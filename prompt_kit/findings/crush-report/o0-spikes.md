@@ -1,6 +1,6 @@
 # O-0 spikes: server mode on the shared loop
 
-Appendix O §9.1 phase 0 and the §10 checks owed. Every figure below was measured on 2026-10-03, on PHP 8.3.6 NTS (pcntl, posix, ffi, ext-uv), Linux 6.8 and 48 cores, against sugar-crush at `fix/w1-j` (= master `6796704e3`). The spike scripts were throwaway: a scratch Composer project loads sugar-crush's `vendor/autoload.php` first, then its own. Nothing here is committed code.
+Appendix O §9.1 phase 0 and the §10 checks owed. Every figure below was measured on 2026-10-03, on PHP 8.3.6 NTS (pcntl, posix, ffi, ext-uv), Linux 6.8 and 48 cores, against candy-code at `fix/w1-j` (= master `6796704e3`). The spike scripts were throwaway: a scratch Composer project loads candy-code's `vendor/autoload.php` first, then its own. Nothing here is committed code.
 
 ## Verdicts
 
@@ -14,10 +14,10 @@ Appendix O §9.1 phase 0 and the §10 checks owed. Every figure below was measur
 ## Dependency pins (check 1)
 
 - Latest versions are `ratchet/rfc6455` v0.4.1 (`^0.4` confirmed), `react/http` v1.11.1, `react/socket` v1.17.0 and `ratchet/pawl` v0.4.3 (test client). `ratchet/rfc6455` needs `psr/http-factory-implementation`, which the `guzzlehttp/psr7` 2.13.1 already installed satisfies (`GuzzleHttp\Psr7\HttpFactory`).
-- **`react/http` (1.11.1, 1.x-dev and 3.x-dev) requires `psr/http-message ^1.0`.** sugar-crush and the root lock resolve `psr/http-message` **2.0** today.
-  - A dry-run `composer update` of sugar-crush's manifest plus `react/http ^1.11`, `react/socket ^1.16`, `ratchet/rfc6455 ^0.4` and `ratchet/pawl ^0.4` (dev) **resolves**, but by downgrading `psr/http-message` 2.0 → 1.1.
+- **`react/http` (1.11.1, 1.x-dev and 3.x-dev) requires `psr/http-message ^1.0`.** candy-code and the root lock resolve `psr/http-message` **2.0** today.
+  - A dry-run `composer update` of candy-code's manifest plus `react/http ^1.11`, `react/socket ^1.16`, `ratchet/rfc6455 ^0.4` and `ratchet/pawl ^0.4` (dev) **resolves**, but by downgrading `psr/http-message` 2.0 → 1.1.
   - Every current consumer accepts `^1.1`: aws-sdk, google/auth, guzzle psr7, openai-php, psr/http-client and psr/http-factory.
-  - No SugarCraft lib *implements* a PSR-7 interface. sugar-crush only type-hints `ResponseInterface` / `StreamInterface` / `RequestInterface` (`MCP/HttpMcpServer.php`, `Providers/SglangServerInfo.php`, `Providers/Concerns/HttpClientDefaults.php`), and those are signature-compatible across 1.1 and 2.0.
+  - No SugarCraft lib *implements* a PSR-7 interface. candy-code only type-hints `ResponseInterface` / `StreamInterface` / `RequestInterface` (`MCP/HttpMcpServer.php`, `Providers/SglangServerInfo.php`, `Providers/Concerns/HttpClientDefaults.php`), and those are signature-compatible across 1.1 and 2.0.
   - The O-3a / O-5a `composer.json` commit will therefore show the downgrade in the root lock. That is expected, not a regression.
 - **The upgrade pattern is confirmed** in `react/http` `src/Io/StreamingServer.php`:
   - a 101 response whose body is an `HttpBodyStream` over a `WritableStreamInterface` gets `Connection: upgrade`;

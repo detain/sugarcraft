@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\McpTool;
 
 /**
- * Lifted from sugar-crush/tests/MCP/McpToolTest — the whole file travels
+ * Lifted from candy-code/tests/MCP/McpToolTest — the whole file travels
  * without product dependencies. The type-gate rows are the load-bearing part:
  * they pin the kill-chain fix (a wrong-typed wire field must degrade to
  * "skipped", never reach the constructor as a TypeError).

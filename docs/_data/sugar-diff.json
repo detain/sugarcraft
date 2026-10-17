@@ -1,6 +1,6 @@
 {
     "title": "SugarCraft — SugarDiff",
-    "description": "SugarDiff: Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and line-number scanner. Extracted from sugar-crush; first-party.",
+    "description": "SugarDiff: Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and line-number scanner. Extracted from candy-code; first-party.",
     "ogTitle": "SugarCraft — SugarDiff",
     "ogDescription": "One faithful diff -u engine for the whole ecosystem: LCS line diffing with budgeted fallback, numbered hunks, a GNU-shaped writer, and a patch scanner that tells any gutter which line each row points at.",
     "emoji": "",

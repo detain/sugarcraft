@@ -2,14 +2,14 @@
 
 Tree position reviewed: `/home/sites/prompt-step-P3.CLOSE-r1`, branch `prompt/P3.CLOSE-r1`,
 HEAD = `d1633da637a592ad75fe9831af77714de830e163`, `git status --porcelain` empty at start.
-Change-set: `git diff 924c71a0d HEAD -- sugar-crush/` (26 files, 14955 insertions, 639 deletions).
+Change-set: `git diff 924c71a0d HEAD -- candy-code/` (26 files, 14955 insertions, 639 deletions).
 
 ## MEASUREMENTS (all re-derived in this tree; none carried from a commit message)
 
 **M1 — FULL SUITE. MEASURED.** cwd = CHECKOUT ROOT `/home/sites/prompt-step-P3.CLOSE-r1`.
 Box confirmed quiet before the run (`ps -eo pid,cmd | /usr/bin/grep -c '[v]endor/bin/phpunit'` -> 0).
 ```
-php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never \
+php candy-code/vendor/bin/phpunit -c candy-code/phpunit.xml --colors=never \
   --log-junit <scratchpad>/full-head.junit.xml </dev/null
 => Time: 06:50.600, Memory: 352.49 MB
 => OK, but some tests were skipped!
@@ -22,7 +22,7 @@ that the assertion total would NOT reproduce. It reproduced exactly. My reasonin
 tree-wide guard scanning repo-root markdown would move the figure between `f958ba8e6` and
 `d1633da63`) was wrong.
 
-**M2 — THE NINE-FILE CENSUS SET. MEASURED.** cwd = `/home/sites/prompt-step-P3.CLOSE-r1/sugar-crush`.
+**M2 — THE NINE-FILE CENSUS SET. MEASURED.** cwd = `/home/sites/prompt-step-P3.CLOSE-r1/candy-code`.
 `OK (176 tests, 31215 assertions)` in 16.7s — byte-identical to the orchestrator's figure. No
 assertion count materially below baseline; no guard has un-guarded itself in this set.
 
@@ -109,10 +109,10 @@ enumeration either — so it is an *undeclared* hole, which §16.8 rule 31 is pr
 **REACHABILITY, stated honestly and MEASURED both ways** — this is a defeat of the INSTRUMENT, not
 (today) of the verdict: in a NAMESPACED file `namespace\file_put_contents` resolves to
 `<Ns>\file_put_contents` and PHP fatals (function calls do not fall back to global for a *qualified*
-name) — I ran that too and the target file was NOT created. Every file under `sugar-crush/src/` is
+name) — I ran that too and the target file was NOT created. Every file under `candy-code/src/` is
 namespaced (`for f in $(/usr/bin/find src -name '*.php'); do grep -qm1 '^namespace ' $f || echo …`
 → no output), and `sourceFilesOf()` only ever hands the scanner `src/` files, so no live tool can
-use this spelling today. **But `bin/sugarcrush` IS in the global namespace** (the only such PHP file
+use this spelling today. **But `bin/candy-code` IS in the global namespace** (the only such PHP file
 in the lib) — so the moment this scanner is pointed at `bin/`, or a global-namespace helper lands
 under `src/`, the spelling is a silent pass on a real write.
 
@@ -124,7 +124,7 @@ the alphabet's limits without this one. A one-line addition of `T_NAME_RELATIVE`
 shape of the repair, but I am not prescribing it — `tests/RuntimeTest.php` is in P3.S1/P3.S5's
 declared lists and this is a REPORT.
 
-### 3. HIGH / SECURITY — a NEW, unrostered `</env>` fence-escape vector: the GIT BRANCH NAME. `sugar-crush/src/Context/EnvironmentBlock.php:854` and `:863`
+### 3. HIGH / SECURITY — a NEW, unrostered `</env>` fence-escape vector: the GIT BRANCH NAME. `candy-code/src/Context/EnvironmentBlock.php:854` and `:863`
 
 MEASURED end to end, on a real git repository I created inside my own scratchpad, with a CLEAN
 working tree. This is **not** the known-open diff-body vector and it is **strictly worse** than it.
@@ -189,12 +189,12 @@ branch line** saying so, because right now the file's only statement about that 
 Reported, not prescribed: `src/Context/EnvironmentBlock.php` is in P3.S2/P3.S3's declared lists and
 `tests/Context/EnvironmentBlockTest.php` in both; this finding is a REPORT.
 
-### 4. MEDIUM — the assertion message that IS the escalation's only carrier repeats a claim §18 explicitly records as FALSIFIED. `sugar-crush/tests/Agents/AgentTest.php:2040-2045`
+### 4. MEDIUM — the assertion message that IS the escalation's only carrier repeats a claim §18 explicitly records as FALSIFIED. `candy-code/tests/Agents/AgentTest.php:2040-2045`
 
 The pin BINDS — I verified it by mutation, which is the good news. MEASURED: I added
 `public readonly ?array $toolCalls = null,` as a ninth parameter to
 `src/Agents/AgentResult.php:24`, ran `vendor/bin/phpunit tests/Agents/AgentTest.php` from
-`sugar-crush/`, and got
+`candy-code/`, and got
 `Tests: 33, Assertions: 327, Failures: 1` at `tests/Agents/AgentTest.php:2025`, with the diff
 naming `8 => 'toolCalls'`. Claim 4's mechanism is real. **File restored** from a private backup
 (`<scratchpad>/P3.CLOSE-r1/backup/AgentResult.php.P3CLOSEr1.orig`); md5 back to
@@ -215,7 +215,7 @@ costs the most: rule 25 notes that a guard's failure message is the one part of 
 never runs, and this message is the *only* text the future agent who adds a tool-call field will
 read. It will tell that agent the disposition rested on a claim that was measured false.
 `/usr/bin/grep -rn 'unwireable' --include='*.php' --include='*.md' .` over the worktree (vendor
-excluded) returns exactly ONE hit: `sugar-crush/tests/Agents/AgentTest.php:2042`.
+excluded) returns exactly ONE hit: `candy-code/tests/Agents/AgentTest.php:2042`.
 
 **What would have to be true for this not to be wrong:** that "unwireable because no signal reaches
 the parent" is a different claim from the falsified "underivable". It is not a weaker one — it is
@@ -251,14 +251,14 @@ explicitly elsewhere ("If there is no per-step loop on this path, the honest out
 plus the measurement that justifies it"), so it is not shorthand — it is the underivability claim
 again, surviving in a third place.
 
-### 6. MEDIUM — P3.S6's own doc-block census of itself was WRONG THE DAY IT LANDED, and the generator it offers cannot produce half of it. `sugar-crush/src/Agents/Agent.php:419-423`
+### 6. MEDIUM — P3.S6's own doc-block census of itself was WRONG THE DAY IT LANDED, and the generator it offers cannot produce half of it. `candy-code/src/Agents/Agent.php:419-423`
 
 The doc-block reads, verbatim:
 > This block carries **THIRTY** distinct `<file>.php:<line>` citations in **FORTY-SIX** occurrences -
 > re-derive that with
 > `` /usr/bin/grep -oP '[A-Za-z/]+[.]php:[0-9]+(-[0-9]+)?' src/Agents/Agent.php | sort -u | wc -l ``
 
-I ran **that exact command** from `/home/sites/prompt-step-P3.CLOSE-r1/sugar-crush`:
+I ran **that exact command** from `/home/sites/prompt-step-P3.CLOSE-r1/candy-code`:
 
 | tree position | distinct | occurrences | claim present? |
 |---|---|---|---|
@@ -267,7 +267,7 @@ I ran **that exact command** from `/home/sites/prompt-step-P3.CLOSE-r1/sugar-cru
 | `d1633da63` (HEAD) | **31** | **54** | yes |
 
 MEASURED. Both figures are wrong, and they were wrong **at the commit that wrote them** — this is
-not later drift, and nothing has touched `sugar-crush/` since `f958ba8e6`. §16.8 rule 6: a figure
+not later drift, and nothing has touched `candy-code/` since `f958ba8e6`. §16.8 rule 6: a figure
 that does not reproduce is a finding; rule 7: a correction is a claim; rule 2: never pin a
 cardinality in prose, ship the generator.
 
@@ -311,7 +311,7 @@ content of a +435-line doc-block by construction. "Doc-block only" was establish
 itself was never checked — and it is wrong. That is §16.8 rule 28 (split the scanner from the arm)
 applied to a verification technique rather than to a test.
 
-### 7. HIGH — P3.S1 FALSIFIED §17.2's two-assembler constraint, and the phase went on to quote it as present fact in TWO production source files. `prompt_plan.md:3259`, `sugar-crush/src/Runtime.php:771`, `sugar-crush/src/Agents/Agent.php:442`, `prompt_plan.md:1343`
+### 7. HIGH — P3.S1 FALSIFIED §17.2's two-assembler constraint, and the phase went on to quote it as present fact in TWO production source files. `prompt_plan.md:3259`, `candy-code/src/Runtime.php:771`, `candy-code/src/Agents/Agent.php:442`, `prompt_plan.md:1343`
 
 This is the finding no single-step review could have made, and the brief calls §17.2 "load-bearing
 for this phase". MEASURED, four ways.
@@ -377,7 +377,7 @@ MEASURED deletion experiment. I removed the three-line marking call from
 `src/Backend/EngineBackend.php:662-664` (backup at
 `<scratchpad>/P3.CLOSE-r1/backup/EngineBackend.php.P3CLOSEr1.orig`; `php -l` clean after):
 
-- from `sugar-crush/` (`vendor/bin/phpunit tests/RuntimeTest.php tests/Integration/SystemPromptWiringTest.php`)
+- from `candy-code/` (`vendor/bin/phpunit tests/RuntimeTest.php tests/Integration/SystemPromptWiringTest.php`)
   → `Tests: 139, Assertions: 505, Failures: 3` —
   `RuntimeTest::testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite`,
   `RuntimeTest::testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt`,
@@ -464,7 +464,7 @@ is present and matches."
 - **Out-of-declared-scope edit, REPORTED not a finding:** P3.S3 edited BOTH golden fixtures while its
   declared Files list names only `src/Context/EnvironmentBlock.php` and
   `tests/Context/EnvironmentBlockTest.php`. MEASURED (`git diff --stat 8d9f703da 74cabae7f --
-  sugar-crush/` → 4 files, including both goldens `+2` each). This was **escalated by the step agent
+  candy-code/` → 4 files, including both goldens `+2` each). This was **escalated by the step agent
   and dispositioned by the orchestrator in writing** (`prompt_worklog.md:4436`), exactly as §16.8
   rule 49 requires. Process was correct; recording it so the ledger is complete.
 
@@ -483,14 +483,14 @@ and the worklog entry shows the before and after numbers side by side."
   (ran both; the absence pin is present and green — I checked it was not made to pass by accident:
   it is still an `assertStringNotContainsString`-shaped absence pin, unmodified in the phase diff).
 - `golden-system-prompt.txt` byte-identical: **SATISFIED, MEASURED** —
-  `git diff --stat 405252a41^ 405252a41 -- sugar-crush/tests/fixtures/` is **empty**.
+  `git diff --stat 405252a41^ 405252a41 -- candy-code/tests/fixtures/` is **empty**.
 - full suite green: **SATISFIED** (M1).
 - worklog records the measured byte delta: present.
 
 **P3.S6** — see **finding 5**: neither declared branch is literally satisfied; the actual outcome is
 §1.10 outcome 3, which is legitimate, but branch (b)'s factual clause is contradicted by the step's
 own §18 row. Sub-clauses that ARE satisfied: golden agent prompt byte-identical (**MEASURED** —
-`git diff --stat f958ba8e6^ f958ba8e6 -- sugar-crush/tests/fixtures/` is **empty**); the eight call
+`git diff --stat f958ba8e6^ f958ba8e6 -- candy-code/tests/fixtures/` is **empty**); the eight call
 sites are classified (six live / two dormant); the subprocess counts are recorded; the §18 row is
 landed; the `AgentResult::__construct` pin BINDS (finding 4).
 
@@ -535,7 +535,7 @@ dormancy greps still exit 1 (`->executeSubAgent(` and `->dispatchSkill(` have no
 **M4 — the MCP-prefix full-suite mutation** (see finding 9): `Tests: 10526, Assertions: 162419,
 Failures: 17, Skipped: 1`. Restored.
 
-**M5 — every Phase-3 declared test file, run individually, cwd `…/sugar-crush`, `</dev/null`:**
+**M5 — every Phase-3 declared test file, run individually, cwd `…/candy-code`, `</dev/null`:**
 ```
 tests/RuntimeTest.php                                   OK (128 tests,  450 assertions)
 tests/BaseSystemPromptTest.php                          OK ( 15 tests,  179 assertions)
@@ -586,10 +586,10 @@ Byte delta on that fixture: **395 B** per suppressed render. Every one of the ph
 subprocess figures is exact.
 
 **M8 — §17.3 repo-level gates, all green.**
-- `git diff --name-only 924c71a0d HEAD -- sugar-crush/composer.json sugar-crush/composer.lock sugar-crush/phpunit.xml` → **empty** (none touched)
-- `sugar-crush/phpunit.xml` still `bootstrap="tests/bootstrap.php"`
-- `/usr/bin/grep -c repositories sugar-crush/composer.json` → **0**
-- `sugar-crush/composer.lock` does not exist
+- `git diff --name-only 924c71a0d HEAD -- candy-code/composer.json candy-code/composer.lock candy-code/phpunit.xml` → **empty** (none touched)
+- `candy-code/phpunit.xml` still `bootstrap="tests/bootstrap.php"`
+- `/usr/bin/grep -c repositories candy-code/composer.json` → **0**
+- `candy-code/composer.lock` does not exist
 - added lines containing `--no-verify` or `core.hooksPath` → **0**
 - `php tools/check-path-repos.php --no-lib-path-repos` → **exit 0**
 - added lines with a tab / trailing whitespace / CR → **0 / 0 / 0**
@@ -629,7 +629,7 @@ neighbour correction travelling to the `Tools/` row ("It used to say 'with Conte
 as well; Providers/ has since been cleaned and moved into SCOPE"). That is rule 40 performed
 correctly, in the one place this phase performed it correctly.
 
-**M12 — check 11, declared scope.** Six sugar-crush files changed that are in no Phase-3 step's
+**M12 — check 11, declared scope.** Six candy-code files changed that are in no Phase-3 step's
 declared list: `src/Providers/VertexProvider.php` + `tests/Providers/VertexProviderTest.php` +
 `tests/Providers/SystemPromptTransmissionMatrixTest.php` (P1.audit-fix-3, separately reviewed),
 `tests/SuiteTempSandboxContractTest.php` + `tests/bootstrap.php` (CI-fix-1),
@@ -649,7 +649,7 @@ checking P3.S5's Done-when — which requires literally *"the golden-system-prom
 byte-identical"* — would conclude P3.S5 broke it. It did not. MEASURED:
 
 ```sh
-git diff --name-only 405252a41^ 405252a41 -- sugar-crush/tests/fixtures/   # → EMPTY
+git diff --name-only 405252a41^ 405252a41 -- candy-code/tests/fixtures/   # → EMPTY
 git log --oneline --first-parent 924c71a0d..d1633da63 -- .../golden-system-prompt.txt
   33df838d0  prompt: merge P2.audit-fix-1 — the golden prompt tests no longer depend on the cwd…
   74cabae7f  prompt: merge P3.S3 — the git block states what it actually is
@@ -678,7 +678,7 @@ it is worth one paragraph now rather than a review cycle later.
 
 ## ACCOUNT OF THE NINETEEN CHECKS + THE §1.7 PHASE ADDITIONS
 
-1. **Reaches production** — CHECKED. `bin/sugarcrush` → `Bootstrap` → `EngineBackend::complete()`
+1. **Reaches production** — CHECKED. `bin/candy-code` → `Bootstrap` → `EngineBackend::complete()`
    (`src/Backend/EngineBackend.php:542`, the only production construction of `Runtime` on the chat
    path) → the bounded agentic loop at `:602` → `markWriteSinceLastRender()` at `:662`, below the
    `break` at `:632` so it only fires when another prompt will be assembled. `Runtime.php:2532` is
@@ -758,7 +758,7 @@ it is worth one paragraph now rather than a review cycle later.
   §17.2's two-assembler constraint rests on, and P3.S5 and P3.S6 both copied the falsified reason
   into production doc-blocks.
 - *a test step 2 wrote that step 6 made vacuous* — looked. The opposite happened: P3.S5-fix-1 made a
-  test that WAS conditionally vacuous (green from `sugar-crush/`, red only from the root) bind from
+  test that WAS conditionally vacuous (green from `candy-code/`, red only from the root) bind from
   both cwds; finding 8 proves it.
 - *an abstraction introduced in one step and bypassed in another* — looked.
   `withWriteSinceLastRender()` has exactly one production consumer (`Runtime::environmentSnapshot()`)

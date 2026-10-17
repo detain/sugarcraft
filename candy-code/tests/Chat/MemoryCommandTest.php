@@ -1,0 +1,760 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Chat;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Context\ProjectMemoryWriter;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Memory\MemoryEntry;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Memory\UnreadableNotes;
+use SugarCraft\Code\Role;
+
+final class MemoryCommandTest extends TestCase
+{
+    private string $tempDir;
+    private MemoryStore $memoryStore;
+
+    protected function setUp(): void
+    {
+        $this->tempDir = sys_get_temp_dir() . '/memory_test_' . uniqid((string) getmypid(), true);
+        mkdir($this->tempDir, 0755, true);
+        $this->memoryStore = new MemoryStore($this->tempDir);
+    }
+
+    protected function tearDown(): void
+    {
+        // Recursive: the old cleanup only unlinked *.md, so anything else the
+        // store wrote (index subdirectories, non-.md sidecars) left the
+        // directory non-empty and every rmdir() raised "Directory not empty"
+        // -- 10 of the suite's warnings came from this one line.
+        self::removeTree($this->tempDir);
+    }
+
+    /** Delete a directory and everything under it, quietly and completely. */
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $entries = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($entries as $entry) {
+            /** @var \SplFileInfo $entry */
+            if ($entry->isDir()) {
+                @rmdir($entry->getPathname());
+            } else {
+                @unlink($entry->getPathname());
+            }
+        }
+
+        @rmdir($dir);
+    }
+
+    public function testMemoryListShowsMemories(): void
+    {
+        // Add some memories — project scope, the bare `/memory list` default
+        // since roadmap 0.6.
+        $this->memoryStore->add('Test memory content', 'project');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Test memory content', $lastMsg->content);
+    }
+
+    public function testMemoryListWithEmptyStore(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('No memories found', $lastMsg->content);
+    }
+
+    public function testMemoryAddCreatesEntry(): void
+    {
+        $chat = new Chat(
+            history: [],
+            // A bare add is a PROJECT note since roadmap 0.6, which lands in
+            // the root's repo-local corner — so the root is the sandbox.
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory add This is a new memory',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Memory created', $lastMsg->content);
+        $this->assertStringContainsString('`', $lastMsg->content); // Contains backticks for ID
+    }
+
+    public function testMemoryAddWithScope(): void
+    {
+        $chat = new Chat(
+            history: [],
+            // Explicit sandbox root: a project-scope ADD now lands in the
+            // ROOT's repo-local corner (E25 piece 2), so a Chat left without a
+            // root would write notes into whatever tree runs the suite.
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory add --scope project This is a project memory',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Memory created', $lastMsg->content);
+    }
+
+    public function testMemorySearchFindsEntries(): void
+    {
+        $this->memoryStore->add('PHP programming tips', 'user');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory search PHP',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('PHP programming tips', $lastMsg->content);
+    }
+
+    public function testMemorySearchNoResults(): void
+    {
+        $this->memoryStore->add('Some content', 'user');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory search nonexistent',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('No memories found matching', $lastMsg->content);
+    }
+
+    public function testMemoryEditUpdatesEntry(): void
+    {
+        $id = $this->memoryStore->add('Original content', 'user');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory edit {$id} Updated content",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('updated', $lastMsg->content);
+
+        // Verify the entry was actually updated
+        $entry = $this->memoryStore->get($id);
+        $this->assertNotNull($entry);
+        $this->assertSame('Updated content', $entry->content());
+    }
+
+    public function testMemoryEditNotFound(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory edit 00000000000000000000000000000000 New content',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('not found', $lastMsg->content);
+    }
+
+    public function testMemoryDeleteRemovesEntry(): void
+    {
+        $id = $this->memoryStore->add('Content to delete', 'user');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('deleted', $lastMsg->content);
+
+        // Verify the entry was actually deleted
+        $entry = $this->memoryStore->get($id);
+        $this->assertNull($entry);
+    }
+
+    public function testMemoryDeleteNotFound(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory delete 00000000000000000000000000000000',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('not found', $lastMsg->content);
+    }
+
+    // ---- cross-store resolution (lane jb, r75): per-id ops follow capture()'s fold law ----
+
+    /** Repo-local memory dir of the sandboxed project root, as the writer lays it out. */
+    private function repoMemoryPath(): string
+    {
+        return $this->tempDir . '/' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '/project';
+    }
+
+    /** The single entry id living in a store directory ('' when there is none). */
+    private function soleEntryIdIn(string $scopeDir): string
+    {
+        $files = glob($scopeDir . '/*.md') ?: [];
+        $files = array_values(array_filter($files, static fn (string $f): bool => !str_ends_with($f, 'MEMORY.md')));
+        $this->assertCount(1, $files, 'expected exactly one note in ' . $scopeDir);
+
+        return basename($files[0], '.md');
+    }
+
+    public function testProjectNoteAddedByCommandIsDeletableFromRepoStore(): void
+    {
+        [$created, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory add --scope project note the repo will hold',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $id = $this->soleEntryIdIn($this->repoMemoryPath());
+        $this->assertStringContainsString($id, $created->history[count($created->history) - 1]->content);
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('deleted', $next->history[count($next->history) - 1]->content);
+        $this->assertSame([], array_filter(glob($this->repoMemoryPath() . '/*.md') ?: [], static fn (string $f): bool => !str_ends_with($f, 'MEMORY.md')));
+        // The home store never held this note and must not have gained one.
+        $this->assertSame([], $this->memoryStore->list('project'));
+    }
+
+    public function testSharedIdResolvesRepoFirstSoTheShownEntryDiesAndTheTwinSurvives(): void
+    {
+        // capture() folds the REPO copy when both stores hold one id (E25p2's
+        // documented law). Ops must claim the same entry — otherwise deleting
+        // the note the prompt shows silently kills its invisible home twin and
+        // the shown note survives its own deletion.
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $id = $writer->write('Repo note - the one the prompt shows');
+        $this->memoryStore->update($id, MemoryEntry::new(
+            type: 'pattern',
+            content: 'Home twin - invisible behind the repo copy',
+            scope: 'project',
+            tags: [],
+            id: $id,
+        ));
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('deleted', $next->history[count($next->history) - 1]->content);
+        $this->assertNull($writer->store()->get($id), 'the repo copy the fold SHOWS must be the copy delete removes');
+        $twin = $this->memoryStore->get($id);
+        $this->assertNotNull($twin, 'the hidden home twin must survive the repo-first delete');
+        $this->assertSame('Home twin - invisible behind the repo copy', $twin->content());
+    }
+
+    public function testHomeOnlyIdStillDeletesFromHomeWithRepoStorePresent(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $occupant = $writer->write('repo occupant');
+
+        $id = $this->memoryStore->add('Home only', 'user');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('deleted', $next->history[count($next->history) - 1]->content);
+        $this->assertNull($this->memoryStore->get($id));
+        $this->assertNotNull($writer->store()->get($occupant), 'the repo store must be untouched by a home-only delete');
+    }
+
+    public function testEditResolvesRepoStore(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $id = $writer->write('original repo body');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory edit {$id} edited repo body",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('updated', $next->history[count($next->history) - 1]->content);
+        $entry = $writer->store()->get($id);
+        $this->assertNotNull($entry);
+        $this->assertSame('edited repo body', $entry->content());
+        $this->assertNull($this->memoryStore->get($id), 'edit must not mint a home copy');
+    }
+
+    public function testEditNotFoundWithBothStoresResolvable(): void
+    {
+        $this->assertNotNull(ProjectMemoryWriter::createForRoot($this->tempDir));
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory edit 00000000000000000000000000000000 New content',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('not found', $next->history[count($next->history) - 1]->content);
+    }
+
+    // ---- E694 slice-A: store-aware list/search, loud project-clear refusal ----
+
+    public function testListGroupsRepoAndHomeProjectNotesUnderStoreBanners(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('repo note for grouping');
+        $homeId = $this->memoryStore->add('home note for grouping', 'project');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString('**Memories (project):**', $content);
+        $this->assertStringContainsString('*In this repository (`' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '`):*', $content);
+        $this->assertStringContainsString('*In your home store:*', $content);
+        $this->assertLessThan(
+            strpos($content, $homeId),
+            strpos($content, $repoId),
+            'the repo section must lead — the same fold order capture() and memoryLocate claim',
+        );
+        // Row bytes are the pre-grouping shape, unchanged.
+        $this->assertStringContainsString("- **[pattern]** `{$repoId}`\n  repo note for grouping", $content);
+        $this->assertStringContainsString("- **[pattern]** `{$homeId}`\n  home note for grouping", $content);
+    }
+
+    public function testListProjectWithEmptyHomeShowsOnlyTheRepoSection(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('sole repo note');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString($repoId, $content);
+        $this->assertStringContainsString('In this repository', $content);
+        $this->assertStringNotContainsString('In your home store', $content, 'an empty home section must not be announced');
+    }
+
+    public function testListIsByteStableWhenTheRepoStoreContributesNothing(): void
+    {
+        $this->memoryStore->add('plain project note', 'project');
+
+        [$noRepoDir, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        // The repo corner exists but holds no notes: same answer, byte for byte.
+        mkdir($this->tempDir . '/' . ProjectMemoryWriter::RELATIVE_DIRECTORY, 0700, true);
+
+        [$emptyRepoDir, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(
+            $noRepoDir->history[1]->content,
+            $emptyRepoDir->history[1]->content,
+            'a repo store with nothing to show must not reshape the home listing',
+        );
+        $this->assertStringNotContainsString('In this repository', $noRepoDir->history[1]->content);
+    }
+
+    public function testSearchGroupsHitsFromBothStores(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('needle resting in the repo');
+        $homeId = $this->memoryStore->add('a needle at home', 'user');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory search needle',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString('**Search results for `needle` (2 matches):**', $content);
+        $this->assertStringContainsString('In this repository', $content);
+        $this->assertStringContainsString('In your home store', $content);
+        $this->assertLessThan(strpos($content, $homeId), strpos($content, $repoId), 'repo hits lead the grouped answer');
+        $this->assertStringContainsString('(scope: project)', $content);
+        $this->assertStringContainsString('(scope: user)', $content);
+    }
+
+    public function testClearProjectRefusedLoudlyWhileRepoHoldsNotesAndNothingDies(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('repo note that must survive a bulk clear');
+        $this->memoryStore->add('home project note that must also survive', 'project');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory clear --scope project --confirm',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString('Not cleared', $content);
+        $this->assertStringContainsString(ProjectMemoryWriter::RELATIVE_DIRECTORY, $content);
+        $this->assertStringNotContainsString('All memories cleared', $content);
+        $this->assertNotNull($writer->store()->get($repoId), 'the refusal must not wipe a single repo note');
+        $this->assertCount(1, $this->memoryStore->list('project'), 'nor may it half-wipe the home store behind the refusal');
+    }
+
+    public function testClearProjectStaysHomeOnlyAndByteIdenticalWhenRepoHoldsNothing(): void
+    {
+        $this->assertNotNull(ProjectMemoryWriter::createForRoot($this->tempDir));
+        $this->memoryStore->add('doomed home note', 'project');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory clear --scope project --confirm',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(
+            'All memories cleared for scope `project`.',
+            $next->history[count($next->history) - 1]->content,
+            'the home clear wording must ride through the store-aware slice byte-identical',
+        );
+        $this->assertSame([], $this->memoryStore->list('project'));
+    }
+
+    public function testMemoryClearRequiresConfirm(): void
+    {
+        $this->memoryStore->add('Memory 1', 'project');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory clear --scope project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('--confirm', $lastMsg->content);
+
+        // Verify nothing was deleted
+        $entries = $this->memoryStore->list('project');
+        $this->assertCount(1, $entries);
+    }
+
+    public function testMemoryClearWithConfirm(): void
+    {
+        $this->memoryStore->add('Memory to clear 1', 'project');
+        $this->memoryStore->add('Memory to clear 2', 'project');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory clear --scope project --confirm',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('cleared', $lastMsg->content);
+
+        // Verify all entries were deleted
+        $entries = $this->memoryStore->list('project');
+        $this->assertCount(0, $entries);
+    }
+
+    public function testMemoryHelpShowsAllCommands(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('/memory list', $lastMsg->content);
+        $this->assertStringContainsString('/memory add', $lastMsg->content);
+        $this->assertStringContainsString('/memory search', $lastMsg->content);
+        $this->assertStringContainsString('/memory edit', $lastMsg->content);
+        $this->assertStringContainsString('/memory delete', $lastMsg->content);
+        $this->assertStringContainsString('/memory clear', $lastMsg->content);
+    }
+
+    public function testMemoryNotConfigured(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list',
+            backend: new EchoBackend(),
+            memoryStore: null,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('not configured', $lastMsg->content);
+    }
+
+    public function testMemoryUnknownCommand(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory unknown',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Unknown command', $lastMsg->content);
+    }
+
+    public function testMemoryInputBufClearedAfterCommand(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    public function testMemoryListWithScopeFilter(): void
+    {
+        $this->memoryStore->add('User memory', 'user');
+        $this->memoryStore->add('Project memory', 'project');
+
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list --scope project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Project memory', $lastMsg->content);
+        $this->assertStringNotContainsString('User memory', $lastMsg->content);
+    }
+
+    /**
+     * A note the store skipped as unreadable is named in the `/memory list`
+     * answer for its scope, with the reason — the user's only view of it
+     * outside the prompt. A clean scope's answer gains nothing.
+     */
+    public function testMemoryListNamesTheUnreadableNotesOfThatScope(): void
+    {
+        $this->memoryStore->add('A readable note', 'user');
+        $bad = $this->tempDir . '/user/hand-edited.md';
+        file_put_contents($bad, "no frontmatter at all\n");
+
+        $answer = $this->lastAnswer('/memory list user');
+        $this->assertStringContainsString('A readable note', $answer);
+        $this->assertStringContainsString("\n\n" . UnreadableNotes::SECTION_HEADER . "\n- `{$bad}` — ", $answer);
+
+        $this->assertStringNotContainsString(UnreadableNotes::SECTION_HEADER, $this->lastAnswer('/memory list project'));
+    }
+
+    /** search() reads every scope, so its answer names every unreadable note. */
+    public function testMemorySearchNamesUnreadableNotesEvenWithNoHits(): void
+    {
+        mkdir($this->tempDir . '/project', 0o700, true);
+        $bad = $this->tempDir . '/project/hand-edited.md';
+        file_put_contents($bad, "no frontmatter at all\n");
+
+        $answer = $this->lastAnswer('/memory search zzz-no-hit');
+        $this->assertStringStartsWith('No memories found matching `zzz-no-hit`.', $answer);
+        $this->assertStringContainsString("- `{$bad}` — ", $answer);
+    }
+
+    private function lastAnswer(string $input): string
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: $input,
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        return $next->history[count($next->history) - 1]->content;
+    }
+
+    public function testWithMemoryStoreFluent(): void
+    {
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '',
+            backend: new EchoBackend(),
+        );
+
+        $chatWithMemory = $chat->withMemoryStore($this->memoryStore);
+
+        $this->assertNotSame($chat, $chatWithMemory);
+        $this->assertFalse($chatWithMemory->inFlight);
+        $this->assertNotNull($chatWithMemory->memoryStore());
+    }
+}

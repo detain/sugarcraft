@@ -27,7 +27,7 @@ namespace SugarCraft\Core\Util;
  * {@see withPermissions()} is the second, independent axis: who may READ the
  * published state. Without it the file lands on whatever the process umask
  * happens to allow, so a caller storing tokens has to re-roll the
- * umask/chmod dance per library (phlix's TokenStore, sugar-crush's Session) or,
+ * umask/chmod dance per library (phlix's TokenStore, candy-code's Session) or,
  * more often, forget it.
  */
 final class AtomicJsonFile

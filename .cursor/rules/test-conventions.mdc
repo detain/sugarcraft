@@ -8,7 +8,7 @@ alwaysApply: false
 
 - Tests at `<slug>/tests/<Class>Test.php`, namespace `<NS>\<Sub>\Tests\…`.
 - `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` (see `sugar-core/phpunit.xml`). Every public method ≥1 test.
-- **Loop-pinning bootstrap** — a suite bounding waits with timers on the shared `Loop::get()` uses `bootstrap="tests/bootstrap.php"` + `\SugarCraft\Testing\LoopPin::pinStableClock()` (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `sugar-crush`). ext-uv computes deadlines against a clock refreshed once per loop iteration, so a timer armed after synchronous idle fires immediately; `StreamSelectLoop` refreshes at arm time. See `sugar-testing/src/LoopPin.php` and `sugar-core/src/Program.php`.
+- **Loop-pinning bootstrap** — a suite bounding waits with timers on the shared `Loop::get()` uses `bootstrap="tests/bootstrap.php"` + `\SugarCraft\Testing\LoopPin::pinStableClock()` (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `candy-code`). ext-uv computes deadlines against a clock refreshed once per loop iteration, so a timer armed after synchronous idle fires immediately; `StreamSelectLoop` refreshes at arm time. See `sugar-testing/src/LoopPin.php` and `sugar-core/src/Program.php`.
 
 Patterns (`sugar-widgets/tests/`, `sugar-core/tests/`, `sugar-vterm/tests/`):
 - **Snapshot byte** — assert raw `\x1b[1m`-style SGR strings from `view()`. Don't abstract.
@@ -17,7 +17,7 @@ Patterns (`sugar-widgets/tests/`, `sugar-core/tests/`, `sugar-vterm/tests/`):
 - **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]`.
 - **Coercion** — negative/oversized index, empty, null; assert clamp/no-op.
 - **Cross-lib parity** — `candy-vcr/tests/VtParityTest.php` diffs the `candy-vcr` renderer against `sugar-vterm` and must pass against BOTH the linked monorepo `sugar-vterm` and the stale Packagist `dev-master` CI resolves. Gate version-dependent arms on a feature marker (`Scrollback::clear()`) via the `vtCarriesMarker()` helper — a literal `\method_exists()` constant-folds under PHPStan into an always-true/always-false report.
-- **Documentation drift** — `sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php` re-derive `sugar-crush/README.md` + `sugar-crush/docs/*.md` rosters from `sugar-crush/src/`. New tool/command/env var/key binding without the doc edit = red.
+- **Documentation drift** — `candy-code/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `candy-code/tests/Commands/KeyBindingDriftTest.php` re-derive `candy-code/README.md` + `candy-code/docs/*.md` rosters from `candy-code/src/`. New tool/command/env var/key binding without the doc edit = red.
 
 **Stream-write gotcha**: don't `ftruncate; rewind;` between writes. Slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `sugar-core/tests/RendererTest.php`).
 

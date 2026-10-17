@@ -49,7 +49,7 @@ use React\EventLoop\StreamSelectLoop;
  * The casualty is any test that arms a safety timer to bound its wait: the
  * safety net fires instead of the work completing, and the test fails having
  * consumed no wall time. It presents as an intermittent, unattributable flake —
- * in sugar-crush it was a measured ~33% suite failure rate across three tests,
+ * in candy-code it was a measured ~33% suite failure rate across three tests,
  * reproducing equally on the change under test and on the untouched baseline,
  * and the first diagnosis of it was wrong.
  *
@@ -107,7 +107,7 @@ final class LoopPin
      * `Program::installSignalHandlers()` returns early under
      * `withoutSignalHandler` or `catchInterrupts: false`, and such a Program
      * never enables async signals at all. A suite built around one of those
-     * does diverge. Recorded rather than worked around — sugar-crush A/B'd it
+     * does diverge. Recorded rather than worked around — candy-code A/B'd it
      * over 30 runs with and 30 without and the results were identical. Re-check
      * it for a suite that leans on `Loop::addSignal()` or does its own
      * `pcntl_signal()` bookkeeping.

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\McpMessage;
 
 /**
- * Codec pins lifted from sugar-crush/tests (McpMessageResultTypeTest and
+ * Codec pins lifted from candy-code/tests (McpMessageResultTypeTest and
  * friends) plus coercion edges. The null-result sentinel family is the core:
  * it exists because a widened-but-lossy `result` once killed the whole MCP
  * subsystem via TypeError.
@@ -101,7 +101,7 @@ final class McpMessageTest extends TestCase
     /**
      * FIX #2: a malformed third-party error object must read as "nothing
      * reported", never as a cast fabrication — `(int)'abc'` is 0 and
-     * `(string)['x']` is 'Array' with a Warning. Mirrors the sugar-crush twin
+     * `(string)['x']` is 'Array' with a Warning. Mirrors the candy-code twin
      * pins: only a real int code / real string message survives.
      */
     public function testMalformedErrorMembersReadAsAbsentInsteadOfCast(): void
@@ -110,7 +110,7 @@ final class McpMessageTest extends TestCase
         // round-tripped through json_encode(): encode collapses `-32601.0`
         // to int text on this host, and the whole point of these rows is
         // that a float token on the wire is not a code. (Carried from the
-        // sugar-crush original with the lane-A2 fold.)
+        // candy-code original with the lane-A2 fold.)
         foreach (['"abc"', '"-32601"', 'true', 'false', '1.5', '-32601.0', '["x"]', '{"a":1}', 'null'] as $literal) {
             $message = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"code":' . $literal . ',"message":"m"}}');
             self::assertNotNull($message, $literal);
@@ -169,7 +169,7 @@ final class McpMessageTest extends TestCase
     }
 
     /**
-     * The error `data` member is `mixed` on the JSON-RPC wire — sugar-crush's
+     * The error `data` member is `mixed` on the JSON-RPC wire — candy-code's
      * ACP error relay forwards a peer's scalar `data` verbatim, so the factory
      * must carry `'data'`, not only `['k' => 'v']`.
      */
@@ -235,7 +235,7 @@ final class McpMessageTest extends TestCase
 
     // =========================================================================
     // The result type matrix — moved with the lane-A2 fold from
-    // sugar-crush/tests/MCP/McpMessageResultTypeTest.php (the consumer rows
+    // candy-code/tests/MCP/McpMessageResultTypeTest.php (the consumer rows
     // that drive a real server child stay there).
     // =========================================================================
 

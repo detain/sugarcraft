@@ -15,7 +15,7 @@ use SugarCraft\Vcr\Tape\Parser;
  * pairs, the synthesized JSON closer, and the token-KIND gates.
  *
  * Every assertion here re-states a fact measured against the real `vhs`
- * binary by sugar-crush/tests/VhsTapeContractTest.php (the three-oracle
+ * binary by candy-code/tests/VhsTapeContractTest.php (the three-oracle
  * sweep); that file owns the oracle evidence, this one owns the port.
  */
 final class LexerGrammarPortTest extends TestCase

@@ -14,7 +14,7 @@ namespace SugarCraft\Diff\Reader;
  * downstream; this is only the region model.
  *
  * Mirrors the `[$old, $new, $isFileHeader]` tuples computed by
- * sugar-crush/src/Tui/DiffGutter.php `number()`.
+ * candy-code/src/Tui/DiffGutter.php `number()`.
  */
 final class ScannedLine
 {

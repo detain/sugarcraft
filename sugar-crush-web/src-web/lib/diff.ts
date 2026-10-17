@@ -1,7 +1,7 @@
 /**
  * A unified diff (`tool.finished.diff`) as rows to render: the file
  * headers, each hunk header, and every line with its old and new line
- * numbers — the gutter semantics of sugar-crush's own TUI diff
+ * numbers — the gutter semantics of candy-code's own TUI diff
  * (`Tui/DiffGutter.php`).
  */
 export type DiffLineKind = 'file' | 'hunk' | 'add' | 'del' | 'ctx' | 'meta'

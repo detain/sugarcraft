@@ -11,7 +11,7 @@ use SugarCraft\Mouse\SelectionRange;
 /**
  * The frozen geometry of a text selection: reading-order normalisation,
  * stream-not-block spans, exact cell coverage, the cell walk and the copy
- * half. Pins adapted from sugar-crush's `tests/Tui/TextSelectionTest.php` to
+ * half. Pins adapted from candy-code's `tests/Tui/TextSelectionTest.php` to
  * 1-based cells (see {@see SelectionTest} for the header note).
  */
 final class SelectionRangeTest extends TestCase

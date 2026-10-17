@@ -127,7 +127,7 @@ final class ExchangeLock
 
     /**
      * Former name of {@see new()}, kept so embedders that still call it (the
-     * sugar-crush ClaudeCodeMcpClient) keep working until they move over; the
+     * candy-code ClaudeCodeMcpClient) keep working until they move over; the
      * repo's factory rule names the default root `::new()`.
      *
      * @deprecated use {@see new()}

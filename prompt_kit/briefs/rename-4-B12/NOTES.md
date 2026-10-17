@@ -18,14 +18,14 @@ DONE (R1–R7 this lane; R8/R9 weld owed). Branch `rename/b12`, base `10f121d49`
 
 ## App-ownership audit (hazard 1) — NO TOOL DEFECT
 - `SugarCraft\App\` refs tree-wide: **ZERO** (recon grep). mold's autoload is package-root `App\`→src/ (class `App\Counter`), `App\Tests\`→tests/ — untouched (ns unchanged; pascal token `CandyMold` is slug-derived, never bare `App`). <!-- @rename-keep -->
-- Files with own `App`-shaped code that dry-run must NOT touch: `sugar-crush/tests/RepoMap/PhpSymbolExtractorTest.php:43,:120` (`namespace App;` heredoc fixtures) — untouched ✓, RepoMap filter green. sugar-crush `SugarCraft\Crush\App\App` (MediaForm docblocks) — untouched ✓.
+- Files with own `App`-shaped code that dry-run must NOT touch: `candy-code/tests/RepoMap/PhpSymbolExtractorTest.php:43,:120` (`namespace App;` heredoc fixtures) — untouched ✓, RepoMap filter green. candy-code `SugarCraft\Code\App\App` (MediaForm docblocks) — untouched ✓.
 - 39-file dry-run set = candy-mold/** + root composer + docs/CI/findings/prompt-kit cites ONLY. No non-consumer App owner in the change set. <!-- @rename-keep -->
 
 ## Consumers (hazard 3)
 - `sugarcraft/candy-mold` requires: root composer.json :61 + :240 only (tool-rewritten) + root composer.lock (R5). Zero lib manifests, zero PHP `use App\...` imports outside the lib. Docs/CI surfaces (codecov flag/component, vhs.yml all=+matrix, root README row, MATCHUPS row already under ## Apps, docs tiles/_data/search-index/sitemap, repo_map pair, research, findings pair, php74_branch table row, bootstrap-org-repos/set-org-default lists) — tool-rewritten, eye-reviewed. <!-- @rename-keep -->
 
 ## Generic-word audit (hazard 2) — survivors are legit, KEPT
-- `sugar-crush/src/Tui/MediaForm/MediaForm.php:21` "in exactly the {SettingsEditor} mold" — English idiom, unrelated package.
+- `candy-code/src/Tui/MediaForm/MediaForm.php:21` "in exactly the {SettingsEditor} mold" — English idiom, unrelated package.
 - `candy-shine/src/GithubEmoji.php:1056` `'moldova'` — country emoji. <!-- @rename-keep historical provenance -->
 - `candy-sql/tests/Admin/Calc/HostLoadSamplerTest.php:106` `TrimOldest…` — camelCase seam false-match.
 - ansi/: `sugarcraft-3-16-l-2.ansi` + `sugarcraft-3-16-m-2.ansi` carry the old **wordmark art bytes** (content-excluded from residue tool); `candy-layout-7…` "Chocolate mold tray", `candy-tetris-10…` glass-furnace, `sugar-dash-10…` foundry-molding captions = art prose about OTHER libs (space-form, non-brand). <!-- @rename-keep -->

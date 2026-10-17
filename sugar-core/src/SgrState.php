@@ -24,7 +24,7 @@ use SugarCraft\Core\Util\Token;
  * {@see linkId()}; feed a full token stream through {@see apply()}.
  *
  * E667 moves the ROW-BOUNDARY contract here: {@see rowOpen()} and
- * {@see rowClose()} are the balance bytes sugar-crush's
+ * {@see rowClose()} are the balance bytes candy-code's
  * Renderer::balanceSgr() used to compute with a private URI tracker, so
  * the seam E50 filed is now closed and this class is the single home of
  * the contract. {@see toPrefix()} itself stays byte-frozen — the extra
@@ -300,7 +300,7 @@ final class SgrState
      * row re-establishes the styling carried in from earlier rows: the SGR
      * prefix plus an OSC 8 re-open while a hyperlink is still open.
      *
-     * E667 — this is the contract sugar-crush's Renderer::balanceSgr()
+     * E667 — this is the contract candy-code's Renderer::balanceSgr()
      * used to compute with a private URI tracker; the row-boundary half
      * of the balance now lives here, next to the state it emits.
      *
@@ -321,7 +321,7 @@ final class SgrState
      * terminal — only the empty-URI OSC does).
      *
      * A row carrying a reset ENDS the observed link here, matching the
-     * E50 accessor semantics pinned by sugar-core's own suite; sugar-crush
+     * E50 accessor semantics pinned by sugar-core's own suite; candy-code
      * measures its goldens to hold byte-identical under the delegation
      * (no pinned row opens a link, resets mid-row, and ends inside the
      * label).

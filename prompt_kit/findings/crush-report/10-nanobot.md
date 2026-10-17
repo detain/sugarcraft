@@ -1,8 +1,8 @@
-# nanobot (HKUDS/nanobot) vs sugar-crush
+# nanobot (HKUDS/nanobot) vs candy-code
 
 Feeds steps: 0.3, 0.4-a, 0.5, 0.6, 0.10, 0.12, 0.16, 1.A-1, 1.B-2, 1.B-3, 1.C-3, 2.1, 2.4-1, 2.4-2, 2.5, 2.7-2, 2.8, 3.D-3, 3.I-1, 3.I-2, 3.I-3, 4.3-1, 4.3-2, 4.4, 5.4-1, 5.4-2, 5.4-3, 5.6, 5.12, 5.13b, 5.14k, 5.14l
 
-**Competitor:** nanobot, a self-hosted personal-assistant runtime in Python (one gateway process owns the agent loop; WebUI, TUI and chat channels are thin clients). Clone: `/home/sites/crush-research-repos/nanobot` @ `6ecb74aea`. All nanobot paths are relative to the clone; sugar-crush paths are relative to `sugar-crush/`.
+**Competitor:** nanobot, a self-hosted personal-assistant runtime in Python (one gateway process owns the agent loop; WebUI, TUI and chat channels are thin clients). Clone: `/home/sites/crush-research-repos/nanobot` @ `6ecb74aea`. All nanobot paths are relative to the clone; candy-code paths are relative to `candy-code/`.
 
 Core files: `nanobot/agent/loop.py` (channel-facing turn), `nanobot/agent/runner.py` (model/tool loop), `nanobot/agent/context_governance.py` (`ContextGovernor`, owns the exact provider payload), `nanobot/utils/runtime.py` (recovery prompts).
 
@@ -182,7 +182,7 @@ Use `(nothing)` when neither the previous checkpoint nor the current conversatio
 - Temporary/ephemeral sessions never create spill files (`loop.py:1252-1254`).
 - MCP: per-call `toolTimeout`, default 30 s, message "(MCP tool call timed out after 30s)" (`agent/tools/mcp.py:629-645`) (→ 0.5).
 
-**Recommendation (→ 2.8).** Pass every non-Read result over the budget through one spill helper (extend `Tools/Concerns/TruncatesOutput` rather than adding a parallel cap) that writes `<root>/.sugar-crush/tool-results/<session>/<callId>.txt`, prunes after 7 days and returns the reference text; apply it to the MCP bridge too.
+**Recommendation (→ 2.8).** Pass every non-Read result over the budget through one spill helper (extend `Tools/Concerns/TruncatesOutput` rather than adding a parallel cap) that writes `<root>/.candy-code/tool-results/<session>/<callId>.txt`, prunes after 7 days and returns the reference text; apply it to the MCP bridge too.
 
 ---
 

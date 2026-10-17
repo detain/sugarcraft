@@ -1,5 +1,5 @@
 == CORPUS INVENTORY ==
-builtInSkillsDir source: /tmp/p7s4-measure-wt/sugar-crush/src/Skills/SkillLoader.php
+builtInSkillsDir source: /tmp/p7s4-measure-wt/candy-code/src/Skills/SkillLoader.php
 skill count: 12
   [api-design            ] autoInvocable=y userInvocable=y disableModel=n
   [composer-wizard       ] autoInvocable=y userInvocable=y disableModel=n

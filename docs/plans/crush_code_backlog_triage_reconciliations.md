@@ -94,7 +94,7 @@ residual". If cross-lane flake recurs, re-derive rather than reinstate.
 - **E630** — recorded `sugar-pty/composer.lock` at 113 KB / 2026-08-22. MEASURED 2026-09-10:
   **115,257 B, dated 2026-09-10 02:08** (this session's refresh). Still gitignored. Recorded in
   RESUME section 3 item 4.
-- **E632** — reasons about **297** files under `sugar-crush/src`. MEASURED: **317**. All four `278`
+- **E632** — reasons about **297** files under `candy-code/src`. MEASURED: **317**. All four `278`
   sites remain at `BuiltInToolCorpus.php:40,41,135,509,514`. Round 61 lane c owns this file — the
   brief must carry 317, not 297, or the lane re-derives a stale number.
 

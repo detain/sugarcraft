@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing</strong>. Extracted from sugar-crush's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing, the same timeouts, and the same error shapes. First-party — MCP is a spec, not a Go port.</p>
+<p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing</strong>. Extracted from candy-code's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing, the same timeouts, and the same error shapes. First-party — MCP is a spec, not a Go port.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mcp-client:@dev</code></pre>
@@ -35,7 +35,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap. Ne
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Speaking MCP from any PHP process</strong> — spawn a stdio server child, handshake, list and call tools, with the framing and timeout discipline already fought for.</li>
-      <li><strong>Agent tool surfaces</strong> — narrow each agent's visible tools with globs and deny-before-allow, the same semantics sugar-crush uses.</li>
+      <li><strong>Agent tool surfaces</strong> — narrow each agent's visible tools with globs and deny-before-allow, the same semantics candy-code uses.</li>
       <li><strong>Bounded subprocess I/O</strong> — the transport doubles as a reference for newline-framed JSON-RPC over pipes with no deadlock, no silent wedge, and no orphaned grandchildren.</li>
     </ul>
 

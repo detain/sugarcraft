@@ -2,7 +2,7 @@
   "name": "sugar-crush-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Browser UI for sugar-crush's WebSocket server mode (Vite + Vue 3 + TypeScript + Pinia + vue-router).",
+  "description": "Browser UI for candy-code's WebSocket server mode (Vite + Vue 3 + TypeScript + Pinia + vue-router).",
   "license": "MIT",
   "type": "module",
   "engines": {

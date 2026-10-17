@@ -45,15 +45,15 @@
   = allow-all (distinct from restrict-to-nothing); blank/non-string allow-list
   entries throw — refuse rather than read a rule that matches nothing.
 - **Deny specs carry two legal spellings** — `pattern => 'deny'` (the
-  sugar-crush config shape, `McpClient::setDenyPatterns(array<string,string>)`)
+  candy-code config shape, `McpClient::setDenyPatterns(array<string,string>)`)
   and `pattern => ['action' => 'deny']` — normalised once in the constructor,
   unrecognised shapes throw THERE. Reading a bare string as a spec array made
   every incoming deny rule inert (`'deny'['action'] ?? ''` is `''`); an inert
   deny is a WIDENED boundary, the same failure the allow side refuses loudly.
-- **`__destruct` → stop()** is the library-level orphan guarantee; sugar-crush
+- **`__destruct` → stop()** is the library-level orphan guarantee; candy-code
   had process-lifetime as the implicit backstop, a library cannot assume it.
 
-## Boundaries vs. the product (sugar-crush)
+## Boundaries vs. the product (candy-code)
 
 - ProcessContainment (setsid-wrapped detached spawn, PATH pre-check, curated
   env) stays downstream — product policy about WHO may be spawned, not the
@@ -65,9 +65,9 @@
   launch before any child exists (that is where crush's PATH pre-check lives).
 - `$clientInfo` is the other ctor seam: the initialize-handshake identity,
   parsed fail-fast at construction (non-empty string `name` + string
-  `version`); default advertises sugar-mcp-client, sugar-crush's adapter sends its
+  `version`); default advertises sugar-mcp-client, candy-code's adapter sends its
   own product identity through it.
-- Router takes a plain `list<string>` allow-list; sugar-crush's AgentPreset
+- Router takes a plain `list<string>` allow-list; candy-code's AgentPreset
   extraction (`$preset->mcpServers`) stays downstream.
 - MAX_FRAME_BYTES restates the product family's 64MiB cap as a library-local
   constant (pinned != MAX_STDERR_BYTES to catch a collapse edit).
@@ -96,7 +96,7 @@
   `--chatty` fixture shape.
 - **Signal 0 says a zombie is alive.** From a `pcntl_fork()`ed caller the
   liveness probe is `posix_kill($pid, 0)`, and a server the owner has not
-  reaped yet (sugar-crush's parent sits in `waitpid()` on the turn, never in
+  reaped yet (candy-code's parent sits in `waitpid()` on the turn, never in
   `proc_get_status()`) is a zombie that passes it. The non-owner branch reads
   `/proc/<pid>/stat` too: state `Z`/`X` is dead, and a start time other than
   the one recorded at `start()` is a reused pid, also dead. Owner-only tests

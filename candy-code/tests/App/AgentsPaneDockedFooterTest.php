@@ -1,0 +1,141 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\App;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Chat;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\Tui\Renderer as ShellRenderer;
+
+/**
+ * CL-2 FIX 2 — one agent listing per frame. The under-input transcript
+ * footer ({@see \SugarCraft\Code\Renderer::renderAgentView()}) and the
+ * docked Agents sidebar are the same listing in two places; the shell now
+ * tells the transcript renderer, per paint, that the sidebar owns the frame
+ * and the footer stands down. Undocked the footer remains the sole display.
+ *
+ * The fixture family carries deliberately distinct helper names from the
+ * AgentsPaneLiveRowsTest twins (DuplicatedTestHelperDrift discipline).
+ */
+final class AgentsPaneDockedFooterTest extends TestCase
+{
+    private const LISTING_MARK = 'Zebra checkmark probe';
+
+    private ProviderInterface $footerProvider;
+
+    protected function setUp(): void
+    {
+        $this->footerProvider = $this->createMock(ProviderInterface::class);
+        // Pinned process size (DockDefaultIdentityTest idiom): the frame is
+        // composed without any message traversing delegateToChat, so CL-2
+        // FIX 1's auto-enable never fires in these fixtures — dock state is
+        // exactly what each case sets.
+        ShellRenderer::setSize(200, 60);
+    }
+
+    protected function tearDown(): void
+    {
+        ShellRenderer::resetSizeCache();
+    }
+
+    private function rosterMember(string $name): Agent
+    {
+        return new Agent(
+            name: $name,
+            description: 'Reviews code for bugs',
+            prompt: 'You are a reviewer.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: false,
+        );
+    }
+
+    private function managerListingOneRun(): AgentManager
+    {
+        $manager = new AgentManager($this->footerProvider, new SkillRegistry());
+        $manager->register($this->rosterMember('reviewer'));
+        $manager->projectRemoteSubAgent(new SubAgentActivity(
+            SubAgentActivity::OP_STARTED,
+            'rid-zebra',
+            'reviewer',
+            self::LISTING_MARK,
+            1,
+            '',
+        ));
+
+        return $manager;
+    }
+
+    private function sizedApp(bool $agentsDocked): App
+    {
+        $app = App::new($this->footerProvider, 'test-model')
+            ->withChat(new Chat(agentManager: $this->managerListingOneRun()));
+
+        return $agentsDocked ? $app->togglePaneDocking(Pane::Agents) : $app;
+    }
+
+    private function frameText(App $app): string
+    {
+        $view = $app->view();
+
+        return (string) preg_replace(
+            '/\x{E000}[^\x{E001}]*\x{E001}|[\x{E000}-\x{F8FF}]/u',
+            '',
+            Ansi::strip(\is_string($view) ? $view : $view->body),
+        );
+    }
+
+    public function testTheDockedSidebarIsTheFramesOnlyAgentListing(): void
+    {
+        $frame = $this->frameText($this->sizedApp(agentsDocked: true));
+
+        $this->assertStringContainsString(self::LISTING_MARK, $frame, 'the docked sidebar still lists the run');
+        $this->assertSame(
+            1,
+            substr_count($frame, self::LISTING_MARK),
+            'the transcript footer stands down while the Agents pane is docked',
+        );
+    }
+
+    public function testTheFooterRemainsTheSoleListingWhileThePaneIsUndocked(): void
+    {
+        $frame = $this->frameText($this->sizedApp(agentsDocked: false));
+
+        $this->assertStringContainsString(self::LISTING_MARK, $frame, 'focus on Chat with no sidebar: the footer paints');
+        // The undocked footer block lists the run on its status row and its
+        // dashboard row — two rows of ONE listing, and no sidebar column.
+        // The docked/undocked 1-vs-2 contrast is the suppression proof.
+        $this->assertSame(
+            2,
+            substr_count($frame, self::LISTING_MARK),
+            'both hits are the footer block itself; no sidebar adds a third',
+        );
+    }
+
+    public function testTheDockedFlagLivesExactlyAsLongAsThePaint(): void
+    {
+        $app = $this->sizedApp(agentsDocked: true);
+        $this->frameText($app);
+
+        // A standalone hosted render after a hosted frame must not inherit a
+        // stale suppression — the finally-reset is the whole safety story.
+        $standalone = \SugarCraft\Code\Renderer::render($app->chat);
+        $this->assertStringContainsString(
+            self::LISTING_MARK,
+            Ansi::strip($standalone),
+            'the footer returns for non-composited renders',
+        );
+    }
+}

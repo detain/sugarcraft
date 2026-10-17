@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from sugar-crush's <code>BuildsUnifiedDiff</code> trait and the <code>DiffGutter</code> region model, so every surface that produces or displays patches reads the same line numbers out of the same engine. First-party — there is no 1:1 Go counterpart.</p>
+<p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from candy-code's <code>BuildsUnifiedDiff</code> trait and the <code>DiffGutter</code> region model, so every surface that produces or displays patches reads the same line numbers out of the same engine. First-party — there is no 1:1 Go counterpart.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-diff:@dev</code></pre>
@@ -17,7 +17,7 @@ echo $diff->unified('file.txt');
 // -Hello World
 // +Hello PHP
 
-// Immutable, fluent options — defaults reproduce sugar-crush byte-for-byte.
+// Immutable, fluent options — defaults reproduce candy-code byte-for-byte.
 $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withContextLines(10)
     ->withIgnoreWhitespace()
@@ -40,7 +40,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers.</li>
-      <li><strong>Editing tools</strong> — the same engine sugar-crush's Edit/Write tools use to report changes to the model and the user.</li>
+      <li><strong>Editing tools</strong> — the same engine candy-code's Edit/Write tools use to report changes to the model and the user.</li>
       <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
     </ul>
 
@@ -56,7 +56,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff (byte-for-byte faithful to sugar-crush defaults)</td></tr>
+<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff (byte-for-byte faithful to candy-code defaults)</td></tr>
 <tr><td>Diff</td><td>unified(string $path, ?string $newPath = null): string</td><td>Full diff -u text with --- / +++ headers</td></tr>
 <tr><td>Diff</td><td>hunkText(): string</td><td>Hunks only, no file headers</td></tr>
 <tr><td>Diff</td><td>isEmpty() / addedLines() / removedLines(): int|bool</td><td>Summary counts</td></tr>

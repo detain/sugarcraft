@@ -19,7 +19,7 @@ Lane: D5 (batch-D line 39, ns Kit→Cli, type=lib, bins {}). Branch `rename/d5` 
 - candy-kit suite: **272T/1634A/0F/0E/0S/0W OK** (rename-baseline.md:42 EXACT — line tagged @rename-keep at tag-prep). <!-- @rename-keep -->
 - candy-sql suite: **1580T/11900A OK** (entry-row figure EXACT).
 - tools/tests: **426T/1484A OK** (via candy-kit/vendor/bin/phpunit). <!-- @rename-keep -->
-- sugar-crush K=8 sharded CONSERVATION PASS at base: shards 22564T/**423771A**/0F/0E/2S vs pinned figure 22564/423652 (+0T/+119A tree-scan wobble, within conservation design). Conservation baseline for this lane = 22564T/423771A/2S.
+- candy-code K=8 sharded CONSERVATION PASS at base: shards 22564T/**423771A**/0F/0E/2S vs pinned figure 22564/423652 (+0T/+119A tree-scan wobble, within conservation design). Conservation baseline for this lane = 22564T/423771A/2S.
 
 ## Self-lock law
 

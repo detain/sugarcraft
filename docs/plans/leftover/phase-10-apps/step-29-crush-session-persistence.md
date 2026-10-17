@@ -1,6 +1,6 @@
-# Step 10.29 — sugar-crush session persistence (JSONL save/restore)
+# Step 10.29 — candy-code session persistence (JSONL save/restore)
 
-**Source:** `leftover_updates_later.md` sugar-crush H1
+**Source:** `leftover_updates_later.md` candy-code H1
 **Branch:** `ai/crush-session-persistence`
 
 ## Deliverable
@@ -10,16 +10,16 @@ on startup. Atomic save via tmp+rename (Homedash pattern).
 
 ## Files
 
-**Create:** `sugar-crush/src/SessionManager.php`, `Persistence/JsonlStore.php`.
+**Create:** `candy-code/src/SessionManager.php`, `Persistence/JsonlStore.php`.
 
 ## Tests
 
-- `sugar-crush/tests/SessionManagerTest.php` — round-trip across
+- `candy-code/tests/SessionManagerTest.php` — round-trip across
   process restart.
 
 ## Acceptance
 
-- `cd sugar-crush && vendor/bin/phpunit --filter Session` green.
+- `cd candy-code && vendor/bin/phpunit --filter Session` green.
 
 ---
 

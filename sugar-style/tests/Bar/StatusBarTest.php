@@ -73,7 +73,7 @@ final class StatusBarTest extends TestCase
 
     public function testNaturalJoinsGroupWithSeparator(): void
     {
-        // Mirrors the sugar-crush pipe-joined bar wrapped in edge spaces.
+        // Mirrors the candy-code pipe-joined bar wrapped in edge spaces.
         $b = StatusBar::new()->separator('  |  ')->left('a', 'b', 'c')->caps(' ', ' ');
         $this->assertSame(' a  |  b  |  c ', $b->render());
     }

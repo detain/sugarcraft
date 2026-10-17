@@ -1,11 +1,11 @@
 {
     "name": "sugarcraft/sugar-crush-web",
-    "description": "Browser UI for sugar-crush's WebSocket server mode, shipped as a pre-built Vite + Vue 3 bundle with a one-class PHP shim that locates it. `sugarcrush serve` serves it on the same port, so PHP users need no Node.",
+    "description": "Browser UI for candy-code's WebSocket server mode, shipped as a pre-built Vite + Vue 3 bundle with a one-class PHP shim that locates it. `candy-code serve` serves it on the same port, so PHP users need no Node.",
     "type": "library",
     "license": "MIT",
     "keywords": [
         "sugarcraft",
-        "sugarcrush",
+        "candy-code",
         "crush",
         "web-ui",
         "vue",

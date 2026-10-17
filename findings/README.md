@@ -103,7 +103,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | candy-starter | 0 HIGH, 1 MED, 5 LOW | Style allocation, case-insensitive key handling |
 | candy-flappy | 2 HIGH, 3 MED, 5 LOW | Collision off-by-one, non-atomic file I/O |
 | sugar-flexbox | 2 HIGH, 2 MED, 4 LOW | UTF-8 corruption in sanitize, example import bug |
-| sugar-crush | 2 HIGH, 3 MED, 2 LOW | EOF buffer drain, mouse coordinate off-by-one |
+| candy-code | 2 HIGH, 3 MED, 2 LOW | EOF buffer drain, mouse coordinate off-by-one |
 | sugar-readline | 0 HIGH, 5 MED, 6 LOW | Unbounded history, blocking save, Vi cursor off-by-one |
 | sugar-datepicker | 1 HIGH, 2 MED, 4 LOW | Viewport overflow, month re-render per view() |
 | sugar-toast | 0 HIGH, 3 MED, 3 LOW | Viewport overflow, non-cancellable timer, no action buttons |
@@ -141,7 +141,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 - Cache Style objects in hot render loops (candy-starter, candy-flappy, sugar-markdown)
 - Pre-compute visible column indices before row iteration (sugar-flexbox, sugar-table)
-- Add caching to SmithWatermanMatcher in fuzzy filter (candy-scriptui, sugar-crush)
+- Add caching to SmithWatermanMatcher in fuzzy filter (candy-scriptui, candy-code)
 - Use array rewind + single-pass iteration instead of multiple array_map passes
 
 ### 4. PHP 8.4 Readiness

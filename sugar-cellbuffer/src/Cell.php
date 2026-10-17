@@ -27,7 +27,7 @@ namespace SugarCraft\CellBuffer;
  * for stripping/replacing control bytes before building cells from
  * untrusted text — escape sequences belong to the parser, never a cell.
  * A hard reject was evaluated and deferred: multiple foundation
- * consumers (sugar-treelist, sugar-crush, sugar-table) legitimately splat
+ * consumers (sugar-treelist, candy-code, sugar-table) legitimately splat
  * pre-rendered strings char-by-char into runes and rely on the
  * pass-through behaviour, so validation has to live at those call sites.
  *

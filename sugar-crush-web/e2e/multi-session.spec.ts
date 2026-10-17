@@ -83,7 +83,7 @@ test('a question in a session nobody here watches reaches the drawer at once, an
 
     // No subscription, no tick: the server-scope permission.asked is enough.
     await expect(page.getByTestId('approvals-count')).toHaveText('1', { timeout: 10_000 })
-    await expect(page).toHaveTitle('(1) SugarCrush')
+    await expect(page).toHaveTitle('(1) CandyCode')
     await expect(page.getByTestId('session-view')).toHaveAttribute('data-session-id', watched)
     await expect.poll(() => page.evaluate(() => (window as unknown as { __notifications: string[] }).__notifications)).toContain('Bash is waiting for an answer')
 

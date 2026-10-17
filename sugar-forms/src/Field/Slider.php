@@ -233,7 +233,7 @@ final class Slider implements \SugarCraft\Forms\Field
      * Slider stays dependency-free — it types sugar-core's own `MouseMsg`
      * (already a required sibling, zero new composer requires), so a host on
      * the TEA channel just forwards messages to {@see update()}, while a
-     * host that owns the layout geometry (sugar-crush runs sugar-mouse and
+     * host that owns the layout geometry (candy-code runs sugar-mouse and
      * knows the track's absolute screen rect) hit-tests itself and calls
      * THIS method with the zone it computed.
      *
@@ -251,7 +251,7 @@ final class Slider implements \SugarCraft\Forms\Field
      * Press, Motion and Release are handled identically in v1 — the widget
      * keeps no drag state, so a host may fire on any action. Wheel messages
      * and non-left buttons answer null (not the widget's to take): noted
-     * divergence — sugar-crush's Viewport routes the wheel as Up/Down
+     * divergence — candy-code's Viewport routes the wheel as Up/Down
      * KeyMsgs today, so also answering WheelDown here would double-step.
      *
      * @param int $zoneLeft   1-based column of the zone's first draggable cell

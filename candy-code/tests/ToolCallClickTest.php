@@ -1,0 +1,395 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Renderer;
+use SugarCraft\Code\ToolResult;
+use SugarCraft\Mouse\Sentinel;
+use SugarCraft\Mouse\Zone;
+
+/**
+ * crush_feat.md section 8 E5 — click a tool call to expand/collapse it.
+ *
+ * Renderer-side assertions are structural snapshots of the zone registry the
+ * root scan produces (the sentinels themselves never survive into the frame,
+ * so the registry IS the observable output) plus a byte-level layout check;
+ * Chat-side assertions drive `update()` and assert on the returned
+ * `[Model, ?Cmd]`.
+ *
+ * @see Renderer::markToolCalls()
+ * @see Chat::toggleToolOutput()
+ */
+final class ToolCallClickTest extends TestCase
+{
+    private const VARS = ['CANDY_CODE_DISABLE_MOUSE', 'CANDY_CODE_DISABLE_MOUSE_CLICKS'];
+
+    protected function setUp(): void
+    {
+        foreach (self::VARS as $var) {
+            putenv($var);
+        }
+        Renderer::scanner()->clear();
+        $this->resetClickTracker();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (self::VARS as $var) {
+            putenv($var);
+        }
+        Renderer::scanner()->clear();
+        $this->resetClickTracker();
+    }
+
+    // =========================================================================
+    // Renderer: tool-call rows carry click zones
+    // =========================================================================
+
+    public function testToolCallRowIsRegisteredAsAToolCallZone(): void
+    {
+        Renderer::render($this->chatWith([$this->toolMessage('grep', "alpha\nbeta", 'call_1')]));
+
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+
+        self::assertInstanceOf(Zone::class, $zone);
+        // Single-row, like every other zone this renderer marks: render()
+        // slices the frame to the terminal's height, and a multi-row zone can
+        // lose one of its sentinels to that slice and desync the whole scan.
+        self::assertSame($zone->startRow, $zone->endRow);
+    }
+
+    /**
+     * The zone id is the SAME key {@see Chat::expanded()} uses, which is what
+     * lets the click reuse §1 E5's expansion map instead of adding a second
+     * one. A result with no id is keyed by its tool name.
+     */
+    public function testAResultWithoutAnIdIsZonedUnderItsToolName(): void
+    {
+        Renderer::render($this->chatWith([$this->toolMessage('grep', 'alpha', null)]));
+
+        self::assertInstanceOf(Zone::class, Renderer::scanner()->get('toolcall:grep'));
+    }
+
+    /**
+     * Regression for the layout failure the post-styling marking pass exists
+     * to avoid: `Style::render()` measures every line to size the border and
+     * pad the short ones, and it counts a sentinel pair as ~29 columns of
+     * content. Marking the label before the shell is drawn therefore left
+     * rows a different visible width than the identical unmarked frame.
+     *
+     * CL-3 re-pins the LAW for the borderless shell: since the transcript
+     * rows no longer share one boxed width, invariance is asserted as the
+     * pairing — every row of the marked frame keeps the display width the
+     * same frame has with clicks off (marking may add zones, it may not move
+     * a cell). The pre-CL-3 form compared the bordered rows against each
+     * other, which only meant something while they were all boxed equal.
+     */
+    public function testToolCallZoneMarkingLeavesEveryShellRowTheSameWidth(): void
+    {
+        $messages = [
+            Message::user('find the bug'),
+            $this->toolMessage('grep', "alpha\nbeta", 'call_1'),
+        ];
+
+        $marked = Renderer::render($this->chatWith($messages));
+        self::assertNotNull(
+            Renderer::scanner()->get('toolcall:call_1'),
+            'the pairing below only means something for a frame that was actually marked',
+        );
+
+        putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS=1');
+        $unmarked = Renderer::render($this->chatWith($messages));
+        self::assertNull(
+            Renderer::scanner()->get('toolcall:call_1'),
+            'the second fixture must paint the same frame UNmarked',
+        );
+
+        $markRows = explode("\n", $marked);
+        $plainRows = explode("\n", $unmarked);
+        self::assertCount(count($plainRows), $markRows, 'marking changed the frame height');
+        self::assertGreaterThan(4, count($plainRows));
+        foreach ($markRows as $i => $row) {
+            self::assertSame(
+                Width::string($this->stripSgr($plainRows[$i])),
+                Width::string($this->stripSgr($row)),
+                "row {$i} gained or lost display width to the marking pass",
+            );
+        }
+    }
+
+    public function testNoToolCallZoneIsMarkedWhenClicksAreDisabled(): void
+    {
+        putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS=1');
+
+        $frame = Renderer::render($this->chatWith([$this->toolMessage('grep', 'alpha', 'call_1')]));
+
+        self::assertStringContainsString('tool: grep', $frame);
+        self::assertNull(Renderer::scanner()->get('toolcall:call_1'));
+    }
+
+    public function testToolCallZoneMarkersNeverReachTheRenderedFrame(): void
+    {
+        $frame = Renderer::render($this->chatWith([$this->toolMessage('grep', 'alpha', 'call_1')]));
+
+        self::assertStringNotContainsString(Sentinel::OPEN, $frame);
+        self::assertStringNotContainsString(Sentinel::CLOSE, $frame);
+        self::assertStringContainsString('tool: grep', $frame);
+    }
+
+    /**
+     * A tool-call id is whatever the provider (ultimately the model) put in
+     * the call, so an id outside Mark's charset would throw from inside
+     * `view()` and take the TUI down. The row renders unmarked instead.
+     */
+    public function testAnIdOutsideTheZoneCharsetIsRenderedUnmarked(): void
+    {
+        $frame = Renderer::render($this->chatWith([$this->toolMessage('grep', 'alpha', 'call one')]));
+
+        self::assertStringContainsString('tool: grep', $frame);
+        foreach (Renderer::scanner()->all() as $zone) {
+            self::assertStringStartsNotWith(Renderer::TOOL_CALL_ZONE_PREFIX, $zone->id);
+        }
+    }
+
+    /**
+     * Two id-less results sharing a name collide on one key. Registering it
+     * twice would make the scan throw, which clears the registry and costs
+     * the frame every OTHER zone too — so the duplicate is dropped, and the
+     * status bar's pane zone survives.
+     */
+    public function testADuplicateToolCallKeyIsRegisteredOnlyOnce(): void
+    {
+        Renderer::render($this->chatWith([
+            $this->toolMessage('grep', 'alpha', null),
+            $this->toolMessage('grep', 'beta', null),
+        ]));
+
+        $toolZones = array_filter(
+            Renderer::scanner()->all(),
+            static fn (Zone $zone): bool => str_starts_with($zone->id, Renderer::TOOL_CALL_ZONE_PREFIX),
+        );
+
+        self::assertCount(1, $toolZones);
+        self::assertInstanceOf(Zone::class, Renderer::scanner()->get('pane:menu'));
+    }
+
+    /**
+     * Two calls to the same tool render byte-identical label rows, so the row
+     * search has to resume past each claim; otherwise both ids would resolve
+     * to the first row and clicking the second one would expand the first.
+     */
+    public function testTwoCallsToTheSameToolClaimTheirOwnRowsInDocumentOrder(): void
+    {
+        Renderer::render($this->chatWith([
+            $this->toolMessage('grep', 'alpha', 'call_1'),
+            $this->toolMessage('grep', 'beta', 'call_2'),
+        ]));
+
+        $first = Renderer::scanner()->get('toolcall:call_1');
+        $second = Renderer::scanner()->get('toolcall:call_2');
+
+        self::assertInstanceOf(Zone::class, $first);
+        self::assertInstanceOf(Zone::class, $second);
+        self::assertLessThan($second->startRow, $first->startRow);
+    }
+
+    // =========================================================================
+    // Chat: a completed click on a tool row toggles that call's output
+    // =========================================================================
+
+    public function testLeftClickOnAToolRowExpandsItsOutput(): void
+    {
+        $chat = $this->chatWith([$this->toolMessage('grep', "alpha\nbeta", 'call_1')]);
+        Renderer::render($chat);
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        [$afterPress, $pressCmd] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        self::assertNull($pressCmd);
+        self::assertFalse($afterPress->isToolOutputExpanded('call_1'), 'press alone must not expand');
+
+        // Released on the press cell, not the row's far edge: sweeping to
+        // endCol is a text selection under section 8 E8, not a click.
+        [$afterRelease, $releaseCmd] = $afterPress->update($this->release($zone->startCol, $zone->startRow));
+
+        self::assertNull($releaseCmd);
+        self::assertTrue($afterRelease->isToolOutputExpanded('call_1'));
+        self::assertStringContainsString('alpha', Renderer::render($afterRelease));
+    }
+
+    public function testClickingAnExpandedToolRowCollapsesItAgain(): void
+    {
+        $chat = $this->chatWith([$this->toolMessage('grep', "alpha\nbeta", 'call_1')])->toggleToolOutput('call_1');
+        Renderer::render($chat);
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat, $cmd] = $chat->update($this->release($zone->startCol, $zone->startRow));
+
+        self::assertNull($cmd);
+        self::assertFalse($chat->isToolOutputExpanded('call_1'));
+        // Collapsing REMOVES the key rather than storing false, so the map
+        // stays the size of what is actually open.
+        self::assertSame([], $chat->expanded());
+    }
+
+    /**
+     * Ctrl+O can only name the LAST tool call — Chat has no history cursor to
+     * select an earlier one with — so before this step an older call's output
+     * was unreachable. A click names the row it landed on.
+     */
+    public function testClickingAnOlderToolRowExpandsThatCallAndNotTheNewestOne(): void
+    {
+        $chat = $this->chatWith([
+            $this->toolMessage('grep', "alpha\nbeta", 'call_1'),
+            $this->toolMessage('bash', "gamma\ndelta", 'call_2'),
+        ]);
+        Renderer::render($chat);
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat, $cmd] = $chat->update($this->release($zone->startCol, $zone->startRow));
+
+        self::assertNull($cmd);
+        self::assertTrue($chat->isToolOutputExpanded('call_1'));
+        self::assertFalse($chat->isToolOutputExpanded('call_2'));
+    }
+
+    public function testPressOnAToolRowAndReleaseElsewhereDoesNotToggle(): void
+    {
+        // The drag-away / text-selection case: routing through
+        // ZoneClickTracker is what keeps this from firing.
+        $chat = $this->chatWith([$this->toolMessage('grep', "alpha\nbeta", 'call_1')]);
+        Renderer::render($chat);
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat] = $chat->update($this->release($zone->startCol, $zone->startRow + 3));
+
+        self::assertFalse($chat->isToolOutputExpanded('call_1'));
+    }
+
+    public function testClickIsIgnoredWhenClicksAreDisabled(): void
+    {
+        $chat = $this->chatWith([$this->toolMessage('grep', "alpha\nbeta", 'call_1')]);
+        Renderer::render($chat);
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS=1');
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat] = $chat->update($this->release($zone->startCol, $zone->startRow));
+
+        self::assertFalse($chat->isToolOutputExpanded('call_1'));
+    }
+
+    public function testRightButtonOnAToolRowIsIgnored(): void
+    {
+        $chat = $this->chatWith([$this->toolMessage('grep', "alpha\nbeta", 'call_1')]);
+        Renderer::render($chat);
+        $zone = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $zone);
+
+        [$chat] = $chat->update(new MouseClickMsg($zone->startCol, $zone->startRow, MouseButton::Right, MouseAction::Press));
+        [$chat, $cmd] = $chat->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Right, MouseAction::Release));
+
+        self::assertNull($cmd);
+        self::assertFalse($chat->isToolOutputExpanded('call_1'));
+    }
+
+    /**
+     * A settled thought's collapsed row is a click zone on the SAME registry and
+     * expansion map as tool rows: one click opens it, a second closes it.
+     */
+    public function testClickingAThoughtRowOpensItAndClickingAgainClosesIt(): void
+    {
+        $reasoning = "THOUGHTBODY weighing it\nand deciding";
+        $key = Renderer::thoughtKey($reasoning);
+        $chat = $this->chatWith([Message::user('why?'), Message::assistant('Because.', null, $reasoning)]);
+        self::assertStringNotContainsString('THOUGHTBODY', Renderer::render($chat));
+
+        $zone = Renderer::scanner()->get('toolcall:' . $key);
+        self::assertInstanceOf(Zone::class, $zone);
+        self::assertSame($zone->startRow, $zone->endRow);
+
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat, $cmd] = $chat->update($this->release($zone->startCol, $zone->startRow));
+        self::assertNull($cmd);
+        self::assertTrue($chat->isToolOutputExpanded($key));
+        self::assertStringContainsString('THOUGHTBODY', Renderer::render($chat));
+
+        $zone = Renderer::scanner()->get('toolcall:' . $key);
+        self::assertInstanceOf(Zone::class, $zone);
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat] = $chat->update($this->release($zone->startCol, $zone->startRow));
+        self::assertFalse($chat->isToolOutputExpanded($key));
+        self::assertStringNotContainsString('THOUGHTBODY', Renderer::render($chat));
+    }
+
+    /**
+     * A thought row and the tool row below it claim their own rows, so a
+     * click on either toggles only that one.
+     */
+    public function testAThoughtAboveAToolRowGetsItsOwnZone(): void
+    {
+        $reasoning = 'check the clock';
+        $message = Message::assistant('', reasoning: $reasoning)->withToolResults([ToolResult::ok('clock', 'noon', 'call_1')]);
+        Renderer::render($this->chatWith([$message]));
+
+        $thought = Renderer::scanner()->get('toolcall:' . Renderer::thoughtKey($reasoning));
+        $tool = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $thought);
+        self::assertInstanceOf(Zone::class, $tool);
+        self::assertLessThan($tool->startRow, $thought->startRow, 'the thought belongs ABOVE the call it led to');
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    /**
+     * @param list<Message> $history
+     */
+    private function chatWith(array $history): Chat
+    {
+        return new Chat(history: $history);
+    }
+
+    private function toolMessage(string $name, string $body, ?string $id): Message
+    {
+        return Message::assistant('')->withToolResults([ToolResult::ok($name, $body, $id)]);
+    }
+
+    private function press(int $col, int $row): MouseClickMsg
+    {
+        return new MouseClickMsg($col, $row, MouseButton::Left, MouseAction::Press);
+    }
+
+    private function release(int $col, int $row): MouseReleaseMsg
+    {
+        return new MouseReleaseMsg($col, $row, MouseButton::Left, MouseAction::Release);
+    }
+
+    private function stripSgr(string $line): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+    }
+
+    private function resetClickTracker(): void
+    {
+        (new \ReflectionProperty(Chat::class, 'clickTracker'))->setValue(null, null);
+    }
+}

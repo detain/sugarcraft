@@ -1,0 +1,695 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Hooks\BuiltIn;
+
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Hooks\HookInterface;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\ShellWords;
+use SugarCraft\Code\Tools\Catalog\ToolCatalog;
+use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
+use SugarCraft\Code\Tools\Edit\PatchParser;
+
+final readonly class ProtectFilesHook implements HookInterface
+{
+    /**
+     * Default protected-file patterns applied when the hook is constructed
+     * without an explicit list. Each entry is a regex matched against the
+     * command / file-path pulled from the tool call.
+     *
+     * THE LAST TWO GUARD THE FILES THAT DECIDE WHAT THIS SESSION IS ALLOWED TO
+     * DO. `~/.candy-code/config.json` carries `permissionMode`,
+     * `permissionRules` and the `trustedProjectHooks` allowlist;
+     * `.candy-code/hooks.yaml` is shell commands run on tool calls; and
+     * `.candy-code/agents/*.md` presets carry their own `permissionMode:` and
+     * `tools:` (see {@see \SugarCraft\Code\Agents\AgentPreset}). Before
+     * {@see \SugarCraft\Code\Cli\Bootstrap::hookFiles()} read them, writing
+     * them was inert; now that they are live, an unprompted write to
+     * `trustedProjectHooks` is the model granting itself the trust the gate
+     * exists to withhold — measured end-to-end, in the shipped
+     * bypass-permissions default, as one Bash call plus one provider switch.
+     * So the deny fires HERE, ahead of {@see PermissionGateHook}, in every
+     * permission mode.
+     *
+     * The rest of `~/.candy-code` (the session database, the memory store) is
+     * deliberately NOT listed: it is per-user data rather than policy, and
+     * nothing there decides what this session may do.
+     *
+     * `composer.json` / `composer.lock` USED TO BE LISTED and are not any more.
+     * They are neither secrets (both are committed) nor policy (nothing in them
+     * decides what this session may do), and the entries were unanchored
+     * substrings judged against Read paths and whole Bash strings alike, so
+     * they refused `grep -c . sugar-core/composer.json`, a `Read` of any
+     * manifest, and every `for d in candy-*; do [ -f "$d/composer.json" ]` loop — in
+     * a PHP monorepo, the most ordinary inspection there is. A model that
+     * wanted to abuse a manifest's `scripts` already holds Bash, so the deny
+     * contained nothing while blocking the audit and dependency work the
+     * agent is for.
+     *
+     * THE `.env` PATTERN USED TO BE `/(^|[\s\/])\.env(\s|$)/` (audit F-J2), and
+     * both of its boundaries were the bypass. Wanting whitespace or the end of
+     * the string AFTER the name let `cat .env;true`, `cat .env|x` and
+     * `cat .env>&2` through; wanting whitespace or `/` BEFORE it let
+     * `cat ".env"`, `cat '.env'`, `cat <.env` and `--env-file=.env` through;
+     * and `.env.local` / `.env.production` — where frameworks put the real
+     * credentials — were never covered at all. Both boundaries are now
+     * lookarounds over the same `[\w.-]` "this byte makes it a different name"
+     * class {@see self::WRITE_ONLY_PATTERNS} uses, so any punctuation a shell or
+     * a quote puts next to the name still matches. What the family covers, as a
+     * deliberate list rather than an accident of a regex:
+     *
+     *  - DENIED: `.env`, `.env.<anything>` (`.env.local`, `.env.production`,
+     *    `.env.bak`, `.env.swp` — a backup of the secret is the secret), and
+     *    `.envrc`. direnv's `.envrc` is the same thing under another name:
+     *    `export AWS_SECRET_ACCESS_KEY=…` is what people put in it, and it is
+     *    as often gitignored as `.env` is. A committed `.envrc` that only says
+     *    `use flake` costs a refused Read; a leaked one costs the key.
+     *  - ALLOWED: the committed templates `.env.example`, `.env.sample`,
+     *    `.env.dist`, `.env.template`, `.env.tpl` (and `.env.<stage>.example`,
+     *    `.envrc.example`). They exist precisely so they can be read and are
+     *    the first file an agent opens to learn what a project needs.
+     *  - NOT A `.env` AT ALL: a name where `.env` is glued to a word before it
+     *    (`foo.env.example`, `process.env.API_KEY`, `dotenv.php`), or followed
+     *    by more name (`.environment`, `.env_old`, `.env-local`) — the
+     *    lookbehind/lookahead are what keep `grep -rn process.env src` usable.
+     *    Nor a `.env/` DIRECTORY: `python -m venv .env` is a common spelling of
+     *    a virtualenv, and `.env/bin/python` holds no secret. `prod.env` is
+     *    deliberately out of scope for the same reason `process.env` is: the
+     *    name shape cannot tell them apart.
+     *
+     * KEY MATERIAL (step 0.14-c), read- and write-denied like `.env`:
+     *
+     *  - `*.pem` and `*.key`, any case: a TLS or signing private key is the
+     *    credential itself. The name must have a stem (`server.key`,
+     *    `deploy.PEM`), because a BARE `.key` is far more often jq's or a
+     *    template's property path (`jq .key`) than a dotfile; a glob stem
+     *    (`*.pem`, `?.key`) counts, so `Glob **\/*.key` and `Grep
+     *    include=*.pem` are refused as statements of intent. Public
+     *    certificates are `.pem` too (`ca.pem`) and are refused all the same:
+     *    the extension cannot tell a chain from a key, and the fail-closed
+     *    reading costs a `Read` of a public file. In `Bash` a dotted property
+     *    spelled like a file (`grep -rn item.key src`) is refused as well —
+     *    the text-match cost the `.env` family already pays for
+     *    `process.env`-free spellings; the `Grep` tool's `pattern` is not
+     *    judged, so the same search through it still works.
+     *  - SSH identities `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (and
+     *    their `_sk`/suffixed variants such as `id_rsa_work`), EXCEPT the
+     *    `.pub`/`.public` half, which exists to be shared. Two fixed-length
+     *    lookbehinds carry the pair — PCRE refuses a variable-length one.
+     *
+     * CREDENTIAL-STORE FILES (rv-sec-2): the SDK/tool keychains that hold real
+     * credentials under names nobody thought to give `.env`, `.pem` or `id_*`.
+     * Read- AND write-denied like the rest of this list, in every mode except
+     * the disclosed `bypass-permissions` waiver (see {@see self::execute()}).
+     *
+     *  - `~/.aws/credentials` — the AWS SDK shared-credentials file this repo
+     *    literally depends on (`aws/aws-sdk-php`). The `credentials` tail is
+     *    prefix-absorbed (no trailing boundary): a suffixed sibling inside the
+     *    `.aws/` directory (`credentials-work`, a `credentials.backup`) is the
+     *    same class of secret, and the fail-closed direction of the
+     *    incomplete-list argument at {@see self::WRITE_ONLY_PATTERNS} applies.
+     *  - the WHOLE `~/.ssh/` DIRECTORY, not only `id_*` names: `~/.ssh/config`
+     *    carries `IdentityCommand`/`ProxyCommand` (code that ssh runs), and a
+     *    key named `deploy_key` matches none of the identity patterns above.
+     *    The arm requires a `/` or end-of-word after `.ssh`, so
+     *    `.ssh-known_hosts` style names and `.sshfoo/` are other things; the
+     *    identity arm's `.pub`/`.public` exception carries into the directory
+     *    arm via a lookahead, so `~/.ssh/id_ed25519.pub` stays readable exactly
+     *    as it was before (the shared half exists to be shared, under either
+     *    spelling), while every other name
+     *    under the directory — `config`, `authorized_keys`, `deploy_key` — is
+     *    refused.
+     *  - `~/.config/gcloud/` — Google ADC (`google/cloud-ai-platform` is a
+     *    dep): `application_default_credentials.json` inside it is an OAuth
+     *    refresh token.
+     *  - `.netrc` / `_netrc` (the Windows spelling) and `.npmrc` — the
+     *    `password`/`_authToken` lines. `\b`-bounded, so `netrcparser.php` and
+     *    a word glued before them (lookbehind) stay readable; `.netrc.bak`
+     *    rides the denial (a backup of the secret is the secret).
+     *  - `~/.docker/config.json` — registry `auths` bearer tokens; and
+     *    `~/.git-credentials` — plaintext `user:token@host` lines.
+     *
+     * All carry `i` for case-insensitive filesystems (macOS, Windows), the
+     * `.git/hooks` argument above: there `~/.SSH/` IS the ssh directory.
+     */
+    public const DEFAULT_PROTECTED_PATTERNS = [
+        '/(?<![\w.-])\.env(?:rc)?(?![\w\/-])(?!(?:\.[\w-]+)*\.(?:example|sample|dist|template|tpl)(?![\w.-]))/',
+        '/[\w*?-]\.(?:pem|key)(?![\w.-])/i',
+        '/(?<![\w.-])id_(?:rsa|dsa|ecdsa|ed25519)[\w.-]*(?<!\.pub)(?<!\.public)(?![\w.-])/',
+        '/\.git\/config\b/',
+        '/(^|\/)config\/[^\s]*\.php\b/',
+        '/(?<![\w.-])\.aws\/credentials/i',
+        '/(?<![\w.-])\.ssh(?:\/(?!\S*\.(?:pub|public)(?![\w.-]))|$)/i',
+        '/(?<![\w.-])\.config\/gcloud(?![\w.-])/i',
+        '/(?<![\w.-])[._]netrc\b/i',
+        '/(?<![\w.-])\.npmrc\b/i',
+        '/(?<![\w.-])\.docker\/config\.json\b/i',
+        '/(?<![\w.-])\.git-credentials\b/i',
+        ...self::WRITE_ONLY_PATTERNS,
+    ];
+
+    /**
+     * The patterns that guard POLICY rather than SECRETS, and are therefore
+     * enforced against `Edit`/`Write` (and the `Bash` command text) but NOT
+     * against `Read` — see {@see execute()}.
+     *
+     * READING A POLICY FILE GRANTS NO CAPABILITY. The other defaults are
+     * secrets, where refusing `Read` IS the point: `.env` read out into the
+     * transcript is the credential leaked. The `.candy-code` entries decide
+     * what the session may do, and a decision is changed by WRITING it. Denying the read bought
+     * no containment and cost the ordinary inspection — "why is my reviewer
+     * preset behaving oddly" is answered by opening
+     * `.candy-code/agents/reviewer.md`, and this repo's own tracked
+     * `.candy-code/config.json` (`worktreeCleanupPeriodDays` and friends, read
+     * by {@see \SugarCraft\Code\Agents\WorktreeConfig}) is not a policy file at
+     * all: the pattern is unanchored, so it matches a PROJECT-scoped
+     * `.candy-code/config.json` as readily as the `~/`-scoped one the
+     * trust list actually lives in.
+     *
+     * THE LOOKAHEAD IS DELIBERATELY ASYMMETRIC. `(?![\w.-])` is an allow-list
+     * of the bytes that make a longer name a DIFFERENT file — `config.dev.json`,
+     * `hooks.yaml.dist`, `config.json.bak`, `config.jsonx` all pass it and are
+     * not protected. Anything else following the name still matches, so
+     * `hooks.yaml~` is denied. That is the fail-closed direction of an
+     * incomplete list and is left as-is: a byte NOT in the allow-list is a
+     * spelling nobody has shown to be a separate file, and enumerating every
+     * editor's backup suffix here would be the whack-a-mole version of the same
+     * guess.
+     *
+     * `.git/hooks/` AND `.git/info/` (audit F-J4) ARE POLICY OF A DIFFERENT
+     * KIND: code and rules that run OUTSIDE this session. A file written to
+     * `.git/hooks/pre-commit` executes on the user's next `git commit` — in
+     * their own shell, under no candy-code mode at all — so one injected
+     * `cp ./payload.sh ./.git/hooks/pre-commit` was persistence that outlived
+     * the session that planted it, and before this entry it was allowed in
+     * `bypass-permissions` (the shipped default) and auto-run under
+     * `accept-edits`. `.git/info/` rides along because `info/attributes` can
+     * route a path through a `filter`/`diff` driver and `info/exclude` decides
+     * what `git status` shows the user. Write-only, like the rest of this
+     * list: reading a hook script grants nothing, so `Read`/`Grep` of one stays
+     * allowed. `Bash` is judged against every pattern (see {@see execute()}),
+     * which means `ls .git/hooks` and `cat .git/hooks/pre-commit` are refused
+     * too — accepted as the fail-closed cost, since a shell string cannot say
+     * which way it is about to touch the file, and `Read` answers the same
+     * question.
+     *
+     * The shape: `(?<![\w-])` so `./.git/hooks`, `".git/hooks` and
+     * `--x=.git/hooks` all count while a bare `repo.git/hooks` does not (a
+     * bare repository's hooks run on a push TO it, not on this user's next
+     * commit); the `/` straight after `.git` keeps `.github/` out; `/+(?:\./+)*`
+     * so `.git//hooks` and `.git/./hooks` are the same directory they are to
+     * the kernel; `(?![\w.-])` so `hooks-sample/` is not `hooks/`; and `i`
+     * because on a case-insensitive filesystem (macOS, Windows) `.GIT/HOOKS`
+     * IS the hooks directory — on Linux the widening costs a refusal of a
+     * name nobody uses.
+     *
+     * KNOWN LIMIT — `git config` writes `.git/config` WITHOUT NAMING IT.
+     * `git config core.hooksPath ./evil` redirects every hook to a directory
+     * no pattern here covers, and `core.fsmonitor`, `core.pager`,
+     * `diff.external` and filter drivers name a program the same way. A
+     * key-by-key pattern list would be the whack-a-mole this docblock already
+     * refuses for backup suffixes, and the honest boundary is the permission
+     * MODE: `git config …` is not a scoped write, so `accept-edits` and
+     * `default` prompt for it; `bypass-permissions` does not, by definition.
+     * Nor is `.git/config` itself in this list: it sits in
+     * {@see self::DEFAULT_PROTECTED_PATTERNS} proper and is refused read-side
+     * too.
+     *
+     * THE REST OF THE POLICY SURFACE is not denied here but ASKED about — see
+     * {@see self::POLICY_ASK_PATTERNS}. The three entries above stay deny-class
+     * because each one is a self-grant the human cannot see in a diff: the
+     * trust list, the hooks it admits, and a preset's own `permissionMode:`.
+     */
+    public const WRITE_ONLY_PATTERNS = [
+        '#(^|/)\.candy-code/(hooks\.yaml|config\.json)(?![\w.-])#',
+        '#(^|/)\.candy-code/agents/#',
+        '#(?<![\w-])\.git/+(?:\./+)*(?:hooks|info)(?![\w.-])#i',
+    ];
+
+    /**
+     * THE REST OF THE POLICY SURFACE (steps 0.8 and 0.8b): writes the hook
+     * ASKS about in every permission mode — `bypass-permissions` and
+     * `dont-ask` included, since a hook's ASK is put to the human whatever the
+     * mode says — rather than refusing outright.
+     *
+     * `hooks.yaml`, `config.json` and `agents/` were never the whole of what
+     * decides a session's powers, so the agent could still grant itself the
+     * rest by writing it:
+     *
+     *  - `.candy-code/settings.json` and `settings.local.json` — the layered
+     *    settings tiers (`allowedTools`, `instructions`, `statusLine`, which
+     *    is a COMMAND run on a timer), user and project scope alike, since the
+     *    pattern is unanchored the way the `config.json` one is.
+     *  - `.mcp.json` — the server list a trusted project launches, i.e. which
+     *    programs start next session. Bounded on both sides by the
+     *    "different name" class, so `foo.mcp.json` and `.mcp.json.example`
+     *    are other files. An `mcp__*` call whose free text names `.mcp.json`
+     *    is asked about too — the fail-closed cost {@see inputsFor()} already
+     *    names for `.env`.
+     *  - `.candy-code/skills`, `commands`, `rules` and `workflows` — prompt
+     *    text the next session treats as the operator's own instructions,
+     *    slash commands that run shell, and PHP workflow files that execute
+     *    when invoked: written once, they outlive the session that planted
+     *    them, the `.git/hooks/` argument above. The directory name itself is
+     *    matched (`(?![\w.-])`, not a trailing `/`), so `mv x
+     *    .candy-code/skills` is asked about as well as a write inside it.
+     *  - `.candy-code/skills-proposed` — the dream pass's skill drafts
+     *    (roadmap 5.4-3). A draft is not live, but `/skills accept` makes it
+     *    live on the user's word, so a draft the agent planted would ride on
+     *    the trust the user gives a dream proposal; promotion stays a user
+     *    action only if the drafts are not the agent's to write either.
+     *  - `.claude/` and `.opencode/` `skills`, `agents` and `commands` (and
+     *    opencode's singular `agent`/`command`) — candy-code imports skills
+     *    and agent presets from both trees, so a write there is a write to
+     *    this session's next launch; and they are other agents' policy too.
+     *    Their `settings*.json` are NOT listed: candy-code never reads them.
+     *
+     * WHY ASK AND NOT DENY. Step 0.8 denied these outright because there was
+     * nobody to ask: the TUI could not put a question to the human and its
+     * default mode never prompted. With approvals live in the TUI (1.C-2) and
+     * `default` its default mode (DEF-MODE), a deny only made the user do by
+     * hand what they could approve in one keystroke — editing a project skill,
+     * or `cat .mcp.json` in Bash. An ASK still stops the unprompted write,
+     * which is the whole threat: the human sees the exact call. It is
+     * ALWAYS-ask — a hook's question is not one the "always" answer can
+     * remember ({@see HookResult::askedOnlyBy()}), so the next write asks
+     * again — and a headless run with nobody to answer refuses it.
+     *
+     * Write-only, like {@see self::WRITE_ONLY_PATTERNS}: `Read`, `Grep`, `Glob`
+     * and `Lsp` of all of them stay allowed, unprompted — reading a policy
+     * grants nothing. `Bash` and `mcp__*` are asked about on any mention, since
+     * a shell string does not say which way it touches the file.
+     */
+    public const POLICY_ASK_PATTERNS = [
+        '#(^|/)\.candy-code/settings(?:\.local)?\.json(?![\w.-])#',
+        '#(?<![\w.-])\.mcp\.json(?![\w.-])#',
+        '#(^|/)\.candy-code/(?:skills|commands|rules|workflows)(?![\w.-])#',
+        '#(^|/)\.candy-code/skills-proposed(?![\w.-])#',
+        '#(^|/)\.(?:claude|opencode)/(?:skills|agents?|commands?)(?![\w.-])#',
+    ];
+
+
+    /** @var list<string> */
+    private array $protectedPatterns;
+
+    /** @var list<string> */
+    private array $askPatterns;
+
+    /** Lazy read of the session's permission mode; see {@see __construct()}. */
+    private ?\Closure $modeReader;
+
+    /**
+     * @param list<string>|null $protectedPatterns Regex patterns to DENY;
+     *        null keeps {@see self::DEFAULT_PROTECTED_PATTERNS}. An empty list
+     *        is honoured verbatim (denies nothing) — callers that want the
+     *        defaults must pass null, not [].
+     * @param list<string>|null $askPatterns Regex patterns whose writes are
+     *        ASKED about; null keeps {@see self::POLICY_ASK_PATTERNS}, [] asks
+     *        about nothing. Judged only after every deny pattern missed, so a
+     *        call both lists name is refused rather than put to the human.
+     * @param (callable(): ?PermissionMode)|null $modeReader reads the mode
+     *        of the gate registered on the SAME HookManager at execute time —
+     *        lazy for the same reason {@see ConfirmRemoveHook} gives, and null
+     *        (or a chain with no gate) enforces the full list as before.
+     *        Owner ruling 2026-10-06: under `bypass-permissions` only
+     *        {@see self::WRITE_ONLY_PATTERNS} — the policy-self-grant floor —
+     *        keeps denying; the secret/file-class protections flip to allow.
+     *        The POLICY_ASK questions are NOT waived by the ruling and still
+     *        ask in every mode; see {@see self::POLICY_ASK_PATTERNS}.
+     */
+    public function __construct(?array $protectedPatterns = null, ?array $askPatterns = null, ?\Closure $modeReader = null)
+    {
+        $this->protectedPatterns = array_values($protectedPatterns ?? self::DEFAULT_PROTECTED_PATTERNS);
+        $this->askPatterns = array_values($askPatterns ?? self::POLICY_ASK_PATTERNS);
+        $this->modeReader = $modeReader;
+    }
+
+    /**
+     * Immutable setter: returns a copy denying the given patterns instead.
+     *
+     * @param list<string> $protectedPatterns
+     */
+    public function withProtectedPatterns(array $protectedPatterns): self
+    {
+        return new self($protectedPatterns, $this->askPatterns, $this->modeReader);
+    }
+
+    /**
+     * Immutable setter: returns a copy asking about the given patterns instead.
+     *
+     * @param list<string> $askPatterns
+     */
+    public function withAskPatterns(array $askPatterns): self
+    {
+        return new self($this->protectedPatterns, $askPatterns, $this->modeReader);
+    }
+
+    /** @return list<string> */
+    public function protectedPatterns(): array
+    {
+        return $this->protectedPatterns;
+    }
+
+    /** @return list<string> */
+    public function askPatterns(): array
+    {
+        return $this->askPatterns;
+    }
+
+    public function name(): string
+    {
+        return 'protect-files';
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    /**
+     * EVERY TOOL THAT CAN PUT A FILE'S BYTES INTO THE TRANSCRIPT, not just the
+     * four that used to be listed (audit F-J2). The matcher was
+     * `^(Bash|Edit|Write|Read)$`, so `Grep pattern="=" path="."
+     * include_ignored=true` — classed read-only and allowed in every mode —
+     * printed `.env:1:DB_PASSWORD=…` without this hook ever being asked.
+     *
+     *  - `Grep`, `Lsp`: read file contents (Lsp's hover/definition answers
+     *    quote the file it was pointed at).
+     *  - `Glob`: lists names only, so a match is not a leak — it is judged so
+     *    that `Glob pattern=**\/.env*` is refused as a statement of intent, the
+     *    same way `Read .env` is, rather than answered with the paths a
+     *    follow-up call would need. Glob's OUTPUT is not screened: a `**\/*`
+     *    walk lists a `.env` among everything else, and naming a file is not
+     *    reading it.
+     *  - `mcp__*`: an MCP server's semantics are opaque here — a filesystem
+     *    server's `read_file {"path": ".env"}` is a Read by another name.
+     *  - `ApplyPatch` (roadmap 3.I-3): writes as `Edit`/`Write` do, to every
+     *    path its patch names.
+     *
+     * Matched case-insensitively ({@see \SugarCraft\Code\Hooks\HookConfig::pattern()}
+     * adds `i`), so `bash`/`grep` spellings are caught as before. WebFetch,
+     * Task and Skill are deliberately absent: their string arguments are URLs
+     * and prose, where `.env` is a word rather than a file this process opens.
+     */
+    public function matcher(): string
+    {
+        return '^(Bash|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$';
+    }
+
+    /**
+     * THE TWO HALVES OF THIS ARE NOT EQUALLY STRONG, and pretending otherwise
+     * would be the finding rather than the fix.
+     *
+     * The `file_path` half is airtight for what it covers: the path is matched
+     * as spelled AND canonicalised (see {@see pathSpellings()}), so a relative
+     * spelling, a `..` walk, or a symlink pointing at the config file all meet
+     * the same pattern the absolute path does. WHAT IT DOES NOT COVER IS A
+     * HARDLINK: `realpath()` resolves symlinks and has nothing to resolve for a
+     * second directory entry pointing at the same inode, so `ln
+     * ~/.candy-code/config.json ./notes.json` is a name this cannot tell from
+     * an unrelated file. Same reason the read side does not lean on this hook
+     * (see below); "airtight" is about spellings, not about inodes.
+     *
+     * The `command` half is BEST-EFFORT DEFENCE IN DEPTH and nothing more. It
+     * is a substring match against one shell string, and a shell has unbounded
+     * ways to name a file without spelling it: `$HOME` expansion, `cd
+     * ~/.candy-code && … > hooks.yaml`, `sh -c 'e''cho'`, a path built in a
+     * variable, `tee`, `python -c`, a heredoc. It catches the obvious
+     * `>> ~/.candy-code/config.json` and is worth having for that; it is not a
+     * containment boundary, and the reason the read side does not depend on it
+     * is {@see \SugarCraft\Code\Cli\Bootstrap::trustedProjectHookRoots()},
+     * which freezes the trust list for the process so a write that slips
+     * through here still cannot take effect in the session that made it.
+     *
+     * WHAT "THE COMMAND" MEANS FOR A PATTERN (audit F-J2). Each pattern runs
+     * against the raw string AND what bash will actually hand the process — the
+     * quote-removed words and redirection targets from
+     * {@see \SugarCraft\Code\Permissions\ShellWords}. The raw string alone
+     * let `cat .git/"config"` and `cat .e''nv` through, because the quotes sit
+     * inside the very name the pattern spells; the words alone would lose a
+     * name inside a substitution (`$(cat .env)` stays one word) or an
+     * unterminated parse. Matching both is the deny-side union: a spelling
+     * either form catches is refused. Still best-effort — `$HOME`, globs
+     * (`cat .en?`), variables and `cd` remain outside what any text match can
+     * see.
+     *
+     * `Read`, `Grep`, `Glob` AND `Lsp` ARE JUDGED AGAINST A SHORTER LIST —
+     * everything except {@see self::WRITE_ONLY_PATTERNS}, which is where the
+     * argument for that lives: none of the four can write. `Bash` is not: one
+     * shell string does not say whether it is about to read the file or write
+     * it. Neither is an `mcp__*` tool, for the same reason one level up — its
+     * name does not say what the server does with the path.
+     *
+     * WHICH ARGUMENTS ARE JUDGED, per tool — see {@see inputsFor()}.
+     */
+    public function execute(HookContext $context): HookResult
+    {
+        $toolName = ucfirst(strtolower($context->toolName));
+        $inputs = self::inputsFor($toolName, $context);
+        // The matched tools that cannot write are judged without
+        // WRITE_ONLY_PATTERNS: the built-ins whose catalog declaration is
+        // read-only. Compared case-insensitively, like the matcher.
+        $readOnly = \in_array(
+            strtolower($context->toolName),
+            array_map('strtolower', ToolCatalog::namesOf(ToolPermissionClass::Read)),
+            true,
+        );
+
+        // Owner ruling 2026-10-06 (bypass allow-all): in `bypass-permissions`
+        // every protection except the policy-self-grant floor flips to allow.
+        // The floor survives precisely because it is the switch's own
+        // integrity — writing hooks.yaml, config.json's trust list, or an
+        // agents/ preset is how a session upgrades ANY mode's word into code,
+        // so no mode, bypass included, may take it unprompted. A null reader
+        // (no gate in the chain) is NOT bypass: enforce everything, as before.
+        $read = $this->modeReader;
+        $bypassing = $read !== null && $read() === PermissionMode::BypassPermissions;
+
+        foreach ($this->protectedPatterns as $pattern) {
+            if ($readOnly && \in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {
+                continue;
+            }
+
+            if ($bypassing && !\in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {
+                continue;
+            }
+
+            foreach ($inputs as $input) {
+                if (\is_string($input) && preg_match($pattern, $input) === 1) {
+                    return HookResult::deny(
+                        "This hook prevents modification of files matching: $pattern"
+                    );
+                }
+            }
+        }
+
+        // The policy surface is write-side only, like WRITE_ONLY_PATTERNS, so
+        // the tools that cannot write never reach it.
+        if ($readOnly) {
+            return HookResult::allow();
+        }
+
+        foreach ($this->askPatterns as $pattern) {
+            foreach ($inputs as $input) {
+                if (\is_string($input) && preg_match($pattern, $input) === 1) {
+                    return HookResult::ask(sprintf(
+                        'This %s call may change a policy file (%s) — settings, MCP servers, or the skills, '
+                        . 'agents, commands, rules or workflows a later session runs as your own. '
+                        . 'Allow it this once? (matched %s)',
+                        $context->toolName,
+                        self::clipped($input),
+                        $pattern,
+                    ));
+                }
+            }
+        }
+
+        return HookResult::allow();
+    }
+
+    /** $input bounded for the question, so a long shell line cannot fill the prompt. */
+    private static function clipped(string $input): string
+    {
+        return strlen($input) <= 200 ? $input : mb_strcut($input, 0, 200, 'UTF-8') . '…';
+    }
+
+    /**
+     * The strings a pattern is matched against for one tool call.
+     *
+     *  - `Bash`: the raw `command` plus its {@see shellSpellings()}.
+     *  - `Edit`/`Write`/`Read`: `file_path`, as given and canonicalised.
+     *  - `Grep`: `path` (canonicalised) and `include` — `include=.env` narrows
+     *    the search to exactly the secret. NOT `pattern`: that is the TEXT being
+     *    searched for, and `Grep pattern=".env" path=src` (where does this code
+     *    load its env file?) is ordinary work. A directory `path` cannot be
+     *    screened here at all — `.` contains `.env` — which is why
+     *    {@see \SugarCraft\Code\Tools\BuiltIn\Grep} itself never opens the
+     *    secret files; this half refuses the call that NAMES one.
+     *  - `Glob`: `path` (canonicalised) and `pattern`.
+     *  - `Lsp`: `path`, canonicalised.
+     *  - `ApplyPatch`: EVERY path the patch adds, updates, moves to or deletes
+     *    ({@see PatchParser::paths()}), each as given and canonicalised, so one
+     *    protected file among ten ordinary ones refuses the call. A patch that
+     *    does not parse is matched as its raw text — the tool will refuse it
+     *    anyway, and an unreadable patch naming `.env` is not waved through.
+     *  - anything else (`mcp__*`): every string leaf of the DECODED arguments,
+     *    at any depth, plus the shell spellings of each. Not the raw JSON
+     *    `toolInput`: `json_encode()` escapes `/` as `\/`, so `.git/config`
+     *    arrives as `.git\/config` and the pattern never sees it. Every leaf
+     *    rather than a guessed list of path-ish keys, because one server's
+     *    `path` is another's `uri`, `target` or `command` — the cost is that an
+     *    MCP call whose free text merely names `.env` is refused too, which is
+     *    the fail-closed direction for a tool this hook cannot see inside.
+     *
+     * @return list<string>
+     */
+    private static function inputsFor(string $toolName, HookContext $context): array
+    {
+        $args = $context->toolArgs;
+
+        return match ($toolName) {
+            'Bash' => self::shellSpellings($args['command'] ?? ''),
+            'Edit', 'Write', 'Read' => self::pathSpellings($args['file_path'] ?? null),
+            'Grep' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['include'] ?? null)],
+            'Glob' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['pattern'] ?? null)],
+            'Lsp' => self::pathSpellings($args['path'] ?? null),
+            // ucfirst(strtolower()) above spells `ApplyPatch` this way.
+            'Applypatch' => self::patchSpellings($args['patch'] ?? null),
+            default => self::leafSpellings($args),
+        };
+    }
+
+    /**
+     * Does this shell line name a file the DEFAULT lists guard — a secret
+     * ({@see self::DEFAULT_PROTECTED_PATTERNS}) or the policy surface
+     * ({@see self::POLICY_ASK_PATTERNS}) — in any spelling bash would
+     * produce? For a caller that GRANTS without asking
+     * ({@see \SugarCraft\Code\Permissions\ReadOnlyCommands::autoAllows()}),
+     * so a read-only `grep x .env` is not waved through on the strength of its
+     * command name: the hook's own verdict still decides it, but nothing
+     * upstream of the hook pre-empts the question either.
+     */
+    public static function namesProtectedFile(string $command): bool
+    {
+        $spellings = self::shellSpellings($command);
+        foreach ([...self::DEFAULT_PROTECTED_PATTERNS, ...self::POLICY_ASK_PATTERNS] as $pattern) {
+            foreach ($spellings as $spelling) {
+                if (preg_match($pattern, $spelling) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * $command as written plus every quote-removed form bash would produce
+     * from it: the dequoted command text, each word on its own (so a `^`
+     * anchored custom pattern sees a word start), and each redirection target
+     * (which {@see \SugarCraft\Code\Permissions\ShellWords::dequoted()} leaves
+     * out — `cat < ".git/config"` reads the file through one).
+     *
+     * @return list<string>
+     */
+    private static function shellSpellings(mixed $command): array
+    {
+        if (!\is_string($command) || $command === '') {
+            return [''];
+        }
+
+        $words = ShellWords::parse($command);
+        $spellings = [$command, $words->dequoted()];
+        foreach ($words->commands as $argv) {
+            foreach ($argv as $word) {
+                $spellings[] = $word;
+            }
+        }
+        foreach ($words->redirections as $redirection) {
+            if ($redirection['target'] !== null) {
+                $spellings[] = $redirection['target'];
+            }
+        }
+
+        return array_values(array_unique($spellings));
+    }
+
+    /**
+     * Every string leaf of $args, each with its shell spellings — an MCP
+     * server's `command` argument is a shell line as much as Bash's is.
+     *
+     * @param array<array-key, mixed> $args
+     * @return list<string>
+     */
+    private static function leafSpellings(array $args): array
+    {
+        $spellings = [];
+        array_walk_recursive($args, static function (mixed $leaf) use (&$spellings): void {
+            if (\is_string($leaf) && $leaf !== '') {
+                array_push($spellings, ...self::shellSpellings($leaf));
+            }
+        });
+
+        return $spellings === [] ? [''] : array_values(array_unique($spellings));
+    }
+
+    /**
+     * Every path of an `ApplyPatch` patch, as {@see pathSpellings()} spells
+     * each, or the raw patch when it does not parse.
+     *
+     * @return list<string>
+     */
+    private static function patchSpellings(mixed $patch): array
+    {
+        $paths = PatchParser::paths($patch);
+        if ($paths === null) {
+            return \is_string($patch) && $patch !== '' ? [$patch] : [''];
+        }
+
+        $spellings = [];
+        foreach ($paths as $path) {
+            array_push($spellings, ...self::pathSpellings($path));
+        }
+
+        return $spellings === [] ? [''] : array_values(array_unique($spellings));
+    }
+
+    /** @return list<string> */
+    private static function strings(mixed $value): array
+    {
+        return \is_string($value) ? [$value] : [];
+    }
+
+    /**
+     * Every spelling of $path a pattern should get a chance to match: the one
+     * the tool call gave, and the canonical one.
+     *
+     * RESOLVED, BECAUSE A PATTERN MATCHES TEXT AND A WRITE TOUCHES AN INODE.
+     * `ln -s ~/.candy-code/config.json ./notes.json` makes those two different
+     * strings for one file, and the raw spelling is the half that does not
+     * match. `realpath()` answers false for a file that does not exist yet —
+     * which is most of what `Write` does — so the PARENT is canonicalised and
+     * the basename re-attached, which is what catches a link pointing at the
+     * config DIRECTORY as well as one pointing at the file.
+     *
+     * @return list<string> at least one entry, so the caller's loop is uniform
+     */
+    private static function pathSpellings(mixed $path): array
+    {
+        if (!\is_string($path) || $path === '') {
+            return [''];
+        }
+
+        $resolved = realpath($path);
+        if ($resolved === false) {
+            $parent = realpath(\dirname($path));
+            $resolved = $parent === false ? false : rtrim($parent, '/') . '/' . basename($path);
+        }
+
+        return $resolved === false || $resolved === $path ? [$path] : [$path, $resolved];
+    }
+}

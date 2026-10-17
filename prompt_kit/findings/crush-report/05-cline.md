@@ -1,8 +1,8 @@
-# Cline vs sugar-crush: competitor deep-dive
+# Cline vs candy-code: competitor deep-dive
 
 Feeds steps: 0.4-a, 0.4-b, 0.5, 0.7, 0.10, 0.11, 0.12, 1.A-1, 1.B-2, 1.B-3, 1.C-1, 1.C-2, 1.C-3, DEF-MODE, 2.1, 2.2-1, 2.2-2, 2.3, 2.4-1, 2.5, 2.6, 2.7-1b, 2.7-2, 2.8, 2.9, 2.12, 3.A-1, 3.A-2, 3.B-4, 3.C, 3.D-1, 3.D-2, 3.F, 3.I-1, 3.I-2, 3.I-3, 4.1-1, 4.1-2, 4.3-2, 4.4, 4.6-2, 4.7-2, 4.7-3, 5.7-1, 5.7-2, 5.8, 5.9-1, 5.10, 5.14a, 5.14c, 5.14d, 5.14f, 5.14j, O-2f
 
-**Sources.** Two Cline engines: **C3** = classic v3.89.2 (`/home/sites/crush-research-repos/cline-classic/apps/vscode/src/`) and **SDK** = 4.1.22 (`/home/sites/crush-research-repos/cline/sdk/packages/`); the 4.x CLI is under `.../cline/apps/cli/src/`. sugar-crush symbols are under `/home/sites/sugarcraft/sugar-crush/`; current line anchors are in `impact/*.md`.
+**Sources.** Two Cline engines: **C3** = classic v3.89.2 (`/home/sites/crush-research-repos/cline-classic/apps/vscode/src/`) and **SDK** = 4.1.22 (`/home/sites/crush-research-repos/cline/sdk/packages/`); the 4.x CLI is under `.../cline/apps/cli/src/`. candy-code symbols are under `/home/sites/sugarcraft/candy-code/`; current line anchors are in `impact/*.md`.
 
 ---
 
@@ -586,7 +586,7 @@ This version is lighter and cheaper to port.
   - `approval.requested {approvalId, toolName, inputJson, policy}` is broadcast to every attached client; a client answers with `approval.respond`.
   - **Pending approvals are re-sent to a client that reconnects.**
   - A non-interactive session is denied with "Tool approval requires an interactive session".
-  - The session is marked `pending` while it waits (the model for pausing sugar-crush's 120 s watchdog while an ask is open).
+  - The session is marked `pending` while it waits (the model for pausing candy-code's 120 s watchdog while an ask is open).
 - **Checkpoints are what make a permissive default acceptable** (Cline docs: "Checkpoints make auto-approve practical… The cost of a mistake drops to nearly zero", `docs/core-workflows/checkpoints.mdx`). (→ DEF-MODE after 3.A-1)
 - **Desktop notifications:** "Cline is having trouble…" on approval waits, and a notification for auto-approved commands still running after 30 s. (→ 5.14a)
 
@@ -599,13 +599,13 @@ This version is lighter and cheaper to port.
 
 ---
 
-## 13. Recommended improvements for sugar-crush
+## 13. Recommended improvements for candy-code
 
 **P0-1. Workspace checkpoints with three restore modes** (→ 3.A-1, 3.A-2).
 - Add a `Session\WorkspaceCheckpoint` class that shells out through `Support\ProcessContainment` with the git env hardening in `Tools/Concerns/CapturesProcessOutput.php`.
 - In `Chat::dispatchTurn()`, add `'workspaceRef' => WorkspaceCheckpoint::snapshot($root, $sessionId, $n)` to the existing checkpoint `$chatState`. `EnhancedSessionStore::saveCheckpoint` already stores arbitrary state and caps it at 100 per session.
 - Snapshot once per user turn (SDK style). Optionally also after any step where `Runtime::stepRequestedAWrite()` is true.
-- Use the 4.x stash-commit + private ref for git repos (`refs/sugar-crush/checkpoints/<session>/<n>`); the classic shadow-git (`core.worktree`) variant for non-repos.
+- Use the 4.x stash-commit + private ref for git repos (`refs/candy-code/checkpoints/<session>/<n>`); the classic shadow-git (`core.worktree`) variant for non-repos.
 - Restore: refuse if HEAD moved; save a rollback stash first; then `reset --hard` → `clean -fd` → `stash apply`.
 - Extend `/rewind [n] [--files|--chat|--both]` and add a palette action; add `/diff [n]` showing `git diff <ref>`, reusing `Tui/DiffGutter`. Refuse in `$HOME`.
 
@@ -636,7 +636,7 @@ Once this works, change the default mode to `accept-edits` or `default`, *after*
 3. Read up to 8 of the most recently edited files (100k-char budget, through `Read`'s `PathJail`) and attach them to the first post-compaction user turn as `<file_content>`.
 
 **P1-3. A todo/progress tool with periodic re-injection** (→ 3.C).
-- A `Todo` tool whose state goes in `SessionMeta::$tasks`. Optionally mirror to `<root>/.sugar-crush/todo/<session>.md` and watch for user edits.
+- A `Todo` tool whose state goes in `SessionMeta::$tasks`. Optionally mirror to `<root>/.candy-code/todo/<session>.md` and watch for user edits.
 - Re-inject via the turn context when `stepsSinceTodoUpdate >= 6`, after a user edit, or when no list exists after 2 steps. Show it in a dock pane.
 
 **P1-4. Mid-turn steering** (→ 1.C-3).
@@ -671,7 +671,7 @@ Once this works, change the default mode to `accept-edits` or `default`, *after*
 
 **P2-5. `/handoff` and `/newrule` distillation** (→ 5.14c, 5.14d).
 - `/handoff`: run the summary backend with the `/newtask` text, then create and switch to a new session with that summary as the first user message.
-- `/newrule`: write to `<root>/.sugar-crush/rules/<slug>.md` through the existing `RuleLoader` directory (the parent writes after the user confirms).
+- `/newrule`: write to `<root>/.candy-code/rules/<slug>.md` through the existing `RuleLoader` directory (the parent writes after the user confirms).
 
 **P2-7. Oversized-result cache** (→ 2.8, 0.5). Cap MCP and `WebFetch` results at about 16 KB in the prompt; save the full text to a session-scoped 0600 file; let `Read` accept that path with a line range.
 

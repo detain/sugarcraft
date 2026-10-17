@@ -1,0 +1,215 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Tools;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tools\PathJail;
+
+/**
+ * @see PathJail
+ */
+final class PathJailTest extends TestCase
+{
+    private string $jail;
+    private string $outside;
+
+    protected function setUp(): void
+    {
+        $base = sys_get_temp_dir() . '/sugarcrush_pathjail_' . uniqid((string) getmypid(), true);
+        $this->jail = $base . '/jail';
+        $this->outside = $base . '/outside';
+        mkdir($this->jail, 0777, true);
+        mkdir($this->outside, 0777, true);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ([$this->jail, $this->outside, dirname($this->jail)] as $dir) {
+            if (is_dir($dir)) {
+                $this->rrmdir($dir);
+            }
+        }
+    }
+
+    private function rrmdir(string $dir): void
+    {
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            if (is_link($path) || is_file($path)) {
+                unlink($path);
+            } elseif (is_dir($path)) {
+                $this->rrmdir($path);
+            }
+        }
+        rmdir($dir);
+    }
+
+    // =========================================================================
+    // resolve()
+    // =========================================================================
+
+    /** The jail root itself is a valid in-jail path (regression: off-by-one). */
+    public function testResolveAcceptsJailRootItself(): void
+    {
+        $resolved = PathJail::resolve($this->jail, '.');
+
+        $this->assertSame(realpath($this->jail), $resolved);
+    }
+
+    public function testResolveAcceptsJailRootViaEmptyPath(): void
+    {
+        $resolved = PathJail::resolve($this->jail, '');
+
+        $this->assertSame(realpath($this->jail), $resolved);
+    }
+
+    public function testResolveAcceptsExistingInJailChild(): void
+    {
+        file_put_contents($this->jail . '/child.txt', 'hi');
+
+        $resolved = PathJail::resolve($this->jail, 'child.txt');
+
+        $this->assertSame(realpath($this->jail . '/child.txt'), $resolved);
+    }
+
+    public function testResolveAcceptsNewFileInJail(): void
+    {
+        // File does not exist yet, but its parent (the jail root) does.
+        $resolved = PathJail::resolve($this->jail, 'newfile.txt');
+
+        $this->assertSame(realpath($this->jail) . '/newfile.txt', $resolved);
+    }
+
+    public function testResolveRejectsDotDotEscape(): void
+    {
+        file_put_contents($this->outside . '/secret.txt', 'top secret');
+
+        $resolved = PathJail::resolve($this->jail, '../outside/secret.txt');
+
+        $this->assertNull($resolved);
+    }
+
+    public function testResolveRejectsAbsoluteOutsidePath(): void
+    {
+        file_put_contents($this->outside . '/secret.txt', 'top secret');
+
+        $resolved = PathJail::resolve($this->jail, $this->outside . '/secret.txt');
+
+        $this->assertNull($resolved);
+    }
+
+    public function testResolveRejectsSymlinkEscape(): void
+    {
+        file_put_contents($this->outside . '/secret.txt', 'top secret');
+        $link = $this->jail . '/link-to-secret';
+        symlink($this->outside . '/secret.txt', $link);
+
+        $resolved = PathJail::resolve($this->jail, 'link-to-secret');
+
+        $this->assertNull($resolved);
+    }
+
+    public function testResolveReturnsNullForMissingRoot(): void
+    {
+        $resolved = PathJail::resolve($this->jail . '/does-not-exist', 'x');
+
+        $this->assertNull($resolved);
+    }
+
+    // =========================================================================
+    // resolveDir()
+    // =========================================================================
+
+    public function testResolveDirAcceptsJailRootItself(): void
+    {
+        $resolved = PathJail::resolveDir($this->jail, '.');
+
+        $this->assertSame(realpath($this->jail), $resolved);
+    }
+
+    public function testResolveDirAcceptsInJailSubdir(): void
+    {
+        mkdir($this->jail . '/sub');
+
+        $resolved = PathJail::resolveDir($this->jail, 'sub');
+
+        $this->assertSame(realpath($this->jail . '/sub'), $resolved);
+    }
+
+    public function testResolveDirRejectsDotDotEscape(): void
+    {
+        $resolved = PathJail::resolveDir($this->jail, '../outside');
+
+        $this->assertNull($resolved);
+    }
+
+    // =========================================================================
+    // resolveForCreate() — the ancestor walk
+    // =========================================================================
+
+    public function testResolveForCreateAcceptsMissingParentsInsideJail(): void
+    {
+        $resolved = PathJail::resolveForCreate($this->jail, 'a/b/c/new.md');
+
+        $this->assertSame(realpath($this->jail) . '/a/b/c/new.md', $resolved);
+    }
+
+    /**
+     * A DANGLING symlink in the path is a denial, not a missing directory.
+     *
+     * The ancestor walk trusts the segments below its anchor for one reason:
+     * they do not exist, and a path that does not exist cannot be a symlink
+     * out of the jail. A broken link breaks that premise — it exists, it is a
+     * symlink, and neither is_dir() nor realpath() can see it, so the walk
+     * stepped over it and anchored on the jail root. The returned
+     * `<jail>/dangling/x.txt` then resolves outside the jail the instant the
+     * link's target is created, which an attacker who can lose a race (or who
+     * planted the link in the first place) controls.
+     */
+    public function testResolveForCreateRejectsPathUnderDanglingSymlink(): void
+    {
+        symlink($this->outside . '/never-created', $this->jail . '/dangling');
+        self::assertTrue(is_link($this->jail . '/dangling'));
+        self::assertFalse(is_dir($this->jail . '/dangling'));
+
+        $this->assertNull(PathJail::resolveForCreate($this->jail, 'dangling/x.txt'));
+    }
+
+    /** The same hazard when the broken link is the leaf being written to. */
+    public function testResolveForCreateRejectsDanglingSymlinkAsTheTarget(): void
+    {
+        symlink($this->outside . '/never-created', $this->jail . '/dangling');
+
+        $this->assertNull(PathJail::resolveForCreate($this->jail, 'dangling'));
+    }
+
+    /**
+     * Non-regression for the fix above: a symlink to a directory that DOES
+     * exist inside the jail must still work. is_dir() is tested before
+     * is_link(), so such a link stops the walk and is settled by realpath()ing
+     * through it — denying every symlink outright would have broken legitimate
+     * in-jail layouts.
+     */
+    public function testResolveForCreateStillFollowsInJailSymlinkedDirectory(): void
+    {
+        mkdir($this->jail . '/real');
+        symlink($this->jail . '/real', $this->jail . '/alias');
+
+        $resolved = PathJail::resolveForCreate($this->jail, 'alias/new.txt');
+
+        $this->assertSame(realpath($this->jail . '/real') . '/new.txt', $resolved);
+    }
+
+    /** A symlinked directory pointing OUT of the jail stays rejected. */
+    public function testResolveForCreateRejectsSymlinkedDirectoryOutsideJail(): void
+    {
+        symlink($this->outside, $this->jail . '/escape');
+
+        $this->assertNull(PathJail::resolveForCreate($this->jail, 'escape/new.txt'));
+    }
+}

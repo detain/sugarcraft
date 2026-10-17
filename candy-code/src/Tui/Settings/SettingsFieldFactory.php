@@ -1,0 +1,271 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tui\Settings;
+
+use SugarCraft\Code\Config\Settings\ApplyMode;
+use SugarCraft\Code\Config\Settings\OptionsProvider;
+use SugarCraft\Code\Config\Settings\SettingDefinition;
+use SugarCraft\Code\Config\Settings\SettingType;
+use SugarCraft\Code\Config\Settings\UiEditability;
+use SugarCraft\Code\Lang;
+use SugarCraft\Forms\Field;
+use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Field\Select;
+
+/**
+ * A {@see SettingDefinition} and its current value as the sugar-forms field that
+ * edits it (Appendix N §5.1), and that field's answer back as a settings value.
+ *
+ * Bool → {@see Confirm}; a key with choices ({@see OptionsProvider::for()}) →
+ * {@see Select}; numbers, strings, paths and URLs → {@see Input}; a string list
+ * → an {@see Input} of comma-separated entries; `models` → an {@see Input} for
+ * the ACTIVE provider's entry, written back into the whole map (decision D9) —
+ * and, since N-P5, `<provider>=<model id>` edits ANY provider's entry, so a
+ * model can be chosen for a provider before switching to it. A complex MAP key
+ * (`modelPrices`, `lintCommands`, `statusLine`, …; N-P5) → an {@see Input}
+ * holding the whole map as one JSON object, parsed back and refused unless it
+ * is one. `permissionRules` (N-P5) → an {@see Input} holding the ordered rule
+ * list as one JSON array, parsed back and refused unless it is one; whether
+ * each rule is one the launch loads is the writer's call, made by the
+ * launch's own strict parser (`Bootstrap::permissionRules()`), so a value the
+ * view stages is judged by exactly the code that will read it. Read-only and
+ * hidden keys and the trust grants get no inline field ({@see field()}
+ * answers null): those are written by the app itself or through their own
+ * confirmed action.
+ *
+ * Validation stays the writer's ({@see \SugarCraft\Code\Config\Settings\SettingsWriter::refusal()})
+ * so a value is judged by one set of rules wherever it comes from; this class
+ * only parses text into the type the key holds and refuses text that is not
+ * one ({@see value()}).
+ */
+final class SettingsFieldFactory
+{
+    /** Keys edited one entry at a time, keyed by the active provider. */
+    private const PER_PROVIDER_KEYS = ['models'];
+
+    /** `<provider>=<model id>`: an entry for a provider other than the active one. */
+    private const PROVIDER_ENTRY = '/^([A-Za-z0-9][A-Za-z0-9_.-]*)\s*=\s*(.*)$/s';
+
+    private function __construct()
+    {
+    }
+
+    /**
+     * The field that edits `$definition`, pre-filled with `$current`, or null
+     * when the key is not edited inline.
+     */
+    public static function field(
+        SettingDefinition $definition,
+        mixed $current,
+        OptionsProvider $options,
+        ?string $provider = null,
+    ): ?Field {
+        if (!self::editable($definition)) {
+            return null;
+        }
+
+        $title = $definition->label;
+        $choices = $options->for($definition);
+
+        if ($definition->type === SettingType::Bool) {
+            return Confirm::new($definition->key, (bool) $current)
+                ->withTitle($title)
+                ->withDescription($definition->help);
+        }
+
+        if ($choices !== []) {
+            $select = Select::new($definition->key)
+                ->withOptions(...$choices)
+                ->withTitle($title)
+                ->withDescription($definition->help);
+
+            return \is_string($current) && \in_array($current, $choices, true) ? $select->withSelected($current) : $select;
+        }
+
+        if (self::perProvider($definition)) {
+            if ($provider === null || $provider === '') {
+                return Input::new($definition->key)
+                    ->withTitle($title)
+                    ->withDescription(Lang::t('tui.settings.field.models_no_provider'));
+            }
+
+            $entry = \is_array($current) ? ($current[$provider] ?? '') : '';
+
+            return Input::new($definition->key)
+                ->withTitle(Lang::t('tui.settings.field.title_for_provider', ['title' => $title, 'provider' => $provider]))
+                ->withDescription(Lang::t('tui.settings.field.models_for_provider'))
+                ->withValue(\is_string($entry) ? $entry : '');
+        }
+
+        if (self::jsonMap($definition)) {
+            return Input::new($definition->key)
+                ->withTitle($title)
+                ->withDescription(Lang::t('tui.settings.field.json_object') . ' ' . $definition->help)
+                ->withValue(\is_array($current) && $current !== [] ? self::text($definition, $current) : '{}');
+        }
+
+        if (self::jsonList($definition)) {
+            return Input::new($definition->key)
+                ->withTitle($title)
+                ->withDescription(Lang::t('tui.settings.field.json_list') . ' ' . $definition->help)
+                ->withValue(\is_array($current) ? (string) json_encode(array_values($current), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) : '[]');
+        }
+
+        $input = Input::new($definition->key)
+            ->withTitle($title)
+            ->withDescription($definition->type === SettingType::StringList ? Lang::t('tui.settings.field.comma_separated') : $definition->help)
+            ->withValue(self::text($definition, $current));
+
+        return $definition->type === SettingType::Secret ? $input->withPassword() : $input;
+    }
+
+    /** Whether the key gets an inline field at all (the provider is checked separately for `models`). */
+    public static function editable(SettingDefinition $definition): bool
+    {
+        return (\in_array($definition->ui, [UiEditability::Easy, UiEditability::List], true)
+            || self::jsonMap($definition) || self::jsonList($definition))
+            && $definition->applyMode !== ApplyMode::Frozen;
+    }
+
+    /**
+     * Why the view offers no field for `$definition`, as the status line says
+     * it — or null when it does. Names where the value IS changed instead.
+     */
+    public static function whyNotEditable(SettingDefinition $definition): ?string
+    {
+        if (self::editable($definition)) {
+            return null;
+        }
+
+        return match (true) {
+            $definition->applyMode === ApplyMode::Frozen
+                => Lang::t('tui.settings.field.frozen', ['label' => $definition->label]),
+            $definition->ui === UiEditability::ReadOnly => Lang::t('tui.settings.field.read_only', ['label' => $definition->label]),
+            default => Lang::t('tui.settings.field.hand_edited', ['label' => $definition->label]),
+        };
+    }
+
+    /** A nested map with no row editor of its own: edited as one JSON object. */
+    private static function jsonMap(SettingDefinition $definition): bool
+    {
+        return $definition->ui === UiEditability::Complex && $definition->type === SettingType::Map;
+    }
+
+    /**
+     * A complex value that is an ordered list (`permissionRules`, the one
+     * `Complex` key of type `Json`): edited as one JSON array.
+     */
+    private static function jsonList(SettingDefinition $definition): bool
+    {
+        return $definition->ui === UiEditability::Complex && $definition->type === SettingType::Json;
+    }
+
+    /**
+     * The settings value `$field`'s answer stands for.
+     *
+     * @throws \InvalidArgumentException when the text is not a value of the key's type
+     */
+    public static function value(SettingDefinition $definition, Field $field, mixed $current = null, ?string $provider = null): mixed
+    {
+        $raw = $field->value();
+        if (\is_bool($raw)) {
+            return $raw;
+        }
+
+        $text = trim((string) $raw);
+
+        if (self::perProvider($definition)) {
+            $target = $provider;
+            if (preg_match(self::PROVIDER_ENTRY, $text, $m) === 1) {
+                [, $target, $text] = $m;
+                $text = trim($text);
+            }
+
+            if ($target === null || $target === '') {
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.name_the_provider'));
+            }
+
+            $map = \is_array($current) ? $current : [];
+            if ($text === '') {
+                unset($map[$target]);
+            } else {
+                $map[$target] = $text;
+            }
+
+            return $map;
+        }
+
+        if (self::jsonMap($definition)) {
+            $decoded = json_decode($text === '' ? '{}' : $text, true);
+            if (!\is_array($decoded) || ($decoded !== [] && array_is_list($decoded))) {
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_json_object', ['label' => $definition->label]));
+            }
+
+            // `{}` would be written as a JSON list (`[]`) and states nothing a
+            // reset does not state better: the reset removes the key.
+            if ($decoded === []) {
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.empty_object', ['label' => $definition->label]));
+            }
+
+            return $decoded;
+        }
+
+        if (self::jsonList($definition)) {
+            $decoded = json_decode($text === '' ? '[]' : $text, true);
+            if (!\is_array($decoded) || !array_is_list($decoded)) {
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_json_list', ['label' => $definition->label]));
+            }
+
+            return $decoded;
+        }
+
+        return match ($definition->type) {
+            SettingType::Int => preg_match('/^-?\d+$/', $text) === 1
+                ? (int) $text
+                : throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_integer', ['label' => $definition->label])),
+            SettingType::Float => is_numeric($text)
+                ? (float) $text
+                : throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_number', ['label' => $definition->label])),
+            SettingType::StringList => array_values(array_filter(
+                array_map('trim', explode(',', $text)),
+                static fn (string $entry): bool => $entry !== '',
+            )),
+            SettingType::Json => self::json($definition, $text),
+            default => $text,
+        };
+    }
+
+    private static function perProvider(SettingDefinition $definition): bool
+    {
+        return \in_array($definition->key, self::PER_PROVIDER_KEYS, true);
+    }
+
+    private static function text(SettingDefinition $definition, mixed $current): string
+    {
+        return match (true) {
+            $current === null => '',
+            \is_array($current) && array_is_list($current) && $definition->type === SettingType::StringList
+                => implode(', ', array_map('strval', $current)),
+            \is_array($current) => (string) json_encode($current, \JSON_UNESCAPED_SLASHES),
+            \is_bool($current) => $current ? 'true' : 'false',
+            default => (string) $current,
+        };
+    }
+
+    private static function json(SettingDefinition $definition, string $text): mixed
+    {
+        if (preg_match('/^-?\d+$/', $text) === 1) {
+            return (int) $text;
+        }
+
+        $decoded = json_decode($text, true);
+        if (!\is_array($decoded)) {
+            throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_number_or_object', ['label' => $definition->label]));
+        }
+
+        return $decoded;
+    }
+}

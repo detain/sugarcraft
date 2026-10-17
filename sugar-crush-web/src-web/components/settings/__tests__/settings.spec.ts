@@ -44,12 +44,12 @@ describe('SettingsField', () => {
 
   it('is disabled, with the lock named, when the environment pins it', () => {
     const wrapper = mount(SettingsField, {
-      props: { row: row(), effective: { value: 7, source: 'env', sourceLabel: 'environment', locked: true, lockReason: 'set by SUGARCRUSH_X' }, editable: false, reason: 'set by SUGARCRUSH_X', staged: undefined },
+      props: { row: row(), effective: { value: 7, source: 'env', sourceLabel: 'environment', locked: true, lockReason: 'set by CANDY_CODE_X' }, editable: false, reason: 'set by CANDY_CODE_X', staged: undefined },
     })
     expect(wrapper.attributes('data-editable')).toBe('false')
     expect(wrapper.find('[data-testid="settings-input"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.find('[data-testid="settings-reason"]').text()).toBe('set by SUGARCRUSH_X')
-    expect(wrapper.find('[data-testid="settings-source"]').text()).toContain('set by SUGARCRUSH_X')
+    expect(wrapper.find('[data-testid="settings-reason"]').text()).toBe('set by CANDY_CODE_X')
+    expect(wrapper.find('[data-testid="settings-source"]').text()).toContain('set by CANDY_CODE_X')
     expect(wrapper.find('[data-testid="settings-reset"]').exists()).toBe(false)
   })
 

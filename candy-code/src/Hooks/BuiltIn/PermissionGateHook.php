@@ -1,0 +1,162 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Hooks\BuiltIn;
+
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Hooks\HookInterface;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Permissions\PermissionDecision;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\ToolCall;
+
+/**
+ * Adapts a {@see PermissionGate} onto the `PreToolUse` hook chain, which is
+ * how crush_code.md Phase 1 item 2 resolves the two-permission-systems split:
+ * the 6-mode gate (with its rules and its Auto-mode circuit breaker) had
+ * exactly one consumer — the sub-agent path — while the main loop got only
+ * {@see \SugarCraft\Code\Hooks\HookManager}'s built-ins.
+ *
+ * An adapter rather than a second gate call site inside
+ * {@see \SugarCraft\Code\Runtime}, because the hook chain is ALREADY the one
+ * place both live tool pipelines gate on: {@see \SugarCraft\Code\Runtime::gate()}
+ * for the engine/provider path and {@see \SugarCraft\Code\Chat::gateToolCall()}
+ * for Chat's own registered tools. Riding in as a hook therefore reaches both
+ * with no new dispatch machinery, and — crucially — inherits the ASK plumbing
+ * those two already implement (blocking prompt on Chat's side, fail-closed
+ * denial on Runtime's), which is what makes {@see PermissionDecision::Ask}
+ * mean something instead of being a decision nobody can act on.
+ *
+ * ORDERING against the built-in hooks (`ProtectFilesHook`, `ConfirmRemoveHook`,
+ * `AuditHook`, `BashEscapeDenyHook`): the built-ins are registered FIRST and
+ * this gate LAST — see {@see \SugarCraft\Code\Cli\Bootstrap::hooks()} and
+ * {@see \SugarCraft\Code\Backend\EngineBackend::resolveHookManager()}. Both
+ * orders are fail-closed as to the VERDICT, because
+ * {@see \SugarCraft\Code\Hooks\HookRegistry::executeHooks()} lets a DENY win
+ * outright and never lets an ASK grant anything; the order is chosen for the
+ * QUALITY of the message the user and the model end up seeing. The built-ins
+ * are narrow, specific hazards ("this hook denies Bash paths outside the
+ * workspace root: /etc") and this gate is broad policy ("permission mode
+ * 'plan' does not allow Edit"), so letting the specific hazard short-circuit
+ * first reports the actual reason rather than the generic one. The gate is
+ * deliberately NOT a replacement for them either. What survives even a mode as
+ * permissive as BypassPermissions is the `rm -rf /` circuit breaker and the
+ * user's own `deny` rules — both evaluated ahead of, or independent of, the
+ * mode in the layer above this gate. The narrow file-class guard
+ * (`ProtectFilesHook`, the check that would refuse a `.env` write) and
+ * `ConfirmRemoveHook` stand down under bypass by design, so bypass genuinely
+ * does reach an Edit there; the breaker and the deny list are the real floor.
+ *
+ * That "both orders" claim used to be made about the ARGUMENTS as well, and it
+ * was false for them: registered last, this gate only ever saw a call as the
+ * hooks ahead of it had left it, so a hook rewriting `Bash{command:"ls"}` into
+ * `Bash{command:"rm -rf /"}` was evaluated here against `ls`. `executeHooks()`
+ * now RE-SCANS the whole chain against a rewrite, which is what actually makes
+ * the ordering argument-independent; see its docblock.
+ */
+final readonly class PermissionGateHook implements HookInterface
+{
+    /**
+     * Stable across instances so re-registering a gate REPLACES the previous
+     * one rather than stacking two gates with independent Auto-mode strike
+     * counters — {@see \SugarCraft\Code\Hooks\HookRegistry} keys its hooks by
+     * name, and {@see \SugarCraft\Code\Backend\EngineBackend} may register
+     * over a manager {@see \SugarCraft\Code\Cli\Bootstrap} already populated.
+     * {@see \SugarCraft\Code\Hooks\HookRegistry::isReserved()} keeps a
+     * user-supplied hook from claiming or disabling the same name.
+     *
+     * BE CLEAR ABOUT WHAT "ONE COUNTER" CURRENTLY BUYS, because it is less
+     * than it sounds: {@see \SugarCraft\Code\Backend\EngineBackend::completeAsync()}
+     * runs the whole completion — tools, hooks, this gate — inside a
+     * `pcntl_fork()`ed CHILD, and the child's memory dies with it. So on the
+     * live TUI path every Auto-mode strike increment is discarded at the end
+     * of the turn that made it, and the 3-strike/20-total circuit breaker
+     * effectively restarts each turn. Sharing ONE instance is still the right
+     * construction — it is what keeps the two tool paths on one MODE and one
+     * rule set, and what makes the counters mean something on the synchronous
+     * `complete()` path {@see \SugarCraft\Code\Cli\NonInteractive} and every
+     * embedder use — but "one counter for the session" is not true yet.
+     * Making it true needs the gate's state to cross the fork boundary, which
+     * is its own queued step.
+     */
+    public const NAME = 'permission-gate';
+
+    /**
+     * `readonly` describes THIS object, not the gate inside it: the hook holds
+     * no state of its own and its binding to one gate never changes, which is
+     * the guarantee that makes re-registering it per turn safe. The gate it
+     * points at is emphatically mutable — its Auto-mode strike counters are
+     * the whole reason a launch shares one instance — so do not read the
+     * modifier as a promise about permission state.
+     */
+    public function __construct(
+        private PermissionGate $gate,
+    ) {}
+
+    public function name(): string
+    {
+        return self::NAME;
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    /**
+     * Every tool, including MCP tools: the gate's own classifiers decide what
+     * a name means (@see PermissionGate::isWriteTool()), so narrowing here
+     * would silently exempt whatever the pattern failed to anticipate.
+     */
+    public function matcher(): string
+    {
+        return '.*';
+    }
+
+    /**
+     * The gate this hook adapts, so a caller that installed one can read its
+     * configured mode back without keeping a second reference.
+     */
+    public function gate(): PermissionGate
+    {
+        return $this->gate;
+    }
+
+    /**
+     * Hands the gate the context's project root because that is the root the
+     * tools resolve a relative path against — without it a path rule judged
+     * the call's SPELLING, so `Deny Read(/proj/secret.txt)` let `secret.txt`
+     * and a symlink to it through (audit F-J3). An empty root (a context built
+     * with no workspace) is passed as null: anchoring at `''` would anchor at
+     * `/` and invent paths the tool never opens.
+     */
+    public function execute(HookContext $context): HookResult
+    {
+        $call = new ToolCall($context->toolName, $context->toolArgs);
+        $mode = $this->gate->mode()->value;
+        $root = $context->projectRoot === '' ? null : $context->projectRoot;
+
+        // The session id lets an `auto` exec reviewer read what the user
+        // asked for (roadmap 5.11-2); the reason it leaves says why a call was
+        // asked about or refused, so the person is not answering blind.
+        $decision = $this->gate->evaluate($call, $root, $context->sessionId === '' ? null : $context->sessionId);
+        $reason = $this->gate->lastAutoReason();
+        $why = $reason === null ? '' : " — {$reason}";
+
+        return match ($decision) {
+            PermissionDecision::Allow => HookResult::allow(),
+            PermissionDecision::Deny => HookResult::deny(
+                "Permission mode '{$mode}' does not allow {$context->toolName}{$why}.",
+            ),
+            // Not collapsed into a deny: ASK is the whole reason the gate was
+            // worth wiring into this chain at all. Whoever owns a UI settles
+            // it; a caller with no UI fails closed, which is the existing
+            // contract of HookResult::ask().
+            PermissionDecision::Ask => HookResult::ask(
+                "Allow {$context->toolName} to run? (permission mode: {$mode}{$why})",
+            )->withAskEveryTime($this->gate->lastAskForced() ? ($reason ?? 'a security finding') : null),
+        };
+    }
+}

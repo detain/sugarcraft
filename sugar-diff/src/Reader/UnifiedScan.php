@@ -6,7 +6,7 @@ namespace SugarCraft\Diff\Reader;
 
 /**
  * Walks an already-rendered unified diff and tells a viewer which line of
- * which file each row points at — the region/hunk MODEL the sugar-crush
+ * which file each row points at — the region/hunk MODEL the candy-code
  * gutter consumes, lifted out so any renderer (or patch tool) can number rows
  * without owning the counting rules.
  *
@@ -30,7 +30,7 @@ namespace SugarCraft\Diff\Reader;
  * the number would die downstream. Declining beats printing a wrong number,
  * and stopping the walk beats bleeding the previous hunk's counters through.
  *
- * Mirrors sugar-crush/src/Tui/DiffGutter.php `number()` / `isFileHeader()` /
+ * Mirrors candy-code/src/Tui/DiffGutter.php `number()` / `isFileHeader()` /
  * `numberable()`.
  */
 final class UnifiedScan

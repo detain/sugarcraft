@@ -1,0 +1,480 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Skills;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Skills\SkillDiscovery;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+
+/**
+ * Tests for SkillDiscovery - discovers skill directories across search paths.
+ */
+final class SkillDiscoveryTest extends TestCase
+{
+    use TemporaryDirectoryTrait;
+    use HomeSandboxTrait;
+
+    private string $tempDir;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->tempDir = sys_get_temp_dir() . '/candy-code-discovery-test-' . uniqid((string) getmypid(), true);
+        mkdir($this->tempDir, 0777, true);
+        // discoverUserSkills()/discoverAll() read ~/.candy-code/skills, so the
+        // class-wide default is an empty sandbox HOME rather than the
+        // developer's own -- see HomeSandboxTrait for why BOTH spellings.
+        $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+        $this->removeDirectory($this->tempDir);
+        parent::tearDown();
+    }
+
+    /**
+     * F11's second site. `discoverUserSkills()` reads `getenv('HOME')`, not
+     * `$_SERVER['HOME']`: while both halves of this codebase read the
+     * superglobal they were wrong TOGETHER, and the moment one moved a
+     * `putenv('HOME')` pointed two subsystems at two different homes.
+     */
+    public function testUserSkillsFollowTheEnvHomeNotTheServerSuperglobal(): void
+    {
+        // WITH a SKILL.md in each: discovery walks through
+        // {@see \SugarCraft\Code\Skills\SkillLoader::skillDirectoriesIn()},
+        // which reports the directories that actually hold one rather than
+        // every subdirectory. Both fixtures get the file so the assertion below
+        // is still only about WHICH HOME was read.
+        $envHome = $this->tempDir . '/env-home';
+        mkdir($envHome . '/.candy-code/skills/from-env', 0777, true);
+        file_put_contents($envHome . '/.candy-code/skills/from-env/SKILL.md', "---\ndescription: Env\n---\n");
+
+        $decoyHome = $this->tempDir . '/server-home';
+        mkdir($decoyHome . '/.candy-code/skills/from-server', 0777, true);
+        file_put_contents($decoyHome . '/.candy-code/skills/from-server/SKILL.md', "---\ndescription: Server\n---\n");
+
+        $this->useHomeSandbox($envHome);
+        $_SERVER['HOME'] = $decoyHome;
+
+        $found = array_map('basename', (new SkillDiscovery())->discoverUserSkills());
+
+        $this->assertContains('from-env', $found);
+        $this->assertNotContains('from-server', $found);
+    }
+
+    /**
+     * A SECOND, UNCONTAINED WALKER IS THE SAME HOLE TWICE.
+     *
+     * `discoverSkillsAt()` used its own `DirectoryIterator` and returned every
+     * `isDir()` entry — and `isDir()` stats THROUGH a symlink — so a cloned
+     * repository carrying `.candy-code/skills/escape -> $HOME` had this class
+     * report the user's home directory as a skill directory. Git stores
+     * symlinks, so that arrives with `git clone`. It is the identical escape
+     * {@see \SugarCraft\Code\Skills\SkillLoader} closed one class over, which
+     * is why the walk now goes through that loader instead of beside it.
+     */
+    public function testAProjectSkillsSymlinkCannotEscapeTheSkillsTree(): void
+    {
+        $projectRoot = $this->tempDir . '/escape-project';
+        mkdir($projectRoot . '/.candy-code/skills', 0777, true);
+
+        $outside = $this->tempDir . '/outside';
+        mkdir($outside . '/secret', 0777, true);
+        file_put_contents($outside . '/secret/SKILL.md', "---\ndescription: Not yours\n---\n");
+
+        if (!@symlink($outside, $projectRoot . '/.candy-code/skills/escape')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $discovery = new SkillDiscovery();
+
+        $this->assertSame([], $discovery->discoverProjectSkills($projectRoot));
+        $this->assertNotSame([], $discovery->skipped(), 'the refusal is recorded, not silent');
+    }
+
+    /**
+     * The other half of the same rule: a link in the USER's own tree may reach
+     * the rest of the user's home, which is the real layout the loader's
+     * $ownedBy widening exists for (skills linked in from a shared checkout).
+     */
+    public function testAUserSkillsSymlinkMayStillReachTheRestOfTheUsersHome(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/owned-home');
+        mkdir($home . '/.candy-code/skills', 0777, true);
+        mkdir($home . '/elsewhere/shared-skill', 0777, true);
+        file_put_contents($home . '/elsewhere/shared-skill/SKILL.md', "---\ndescription: Shared\n---\n");
+
+        if (!@symlink($home . '/elsewhere/shared-skill', $home . '/.candy-code/skills/shared-skill')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        try {
+            $found = array_map('basename', (new SkillDiscovery())->discoverUserSkills());
+
+            $this->assertContains('shared-skill', $found);
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    private function createSkillDir(string $path): void
+    {
+        $fullPath = $this->tempDir . '/' . $path;
+        mkdir($fullPath, 0777, true);
+        file_put_contents($fullPath . '/SKILL.md', "---\ndescription: Test skill\n---\nContent");
+    }
+
+    // -------------------------------------------------------------------------
+    // discoverProjectSkills()
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverProjectSkillsReturnsEmptyWhenNoProjectSkillsDir(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        $result = $discovery->discoverProjectSkills($this->tempDir . '/nonexistent');
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testDiscoverProjectSkillsFindsSkillDirectories(): void
+    {
+        $discovery = new SkillDiscovery();
+        $projectRoot = $this->tempDir . '/project';
+        mkdir($projectRoot . '/.candy-code/skills', 0777, true);
+        $this->createSkillDir('project/.candy-code/skills/my-project-skill');
+        $this->createSkillDir('project/.candy-code/skills/another-skill');
+
+        $result = $discovery->discoverProjectSkills($projectRoot);
+
+        $this->assertCount(2, $result);
+        $this->assertContains($projectRoot . '/.candy-code/skills/my-project-skill', $result);
+        $this->assertContains($projectRoot . '/.candy-code/skills/another-skill', $result);
+    }
+
+    public function testDiscoverProjectSkillsReturnsAbsolutePaths(): void
+    {
+        $discovery = new SkillDiscovery();
+        $projectRoot = $this->tempDir . '/abs-project';
+        mkdir($projectRoot . '/.candy-code/skills/test-skill', 0777, true);
+        file_put_contents($projectRoot . '/.candy-code/skills/test-skill/SKILL.md', "---\ndescription: Test\n---\n");
+
+        $result = $discovery->discoverProjectSkills($projectRoot);
+
+        $this->assertCount(1, $result);
+        $realPath = realpath($projectRoot . '/.candy-code/skills/test-skill');
+        $this->assertSame($realPath, $result[0]);
+    }
+
+    // -------------------------------------------------------------------------
+    // discoverUserSkills()
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverUserSkillsReturnsEmptyWhenNoUserSkillsDir(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        // Use a temp home that definitely has no skills
+        $home = $this->useHomeSandbox($this->tempDir . '/empty-home');
+        mkdir($home . '/.candy-code/skills', 0777, true);
+
+        try {
+            $result = $discovery->discoverUserSkills();
+
+            $this->assertIsArray($result);
+            // The directory exists but is empty
+            $this->assertEmpty($result);
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    public function testDiscoverUserSkillsFindsSkillDirectories(): void
+    {
+        $discovery = new SkillDiscovery();
+        $fakeHome = $this->tempDir . '/fake-home';
+        $this->useHomeSandbox($fakeHome);
+        mkdir($fakeHome . '/.candy-code/skills/user-skill', 0777, true);
+        file_put_contents($fakeHome . '/.candy-code/skills/user-skill/SKILL.md', "---\ndescription: User skill\n---\n");
+
+        try {
+            $result = $discovery->discoverUserSkills();
+
+            $this->assertCount(1, $result);
+            $this->assertStringContainsString('user-skill', $result[0]);
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // discoverLibSkills()
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverLibSkillsReturnsEmptyWhenNoLibSkillsDir(): void
+    {
+        $discovery = new SkillDiscovery();
+        $libPath = $this->tempDir . '/some-lib';
+
+        $result = $discovery->discoverLibSkills($libPath);
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testDiscoverLibSkillsFindsNestedSkillDirectories(): void
+    {
+        $discovery = new SkillDiscovery();
+        $libPath = $this->tempDir . '/my-lib';
+        mkdir($libPath . '/.candy-code/skills/lib-nested-skill', 0777, true);
+        file_put_contents($libPath . '/.candy-code/skills/lib-nested-skill/SKILL.md', "---\ndescription: Lib nested\n---\n");
+
+        $result = $discovery->discoverLibSkills($libPath);
+
+        $this->assertCount(1, $result);
+        $this->assertStringContainsString('lib-nested-skill', $result[0]);
+    }
+
+    public function testDiscoverLibSkillsHandlesMultipleLibSkills(): void
+    {
+        $discovery = new SkillDiscovery();
+        $libPath = $this->tempDir . '/multi-lib';
+        mkdir($libPath . '/.candy-code/skills/skill-a', 0777, true);
+        mkdir($libPath . '/.candy-code/skills/skill-b', 0777, true);
+        file_put_contents($libPath . '/.candy-code/skills/skill-a/SKILL.md', "---\ndescription: A\n---\n");
+        file_put_contents($libPath . '/.candy-code/skills/skill-b/SKILL.md', "---\ndescription: B\n---\n");
+
+        $result = $discovery->discoverLibSkills($libPath);
+
+        $this->assertCount(2, $result);
+    }
+
+    // -------------------------------------------------------------------------
+    // discoverAll() - combined discovery with deduplication
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverAllReturnsEmptyWhenNoSkillsExist(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        // An explicit project root: the default '.' is the runner's cwd, so the
+        // answer would depend on which directory and which earlier test left
+        // the process where it is.
+        $result = $discovery->discoverAll([], $this->tempDir . '/no-project');
+
+        $this->assertSame([], $result);
+    }
+
+    public function testDiscoverAllCombinesAllThreeSources(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        // Set up project skills
+        $projectRoot = $this->tempDir . '/all-project';
+        mkdir($projectRoot . '/.candy-code/skills/project-skill', 0777, true);
+        file_put_contents($projectRoot . '/.candy-code/skills/project-skill/SKILL.md', "---\ndescription: Project\n---\n");
+
+        // Set up user skills (using fake home)
+        $fakeHome = $this->tempDir . '/all-user';
+        $this->useHomeSandbox($fakeHome);
+        mkdir($fakeHome . '/.candy-code/skills/user-skill', 0777, true);
+        file_put_contents($fakeHome . '/.candy-code/skills/user-skill/SKILL.md', "---\ndescription: User\n---\n");
+
+        // Set up lib skills
+        $libPath = $this->tempDir . '/all-lib';
+        mkdir($libPath . '/.candy-code/skills/lib-skill', 0777, true);
+        file_put_contents($libPath . '/.candy-code/skills/lib-skill/SKILL.md', "---\ndescription: Lib\n---\n");
+
+        try {
+            // Pass the temp project root so discoverAll finds our project skills
+            $result = $discovery->discoverAll([$libPath], $projectRoot);
+
+            // Should have all three skills from different sources
+            $this->assertCount(3, $result);
+            $this->assertArrayHasKey('project-skill', $result);
+            $this->assertArrayHasKey('user-skill', $result);
+            $this->assertArrayHasKey('lib-skill', $result);
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    /**
+     * Kept in step with the live loader (audit 15d-03(b)): the user's own tree
+     * beats a vendored lib's — it used to be the reverse, lib highest — and the
+     * lib's copy is recorded as shadowed rather than dropped silently.
+     */
+    public function testDiscoverAllLetsTheUsersSkillBeatALibsAndReportsIt(): void
+    {
+        $discovery = new SkillDiscovery(new SkillLoader(reportSkips: false));
+
+        $fakeHome = $this->tempDir . '/override-user';
+        $this->useHomeSandbox($fakeHome);
+        mkdir($fakeHome . '/.candy-code/skills/shared-skill', 0777, true);
+        file_put_contents($fakeHome . '/.candy-code/skills/shared-skill/SKILL.md', "---\ndescription: User version\n---\n");
+
+        $libPath = $this->tempDir . '/override-lib';
+        mkdir($libPath . '/.candy-code/skills/shared-skill', 0777, true);
+        file_put_contents($libPath . '/.candy-code/skills/shared-skill/SKILL.md', "---\ndescription: Lib version\n---\n");
+
+        try {
+            $result = $discovery->discoverAll([$libPath], $this->tempDir . '/no-project');
+
+            $this->assertCount(1, $result);
+            $this->assertStringContainsString('override-user', $result['shared-skill']);
+
+            $shadowed = array_filter(
+                $discovery->skipped(),
+                static fn(string $path): bool => str_contains($path, 'override-lib'),
+                ARRAY_FILTER_USE_KEY,
+            );
+            $this->assertCount(1, $shadowed, 'the lib copy must be reported as shadowed');
+            $this->assertStringContainsString('shadowed by [user] skill', (string) reset($shadowed));
+            $this->assertStringContainsString('this [lib] skill was not loaded', (string) reset($shadowed));
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    /**
+     * lib < project < user end to end: the project beats a lib it vendors, and
+     * the user beats the project.
+     */
+    public function testDiscoverAllRanksLibBelowProjectBelowUser(): void
+    {
+        $discovery = new SkillDiscovery(new SkillLoader(reportSkips: false));
+
+        $projectRoot = $this->tempDir . '/rank-project';
+        $libPath = $this->tempDir . '/rank-lib';
+        $fakeHome = $this->tempDir . '/rank-user';
+        $this->useHomeSandbox($fakeHome);
+        foreach ([$libPath => ['a', 'b'], $projectRoot => ['a', 'b'], $fakeHome => ['b']] as $root => $names) {
+            foreach ($names as $name) {
+                mkdir($root . '/.candy-code/skills/' . $name, 0777, true);
+                file_put_contents($root . '/.candy-code/skills/' . $name . '/SKILL.md', "---\ndescription: {$root}\n---\n");
+            }
+        }
+
+        try {
+            $result = $discovery->discoverAll([$libPath], $projectRoot);
+
+            $this->assertStringContainsString('rank-project', $result['a'], 'the project beats the lib');
+            $this->assertStringContainsString('rank-user', $result['b'], 'the user beats the project');
+        } finally {
+            $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+        }
+    }
+
+    public function testDiscoverAllWithEmptyLibPaths(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        $projectRoot = $this->tempDir . '/empty-libs-project';
+        mkdir($projectRoot . '/.candy-code/skills/project-only', 0777, true);
+        file_put_contents($projectRoot . '/.candy-code/skills/project-only/SKILL.md', "---\ndescription: Project\n---\n");
+
+        $result = $discovery->discoverAll([], $projectRoot);
+
+        $this->assertSame(['project-only'], array_keys($result), 'no lib paths: only the project tier (the sandbox HOME is empty)');
+    }
+
+    // -------------------------------------------------------------------------
+    // resolveSkillPath()
+    // -------------------------------------------------------------------------
+
+    public function testResolveSkillPathReturnsPathWhenSkillExists(): void
+    {
+        $discovery = new SkillDiscovery();
+        $skillPath = $this->tempDir . '/resolve-test/my-skill';
+        mkdir($skillPath, 0777, true);
+        file_put_contents($skillPath . '/SKILL.md', "---\ndescription: Test\n---\n");
+
+        $result = $discovery->resolveSkillPath('my-skill', [$this->tempDir . '/resolve-test']);
+
+        $this->assertNotNull($result);
+        $this->assertSame($skillPath, $result);
+    }
+
+    public function testResolveSkillPathReturnsNullWhenNotFound(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        $result = $discovery->resolveSkillPath('nonexistent', [$this->tempDir]);
+
+        $this->assertNull($result);
+    }
+
+    public function testResolveSkillPathSearchesInOrder(): void
+    {
+        $discovery = new SkillDiscovery();
+
+        // Create skill in first location
+        $path1 = $this->tempDir . '/search/path1/exists-skill';
+        mkdir($path1, 0777, true);
+        file_put_contents($path1 . '/SKILL.md', "---\ndescription: First\n---\n");
+
+        // Create same-named skill in second location (should NOT be found)
+        $path2 = $this->tempDir . '/search/path2/exists-skill';
+        mkdir($path2, 0777, true);
+        file_put_contents($path2 . '/SKILL.md', "---\ndescription: Second\n---\n");
+
+        $result = $discovery->resolveSkillPath('exists-skill', [
+            $this->tempDir . '/search/path1',
+            $this->tempDir . '/search/path2',
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertSame($path1, $result);
+    }
+
+    /**
+     * A NAME IS NOT A PATH. `resolveSkillPath()` used to concatenate the name
+     * onto the base and ask `is_dir()`, so `'../../..'` named a directory
+     * outside the search path and was resolved as a skill — the escape this
+     * class's own doc-comment says a future caller would inherit. Matching
+     * against the contained walk cannot leave the tree: a basename holds no
+     * separator.
+     */
+    public function testResolveSkillPathRefusesANameThatWalksOutOfTheSearchPath(): void
+    {
+        $discovery = new SkillDiscovery();
+        $base = $this->tempDir . '/escape/skills';
+        mkdir($base . '/real', 0777, true);
+        file_put_contents($base . '/real/SKILL.md', "---\ndescription: Real\n---\n");
+
+        $this->assertNull($discovery->resolveSkillPath('..', [$base]));
+        $this->assertNull($discovery->resolveSkillPath('../../..', [$base]));
+        $this->assertNull($discovery->resolveSkillPath('real/../../..', [$base]));
+        // ...and the ordinary lookup still works, so containment is not
+        // "resolves nothing".
+        $this->assertSame($base . '/real', $discovery->resolveSkillPath('real', [$base]));
+    }
+
+    /**
+     * The other half of the same escape: `is_dir()` stats THROUGH a symlink, so
+     * a link out of the skills directory answered true and its target came back
+     * as the skill's path. The loader's walk refuses it.
+     */
+    public function testResolveSkillPathRefusesASkillDirectoryThatIsALinkOutOfTheTree(): void
+    {
+        $discovery = new SkillDiscovery();
+        $base = $this->tempDir . '/linked/skills';
+        $outside = $this->tempDir . '/outside/elsewhere';
+        mkdir($base, 0777, true);
+        mkdir($outside, 0777, true);
+        file_put_contents($outside . '/SKILL.md', "---\ndescription: Outside\n---\n");
+
+        if (!@symlink($outside, $base . '/escape')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        $this->assertNull($discovery->resolveSkillPath('escape', [$base]));
+    }
+}

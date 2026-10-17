@@ -181,7 +181,7 @@ that are tiny but together justify a PR.
 - charmbracelet/skate → candy-kv
 - charmbracelet/pop → candy-mail
 - charmbracelet/soft-serve → candy-git-server
-- charmbracelet/crush → sugar-crush
+- charmbracelet/crush → candy-code
 - Broderick-Westrope/tetrigo → candy-tetris
 - yorukot/superfile → super-candy
 - jesseduffield/lazygit → candy-git

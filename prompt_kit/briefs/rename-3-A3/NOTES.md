@@ -64,7 +64,7 @@
 - tools/tests: 426T/1484A — exact floor (no docs-dataset wobble).
 - check-path-repos --no-lib-path-repos: rc=0. (Refresh-deps wrapper verified too.)
 - gen-docs --check rc=0; gen-ansi-readme --check rc=0.
-- Consumers beyond root: none → no consumer suite runs owed. sugar-crush: zero src/tests/manifest
+- Consumers beyond root: none → no consumer suite runs owed. candy-code: zero src/tests/manifest
   references to the old slug → not run (no crush files in diff).
 - composer.lock root: churn confined to the renamed package block (name/homepage/support/
   autoload/alias/content-hash).

@@ -324,9 +324,9 @@ final class PosixMasterPty implements MasterPty
         // scope that takes the master's fd NUMBER and reads it after a
         // close() call in the same scope. The callers are PtyPool::release()
         // and PtyPool::drain() in this package, the deprecated Pty facade
-        // here, sugar-ssh-server's InProcessTransport teardown, sugar-crush's
+        // here, sugar-ssh-server's InProcessTransport teardown, candy-code's
         // CapturesProcessOutput pty drain, and the finally-block cleanups in
-        // the sugar-pty, sugar-animation, sugar-core and sugar-crush suites
+        // the sugar-pty, sugar-animation, sugar-core and candy-code suites
         // (sugar-image never touches a pty). NONE reads the number back.
         // Two honest caveats on the instrument: this walk replaces the
         // `--filter Posix` measurement above for this question, because the

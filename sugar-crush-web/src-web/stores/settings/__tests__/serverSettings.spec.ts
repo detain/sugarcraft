@@ -47,7 +47,7 @@ const SCHEMA = {
   items: [
     { key: 'parallelToolCalls', type: 'bool', group: 'Tools', label: 'Parallel tool calls', riskClass: 'tuning', applies: 'next-turn', appliesLabel: 'next turn', sensitive: false, writableRemotely: true, projectSettable: true },
     { key: 'statusLine', type: 'map', group: 'UI', label: 'Status line', riskClass: 'exec', applies: 'live', sensitive: false, writableRemotely: false, remoteRefusal: 'runs a command: not writable remotely' },
-    { key: 'connectTimeoutSeconds', type: 'float', group: 'Advanced', label: 'Connect timeout', riskClass: 'tuning', applies: 'restart', envVar: 'SUGARCRUSH_CONNECT_TIMEOUT', sensitive: false, writableRemotely: true, projectSettable: true },
+    { key: 'connectTimeoutSeconds', type: 'float', group: 'Advanced', label: 'Connect timeout', riskClass: 'tuning', applies: 'restart', envVar: 'CANDY_CODE_CONNECT_TIMEOUT', sensitive: false, writableRemotely: true, projectSettable: true },
   ],
   tiers: [
     { scope: 'user', label: 'You (all projects)', path: '/h/config.json', writable: true },
@@ -60,7 +60,7 @@ const VALUES = {
   values: {
     parallelToolCalls: { value: true, source: 'default', sourceLabel: 'default', shadowed: [], locked: false },
     statusLine: { value: null, source: 'default', sourceLabel: 'default', shadowed: [], locked: false },
-    connectTimeoutSeconds: { value: 7, source: 'env', sourceLabel: 'environment', shadowed: [], locked: true, lockReason: 'set by SUGARCRUSH_CONNECT_TIMEOUT' },
+    connectTimeoutSeconds: { value: 7, source: 'env', sourceLabel: 'environment', shadowed: [], locked: true, lockReason: 'set by CANDY_CODE_CONNECT_TIMEOUT' },
   },
   files: [{ role: 'your config', path: '/h/config.json', status: 'absent', note: 'Layer 4' }],
 }
@@ -91,7 +91,7 @@ describe('server settings store', () => {
     expect(settings.files).toHaveLength(1)
     expect(settings.editabilityOf('parallelToolCalls')).toEqual({ editable: true, reason: null })
     expect(settings.editabilityOf('statusLine').reason).toContain('runs a command')
-    expect(settings.editabilityOf('connectTimeoutSeconds').reason).toBe('set by SUGARCRUSH_CONNECT_TIMEOUT')
+    expect(settings.editabilityOf('connectTimeoutSeconds').reason).toBe('set by CANDY_CODE_CONNECT_TIMEOUT')
     settings.setScope('project')
     expect(settings.editabilityOf('parallelToolCalls').reason).toContain('trust this project')
   })
@@ -173,10 +173,10 @@ describe('server settings store', () => {
     const previewing = settings.requestPreview()
     await flush()
     expect(sent('settings.preview')[0]?.params).toEqual({ scope: 'project-shared', set: { parallelToolCalls: false }, unset: [] })
-    answer('settings.preview', { scope: 'project-shared', path: '/p/.sugar-crush/settings.json', canSave: true, refusals: {}, changes: [], applySummary: '', notes: [], diff: '' })
+    answer('settings.preview', { scope: 'project-shared', path: '/p/.candy-code/settings.json', canSave: true, refusals: {}, changes: [], applySummary: '', notes: [], diff: '' })
     await previewing
 
-    const shared = { scope: 'project-shared', label: 'This project (shared)', path: '/p/.sugar-crush/settings.json', writable: true } as TierInfo
+    const shared = { scope: 'project-shared', label: 'This project (shared)', path: '/p/.candy-code/settings.json', writable: true } as TierInfo
     const userOnly = { key: 'theme', type: 'enum', group: 'UI', label: 'Theme', riskClass: 'cosmetic', applies: 'live', sensitive: false, writableRemotely: true, projectSettable: false } as SettingRow
     expect(editability(userOnly, undefined, shared)).toEqual({ editable: false, reason: 'user-tier only: a project may not set it' })
     expect(editability({ ...userOnly, projectSettable: true }, undefined, shared)).toEqual({ editable: true, reason: null })

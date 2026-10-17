@@ -139,7 +139,7 @@ final class CodePointExpansionTest extends TestCase
     #[Test]
     public function testHighlighterRoundTripStylesExactlyTheMatchedChars(): void
     {
-        // The production shape (sugar-crush Renderer): MatchResult → Highlighter.
+        // The production shape (candy-code Renderer): MatchResult → Highlighter.
         // Pre-fix the round trip produced "[İ]s[ta]nbul" for query 'ist'.
         $highlighter = new Highlighter();
 

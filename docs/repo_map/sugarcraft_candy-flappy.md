@@ -652,7 +652,7 @@ public function testCellsAboveAndBelowGapCollide(): void
 The SugarCraft monorepo contains other game-related ports:
 - **candy-tetris**: Tetris clone (no physics library use)
 
-- **sugar-crush**: Match-3 game (no physics)
+- **candy-code**: Match-3 game (no physics)
 
 candy-flappy is unique in its use of sugar-spring physics for game motion — all other games use integer-grid movement only.
 

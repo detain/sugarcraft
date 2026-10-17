@@ -122,7 +122,7 @@ final class LegacyEnvTest extends TestCase
         $this->setEnv('SUGARCRUSH_ONE', 'plain'); // @rename-keep
         $this->setEnv('SUGAR_CRUSH_ONE', 'underscored'); // @rename-keep
 
-        // Sorted scan: 'SUGARCRUSH_ONE' < 'SUGAR_CRUSH_ONE' ('S' 0x53 beats '_' 0x5F),
+        // Sorted scan: 'CANDY_CODE_ONE' < 'CANDY_CODE_ONE' ('S' 0x53 beats '_' 0x5F),
         // so the plain spelling wins the shared CANDY_CODE_ONE and the loser is not reported.
         $this->assertSame(['SUGARCRUSH_ONE'], LegacyEnv::import([ // @rename-keep
             'SUGARCRUSH_' => 'CANDY_CODE_', // @rename-keep
@@ -151,7 +151,7 @@ final class LegacyEnvTest extends TestCase
         $this->setEnv('SUGARCRUSH_ABE', 'a'); // @rename-keep
 
         $this->assertSame( // @rename-keep
-            ['SUGARCRUSH_ABE', 'SUGARCRUSH_ZET', 'SUGAR_CRUSH_MID'],
+            ['CANDY_CODE_ABE', 'CANDY_CODE_ZET', 'CANDY_CODE_MID'],
             LegacyEnv::import([ // @rename-keep
                 'SUGARCRUSH_' => 'CANDY_CODE_', // @rename-keep
                 'SUGAR_CRUSH_' => 'CANDY_CODE_', // @rename-keep

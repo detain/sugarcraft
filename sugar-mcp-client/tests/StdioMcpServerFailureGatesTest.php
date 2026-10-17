@@ -244,7 +244,7 @@ final class StdioMcpServerFailureGatesTest extends TestCase
     }
 
     /**
-     * The sugar-crush shape: the owner starts the server, a pcntl_fork()ed turn
+     * The candy-code shape: the owner starts the server, a pcntl_fork()ed turn
      * makes the call, and the owner sits in waitpid() on that turn — never in
      * proc_get_status() — so the dead server stays an unreaped zombie, which
      * signal 0 still reports as alive. The forked caller must see it as dead.

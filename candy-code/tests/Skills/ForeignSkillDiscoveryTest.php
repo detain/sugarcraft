@@ -1,0 +1,440 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Skills;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Skills\ForeignSkillDiscovery;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Skills\SkillOrigin;
+use SugarCraft\Code\Skills\SkillSource;
+use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+
+/**
+ * Tests for ForeignSkillDiscovery — imports SKILL.md-shaped directories from
+ * other coding-CLI tools' conventions (.agents/skills, .claude/skills,
+ * .opencode/skills) and tags them with the originating SkillSource for
+ * provenance badges.
+ */
+final class ForeignSkillDiscoveryTest extends TestCase
+{
+    use TemporaryDirectoryTrait;
+    use HomeSandboxTrait;
+
+    private string $tempDir;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->tempDir = sys_get_temp_dir() . '/candy-code-foreign-skill-test-' . uniqid((string) getmypid(), true);
+        mkdir($this->tempDir, 0777, true);
+        // Every discover*() call also scans the real HOME's foreign-skill
+        // dirs; point HOME at an empty sandbox by default so tests aren't
+        // polluted by whatever .claude/skills or .opencode/skills happen to
+        // exist on the machine running the suite. Tests that specifically
+        // exercise home-dir discovery move the sandbox to a different fake
+        // home. BOTH spellings of HOME are redirected -- see HomeSandboxTrait.
+        $this->useHomeSandbox($this->tempDir . '/default-empty-home');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+        $this->removeDirectory($this->tempDir);
+        parent::tearDown();
+    }
+
+    private function createSkillFile(string $dir, string $name, string $description): void
+    {
+        $skillDir = $dir . '/' . $name;
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', "---\ndescription: $description\n---\n\nBody.");
+    }
+
+    // -------------------------------------------------------------------------
+    // discoverClaude()
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverClaudeReturnsEmptyWhenNoDirExists(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/no-claude-here';
+
+        $result = $discovery->discoverClaude($projectRoot);
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testDiscoverClaudeFindsProjectSkillsAndTagsSource(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/project';
+        $this->createSkillFile($projectRoot . '/.claude/skills', 'imported-skill', 'A Claude Code skill');
+
+        $result = $discovery->discoverClaude($projectRoot);
+
+        $this->assertCount(1, $result);
+        $this->assertArrayHasKey('imported-skill', $result);
+        $this->assertSame(SkillSource::Claude, $result['imported-skill']->source);
+        $this->assertSame('A Claude Code skill', $result['imported-skill']->description);
+    }
+
+    public function testDiscoverClaudeFindsUserHomeSkills(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $fakeHome = $this->tempDir . '/fake-home';
+        $this->useHomeSandbox($fakeHome);
+        $this->createSkillFile($fakeHome . '/.claude/skills', 'home-skill', 'Home Claude skill');
+
+        $result = $discovery->discoverClaude($this->tempDir . '/empty-project');
+
+        $this->assertCount(1, $result);
+        $this->assertArrayHasKey('home-skill', $result);
+        $this->assertSame(SkillSource::Claude, $result['home-skill']->source);
+    }
+
+    /**
+     * THE USER'S OWN COPY WINS. A project's `.claude/skills` arrives with
+     * whatever repository was cloned, so letting it win a shared key would let
+     * a clone silently re-point a skill the user relies on -- the weaker,
+     * prompt-text form of the project-hook-file hole
+     * {@see \SugarCraft\Code\Cli\Bootstrap::hookFiles()} is gated for. The
+     * project's skill is still imported; it just may not displace a name that
+     * already resolved.
+     */
+    public function testDiscoverClaudeMergesProjectAndHomeWithTheUsersCopyWinning(): void
+    {
+        // The merge is last-write-wins over a lowest-priority-first search
+        // order, so the search order is project then home.
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/project2';
+        $fakeHome = $this->tempDir . '/fake-home2';
+        $this->useHomeSandbox($fakeHome);
+        $this->createSkillFile($projectRoot . '/.claude/skills', 'shared', 'From project');
+        $this->createSkillFile($projectRoot . '/.claude/skills', 'project-only', 'Project only skill');
+        $this->createSkillFile($fakeHome . '/.claude/skills', 'shared', 'From home');
+        $this->createSkillFile($fakeHome . '/.claude/skills', 'home-only', 'Home only skill');
+
+        $result = $discovery->discoverClaude($projectRoot);
+
+        $this->assertCount(3, $result);
+        $this->assertSame('From home', $result['shared']->description);
+        $this->assertArrayHasKey('home-only', $result);
+        $this->assertArrayHasKey('project-only', $result, 'a project skill with no collision is still imported');
+    }
+
+    /**
+     * Audit 15d-03 (the ForeignSkillDiscovery half): the user's copy already
+     * won inside one convention, but the repository's copy was dropped with
+     * nothing recorded. The loss now lands in the loader's skipped(), keyed by
+     * the losing file, naming the winner — for all three conventions.
+     */
+    public function testTheUsersCopyShadowingTheProjectsCopyIsRecordedInSkipped(): void
+    {
+        $projectRoot = $this->tempDir . '/project-shadow';
+        $fakeHome = $this->tempDir . '/fake-home-shadow';
+        $this->useHomeSandbox($fakeHome);
+
+        $conventions = [
+            'claude' => ['/.claude/skills', '/.claude/skills', 'discoverClaude'],
+            'opencode' => ['/.opencode/skills', '/.config/opencode/skills', 'discoverOpencode'],
+            'spec' => ['/.agents/skills', '/.agents/skills', 'discoverAgents'],
+        ];
+        foreach ($conventions as $format => [$projectSuffix, $userSuffix, $method]) {
+            $this->createSkillFile($projectRoot . $projectSuffix, 'shared', "From project ({$format})");
+            $this->createSkillFile($fakeHome . $userSuffix, 'shared', "From home ({$format})");
+
+            $loader = new SkillLoader(reportSkips: false);
+            $result = (new ForeignSkillDiscovery($loader))->{$method}($projectRoot);
+
+            $this->assertSame("From home ({$format})", $result['shared']->description);
+            $loserPath = $projectRoot . $projectSuffix . '/shared/SKILL.md';
+            $this->assertArrayHasKey($loserPath, $loader->skipped(), "{$format}: the project's copy must be reported");
+            $reason = $loader->skipped()[$loserPath];
+            $this->assertStringContainsString("shadowed by [user, foreign: {$format}] skill {$fakeHome}{$userSuffix}/shared/SKILL.md", $reason);
+            $this->assertStringContainsString("this [project, foreign: {$format}] skill was not loaded", $reason);
+            $this->assertCount(1, $loader->skipped(), "{$format}: nothing else was shadowed");
+        }
+    }
+
+    /**
+     * The unmerged view SkillManager interleaves with the native tiers: one
+     * entry per tier present, lowest precedence first, each skill stamped with
+     * its tier — and nothing recorded, since nothing was merged yet.
+     */
+    public function testClaudeTiersKeepsEachTierApartLowestFirst(): void
+    {
+        $projectRoot = $this->tempDir . '/project-tiers';
+        $fakeHome = $this->tempDir . '/fake-home-tiers';
+        $this->useHomeSandbox($fakeHome);
+        $this->createSkillFile($projectRoot . '/.claude/skills', 'shared', 'From project');
+        $this->createSkillFile($fakeHome . '/.claude/skills', 'shared', 'From home');
+
+        $loader = new SkillLoader(reportSkips: false);
+        $tiers = (new ForeignSkillDiscovery($loader))->claudeTiers($projectRoot);
+
+        $this->assertSame([SkillOrigin::Project->value, SkillOrigin::User->value], array_keys($tiers));
+        $this->assertSame('From project', $tiers['project']['shared']->description);
+        $this->assertSame(SkillOrigin::Project, $tiers['project']['shared']->origin);
+        $this->assertSame('From home', $tiers['user']['shared']->description);
+        $this->assertSame(SkillOrigin::User, $tiers['user']['shared']->origin);
+        $this->assertSame([], $loader->skipped());
+    }
+
+    // -------------------------------------------------------------------------
+    // discoverOpencode()
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverOpencodeReturnsEmptyWhenNoDirExists(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/no-opencode-here';
+
+        $result = $discovery->discoverOpencode($projectRoot);
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testDiscoverOpencodeFindsProjectSkillsAndTagsSource(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/oc-project';
+        $this->createSkillFile($projectRoot . '/.opencode/skills', 'oc-skill', 'An opencode skill');
+
+        $result = $discovery->discoverOpencode($projectRoot);
+
+        $this->assertCount(1, $result);
+        $this->assertArrayHasKey('oc-skill', $result);
+        $this->assertSame(SkillSource::Opencode, $result['oc-skill']->source);
+        $this->assertSame('An opencode skill', $result['oc-skill']->description);
+    }
+
+    public function testDiscoverOpencodeFindsUserConfigSkills(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $fakeHome = $this->tempDir . '/fake-home-oc';
+        $this->useHomeSandbox($fakeHome);
+        $this->createSkillFile($fakeHome . '/.config/opencode/skills', 'oc-home-skill', 'Home opencode skill');
+
+        $result = $discovery->discoverOpencode($this->tempDir . '/empty-oc-project');
+
+        $this->assertCount(1, $result);
+        $this->assertArrayHasKey('oc-home-skill', $result);
+        $this->assertSame(SkillSource::Opencode, $result['oc-home-skill']->source);
+    }
+
+    public function testDiscoverOpencodeMergesProjectAndHomeWithTheUsersCopyWinning(): void
+    {
+        // Same project < user precedence as discoverClaude().
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/oc-project2';
+        $fakeHome = $this->tempDir . '/fake-home-oc2';
+        $this->useHomeSandbox($fakeHome);
+        $this->createSkillFile($projectRoot . '/.opencode/skills', 'shared', 'From project');
+        $this->createSkillFile($projectRoot . '/.opencode/skills', 'project-only', 'Project only skill');
+        $this->createSkillFile($fakeHome . '/.config/opencode/skills', 'shared', 'From home');
+        $this->createSkillFile($fakeHome . '/.config/opencode/skills', 'home-only', 'Home only skill');
+
+        $result = $discovery->discoverOpencode($projectRoot);
+
+        $this->assertCount(3, $result);
+        $this->assertSame('From home', $result['shared']->description);
+        $this->assertArrayHasKey('home-only', $result);
+        $this->assertArrayHasKey('project-only', $result, 'a project skill with no collision is still imported');
+    }
+
+    // -------------------------------------------------------------------------
+    // tag() preserves every field except source (regression guard: a hand-
+    // enumerated rebuild like tag() is exactly the shape of bug that dropped
+    // provenance in Skill::withName() before that method threaded $source —
+    // see SkillSourceTest::testWithNamePreservesForeignSource)
+    // -------------------------------------------------------------------------
+
+    public function testDiscoveredSkillPreservesAllFieldsExceptSource(): void
+    {
+        $discovery = new ForeignSkillDiscovery();
+        $projectRoot = $this->tempDir . '/full-fields-project';
+        $skillDir = $projectRoot . '/.claude/skills/full-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', <<<SKILL
+---
+description: Full field skill
+disable-model-invocation: true
+user-invocable: false
+allowed-tools: read
+disallowed-tools: write
+model: gpt-4
+effort: high
+context: fork
+paths:
+  - some/path
+---
+
+Body content here.
+SKILL
+        );
+
+        $result = $discovery->discoverClaude($projectRoot);
+        $skill = $result['full-skill'];
+
+        $this->assertSame('Full field skill', $skill->description);
+        $this->assertTrue($skill->disableModelInvocation);
+        $this->assertFalse($skill->userInvocable);
+        $this->assertSame('read', $skill->allowedTools);
+        $this->assertSame('write', $skill->disallowedTools);
+        $this->assertSame('gpt-4', $skill->model);
+        $this->assertSame('high', $skill->effort);
+        $this->assertSame('fork', $skill->context);
+        $this->assertSame(['some/path'], $skill->paths);
+        $this->assertSame('Body content here.', $skill->content);
+        $this->assertSame(SkillSource::Claude, $skill->source);
+    }
+
+    // -------------------------------------------------------------------------
+    // constructor default
+    // -------------------------------------------------------------------------
+
+    public function testConstructorDefaultsToOwnSkillLoaderInstance(): void
+    {
+        // No exception thrown when constructed with zero args — confirms the
+        // default-value SkillLoader instantiation compiles and works standalone.
+        $discovery = new ForeignSkillDiscovery();
+
+        $result = $discovery->discoverClaude($this->tempDir . '/never-created');
+
+        $this->assertIsArray($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // the user tier's own boundary
+    // -------------------------------------------------------------------------
+
+    /**
+     * `~/.claude/skills -> <outside $HOME>` is REFUSED.
+     *
+     * This pair used to pass `null` as the user tier's anchor, justified as
+     * "its location is not a repository's choice" — the same premise
+     * {@see \SugarCraft\Code\Cli\Bootstrap::agentPresetTiers()} measured
+     * false across four launch shapes: a symlink out of `$HOME` arrives in a
+     * tarball as readily as in a clone, and the `$ownedBy` check beside it does
+     * not catch that, because a tarball extracts as the extracting user.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function foreignUserSkillTiers(): array
+    {
+        return [
+            'claude' => ['discoverClaude', '.claude/skills'],
+            'opencode' => ['discoverOpencode', '.config/opencode/skills'],
+            'agents' => ['discoverAgents', '.agents/skills'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignUserSkillTiers')]
+    public function testAUserSkillTreeLinkedOutOfHomeIsRefused(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/anchored-home';
+        $outside = $this->tempDir . '/outside-skills';
+        mkdir($home . '/' . \dirname($relative), 0o700, true);
+        mkdir($outside, 0o700, true);
+        $this->createSkillFile($outside, 'leaked', 'OUTSIDE-SKILL-DESCRIPTION');
+        symlink($outside, $home . '/' . $relative);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame([], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
+
+    /**
+     * THE CONTROL: a link elsewhere INSIDE `$HOME` — the layout the old
+     * justification was actually defending — still loads.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignUserSkillTiers')]
+    public function testAUserSkillTreeLinkedInsideHomeStillLoads(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/inside-home';
+        mkdir($home . '/' . \dirname($relative), 0o700, true);
+        mkdir($home . '/elsewhere', 0o700, true);
+        $this->createSkillFile($home . '/elsewhere', 'mine', 'MY-OWN-SKILL');
+        symlink($home . '/elsewhere', $home . '/' . $relative);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertSame(['mine'], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
+
+    /**
+     * THE ANCHOR HAS TO BE AN ESTABLISHED HOME, and it was `HomeDirectory::path()`
+     * — whose fallback is `sys_get_temp_dir()`, mode 1777 — while the comment
+     * beside it claimed "`$HOME` is the anchor that makes 'the user's own tree'
+     * true rather than assumed". `path()` establishes nothing, so the tree and the
+     * boundary it was judged against were both derived from a home nobody had
+     * vouched for, and the containment check compared a directory to itself.
+     *
+     * The sibling changed in the same commit,
+     * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry::userDir()},
+     * correctly used {@see \SugarCraft\Code\Support\HomeDirectory::owned()}: ONE
+     * SENTENCE, TRUE IN ONE FILE AND FALSE IN THE OTHER.
+     *
+     * MEASURED with `HOME` at a mode-0777 directory holding
+     * `.claude/skills/leak/SKILL.md`: off `path()` the skill was discovered and its
+     * body — `FOREIGN-USER-TIER-BODY sk-live-DEADBEEF` — was in the registry bound
+     * for the model's prompt; off `owned()` the tier is absent entirely.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignUserSkillTiers')]
+    public function testAWorldWritableHomeContributesNoUserSkills(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/loose-home';
+        mkdir($home . '/' . $relative, 0o777, true);
+        $this->createSkillFile($home . '/' . $relative, 'notmine', 'ANOTHER-LOCAL-USERS-SKILL');
+        chmod($home, 0o777);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertNull(
+            HomeDirectory::owned(),
+            'the fixture is only meaningful while this home is one owned() refuses',
+        );
+        $this->assertSame($home, HomeDirectory::path(), 'and while path() still hands it back');
+
+        $this->assertSame([], array_keys((new ForeignSkillDiscovery())->{$method}($this->tempDir . '/project')));
+    }
+
+    /**
+     * A home `owned()` refuses costs the USER tier and not the PROJECT one, which
+     * is the whole reason the tier is dropped rather than the discovery failing:
+     * a project's foreign skills are anchored to the checkout and do not depend on
+     * a home at all.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('foreignProjectSkillTiers')]
+    public function testAProjectTierSurvivesAHomeThatCannotBeEstablished(string $method, string $relative): void
+    {
+        $home = $this->tempDir . '/loose-home-2';
+        mkdir($home, 0o777, true);
+        chmod($home, 0o777);
+
+        $project = $this->tempDir . '/project-survives';
+        mkdir($project . '/' . $relative, 0o755, true);
+        $this->createSkillFile($project . '/' . $relative, 'theirs', 'FROM-THE-CHECKOUT');
+
+        $this->useHomeSandbox($home, create: false);
+
+        $this->assertNull(HomeDirectory::owned());
+        $this->assertSame(['theirs'], array_keys((new ForeignSkillDiscovery())->{$method}($project)));
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function foreignProjectSkillTiers(): array
+    {
+        return [
+            'claude' => ['discoverClaude', '.claude/skills'],
+            'opencode' => ['discoverOpencode', '.opencode/skills'],
+            'agents' => ['discoverAgents', '.agents/skills'],
+        ];
+    }
+}

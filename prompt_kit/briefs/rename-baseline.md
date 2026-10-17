@@ -9,7 +9,7 @@
 1. **Untracked-file residue at start:** `git status --porcelain` showed exactly one entry —
    `?? plan_rename.md` (the plan itself, added to version control by this step). No tracked-file
    modifications were present, satisfying the Part A precondition. No foreign operator dirt
-   (crush_libs.md / plan_crush_media.md / .sugar-crush/ were absent or gitignored).
+   (crush_libs.md / plan_crush_media.md / .candy-code/ were absent or gitignored).
 2. **refresh-deps --status (pre-fix):** `linked=56  published=0  mixed=0`. Six libs report
    `-  no vendor/sugarcraft` because they declare no sugarcraft sibling deps at all:
    `candy-ansi, candy-focus, candy-fuzzy, candy-layout, sugar-crush-web, sugar-diff`. <!-- @rename-keep historical provenance -->
@@ -23,7 +23,7 @@
 Command per lib: `cd /home/sites/sugarcraft/<lib> && vendor/bin/phpunit --colors=never`.
 PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-scriptui, sugar-crush) run under the <!-- @rename-keep historical provenance -->
 Part A rule-9 watchdog (1800 s). Pre-existing failures are RECORDED, not fixed.
-sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush — sharded, E671)".
+candy-code uses the sharded runner mirroring ci.yml "Run tests (candy-code — sharded, E671)".
 
 | lib | tests | assertions | failures | errors | skipped | rc | note |
 |---|---|---|---|---|---|---|---|
@@ -88,15 +88,15 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | sugar-toast | 278 | 669 | 0 | 0 | 0 | 0 |  |
 | sugar-veil | 258 | 561 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | sugar-wishlist | 257 | 1160 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
-### sugar-crush (sharded, CI-shape)
+### candy-code (sharded, CI-shape)
 
-Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E671)" from the repo root:
-`bash scripts/parallel-tests.sh 4 --durations scripts/parallel-tests-durations.tsv --against-json sugar-crush/tests/Config/Support/suite-figure.json --out <fresh> --timeout 1200`
+Mirrors `.github/workflows/ci.yml` step "Run tests (candy-code — sharded, E671)" from the repo root:
+`bash scripts/parallel-tests.sh 4 --durations scripts/parallel-tests-durations.tsv --against-json candy-code/tests/Config/Support/suite-figure.json --out <fresh> --timeout 1200`
 (CI pins K=min(nproc,4); box has 48 cores → K=4.)
 
 | lib | tests | assertions | failures | errors | skipped | rc | note |
 |---|---|---|---|---|---|---|---|
-| sugar-crush | 22564 | 423668 | 0 | 0 | 2 | 0 | CONSERVATION PASS vs pinned figure 22564/423652/0/0/2 (+16A wobble); 4 shards rc=0, wall 557s. Evidence /tmp/opencode/rename-baseline/sugar-crush-shard.txt |
+| candy-code | 22564 | 423668 | 0 | 0 | 2 | 0 | CONSERVATION PASS vs pinned figure 22564/423652/0/0/2 (+16A wobble); 4 shards rc=0, wall 557s. Evidence /tmp/opencode/rename-baseline/candy-code-shard.txt |
 
 ## Pre-existing failures catalog (RECORDED, not fixed)
 
@@ -124,4 +124,4 @@ Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E67
 - Suite loops MUST run with stdin `</dev/null`: the first candy-serve attempt STOPPED (state T, <!-- @rename-keep historical hazard note -->
   SIGTTIN) because its git-server children read stdin while the loop ran under a PTY session;
   with `</dev/null` candy-serve passed 354T/875A in <1 min. Not a pre-existing defect. <!-- @rename-keep historical hazard note -->
-- 61 lib suites + sugar-crush sharded = 62 test surfaces baselined.
+- 61 lib suites + candy-code sharded = 62 test surfaces baselined.

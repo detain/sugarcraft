@@ -95,7 +95,7 @@ the app it belongs to.
 
 | Satellite | App | Surface | Decision |
 |---|---|---|---|
-| **SugarCrushWeb** (`sugar-crush-web/`, `sugarcraft/sugar-crush-web`, `SugarCraft\CrushWeb\`) | SugarCrush | browser UI for `sugarcrush serve` (Vite + Vue 3 bundle + one-class PHP shim) | User decision, 2026-10-01: keep the three-word name. A two-word candidate (e.g. a `Sugar-` + `Web` coinage) would hide that it is sugar-crush's UI and unusable without it. |
+| **CandyCodeWeb** (`sugar-crush-web/`, `sugarcraft/sugar-crush-web`, `SugarCraft\CrushWeb\`) | CandyCode | browser UI for `candy-code serve` (Vite + Vue 3 bundle + one-class PHP shim) | User decision, 2026-10-01: keep the three-word name. A two-word candidate (e.g. a `Sugar-` + `Web` coinage) would hide that it is candy-code's UI and unusable without it. |
 
 The exception is narrow: a satellite has no use without its app, ships no
 standalone functionality, and keeps the app's prefix (no `Candy-` for an
@@ -159,10 +159,10 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |
 | **CandySql** | candy + sql = terminal SQL client. literal pairing (was candy-query — the query-editor framing retired with the 2026-10 rename); multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. | <!-- @rename-keep -->
 | **SugarVideo** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside SugarAnimation (GIF) and SugarImage (images) as the video member of the family. |
-| **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter numbering model); first-party PHP. |
-| **Sugar MCP Client** | sugar + mcp = Model Context Protocol client core. component/data per prefix law; extracted from sugar-crush (src/MCP stdio stack + McpMessage codec); first-party PHP — MCP is an open protocol spec. |
-| **SugarCrushWeb** | app satellite of SugarCrush — the browser UI for `sugarcrush serve`. Three words by the `<app>-<surface>` exception above; first-party PHP + Vue. |
-| **SugarCrush** | sugar + crush = TUI AI coding assistant. Multi-provider (OpenAI, SGLang, Claude Code, etc.), multi-agent, skill-aware. Original. |
+| **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from candy-code (BuildsUnifiedDiff + DiffGutter numbering model); first-party PHP. |
+| **Sugar MCP Client** | sugar + mcp = Model Context Protocol client core. component/data per prefix law; extracted from candy-code (src/MCP stdio stack + McpMessage codec); first-party PHP — MCP is an open protocol spec. |
+| **CandyCodeWeb** | app satellite of CandyCode — the browser UI for `candy-code serve`. Three words by the `<app>-<surface>` exception above; first-party PHP + Vue. |
+| **CandyCode** | sugar + crush = TUI AI coding assistant. Multi-provider (OpenAI, SGLang, Claude Code, etc.), multi-agent, skill-aware. Original. |
 
 ## ⚠️ Functional half is weak / vague
 

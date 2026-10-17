@@ -143,7 +143,7 @@ final class WidthResolutionTest extends TestCase
     // ------------------------------------------------------------------
 
     /**
-     * sugar-crush's longest `cli.help.screen` row measures 81 cells; on an
+     * candy-code's longest `cli.help.screen` row measures 81 cells; on an
      * 82-column terminal that line must survive an omitted width intact —
      * at the old hard 80 default it wrapped, and narrow terminals must
      * still wrap rather than clip it.

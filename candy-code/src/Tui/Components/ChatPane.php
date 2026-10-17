@@ -1,0 +1,155 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tui\Components;
+
+use SugarCraft\Code\Lang;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Messages\Message;
+use SugarCraft\Code\Renderer as LiveRenderer;
+use SugarCraft\Code\Theme;
+
+/**
+ * The shell's chat pane.
+ *
+ * Its body is NOT a second transcript renderer: when the {@see App} hosts a
+ * {@see \SugarCraft\Code\Chat}, this delegates to the live
+ * {@see LiveRenderer} — the one that carries tool results, diffs, the Veil
+ * permission modal, collapse/expand, images and the mouse zone pass — and
+ * only supplies the surrounding box (crush_feat.md §5 E7, merge branch).
+ * That is the whole point of the merge: the pane layer contributes layout,
+ * `src/Renderer.php` contributes content, and neither reimplements the other.
+ *
+ * Layout contract with {@see \SugarCraft\Code\Tui\Renderer}: `$cols`/`$rows`
+ * are the pane's TOTAL width and height budget (border included) — the columns
+ * the shell has left after its sidebars, not the terminal's — and the pane
+ * renders exactly that box, so the shell can lay chrome around it without the
+ * composed frame growing past the terminal. The hosted chat is re-sized to the
+ * pane's INNER box first ({@see \SugarCraft\Code\Chat::withSize()}) — the live
+ * renderer fits its frame to `rows()`/`cols()`, so handing it the terminal size
+ * while drawing it into a smaller box is what truncates content mid-glyph.
+ *
+ * Residual, pre-existing and NOT introduced here: the live renderer does not
+ * hard-wrap an assistant turn's Markdown, so a turn whose rendered line is
+ * wider than the box it is given still gets clipped — exactly as it is clipped
+ * by the terminal edge when that same Chat runs standalone. Sizing the chat to
+ * the pane is what stops the shell from *causing* that clip; making long text
+ * reflow is a content-model change.
+ *
+ * The `$a->messages` fallback below stays for a chat-less `App` — the plain
+ * engine-state object {@see \SugarCraft\Code\Runtime} builds — which has a
+ * message list but no content model to render it.
+ */
+final class ChatPane
+{
+    /**
+     * Columns between the pane's left edge and its body's first cell: the
+     * left border, then the left padding.
+     *
+     * Public because the shell needs it to translate mouse coordinates: the
+     * hosted chat records its click zones against its own body, and
+     * {@see \SugarCraft\Code\Renderer::setZoneOrigin()} wants the body's
+     * position on the terminal.
+     */
+    public const BODY_COL_INSET = 2;
+
+    /** Rows between the pane's top edge and its body's first row: the top border. */
+    public const BODY_ROW_INSET = 1;
+
+    /** Border columns (2) + horizontal padding (2) the box spends around its content. */
+    private const CHROME_COLS = self::BODY_COL_INSET * 2;
+
+    /** Top + bottom border rows the box spends around its content. */
+    private const CHROME_ROWS = self::BODY_ROW_INSET * 2;
+
+    /**
+     * The pane's text bytes only.
+     *
+     * Kept as the entry point for callers that compose the pane into something
+     * else and have no {@see \SugarCraft\Core\Program} to paint an image layer
+     * with; {@see renderView()} is what the shell itself uses.
+     */
+    public static function render(App $a, int $cols, int $rows): string
+    {
+        return self::renderView($a, $cols, $rows)[0];
+    }
+
+    /**
+     * The pane's text bytes plus the hosted chat's pixel-graphics layer.
+     *
+     * The image layer has to ride out of here rather than being dropped:
+     * {@see LiveRenderer::renderView()} leaves a marker in the body for every
+     * image-bearing tool result (crush_feat.md §9 E3) — a zero-width
+     * authenticating OSC plus one U+E002 + id cell
+     * ({@see \SugarCraft\Core\ImageOverlay::marker()}) — and only
+     * `Program::renderFrame()`, given the placements on a
+     * {@see \SugarCraft\Core\View}, paints those markers as images. Returning
+     * just the string would paint no image: since 15b-17's fix
+     * `renderFrame()` resolves every frame, so a marker whose placement was
+     * dropped is cleared to a blank cell rather than leaked to the terminal.
+     *
+     * Placements need no coordinate fix-up for the pane's position: markers are
+     * resolved against the FINAL composed frame by
+     * {@see \SugarCraft\Core\ImageOverlay::resolve()}, which derives each
+     * paint's row/column from where the marker actually ended up.
+     *
+     * Mouse ZONES do, and the reasoning above does not carry over to them:
+     * they are frozen at scan time, in the coordinate space of the body string
+     * built here. {@see \SugarCraft\Code\Tui\Renderer} is what closes that
+     * gap — it knows where this pane landed and declares the body's origin via
+     * {@see LiveRenderer::setZoneOrigin()} once the composite is final (hence
+     * {@see BODY_COL_INSET}/{@see BODY_ROW_INSET} being public).
+     *
+     * @return array{0: string, 1: array<int, \SugarCraft\Core\ImagePlacement>}
+     */
+    public static function renderView(App $a, int $cols, int $rows): array
+    {
+        $width = max(20, $cols - self::CHROME_COLS);
+        $innerRows = max(1, $rows - self::CHROME_ROWS);
+
+        $theme = $a->theme();
+        $images = [];
+        $messages = $a->messages;
+        if ($a->chat !== null) {
+            // The live agents strip's focus and dismissals are the shell's
+            // state (P-B3), so they ride in beside the chat.
+            $view = LiveRenderer::renderView($a->chat->withSize($width, $innerRows), $a->agentStripFocus, $a->agentStripDismissed);
+            $body = $view->body;
+            $images = $view->images;
+        } elseif ($messages === []) {
+            $body = Style::new()->foreground($theme->shellMuted)
+                ->render(Lang::t('tui.chat.welcome'));
+        } else {
+            $lines = [];
+            foreach ($messages as $msg) {
+                $lines[] = self::formatMessage($msg, $theme);
+            }
+            $body = implode("\n", $lines);
+        }
+
+        $st = Style::new()
+            ->border(Border::normal()->withTitle(' ' . \SugarCraft\Code\Tui\Pane::Chat->icon() . ' ' . Lang::t('tui.pane.title.chat') . ' '))
+            ->padding(0, 1)
+            ->width($width);
+
+        $st = $a->pane === \SugarCraft\Code\Tui\Pane::Chat
+            ? $st->borderForeground($theme->shellPrimary)
+            : $st->borderForeground($theme->border);
+
+        return [PaneFrame::render($st, $body, $theme->border), $images];
+    }
+
+    private static function formatMessage(Message $msg, Theme $theme): string
+    {
+        // Surface the concrete message type (e.g. UserMessage) so the
+        // transcript shows provenance, not just the role string.
+        $shortName = (new \ReflectionClass($msg))->getShortName();
+        $tag = Style::new()->foreground($theme->shellMuted)->render('[' . $shortName . ']');
+        $role = Style::new()->bold()->foreground($theme->shellWarning)->render($msg->role() . ':');
+        $content = Style::new()->foreground($theme->shellForeground)->render($msg->content());
+        return "$tag $role $content";
+    }
+}

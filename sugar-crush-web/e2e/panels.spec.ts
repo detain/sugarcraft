@@ -1,7 +1,7 @@
 import { expect, newSession, openApp, send, test } from './fixtures/server'
 
 /**
- * Roadmap O-6c in a real browser against a real `sugarcrush serve`: the todo
+ * Roadmap O-6c in a real browser against a real `candy-code serve`: the todo
  * panel following the agent's Todo tool, the memory panel's round trip, the
  * command palette, and a delegated run's tree, agent view and transcript.
  */

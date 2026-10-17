@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — Sugar MCP Client</title>
-<meta name="description" content="Sugar MCP Client: MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, deny-before-allow tool narrowing. Extracted from sugar-crush; first-party.">
+<meta name="description" content="Sugar MCP Client: MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, deny-before-allow tool narrowing. Extracted from candy-code; first-party.">
 <meta property="og:title" content="SugarCraft — Sugar MCP Client">
 <meta property="og:description" content="One faithful Model Context Protocol client core for the whole ecosystem: a JSON-RPC 2.0 envelope codec, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-mcp-client.png">
@@ -48,7 +48,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-mcp-client"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-mcp-client" alt="Sugar MCP Client code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing</strong>. Extracted from sugar-crush's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing, the same timeouts, and the same error shapes. First-party — MCP is a spec, not a Go port.</p>
+    <p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded, orphan-proof child lifecycle, the initialize/tools handshake, and deny-before-allow tool narrowing</strong>. Extracted from candy-code's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing, the same timeouts, and the same error shapes. First-party — MCP is a spec, not a Go port.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mcp-client:@dev</code></pre>
@@ -85,7 +85,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap. Ne
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Speaking MCP from any PHP process</strong> — spawn a stdio server child, handshake, list and call tools, with the framing and timeout discipline already fought for.</li>
-      <li><strong>Agent tool surfaces</strong> — narrow each agent's visible tools with globs and deny-before-allow, the same semantics sugar-crush uses.</li>
+      <li><strong>Agent tool surfaces</strong> — narrow each agent's visible tools with globs and deny-before-allow, the same semantics candy-code uses.</li>
       <li><strong>Bounded subprocess I/O</strong> — the transport doubles as a reference for newline-framed JSON-RPC over pipes with no deadlock, no silent wedge, and no orphaned grandchildren.</li>
     </ul>
 

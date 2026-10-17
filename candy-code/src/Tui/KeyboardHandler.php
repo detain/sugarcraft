@@ -1,0 +1,1171 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tui;
+
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\App\SelectSkillMsg;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Tui\Commands\CancelAgentCmd;
+use SugarCraft\Code\Tui\Commands\CancelCmd;
+use SugarCraft\Code\Tui\Commands\CommandPaletteCmd;
+use SugarCraft\Code\Tui\Commands\GroupInputCmd;
+use SugarCraft\Code\Tui\Commands\KeyCmd;
+use SugarCraft\Code\Tui\Commands\NewSessionCmd;
+use SugarCraft\Code\Tui\Commands\ProviderSelectCmd;
+use SugarCraft\Code\Tui\Commands\QuitAgentViewCmd;
+use SugarCraft\Code\Tui\Commands\ResumeAgentCmd;
+use SugarCraft\Code\Tui\Commands\SourceSkillCmd;
+use SugarCraft\Code\Tui\Commands\StopAllAgentsCmd;
+use SugarCraft\Code\Tui\Components\AgentDashboardPane;
+use SugarCraft\Code\Tui\Components\MenuBar;
+
+/**
+ * Handles keyboard input and routes to appropriate handlers.
+ *
+ * Mirrors charmbracelet/crush key handling logic.
+ */
+final class KeyboardHandler
+{
+    /**
+     * Ctrl+<rune> chords the SHELL answers. Deliberately excludes every chord
+     * the live {@see \SugarCraft\Code\Chat} already binds — see
+     * {@see chatOwns()}.
+     *
+     * Read off {@see KeyBindingRegistry}'s `Panes & windows` rows rather than
+     * spelled out here, so this routing table and the in-app keybinding
+     * reference cannot describe two different keyboards (crush_code.md Phase
+     * 8 item 2). The registry keeps its dormant rows in this set on purpose:
+     * an unclaimed chord is not inert, it falls through to Chat's generic
+     * `KeyType::Char` arm and types its own letter into the input box.
+     *
+     * @return list<string>
+     */
+    private static function shellCtrlRunes(): array
+    {
+        return KeyBindingRegistry::shellCtrlRunes();
+    }
+
+    /**
+     * Ctrl+<rune> chords the CONTENT model owns outright. The shell never
+     * claims these, in any pane, so merging the two layers cannot silently
+     * steal a binding a `bin/candy-code` user already has:
+     *
+     * - `p` — Chat's command palette. KeyboardHandler's own `'p'` arm loses,
+     *   and is therefore shadowed in every state (which is why the keybinding
+     *   table documents no shell `Ctrl+P`). It does NOT lose for being inert:
+     *   measured by driving {@see handle()} with `'ctrl+p'` and feeding the
+     *   result to {@see App::consumeShellCmd()}, the arm returns
+     *   `ProviderSelectCmd` and the shell runs it as `/model`, opening the
+     *   palette in `providers` mode. It loses because the palette is the live,
+     *   user-facing, tested binding for this chord, while the model switcher it
+     *   would displace it with keeps two other doors — typing `/model`, and the
+     *   palette's own "Switch model" row. The shell reaches the palette itself
+     *   through `Ctrl+K`, which `consumeShellCmd()` translates into a `Ctrl+P`
+     *   fed to the hosted Chat.
+     * - `o` — Chat's collapse/expand of the latest tool output (§1 E5); the
+     *   only way to read a hidden tool body. The shell binds nothing to it.
+     * - `a` — Chat's `/agents` dispatch, over a shell arm (focus
+     *   `Pane::Agents`) that is shadowed the same way: the Chat arm was built
+     *   (R20) precisely as the reachable equivalent of this shortcut, and the
+     *   Agents pane is still one plain Tab away.
+     * - `r` — Chat's session picker. Newly named here: the hand-written list
+     *   this replaced omitted it, and the shell binds nothing to it, so from
+     *   every ordinary pane the chord already fell through to Chat. Deriving
+     *   the set from the table changed exactly the three states where
+     *   {@see shellOwnsKeyboard()} holds — `Pane::Agents`, an open skill
+     *   picker, and any pane with the F10 menu open — in all of which the
+     *   shell used to swallow it (via `handleCtrl('r')`'s `default` no-op) and
+     *   would otherwise now let Chat open a picker underneath a view that
+     *   claims `↑`/`↓`/`Enter`. It is therefore the one chat row that yields
+     *   the chord back in those states: see
+     *   {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}, which is
+     *   where that exception is declared — both of its conditions, why `p`
+     *   meets the first and fails the second, and the gap that leaves open.
+     *   Outside those three states the picker is Chat's, exactly as before.
+     * - `w` — Chat's word-delete while typing.
+     * - `c` — Chat quits on it. Note most terminals deliver Ctrl+C as the
+     *   raw `\x03` rune with no ctrl flag, which {@see chatOwns()} also
+     *   covers explicitly.
+     *
+     * @return list<string>
+     */
+    private static function chatCtrlRunes(): array
+    {
+        return KeyBindingRegistry::chatCtrlRunes();
+    }
+
+    /**
+     * Decide whether the pane SHELL claims this keypress, and if so apply it.
+     *
+     * This is the {@see KeyMsg} bridge that lets {@see App::update()} host the
+     * live {@see \SugarCraft\Code\Chat} (crush_feat.md §5 E7, the merge
+     * branch): the shell answers its own keys — menu, pane switch, the agent
+     * view's c/r/s/q and arrows — and returns **null** for everything else so
+     * the App can hand the untouched `KeyMsg` to `Chat::update()`. Returning
+     * `[$app, null]` for an unclaimed key (which {@see handle()} does, having
+     * no way to say "not mine") would swallow the palette, the "/" menu,
+     * Ctrl+O, history recall and every other live binding.
+     *
+     * Claim rules, in order:
+     * 1. Never claim a {@see chatOwns()} binding — content wins outright,
+     *    except for the one chord {@see KeyBindingRegistry} declares as
+     *    yielded while rule 2 holds.
+     * 2. {@see shellOwnsKeyboard()}: an open menu, `Pane::Agents`' full-pane
+     *    agent view (where c/r/s/q are commands, not text, and `q` is how the
+     *    user leaves), or an OPEN skill picker.
+     * 3. F10 opens the menu, from any pane.
+     * 4. Unmodified Tab cycles pane FOCUS along the docked frame
+     *    ({@see App::cyclePaneFocus()}), except while Chat itself holds focus
+     *    and its "/" popup is showing matches — there it is that popup's
+     *    completion key and falls through. Ctrl+Tab is excluded by rule 1 —
+     *    that is Chat's session cycling (§5 E2).
+     * 5. Escape returns to the chat pane, but only when the shell has
+     *    somewhere to return FROM. In `Pane::Chat` it belongs to Chat, whose
+     *    Escape cancels an in-flight turn and closes the palette.
+     * 6. Enter from a docked non-Chat pane opens the command palette while
+     *    the chat draft is empty — the interaction door for the read-only
+     *    surfaces. A non-empty draft submits as always.
+     * 7. The {@see shellCtrlRunes()} chords.
+     *
+     * Element 1 is consumed by {@see App::consumeShellCmd()}, which translates
+     * it into shell state, into keystrokes the hosted Chat already answers, or
+     * (the agent commands, roadmap P-D3) into an
+     * {@see \SugarCraft\Code\AgentControlMsg} for the runs it names.
+     *
+     * @return array{0: App, 1: ?object}|null [newApp, command], or null when
+     *         the key is not the shell's and must fall through to Chat.
+     *         Element 1 is a {@see KeyCmd} except on the menu path, which
+     *         surfaces {@see \SugarCraft\Code\Tui\Components\MenuSelectedMsg}.
+     */
+    public function handleKeyMsg(KeyMsg $msg, App $app): ?array
+    {
+        if (!$this->claims($msg, $app)) {
+            return null;
+        }
+
+        if ($msg->type === KeyType::F10) {
+            MenuBar::openMenu();
+
+            return [$app, null];
+        }
+
+        return $this->handle($msg->string(), $app);
+    }
+
+    /**
+     * @see handleKeyMsg() for the rule list this implements.
+     */
+    private function claims(KeyMsg $msg, App $app): bool
+    {
+        if (self::chatOwns($msg, $app)) {
+            return false;
+        }
+
+        // The live agents strip (roadmap P-B3): `Alt+↓` while it shows, and
+        // its own keys while it holds the keyboard. Any other key is NOT
+        // claimed — App::handleKey() hands the keyboard back to the input and
+        // lets the key land there.
+        if (self::agentStripKey($msg, $app) !== null) {
+            return true;
+        }
+
+        // The Agent View (roadmap P-C2): `Esc`/`Alt+↑` leave it and
+        // `Alt+N`/`Alt+P` walk the run's batch, while it is open in the chat
+        // pane with nothing modal over it; `Enter` on a sendable draft sends
+        // it to the run (P-D2). Every other key falls through to the chat as
+        // before — typing still edits the one input box.
+        if (self::agentViewKey($msg, $app) !== null) {
+            return true;
+        }
+
+        if (self::shellOwnsKeyboard($app)) {
+            return true;
+        }
+
+        // F10 opens the menu bar -- the conventional TUI menu key, and the
+        // piece that was missing: MenuBar's navigation existed but nothing
+        // could ever open it, so the bar was unreachable by keyboard AND
+        // mouse. Claimed unconditionally so it works from any pane.
+        if ($msg->type === KeyType::F10) {
+            return true;
+        }
+
+        // Unmodified Tab cycles panes -- EXCEPT while the hosted chat's "/"
+        // popup is showing matches, where it is the completion key instead
+        // (the user report: "hitting tab while typing a partial /command ...
+        // should expand your typed command to the full command currently
+        // highlighted ... currently it switches your active other window").
+        // Conditional exactly the way the Escape rule below already is: the
+        // key belongs to whichever surface is modal for it, and a menu of
+        // candidate completions is that surface for Tab.
+        //
+        // The predicate is Chat::slashMenuOwnsTab(), and it is that ONE
+        // method rather than a copy of its body, because dropping the claim
+        // here does not BIND the key anywhere -- it only lets it fall
+        // through. A shell that yields on a condition Chat does not answer
+        // turns Tab into a dead keystroke rather than a completion, and a
+        // matching ARM is not enough for that: this rule first shipped with
+        // `slashMenuMatches() !== []` written out on both sides, and Tab was
+        // dead with the palette, the session picker or a permission prompt
+        // up, because Chat::update() returns to those handlers BEFORE its Tab
+        // arm. The reachability guards therefore live in slashMenuOwnsTab().
+        //
+        // Ordered after shellOwnsKeyboard() on purpose: with the F10 menu,
+        // the Agents dashboard or the skill picker up, the popup is buried
+        // and undrivable, so Tab stays the shell's there. Pinned per state by
+        // SlashMenuTabCompletionTest::testTheShellKeepsTabWhileOneOfItsOwnViews
+        // OwnsTheKeyboard() -- reordering this block above that call is a real
+        // behaviour change, and used to go unnoticed.
+        //
+        // Ordered on $app->pane since the pane-docking feature (L2): the
+        // popup's claim on Tab is a CHAT-mode privilege. While Chat holds
+        // focus and its "/" popup is showing matches, Tab completes and
+        // falls through; from any docked pane Tab is the focus cycle, which
+        // is the whole point of docking a pane you cannot type into. The
+        // sidebar-era rule that yielded Tab from Files/Tools too pinned away
+        // — see SlashMenuTabCompletionTest::testTabFromADockPaneCyclesFocusEvenWithThePopupOpen().
+        //
+        // The session picker is the second Chat surface that answers Tab: it
+        // shows or hides sub-agent rows (`picker.children`), and Chat routes
+        // every key to the open picker before anything else, so yielding
+        // there lands on a live arm rather than a dead keystroke.
+        if ($msg->type === KeyType::Tab && !$msg->ctrl && !$msg->alt && !$msg->shift) {
+            return $app->pane !== Pane::Chat
+                || !(self::chatIsCompletingSlashCommand($app) || $app->chat?->sessionPicker() !== null);
+        }
+
+        // Shift+Tab cycles panes BACKWARD, and is claimed UNCONDITIONALLY --
+        // deliberately not mirroring the yield-to-the-popup rule directly
+        // above it. That rule exists because Tab is the "/" popup's completion
+        // key, so yielding hands the keystroke to a surface that answers it.
+        // Shift+Tab has no such answer: Chat binds it nowhere (Chat.php binds
+        // only the CTRL variants, for session cycling, and chatOwns() has
+        // already claimed those above). Yielding it would therefore produce
+        // exactly the dead keystroke the Tab block's own docblock warns
+        // against -- a matching ARM is what makes yielding safe, and there
+        // isn't one.
+        //
+        // Ordered after shellOwnsKeyboard() for the same reason Tab is, so an
+        // open menu, the Agents dashboard or the skill picker keeps it.
+        if ($msg->type === KeyType::Tab && $msg->shift && !$msg->ctrl && !$msg->alt) {
+            return true;
+        }
+
+        // Enter is the palette door from a dockable non-Chat pane while the
+        // chat draft is empty — see {@see enterOpensPaletteDoor()}. Claimed
+        // only under that predicate; every other Enter keeps falling through
+        // to Chat, so a NON-empty draft still submits from any pane exactly
+        // as it did before the door existed.
+        if ($msg->type === KeyType::Enter && !$msg->ctrl && !$msg->alt && !$msg->shift) {
+            return self::enterOpensPaletteDoor($app);
+        }
+
+        // CL-2: the yield mirrors the Tab rule above — Escape with the hosted
+        // palette OPEN falls through even from a docked pane, because Chat
+        // routes every key to `handlePaletteKey()` while a palette is up and
+        // its Escape arm IS the matching arm (the canonical close). The
+        // two-beat: first Esc closes the palette where it stands, the next
+        // (palette now null) is claimed here and returns focus to Chat.
+        if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat
+            && $app->chat?->palette() === null) {
+            return true;
+        }
+
+        return $msg->type === KeyType::Char
+            && $msg->ctrl
+            && in_array($msg->rune, self::shellCtrlRunes(), true);
+    }
+
+    /**
+     * Whether the hosted chat will bind a bare Tab to its "/" completion.
+     *
+     * False when no chat is hosted at all: the pane shell can be driven
+     * without one (`App::new()` leaves `$chat` null and several shell tests
+     * run that way), and with no popup on screen Tab has nothing to complete.
+     *
+     * Everything else is delegated, deliberately: this must answer "will Chat
+     * ACT on the Tab", not "is the popup non-empty", and only Chat knows
+     * which of its modal states return before the arm.
+     *
+     * @see \SugarCraft\Code\Chat::slashMenuOwnsTab() the one source of truth,
+     *      read by Chat's own arm as well.
+     */
+    private static function chatIsCompletingSlashCommand(App $app): bool
+    {
+        // Audit 15b-15: an `@file` mention under the caret is the second
+        // thing a bare Tab completes, on the same one-predicate contract.
+        // Roadmap 1.C-3: the third — mid-turn, a sendable draft is QUEUED by
+        // Tab (`chat.queue`), the follow-up half of "Enter steers".
+        return $app->chat !== null
+            && ($app->chat->slashMenuOwnsTab() || $app->chat->mentionOwnsTab() || $app->chat->queueOwnsTab());
+    }
+
+    /**
+     * Whether Enter should open the command palette instead of falling
+     * through to Chat: the user is on a DOCKABLE non-Chat pane (Files,
+     * Tools, Skills, Agents, Settings — the strip the menu bar toggles),
+     * and the chat draft is empty.
+     *
+     * This is the interaction door the docked panes were missing. Most of
+     * them are deliberately read-only surfaces — Files/Tools are lists, and
+     * the Settings pane is a summary whose Enter opens the full settings view
+     * instead (see {@see handle()}) — so
+     * without a key, focusing one was a dead end for changing anything.
+     * Enter feeds `Ctrl+P` to the hosted Chat through
+     * {@see \SugarCraft\Code\App\App::consumeShellCmd()}'s
+     * {@see CommandPaletteCmd} arm, which is the same palette the `/`
+     * commands and every setting change already route through; the door
+     * adds no new surface, it makes the existing one reachable from focus.
+     *
+     * The empty-draft condition is what keeps Chat's send path intact: a
+     * draft in progress submits exactly as before, from any pane.
+     *
+     * The {@see shellOwnsKeyboard()} conjunct earns its keep on the ACT side,
+     * not the claim side: claims() returns true for an Agents dashboard or an
+     * open picker long before this rule is consulted, and handle() re-reads
+     * the predicate after those views have passed on the key. Without it,
+     * Enter in the agent list with nothing selected would open a palette that
+     * is abandoned the moment it is up — the E666 defect through a door this
+     * feature built.
+     */
+    private static function enterOpensPaletteDoor(App $app): bool
+    {
+        if ($app->pane === Pane::Chat || !$app->pane->dockable() || self::shellOwnsKeyboard($app)) {
+            return false;
+        }
+
+        return $app->chat !== null && $app->chat->inputBuf === '';
+    }
+
+    /**
+     * Whether one of the shell's OWN views is driving the keyboard, so that a
+     * key belongs to it rather than to whatever is behind it.
+     *
+     * All four cover the hosted chat and bind `↑`/`↓`/`Enter` themselves:
+     * the F10 menu, `Pane::Agents`' full-pane dashboard, an open skill
+     * picker (letting its keys fall through would scroll the chat behind the
+     * modal instead of moving the highlighted skill — which is exactly why the
+     * Skills pane could be OPENED but never selected from), and the full-band
+     * settings view (N-P1), which {@see \SugarCraft\Code\App\App::handleKey()}
+     * hands every key to before this class is consulted at all.
+     *
+     * Read three times: once as claim rule 2, once by {@see chatOwns()} for
+     * the one chord {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}
+     * declares as the shell's while this holds, and once by
+     * {@see paletteIsAbandoned()} as the liveness half of the E666 gate.
+     *
+     * The second read is DEFENCE IN DEPTH, not a behaviour, and saying so is
+     * the honest form: measured, dropping the conjunct from `chatOwns()` — so
+     * that a yielded rune is yielded unconditionally — changes no routing at
+     * all. Two guarantees overlap to make it unobservable.
+     *
+     * Inside these states claim rule 2 claims every key `chatOwns()` has
+     * not already taken — NOT every key, and the difference is measured: six
+     * chords escape rule 2 in `Pane::Agents`, pinned by name in
+     * `KeyboardHandlerTest::testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()`.
+     * The conclusion does not depend on the imprecision, because the conjunct
+     * only ever governs the runes in
+     * {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}, which is the
+     * single rune `r`, and `Ctrl+R` is not one of the six — so rule 2 does claim
+     * it inside these states, and the conjunct still cannot change the outcome
+     * there. Outside them
+     * `KeyBindingRegistryTest::testTheTwoClaimSetsAreDisjoint()` keeps a
+     * yielded rune out of {@see shellCtrlRunes()}, so claim rule 6 cannot pick
+     * it up either and it still falls through to Chat. (The corrected phrasing
+     * lived thirty lines from the wrong one, in the test docblock, for a round:
+     * two copies of one claim, one fixed and one not.) The guard is what keeps
+     * that true if rule 2 ever narrows — a rule-2 that claimed only its own
+     * keys would otherwise let the yield leak into every ordinary pane and
+     * silently kill `Ctrl+R`. It is therefore pinned at the predicate rather
+     * than through routing, by
+     * `KeyboardHandlerTest::testChatOwnsYieldsTheChordOnlyWhileTheShellOwnsTheKeyboard()`,
+     * which reads `chatOwns()` directly: end-to-end routing tests cannot see
+     * this and a mutation of it survives them.
+     */
+    private static function shellOwnsKeyboard(App $app): bool
+    {
+        return MenuBar::getActiveMenu() > 0
+            || $app->pane === Pane::Agents
+            || ($app->pane === Pane::Skills && $app->skillPickerOptions !== [])
+            || $app->settingsEditor !== null
+            || $app->mediaForm !== null;
+    }
+
+    /**
+     * Bindings the live {@see \SugarCraft\Code\Chat} owns.
+     *
+     * In every pane, with the single documented exception below.
+     *
+     * @see chatCtrlRunes() for the per-chord rationale.
+     */
+    private static function chatOwns(KeyMsg $msg, App $app): bool
+    {
+        // Session cycling (crush_feat.md §5 E2). Shift only picks the
+        // direction, so both Ctrl+Tab and Ctrl+Shift+Tab belong to Chat.
+        if ($msg->type === KeyType::Tab && $msg->ctrl) {
+            return true;
+        }
+
+        if ($msg->type !== KeyType::Char) {
+            return false;
+        }
+
+        if ($msg->rune === "\x03") {
+            return true;
+        }
+
+        if (!$msg->ctrl || !in_array($msg->rune, self::chatCtrlRunes(), true)) {
+            return false;
+        }
+
+        // The declared exception: a chord whose only effect is a Chat overlay
+        // that one of the shell's own keyboard-owning views would bury AND
+        // render undrivable goes back to the shell while such a view is up,
+        // PROVIDED the shell answers it with a no-op there. The registry is
+        // what says WHICH chord and why — both conditions, and the gap the
+        // second one deliberately leaves open, live in its docblock and may not
+        // be spelled out a second time here. The $app conjunct is deliberately
+        // unobservable today: see shellOwnsKeyboard().
+        return !(self::shellOwnsKeyboard($app)
+            && in_array($msg->rune, KeyBindingRegistry::chatCtrlRunesYieldedToShell(), true));
+    }
+
+    /**
+     * Does the hosted chat's command palette stand down while one of the
+     * shell's own views owns the keyboard?
+     *
+     * The palette's opening chord (`Ctrl+P` — and `Ctrl+K`, which
+     * `App::consumeShellCmd()` feeds through as the same keystroke) stays
+     * CLAIMED by {@see chatOwns()}: yielding it is measured to be worse,
+     * rebinding the chord to `/model` exactly where an overlay cannot be
+     * seen. But every state {@see shellOwnsKeyboard()} covers either paints
+     * no hosted overlay at all (the Agents dashboard replaces the whole
+     * content band) or paints one it does not drive (arrows and Enter go to
+     * the menu, or to the skill picker), so delivering the chord there
+     * produced the trackers #83/#85 ghost — an invisible-or-undrivable modal
+     * revealed the moment the user left the state.
+     *
+     * This is the stand-down half of the E12 fix: while such a view owns the
+     * keyboard, the chord is a true no-op — nothing opens, and nothing waits
+     * on the other side of the exit. {@see \SugarCraft\Code\App\App::delegateToChat()}
+     * enforces it at the one delivery choke point BOTH doors share. A
+     * palette opened BEFORE such a view took the keyboard is the other half
+     * of the leak and is closed there by {@see paletteIsAbandoned()}. The
+     * composite half — the shell painting a hosted overlay over its full-pane
+     * views — stays open as a layout item, recorded as the E12 follow-up in
+     * `docs/plans/crush_code_hardening_backlog.md`.
+     *
+     * The rune test mirrors `Chat`'s opening arm exactly (`Char`, `ctrl`,
+     * `p`, no alt/shift qualifier on either side), so wherever `Chat` would
+     * have opened the palette, it stands down instead; everywhere else this
+     * method stays out of the way.
+     */
+    public static function paletteStandsDown(KeyMsg $msg, App $app): bool
+    {
+        return $msg->type === KeyType::Char
+            && $msg->ctrl
+            && $msg->rune === 'p'
+            && self::shellOwnsKeyboard($app);
+    }
+
+    /**
+     * Is the hosted chat's palette open but ABANDONED — left behind by a
+     * hand-over of the keyboard to one of the shell's own views?
+     *
+     * {@see paletteStandsDown()} gates the OPENING chord only. A palette
+     * opened in `Pane::Chat` — where that gate is correctly silent and the
+     * modal is painted and drivable — and then left open across a hand-over
+     * (Tab to the agent dashboard, the F10 menu, an opening skill picker) is
+     * the same E12 defect through a different door: the chords that still
+     * fall through to Chat feed the invisible modal (measured pre-fix red:
+     * `Ctrl+O` in `Pane::Agents` appended an unseen `o` to the buried
+     * palette's query), and `Ctrl+P`, the toggle-close inside the pane, is
+     * itself withheld by the stand-down — so the abandoned modal cannot be
+     * closed from the owning view at all. Tracker E666, the lane-W seam.
+     *
+     * The entry offered two shapes: re-entry re-validation (every hand-over
+     * site closes or adopts the palette) versus a per-keystroke gate. This
+     * is the per-keystroke gate, and the reason is a count, not a taste: the
+     * hand-over has many doors — `Tab`, `Shift+Tab`, `a`, `,`, F10, the skill
+     * picker's opener, a mouse pane-jump — each needing its own hook,
+     * while {@see \SugarCraft\Code\App\App::delegateToChat()} is the single
+     * choke point that already sees every keystroke bound for Chat, the same
+     * discipline E12 chose. The predicate is live state, not edge detection:
+     * a keyboard-owning view is up AND a palette is open. CLOSE is chosen
+     * over ADOPT because adopting is the composite route — a `Renderer`
+     * layout change, tracked separately as the E12 follow-up; a seam, not a
+     * fix in this lane.
+     *
+     * Scope guard: a palette the user can see and drive is nobody's to
+     * close. In the sidebar panes (`Files`, `Tools`) the chat is painted
+     * alongside, {@see shellOwnsKeyboard()} is false, and keystrokes keep
+     * reaching the modal exactly as Chat designed it.
+     *
+     * Pinned by
+     * {@see \SugarCraft\Code\Tests\Tui\KeyboardHandlerTest::testAPaletteLeftBehindByAPaneSwitchIsClosedByTheNextFallThroughKey()}.
+     */
+    public static function paletteIsAbandoned(App $app): bool
+    {
+        return $app->chat !== null
+            && $app->chat->palette() !== null
+            && self::shellOwnsKeyboard($app);
+    }
+
+    /**
+     * Process a keypress and return updated App and optional command.
+     *
+     * Takes the string key label the pane layer has always used. The live
+     * path speaks {@see KeyMsg}; {@see handleKeyMsg()} is the bridge, and is
+     * what decides whether a key reaches here at all.
+     *
+     * @return array{0: App, 1: ?KeyCmd} [newApp, command]
+     */
+    public function handle(string $key, App $app): array
+    {
+        // The live agents strip (P-B3), ahead of everything: while it holds
+        // the keyboard its keys mean the strip, not panes or the dashboard.
+        if ($app->pane === Pane::Chat && ($app->agentStripFocus !== null || $key === 'alt+down')) {
+            $result = $this->handleAgentStripKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+        // A shell key the strip does not answer (Tab, F10, …) takes the
+        // keyboard elsewhere, so the strip lets go of it.
+        if ($app->agentStripFocus !== null) {
+            $app = $app->withAgentStripFocus(null);
+        }
+
+        // The open Agent View (P-C2) — below the strip, which has the keyboard
+        // first while it is focused, and only with no menu open over it.
+        if ($app->pane === Pane::Chat && $app->agentViewTarget !== null && MenuBar::getActiveMenu() === 0) {
+            $result = $this->handleOpenAgentViewKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
+        // Tab - cycle focus over Chat plus the docked panes, left column
+        // first (top-to-bottom), then right. Dock-scoped since L2: the cycle
+        // visits what the frame persistently shows; docking more panes widens
+        // it, undocking narrows it, and an off-cycle focus folds to Chat.
+        if ($key === 'tab') {
+            return [$app->cyclePaneFocus(1), null];
+        }
+
+        // Shift+Tab - cycle focus the other way. The label is whatever
+        // KeyMsg::string() builds, which prefixes modifiers in the fixed order
+        // ctrl, alt, shift; ctrl+tab never reaches here (chatOwns() takes it),
+        // so 'shift+tab' is the only spelling this arm can see.
+        if ($key === 'shift+tab') {
+            return [$app->cyclePaneFocus(-1), null];
+        }
+
+        // Agent view keyboard handling - before generic navigation
+        if ($app->pane === Pane::Agents) {
+            $result = $this->handleAgentViewKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+
+            // rv-a11y M3a: a key the dashboard declines still takes a pending
+            // stop-all off the table — the disarmed copy inside
+            // handleAgentViewKey() is discarded with its null return, so the
+            // disarm is re-applied to the app the fall-through keeps using.
+            if ($key !== 's' && $app->agentsStopArmedAt !== null) {
+                $app = $app->withAgentsStopArmedAt(null);
+            }
+        }
+
+        // An OPEN menu takes the arrow/vim keys first. Ordered before the
+        // generic pane navigation below because that block claimed
+        // left/right/h/l unconditionally, so a menu could never be navigated
+        // even once something opened it.
+        $currentMenu = MenuBar::getActiveMenu();
+        if ($currentMenu > 0) {
+            $result = MenuBar::handleKey($key, $currentMenu);
+            // Persist the index handleKey() navigated to -- it is a pure
+            // function and this return value used to be dropped, so every
+            // move was computed and discarded.
+            MenuBar::activateMenu($result[0]);
+            if ($result[1] !== null) {
+                return [$app, $result[1]];
+            }
+            if ($result[0] !== $currentMenu) {
+                return [$app, null];
+            }
+        }
+
+        // An open skill picker takes the arrow/enter/escape keys next, for the
+        // same reason the menu block above does: the generic navigation below
+        // claims up/down unconditionally and would otherwise make the picker
+        // unmovable — which is exactly why the Skills pane could be OPENED but
+        // never selected from.
+        if ($app->pane === Pane::Skills && $app->skillPickerOptions !== []) {
+            $result = $this->handleSkillPickerKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
+        // Enter on a docked pane with nothing drafted opens the palette --
+        // the change door for the read-only surfaces (claims() admitted the
+        // key on exactly this predicate; the agent view and the skill picker
+        // consumed their own Enter above).
+        if ($key === 'enter' && self::enterOpensPaletteDoor($app)) {
+            // Except on the settings pane, whose door is the settings view the
+            // pane summarises (N-P1) rather than the generic palette.
+            return $app->pane === Pane::Settings
+                ? [$app->openSettings(), null]
+                : [$app, new CommandPaletteCmd()];
+        }
+
+        // Handle arrow keys / vim keys for navigation
+        if (in_array($key, ['up', 'k', 'down', 'j', 'left', 'h', 'right', 'l'], true)) {
+            return $this->handleNavigation($key, $app);
+        }
+
+        // Handle Escape - close menu and return to Chat pane
+        if ($key === 'escape') {
+            MenuBar::closeMenu();
+            return [$app->withPane(Pane::Chat), null];
+        }
+
+        // Handle Ctrl+key combinations
+        if (str_starts_with($key, 'ctrl+')) {
+            return $this->handleCtrl(substr($key, 5), $app);
+        }
+
+        return [$app, null];
+    }
+
+    /**
+     * Move through, commit, or dismiss an open skill picker.
+     *
+     * Enter reports a {@see SelectSkillMsg} rather than applying the change
+     * here: enabling a skill is {@see App::update()}'s job (it re-validates
+     * the name against the user-invocable filter), and this layer only says
+     * WHICH row the user committed to.
+     *
+     * @return array{0: App, 1: ?SelectSkillMsg}|null null when the key is not
+     *         one the picker answers, so the caller's generic handling runs.
+     */
+    private function handleSkillPickerKey(string $key, App $app): ?array
+    {
+        $count = count($app->skillPickerOptions);
+        if ($count === 0) {
+            return null;
+        }
+
+        // Wrapping, so a user holding "down" on a short list does not simply
+        // stick on the last row.
+        if (in_array($key, ['up', 'k'], true)) {
+            return [$app->withSkillPickerIndex(($app->skillPickerIndex - 1 + $count) % $count), null];
+        }
+
+        if (in_array($key, ['down', 'j'], true)) {
+            return [$app->withSkillPickerIndex(($app->skillPickerIndex + 1) % $count), null];
+        }
+
+        if ($key === 'enter') {
+            $skill = $app->skillPickerOptions[min($app->skillPickerIndex, $count - 1)] ?? null;
+
+            return $skill === null ? [$app, null] : [$app, new SelectSkillMsg($skill->name)];
+        }
+
+        if ($key === 'escape') {
+            // Dismiss the picker AND leave the pane: an emptied picker would
+            // otherwise silently turn back into the plain skills list while
+            // the user believed they had closed a modal.
+            return [$app->withSkillPickerOptions([])->withPane(Pane::Chat), null];
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle keyboard input when in the Agent View pane.
+     *
+     * P5.S4 fix: mode dispatch for {@see AgentViewMode::Attach} runs BEFORE
+     * the quick-action keys below. {@see AgentViewMode}'s own docblock says
+     * "all keyboard input goes to the selected agent" in Attach mode, but the
+     * previous ordering checked c/r/s/q as global shortcuts first — so a key
+     * meant for the attached agent's own input (e.g. the letter "s") was
+     * hijacked into StopAllAgentsCmd before Attach mode ever saw it. List and
+     * Peek mode are unaffected: neither claims c/r/s/q for itself, so those
+     * keys are still meant to reach the quick actions below in those modes.
+     *
+     * @return array{0: App, 1: ?KeyCmd}|null [newApp, command] or null if key not handled
+     */
+    private function handleAgentViewKey(string $key, App $app): ?array
+    {
+        if ($app->agentViewMode === AgentViewMode::Attach) {
+            return $this->handleAgentAttachKey($key, $app);
+        }
+
+        // rv-a11y M3a: any key other than `s` takes the pending stop-all
+        // request off the table — the same disarm convention the session
+        // picker's armed `d` uses ({@see SessionPicker::handleKey()}).
+        if ($key !== 's' && $app->agentsStopArmedAt !== null) {
+            $app = $app->withAgentsStopArmedAt(null);
+        }
+
+        // Alt+1..9 — jump straight to slot N of the dashboard (crush_feat.md
+        // §5 E5). The slot→agent mapping is AgentDashboardPane's, not a second
+        // ordering invented here, so the number the user presses is the number
+        // printed on the row. Deliberately below the Attach dispatch: while
+        // attached, every key belongs to the agent.
+        $slot = self::jumpSlot($key);
+        if ($slot !== null) {
+            $index = AgentDashboardPane::indexForSlot($app, $slot);
+
+            // An empty slot is still CLAIMED (a no-op, not null): falling
+            // through would hand a bare "1" to the chat input the dashboard
+            // is covering.
+            return $index < 0 ? [$app, null] : [$app->withSelectedAgentIndex($index), null];
+        }
+
+        // Quick action keys (c, r, s, q) work in List/Peek agent view modes.
+        if ($key === 'c' && $app->selectedAgentIndex >= 0) {
+            return [$app, new CancelAgentCmd($app->selectedAgentIndex)];
+        }
+
+        if ($key === 'r' && $app->selectedAgentIndex >= 0) {
+            return [$app, new ResumeAgentCmd($app->selectedAgentIndex)];
+        }
+
+        if ($key === 's') {
+            // rv-a11y M3a: stopping EVERY run is destructive, so bare `s` now
+            // mirrors the per-agent hard-cancel two-press in
+            // {@see App::deliverAgentControl()} — first press arms with a
+            // countdown note, a second within {@see App::STOP_ALL_ARMED_SECONDS}
+            // fires, any other key disarms above. The Ctrl+X leader's `s` chord
+            // (handleOpenAgentViewKey) is already two-step and stays immediate.
+            $armed = $app->agentsStopArmedAt;
+            if ($armed !== null && microtime(true) - $armed <= App::STOP_ALL_ARMED_SECONDS) {
+                return [$app->withAgentsStopArmedAt(null), new StopAllAgentsCmd()];
+            }
+
+            return [$app->withAgentsStopArmedAt(microtime(true))->withStatus(Lang::t('tui.app.stop_all_armed')), null];
+        }
+
+        if ($key === 'q') {
+            return [
+                $app
+                    ->withPane(Pane::Chat)
+                    ->withSelectedAgentIndex(-1)
+                    ->withAgentViewMode(AgentViewMode::List),
+                new QuitAgentViewCmd(),
+            ];
+        }
+
+        // Mode-specific handling (Attach already returned above).
+        return match ($app->agentViewMode) {
+            AgentViewMode::List => $this->handleAgentListKey($key, $app),
+            AgentViewMode::Peek => $this->handleAgentPeekKey($key, $app),
+            AgentViewMode::Attach => $this->handleAgentAttachKey($key, $app),
+        };
+    }
+
+    /**
+     * What a key means to the live agents strip (roadmap P-B3), or null when
+     * the strip does not answer it: `focus` (`Alt+↓` while the strip shows and
+     * the input has the keyboard), then — while it holds the keyboard —
+     * `prev`/`next` (`←`/`→`, or `↑`/`↓`), `open` (`Enter`), `cancel` (`c`),
+     * `dismiss` (`x`), `back` (`Esc`, `Alt+↑`) and `stay` (`Alt+↓` again).
+     *
+     * Only in the chat pane with nothing modal over the chat — a permission
+     * prompt, the key reference, the palette or the session picker each own
+     * the keyboard first, and so do the settings view and an open menu.
+     */
+    private static function agentStripKey(KeyMsg $msg, App $app): ?string
+    {
+        $chat = $app->chat;
+        if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::getActiveMenu() > 0
+            || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
+            || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null) {
+            return null;
+        }
+
+        $plain = !$msg->ctrl && !$msg->alt && !$msg->shift;
+        if ($app->agentStripFocus === null) {
+            return $msg->type === KeyType::Down && $msg->alt && !$msg->ctrl && !$msg->shift && $app->agentStripItems() !== []
+                ? 'focus'
+                : null;
+        }
+
+        return match (true) {
+            $msg->alt && !$msg->ctrl && $msg->type === KeyType::Up => 'back',
+            $msg->alt && !$msg->ctrl && $msg->type === KeyType::Down => 'stay',
+            !$plain => null,
+            $msg->type === KeyType::Left, $msg->type === KeyType::Up => 'prev',
+            $msg->type === KeyType::Right, $msg->type === KeyType::Down => 'next',
+            $msg->type === KeyType::Enter => 'open',
+            $msg->type === KeyType::Escape => 'back',
+            $msg->type === KeyType::Char && $msg->rune === 'c' => 'cancel',
+            $msg->type === KeyType::Char && $msg->rune === 'x' => 'dismiss',
+            default => null,
+        };
+    }
+
+    /**
+     * Act on a key the live agents strip answers (roadmap P-B3). `$key` is
+     * the key's {@see KeyMsg::string()} spelling, the form {@see handle()}
+     * receives.
+     *
+     * Stopping a run is the turn's own `cancel_tool` (1.C-4b) for the Task
+     * call it runs under, so it reaches the chat as a
+     * {@see \SugarCraft\Code\CancelAgentRunMsg} for
+     * {@see App::consumeShellCmd()} to deliver. Opening a run is
+     * {@see App::openAgent()}, the Agent View (P-C2).
+     *
+     * @return array{0: App, 1: ?object}|null null when the strip does not answer the key
+     */
+    private function handleAgentStripKey(string $key, App $app): ?array
+    {
+        $items = $app->agentStripItems();
+        if ($app->agentStripFocus === null) {
+            return $key === 'alt+down' && $items !== [] ? [$app->withAgentStripFocus($items[0]->id), null] : null;
+        }
+        if ($items === []) {
+            // Every run left the strip under the focus: the input gets the
+            // keyboard back, and the key is the strip's last.
+            return [$app->withAgentStripFocus(null), null];
+        }
+
+        $at = AgentStrip::indexOf($items, $app->agentStripFocus);
+        if ($at < 0) {
+            // The focused run left; the nearest one takes its place.
+            $at = 0;
+        }
+        $focused = $items[$at];
+
+        return match ($key) {
+            'left', 'up' => [$app->withAgentStripFocus($items[max(0, $at - 1)]->id), null],
+            'right', 'down' => [$app->withAgentStripFocus($items[min(count($items) - 1, $at + 1)]->id), null],
+            'enter' => [$app->openAgent($focused->id), null],
+            'c' => $focused->isFinished()
+                ? [$app, null]
+                : [$app, new \SugarCraft\Code\CancelAgentRunMsg($focused->parentCallId)],
+            'x' => $focused->isFinished()
+                ? [$app->dismissFromAgentStrip($focused->id), null]
+                : [$app, new \SugarCraft\Code\CancelAgentRunMsg($focused->parentCallId)],
+            'escape', 'alt+up' => [$app->withAgentStripFocus(null), null],
+            'alt+down' => [$app, null],
+            default => null,
+        };
+    }
+
+    /**
+     * What a key means to the open Agent View (roadmap P-C2), or null when
+     * the view does not answer it: `back` (`Esc`, `Alt+↑`), `next`/`prev`
+     * (`Alt+N`/`Alt+P`, the runs of the same Task batch), `send` (`Enter`
+     * on a draft the composer sends, P-D2 — {@see composerSends()}),
+     * `leader` (`Ctrl+X`) and, while the leader is down, `chord` for any key
+     * (P-D3).
+     *
+     * Only in the chat pane, with the view open and nothing modal over the
+     * chat — a permission prompt, the key reference, the palette, the session
+     * picker or the inline title editor each own `Esc` first, and so do the
+     * settings view and an open menu. The live agents strip, while it holds
+     * the keyboard, answers its own `Esc` before this ({@see claims()}).
+     */
+    private static function agentViewKey(KeyMsg $msg, App $app): ?string
+    {
+        $chat = $app->chat;
+        if ($app->agentViewTarget === null || $app->pane !== Pane::Chat || $chat === null
+            || $app->agentStripFocus !== null || $app->settingsEditor !== null || $app->mediaForm !== null || MenuBar::getActiveMenu() > 0
+            || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
+            || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null || $chat->titleEditor() !== null) {
+            return null;
+        }
+
+        // P-D3: with the `Ctrl+X` leader down, the next key is a chord — any
+        // key, so a stray one is dropped rather than typed.
+        if ($app->agentViewLeader) {
+            return 'chord';
+        }
+        if ($msg->ctrl && !$msg->alt && !$msg->shift && $msg->type === KeyType::Char && strtolower($msg->rune) === 'x') {
+            return 'leader';
+        }
+
+        if ($msg->ctrl || $msg->shift) {
+            return null;
+        }
+
+        return match (true) {
+            !$msg->alt && $msg->type === KeyType::Escape => 'back',
+            !$msg->alt && $msg->type === KeyType::Enter && self::composerSends($app) => 'send',
+            $msg->alt && $msg->type === KeyType::Up => 'back',
+            $msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'n' => 'next',
+            $msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'p' => 'prev',
+            default => null,
+        };
+    }
+
+    /**
+     * Whether `Enter` in the open Agent View sends the draft to the agent on
+     * screen (roadmap P-D2): the box is that agent's composer. Not for an
+     * empty draft, nor for a `/command` or a `!command` — those are the
+     * user's commands to this app, and run as they do anywhere — nor while
+     * the "/" popup would take the `Enter` itself.
+     */
+    private static function composerSends(App $app): bool
+    {
+        $chat = $app->chat;
+        if ($chat === null || $app->agentComposerTargets() === []) {
+            return false;
+        }
+        $draft = trim($chat->inputBuf);
+
+        return $draft !== ''
+            && !str_starts_with($draft, '/')
+            && !str_starts_with($draft, '!')
+            && $chat->slashMenuMatches() === [];
+    }
+
+    /**
+     * Act on a key the open Agent View answers (roadmap P-C2). `$key` is the
+     * key's {@see KeyMsg::string()} spelling. Leaving is a
+     * {@see \SugarCraft\Code\CloseAgentViewMsg} for
+     * {@see App::consumeShellCmd()} to deliver, so the hosted chat hears it
+     * and disarms its `Esc` `Esc` cancel; a sibling is opened in place, and
+     * `Alt+N`/`Alt+P` past either end of the batch do nothing.
+     *
+     * @return array{0: App, 1: ?object}|null null when the view does not answer the key
+     */
+    private function handleOpenAgentViewKey(string $key, App $app): ?array
+    {
+        // P-D3's chords (Appendix P §5.5), and P-E3's `b`. The leader is
+        // consumed whatever follows it.
+        if ($app->agentViewLeader) {
+            $app = $app->withAgentViewLeader(false);
+            $target = (string) $app->agentViewTarget;
+
+            return match (strtolower($key)) {
+                'c' => [$app, new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::CANCEL, [$target])],
+                'p' => [$app, new \SugarCraft\Code\AgentControlMsg(
+                    $app->isAgentPaused($target) ? \SugarCraft\Code\AgentControlMsg::RESUME : \SugarCraft\Code\AgentControlMsg::PAUSE,
+                    [$target],
+                )],
+                's' => [$app, new StopAllAgentsCmd()],
+                'o' => [$app, new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::OPEN_SESSION, [$target])],
+                // P-E3: the run hands itself to a background session at its
+                // next tool or step, and its Task call returns at once. A run
+                // that cannot go is refused by the chat, in a notice row.
+                'b' => [
+                    ($run = $app->chat?->agentLive()->get($target)) === null || $run->isFinished() || (string) $run->parentAgentId !== ''
+                        ? $app
+                        : $app->withStatus(Lang::t('tui.agent.backgrounding', ['name' => $run->name])),
+                    new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::BACKGROUND, [$target]),
+                ],
+                default => [$app, null],
+            };
+        }
+
+        return match (strtolower($key)) {
+            'ctrl+x' => [$app->withAgentViewLeader(true), null],
+            'escape', 'alt+up' => [$app, new \SugarCraft\Code\CloseAgentViewMsg()],
+            'enter' => self::composerSends($app)
+                ? [$app, new \SugarCraft\Code\AgentControlMsg(\SugarCraft\Code\AgentControlMsg::MESSAGE, $app->agentComposerTargets())]
+                : null,
+            'alt+n' => [($next = $app->agentViewSibling(1)) === null ? $app : $app->openAgentView($next), null],
+            'alt+p' => [($prev = $app->agentViewSibling(-1)) === null ? $app : $app->openAgentView($prev), null],
+            default => null,
+        };
+    }
+
+    /**
+     * The 1-based dashboard slot an `Alt+<digit>` chord addresses, or null
+     * when the key is not such a chord.
+     *
+     * `alt+0` is deliberately not a slot: slots are labelled 1..9 on screen.
+     */
+    private static function jumpSlot(string $key): ?int
+    {
+        if (preg_match('/\Aalt\+([1-9])\z/', $key, $m) !== 1) {
+            return null;
+        }
+
+        return (int) $m[1];
+    }
+
+    /**
+     * Handle keys in agent list view mode.
+     *
+     * @return array{0: App, 1: ?KeyCmd}|null
+     */
+    private function handleAgentListKey(string $key, App $app): ?array
+    {
+        // Enter - switch to peek view (if an agent is selected)
+        if ($key === 'enter' && $app->selectedAgentIndex >= 0) {
+            return [$app->withAgentViewMode(AgentViewMode::Peek), null];
+        }
+
+        // Space - the non-committing peek (crush_feat.md §5 E5): look at what
+        // the selected worker is blocked on without leaving the dashboard.
+        // Both spellings are matched because sugar-core reports the key as
+        // KeyType::Space ("space") but a Char " " reaches here from any
+        // decoder that does not special-case it.
+        if (($key === 'space' || $key === ' ') && $app->selectedAgentIndex >= 0) {
+            return [$app->withAgentViewMode(AgentViewMode::Peek), null];
+        }
+
+        // Escape - return to Chat pane (same as Q when no selection)
+        if ($key === 'escape') {
+            if ($app->selectedAgentIndex >= 0) {
+                // Clear selection but stay in agent view
+                return [$app->withSelectedAgentIndex(-1), null];
+            }
+
+            // No selection - return to Chat pane
+            MenuBar::closeMenu();
+            return [$app->withPane(Pane::Chat), null];
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle keys in agent peek view mode.
+     *
+     * @return array{0: App, 1: ?KeyCmd}|null
+     */
+    private function handleAgentPeekKey(string $key, App $app): ?array
+    {
+        // Enter - attach: the main area shows the peeked agent (roadmap P-C2's
+        // Agent View). The mode changes here; the view itself is opened by
+        // App::consumeShellCmd() from the message, which also gives the chat
+        // pane focus — the run's transcript is drawn where the chat's was.
+        if ($key === 'enter') {
+            $entry = AgentDashboardPane::entries($app)[$app->selectedAgentIndex] ?? null;
+
+            return [
+                $app->withAgentViewMode(AgentViewMode::Attach),
+                $entry === null ? null : new \SugarCraft\Code\OpenAgentViewMsg($entry->key ?? $entry->name, null, $entry->name),
+            ];
+        }
+
+        // Escape - return to list view
+        if ($key === 'escape') {
+            return [$app->withAgentViewMode(AgentViewMode::List), null];
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle keys in agent attach view mode.
+     *
+     * Attached means the main area shows the agent (roadmap P-C2's Agent
+     * View, opened by the Peek `Enter`); this is what the dashboard does with
+     * a key while it is focused over an attached view. Escape is the only key
+     * intercepted here for detaching. Every other key is claimed with a no-op
+     * `[App, null]` (not `null`) so it can never fall through to the
+     * quick-action shortcuts in {@see handleAgentViewKey()} — that fallthrough
+     * was the P5.S4 bug. Typing to the agent is P-D2's composer, in the chat
+     * pane, not here; its controls are the view's `Ctrl+X` chords (P-D3). What this method guarantees today: a key typed while
+     * attached is never reinterpreted as CancelAgentCmd/ResumeAgentCmd/
+     * StopAllAgentsCmd/QuitAgentViewCmd.
+     *
+     * @return array{0: App, 1: ?KeyCmd}
+     */
+    private function handleAgentAttachKey(string $key, App $app): array
+    {
+        // Escape - detach and return to list view. Attached means an Agent
+        // View is open in the main area (P-C2), so detaching closes it too.
+        if ($key === 'escape') {
+            return [
+                $app->withAgentViewMode(AgentViewMode::List),
+                $app->agentViewTarget === null ? null : new \SugarCraft\Code\CloseAgentViewMsg(),
+            ];
+        }
+
+        return [$app, null];
+    }
+
+    /**
+     * Handle navigation keys within panes.
+     *
+     * @return array{0: App, 1: ?KeyCmd} [newApp, command]
+     */
+    private function handleNavigation(string $key, App $app): array
+    {
+        // Agent list navigation when in Agents pane and list view
+        if ($app->pane === Pane::Agents && $app->agentViewMode === AgentViewMode::List) {
+            return $this->handleAgentListNavigation($key, $app);
+        }
+
+        // Navigation is delegated to specific pane handlers
+        // The appropriate pane will handle scroll/movement based on current focus
+        return [$app, null];
+    }
+
+    /**
+     * Handle arrow key navigation within the agent list.
+     *
+     * @return array{0: App, 1: ?KeyCmd} [newApp, command]
+     */
+    private function handleAgentListNavigation(string $key, App $app): array
+    {
+        $isUp = in_array($key, ['up', 'k'], true);
+        $isDown = in_array($key, ['down', 'j'], true);
+
+        if (!$isUp && !$isDown) {
+            return [$app, null];
+        }
+
+        // If nothing selected yet, down/j selects first agent (index 0)
+        // up/k does nothing (can't go above 0)
+        if ($app->selectedAgentIndex < 0) {
+            if ($isDown) {
+                return [$app->withSelectedAgentIndex(0), null];
+            }
+
+            return [$app, null];
+        }
+
+        // Calculate new index (up decreases, down increases)
+        $delta = $isUp ? -1 : 1;
+        $newIndex = $app->selectedAgentIndex + $delta;
+
+        // Clamp to valid range (0 or greater)
+        $newIndex = max(0, $newIndex);
+
+        // If index changed, return new app with updated selection
+        if ($newIndex !== $app->selectedAgentIndex) {
+            return [$app->withSelectedAgentIndex($newIndex), null];
+        }
+
+        return [$app, null];
+    }
+
+    /**
+     * Handle Ctrl+key combinations.
+     *
+     * @return array{0: App, 1: ?KeyCmd} [newApp, command]
+     */
+    private function handleCtrl(string $key, App $app): array
+    {
+        return match ($key) {
+            'n' => [$app, new NewSessionCmd()],
+            'c' => [$app, new CancelCmd()],
+            'g' => [$app, new GroupInputCmd()],
+            'k' => [$app, new CommandPaletteCmd()],
+            's' => [$app, new SourceSkillCmd()],
+            'a' => [$app->withPane(Pane::Agents), null],
+            'p' => [$app, new ProviderSelectCmd()],
+            // The first press focuses the settings pane; a second, with the
+            // pane already focused, opens the full settings view (N-P1).
+            ',' => $app->pane === Pane::Settings
+                ? [$app->openSettings(), null]
+                : [$app->withPane(Pane::Settings), null],
+            default => [$app, null],
+        };
+    }
+}

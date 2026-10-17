@@ -1,6 +1,6 @@
-# Step 10.32 — sugar-crush MCP client + CLAUDE.md autoload
+# Step 10.32 — candy-code MCP client + CLAUDE.md autoload
 
-**Source:** `leftover_updates_later.md` sugar-crush M7 + M8
+**Source:** `leftover_updates_later.md` candy-code M7 + M8
 **Branch:** `ai/crush-mcp-claudemd`
 
 ## Deliverable
@@ -11,19 +11,19 @@
 
 ## Files
 
-**Create:** `sugar-crush/src/Mcp/Client.php`, plus DTOs for the MCP
+**Create:** `candy-code/src/Mcp/Client.php`, plus DTOs for the MCP
 JSON-RPC surface.
 
-**Modify:** `sugar-crush/src/Chat.php` — `CLAUDE.md` boot hook.
+**Modify:** `candy-code/src/Chat.php` — `CLAUDE.md` boot hook.
 
 ## Tests
 
-- `sugar-crush/tests/Mcp/ClientTest.php`.
-- `sugar-crush/tests/ClaudeMdBootTest.php`.
+- `candy-code/tests/Mcp/ClientTest.php`.
+- `candy-code/tests/ClaudeMdBootTest.php`.
 
 ## Acceptance
 
-- `cd sugar-crush && vendor/bin/phpunit --filter "Mcp|ClaudeMd"` green.
+- `cd candy-code && vendor/bin/phpunit --filter "Mcp|ClaudeMd"` green.
 
 ---
 

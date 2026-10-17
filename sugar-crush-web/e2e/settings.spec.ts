@@ -10,7 +10,7 @@ import { expect, openApp, test } from './fixtures/server'
  */
 test.describe('settings', () => {
   function userConfig(home: string): Record<string, unknown> {
-    const path = join(home, '.sugar-crush', 'config.json')
+    const path = join(home, '.candy-code', 'config.json')
     return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>) : {}
   }
 

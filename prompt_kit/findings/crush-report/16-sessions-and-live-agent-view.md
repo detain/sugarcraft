@@ -7,11 +7,11 @@ Feeds: the Agent View remainder (synthesis Part IV).
 2. "While a parent is running agents it should have something like an updating line showing the most recent thing they did, similar to opencode/Claude Code."
 3. "You should be able to click on the agents to go to them to view what they're doing, and send chat messages to the subagents/agents directly as well."
 
-**Path convention.** Paths are relative to `sugar-crush/` unless they start with `/`.
+**Path convention.** Paths are relative to `candy-code/` unless they start with `/`.
 
 ---
 
-Only the sections an open item still cites are kept: §5, whose direct-chat design the Agent View remainder follows, and the open question (§8). The shipped behaviour is documented in `sugar-crush/docs/AGENTS.md`.
+Only the sections an open item still cites are kept: §5, whose direct-chat design the Agent View remainder follows, and the open question (§8). The shipped behaviour is documented in `candy-code/docs/AGENTS.md`.
 
 ## 5. Design — Agent View and direct chat
 
@@ -30,7 +30,7 @@ Only the sections an open item still cites are kept: §5, whose direct-chat desi
 ### 5.2 What it shows (the transcript source)
 
 **Per-agent transcript log** (new `src/Agents/Live/SubAgentTranscriptLog.php`):
-- The process running the sub-agent appends one JSONL line per item to `~/.sugar-crush/subagents/<parentSessionId>/<agentId>.jsonl`. That process is the turn child for a lone Task, or the grandchild for a parallel one.
+- The process running the sub-agent appends one JSONL line per item to `~/.candy-code/subagents/<parentSessionId>/<agentId>.jsonl`. That process is the turn child for a lone Task, or the grandchild for a parallel one.
 - Items: `{"t":"user|assistant|tool_call|tool_result|thinking|inbox|status", …}`, with tool results clipped to 16 KB plus a `truncated` flag.
 - The directory is mode 0700 and files 0600, created under `umask(0077)`, as `EnhancedSessionStore`'s constructor does.
 - It is written with `fopen('ab')` plus `flock(LOCK_EX)` per line, so concurrent writers never interleave.
@@ -78,7 +78,7 @@ The parent tails it **only while that Agent View is open**:
 ```
  TUI (parent)                         turn child                 grandchild / in-process sub-agent
  composer Enter
-   └─ AgentInbox::send(agentId, AgentMessage)   ──file──►  ~/.sugar-crush/mailboxes/<session>/<agentId>.jsonl
+   └─ AgentInbox::send(agentId, AgentMessage)   ──file──►  ~/.candy-code/mailboxes/<session>/<agentId>.jsonl
                                                                   ▲ drained at each step boundary by
                                                                   │ EngineBackend::runTurn() via
                                                                   │ $inbox->drain($agentId)

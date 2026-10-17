@@ -8,7 +8,7 @@ kind=rename, type=app, ns Post→Mail, bins {"bin/pop":"bin/candy-mail"}, extra_
 - Baseline suite (rename-baseline.md:78): 203T/361A/0F/0E/0S/0W. <!-- @rename-keep -->
 - `SugarCraft\Mail` collision check: NONE repo-wide (php grep, word boundary) — clear. No *mail* dir, no candy-mail token anywhere.
 - PHP consumers of `SugarCraft\Post\`: ZERO outside the lib. Root composer require + its own files only. <!-- @rename-keep -->
-- sugar-crush hits are DOCBLOCK ancestry cites only (src/Cli/ArgvParser.php:12, Help.php:15,
+- candy-code hits are DOCBLOCK ancestry cites only (src/Cli/ArgvParser.php:12, Help.php:15,
   NonInteractive.php:192,1015 — `sugar-post/bin/pop` pattern provenance). No composer dep, no tests pin <!-- @rename-keep -->
   (`grep sugar-post sugar-crush/tests/` empty). Mechanical R7+R3 rewrite = correct (`candy-mail/bin/candy-mail`). No consumer suite owed; crush unaffected (docblock text only). <!-- @rename-keep -->
 - tools/tests/DocsQuickstartTest.php:41 — narrative docblock mention, rewrites mechanically. No behavioural pin.
@@ -91,7 +91,7 @@ kind=rename, type=app, ns Post→Mail, bins {"bin/pop":"bin/candy-mail"}, extra_
 ## R6 gates — LANDED
 - Suite `cd candy-mail; phpunit` (watchdog): OK 203 tests / 361 assertions EXACT baseline shape, 0.115s, exit 0.
 - tools/tests: OK 426/1484 EXACT (re-run after doc-tag pass — tags don't perturb any census).
-- sugar-crush consumer guards --filter 'DocFigureProseDrift|EnvRosterDrift|ReadmeRosterDrift|HelpTest': OK 276/133731 (3 auto-rewritten crush docblock files pin nothing).
+- candy-code consumer guards --filter 'DocFigureProseDrift|EnvRosterDrift|ReadmeRosterDrift|HelpTest': OK 276/133731 (3 auto-rewritten crush docblock files pin nothing).
 - Residue --old=sugar-post: first pass 48 findings → triaged → 0 findings rc=0 (gate re-run immediately before staging per B7 law). <!-- @rename-keep -->
 
 ### pop audit table (complete — 48 findings classified; [BIN] rule fires on `pop`/`$ pop`/`php pop` shapes only; POP3/popen vocabulary elsewhere provably untouched — zero such lines in diff outside own NOTES prose) <!-- @rename-keep -->

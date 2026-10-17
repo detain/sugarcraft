@@ -104,7 +104,7 @@ namespace SugarCraft\Core\Util;
  * ## THE CLOSED-DESCRIPTOR-0 FAMILY — read this before touching a member
  *
  * sugar-core and sugar-image were written when descriptor 0 was always a
- * live terminal.  It is not any more.  `sugar-crush`'s `tests/bootstrap.php`
+ * live terminal.  It is not any more.  `candy-code`'s `tests/bootstrap.php`
  * closes the standard input constant on every non-tty run, and a daemon, a
  * git hook, or a shell invocation that detaches its own input reaches the
  * same state in production.  The trap is that `defined('STDIN')` STAYS TRUE

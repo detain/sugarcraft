@@ -1,0 +1,1024 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Tools;
+
+use SugarCraft\Code\MCP\McpClient;
+use SugarCraft\Code\MCP\McpTool;
+use SugarCraft\Code\Memory\DreamMemoryView;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Memory\MemoryWriter;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tools\BuiltIn\SkillTool;
+use SugarCraft\Code\Tools\McpToolBridge;
+use SugarCraft\Code\Tools\Tool;
+
+/**
+ * The built-in tool set, DERIVED from `src/` rather than listed.
+ *
+ * Every corpus of built-in tools in this suite used to be a literal array, and
+ * that pins only one of the two directions. MEASURED: adding an eleventh `Tool`
+ * implementor (`src/Tools/BuiltIn/Notify.php`) and NOT listing it in
+ * {@see \SugarCraft\Code\Cli\Bootstrap::tools()} left
+ * `BinSugarcrushWiringTest` at `OK (298 tests, 1692 assertions)` and the whole
+ * Integration tier green — while `tests/Tools/BuiltInToolTest.php`'s "all
+ * built-in tools" provider listed only NINE of the ten that existed, `SkillTool`
+ * absent. Nothing scanned the directory. The omitted-from-the-array direction is
+ * exactly what happened to `Write`: written, tested, named in the README, and
+ * unreachable from any real run.
+ *
+ * So the SOURCE TREE is the corpus — `src/`, not one directory inside it. It was
+ * one flat directory for two rounds, which put the same recurrence back in front
+ * of the then-unwritten `LspTool`; see {@see classNames()} for the measurement,
+ * for why the widening changes nothing on today's tree, and for where that tool
+ * actually landed. A new tool class is in every one of these tests the moment it
+ * exists, and it fails them until it is wired.
+ *
+ * "THE SOURCE TREE IS THE CORPUS" USED TO MEAN "ONE TYPE PER FILE", and `src/`
+ * always shipped counterexamples. The scan derived exactly one class per
+ * FILENAME, so a `Tool` implementor declared as a SECOND top-level symbol in a
+ * file was invisible to all four consumers while {@see nonClassSources()} still
+ * returned `[]` — silently, because the file's PRIMARY symbol does exist.
+ * MEASURED with `token_get_all()` rather than `class_exists()`. THE TREE TOTALS
+ * ARE NO LONGER SPELLED HERE: the file-and-type counts this paragraph used to
+ * carry were present-tense claims about a moving tree, and the per-file map
+ * that {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationMap()}
+ * pins BY NAME is the living record — a minority of files declare more than
+ * their PSR-4 symbol, in whatever numbers the current census yields. What does
+ * not rot is the argument itself: `src/App/App.php` once declared thirteen
+ * (`Msg`, `Cmd`, `UserInputMsg`, …) — which PSR-4 could not autoload, so a
+ * shard that built a `LayoutResetMsg` before anything loaded `App` died with
+ * "class not found", until they moved to one file each — and
+ * `src/ToolRegistry.php` once declared
+ * `SugarCraft\Code\Tool` — one `use` away from colliding with the tool
+ * interface — until E14 moved the registry pair into
+ * `SugarCraft\Code\Registry` (`src/Registry/`), where
+ * `tests/ToolRegistryTest.php` now imports it from.
+ * {@see declaredTypes()} is what the scan reads now — and since the redeclare
+ * finding (audit id E-six-thirty-one, spelled out so this guarded document
+ * carries no integer the src/ census can grow into) what its RESOLUTION GATE
+ * reads too: resolution never asks the engine whether
+ * a symbol exists, because under Composer's plain-`include` autoloader the
+ * asking was itself process-fatal. {@see classNames()} carries the measurement.
+ *
+ * NOT a trait, and not a static in one of the test classes: three test files in
+ * three namespaces need the same list, and a copy per file is the shape being
+ * removed. It carries no `Test` suffix, so PHPUnit does not collect it.
+ */
+final class BuiltInToolCorpus
+{
+    /** The PSR-4 prefix `src/` is rooted at — `composer.json`'s `autoload`. */
+    private const NAMESPACE_PREFIX = 'SugarCraft\\Code\\';
+
+    /**
+     * Concrete {@see Tool} implementors under `src/` that
+     * {@see \SugarCraft\Code\Cli\Bootstrap::tools()} constructs DYNAMICALLY,
+     * one per runtime-discovered thing, and therefore CANNOT appear as a literal
+     * in that array.
+     *
+     * A RECORDED EXEMPTION, not a hole, and it is deliberately narrow: these
+     * classes stay in {@see classNames()} and {@see instances()} — so every
+     * interface-conformance, naming and schema test still covers them — and are
+     * subtracted only by the ONE assertion whose subject is "the literal in
+     * `Bootstrap::tools()` and the `src/Tools/BuiltIn/` directory agree"
+     * ({@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}).
+     *
+     * WHY IT HAD TO EXIST. That assertion is `assertSame(classNames(), wired)` in
+     * both directions, which is exactly what caught the `Write` defect and must
+     * keep doing so. But {@see McpToolBridge} wraps ONE MCP tool descriptor
+     * discovered from a project's `.mcp.json`: on a tree with no such file there
+     * are zero of them in `Bootstrap::tools()`, and on a tree with one there are as
+     * many as the servers advertise. Neither number is a literal anybody could
+     * write. Without this list the bidirectional assertion would have had to be
+     * weakened to `assertContains`, which loses the direction that matters.
+     *
+     * AND THE PREDICTED SECOND RESIDENT DEPARTED THE SAME YEAR IT LANDED.
+     * {@see classNames()}'s doc-block once recorded that the widening still
+     * guarded "a LATENT case, for some future tool that a real run dispatches
+     * without `Bootstrap::tools()` naming it", with the bridge as the only live
+     * instance. P8.13's `TaskTool` moved in for exactly that reason — a literal
+     * would have been a task tool with no session `AgentManager` behind it — and
+     * the manager-hoist fix closed the gap from the other side: `Bootstrap::chat()` now hoists the
+     * one manager and feeds a BOUND `TaskTool` at every launch that has agents.
+     * The tool lives in `src/Tools/BuiltIn/` and the feed passes through
+     * `tools()`, so it is a wired tool in the wired directory: exempting it
+     * would now be the lie. {@see \SugarCraft\Code\Tests\Integration\TaskToolWiringTest}
+     * stays as the end-to-end evidence that the bound instance actually reaches
+     * {@see \SugarCraft\Code\Agents\AgentManager::executeAll()} through a real
+     * `Runtime` dispatch.
+     *
+     * KEEP IT AT THE SHORTEST LIST THAT IS TRUE. Anything in here is a tool no
+     * scanned assertion can prove is reachable, so each entry needs its own
+     * end-to-end reachability test naming it — for the bridge,
+     * {@see \SugarCraft\Code\Tests\Integration\McpToolWiringTest}, which drives
+     * a real call through `Runtime`.
+     *
+     * AND THAT RULE IS NOW THE SHAPE OF THIS CONSTANT RATHER THAN A SENTENCE
+     * ABOVE IT. It was a flat list, and the rule was asserted nowhere: MEASURED,
+     * adding one line here for a `Tool` that nothing wires and nothing can
+     * dispatch made it pass `BuiltInToolCorpusTest`, `BinSugarcrushWiringTest`,
+     * `BuiltInToolTest` and `ToolSchemaEncodingTest`, all rc=0 — an exemption that
+     * granted itself. So each entry is a `class => reachability test method` pair,
+     * and {@see BuiltInToolCorpusTest::testEveryDynamicToolExemptionNamesAReachabilityTestThatExists()}
+     * resolves the named method by reflection. A new entry cannot be written
+     * without naming the evidence, and naming evidence that does not exist reds.
+     * The flat list every other consumer wants is {@see dynamicToolClasses()}.
+     *
+     * @var array<class-string<Tool>, string> class => `Test\Class::testMethod`
+     *      that drives it end to end
+     */
+    public const DYNAMIC_TOOL_CLASSES = [
+        McpToolBridge::class => \SugarCraft\Code\Tests\Integration\McpToolWiringTest::class
+            . '::testAModelToolCallReachesTheMcpServerAndItsAnswerReachesTheModel',
+        // The dream pass's read-only `Memory` (roadmap 5.4-3): built by
+        // `Memory\DreamPass` for its own restricted turn, never by
+        // `Bootstrap::tools()`, so no launch may carry it.
+        DreamMemoryView::class => \SugarCraft\Code\Tests\Memory\DreamPassTest::class
+            . '::testTheTurnRunsOnTheReadOnlyToolsAndTheAnswerIsAppliedTaggedAndRecorded',
+    ];
+
+    /**
+     * The exempted classes alone — {@see DYNAMIC_TOOL_CLASSES}' keys.
+     *
+     * Every consumer that subtracts or compares the exemption wants this and not
+     * the map: `array_diff()` and `assertSame()` against a map would compare the
+     * TEST METHOD NAMES, which is silently the wrong question rather than a type
+     * error.
+     *
+     * @return list<class-string<Tool>>
+     */
+    public static function dynamicToolClasses(): array
+    {
+        return array_keys(self::DYNAMIC_TOOL_CLASSES);
+    }
+
+    /**
+     * The directory whose contents MUST every one of them declare their PSR-4
+     * symbol: the tools a real run dispatches, where a namespace/directory
+     * disagreement is a defect rather than an exemption.
+     */
+    private const WIRED_TOOL_DIR = 'Tools/BuiltIn';
+
+    /**
+     * Every concrete {@see Tool} implementor anywhere under `src/`.
+     *
+     * ANYWHERE, and the widening is the fix for a LATENT trap rather than a live
+     * false green. This globbed the flat `src/Tools/BuiltIn/*.php` and hard-coded
+     * that namespace, so a `Tool` implementor one directory away was invisible to
+     * all three consumers ({@see \SugarCraft\Code\Tests\Tools\BuiltInToolTest},
+     * {@see \SugarCraft\Code\Tests\Providers\ToolSchemaEncodingTest},
+     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest}).
+     * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
+     * this tree, `src/` holds THIRTEEN concrete `Tool` implementors, TWELVE in
+     * `src/Tools/BuiltIn/` and ONE in `src/Tools/` — {@see McpToolBridge},
+     * the adapter that makes a project's MCP tools dispatchable. (The manager-hoist fix moved
+     * `TaskTool`, the thirteenth, from `src/Tools/` into the wired directory
+     * when the launch feed bound it; before that move it was the second
+     * resident here.) When the widening landed there
+     * were TWELVE and the twelfth — the bridge — is the one the flat glob could
+     * not see, which is verbatim the recurrence this corpus was written to
+     * prevent.
+     *
+     * AND THE PREDICTION THAT USED TO SIT HERE WAS WRONG, which is worth leaving
+     * on the record rather than deleting. It read: "The next planned tool,
+     * `src/LSP/LspTool.php` (plan step #17), lands the same way" — i.e. outside
+     * the wired directory, needing the widening. It did not.
+     * {@see \SugarCraft\Code\Tools\BuiltIn\LspTool} is the ELEVENTH entry in
+     * `src/Tools/BuiltIn/`, because it is a literal in `Bootstrap::tools()` and
+     * {@see BuiltInToolCorpusTest::testTheWideSweepFindsTheFlatGlobPlusExactlyTheRecordedDynamicTools()}
+     * asserts `assertSame(flat-glob + DYNAMIC_TOOL_CLASSES, classNames())` — so a
+     * wired tool placed in `src/Tools/` and not exempted reds that assertion, and
+     * exempting it is impossible because
+     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}
+     * requires every exempted class to be ABSENT from the array. Measured, not
+     * reasoned: with the file at `src/Tools/LspTool.php` that first assertion
+     * failed `actual size 11 matches expected size 10`. The widening did catch a
+     * second resident — `TaskTool` (P8.13), exempted for the shape a tool must
+     * be BOUND, not merely built, before a real run can dispatch it — and the manager-hoist fix
+     * has since resolved it the way LspTool was resolved: the binding moved into
+     * `Bootstrap::chat()`'s feed and the class moved into the wired directory,
+     * so the exemption row is gone and only the bridge remains as the case the
+     * flat glob truly cannot see. That is why the exemption list carries a
+     * reachability test per entry rather than being prose.
+     *
+     * The counterpart is {@see DYNAMIC_TOOL_CLASSES}: the widening is what puts a
+     * tool outside the wired directory INTO every test, and that list is what
+     * says which of them `Bootstrap::tools()` cannot name as a literal.
+     *
+     * THE GUARD FIX BELOW IS A PREREQUISITE FOR THAT WIDENING, not a nicety
+     * beside it — in TWO stages, because the first fix was itself a defect.
+     * Stage one, HISTORICAL: symbol kinds measured across the PRIMARY
+     * (PSR-4-named) symbol of each of 267 files — the tree AS IT WAS WHEN THAT
+     * PARAGRAPH WAS MEASURED, one symbol per file, which is the census's stated
+     * domain and NOT the same as the 286 top-level types those 267 files
+     * declared: 220 concrete classes, 25 enums, 16 interfaces, 6 traits,
+     * **0 abstract classes**. The live figures move with the tree and are no
+     * longer pinned anywhere, deliberately: a literal per symbol kind is a
+     * count of the tree asserted against the tree.
+     * {@see BuiltInToolCorpusTest::testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
+     * keeps the part of that census that was never arithmetic —
+     * what that paragraph was about is the ZERO, which is the whole argument and
+     * has held at every size since. So the
+     * one shape the old `class_exists()`-only guard classified correctly is the
+     * one shape that does not occur, and the files it would have thrown on are
+     * already in the tree: every interface and every trait the scan reaches. That
+     * is 16 + 6 = 22 in the historical figures above and it MOVES WITH THE TREE
+     * exactly as they do — it read 22 as a live count for one round after the
+     * interface count had gone to 17, which is this project's standing defect in
+     * miniature, so the live number is deliberately not written here or
+     * anywhere else;
+     * {@see BuiltInToolCorpusTest::testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
+     * asserts only that the count is NON-ZERO, which is the claim that keeps
+     * the zero beside it honest without being a figure that rots. `src/LSP/` alone ships `LspCacheInterface` and
+     * `LspConnectionInterface`. Widening the scan without the stage-one guard
+     * would have aborted suite construction on this very checkout — and the
+     * stage-one guard (the `*_exists()` triple) then carried stage two's defect
+     * instead: the redeclare finding, documented at the guard itself below, where the
+     * triple has been replaced by a token gate that never asks the engine.
+     *
+     * Sorted, so a provider keyed off it names its cases the same way on every
+     * machine — directory-iteration order is not a contract.
+     *
+     * INJECTABLE $srcDir/$namespacePrefix, and only tests of this scanner pass
+     * them: they exist so the interface/trait/mis-namespaced cases can be driven
+     * against a SYNTHETIC tree. Driving them by writing probe files into the real
+     * `src/` is what the first attempt did, and a probe that fatals leaves residue
+     * in a tree other suites are reading concurrently. The mis-namespaced case
+     * needs one more thing a synthetic tree cannot give it — the REAL composer
+     * autoloader, whose plain-`include` loader is the other half of the redeclare finding
+     * (a test-local `require_once` probe autoloader hid it for its entire life) —
+     * so it is ALSO driven as a subprocess over temp trees registered on that
+     * autoloader: `tests/Tools/corpus-real-autoloader-driver.php`, spawned by
+     * {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpusTest}.
+     *
+     * @return list<class-string<Tool>>
+     */
+    public static function classNames(?string $srcDir = null, string $namespacePrefix = self::NAMESPACE_PREFIX): array
+    {
+        $srcDir ??= self::srcDir();
+
+        $classes = [];
+        foreach (self::sourceFiles($srcDir) as $relative) {
+            $class = $namespacePrefix . str_replace('/', '\\', substr($relative, 0, -4));
+
+            // THE RESOLUTION GATE, AND WHY IT NO LONGER ASKS THE ENGINE
+            // (the redeclare finding — a latent process-killer).
+            //
+            // WHAT THE OLD TEXT SAID: this branch was reached by
+            // `!class_exists($class) && !interface_exists($class) &&
+            // !trait_exists($class)`, and the doc-block promised a file failing
+            // the probes would be REPORTED rather than THROWN ON.
+            //
+            // WHAT IS TRUE NOW: that promise held only inside the suite's
+            // SYNTHETIC probe tree, whose test-local autoloader is
+            // `require_once`. Under the REAL composer autoloader the three
+            // probes are three autoload ATTEMPTS FOR ONE NAME, and
+            // `Composer\Autoload\ClassLoader::includeFile()` is a plain
+            // `include`. A file that does not declare the probed name therefore
+            // EXECUTES AGAIN on the second probe, meets the class (or function)
+            // the first pass already declared, and PHP raises a REDECLARE FATAL
+            // while still evaluating the condition — before this branch is
+            // entered, before {@see nonClassSources()} can report anything,
+            // before a single test result exists. The whole runner dies at rc
+            // 255. ONE mis-namespaced `src/` file stopped the ENTIRE suite from
+            // existing. MEASURED pre-fix through
+            // `tests/Tools/corpus-real-autoloader-driver.php` (its header says
+            // why only a subprocess can show this), transcript kept beside this
+            // test suite's evidence: `PHASE A:classNames` printed, then
+            // `PHP Fatal error: Cannot declare class …\Ghost, because the name
+            // is already in use`, rc 255, no results.
+            //
+            // THE GATE NOW READS THE FILE'S OWN TOKEN STREAM:
+            // {@see declaredTypes()} answers "does this file DECLARE the name its
+            // path promises?" at depth zero, with zero autoload attempts — so
+            // the mis-namespaced, functions-only and multi-symbol shapes skip,
+            // report, or throw EXACTLY as this method's prose has always
+            // claimed. The engine still gets asked about symbols, but only in
+            // {@see isDispatchableTool()}, and only for names the tokens have
+            // already seen declared in a file whose PRIMARY name matched: the
+            // first `class_exists()` of that list executes the file once, every
+            // later probe finds the symbol known, and no known name is ever
+            // autoloaded a second time. Kind discrimination (an interface is
+            // not a class) no longer needs a triple: a conditional- or
+            // mismatch-declaration is refused by the gate itself, and what the
+            // gate cannot see at all is bound in {@see declaredTypes()}.
+            //
+            // WHY THE NOTE EARNS ITS PLACE: the triple is the reflex repair for
+            // "the tokens say absent but the engine says present" — restore it
+            // here and the next merge that mis-namespaces one wired file takes
+            // the whole runner down again, with only this comment and the
+            // subprocess tests between it and reappearing.
+            if (!in_array($class, self::declaredTypes($srcDir . '/' . $relative), true)) {
+                if (str_starts_with($relative, self::WIRED_TOOL_DIR . '/')) {
+                    throw new \RuntimeException(
+                        "src/{$relative} does not declare {$class}; the built-in tool namespace and "
+                        . 'directory must agree',
+                    );
+                }
+
+                // Elsewhere under `src/` this is a PSR-4 exemption, not a tool
+                // defect, and it CANNOT be a dispatchable Tool either way. It is
+                // skipped rather than thrown on, precisely so the arrival of a
+                // functions-only or multi-symbol file cannot abort suite
+                // construction — which is the promise the OLD gate made and
+                // the redeclare finding measured as false; it is true again only because reaching
+                // this line executes nothing — and {@see nonClassSources()}
+                // keeps the skip visible instead of silent, asserted by
+                // {@see BuiltInToolCorpusTest}.
+                continue;
+            }
+
+            // EVERY top-level type the file declares, not just the one its
+            // FILENAME names. The gate above does not EXECUTE the file; the load
+            // happens on the FIRST probe below — declaredTypes() leads with the
+            // primary precisely so the first `class_exists()` autoloads this
+            // file and thereby defines its secondary symbols too, which is what
+            // makes them reflectable without a second `require`. A secondary
+            // whose PSR-4 path ALSO exists as another file is resolved by that
+            // other file first; `src/` ships no such name collision today.
+            // Audit finding E-six-sixty-two (spelled out so the census guard
+            // does not read it as a figure) re-derived that "today" live: BOTH collision
+            // surfaces — a secondary whose own PSR-4 path exists as a separate
+            // file, and a secondary FQN that doubles as another file's primary
+            // — were walked over the whole tree and each came back with zero
+            // members, so the autoload-then-miss the prose warns about stays
+            // unreachable. If this gate ever reds on a name-shape, re-run that
+            // two-surface walk before believing the short list.
+            //
+            // WHY IT IS NOT ENOUGH TO SCAN FILENAMES: the miss is SILENT. A
+            // `Tool` implementor declared as a second type in a file whose
+            // primary type exists is invisible to all four consumers while
+            // {@see nonClassSources()} still reports `[]`, because nothing was
+            // exempt — the primary really is there. `src/` ships such files
+            // today; the map in
+            // {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationMap()}
+            // names every one and what it carries.
+            foreach (self::declaredTypes($srcDir . '/' . $relative, $class) as $declared) {
+                if (!self::isDispatchableTool($declared)) {
+                    continue;
+                }
+
+                /** @var class-string<Tool> $declared */
+                $classes[] = $declared;
+            }
+        }
+
+        if ($classes === []) {
+            throw new \RuntimeException("No built-in tool sources found under {$srcDir}");
+        }
+
+        sort($classes);
+
+        return $classes;
+    }
+
+    /**
+     * Is $symbol a class a real run could DISPATCH as a tool?
+     *
+     * The filter, and the enum clause is the fix for a doc-block that asserted
+     * the OPPOSITE of what the code did. It read: "all four non-tool shapes:
+     * abstract bases, interfaces (abstract, per the measurement above), traits
+     * and enums (`class_exists()` answers true for an enum, and it is rejected
+     * here on the interface clause)". MEASURED on PHP 8.3.6, for
+     * `enum E: string implements Tool`:
+     *
+     *     class_exists = true   isAbstract = false   implementsInterface(Tool) = true
+     *
+     * — so an enum implementing `Tool` passed BOTH clauses, entered the corpus,
+     * and `instances()` then died with `Error: Cannot instantiate enum E`. Inside
+     * a data provider that is an uncatchable abort during suite construction,
+     * which is the exact failure mode this class was refactored to remove. The
+     * one dangerous shape was also the one shape untested: `testAnEnumIsSkipped`
+     * probed a PLAIN enum, which the interface clause rejects for the same reason
+     * it rejects any unrelated class.
+     *
+     * `isEnum()` rather than `enum_exists()` because the reflection object is
+     * already in hand and the two answer the same question here.
+     *
+     * THE ENUM CLAUSE WAS ONE INSTANCE OF A CLASS OF DEFECT, not the class, and
+     * the sibling it left behind is THIS REPO'S OWN MANDATED SHAPE. The filter
+     * asked what a class IS and never whether it can be BUILT, while
+     * {@see instances()}'s `getNumberOfRequiredParameters() === 0` arm is true of
+     * a zero-argument PRIVATE constructor — so the `match` fallback never fired
+     * and `new $class()` ran anyway. `CLAUDE.md` and `.claude/rules/model-pattern.md`
+     * both MANDATE `final` + `private function __construct()` + a `::new()`
+     * factory, so a tool written the way this codebase says to write one entered
+     * the corpus and produced:
+     *
+     *     Error: Call to private CorpusProbe\…\ProbePrivateCtor::__construct()
+     *     tests/Tools/BuiltInToolTest.php            -> Tests: 80, Errors: 33
+     *     tests/Providers/ToolSchemaEncodingTest.php -> abort inside TestSuiteBuilder->build()
+     *
+     * — the last line verbatim the failure mode the enum clause was added to
+     * remove.
+     *
+     * AND THE FIX FOR THAT WAS ITSELF THE NEXT INSTANCE OF THE CLASS, which is why
+     * constructibility is NO LONGER ASKED HERE. The clause added was
+     * `&& self::isConstructible($reflection)`, and a `false` from it SILENTLY
+     * DROPPED the class: it left the corpus, so {@see instances()}'s throw — whose
+     * own message says "add it … rather than silently skipping it" — could never
+     * fire for the shape `CLAUDE.md` MANDATES. MEASURED on a synthetic tree, two
+     * shapes vanishing with no exception and no diagnostic of any kind:
+     *
+     *     final class + private __construct + public static new(\stdClass $dep)
+     *     final class + private __construct + public function new()   (not static)
+     *
+     * Both are real authoring mistakes — a factory that grew a dependency, a
+     * missing `static` — and both used to mean "this tool disappears from every
+     * built-in-tool test and BinSugarcrushWiringTest stays green". A filter that
+     * removes a would-be tool for a reason nobody is told is worse than an abort.
+     *
+     * So this method asks only what a class IS: concrete, not an enum, implements
+     * {@see Tool}. Whether it can be BUILT is asked by {@see instances()}, where
+     * the answer is a named `RuntimeException` naming the class — see
+     * {@see isConstructible()}, which still exists and is still the predicate, now
+     * consulted where a `false` is LOUD.
+     *
+     * The cost of moving it: a class that cannot be built now reaches the corpus,
+     * so any consumer that walks {@see classNames()} without building (the schema
+     * and naming tests) will include it, and the failure surfaces as this
+     * scanner's own throw rather than as a shorter list.
+     */
+    private static function isDispatchableTool(string $symbol): bool
+    {
+        if (!class_exists($symbol)) {
+            return false;
+        }
+
+        $reflection = new \ReflectionClass($symbol);
+
+        return !$reflection->isAbstract()
+            && !$reflection->isEnum()
+            && $reflection->implementsInterface(Tool::class);
+    }
+
+    /**
+     * Can this class be built at all, by `new` or by the project's `::new()`
+     * factory convention?
+     *
+     * Reflection can answer VISIBILITY and it cannot answer whether a
+     * constructor THROWS — that residual is handled where it surfaces, in
+     * {@see instances()}, which turns it into a named failure rather than an
+     * opaque abort during suite construction.
+     *
+     * @param \ReflectionClass<object> $reflection
+     */
+    private static function isConstructible(\ReflectionClass $reflection): bool
+    {
+        $constructor = $reflection->getConstructor();
+
+        if ($constructor === null || $constructor->isPublic()) {
+            return true;
+        }
+
+        return self::zeroArgumentFactory($reflection) !== null;
+    }
+
+    /**
+     * The class's public static zero-argument `new()`, or null.
+     *
+     * @param  \ReflectionClass<object> $reflection
+     * @return \ReflectionMethod|null
+     */
+    private static function zeroArgumentFactory(\ReflectionClass $reflection): ?\ReflectionMethod
+    {
+        if (!$reflection->hasMethod('new')) {
+            return null;
+        }
+
+        $factory = $reflection->getMethod('new');
+
+        return $factory->isPublic() && $factory->isStatic() && $factory->getNumberOfRequiredParameters() === 0
+            ? $factory
+            : null;
+    }
+
+    /**
+     * Every top-level class/interface/trait/enum $file declares, as fully
+     * qualified names, primary first.
+     *
+     * DERIVED FROM TOKENS, not from the filename and not from `get_declared_*()`:
+     * the filename gives one name per file (the blindness this exists to remove)
+     * and the declared-symbol lists are process-global and would attribute every
+     * previously-loaded class to whichever file happened to be scanned first.
+     *
+     * $primary is the file's PSR-4 name; it is placed first so a wired tool's own
+     * class keeps its position, and it is included even when the token scan
+     * cannot see it (a file whose declaration is inside a conditional).
+     *
+     * THE BOUNDS — and since the redeclare finding this walk is not merely the census's
+     * instrument but the RESOLUTION GATE'S too (`classNames()` and
+     * {@see nonClassSources()} branch on its output), so its bounds are the
+     * scanner's bounds, and a guard has to state what it cannot see:
+     *
+     * FIRST BOUND, depth: a type declared inside ANY brace-delimited
+     * conditional — `if (…) { class … }`, a function body, a loop — sits at
+     * depth > 0 and is INVISIBLE here. That is POLICY, not oversight, and it
+     * is pinned BOTH ways by
+     * {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpusTest} (an
+     * unconditional decoy IS seen, a conditional sibling in the same file is
+     * NOT): whether PHP has even defined such a class depends on execution
+     * history, and an instrument that reads SOURCE without running it cannot
+     * inherit that question.
+     *
+     * SECOND BOUND, alternative syntax — the shape the FIRST DRAFT of this
+     * gate got WRONG, which is worse than a bound because it was not a miss
+     * but a re-arm. WHAT THE OLD TEXT SAID: "any brace-delimited conditional"
+     * was the whole claim, and the walk tracked braces only. WHAT IS TRUE NOW:
+     * `if (…): class … endif;` carries no braces, so brace depth read zero,
+     * the gate counted such a declaration UNCONDITIONAL, and handing its name
+     * to `class_exists()` executes the file once; the conditional body never
+     * runs; the probed name stays unknown; and any further `*_exists()` probe
+     * RE-INCLUDES the file, redeclaring the class the first include defined —
+     * the redeclare finding smuggled straight back through the gate. The walk now counts
+     * colon-form control bodies (`if`/`for`/`foreach`/`while`/`switch`/
+     * `declare` opened with `:` until the matching `end*`) as scopes beside the
+     * brace depth, so EITHER conditional form makes a type invisible, and the
+     * alt-syntax arm is pinned by the same both-polarity tests plus the
+     * driver's tethered-alt tree (a conditional primary SHARED with an
+     * unconditional class — the exact redeclare payload). The two-word
+     * `else if (…):` is ACCOUNTED AS A CHAIN CONTINUATION, not a second
+     * opener: alternative syntax admits no such arm — `else` must be followed
+     * directly by `:` (`php -l` rejects the shape, MEASURED) — so it belongs
+     * to files that tokenize without parsing, and arming it would count two
+     * `:` against the chain's single `endif` and leave the walk stuck
+     * POSITIVE over the file's tail. The backstop refuses ALL unresolved
+     * walks by name: after the loop, a nonzero colon-scope balance on EITHER
+     * polarity (an unclosed `:` hiding the tail, or an excess `end*`) or any
+     * else-chain colon THROWS the file — never silently miscounted in either
+     * direction, the same by-name discipline as the bracketed-namespace bound
+     * below, and pinned by both-polarity imbalance fixtures.
+     *
+     * THIRD BOUND, bracketed namespaces — LOUD, and named because this
+     * paragraph previously did not say it: a file in the braced form
+     * `namespace X { class Y … }` puts EVERY declaration at depth > 0, so the
+     * gate reads such a file as "declares nothing at its PSR-4 name" and
+     * REJECTS IT BY NAME — exempt-reported by {@see nonClassSources()} or a
+     * named throw in the wired directory. Nothing is silently missed; the
+     * cost is a false exemption, visible in red, and a multi-bracketed file
+     * inside the wired directory throws on its disagreement. `src/` uses the
+     * declaration form of `namespace` exclusively; the bracketed form has no
+     * live support here and none is promised.
+     *
+     * A conditional PRIMARY (either brace or colon form) therefore fails the
+     * gate and surfaces LOUDLY — reported by name, or thrown by name inside
+     * the wired directory — never silently; it is a conditional SECONDARY
+     * inside an otherwise-resolving file that is missed by design, exactly as
+     * it was before this gate existed (finding E-six-thirty-seven, spelled out
+     * like the redeclare finding). `src/` ships zero conditional declarations of
+     * EITHER syntax form, measured both by this walk's scope accounting and by a
+     * token sweep over every `end*` keyword in the tree.
+     *
+     * Independently: a secondary type is only REFLECTABLE once its file has
+     * been loaded, which happens as a side effect of the primary symbol
+     * autoloading under {@see classNames()}'s filter. A file whose primary
+     * symbol does NOT exist fails the token gate above, is reported by
+     * {@see nonClassSources()}, and its secondary declarations are named here
+     * but will not reflect. `src/` has zero such files.
+     *
+     * @return list<string>
+     */
+    public static function declaredTypes(string $file, string $primary = ''): array
+    {
+        $tokens = token_get_all((string) file_get_contents($file));
+        $namespace = '';
+        $names = [];
+        $depth = 0;
+
+        // ALTERNATIVE-SYNTAX CONTROL BODIES. `if (…): … endif;` opens a
+        // conditional WITHOUT braces, so the brace depth alone reads zero
+        // inside one — and a gate that counted the declaration unconditional
+        // handed the name straight back to `*_exists()` probes, re-arming the
+        // redeclare fatal through the gate itself (found on the round-two
+        // review of that finding). Colon-form bodies are therefore counted as scopes
+        // too: a control keyword awaits its body opener, `:` opens a counted
+        // scope, the matching `end*` closes it. `elseif`/`else` continue a
+        // chain whose scope is already open from the `if`, so they are not
+        // openers of their own — and neither is the TWO-WORD `else if`, which
+        // alternative syntax does not even accept: `else` must be followed
+        // directly by `:` (MEASURED with `php -l`: `if ($a): else if ($b):
+        // endif;` fails with "unexpected token if, expecting ':'"), so an
+        // opener keyword right after `else` only ever occurs in a file that
+        // is tokenizable but broken. Arming such an `if` would count a second
+        // `:` against the chain's single `endif` and stick the walk POSITIVE,
+        // silently hiding every later depth-0 declaration; it is therefore
+        // tracked as a chain continuation whose colon marks the file
+        // UNRESOLVED for the imbalance backstop below, never as a scope.
+        $altScopes = 0;
+        $awaitingBodyOpener = false;
+        $conditionParen = 0;
+        $elseChainContinuation = false;
+        $elseChainAltColons = 0;
+
+        for ($i = 0, $n = \count($tokens); $i < $n; ++$i) {
+            $token = $tokens[$i];
+
+            if ($awaitingBodyOpener
+                && !(\is_array($token)
+                    && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true))
+            ) {
+                if (\is_string($token) && $token === '(') {
+                    ++$conditionParen;
+
+                    continue;
+                }
+
+                // A `{` while the condition's parens are still open is a
+                // closure or array-like literal INSIDE the condition, not the
+                // body opener — let the generic brace counter track it.
+                if (\is_string($token) && $conditionParen > 0 && $token === ')') {
+                    --$conditionParen;
+
+                    continue;
+                }
+
+                if ($conditionParen === 0) {
+                    if (\is_string($token) && $token === ':') {
+                        // `else if(…):` continues the else branch: from the
+                        // walk's view the nested if has NO independent body
+                        // opener, its `:` belongs to the chain and the `end*`
+                        // that follows closes the OUTER scope. Counting it
+                        // would arm +2 against one `endif`.
+                        if ($elseChainContinuation) {
+                            ++$elseChainAltColons;
+                        } else {
+                            ++$altScopes;
+                        }
+                    }
+
+                    $awaitingBodyOpener = false;
+                    $elseChainContinuation = false;
+
+                    if (\is_string($token) && $token === '{') {
+                        ++$depth;
+
+                        continue;
+                    }
+                }
+            }
+
+            if (\is_string($token)) {
+                $depth += $token === '{' ? 1 : ($token === '}' ? -1 : 0);
+
+                continue;
+            }
+
+            // An interpolation brace opens a scope the closing `}` will decrement.
+            if (\in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                ++$depth;
+
+                continue;
+            }
+
+            if ($token[0] === \T_NAMESPACE) {
+                $namespace = '';
+                for ($j = $i + 1; $j < $n; ++$j) {
+                    if (\is_string($tokens[$j]) && \in_array($tokens[$j], [';', '{'], true)) {
+                        break;
+                    }
+                    if (\is_array($tokens[$j])
+                        && \in_array($tokens[$j][0], [\T_STRING, \T_NAME_QUALIFIED], true)
+                    ) {
+                        $namespace .= $tokens[$j][1];
+                    }
+                }
+
+                continue;
+            }
+
+            if (\in_array($token[0], [\T_IF, \T_FOR, \T_FOREACH, \T_WHILE, \T_SWITCH, \T_DECLARE], true)) {
+                // A keyword used as a METHOD NAME (`public function for(…): array`,
+                // legal since PHP 7) tokenizes as the keyword without
+                // TOKEN_PARSE, and its return-type `:` would otherwise arm a
+                // colon scope no `end*` ever closes.
+                if (self::precededBy($tokens, $i, \T_FUNCTION)) {
+                    continue;
+                }
+
+                $awaitingBodyOpener = true;
+                $conditionParen = 0;
+
+                // The two-word `else if` (and any other opener glued to an
+                // `else`) continues the else branch rather than opening a
+                // scope of its own: alternative syntax has no two-word
+                // else-if arm at all — `else` must be followed directly by
+                // `:` — so a `:` meeting this arm can only come from a file
+                // that tokenizes but does not parse, and the imbalance
+                // backstop below reports such a file UNRESOLVED instead of
+                // letting the walk stick positive over its tail. A `{`
+                // meeting it is ordinary braced `else if`, handled exactly
+                // as before through the brace depth.
+                $elseChainContinuation = self::precededBy($tokens, $i, \T_ELSE);
+
+                continue;
+            }
+
+            if (\in_array(
+                $token[0],
+                [\T_ENDIF, \T_ENDFOR, \T_ENDFOREACH, \T_ENDWHILE, \T_ENDSWITCH, \T_ENDDECLARE],
+                true,
+            )) {
+                --$altScopes;
+
+                continue;
+            }
+
+            if ($depth !== 0 || $altScopes !== 0
+                || !\in_array($token[0], [\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM], true)
+            ) {
+                continue;
+            }
+
+            // `Foo::class` is a constant expression, not a declaration.
+            if (self::precededBy($tokens, $i, \T_DOUBLE_COLON)) {
+                continue;
+            }
+
+            $next = $i + 1;
+            while ($next < $n && \is_array($tokens[$next])
+                && \in_array($tokens[$next][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
+                ++$next;
+            }
+            // An anonymous class has no name token here.
+            if ($next < $n && \is_array($tokens[$next]) && $tokens[$next][0] === \T_STRING) {
+                $names[] = ($namespace === '' ? '' : $namespace . '\\') . $tokens[$next][1];
+            }
+        }
+
+        // THE IMBALANCE BACKSTOP. The loop above can only answer "inside a
+        // scope" or "outside one"; it cannot answer anything for a file whose
+        // colon scopes do not close. `endif; endif;` with one `:` — or any
+        // missing/excess `end*` — leaves $altScopes nonzero, and the guard at
+        // the declaration check would then treat the file's WHOLE TAIL as one
+        // open conditional: stuck positive, every later depth-0 declaration
+        // silently invisible (and a silently invisible PRIMARY is the redeclare
+        // re-arm this gate exists to refuse); negative is the same refusal in
+        // the other direction. A $elseChainAltColons count is the same class
+        // of input: an `else if(…):` colon, which `php -l` rejects outright.
+        // Neither is silently miscounted — the walk refuses the FILE BY NAME,
+        // loud on both polarities, the same discipline as the bracketed
+        // namespace bound below: never a quiet over- or under-count.
+        if ($altScopes !== 0 || $elseChainAltColons !== 0) {
+            throw new \RuntimeException(
+                "unresolved alternative-syntax walk in {$file}: {$altScopes} unclosed colon scope(s), "
+                . "{$elseChainAltColons} else-chain alt-syntax colon(s)",
+            );
+        }
+
+        if ($primary !== '') {
+            array_unshift($names, $primary);
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * Is the nearest significant token before $tokens[$index] of type $type?
+     *
+     * "Significant" skips exactly whitespace and comments, which never
+     * separate a keyword from what it continues (`else`+`if`, `::`+`class`).
+     */
+    private static function precededBy(array $tokens, int $index, int $type): bool
+    {
+        for (--$index; $index >= 0; --$index) {
+            if (\is_array($tokens[$index])
+                && \in_array($tokens[$index][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
+                continue;
+            }
+
+            return \is_array($tokens[$index]) && $tokens[$index][0] === $type;
+        }
+
+        return false;
+    }
+
+    /**
+     * The `src/` files that declare no symbol at their PSR-4 name.
+     *
+     * The visible half of {@see classNames()}'s one non-throwing skip, read
+     * through the SAME token gate — no `*_exists()` probe runs here either, and
+     * {@see classNames()} carries the measurement of why one does not belong
+     * (the redeclare finding: under composer's plain-`include` autoloader these three
+     * probes were three re-inclusions of the exempt file, i.e. a redeclare
+     * fatal at the exact moment the file tried to get itself REPORTED).
+     * MEASURED on this tree: NONE — no file the current census enumerates is
+     * exempt, which is what
+     * {@see BuiltInToolCorpusTest::testEverySourceFileDeclaresItsPsr4Symbol()}
+     * pins by asserting the empty list itself, with no total beside it to rot.
+     * Pinned that way so a file that becomes exempt turns ONE test red with its
+     * own name in the message rather than aborting the whole suite's
+     * construction.
+     *
+     * The empty result is load-bearing rather than decorative:
+     * {@see sourceFiles()} throws on an empty tree, so `[]` here can
+     * no longer mean "nothing was scanned".
+     *
+     * @return list<string> paths relative to `src/`
+     */
+    public static function nonClassSources(?string $srcDir = null, string $namespacePrefix = self::NAMESPACE_PREFIX): array
+    {
+        $srcDir ??= self::srcDir();
+
+        $skipped = [];
+        foreach (self::sourceFiles($srcDir) as $relative) {
+            $class = $namespacePrefix . str_replace('/', '\\', substr($relative, 0, -4));
+
+            // The gate is `declaredTypes()` membership — the token stream, not
+            // the engine — so a functions-only or mis-namespaced file gets
+            // REPORTED here without ever being included (see classNames()).
+            if (!in_array($class, self::declaredTypes($srcDir . '/' . $relative), true)) {
+                $skipped[] = $relative;
+            }
+        }
+
+        return $skipped;
+    }
+
+    /**
+     * Every `.php` file under $src, relative to it, sorted.
+     *
+     * THROWS ON AN EMPTY-BUT-EXISTING TREE, and that guard is what stops
+     * {@see nonClassSources()} being vacuous. `classNames()` has always thrown on
+     * an empty RESULT; `nonClassSources()` had no such guard, so pointed at an
+     * existing-but-empty injected root it returned `[]` and
+     * `assertSame([], $exempt)` passed having scanned nothing. "0 of N" was
+     * never asserted to have looked at N files. The guard lives here rather
+     * than in each caller because both of them need it and there is one place a
+     * scan can come back empty.
+     *
+     * @return list<string>
+     */
+    public static function sourceFiles(?string $src = null): array
+    {
+        $src ??= self::srcDir();
+
+        if (!is_dir($src)) {
+            throw new \RuntimeException("No source tree found at {$src}");
+        }
+
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        /** @var \SplFileInfo $file */
+        foreach ($walk as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $files[] = substr($file->getPathname(), \strlen($src) + 1);
+            }
+        }
+
+        if ($files === []) {
+            throw new \RuntimeException("No PHP sources found under {$src}");
+        }
+
+        // Sorted here rather than only in classNames(), so nonClassSources()
+        // reports in a stable order too.
+        sort($files);
+
+        return $files;
+    }
+
+    private static function srcDir(): string
+    {
+        return \dirname(__DIR__, 2) . '/src';
+    }
+
+    /**
+     * Every built-in tool, constructed with its default (standalone) wiring.
+     *
+     * A tool whose constructor has REQUIRED arguments has to be named here.
+     * Deliberately a throw rather than a skip: a new tool that this cannot build
+     * is a new tool nobody has said how to test, and a silent skip would hand
+     * back the empty-corpus problem this class exists to remove.
+     *
+     * THE CANONICAL SHAPE IS BUILT THROUGH ITS FACTORY. `final` + `private
+     * function __construct()` + `::new()` is what `CLAUDE.md` and
+     * `.claude/rules/model-pattern.md` mandate, and `new $class()` on one of
+     * those is a fatal `Error` that no `catch` in a data provider can reach —
+     * see {@see isDispatchableTool()} for the measurement.
+     *
+     * AND A CONSTRUCTOR THAT THROWS is caught, because reflection cannot see it
+     * coming. It produced the same uncatchable abort inside
+     * `TestSuiteBuilder->build()`; rethrown here it is a named `RuntimeException`
+     * that says which class and what to do about it. It is still a HARD failure —
+     * a tool that cannot be built standalone is one nobody has said how to test —
+     * but a legible one.
+     *
+     * $srcDir/$namespacePrefix are injectable for the reason
+     * {@see classNames()}'s are, and only this scanner's own tests pass them:
+     * driving the private-constructor and throwing-constructor shapes needs a
+     * synthetic tree, and writing probe files into the real `src/` is what left
+     * residue for concurrently-running suites to read.
+     *
+     * @return list<Tool>
+     */
+    public static function instances(?string $srcDir = null, string $namespacePrefix = self::NAMESPACE_PREFIX): array
+    {
+        $tools = [];
+        foreach (self::classNames($srcDir, $namespacePrefix) as $class) {
+            $reflection = new \ReflectionClass($class);
+            $constructor = $reflection->getConstructor();
+
+            try {
+                // THE LOUD ARM, and it is the whole of finding F5. This question
+                // used to be asked in {@see isDispatchableTool()}, where a `false`
+                // removed the class from the corpus and therefore from this loop —
+                // so the throw below could not fire for the shape this repo
+                // mandates. A dispatchable `Tool` implementor nobody can build is
+                // a defect in the tool or a gap in this fixture, and either way it
+                // is something to say out loud.
+                if (!self::isConstructible($reflection)) {
+                    throw new \RuntimeException(sprintf(
+                        '%s implements Tool but cannot be built: its constructor is not public and it offers no '
+                        . 'public static zero-argument new(). Give it the `final` + `private __construct()` + '
+                        . '`::new()` shape CLAUDE.md mandates, or add it to %s::instances() with the wiring it '
+                        . 'needs — it must not be silently skipped.',
+                        $class,
+                        self::class,
+                    ));
+                }
+
+                if ($constructor !== null && !$constructor->isPublic()) {
+                    // Non-null by the guard above: isConstructible() reached its
+                    // factory arm for this class, which is what makes it
+                    // constructible at all.
+                    $built = self::zeroArgumentFactory($reflection)?->invoke(null);
+                } elseif ($constructor === null || $constructor->getNumberOfRequiredParameters() === 0) {
+                    $built = new $class();
+                } else {
+                    $built = match ($class) {
+                        SkillTool::class => new SkillTool(new SkillRegistry()),
+                        // A writer whose home store cannot be opened: the
+                        // view's reads answer the error an unopenable store
+                        // must, and nothing touches a real memory directory.
+                        DreamMemoryView::class => new DreamMemoryView(MemoryWriter::new(static fn (): ?MemoryStore => null, '')),
+                        // A bridge over a client with NO config file and therefore
+                        // no servers: every consumer of this corpus asks about
+                        // name/description/schema shape, which come from the
+                        // descriptor, and the one that calls `execute([])`
+                        // ({@see \SugarCraft\Code\Tests\Tools\BuiltInToolTest})
+                        // gets the error result an unreachable tool must produce
+                        // rather than a spawned process. The descriptor is
+                        // synthetic on purpose: a corpus probe must not depend on
+                        // any MCP server being installed.
+                        McpToolBridge::class => new McpToolBridge(
+                            new McpClient('/nonexistent/corpus-probe/.mcp.json'),
+                            new McpTool(
+                                name: 'ping',
+                                description: 'corpus probe descriptor',
+                                inputSchema: [],
+                                serverName: 'corpus',
+                            ),
+                        ),
+                        default => throw new \RuntimeException(sprintf(
+                            '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
+                            . 'covers it rather than silently skipping it.',
+                            $class,
+                            self::class,
+                        )),
+                    };
+                }
+
+                // WHAT THE FACTORY ARM ACTUALLY RETURNED, checked rather than
+                // assumed. `new $class()` is guaranteed to be a `$class`; a
+                // `::new()` is an ordinary static method, and reflection can see
+                // that it is public, static and zero-argument without seeing its
+                // return type. A factory that returns a builder, `null`, or `self`
+                // of a different class used to enter this list unchallenged and
+                // fail later inside whichever consumer first called a `Tool`
+                // method on it — a defect reported far from its cause.
+                if (!$built instanceof Tool) {
+                    throw new \RuntimeException(sprintf(
+                        '%s::new() returned %s rather than a Tool; %s builds the corpus through that factory, so '
+                        . 'it must return the tool itself.',
+                        $class,
+                        get_debug_type($built),
+                        self::class,
+                    ));
+                }
+
+                $tools[] = $built;
+            } catch (\Throwable $e) {
+                if ($e instanceof \RuntimeException && str_contains($e->getMessage(), self::class)) {
+                    throw $e;
+                }
+
+                throw new \RuntimeException(sprintf(
+                    '%s could not be constructed standalone (%s: %s); add it to %s::instances() with the '
+                    . 'wiring it needs, so every built-in-tool test covers it rather than aborting suite '
+                    . 'construction.',
+                    $class,
+                    $e::class,
+                    $e->getMessage(),
+                    self::class,
+                ), 0, $e);
+            }
+        }
+
+        return $tools;
+    }
+}

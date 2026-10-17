@@ -8,7 +8,7 @@ namespace SugarCraft\Diff;
  * Immutable knob-set for {@see Diff::compute()} and the unified writer.
  *
  * Every `with*()` returns a new instance; the receiver never changes. Defaults
- * reproduce the ported sugar-crush engine: three context lines, exact
+ * reproduce the ported candy-code engine: three context lines, exact
  * comparison, no `\ No newline at end of file` markers, and real path labels
  * (never `/dev/null`) on both header rows.
  *
@@ -18,7 +18,7 @@ namespace SugarCraft\Diff;
  * `patch`-tool-compatible. Hunk BODIES and grouping remain byte-for-byte.
  *
  * Mirrors the hardcoded behaviour of
- * sugar-crush/src/Tools/Concerns/BuildsUnifiedDiff.php
+ * candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php
  * (`CONTEXT_LINES = 3`, `MAX_LCS_CELLS = 250_000`, exact `===` line
  * comparison, marker-free output) widened from constants into options.
  */

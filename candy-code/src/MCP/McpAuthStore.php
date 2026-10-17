@@ -1,0 +1,117 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\MCP;
+
+/**
+ * Storage layer for MCP server OAuth credentials.
+ *
+ * Wraps {@see OAuthClientRegistration} to provide a simple key-value store
+ * interface for server credentials. The actual token lifecycle (registration,
+ * token fetch/refresh) is delegated to the OAuthClientRegistration instance;
+ * this class only manages the mapping of server URLs to their auth entries.
+ *
+ * Auth data is persisted at ~/.local/share/candy-code/mcp-auth.json.
+ *
+ * @see OAuthClientRegistration
+ */
+final class McpAuthStore
+{
+    public function __construct(
+        private readonly OAuthClientRegistration $oauth,
+    ) {
+    }
+
+    /**
+     * Default factory: an McpAuthStore over a default OAuthClientRegistration.
+     *
+     * Mirrors the house `::new()` law (AGENTS.md — factories mirror upstream;
+     * `::create()` is a refused second vocabulary, rv-php-4).
+     */
+    public static function new(): self
+    {
+        return new self(new OAuthClientRegistration());
+    }
+
+    /**
+     * @deprecated use {@see new()} — kept as a thin alias for the two
+     *             out-of-directory call sites (Cli/Subcommands.php,
+     *             MCP/McpClient.php is migrated); removal rides the next
+     *             minor without a BC promise.
+     */
+    public static function create(): self
+    {
+        return self::new();
+    }
+
+    /**
+     * List all registered servers and their auth status.
+     *
+     * @return array<string, ServerAuthStatus>
+     */
+    public function listServers(): array
+    {
+        $authData = $this->oauth->loadAuth();
+        $result = [];
+
+        foreach ($authData as $serverUrl => $entry) {
+            $result[$serverUrl] = new ServerAuthStatus(
+                serverUrl: $serverUrl,
+                hasCredentials: $entry->accessToken !== '',
+                isExpired: $entry->isExpired(),
+                expiresAt: $entry->expiresAt,
+                scopes: $entry->scopes,
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check whether credentials exist for a given server.
+     */
+    public function hasServer(string $serverUrl): bool
+    {
+        $authData = $this->oauth->loadAuth();
+        return isset($authData[$serverUrl]);
+    }
+
+    /**
+     * Get the auth status for a specific server.
+     */
+    public function getServerStatus(string $serverUrl): ?ServerAuthStatus
+    {
+        $authData = $this->oauth->loadAuth();
+        $entry = $authData[$serverUrl] ?? null;
+
+        if ($entry === null) {
+            return null;
+        }
+
+        return new ServerAuthStatus(
+            serverUrl: $serverUrl,
+            hasCredentials: $entry->accessToken !== '',
+            isExpired: $entry->isExpired(),
+            expiresAt: $entry->expiresAt,
+            scopes: $entry->scopes,
+        );
+    }
+
+    /**
+     * Remove stored credentials for a given server.
+     */
+    public function removeServer(string $serverUrl): void
+    {
+        $this->oauth->deleteAuth($serverUrl);
+    }
+
+    /**
+     * Get the underlying OAuthClientRegistration for token lifecycle operations.
+     * Use this to trigger registration flows, token fetches, and refreshes.
+     */
+    public function oauth(): OAuthClientRegistration
+    {
+        return $this->oauth;
+    }
+}

@@ -34,7 +34,7 @@ test.describe('a session', () => {
     await expect(ask).toContainText('notes.txt')
     await expect(page.getByTestId('status-bar')).toHaveAttribute('data-status', 'waiting_permission')
     await expect(page.locator('[data-testid="ask-badge"]')).toHaveText('1')
-    await expect(page).toHaveTitle('(1) SugarCrush')
+    await expect(page).toHaveTitle('(1) CandyCode')
 
     await ask.getByTestId('ask-once').click()
     await expect(ask).toHaveCount(0)
@@ -44,7 +44,7 @@ test.describe('a session', () => {
     await card.locator('button.head').click()
     await expect(card.getByTestId('diff')).toContainText('alpha')
     await expect(page.locator('[data-kind="assistant"]').last()).toContainText('Tool Write returned')
-    await expect(page).toHaveTitle('SugarCrush')
+    await expect(page).toHaveTitle('CandyCode')
   })
 
   test('a rejected call is shown refused', async ({ page, server }) => {

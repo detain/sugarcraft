@@ -41,7 +41,7 @@ describe('editability', () => {
 
   it('names the first reason a field is read-only, in the order a user wants to hear them', () => {
     expect(editability(row({ writableRemotely: false, remoteRefusal: 'runs a command: not writable remotely' }), undefined, USER).reason).toBe('runs a command: not writable remotely')
-    expect(editability(row(), { value: 7, source: 'env', locked: true, lockReason: 'set by SUGARCRUSH_X' }, USER).reason).toBe('set by SUGARCRUSH_X')
+    expect(editability(row(), { value: 7, source: 'env', locked: true, lockReason: 'set by CANDY_CODE_X' }, USER).reason).toBe('set by CANDY_CODE_X')
     expect(editability(row(), undefined, { ...PROJECT, writable: false, refusal: 'project settings are ignored until you trust this project' }).reason).toContain('trust this project')
     expect(editability(row({ projectSettable: false }), undefined, PROJECT).reason).toBe('user-tier only: a project may not set it')
     expect(editability(row({ projectSettable: false }), undefined, USER).editable).toBe(true)
@@ -101,7 +101,7 @@ describe('display', () => {
   it('says where a value comes from, naming the lock when there is one', () => {
     expect(provenance(undefined)).toBe('default')
     expect(provenance({ value: 1, source: 'user-config', sourceLabel: 'config.json', locked: false })).toBe('config.json')
-    expect(provenance({ value: 1, source: 'env', sourceLabel: 'environment', locked: true, lockReason: 'set by SUGARCRUSH_X' })).toBe('set by SUGARCRUSH_X')
+    expect(provenance({ value: 1, source: 'env', sourceLabel: 'environment', locked: true, lockReason: 'set by CANDY_CODE_X' })).toBe('set by CANDY_CODE_X')
   })
 
   it('compares values deeply', () => {

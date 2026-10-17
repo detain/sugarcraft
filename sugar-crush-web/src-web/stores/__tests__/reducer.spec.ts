@@ -50,8 +50,8 @@ describe('reducer: replay idempotency', () => {
 })
 
 describe('reducer: media refs (W6.3)', () => {
-  const ref = { artifactId: 'crush-20261010-120000-1', kind: 'image' as const, path: '/srv/.sugar-crush/media/s1/crush-20261010-120000-1.png', bytes: 0, mime: 'image/png' }
-  const second = { ...ref, artifactId: 'crush-20261010-120000-2', path: '/srv/.sugar-crush/media/s1/crush-20261010-120000-2.png' }
+  const ref = { artifactId: 'crush-20261010-120000-1', kind: 'image' as const, path: '/srv/.candy-code/media/s1/crush-20261010-120000-1.png', bytes: 0, mime: 'image/png' }
+  const second = { ...ref, artifactId: 'crush-20261010-120000-2', path: '/srv/.candy-code/media/s1/crush-20261010-120000-2.png' }
 
   it('lands the artifact refs and the truncation flag on the finished tool', () => {
     const state = run(createState('s1'), [

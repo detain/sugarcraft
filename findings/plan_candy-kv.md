@@ -166,7 +166,7 @@ it is a one-line zero-risk edit that rides the first remediation PR.
 ### 3.5 `Database`: `try/finally` around generator `stmt->close()` (`:191-199`); best-effort ROLLBACK inside `transaction()` catch (`:351-353`); `finalize()` the PRAGMA result; doc the deliberate unchecked `execute()===false` posture or add guards — `src/Database.php`.
 ### 3.6 README metadata: PHP badge 8.1→8.3, packagist badge `sugarcore/`→`sugarcraft/`, `docs/_data` body regen after 1.2/2.3 — `README.md:8-9`.
 ### 3.7 Strengthen vacuous test legs: unconditional ordering assertions in `testFuzzyFilterReturnsScoreDescendingOrder` (`StoreTest.php:478-482`); make `testJsonExportWithTtl` actually capture-and-assert the export string (needs a stdout seam or `ob_start()` on the echo path — prefer refactoring `ExportCommand::run` to accept a writable stream, which also kills PHPUnit-STDOUT noise from `testJsonExportRoundTrip`).
-### 3.8 `CliSmokeTest::runSkate`: bound the child (house `timeout -s KILL` idiom per `RunsWallClockBoundedChildTrait` precedent in sugar-crush; per-lib local copy acceptable for standalone libs) so a hung bin fails fast.
+### 3.8 `CliSmokeTest::runSkate`: bound the child (house `timeout -s KILL` idiom per `RunsWallClockBoundedChildTrait` precedent in candy-code; per-lib local copy acceptable for standalone libs) so a hung bin fails fast.
 
 ---
 

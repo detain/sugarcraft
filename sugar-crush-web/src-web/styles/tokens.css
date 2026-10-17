@@ -1,7 +1,7 @@
 /* Theme tokens. Dark is the default (TokyoNight, as the TUI demos use); the
    light set applies when the OS asks for it, or when the viewer picks a theme
    (`data-theme` on <html>, set by the settings store). Later themes mirror
-   sugar-crush's src/Theme.php. */
+   candy-code's src/Theme.php. */
 :root {
   color-scheme: dark;
   --bg: #1a1b26;

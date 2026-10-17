@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/detain/sugarcraft/master/media/icons/sugar-crush-web.png" alt="sugar-crush-web" width="160" align="right">
 
-# SugarCrushWeb
+# CandyCodeWeb
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -10,13 +10,13 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-The browser UI for [sugar-crush](https://github.com/sugarcraft/sugar-crush)'s
+The browser UI for [candy-code](https://github.com/sugarcraft/candy-code)'s
 WebSocket server mode: a multi-session dashboard with approvals, live tool
 output and settings, built with Vite + Vue 3 + TypeScript + Pinia +
 vue-router.
 
 It ships as a Composer package. The pre-built bundle is committed under
-`dist/`, and a one-class PHP shim tells `sugarcrush serve` where it is, so
+`dist/`, and a one-class PHP shim tells `candy-code serve` where it is, so
 PHP users get the UI from `composer require` alone and never need Node.
 
 > **Status: multi-session.** Everything a turn
@@ -32,7 +32,7 @@ PHP users get the UI from `composer require` alone and never need Node.
 composer require sugarcraft/sugar-crush-web
 ```
 
-`sugar-crush` lists this package under `suggest`, not `require`, so headless
+`candy-code` lists this package under `suggest`, not `require`, so headless
 installs stay lean.
 
 ## PHP API
@@ -50,10 +50,10 @@ broken install, never something the server should paper over.
 
 ## What it does
 
-`sugarcrush serve` prints a sign-in URL; open it. The page trades the one-time
+`candy-code serve` prints a sign-in URL; open it. The page trades the one-time
 code for an HttpOnly session cookie, then holds one WebSocket speaking
-`sugarcrush.v1` (sugar-crush's
-[`docs/SERVER.md`](https://github.com/sugarcraft/sugar-crush/blob/master/docs/SERVER.md)
+`candy-code.v1` (candy-code's
+[`docs/SERVER.md`](https://github.com/sugarcraft/candy-code/blob/master/docs/SERVER.md)
 documents the protocol and the UI).
 
 - **Sessions sidebar**: newest first, filter, status, and a badge for every
@@ -123,11 +123,11 @@ npm run lint          # eslint
 npm test              # vitest (happy-dom): protocol client, reducer, stores, components
 npm run build         # writes dist/
 npm run gen:protocol  # regenerate src-web/protocol/generated.ts
-npm run e2e           # Playwright (Chromium) against a real `sugarcrush serve`
+npm run e2e           # Playwright (Chromium) against a real `candy-code serve`
 ```
 
 For `npm run dev`, start the server with
-`sugarcrush serve --allowed-origin http://localhost:5173`, so it accepts the
+`candy-code serve --allowed-origin http://localhost:5173`, so it accepts the
 dev page's origin.
 
 ```text
@@ -158,14 +158,14 @@ file names, no timestamps), so a clean rebuild of unchanged source is
 byte-identical.
 
 **`src-web/protocol/generated.ts` is generated too**, by
-`scripts/gen-protocol.mjs` from sugar-crush's
-`docs/protocol/sugarcrush.v1.schema.json` (itself generated from the PHP
+`scripts/gen-protocol.mjs` from candy-code's
+`docs/protocol/candy-code.v1.schema.json` (itself generated from the PHP
 protocol classes). `web.yml` regenerates it and fails on a diff, so a server
 protocol change the client was not updated for is caught in CI.
 
 ### End-to-end tests
 
-`e2e/fixtures/server.ts` starts `php ../sugar-crush/bin/sugarcrush serve
+`e2e/fixtures/server.ts` starts `php ../candy-code/bin/candy-code serve
 --port 0` over a throwaway git repository and HOME, on the offline echo
 provider (no network, no keys; it needs `ext-pcntl`, `ext-posix`, `ext-ffi`).
 A prompt of `::tool <Name> <json-object>` lines makes the echo provider call
@@ -175,7 +175,7 @@ code, send and see the echo, markup injection refused, a tool call with its
 question and diff, a rejected call, a queued prompt, Stop, `/clear` through
 `command.exec`, two tabs on one session (first answer wins), a tab opened
 mid-turn, a dropped socket resuming from its cursor, and a server restart.
-`PHP_BINARY` and `SUGARCRUSH_BIN` override where PHP and the server are.
+`PHP_BINARY` and `CANDY_CODE_BIN` override where PHP and the server are.
 
 ## Tests
 

@@ -12,7 +12,7 @@ precedence (ctrl+c still first) and paints over the whole frame (btop overlay la
 inactive_fg, plan §3 Overlays.php / sugar-overlay precedent). Keep panels decoupled: panels REQUEST overlays via a Msg or
 PanelResult field (e.g. OpenMenuMsg / Overlay value object), never construct App state.
 
-Hard rules: NEVER git stash/checkout/reset/clean/commit/add (supervisor commits). Don't touch sugar-crush or
+Hard rules: NEVER git stash/checkout/reset/clean/commit/add (supervisor commits). Don't touch candy-code or
 candy-core. Only candy-top/ (and, for P-F2, sugar-bits only if a genuine lib gap — report it). Other agents may edit <!-- @rename-keep historical provenance -->
 candy-top/themes/ and theme tests concurrently (P-G mellow theme) — don't touch those. User-visible strings via
 Lang::t in your own lang/en.php block `// ---- <name> (phase P-Fx) ----` before the closing `];`. Append your own

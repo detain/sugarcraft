@@ -38,13 +38,13 @@
 - sugar-mcp-client lib: 226T/899A OK (baseline 226/899 exact).
 - crush --filter Mcp: 1058T/5271A/1S(canary) exact; --filter Lsp: 287T/1206A exact;
   --filter DocFigureProseDrift|DescriptorInheritance|ProcessReaper: 111T/8436A exact.
-- tools/tests: 426T/1484A (via sugar-crush/vendor/bin/phpunit — fresh worktree lacks
+- tools/tests: 426T/1484A (via candy-code/vendor/bin/phpunit — fresh worktree lacks
   candy-core/vendor; equivalent binary, pinned figures hold). <!-- @rename-keep historical provenance -->
 - check-path-repos --no-lib-path-repos rc=0; check-child-lifetimes 60 libs/28 sites/
   8 findings/8 accounted/0 problems (renamed StdioMcpServer key rides tools/ rewrite);
   gen-docs --check + gen-ansi --check rc=0.
 - R5 wiring: root composer update sugarcraft/sugar-mcp-client --no-install (lock M,
-  committed R7); refresh-deps linked sugar-mcp-client,sugar-crush; stale dangling
+  committed R7); refresh-deps linked sugar-mcp-client,candy-code; stale dangling
   sugar-crush/vendor/sugarcraft/sugar-mcp symlink removed (escaping=1 -> 23/23 0). @rename-keep
 
 ## R7

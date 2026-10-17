@@ -14,7 +14,7 @@ use SugarCraft\McpClient\McpMessage;
  * E479 recorded that `toArray()` "NOW emits a key that is not JSON-RPC", the
  * `resultSet` sentinel round 55 added, and asked whether the method is a wire
  * serialiser or a debug view. The premise of the "now" is FALSE, and the tree
- * says so rather than an argument: `git log -L` on the method (sugar-crush's
+ * says so rather than an argument: `git log -L` on the method (candy-code's
  * original of this class) shows `isNotification` — equally not a JSON-RPC key
  * — present in the very commit that created the file (`790e9464f`), long
  * before the sentinel existed (`f2f9f6985`). And that is not the only way the
@@ -39,7 +39,7 @@ use SugarCraft\McpClient\McpMessage;
  * — a serialiser that dropped an absent `result` would take the tool list with
  * it. That is pinned here as well.
  *
- * Moved from sugar-crush/tests with the lane-A2 fold — the canonical tests
+ * Moved from candy-code/tests with the lane-A2 fold — the canonical tests
  * live with the canonical class.
  */
 final class McpMessageWireShapeTest extends TestCase
@@ -250,7 +250,7 @@ final class McpMessageWireShapeTest extends TestCase
      *
      * ⚠️ THIS ROW EXISTS BECAUSE A MUTATION SURVIVED. Deleting
      * `'resultSet' => $this->resultSet` from `toArray()` left every McpMessage,
-     * MCP and ClaudeCodeMcpClient suite in the sugar-crush tree green — 394
+     * MCP and ClaudeCodeMcpClient suite in the candy-code tree green — 394
      * tests, 1276 assertions, rc 0. Nothing pinned it anywhere. The row above
      * deliberately does not: it asserts the extra-key set contains
      * `isNotification`, because `isNotification` is the EVIDENCE that this

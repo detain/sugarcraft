@@ -1,4 +1,4 @@
-# 07 — Zed's AI agent panel vs sugar-crush
+# 07 — Zed's AI agent panel vs candy-code
 
 Feeds steps: 0.3, 0.4-a, 0.4-b, 0.8, 0.8b, 0.11, 0.12, 0.14-c, 0.16, 1.A-1, 1.A-2, 1.B-2, 1.C-1, 1.C-2, 1.C-3, 1.C-5, DEF-MODE, 2.1, 2.4-1, 2.4-2, 2.5, 2.7-1a, 2.7-3, 2.8, 2.9, 3.A-1, 3.A-2, 3.F, 3.G, 3.I-1, 3.I-2, 3.I-3, 4.1-1, 4.2, 4.7-1, 4.7-2, 4.7-3, 4.9, 5.6, 5.7-2, 5.8, 5.9-1, 5.9-2, 5.10, 5.12, 5.13b, 5.14a, 5.14c, 5.14j, N-P4b, P-B2, P-E2
 
@@ -27,7 +27,7 @@ Feeds steps: 0.3, 0.4-a, 0.4-b, 0.8, 0.8b, 0.11, 0.12, 0.14-c, 0.16, 1.A-1, 1.A-
 - **Refusal fallback.** On `StopReason::Refusal`, if the model declares `refusal_fallback_model_id()`, the turn switches to that model and continues, with a retry banner ("Safety filter triggered") (`:3027-3080`).
 - UI: a retry banner shows attempt N/M, the countdown and the last error.
 
-**For sugar-crush (R8 → 2.7-3).** In `Runtime::runStreaming()`, on a transient failure after tokens were emitted: keep the partial `AssistantMessage`, append `UserMessage("Continue where you left off")`, retry up to `TransientFailure::MAX_ATTEMPTS`. Also honour provider `retry-after` and add jitter.
+**For candy-code (R8 → 2.7-3).** In `Runtime::runStreaming()`, on a transient failure after tokens were emitted: keep the partial `AssistantMessage`, append `UserMessage("Continue where you left off")`, retry up to `TransientFailure::MAX_ATTEMPTS`. Also honour provider `retry-after` and add jitter.
 
 ### Cancellation (→ 1.B-2, 1.C-2)
 
@@ -39,7 +39,7 @@ Feeds steps: 0.3, 0.4-a, 0.4-b, 0.8, 0.8b, 0.11, 0.12, 0.14-c, 0.16, 1.A-1, 1.A-
 
 Each queue entry has a **Steer** toggle (`agent_ui/src/conversation_view/message_queue.rs:15,73-80`). If the *front* entry wants to steer, `set_end_turn_at_next_boundary(true)` is pushed into the native thread (`thread_view.rs:2528-2537`). The loop exits right after the current tool results are recorded (`thread.rs:3140-3146`), and the queued message is sent. The model sees its tool results plus the new instruction — a clean, protocol-valid interruption point. The queue UI also has an editable entry and "send now".
 
-**For sugar-crush (R7).** Steer flag on queued prompts bound to a key while busy; the parent writes a `steer` frame to the child socket; `runTurn()` polls non-blockingly after each step's tool results and ends the turn (or injects) at that boundary; tool results are kept, so the model sees them plus the new instruction.
+**For candy-code (R7).** Steer flag on queued prompts bound to a key while busy; the parent writes a `steer` frame to the child socket; `runTurn()` polls non-blockingly after each step's tool results and ends the turn (or injects) at that boundary; tool results are kept, so the model sees them plus the new instruction.
 
 ### Rate-limit permit (pitfall for 0.16 / RELAY)
 
@@ -70,7 +70,7 @@ Each queue entry has a **Steer** toggle (`agent_ui/src/conversation_view/message
 
 **Worktrees (→ 4.9).** `create_thread {use_new_worktree: true}` creates a linked git worktree (detached HEAD, optional `base_ref` / `worktree_name`); the worktree's git state is persisted on archive (`agent_ui/src/thread_worktree_archive.rs`).
 
-**For sugar-crush (R13, `TaskTool`):**
+**For candy-code (R13, `TaskTool`):**
 1. Return a `session_id` on **success** too, persisted via `SuspendedDelegations`, so the parent can send short follow-ups (→ 4.7-1).
 2. On failure, return the last 3 messages × 4096 characters of partial output (→ 4.7-1).
 3. Stop a sub-agent whose own usage crosses about 80–90% of the window, with the "wrap up or hand off" message (→ 4.7-2).
@@ -137,7 +137,7 @@ Write it so the next agent can act without re-asking the user. Be concise and we
 - Everything else (assistant text, tool calls, tool results) is dropped.
 - `CompactionInfo::ProviderNative { provider, items }` holds opaque provider-side compaction blobs (`:213-232`).
 
-**For sugar-crush (R3 → 2.1, 2.4-1).** In `EngineBackend::runTurn()`, before each `Runtime::run()`, compare the previous step's provider `Usage` with the context window. Over threshold: summarise with a handoff-style prompt (a better fit mid-turn than the per-exchange records, since a mid-turn compaction has no exchange boundaries), splice into the typed `$messages`, emit a `compacting` frame for Chat, and reuse `ContextCompactor` for the retained-user-messages budget.
+**For candy-code (R3 → 2.1, 2.4-1).** In `EngineBackend::runTurn()`, before each `Runtime::run()`, compare the previous step's provider `Usage` with the context window. Over threshold: summarise with a handoff-style prompt (a better fit mid-turn than the per-exchange records, since a mid-turn compaction has no exchange boundaries), splice into the typed `$messages`, emit a `compacting` frame for Chat, and reuse `ContextCompactor` for the retained-user-messages budget.
 
 ### "New thread from summary" (→ 5.14c)
 
@@ -172,7 +172,7 @@ Format it in Markdown with headings and bullet points.
 - No git status, file tree, open files, memory or diagnostics are injected automatically; volatile state arrives only through tool results or user @-mentions. There are no periodic system reminders.
 - The last request message gets `cache: true` (`thread.rs:4434-4436`).
 
-**For sugar-crush.** Keep the system message identical across steps and turns; move per-step git state out of the system block into a trailing user-side note (or render it only on the first step of a turn), so providers that cache by prefix keep every following message cached. sugar-crush's richer `<env>` / repo map is worth keeping — only its placement changes.
+**For candy-code.** Keep the system message identical across steps and turns; move per-step git state out of the system block into a trailing user-side note (or render it only on the first step of a turn), so providers that cache by prefix keep every following message cached. candy-code's richer `<env>` / repo map is worth keeping — only its placement changes.
 
 ---
 
@@ -207,7 +207,7 @@ pub const RULES_FILE_NAMES: &[&str] = &[
 
 Personal file: `~/.config/zed/AGENTS.md`, loaded into a file-watched global; read errors surface in the UI (`crates/agent_settings/src/user_agents_md.rs`).
 
-**For sugar-crush (R19).** In the instruction loader also probe `.rules`, `.cursorrules`, `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`, `AGENT.md`, `GEMINI.md` — at least when neither CLAUDE.md nor AGENTS.md exists. Load `~/.sugar-crush/AGENTS.md` as a personal tier rendered *before* project instructions with the precedence sentence above.
+**For candy-code (R19).** In the instruction loader also probe `.rules`, `.cursorrules`, `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`, `AGENT.md`, `GEMINI.md` — at least when neither CLAUDE.md nor AGENTS.md exists. Load `~/.candy-code/AGENTS.md` as a personal tier rendered *before* project instructions with the precedence sentence above.
 
 ---
 
@@ -233,7 +233,7 @@ The following items were attached by the user. They are up-to-date and don't nee
 - Reuse the "up-to-date and don't need to be re-read" promise.
 - **Pitfall:** the rules section opens `<rules>` but closes `</user_rules>` (`:542-547`). Keep tags matched.
 
-**For sugar-crush (R11).** `@diff` (`git diff`), `@session:<id>` (title plus an LLM summary via the title/summary backend), `@url`; resolve at submit time beside the existing `@file` resolution.
+**For candy-code (R11).** `@diff` (`git diff`), `@session:<id>` (title plus an LLM summary via the title/summary backend), `@url`; resolve at submit time beside the existing `@file` resolution.
 
 ---
 
@@ -246,7 +246,7 @@ The following items were attached by the user. They are up-to-date and don't nee
 - The `edit_file` description tells the model to strip `read_file`'s line-number prefix.
 - Refuses paths matching `private_files` (default `**/.env*, **/*.pem, **/*.key, **/*.cert, **/*.crt, **/secrets.yml`, `default.json:498`).
 
-**For sugar-crush (R6).** Range parameters and numbering in `Read.php`; for the outline, wire the dormant LSP client (`documentSymbol`) and fall back to a regex outline (class/function/method signatures) when no server is configured.
+**For candy-code (R6).** Range parameters and numbering in `Read.php`; for the outline, wire the dormant LSP client (`documentSymbol`) and fall back to a regex outline (class/function/method signatures) when no server is configured.
 
 ### `edit_file` pipeline (→ 0.11, 3.I-1, 3.I-2, 3.I-3)
 
@@ -266,11 +266,11 @@ The following items were attached by the user. They are up-to-date and don't nee
 - **Result:** on success the model gets only `"Edited {path} successfully"` (or "No edits were made."); the diff goes to the UI. **On partial failure** (edit #3 of 5 failed) the model gets the error **plus the diff of what was applied**: `"{error}\nEdited {path}:\n\n```diff\n…```"` (`Display for EditSessionOutput`, `:95-128`), so it knows the file state without re-reading.
 - Edit evals: `crates/agent/src/tools/evals/edit_file.rs` runs real-model edits on fixture repos judged by an LLM (`templates/diff_judge.hbs`) — a model for evaluating the matcher chain.
 
-**For sugar-crush (R5).** `Edit.php`: accept `edits: [{old_string,new_string}]` while keeping the single form; apply sequentially to an in-memory copy and write once. A `FuzzyLocator` concern for the per-line DP. Record a read mtime in the session state that rides `CarriesSessionState` and append the "changed on disk" sentence to no-match errors. Return the applied diff on partial failure (`BuildsUnifiedDiff` exists).
+**For candy-code (R5).** `Edit.php`: accept `edits: [{old_string,new_string}]` while keeping the single form; apply sequentially to an in-memory copy and write once. A `FuzzyLocator` concern for the per-line DP. Record a read mtime in the session state that rides `CarriesSessionState` and append the "changed on disk" sentence to no-match errors. Return the applied diff on partial failure (`BuildsUnifiedDiff` exists).
 
 ### Terminal (→ 0.4-a)
 
-`terminal_tool.rs`: one-liner, `cd` param, `timeout_ms` (kill on timeout), `head_lines`, `tail_lines`, 16 KiB cap, fresh shell per call. **For sugar-crush (R9 → 0.4-a, 0.4-b):** Bash `timeout` + line selection (kill the process group), a heartbeat while sequential tools run so the 120 s watchdog measures silence, and a model-visible cap of ~16–32 KiB when head/tail are not given.
+`terminal_tool.rs`: one-liner, `cd` param, `timeout_ms` (kill on timeout), `head_lines`, `tail_lines`, 16 KiB cap, fresh shell per call. **For candy-code (R9 → 0.4-a, 0.4-b):** Bash `timeout` + line selection (kill the process group), a heartbeat while sequential tools run so the 120 s watchdog measures silence, and a model-visible cap of ~16–32 KiB when head/tail are not given.
 
 ---
 
@@ -295,7 +295,7 @@ with_temp_index (copy of .git/index):
 - `restore_checkpoint(message_id)` = cancel → rewind (truncate the thread at that message, kill its terminals, reject all agent edits) → git restore (`:6111-6143`). Transcript-only rewind exists too (`:6146-6189`).
 - **Pitfall:** the checkpoint commits are not referenced by any ref, so `git gc` can prune them after `gc.pruneExpire` (inference).
 
-**For sugar-crush (R4).** Run the same sequence with `GIT_INDEX_FILE=<tmp>` at the per-turn checkpoint, store the sha in the checkpoint row, **pin** it with `git update-ref refs/sugar-crush/checkpoints/<session>/<n> <sha>`, and delete the ref when the store prunes checkpoints (max 100 per session). `/rewind [n]` offers "transcript + files", and only offers the file restore if `git diff --quiet <sha>` shows a change.
+**For candy-code (R4).** Run the same sequence with `GIT_INDEX_FILE=<tmp>` at the per-turn checkpoint, store the sha in the checkpoint row, **pin** it with `git update-ref refs/candy-code/checkpoints/<session>/<n> <sha>`, and delete the ref when the store prunes checkpoints (max 100 per session). `/rewind [n]` offers "transcript + files", and only offers the file restore if `git diff --quiet <sha>` shows a change.
 
 ---
 
@@ -323,13 +323,13 @@ with_temp_index (copy of .git/index):
 - A pending prompt **auto-resolves if settings change** to a definitive allow or deny — approving "always" on one of several parallel prompts resolves the rest (`run_authorization_loop`, `:6576-6690`).
 - Mechanism: the tool calls `event_stream.authorize(...)`, which sends `ToolCallAuthorization{options, response: oneshot}` to the UI and awaits it (`thread.rs:5876-5896`).
 
-**For sugar-crush (R1 → 1.C-1, 1.C-2, DEF-MODE).** Child approver closure writes a permission frame and blocks on the reply; the parent routes it to the existing Veil y/n/a modal; **pause the 120 s watchdog** while a request is outstanding; add "always for `<cmd> <subcmd>`" by appending `{pattern, action: allow}` to user-tier `permissionRules`; once green, change the built-in default mode.
+**For candy-code (R1 → 1.C-1, 1.C-2, DEF-MODE).** Child approver closure writes a permission frame and blocks on the reply; the parent routes it to the existing Veil y/n/a modal; **pause the 120 s watchdog** while a request is outstanding; add "always for `<cmd> <subcmd>`" by appending `{pattern, action: allow}` to user-tier `permissionRules`; once green, change the built-in default mode.
 
 ### Always-prompt paths (→ 0.8, 0.8b)
 
 `authorize_always_prompt` covers symlink escapes out of the project and edits to sensitive settings: `.zed/` (local settings, which could grant permissions) and `.agents/skills/` (`tools/tool_permissions.rs:287-340`). These prompt even when `always_allow` would match.
 
-**For sugar-crush (R20).** Still writable: `~/.sugar-crush/settings.json`, `<root>/.sugar-crush/settings{,.local}.json` (the user tier holds `permissionMode`, `permissionRules` and all `trustedProject*` keys), `.mcp.json`, `.sugar-crush/{skills,commands,rules}/`. The model could self-grant trust for an MCP server or command it also writes. Extend the protect patterns now; turn them into always-Ask once approvals exist.
+**For candy-code (R20).** Still writable: `~/.candy-code/settings.json`, `<root>/.candy-code/settings{,.local}.json` (the user tier holds `permissionMode`, `permissionRules` and all `trustedProject*` keys), `.mcp.json`, `.candy-code/{skills,commands,rules}/`. The model could self-grant trust for an MCP server or command it also writes. Extend the protect patterns now; turn them into always-Ask once approvals exist.
 
 ### OS sandbox (→ 5.12)
 
@@ -350,7 +350,7 @@ with_temp_index (copy of .git/index):
 - `.git` metadata is never writable inside the sandbox; git writes need `unsandboxed: true` "with a reason".
 - The system prompt describes the sandbox exactly (`system_prompt.hbs:156-212`).
 
-**For sugar-crush (R18).** When `bwrap` exists and `sandbox: true`, prefix the command with `--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --bind <root> <root> --ro-bind <root>/.git <root>/.git --unshare-all --die-with-parent [--share-net]`; `unsandboxed: true` as an Ask-gated escape; describe it in the prompt; the dormant `BashEscapeDenyHook` is the non-bwrap fallback.
+**For candy-code (R18).** When `bwrap` exists and `sandbox: true`, prefix the command with `--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --bind <root> <root> --ro-bind <root>/.git <root>/.git --unshare-all --die-with-parent [--share-net]`; `unsandboxed: true` as an Ask-gated escape; describe it in the prompt; the dormant `BashEscapeDenyHook` is the non-bwrap fallback.
 
 ---
 
@@ -382,7 +382,7 @@ Crate `agent-client-protocol = "=2.2.0"` (features `unstable`, `unstable_protoco
 
 When an external agent writes through `fs/write_text_file`, Zed diffs against the buffer and records it in the same action log, so review and checkpoints work for every agent.
 
-**For sugar-crush (R15, `sugarcrush acp`).**
+**For candy-code (R15, `candy-code acp`).**
 - New subcommand running a synchronous stdio JSON-RPC loop; reuse `SugarCraft\McpClient\McpMessage` (`request/notification/success/error/parse/toJson`) for framing.
 - `initialize`: advertise `loadSession: true`, `promptCapabilities{embeddedContext:true}`.
 - `session/new` / `load` / `list` → `EnhancedSessionStore` (`loadTranscript`, `list`).
@@ -397,4 +397,4 @@ When an external agent writes through `fs/write_text_file`, Zed diffs against th
 
 - **`/context` contents (→ 5.6).** Zed's token tooltip shows used/max, an input/output split with separate maxima, cost, and **which rules files and whether the personal AGENTS.md are loaded**. R14: make `/context` list loaded instruction files, rules, memory entry count and skill count.
 - **Notifications (→ 5.14a).** `notify_when_agent_waiting: "primary_screen"` and `play_sound_when_agent_done`. For sugar-crush: BEL plus OSC 9 / OSC 777 on turn end or approval wait when the terminal is unfocused (focus reporting is available via candy-core). <!-- @rename-keep historical provenance -->
-- **`ask_user` (→ 5.7-2).** Question plus ≥ 2 options and/or free text, rendered as a form via ACP *elicitation*; off in all default profiles. For sugar-crush: over the 1.C approval channel.
+- **`ask_user` (→ 5.7-2).** Question plus ≥ 2 options and/or free text, rendered as a form via ACP *elicitation*; off in all default profiles. For candy-code: over the 1.C approval channel.

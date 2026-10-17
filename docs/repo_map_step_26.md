@@ -72,7 +72,7 @@ Reference: `docs/repo_map_update.md` §59 (buffer diffing called critical for 6+
   - DiffEncoder emits ECH / REP / ICH / DCH / CUP / SGR transitions.
   - DiffOptimiser collapses adjacent ops to keep the byte stream tight.
   - Buffer::applyDiff round-trip-tested.
-  - Step-27 wires this into 6 renderers (sugar-panels, sugar-dashboard, sugar-crush, sugar-overlay, sugar-flexbox, sugar-treelist).
+  - Step-27 wires this into 6 renderers (sugar-panels, sugar-dashboard, candy-code, sugar-overlay, sugar-flexbox, sugar-treelist).
 
   ## Test plan
   - [x] vendor/bin/phpunit in sugar-cellbuffer (≥95% coverage, round-trip property tests)

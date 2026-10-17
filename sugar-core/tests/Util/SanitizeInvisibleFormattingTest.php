@@ -97,7 +97,7 @@ final class SanitizeInvisibleFormattingTest extends TestCase
     }
 
     /**
-     * Callers (sugar-crush's input box) sanitise a draft and its caret prefix
+     * Callers (candy-code's input box) sanitise a draft and its caret prefix
      * in two passes and index one with the other's length, so the result of a
      * prefix must be a prefix of the result.
      */

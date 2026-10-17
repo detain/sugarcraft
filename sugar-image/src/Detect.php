@@ -250,7 +250,7 @@ final class Detect
      *
      * NULL IS A REAL ANSWER, NOT A DEFENSIVE ONE (E318/E302). A closed
      * descriptor 0 is a legitimate state for a process to be in — a daemon, a
-     * git hook, `sugarcrush 0<&-`, or a test harness that replaced its own fd 0
+     * git hook, `candy-code 0<&-`, or a test harness that replaced its own fd 0
      * — and `defined('STDIN')` stays true after `fclose(STDIN)` while
      * `is_resource()` goes false. Handing that on unguarded is what this used
      * to do, and the failure is NOT the suppressed warning it looks like:

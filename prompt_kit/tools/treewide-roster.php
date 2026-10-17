@@ -14,7 +14,7 @@ declare(strict_types=1);
  *      that walk at the package root (`dirname(__DIR__)`, `inPackageRoot()`,
  *      `packageRoot()`), rather than at a temp dir the test just made.
  */
-$root = '/home/sites/prompt-step-P3.CLOSE-r1/sugar-crush';
+$root = '/home/sites/prompt-step-P3.CLOSE-r1/candy-code';
 $walkers = ['RecursiveDirectoryIterator', 'DirectoryIterator', 'FilesystemIterator', 'glob', 'scandir', 'readdir'];
 $anchorRe = '/dirname\(__DIR__|inPackageRoot|packageRoot|__DIR__ \. \'\/\.\./';
 

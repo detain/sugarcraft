@@ -8,11 +8,11 @@ namespace SugarCraft\Mouse;
  * The press → drag → release state machine of a mouse text-selection
  * gesture, clamped to a selectable region of the painted frame.
  *
- * Ported upstream from sugar-crush's `Tui\TextSelection` (scout item S12).
+ * Ported upstream from candy-code's `Tui\TextSelection` (scout item S12).
  * With SGR mouse tracking on, the terminal hands every press/drag/release to
  * the application instead of running its own copy-on-select, so an app that
  * wants the gesture every terminal user expects has to own it — the way tmux
- * copy-mode, crush and opencode do. sugar-crush grew this as an immutable
+ * copy-mode, crush and opencode do. candy-code grew this as an immutable
  * value object rebuilt per event (its `Tui\TextSelection` is now an immutable
  * adapter that clones this machine per step); upstreamed, it is one small mutable
  * machine — the same deliberate exception to the fluent convention
@@ -99,7 +99,7 @@ final class Selection
      * Anchor a gesture at a pressed cell.
      *
      * A press outside the region selects nothing — and, plain, also drops a
-     * previous selection, the same collapse sugar-crush performs when a
+     * previous selection, the same collapse candy-code performs when a
      * press lands off the transcript while a copied highlight is up. With
      * $shiftExtend the previous selection survives instead: a shift-press on
      * chrome is declined, not acted on.
@@ -211,7 +211,7 @@ final class Selection
      * Geometric: a drag that returns to its own anchor cell un-dragges, so a
      * there-and-back sweep releases as a click and copies nothing. The
      * downstream original latched the flag past a drift tolerance instead;
-     * an app that wants latching tracks its own max-drift (sugar-crush's
+     * an app that wants latching tracks its own max-drift (candy-code's
      * `Tui\TextSelection` adapter latches its own flag past its click
      * tolerance on top of this machine) — the model
      * tells the truth about where the pointer is right now.

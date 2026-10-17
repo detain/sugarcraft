@@ -26,8 +26,8 @@ Started: 2026-09-01. git status --porcelain EMPTY at start (verified).
 - The failure is NEITHER of the two known tty-viewport artifacts (CompactModelSummary,
   MouseModalGuard); it is `ClaudeCodeMcpClientShutdownTest::
   testTheFloodingServersStderrIsRetainedUpToOneBufferAndNoMore`,
-  sugar-crush/tests/ClaudeCodeMcpClientShutdownTest.php:262 — `stderrTail()` was `''`.
-- OBSERVED: `--filter` on that one test, 3 consecutive isolated runs, cwd sugar-crush, </dev/null:
+  candy-code/tests/ClaudeCodeMcpClientShutdownTest.php:262 — `stderrTail()` was `''`.
+- OBSERVED: `--filter` on that one test, 3 consecutive isolated runs, cwd candy-code, </dev/null:
   all `OK (1 test, 5 assertions)`. So: red 1/1 in-suite, green 3/3 isolated.
 - Mechanism (OBSERVED in source): fixture NOISY_STDERR_SERVER writes the pid file (the ONLY
   readiness handshake, :381) BEFORE `fwrite(STDERR, str_repeat('E',200000))` (:382). The test then
@@ -56,7 +56,7 @@ imply any stderr byte exists; the single-shot readMessages() drain has no stderr
 Label upgrade: mechanism MEASURED (was OBSERVED).
 
 ## F2 — THE THIRTEENTH DEFEAT of the write-primitive scanner: `new class(...) extends \SplFileObject`
-- Tree: 470e43569. File: sugar-crush/tests/RuntimeTest.php — scanner `writePrimitivesCalledIn()`
+- Tree: 470e43569. File: candy-code/tests/RuntimeTest.php — scanner `writePrimitivesCalledIn()`
   (:3588); roster `WRITE_CONSTRUCTIONS = ['splfileobject','spltempfileobject']` (:3363); the miss
   path: `extends SplFileObject` token has `$next === '{'` so `:3723` `if ($next !== '(') continue;`
   drops it, and there is no T_NEW before the name (`:3719` afterNew=false). The `new` itself carries
@@ -106,7 +106,7 @@ Label upgrade: mechanism MEASURED (was OBSERVED).
   and a downstream agent re-deriving "5,099" at HEAD would chase a phantom regression.
 
 ## F4 — THREE UNDECLARED SILENT ESCAPES of the roster walker (the derivation is the thing to attack)
-- Tree: 470e43569. Instrument: sugar-crush/tests/TreeWideGuardRosterTest.php, shipped
+- Tree: 470e43569. Instrument: candy-code/tests/TreeWideGuardRosterTest.php, shipped
   `classifyWalkSites()` :2680; name test :2690-2696 matches the WRITTEN token text (lowercased,
   ltrim `\`) against WALKER_CLASSES :658 / WALKER_FUNCTIONS :661. No alias map.
 - MEASURED through the SHIPPED method via ReflectionMethod, known-answer control first (rule 13),
@@ -132,7 +132,7 @@ Label upgrade: mechanism MEASURED (was OBSERVED).
   never reached the other classifier in the same tests/ tree. The GlobIterator row's own
   argument (:1043-1049) is the template: "a walk this alphabet cannot see produces no site at all -
   so the file is skipped in SILENCE rather than landing in the residue" — exactly the mechanism here.
-- Population (OBSERVED): no live use of any of the three shapes under sugar-crush/tests/ today
+- Population (OBSERVED): no live use of any of the three shapes under candy-code/tests/ today
   (grep for getChildren( / use function glob / use RecursiveDirectoryIterator as → nothing outside
   the roster test), so this is the same 'MEASURED LATENT, removes a future false' grade the T_ENUM
   row carries. It is a defect of the INSTRUMENT'S MAP, not of today's verdict.
@@ -156,7 +156,7 @@ Label upgrade: mechanism MEASURED (was OBSERVED).
   App.php:118-127 records that `--root` used to reach ONLY the tools and was fixed to reach the
   prompt — that fix is the Runtime half.
 - CONSEQUENCE (INFERRED from the above; no live measurement of a mislabelled run): under
-  `bin/sugarcrush --root <dir>` with the process started elsewhere, the live `/workflow run` path
+  `bin/candy-code --root <dir>` with the process started elsewhere, the live `/workflow run` path
   (Chat.php:7725 → WorkflowEngine, established live by P3.S6's hop-walk) tells every sub-agent a
   "Working directory:" and git block for a directory whose files its jailed tools are NOT confined
   to — precisely the orienting-line mismatch Runtime's capture site was created to prevent. With
@@ -173,7 +173,7 @@ Label upgrade: mechanism MEASURED (was OBSERVED).
 - Severity: MEDIUM.
 
 ## F6 — The P3.S2 HARD-CONSTRAINT absence test is STILL vacuous on a dead render() (RR4-F2 unfixed)
-- Tree: 470e43569. File: sugar-crush/tests/Context/EnvironmentBlockTest.php:150-156.
+- Tree: 470e43569. File: candy-code/tests/Context/EnvironmentBlockTest.php:150-156.
 - MEASURED (mutation M1, sandbox, FULLY RESTORED — `git status --porcelain` empty after restore and
   file re-verified `OK (43 tests, 170 assertions)`): inserting `return '';` as the first statement of
   `EnvironmentBlock::render()` (:673) leaves
@@ -194,7 +194,7 @@ Label upgrade: mechanism MEASURED (was OBSERVED).
   exists to police).
 
 ### F4 addendum — same family reaches channel A's helper matcher (INFERRED, mechanism read at :2693-2695)
-`use SugarCraft\Crush\Tests\Support\TestFileWalkTrait as TF;` + `use TF;` would miss
+`use SugarCraft\Code\Tests\Support\TestFileWalkTrait as TF;` + `use TF;` would miss
 walkingHelperUsedIn()'s name matching exactly as the class-alias walk missed classifyWalkSites:
 the helper alphabet is matched on WRITTEN last-segment text. Not separately re-driven (the skip of
 the walker is inside the helper body — a consumer-channel analogue of ESCAPE 2); mechanism shares
@@ -211,7 +211,7 @@ red; the headline figure is reproducible but NOT reliably so at this tree positi
 ## F7 — Identity: 8 of 200 in-window commits carry detain@gmail.com (P3.audit-fix-2 lane)
 - MEASURED: `git log --format='%H %ae' 924c71a0d..470e43569 | awk uniq-c` → 192 detain@interserver.net,
   8 detain@gmail.com; all 8 subjects `prompt: P3.audit-fix-2 — …` (first enumerated: 067a18e0a), and
-  they carry the sugar-crush/tests changes of that lane (RuntimeTest.php, TreeWideGuardRosterTest.php).
+  they carry the candy-code/tests changes of that lane (RuntimeTest.php, TreeWideGuardRosterTest.php).
 - The plan's non-negotiable identity is `Joe Huss <detain@interserver.net>` (name matches, address
   does not). Not fixable without rewriting merged history — prohibited — so reported for lane hygiene:
   the audit-fix-2 worktree's git config identity differed from every other lane's.

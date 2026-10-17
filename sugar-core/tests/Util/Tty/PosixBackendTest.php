@@ -417,7 +417,7 @@ final class PosixBackendTest extends TestCase
      * PARENT's pre-raw-mode termios) onto the REAL, shared terminal - i.e.
      * a forked child that does nothing but exit() would silently knock the
      * live parent process's terminal out of raw mode. Any consumer of this
-     * class that ever forks while raw mode is active (sugar-crush's async
+     * class that ever forks while raw mode is active (candy-code's async
      * backend completion and tool-call execution both do) is exposed.
      * Fixed by recording the PID that called enableRawMode() and skipping
      * the real restore syscall when restore()/the destructor fires from a

@@ -1,0 +1,274 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Config\Settings\Definitions;
+
+use SugarCraft\Code\Backend\QueueMode;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Config\Settings\ApplyMode;
+use SugarCraft\Code\Config\Settings\OptionsSource;
+use SugarCraft\Code\Config\Settings\RiskClass;
+use SugarCraft\Code\Config\Settings\SettingCategory;
+use SugarCraft\Code\Config\Settings\SettingDefinition;
+use SugarCraft\Code\Config\Settings\SettingDefinitionSet;
+use SugarCraft\Code\Config\Settings\SettingType;
+use SugarCraft\Code\Config\Settings\UiEditability;
+use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Host\TitleService;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Renderer;
+use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Support\AiCommentWatcher;
+use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tui\TerminalBackground;
+use SugarCraft\Code\Tui\TerminalNotifier;
+
+/**
+ * The "Interface" category's keys. One file per category so a step adding a
+ * key edits only its category's file (DH-KEYS); {@see \SugarCraft\Code\Config\Settings\SettingsSchema}
+ * collects every set.
+ *
+ * Roadmap N-P4g promoted the TUI's own constants to keys here — what Enter
+ * does mid-turn (`queueMode`, decision D6), the mouse, the wheel step, the
+ * double-Esc window, the palette's recent list, the collapsed preview sizes
+ * and the checkpoint cap. Each default IS the constant it replaced, cited
+ * rather than restated. They are read through
+ * {@see \SugarCraft\Code\Config\Settings\UiSettings}, which holds them for
+ * the per-frame readers and drops them on every save, so they are all LIVE.
+ * All but the checkpoint cap are cosmetic and project-settable like `theme`;
+ * the cap decides how much of the operator's session history is kept.
+ */
+final class InterfaceSettings implements SettingDefinitionSet
+{
+    public static function category(): SettingCategory
+    {
+        return SettingCategory::Interface;
+    }
+
+    public static function definitions(): array
+    {
+        return [
+            SettingDefinition::new('theme', SettingType::Enum, 'dark')
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnumValues(Theme::names())
+                ->withOptionsSource(OptionsSource::Themes)
+                ->withLabel(Lang::t('settings.theme.label'))
+                ->withHelp('Colour theme; /theme and the palette change it live.')
+                ->withReaderSymbol(Bootstrap::class . '::chat'),
+            SettingDefinition::new('statusLine', SettingType::Map)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                // N-P3: a save re-runs `StatusLineCommand::reconfigure()`.
+                ->withApplyMode(ApplyMode::Live)
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.statusLine.label'))
+                ->withHelp('{"type": "command", "command": "…", "refreshSeconds": 2}: a shell command whose output paints the status bar, re-run every refreshSeconds (2 to 3600, default 2).')
+                ->withReaderSymbol(StatusLineCommand::class . '::fromSettings')
+                ->withReadBy('`Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()`'),
+            SettingDefinition::new('layout', SettingType::Json)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withUi(UiEditability::ReadOnly)
+                ->withLabel(Lang::t('settings.layout.label'))
+                ->withHelp('The docked-pane manifest; written by the shell when panes move.')
+                ->withReaderSymbol(Bootstrap::class . '::app')
+                ->withReadBy('`Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()`'),
+            // Roadmap 5.14a. Cosmetic and project-settable like `theme`: it
+            // only decides which bytes tell THIS terminal a turn is over.
+            SettingDefinition::new(TerminalNotifier::SETTINGS_KEY, SettingType::Enum, TerminalNotifier::OFF)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withEnumValues(TerminalNotifier::MODES)
+                ->withLabel(Lang::t('settings.notify.label'))
+                ->withHelp('off, bell (BEL) or osc9 (a desktop notification): sent when a turn ends and when the agent waits for an approval.')
+                ->withReaderSymbol(TerminalNotifier::class . '::fromConfig')
+                ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()`'),
+            // Roadmap 5.14i. USER-only: it makes comments in the repository's
+            // files prompts the agent acts on, so a checkout may never turn it on.
+            SettingDefinition::new(AiCommentWatcher::SETTINGS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.watchFiles.label'))
+                ->withHelp('Send a prompt when a saved file holds a comment ending in AI! (make a change) or AI? (answer a question); plain AI comments ride along as context. Polled while the chat is idle; only comments saved after launch fire, each once.')
+                ->withReaderSymbol(AiCommentWatcher::class . '::enabled')
+                ->withReadBy('`Chat::subscriptions()` → `AiCommentWatcher::enabled()`'),
+            SettingDefinition::new('queueMode', SettingType::Enum, QueueMode::Steer->value)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnumValues(array_map(static fn (QueueMode $m): string => $m->value, QueueMode::cases()))
+                ->withLabel(Lang::t('settings.queueMode.label'))
+                ->withHelp('steer (the agent reads it at its next step), followup (sent after the turn) or interrupt (stop the turn at its next step, then send). Tab always queues.')
+                ->withReaderSymbol(QueueMode::class . '::onEnter')
+                ->withReadBy('`Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()`'),
+            // Cosmetic and project-settable like `theme`: it only says what
+            // the `adaptive` theme should believe about the background.
+            SettingDefinition::new(TerminalBackground::SETTINGS_KEY, SettingType::Enum, 'auto')
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar(TerminalBackground::ENV_OVERRIDE)
+                ->withEnumValues(TerminalBackground::SETTING_VALUES)
+                ->withLabel(Lang::t('settings.terminalBackground.label'))
+                ->withHelp('What the adaptive theme assumes behind the text: auto asks the terminal (OSC 11, then COLORFGBG); light or dark says so outright.')
+                ->withReaderSymbol(TerminalBackground::class . '::setting')
+                ->withReadBy('`Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()`'),
+            SettingDefinition::new('mouse', SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar('CANDY_CODE_DISABLE_MOUSE')
+                ->withLabel(Lang::t('settings.mouse.label'))
+                ->withHelp('Report the mouse to candy-code (clicks, wheel, selection); off gives the terminal its own copy-on-select back.')
+                ->withReaderSymbol(Chat::class . '::mouseMode')
+                ->withReadBy('`Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()`'),
+            SettingDefinition::new('mouseClicks', SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar('CANDY_CODE_DISABLE_MOUSE_CLICKS')
+                ->withLabel(Lang::t('settings.mouseClicks.label'))
+                ->withHelp('Clicks and drags act on what they hit; off keeps the wheel and ignores clicks.')
+                ->withReaderSymbol(Chat::class . '::mouseClicksEnabled'),
+            SettingDefinition::new('scrollWheelLines', SettingType::Int, Chat::SCROLL_WHEEL_LINES)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1, 20)
+                ->withLabel(Lang::t('settings.scrollWheelLines.label'))
+                ->withHelp('Transcript lines one wheel tick scrolls.')
+                ->withReaderSymbol(Chat::class . '::scrollWheelLines'),
+            SettingDefinition::new('doubleEscSeconds', SettingType::Float, Chat::DOUBLE_ESCAPE_WINDOW_SECONDS)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(0.2, 3.0)
+                ->withLabel(Lang::t('settings.doubleEscSeconds.label'))
+                ->withHelp('How quickly the second Esc must follow the first to cancel a running turn.')
+                ->withReaderSymbol(Chat::class . '::doubleEscapeWindowSeconds'),
+            SettingDefinition::new('paletteMru', SettingType::Int, Chat::PALETTE_MRU_LIMIT)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(0, 50)
+                ->withLabel(Lang::t('settings.paletteMru.label'))
+                ->withHelp('How many recently used palette rows are remembered and ranked first; 0 remembers none.')
+                ->withReaderSymbol(Chat::class . '::paletteMruLimit'),
+            SettingDefinition::new('diffPreviewRows', SettingType::Int, Renderer::DIFF_MAX_ROWS)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(4, 1000)
+                ->withLabel(Lang::t('settings.diffPreviewRows.label'))
+                ->withHelp('Rows of an Edit or Write diff shown in the transcript before the rest is summarised.')
+                ->withReaderSymbol(Renderer::class . '::diffPreviewRows'),
+            SettingDefinition::new('toolOutputPreviewLines', SettingType::Int, Renderer::TOOL_OUTPUT_MAX_LINES)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1, 200)
+                ->withLabel(Lang::t('settings.toolOutputPreviewLines.label'))
+                ->withHelp('Lines of a collapsed tool result shown in the transcript; Ctrl+O expands the rest.')
+                ->withReaderSymbol(Renderer::class . '::toolOutputPreviewLines'),
+            // Retention DELETES conversations, so it is the operator's own
+            // switch: a checkout must not be able to prune their history.
+            SettingDefinition::new(Bootstrap::SESSION_RETENTION_DAYS_SETTING, SettingType::Int, 0)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar('CANDY_CODE_SESSION_RETENTION_DAYS')
+                ->withRange(0, SessionStore::MAX_RETENTION_DAYS)
+                ->withLabel(Lang::t('settings.sessionRetentionDays.label'))
+                ->withHelp('Each launch deletes unnamed, unpinned sessions untouched for this many days and says which; 0 (the default) keeps everything.')
+                ->withReaderSymbol(Bootstrap::class . '::sessionRetentionDays')
+                ->withReadBy('`Bootstrap::sessionStore()` at launch → `sessionRetentionDays()`'),
+            // The title model's two side-calls (roadmap N-P4g). Switching
+            // either off only saves calls, so a project may (Narrowing); how
+            // much history a suggestion is shown is input tokens on every
+            // turn, so that one is the operator's alone.
+            SettingDefinition::new(TitleService::AUTO_TITLE_SETTING, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.sessions.autoTitle.label'))
+                ->withHelp('Name each new session from its first turn with one call on the title model; off leaves it unnamed until /rename.')
+                ->withReaderSymbol(TitleService::class . '::autoTitleEnabled')
+                ->withReadBy('`Chat` turn dispatch → `TitleService::titleCall()` → `autoTitleEnabled()`'),
+            SettingDefinition::new(TitleService::PROMPT_SUGGESTIONS_SETTING, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS')
+                ->withLabel(Lang::t('settings.promptSuggestions.label'))
+                ->withHelp('After each turn, ask the title model for the message you are likely to send next and show it greyed in the empty input box (→ accepts it).')
+                ->withReaderSymbol(TitleService::class . '::promptSuggestionsEnabled')
+                ->withReadBy('`Chat` turn settle → `TitleService::suggestionCall()` → `promptSuggestionsEnabled()`'),
+            SettingDefinition::new(TitleService::PROMPT_SUGGESTION_HISTORY_SETTING, SettingType::Int, TitleService::PROMPT_SUGGESTION_HISTORY)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1, 100)
+                ->withLabel(Lang::t('settings.promptSuggestionHistory.label'))
+                ->withHelp('Recent messages (each clipped to 2000 characters) the prompt-suggestion call is shown.')
+                ->withReaderSymbol(TitleService::class . '::promptSuggestionHistory')
+                ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
+            SettingDefinition::new('expandToolOutput', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.expandToolOutput.label'))
+                ->withHelp('Show each finished tool call\'s output in full in the transcript; Ctrl+O or a click still collapses one.')
+                ->withReaderSymbol(Renderer::class . '::toolOutputExpandedByDefault')
+                ->withReadBy('`Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()`'),
+            SettingDefinition::new('maxCheckpoints', SettingType::Int, EnhancedSessionStore::MAX_CHECKPOINTS_PER_SESSION)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1, 10000)
+                ->withLabel(Lang::t('settings.maxCheckpoints.label'))
+                ->withHelp('Turn checkpoints /rewind can return to, per session; the oldest are pruned past this.')
+                ->withReaderSymbol(EnhancedSessionStore::class . '::maxCheckpoints')
+                ->withReadBy('`EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()`'),
+        ];
+    }
+}

@@ -17,5 +17,5 @@ require __DIR__ . '/../vendor/autoload.php';
 // test runs, so the loop's clock is fresh when the first timer in each
 // test goes in. See \SugarCraft\Testing\LoopPin for the mechanism and
 // AGENTS.md "Tests" for the family law (sugar-async, sugar-image,
-// sugar-pty, sugar-testing, sugar-crush all pin the same way).
+// sugar-pty, sugar-testing, candy-code all pin the same way).
 \SugarCraft\Testing\LoopPin::pinStableClock();

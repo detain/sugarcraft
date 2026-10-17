@@ -1,0 +1,928 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Config\Support;
+
+/**
+ * WHICH `SUGARCRUSH_*` VARIABLES THE CODE ACTUALLY READS, BY TOKEN STREAM.
+ *
+ * `grep` cannot answer this question. Every prefixed name in `src/` that a
+ * `grep` finds is a mixture of three different things — a real read, a mention
+ * inside a doc-comment explaining a read, and a name printed back at the user
+ * inside an error string — and only the first belongs on `docs/ENVIRONMENT.md`.
+ * A token stream separates them for free: `T_DOC_COMMENT` and `T_COMMENT` are
+ * their own tokens, so prose drops out before any matching happens, and what
+ * is left is a string LITERAL whose syntactic position can be classified.
+ *
+ * FIVE CALL SHAPES ARE UNDERSTOOD, in any of the four STRING shapes PHP can
+ * spell a literal with (single- or double-quoted, heredoc, nowdoc), and each
+ * one is verified rather than assumed — the scanner never trusts a naming
+ * convention, it follows the value:
+ *
+ * - **S1 direct** — the literal is the argument of `getenv(` (or `\getenv(`).
+ * - **S3 forwarded** — the literal is argument #k of `self::m(…)`,
+ *   `static::m(…)` or `$this->m(…)`; `m` is located in the call site's
+ *   declaring scope (innermost class/trait/enum body that contains it), and
+ *   only when no enclosing scope declares it, anywhere in the same file —
+ *   E127 replaced the old whole-file first-match sweep, which resolved
+ *   through whichever twin a trait-and-class file happened to carry first
+ *   rather than through the one PHP would run. Its parameter #k is read out
+ *   of the signature, and that parameter must itself
+ *   reach `getenv()` in `m`'s body. `Chat::envFlag()`,
+ *   `Bootstrap::backendCommandEnv()` and `Bootstrap::toollessBackend()` are all
+ *   found this way, none of them by name.
+ * - **S4 foreach** — the literal is an element of an array literal in a
+ *   `foreach ([…] as $v)` header whose `$v` reaches `getenv()` in the same
+ *   function. This is how the two deprecated-alias pairs are read.
+ * - **S2 constant** — the literal is the initialiser of a class constant. The
+ *   DECLARATION is not itself a read; instead every `Foo::CONST` occurrence is
+ *   re-classified through S1/S3/S4, so a constant that is declared and never
+ *   passed to `getenv()` is reported as unresolved rather than counted.
+ *   `TerminalBackground::ENV_OVERRIDE` is the case that forced this: it is
+ *   never a direct `getenv()` argument, it is an element of an S4 array.
+ * - **S5 schema-binding** — the literal is argument #1 of a `->withEnvVar(…)`
+ *   fluent call (the `SettingDefinition` declaration channel). This shape is
+ *   PLACED, not followed: `withEnvVar()` stores its argument instead of
+ *   reading it, so the record names the channel for what it is — the schema's
+ *   declaration that this variable backs this setting — and the honesty of
+ *   that declaration is policed by the doc census downstream, which demands
+ *   an `docs/ENVIRONMENT.md` row and a help-screen entry for every name
+ *   placed here. The S2 dead-const polarity stays: a name declared and placed
+ *   NOWHERE (no getenv path, no schema binding) is still reported.
+ *   `CANDY_CODE_MEDIA_RENDER_MODE` (crush-media W1.8) forced this shape: the
+ *   settings schema may declare an env fallback one wave before its reader
+ *   lands (W2.2 wires the painter), and the census must place the occurrence
+ *   without pretending a getenv ran.
+ *
+ * ANYTHING ELSE IS AN ERROR, NOT A SKIP — AND THAT CLAIM WAS FALSE FOR ONE
+ * ROUND. A prefixed occurrence the scanner cannot place, and whose name no
+ * other occurrence resolves, lands in {@see unresolved()} — a list the caller
+ * is expected to assert is empty. That held for `$_ENV['…']` and for a
+ * constant that never reaches `getenv()`. It did NOT hold for three string
+ * shapes, and a reviewer found all three by injecting them into
+ * `src/Tui/TerminalBackground.php`: a heredoc literal, a nowdoc literal, and
+ * `getenv("CANDY_CODE_X_{$n}")` each produced no read, no fragment and no
+ * unresolved entry. MEASURED at round 44 on PHP 8.3.6.
+ *
+ * THE CAUSE WAS THE TOKEN CATEGORY, not the classifier: `scan()` only ever
+ * looked at `T_CONSTANT_ENCAPSED_STRING`, and PHP hands a heredoc back as
+ * `T_START_HEREDOC` + `T_ENCAPSED_AND_WHITESPACE` + `T_END_HEREDOC` and an
+ * interpolated string as a `"` char token with parts between. Two plain
+ * literals of a whole roster name were invisible to the one class that exists
+ * to find them. {@see significant()} now collapses every string span to a
+ * single token before any rule runs: a heredoc or nowdoc without
+ * interpolation becomes an ordinary literal, and anything assembled at runtime
+ * becomes {@see T_COMPOSED}, whose prefixed pieces are collected as fragments.
+ *
+ * MEASURED ON PHP 8.3.6. `token_get_all()`'s categories for the constructs used
+ * here (`T_CONSTANT_ENCAPSED_STRING`, `T_NAME_FULLY_QUALIFIED` for `\getenv`)
+ * are stable across 8.3 and 8.4; the stamp is provenance, and CI runs both.
+ *
+ * @internal
+ */
+final class EnvReadScanner
+{
+    /**
+     * The roster's own alphabet — and it deliberately admits the DEPRECATED
+     * spelling `SUGAR_CRUSH_*` as well as the canonical `SUGARCRUSH_*`.
+     *
+     * A pattern that only matched the canonical prefix would report zero
+     * problems while the two legacy aliases in `WorktreeManager` and
+     * `ShareCommand` went undocumented — a census cannot find what its alphabet
+     * cannot spell.
+     */
+    public const NAME_PATTERN = '/^SUGAR_?CRUSH_[A-Z0-9_]+$/';
+
+    /**
+     * The synthetic token id for a string whose value is assembled at runtime.
+     *
+     * A negative id cannot collide with a real `T_*` constant, which are all
+     * positive, so a downstream `$token['id'] === \T_CONSTANT_ENCAPSED_STRING`
+     * test can never see one by accident.
+     */
+    public const T_COMPOSED = -1;
+
+    /** @var array<string, list<string>> name => "label:line [shape]" */
+    private array $reads = [];
+
+    /** @var list<array{0: string, 1: string}> [name, "label:line"] */
+    private array $unplaced = [];
+
+    /** @var array<string, string> CONSTNAME => literal value */
+    private array $constValue = [];
+
+    /** @var array<string, list<string>> name => sites of a `putenv('NAME=…')`-shaped literal */
+    private array $exported = [];
+
+    /** @var list<string> literals that look like a roster name cut in half */
+    private array $fragments = [];
+
+    /** @param array<string, string> $sources label => PHP source text */
+    public function __construct(private readonly array $sources)
+    {
+        foreach ($this->sources as $src) {
+            $this->collectConstants($src);
+        }
+        foreach ($this->sources as $label => $src) {
+            $this->scan($src, $label);
+            $this->scanForWritesAndFragments($src, $label);
+        }
+    }
+
+    /**
+     * Names this code EXPORTS rather than reads — `putenv('NAME=' . $value)`.
+     *
+     * A write is not a read and does not belong in {@see reads()}, but it is
+     * still a roster name, and the token scan cannot see it from the read side
+     * because the literal carries a trailing `=`. `BackgroundSessionRunner`
+     * exports `CANDY_CODE_MODEL` to the daemon it spawns, and a future export
+     * of a name the page does not tabulate would otherwise be invisible to
+     * every assertion here.
+     *
+     * @return array<string, list<string>>
+     */
+    public function exported(): array
+    {
+        $out = $this->exported;
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * Literals that look like a roster name assembled from pieces.
+     *
+     * THE ONE THING THIS SCANNER GENUINELY CANNOT FOLLOW is a name built at
+     * runtime — `getenv('SUGARCRUSH_' . $suffix)` is read by the code and named
+     * by no pattern here. Rather than leave that as a caveat in prose, the
+     * pieces are collected so the caller can assert there are none: the blind
+     * spot is measured empty rather than assumed empty.
+     *
+     * THREE SHAPES REACH THIS LIST, and the last two were added in round 44
+     * after they were found silently dropped:
+     *
+     * - a piece that is not a well-formed name, `'SUGARCRUSH_' . $suffix`;
+     * - a piece of an INTERPOLATED string, `"CANDY_CODE_X_{$n}"`, even when the
+     *   piece matches {@see NAME_PATTERN} on its own — it is a piece of the
+     *   value, and recording it as the value would be a confident wrong answer
+     *   rather than a reported gap;
+     * - a whole name GLUED to a concatenation, `'CANDY_CODE_MAX' . $suffix`,
+     *   for the same reason.
+     *
+     * A piece counts only when it BEGINS with the prefix, which is the same
+     * test the whole-literal path applies. `str_contains()` reported
+     * `Bootstrap`'s `"\$CANDY_CODE_MAX_COST is '{$trimmed}'"` — an error
+     * message, not an assembled name — on its first run.
+     *
+     * @return list<string>
+     */
+    public function fragments(): array
+    {
+        $out = $this->fragments;
+        sort($out);
+
+        return $out;
+    }
+
+    private function scanForWritesAndFragments(string $src, string $label): void
+    {
+        foreach (self::significant($src) as $token) {
+            if ($token['id'] === self::T_COMPOSED) {
+                // Every prefixed piece of a runtime-assembled string is a
+                // fragment, INCLUDING one that matches NAME_PATTERN on its own:
+                // `"CANDY_CODE_X_{$n}"` has the literal part `CANDY_CODE_X_`,
+                // which is a well-formed name and is not the name being read.
+                foreach ($token['parts'] ?? [] as $part) {
+                    // `str_starts_with`, the same test the whole-literal rule
+                    // below applies, and it is not interchangeable with
+                    // `str_contains`: `"\$CANDY_CODE_MAX_COST is '{$trimmed}'"`
+                    // in `Bootstrap` is an error message that MENTIONS a
+                    // variable, and reporting it as a half-assembled name would
+                    // have been the census crying wolf on its first run.
+                    if (str_starts_with($part, 'SUGAR')) {
+                        $this->fragments[] = $label . ':' . $token['line'] . ': ' . $part;
+                    }
+                }
+
+                continue;
+            }
+            if ($token['id'] !== \T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            $value = self::stringValue($token);
+            if ($value === null || !str_starts_with($value, 'SUGAR')) {
+                continue;
+            }
+            if (preg_match(self::NAME_PATTERN, $value) === 1) {
+                continue;
+            }
+            if (preg_match('/^(SUGAR_?CRUSH_[A-Z0-9_]+)=/', $value, $matches) === 1) {
+                $this->exported[$matches[1]][] = $label . ':' . $token['line'];
+
+                continue;
+            }
+            $this->fragments[] = $label . ':' . $token['line'] . ': ' . $value;
+        }
+    }
+
+    /** @return array<string, list<string>> variable name => the sites that read it */
+    public function reads(): array
+    {
+        $out = $this->reads;
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * Occurrences the scanner could not place, and constants it could not
+     * follow to a `getenv()`.
+     *
+     * An occurrence is only listed when NO occurrence of the same name
+     * resolved: a variable read once in `getenv()` and mentioned again inside
+     * an exception message is read, and the exception message is not a defect.
+     *
+     * @return list<string>
+     */
+    public function unresolved(): array
+    {
+        $out = [];
+        foreach ($this->unplaced as [$name, $site]) {
+            if (!isset($this->reads[$name])) {
+                $out[] = $site . ': ' . $name . ' — occurrence matches no understood shape';
+            }
+        }
+        foreach ($this->constValue as $constant => $value) {
+            if (!isset($this->reads[$value])) {
+                $out[] = 'const ' . $constant . ' = ' . $value . ' — declared, but no occurrence reaches getenv()';
+            }
+        }
+        sort($out);
+
+        return $out;
+    }
+
+    /**
+     * The token stream with whitespace and comments dropped, and with every
+     * STRING collapsed to a single token.
+     *
+     * COLLAPSING IS THE POINT, and it is what the first cut of this scanner
+     * missed. `token_get_all()` hands back a plain `'FOO'` as one
+     * `T_CONSTANT_ENCAPSED_STRING`, but a heredoc as
+     * `T_START_HEREDOC` + `T_ENCAPSED_AND_WHITESPACE` + `T_END_HEREDOC`, and an
+     * interpolated `"FOO_{$x}"` as a `"` char token, parts, and another `"`.
+     * The scanner reads a literal's NEIGHBOURS to classify it — `(` before it,
+     * `getenv` before that — so a string that arrives as five tokens is
+     * invisible to every rule here. MEASURED at round 44 on PHP 8.3.6:
+     * `getenv(<<<TXT … TXT)` and `getenv(<<<'TXT' … 'TXT')` naming an
+     * undocumented variable produced no read, no fragment and no unresolved
+     * entry — a silent miss of a PLAIN LITERAL, the one shape this class
+     * claims it definitely resolves.
+     *
+     * TWO COLLAPSED SHAPES COME OUT:
+     *
+     * - a heredoc or nowdoc with NO interpolation becomes an ordinary literal
+     *   token carrying its `value`, indistinguishable downstream from `'FOO'`;
+     * - anything with interpolation — an interpolated `"…"`, an interpolated
+     *   heredoc, a backtick — becomes {@see T_COMPOSED}, which is never a read
+     *   and whose prefixed literal PARTS are collected as fragments. The value
+     *   of such a string is assembled at runtime, so the literal `CANDY_CODE_X_`
+     *   inside `"CANDY_CODE_X_{$n}"` is a piece of a name and not a name, even
+     *   though it matches {@see NAME_PATTERN} on its own.
+     *
+     * @return list<array{text: string, id: int, line: int, value?: string, parts?: list<string>}>
+     */
+    public static function significant(string $src): array
+    {
+        $raw = token_get_all($src);
+        $n = \count($raw);
+        $sig = [];
+
+        for ($i = 0; $i < $n; $i++) {
+            $token = $raw[$i];
+
+            if (\is_array($token)) {
+                if (\in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                if ($token[0] === \T_START_HEREDOC) {
+                    [$collapsed, $i] = self::collapseHeredoc($raw, $i, $n);
+                    $sig[] = $collapsed;
+
+                    continue;
+                }
+                $sig[] = ['text' => $token[1], 'id' => $token[0], 'line' => $token[2]];
+
+                continue;
+            }
+
+            if ($token === '"' || $token === '`') {
+                [$collapsed, $i] = self::collapseInterpolated($raw, $i, $n);
+                $sig[] = $collapsed;
+
+                continue;
+            }
+
+            $sig[] = ['text' => $token, 'id' => 0, 'line' => 0];
+        }
+
+        return $sig;
+    }
+
+    /**
+     * A heredoc or nowdoc span, from its `T_START_HEREDOC` to its
+     * `T_END_HEREDOC`.
+     *
+     * The closing marker's INDENTATION is stripped from the body, because PHP
+     * 7.3+ flexible heredocs put it in the `T_ENCAPSED_AND_WHITESPACE` token
+     * and take it out of the value. Getting that wrong would turn
+     * `CANDY_CODE_FOO` into `    CANDY_CODE_FOO`, which matches nothing and
+     * would be reported as a fragment — a false alarm rather than a miss, but
+     * still a wrong answer.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $raw
+     *
+     * @return array{0: array{text: string, id: int, line: int, value?: string, parts?: list<string>}, 1: int}
+     */
+    private static function collapseHeredoc(array $raw, int $start, int $n): array
+    {
+        $line = \is_array($raw[$start]) ? $raw[$start][2] : 0;
+        $parts = [];
+        $interpolated = false;
+        $end = $start;
+
+        for ($j = $start + 1; $j < $n; $j++) {
+            $token = $raw[$j];
+            if (\is_array($token) && $token[0] === \T_END_HEREDOC) {
+                $end = $j;
+
+                break;
+            }
+            if (\is_array($token) && $token[0] === \T_ENCAPSED_AND_WHITESPACE) {
+                $parts[] = $token[1];
+
+                continue;
+            }
+            $interpolated = true;
+        }
+
+        if ($end === $start) {
+            // An unterminated heredoc is not something to guess about.
+            return [['text' => '<unterminated heredoc>', 'id' => self::T_COMPOSED, 'line' => $line, 'parts' => $parts], $n];
+        }
+
+        $marker = \is_array($raw[$end]) ? $raw[$end][1] : '';
+        $indent = substr($marker, 0, \strlen($marker) - \strlen(ltrim($marker)));
+
+        if ($interpolated) {
+            return [
+                ['text' => '<interpolated heredoc>', 'id' => self::T_COMPOSED, 'line' => $line, 'parts' => $parts],
+                $end,
+            ];
+        }
+
+        $body = (string) preg_replace('/\R\z/', '', implode('', $parts));
+        if ($indent !== '') {
+            $lines = preg_split('/\R/', $body) ?: [];
+            foreach ($lines as $k => $bodyLine) {
+                $lines[$k] = str_starts_with($bodyLine, $indent) ? substr($bodyLine, \strlen($indent)) : $bodyLine;
+            }
+            $body = implode("\n", $lines);
+        }
+
+        return [
+            ['text' => "'" . $body . "'", 'id' => \T_CONSTANT_ENCAPSED_STRING, 'line' => $line, 'value' => $body],
+            $end,
+        ];
+    }
+
+    /**
+     * An interpolated `"…"` or backtick span.
+     *
+     * Brace depth is tracked because `"{$this->f("x")}"` nests a whole string
+     * inside the interpolation, and a naive "stop at the next quote" would end
+     * the span in the middle of it.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $raw
+     *
+     * @return array{0: array{text: string, id: int, line: int, parts: list<string>}, 1: int}
+     */
+    private static function collapseInterpolated(array $raw, int $start, int $n): array
+    {
+        $quote = $raw[$start];
+        $line = 0;
+        $parts = [];
+        $depth = 0;
+        $end = $n - 1;
+
+        for ($j = $start + 1; $j < $n; $j++) {
+            $token = $raw[$j];
+            if (\is_array($token)) {
+                if ($line === 0) {
+                    $line = $token[2];
+                }
+                if (\in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                    $depth++;
+
+                    continue;
+                }
+                if ($token[0] === \T_ENCAPSED_AND_WHITESPACE && $depth === 0) {
+                    $parts[] = $token[1];
+                }
+
+                continue;
+            }
+            if ($token === '{') {
+                $depth++;
+
+                continue;
+            }
+            if ($token === '}') {
+                $depth--;
+
+                continue;
+            }
+            if ($token === $quote && $depth === 0) {
+                $end = $j;
+
+                break;
+            }
+        }
+
+        return [['text' => '<interpolated string>', 'id' => self::T_COMPOSED, 'line' => $line, 'parts' => $parts], $end];
+    }
+
+    /**
+     * The value of a string token, whatever shape produced it.
+     *
+     * @param array{text: string, id: int, line: int, value?: string, parts?: list<string>} $token
+     */
+    private static function stringValue(array $token): ?string
+    {
+        if (\array_key_exists('value', $token)) {
+            return $token['value'];
+        }
+
+        return self::literal($token['text']);
+    }
+
+    private function collectConstants(string $src): void
+    {
+        $sig = self::significant($src);
+        foreach ($sig as $i => $token) {
+            if ($token['id'] !== \T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            $value = self::stringValue($token);
+            if ($value === null || preg_match(self::NAME_PATTERN, $value) !== 1) {
+                continue;
+            }
+            if (($sig[$i - 1]['text'] ?? '') === '=' && ($sig[$i - 3]['text'] ?? '') === 'const') {
+                $this->constValue[$sig[$i - 2]['text']] = $value;
+            }
+        }
+    }
+
+    private function scan(string $src, string $label): void
+    {
+        $sig = self::significant($src);
+        $n = \count($sig);
+
+        for ($i = 0; $i < $n; $i++) {
+            $first = $i;
+
+            if ($sig[$i]['id'] === \T_CONSTANT_ENCAPSED_STRING) {
+                $value = self::stringValue($sig[$i]);
+                if ($value === null || preg_match(self::NAME_PATTERN, $value) !== 1) {
+                    continue;
+                }
+                // The constant's DECLARATION is not a read; its uses are.
+                if (($sig[$i - 1]['text'] ?? '') === '=' && ($sig[$i - 3]['text'] ?? '') === 'const') {
+                    continue;
+                }
+                // A literal glued to a `.` is a PIECE of a value, even when the
+                // piece is a well-formed name on its own:
+                // `getenv('CANDY_CODE_MAX' . $suffix)` reads neither
+                // `CANDY_CODE_MAX` nor anything this scanner can name, and
+                // recording it as a read of the piece would be a confident
+                // wrong answer rather than a reported gap. MEASURED at round
+                // 44: no such literal exists in `src/` or `bin/`, so this rule
+                // costs nothing today and closes the shape.
+                if (($sig[$i - 1]['text'] ?? '') === '.' || ($sig[$i + 1]['text'] ?? '') === '.') {
+                    $this->fragments[] = $label . ':' . $sig[$i]['line'] . ': ' . $value . ' (concatenated)';
+
+                    continue;
+                }
+            } elseif (
+                $sig[$i]['id'] === \T_STRING
+                && ($sig[$i - 1]['text'] ?? '') === '::'
+                && isset($this->constValue[$sig[$i]['text']])
+            ) {
+                $value = $this->constValue[$sig[$i]['text']];
+                $first = $i - 2;
+            } else {
+                continue;
+            }
+
+            $site = $label . ':' . $sig[$i]['line'];
+            $shape = $this->classify($sig, $first, $n);
+            if ($shape === null) {
+                $this->unplaced[] = [$value, $site];
+
+                continue;
+            }
+            $this->reads[$value][] = $site . ' [' . $shape . ']';
+        }
+    }
+
+    private static function literal(string $token): ?string
+    {
+        $quote = $token[0] ?? '';
+        if ($quote !== "'" && $quote !== '"') {
+            return null;
+        }
+
+        return substr($token, 1, -1);
+    }
+
+    private static function isGetenv(string $text): bool
+    {
+        return strtolower(ltrim($text, '\\')) === 'getenv';
+    }
+
+    private function classify(array $sig, int $i, int $n): ?string
+    {
+        if (($sig[$i - 1]['text'] ?? '') === '(' && self::isGetenv($sig[$i - 2]['text'] ?? '')) {
+            return 'S1-direct';
+        }
+
+        [$bodyStart, $bodyEnd] = $this->enclosingFunctionBody($sig, $i, $n);
+        if ($bodyStart === null || $bodyEnd === null) {
+            return null;
+        }
+
+        $loopVar = $this->foreachLoopVariable($sig, $i, $n);
+        if ($loopVar !== null) {
+            return $this->reachesGetenv($sig, $bodyStart, $bodyEnd, $loopVar)
+                ? 'S4-foreach:' . $loopVar
+                : null;
+        }
+
+        $call = $this->enclosingCall($sig, $i);
+        if ($call !== null) {
+            [$callee, $argIndex, $operator] = $call;
+            if ($operator === '->' && $callee === 'withEnvVar' && $argIndex === 0) {
+                // S5 — the settings-schema declaration channel (see class
+                // doc-block): placed as a DECLARED binding, not followed as a
+                // getenv read. The doc census turns the placement into an
+                // obligation (ENVIRONMENT.md row + help-screen entry), so the
+                // marker cannot hide an undocumented variable — W1.8's
+                // CANDY_CODE_MEDIA_RENDER_MODE is exactly that case.
+                return 'S5-schema:withEnvVar';
+            }
+            $method = $this->methodSignature($sig, $n, $callee, $i);
+            if ($method !== null && isset($method['params'][$argIndex])) {
+                $reached = $this->reachesGetenv(
+                    $sig,
+                    $method['start'],
+                    $method['end'],
+                    $method['params'][$argIndex],
+                );
+                if ($reached) {
+                    return 'S3-forward:' . $callee . '#' . $argIndex;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Does `$var` reach `getenv()` inside the body `[$start, $end)`?
+     *
+     * One extra hop is followed — `$var` handed to another method of the same
+     * file that forwards it — because `backendCommandTierIsSelected()` reaches
+     * `getenv()` exactly that way: a `foreach` over two literals calling
+     * `self::backendCommandEnv($var)`. The depth is bounded so a pair of
+     * mutually-forwarding methods cannot spin.
+     */
+    private function reachesGetenv(array $sig, int $start, int $end, string $var, int $depth = 0): bool
+    {
+        for ($j = $start; $j < $end; $j++) {
+            if (
+                self::isGetenv($sig[$j]['text'])
+                && ($sig[$j + 1]['text'] ?? '') === '('
+                && ($sig[$j + 2]['text'] ?? '') === $var
+                && ($sig[$j + 3]['text'] ?? '') === ')'
+            ) {
+                return true;
+            }
+            if ($depth >= 2 || $sig[$j]['text'] !== $var) {
+                continue;
+            }
+            $call = $this->enclosingCall($sig, $j);
+            if ($call === null) {
+                continue;
+            }
+            [$callee, $argIndex] = $call;
+            $method = $this->methodSignature($sig, \count($sig), $callee, $j);
+            if ($method === null || !isset($method['params'][$argIndex])) {
+                continue;
+            }
+            $forwarded = $this->reachesGetenv(
+                $sig,
+                $method['start'],
+                $method['end'],
+                $method['params'][$argIndex],
+                $depth + 1,
+            );
+            if ($forwarded) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** The `$v` of a `foreach ([… , HERE, …] as $v)` header, or null. */
+    private function foreachLoopVariable(array $sig, int $i, int $n): ?string
+    {
+        $depth = 0;
+        for ($j = $i - 1; $j >= 0; $j--) {
+            $text = $sig[$j]['text'];
+            if ($text === ']' || $text === ')') {
+                $depth++;
+
+                continue;
+            }
+            if ($text === '[') {
+                if ($depth === 0) {
+                    break;
+                }
+                $depth--;
+
+                continue;
+            }
+            if ($text === '(') {
+                if ($depth === 0) {
+                    return null;
+                }
+                $depth--;
+
+                continue;
+            }
+            if ($text === ';' || $text === '{' || $text === '}') {
+                return null;
+            }
+        }
+        if ($j < 0) {
+            return null;
+        }
+        if (($sig[$j - 1]['text'] ?? '') !== '(' || strtolower($sig[$j - 2]['text'] ?? '') !== 'foreach') {
+            return null;
+        }
+
+        $depth = 0;
+        for ($k = $j; $k < $n; $k++) {
+            if ($sig[$k]['text'] === '[') {
+                $depth++;
+            } elseif ($sig[$k]['text'] === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    break;
+                }
+            }
+        }
+        if (strtolower($sig[$k + 1]['text'] ?? '') !== 'as') {
+            return null;
+        }
+        $var = $sig[$k + 2]['text'] ?? '';
+
+        return str_starts_with($var, '$') ? $var : null;
+    }
+
+    /**
+     * @return array{0: string, 1: int, 2: string}|null the callee's bare name,
+     *         this argument's index, and the operator that reached the callee
+     *         (`'->'` or `'::'`) — the operator distinguishes the instance
+     *         fluent `withEnvVar()` schema channel (S5) from a static call
+     *         wearing the same name, which is not that channel.
+     */
+    private function enclosingCall(array $sig, int $i): ?array
+    {
+        $depth = 0;
+        $commas = 0;
+        for ($j = $i - 1; $j >= 0; $j--) {
+            $text = $sig[$j]['text'];
+            if ($text === ')' || $text === ']') {
+                $depth++;
+
+                continue;
+            }
+            if ($text === '(') {
+                if ($depth === 0) {
+                    break;
+                }
+                $depth--;
+
+                continue;
+            }
+            if ($text === '[') {
+                if ($depth === 0) {
+                    return null;
+                }
+                $depth--;
+
+                continue;
+            }
+            if ($text === ',' && $depth === 0) {
+                $commas++;
+
+                continue;
+            }
+            if ($text === ';' || $text === '{' || $text === '}') {
+                return null;
+            }
+        }
+        if ($j < 0) {
+            return null;
+        }
+        $name = $sig[$j - 1]['text'] ?? '';
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name) !== 1) {
+            return null;
+        }
+        $operator = $sig[$j - 2]['text'] ?? '';
+        if ($operator !== '::' && $operator !== '->') {
+            return null;
+        }
+
+        return [$name, $commas, $operator];
+    }
+
+    /**
+     * The `$name` declaration, resolved through the CALL SITE'S declaring scope.
+     *
+     * WHAT THIS USED TO BE (E127): a first-match sweep of the whole token
+     * stream — `function <name>` anywhere in the file, whichever came first.
+     * A call site does not live in a FILE, it lives in a CLASS, and a file
+     * holding a trait and its using class can declare the same method name
+     * twice with different bodies. The sweep then resolved
+     * `self::flag('CANDY_CODE_X')` written inside the class through the
+     * TRAIT's `flag()` — whichever was physically first — which is the wrong
+     * answer exactly when the class's own declaration shadows the trait's,
+     * because PHP itself runs the class method, and a forwarded literal would
+     * then be followed into a body that never executes. MEASURED at filing:
+     * no same-name collision exists in `src/` today, so the sweep and this
+     * agree on the live tree; the collision is cheap to write, invisible to
+     * every other assertion in the family, and the fix belongs before it.
+     *
+     * HOW THE SCOPE IS FOUND: lexical, token-level, and deliberately not a
+     * link-time symbol table. Every `class`/`trait`/`enum` body that CONTAINS
+     * the call site is a candidate, innermost first; a declaration inside the
+     * call site's own class wins over one earlier in the file. A trait
+     * declared in the same file is not lexically inside the using class, so a
+     * class that does NOT declare the method falls through to the whole-file
+     * sweep — which is the right answer for trait methods and the old rule's
+     * only honest case. What the resolution can no longer do is answer FIRST
+     * where PHP would answer SHADOWED.
+     */
+    private function methodSignature(array $sig, int $n, string $name, int $atIndex): ?array
+    {
+        foreach ($this->enclosingScopes($sig, $n, $atIndex) as [$from, $to]) {
+            $found = $this->functionDeclaration($sig, $n, $name, $from, $to);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return $this->functionDeclaration($sig, $n, $name, 0, $n);
+    }
+
+    /**
+     * Class/trait/enum bodies containing `$atIndex`, innermost first.
+     *
+     * A body that cannot be bounded (a one-line interface method stub between
+     * the declaration and its brace is not a scope the scanner can trust) is
+     * skipped, not guessed.
+     *
+     * @return list<array{0: int, 1: int}>
+     */
+    private function enclosingScopes(array $sig, int $n, int $atIndex): array
+    {
+        $scopes = [];
+        for ($j = 0; $j < $n; $j++) {
+            if (!\in_array($sig[$j]['id'], [\T_CLASS, \T_TRAIT, \T_ENUM], true)) {
+                continue;
+            }
+            $body = $this->braceRange($sig, $j, $n);
+            if ($body === null) {
+                continue;
+            }
+            if ($atIndex > $body[0] && $atIndex < $body[1]) {
+                $scopes[] = $body;
+            }
+        }
+        usort($scopes, static fn (array $a, array $b): int => ($a[1] - $a[0]) <=> ($b[1] - $b[0]));
+
+        return $scopes;
+    }
+
+    /**
+     * The first `function $name(...)` within `[$from, $to)`, params and body
+     * range read out of the signature — the pre-E127 matcher, confined.
+     *
+     * @return array{params: array<int, string>, start: int, end: int}|null
+     */
+    private function functionDeclaration(array $sig, int $n, string $name, int $from, int $to): ?array
+    {
+        for ($j = $from; $j < $to; $j++) {
+            if (strtolower($sig[$j]['text']) !== 'function' || ($sig[$j + 1]['text'] ?? '') !== $name) {
+                continue;
+            }
+            if (($sig[$j + 2]['text'] ?? '') !== '(') {
+                continue;
+            }
+            $params = [];
+            $depth = 0;
+            $index = 0;
+            for ($k = $j + 2; $k < $n; $k++) {
+                $text = $sig[$k]['text'];
+                if ($text === '(') {
+                    $depth++;
+
+                    continue;
+                }
+                if ($text === ')') {
+                    $depth--;
+                    if ($depth === 0) {
+                        break;
+                    }
+
+                    continue;
+                }
+                if ($text === ',' && $depth === 1) {
+                    $index++;
+
+                    continue;
+                }
+                if ($depth === 1 && $sig[$k]['id'] === \T_VARIABLE && !isset($params[$index])) {
+                    $params[$index] = $text;
+                }
+            }
+            $body = $this->braceRange($sig, $k, $n);
+            if ($body === null) {
+                return null;
+            }
+
+            return ['params' => $params, 'start' => $body[0], 'end' => $body[1]];
+        }
+
+        return null;
+    }
+
+    /** @return array{0: int, 1: int}|null */
+    private function braceRange(array $sig, int $from, int $n): ?array
+    {
+        for ($b = $from; $b < $n; $b++) {
+            if ($sig[$b]['text'] === '{' || $sig[$b]['text'] === ';') {
+                break;
+            }
+        }
+        if (($sig[$b]['text'] ?? '') !== '{') {
+            return null;
+        }
+        $depth = 0;
+        for ($e = $b; $e < $n; $e++) {
+            if ($sig[$e]['text'] === '{') {
+                $depth++;
+            } elseif ($sig[$e]['text'] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return [$b, $e];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array{0: ?int, 1: ?int} */
+    private function enclosingFunctionBody(array $sig, int $i, int $n): array
+    {
+        for ($j = $i; $j >= 0; $j--) {
+            if (strtolower($sig[$j]['text']) !== 'function') {
+                continue;
+            }
+            $body = $this->braceRange($sig, $j, $n);
+            if ($body === null) {
+                continue;
+            }
+            if ($i > $body[0] && $i < $body[1]) {
+                return [$body[0], $body[1]];
+            }
+        }
+
+        return [null, null];
+    }
+}

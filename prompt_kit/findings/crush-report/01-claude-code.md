@@ -1,4 +1,4 @@
-# Competitor deep-dive: Claude Code vs sugar-crush
+# Competitor deep-dive: Claude Code vs candy-code
 
 Feeds steps: 0.3, 0.4-a, 0.4-b, 0.5, 0.6, 0.7, 0.8, 0.11, 0.12, 0.15, 0.16, 1.A-1, 1.A-2, 1.C-1, 1.C-2, 1.C-3, 1.C-4b, 1.C-5, 2.1, 2.2-1, 2.2-2, 2.4-1, 2.4-2, 2.5, 2.6, 2.7-1b, 2.7-2, 2.8, 2.9, 2.12, 3.A-1, 3.A-2, 3.C, 3.D-1, 3.D-2, 3.D-3, 3.F, 3.I-2, 4.1-1, 4.1-2, 4.2, 4.3-2, 4.4, 4.6-2, 4.7-1, 4.7-2, 4.7-3, 4.9, 4.10-2, 5.1-1, 5.1-2, 5.2, 5.6, 5.7-1, 5.7-2, 5.11-2, 5.12, 5.13b, 5.14a, 5.14b, 5.14e, 5.14g, 5.14h, 5.14j, 5.14l, X-30, X-37a, N-P4c, P-B2, P-C1, P-D1, P-E2
 
@@ -437,7 +437,7 @@ All matching hooks run in parallel; `if` filters use permission-rule syntax, e.g
 
 ---
 
-## 13. Recommended improvements for sugar-crush
+## 13. Recommended improvements for candy-code
 
 ### P0-1. Cache-stable prefix: move volatile `<env>` out of the leading system prompt (→ 1.A-1, 1.A-2)
 
@@ -445,7 +445,7 @@ All matching hooks run in parallel; `if` filters use permission-rule syntax, e.g
 1. In `Runtime::systemPromptSections()` (`src/Runtime.php:2832-3144`), split `EnvironmentBlock` into a **static** part (cwd, OS, PHP, model, *date* rendered once per session) and a **dynamic** part (git status and diffs).
 2. Render the dynamic part as a reminder appended at the **end** of `$app->messages` for the step, not persisted into history. `EngineBackend::runTurn()` already rebuilds `$app->withMessages()` per step.
 3. Emit the post-write diff only as a delta reminder after the step that wrote.
-4. Freeze instruction and memory sections per session: memoise in `EngineBackend`, not in the per-turn `Runtime` (`EngineBackend.php:784`). Refresh on `/clear`, compaction or explicit reload. Pick one CLAUDE.md freshness policy deliberately and document it (Claude Code freezes until `/clear`/`/compact`; sugar-crush currently rebuilds per turn, applying edits immediately but busting the cache).
+4. Freeze instruction and memory sections per session: memoise in `EngineBackend`, not in the per-turn `Runtime` (`EngineBackend.php:784`). Refresh on `/clear`, compaction or explicit reload. Pick one CLAUDE.md freshness policy deliberately and document it (Claude Code freezes until `/clear`/`/compact`; candy-code currently rebuilds per turn, applying edits immediately but busting the cache).
 
 ### P0-2. Parent→child back-channel on the fork socket (→ 1.C-1, 1.C-2, 1.C-3, 1.C-4b, 1.C-5)
 

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { test as base, expect, openApp, send, SugarCrushServer } from './fixtures/server'
+import { test as base, expect, openApp, send, CandyCodeServer } from './fixtures/server'
 
 /**
  * `serve --allow-dir-browse`: "New session" opens a directory picker over the
@@ -8,10 +8,10 @@ import { test as base, expect, openApp, send, SugarCrushServer } from './fixture
  * and a `projects/` tree), and the session starts in the picked directory —
  * a workspace host of its own, whose tools act there.
  */
-const test = base.extend<object, { browseServer: SugarCrushServer }>({
+const test = base.extend<object, { browseServer: CandyCodeServer }>({
   browseServer: [
     async ({}, use) => {
-      const server = await SugarCrushServer.start((scratch) => {
+      const server = await CandyCodeServer.start((scratch) => {
         mkdirSync(join(scratch, 'projects', 'alpha', '.git'), { recursive: true })
         mkdirSync(join(scratch, 'projects', 'beta', 'deeper'), { recursive: true })
         mkdirSync(join(scratch, 'projects', '.hidden'), { recursive: true })

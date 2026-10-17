@@ -278,7 +278,7 @@ because research adds three items the PTY plan did not call out:)
 - Real daemon mode (§3.4).
 - OSC 52 clipboard — wire through sugar-vterm OSC handler once added.
 
-### sugar-crush
+### candy-code
 
 - **Session persistence** JSONL save/restore (H1) — no `SessionManager`.
 - **Real-time streaming UI** (H2) — `StreamingCommandBackend` exists but Chat/Renderer don't render incremental tokens.

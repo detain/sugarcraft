@@ -1,0 +1,147 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Hooks\BuiltIn;
+
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Hooks\HookInterface;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Permissions\PermissionDecision;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\ToolCall;
+
+/**
+ * Enforces a delegated sub-agent's OWN tool declaration on every call it makes
+ * through the engine path — the argument half of `tools: ['Bash(git *)']` and
+ * every argument-scoped `disallowedTools` entry (step 4.2).
+ *
+ * WHY A HOOK. {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} runs a sub-agent
+ * through the calling engine's own tool loop, narrowed to the preset's grant by
+ * tool NAME ({@see AgentManager::grantedToolsFor()}) — a tool schema cannot say
+ * "git commands only", so `Bash(git *)` puts the whole `Bash` tool on the wire.
+ * The per-call half lived in {@see AgentManager::evaluateToolCalls()}, reachable
+ * only from `executeSubAgent()`, which nothing in `src/` calls. So the built-in
+ * `reviewer`, declared `['Read', 'Grep', 'Bash(git *)']`, ran ANY Bash command
+ * the session gate allowed, and `disallowedTools: ['Bash(git push*)']` bit
+ * nothing. The PreToolUse chain is the one place the engine path already gates
+ * every call — rewrites re-scanned, the root handed in — so the check rides it
+ * rather than adding a second dispatch-time call site.
+ *
+ * THE MATCHER IS {@see AgentManager::grantRefusalFor()}, not a second one: the
+ * fail-closed {@see \SugarCraft\Code\Permissions\PermissionRule} dialect, where
+ * a denial is a UNION over a shell chain's segments and a grant an
+ * INTERSECTION, so `Bash(git *)` admits `git status` and refuses
+ * `git log && rm x`. A malformed declaration is a DENY naming it, never an
+ * allow.
+ *
+ * A REFUSAL IS A DENIED CALL, NOT A FAILED RUN. The model gets the reason as the
+ * call's result and may carry on inside its grant, the same as any other hook
+ * denial — the stop-the-run shape belongs to the dormant `executeSubAgent()`
+ * path, which has no transcript to continue.
+ *
+ * NOT AN OPT-OUT. {@see \SugarCraft\Code\Backend\EngineBackend::resolveHookManager()}
+ * registers it on the sub-agent's per-turn chain even under `withoutHooks()`,
+ * as it does the permission gate: a preset's declaration is the agent's own
+ * statement about itself and a hooks switch is not a way to widen it. It is the
+ * second gate, never a substitute for the first — the session's
+ * {@see PermissionGateHook} still judges every call this one admits.
+ *
+ * AND THE PRESET'S PERMISSION MODE (roadmap 4.1-2), when it is stricter than
+ * the session's: `$modeGate` is the sub-agent's own
+ * {@see \SugarCraft\Code\Agents\SubAgent::$permissionGate}, built for the
+ * stricter of the two modes ({@see AgentManager::createSubAgent()}), and every
+ * call the grant admits is put to it as well — `permissionMode: plan` denies a
+ * write the `default` session would only have asked about. It rides this hook
+ * rather than a second {@see PermissionGateHook} because that hook's name is
+ * the session gate's and re-registering it would REPLACE the session gate;
+ * this one's name is reserved the same way, so the preset's mode cannot be
+ * claimed or disabled either. Null — a preset no stricter than its session,
+ * whose gate could add nothing — skips it.
+ */
+final readonly class SubAgentGrantHook implements HookInterface
+{
+    /**
+     * Stable, so re-registering on the next turn REPLACES the hook instead of
+     * stacking two, and distinct from every user-hook name the built-ins use.
+     */
+    public const NAME = 'subagent-grant';
+
+    public function __construct(
+        private AgentManager $manager,
+        private SubAgent $subAgent,
+        private ?PermissionGate $modeGate = null,
+    ) {}
+
+    public function name(): string
+    {
+        return self::NAME;
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    /**
+     * Every tool, MCP bridges included: the declaration decides what a name
+     * means, so narrowing the matcher here would exempt whatever it missed.
+     */
+    public function matcher(): string
+    {
+        return '.*';
+    }
+
+    /** The run this hook polices — for a caller that reads the chain back. */
+    public function subAgent(): SubAgent
+    {
+        return $this->subAgent;
+    }
+
+    /** The preset's stricter-than-the-session gate, or null — see the class doc. */
+    public function modeGate(): ?PermissionGate
+    {
+        return $this->modeGate;
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        $call = new ToolCall($context->toolName, $context->toolArgs);
+        $root = $context->projectRoot === '' ? null : $context->projectRoot;
+
+        try {
+            $why = $this->manager->grantRefusalFor($call, $this->subAgent, $root);
+        } catch (\RuntimeException $malformed) {
+            return HookResult::deny(sprintf(
+                'Tool call "%s" refused: the declaration of agent "%s" cannot be applied (%s).',
+                $context->toolName,
+                $this->subAgent->agent->name,
+                $malformed->getMessage(),
+            ));
+        }
+
+        if ($why !== null) {
+            return HookResult::deny(sprintf('Tool call "%s" %s.', $context->toolName, $why));
+        }
+
+        if ($this->modeGate === null) {
+            return HookResult::allow();
+        }
+
+        $mode = $this->modeGate->mode()->value;
+        $agent = $this->subAgent->agent->name;
+
+        return match ($this->modeGate->evaluate($call, $root)) {
+            PermissionDecision::Allow => HookResult::allow(),
+            PermissionDecision::Deny => HookResult::deny(
+                "Permission mode '{$mode}' of agent \"{$agent}\" does not allow {$context->toolName}.",
+            ),
+            PermissionDecision::Ask => HookResult::ask(
+                "Allow {$context->toolName} to run? (agent \"{$agent}\" runs in permission mode: {$mode})",
+            ),
+        };
+    }
+}

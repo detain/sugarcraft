@@ -1,0 +1,495 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests;
+
+use SugarCraft\Code\ClaudeCodeMcpClient;
+use SugarCraft\McpClient\McpMessage;
+use SugarCraft\Code\Tests\Support\ClaudeMcpHandshakeFixture;
+use PHPUnit\Framework\TestCase;
+
+final class ClaudeCodeMcpClientTest extends TestCase
+{
+    /**
+     * The rename itself (crush_code.md Phase 2 item 1), asserted rather than
+     * grepped.
+     *
+     * The plan called the two `McpClient` classes duplicates. They were not:
+     * `SugarCraft\Code\McpClient` (this class, stdio JSON-RPC to the
+     * `claude` binary) and {@see \SugarCraft\Code\MCP\McpClient} (Guzzle
+     * HTTP over configured servers) sit in different namespaces, so nothing was
+     * ever broken and no PSR-4 rule was violated. What DID collide was the two
+     * TEST files' basename, which is why this file is now named after the class
+     * it drives. Both halves are pinned: the new FQN resolves, the old one does
+     * NOT — including through the autoloader, since a `class_alias` or a
+     * re-added `src/McpClient.php` would each make the old name resolve again
+     * and each would put the collision straight back.
+     */
+    public function testTheRenamedClassResolvesAtItsNewFqnAndTheOldNameIsGone(): void
+    {
+        $this->assertTrue(class_exists(ClaudeCodeMcpClient::class, true));
+        $this->assertSame('SugarCraft\\Code\\ClaudeCodeMcpClient', ClaudeCodeMcpClient::class);
+
+        $this->assertFalse(
+            class_exists('SugarCraft\\Code\\McpClient', true),
+            'the pre-rename FQN must not resolve — not via an alias, and not via a re-added src/McpClient.php',
+        );
+
+        // The sibling is untouched and is still a DIFFERENT class, which is the
+        // fact that made "duplicates" the wrong word for these two.
+        $this->assertTrue(class_exists(\SugarCraft\Code\MCP\McpClient::class, true));
+        $this->assertNotSame(
+            (new \ReflectionClass(ClaudeCodeMcpClient::class))->getShortName(),
+            (new \ReflectionClass(\SugarCraft\Code\MCP\McpClient::class))->getShortName(),
+            'the whole point of the rename is that the two short names differ',
+        );
+    }
+
+    /**
+     * E699 CONVERSION — the dormancy pin became an allowlist pin in the same
+     * commit that gave the seam its gated door. What is measured here is not
+     * "nothing reaches this class" but "exactly one thing reaches it, and it
+     * is the gated adapter": the set of files under `src/` that name
+     * {@see ClaudeCodeMcpClient} in CODE must equal
+     * {src/MCP/ClaudeCodeMcpServer.php}, BIDIRECTIONALLY — a new construction
+     * site reddens the added half, and deleting or renaming the adapter's
+     * reddens the missing half, so the seam can be neither widened nor
+     * orphaned quietly. `bin/` and `examples/` stay off the list entirely:
+     * the factory arm is still the only door, and it opens only for a
+     * `claude-mcp` entry behind the operator-tier `claudeMcpBinary` grant.
+     *
+     * The harness is the dormancy version on purpose — CODE, NOT PROSE, and
+     * the distinction stays load-bearing. This test used to be a
+     * `str_contains()` over the raw bytes of every file, which matched a
+     * `{@see}` in a doc comment exactly as readily as a `new` — so the day
+     * anyone cross-referenced this class from a neighbouring docblock the test
+     * would have gone red claiming the class was "reached from" a file that
+     * merely mentioned it, which is the mis-attribution this whole rename exists
+     * to stop. Comments are separated with {@see \token_get_all()}: a
+     * mention inside a `T_COMMENT`/`T_DOC_COMMENT` cannot reach anything, so it
+     * is collected and REPORTED rather than failed on. A name inside a string
+     * literal still counts as code — `class_exists('…')` and a container binding
+     * are both real reachability.
+     *
+     * MEASURED CEILING, stated so nobody over-trusts the pin: it is
+     * literal-name grammar — the §5 promise is "names the class in CODE",
+     * and a glued split construction (string-concatenating the class name
+     * past a `new`) evades it. Widening beyond that literal promise is
+     * deliberately not done here.
+     */
+    public function testTheOnlyPathToThisSeamIsTheGatedFactoryArm(): void
+    {
+        $lib = \dirname(__DIR__);
+        $callers = [];
+        $mentionedInProse = [];
+
+        foreach (['src', 'bin', 'examples'] as $dir) {
+            $path = $lib . '/' . $dir;
+            if (!\is_dir($path)) {
+                continue;
+            }
+
+            /** @var \SplFileInfo $file */
+            foreach (new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS)
+            ) as $file) {
+                if (!$file->isFile()) {
+                    continue;
+                }
+                $relative = \substr((string) $file->getPathname(), \strlen($lib) + 1);
+                if ($relative === 'src/ClaudeCodeMcpClient.php') {
+                    continue; // the declaration is not a call site
+                }
+                $source = (string) \file_get_contents((string) $file->getPathname());
+                if (!\str_contains($source, 'ClaudeCodeMcpClient')) {
+                    continue;
+                }
+                if (self::namesTheClassOutsideAComment($source)) {
+                    $callers[] = $relative;
+                } else {
+                    $mentionedInProse[] = $relative;
+                }
+            }
+        }
+
+        $this->assertSame(
+            ['src/MCP/ClaudeCodeMcpServer.php'],
+            $callers,
+            'ClaudeCodeMcpClient must be named in CODE by exactly one src file — the gated '
+                . 'claude-mcp adapter (E699). Anything else on this list is a construction site that '
+                . 'skipped the operator-tier claudeMcpBinary gate; an empty list means the adapter '
+                . 'moved or renamed without converting this pin. The gates the old dormancy note '
+                . 'demanded — binary-path policy and the PreToolUse chain in front of forwarded '
+                . 'calls — arrive via ClaudeCodeMcpServer::fromGrant() and McpToolBridge.'
+                . ($mentionedInProse === []
+                    ? ''
+                    : ' (Doc-comment mentions, which reach nothing and are not the failure: '
+                        . \implode(', ', $mentionedInProse) . '.)'),
+        );
+    }
+
+    /**
+     * The second half of the allowlist: the ADAPTER has one door too.
+     * `ClaudeCodeMcpServer::fromGrant` may appear outside comments at exactly
+     * one place in `src/`, and it must sit inside
+     * {@see \SugarCraft\Code\MCP\McpClient::buildServer()} — the `match`
+     * that is the factory's single `type` switch. `new ClaudeCodeMcpServer`
+     * is not merely unpinned here, it is impossible: the constructor is
+     * private, so `fromGrant` IS the construction grammar of this transport
+     * and pinning it pins every spawn the repository side can request.
+     */
+    public function testTheAdapterIsConstructedOnlyByTheFactoryArm(): void
+    {
+        $needle = 'ClaudeCodeMcpServer::fromGrant';
+        $lib = \dirname(__DIR__);
+        $found = [];
+
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($lib . '/src', \FilesystemIterator::SKIP_DOTS)
+        ) as $file) {
+            if (!$file->isFile() || !\str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+            $source = (string) \file_get_contents((string) $file->getPathname());
+            if (!\str_contains($source, $needle)) {
+                continue;
+            }
+            // Pure token walk: a `<?php` sequence inside doc prose would
+            // desynchronise any byte-arithmetic blank-out, so count the
+            // three-token sequence `ClaudeCodeMcpServer :: fromGrant`
+            // directly among non-comment tokens instead.
+            $tokens = \token_get_all($source);
+            $code = [];
+            foreach ($tokens as $index => $token) {
+                if (!\is_array($token)) {
+                    continue;
+                }
+                if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT || $token[0] === \T_INLINE_HTML) {
+                    continue;
+                }
+                if ($token[0] === \T_STRING
+                    && $token[1] === 'ClaudeCodeMcpServer'
+                    && isset($tokens[$index + 1], $tokens[$index + 2])
+                    // PHP 8 lexes the scope operator as an ARRAY token whose
+                    // text is the two-character '::' — compare texts.
+                    && (\is_array($tokens[$index + 1]) ? $tokens[$index + 1][1] : $tokens[$index + 1]) === '::'
+                    && \is_array($tokens[$index + 2])
+                    && $tokens[$index + 2][0] === \T_STRING
+                    && $tokens[$index + 2][1] === 'fromGrant') {
+                    $code[] = $index;
+                }
+            }
+            $count = \count($code);
+            if ($count > 0) {
+                // The hit sits inside buildServer when its token index is
+                // greater than the declaration's and no T_FUNCTION keyword
+                // starts a new body in between.
+                $declIndex = null;
+                $previous = null;
+                foreach ($tokens as $index => $token) {
+                    // The DECLARATION, not the call site: startServer()
+                    // invokes `$this->buildServer(...)` and would otherwise
+                    // win a bare name search; a `{@see ...buildServer()}`
+                    // doc mention must not win either.
+                    if (\is_array($token)
+                        && $token[0] === \T_STRING
+                        && $token[1] === 'buildServer'
+                        && \is_array($previous)
+                        && $previous[0] === \T_FUNCTION) {
+                        $declIndex = $index;
+                        break;
+                    }
+                    if (\is_array($token) && $token[0] === \T_WHITESPACE) {
+                        continue; // the name follows whitespace after the keyword
+                    }
+                    $previous = $token;
+                }
+                $anotherFunctionBetween = false;
+                if ($declIndex !== null) {
+                    for ($i = $declIndex + 1; $i < $code[0]; $i++) {
+                        if (\is_array($tokens[$i]) && $tokens[$i][0] === \T_FUNCTION) {
+                            $anotherFunctionBetween = true;
+                            break;
+                        }
+                    }
+                }
+                $found[\substr((string) $file->getPathname(), \strlen($lib) + 1)] = [
+                    'count' => $count,
+                    'insideBuildServer' => $declIndex !== null && $code[0] > $declIndex && !$anotherFunctionBetween,
+                ];
+            }
+        }
+
+        $this->assertSame(
+            ['src/MCP/McpClient.php' => ['count' => 1, 'insideBuildServer' => true]],
+            $found,
+            'the claude-mcp factory arm is the adapter\'s only construction door (E699); a second '
+                . 'fromGrant call, or the same call relocated outside buildServer, is a new door.',
+        );
+    }
+
+
+    /**
+     * True when the class name appears anywhere in $source that is not a
+     * comment.
+     *
+     * A file that does not parse as PHP yields a single `T_INLINE_HTML` token
+     * carrying the whole text; that counts as prose, which is the right answer
+     * for a `SKILL.md` or a YAML workflow under the scanned directories.
+     */
+    private static function namesTheClassOutsideAComment(string $source): bool
+    {
+        foreach (\token_get_all($source) as $token) {
+            if (!\is_array($token)) {
+                continue; // single-character token; cannot contain a class name
+            }
+            [$id, $text] = $token;
+            if ($id === \T_COMMENT || $id === \T_DOC_COMMENT || $id === \T_INLINE_HTML) {
+                continue;
+            }
+            if (\str_contains($text, 'ClaudeCodeMcpClient')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function testConstruction(): void
+    {
+        $client = new ClaudeCodeMcpClient('claude', ['--mcp'], ['capabilities' => ['tools' => true]]);
+
+        $this->assertSame('claude', $client->command);
+        $this->assertSame(['--mcp'], $client->args);
+        $this->assertSame(['capabilities' => ['tools' => true]], $client->initialOptions);
+        $this->assertFalse($client->isConnected());
+    }
+
+    public function testForClaudeCodeDefaults(): void
+    {
+        $client = ClaudeCodeMcpClient::forClaudeCode();
+
+        $this->assertSame('claude', $client->command);
+        $this->assertSame(['--mcp'], $client->args);
+        $this->assertFalse($client->isConnected());
+    }
+
+    public function testForClaudeCodeWithOptions(): void
+    {
+        $options = ['timeout' => 30];
+        $client = ClaudeCodeMcpClient::forClaudeCode($options);
+
+        $this->assertSame($options, $client->initialOptions);
+    }
+
+    public function testConnectThrowsWhenProcessFails(): void
+    {
+        $client = new ClaudeCodeMcpClient('nonexistent-command-xyz', [], null);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to spawn MCP process');
+
+        $client->connect();
+    }
+
+    public function testDisconnectWhenNotConnectedIsNoOp(): void
+    {
+        $client = new ClaudeCodeMcpClient();
+        $client->disconnect(); // should not throw
+        $this->assertFalse($client->isConnected());
+    }
+
+    public function testCallToolThrowsWhenNotConnected(): void
+    {
+        $client = new ClaudeCodeMcpClient();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('MCP client not connected');
+
+        $client->callTool('test_tool');
+    }
+
+    public function testListToolsThrowsWhenNotConnected(): void
+    {
+        $client = new ClaudeCodeMcpClient();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('MCP client not connected');
+
+        $client->listTools();
+    }
+
+    public function testSendMessageThrowsWhenNotConnected(): void
+    {
+        $client = new ClaudeCodeMcpClient();
+        $msg = McpMessage::notification('test');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('MCP client not connected');
+
+        $client->sendMessage($msg);
+    }
+
+    public function testReadMessagesWhenNotConnectedReturnsEmpty(): void
+    {
+        $client = new ClaudeCodeMcpClient();
+        $this->assertSame([], $client->readMessages());
+    }
+
+    public function testForClaudeCodeSetsCorrectCommandAndArgs(): void
+    {
+        $client = ClaudeCodeMcpClient::forClaudeCode(['protocolVersion' => '2024-11-05']);
+
+        $this->assertSame('claude', $client->command);
+        $this->assertCount(1, $client->args);
+        $this->assertSame('--mcp', $client->args[0]);
+        $this->assertNotNull($client->initialOptions);
+        $this->assertSame('2024-11-05', $client->initialOptions['protocolVersion']);
+    }
+
+    public function testInitialOptionsDefaults(): void
+    {
+        $client = new ClaudeCodeMcpClient();
+        $this->assertNull($client->initialOptions);
+
+        $client2 = new ClaudeCodeMcpClient('claude');
+        $this->assertNull($client2->initialOptions);
+    }
+
+    public function testConnectWithEmptyCommandThrows(): void
+    {
+        $client = new ClaudeCodeMcpClient('', [], null);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to spawn MCP process');
+
+        $client->connect();
+    }
+
+    public function testConnectWithNonexistentAbsolutePathThrows(): void
+    {
+        // A path with separator that doesn't exist as a file
+        $client = new ClaudeCodeMcpClient('/nonexistent/directory/command', [], null);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to spawn MCP process');
+
+        $client->connect();
+    }
+
+    public function testConnectWithPathSeparatorButNotExecutableThrows(): void
+    {
+        // Create a file that exists but is not executable
+        $tempFile = sys_get_temp_dir() . '/nonexec_' . uniqid((string) getmypid(), true);
+        file_put_contents($tempFile, '#!/bin/bash\necho test');
+        chmod($tempFile, 0644); // not executable
+
+        try {
+            $client = new ClaudeCodeMcpClient($tempFile, [], null);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Failed to spawn MCP process');
+
+            $client->connect();
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    /**
+     * A stdio MCP server must outlive the handshake — and since audit MCP-3 it
+     * must ANSWER it: `connect()` sends `initialize` as a request and waits for
+     * the result, so `cat` (which only echoes the request back, id, method and
+     * all) is no longer a server. The fixture answers the handshake and then
+     * holds its stdin open until EOF, so disconnect()'s fclose() is what ends
+     * it — no timeout, no orphan, no scheduling race.
+     *
+     * `true` and `echo` were always wrong here for a second reason: they exit
+     * immediately, so connect()'s handshake fwrite() races the kernel closing
+     * the pipe's read end, and an EPIPE warning is a failure under
+     * phpunit.xml's failOnWarning="true".
+     */
+    private const LIVE_SERVER_BODY = '<?php while (fgets(STDIN) !== false) {}';
+
+    private string $liveServerScript = '';
+
+    protected function tearDown(): void
+    {
+        if ($this->liveServerScript !== '' && is_file($this->liveServerScript)) {
+            unlink($this->liveServerScript);
+        }
+        $this->liveServerScript = '';
+
+        parent::tearDown();
+    }
+
+    private function liveServerScript(): string
+    {
+        if ($this->liveServerScript === '') {
+            $this->liveServerScript = (string) tempnam(sys_get_temp_dir(), 'cc_live_server_');
+            file_put_contents($this->liveServerScript, ClaudeMcpHandshakeFixture::around(self::LIVE_SERVER_BODY));
+        }
+
+        return $this->liveServerScript;
+    }
+
+    private function liveClient(): ClaudeCodeMcpClient
+    {
+        return new ClaudeCodeMcpClient(PHP_BINARY, [$this->liveServerScript()]);
+    }
+
+    public function testConnectReturnsEarlyWhenAlreadyConnected(): void
+    {
+        $client = $this->liveClient();
+        $client->connect();
+        $this->assertTrue($client->isConnected());
+
+        // The early return is observable two ways: it answers [] rather than
+        // readMessages(), and it leaves the child alone. Assert the second —
+        // a respawn would replace the process handle even if both calls
+        // happened to return an empty array.
+        $handle = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'process');
+        $before = $handle->getValue($client);
+
+        $this->assertSame([], $client->connect());
+        $this->assertSame($before, $handle->getValue($client));
+
+        $client->disconnect();
+    }
+
+    public function testDestructorDisconnects(): void
+    {
+        // __destruct() delegates to disconnect(); this pins that disconnect()
+        // cleans up without error while the child is still running.
+        $client = $this->liveClient();
+        $client->connect();
+        $this->assertTrue($client->isConnected());
+        // Explicitly disconnect to avoid relying on GC timing
+        $client->disconnect();
+        $this->assertFalse($client->isConnected());
+    }
+
+    public function testConnectSucceedsWithExistingExecutable(): void
+    {
+        $client = $this->liveClient();
+        $result = $client->connect();
+        $this->assertTrue($client->isConnected());
+        // connect() hands back the handshake it completed: the initialize result.
+        $this->assertCount(1, $result);
+        $this->assertTrue($result[0]->isResponse());
+        $this->assertSame('fixture', $result[0]->result['serverInfo']['name'] ?? null);
+        $client->disconnect();
+    }
+
+    public function testResolveExecutableFindsCommandInPath(): void
+    {
+        // A command with no path separator is resolved against PATH.
+        $command = 'php';
+        $this->assertStringNotContainsString(DIRECTORY_SEPARATOR, $command);
+
+        $client = new ClaudeCodeMcpClient($command, [$this->liveServerScript()]);
+        $client->connect();
+        $this->assertTrue($client->isConnected());
+        $client->disconnect();
+    }
+}

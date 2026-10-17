@@ -8,7 +8,7 @@ paths:
 
 - Tests at `<slug>/tests/<Class>Test.php`, namespace `<NS>\<Sub>\Tests\…`.
 - `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` — see `sugar-core/phpunit.xml`. Every public method needs ≥1 test.
-- **Loop-pinning bootstrap**: a suite that bounds waits with timers on the shared `Loop::get()` sets `bootstrap="tests/bootstrap.php"` and calls `\SugarCraft\Testing\LoopPin::pinStableClock()` there (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `sugar-crush`). Under ext-uv, timer deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue and fires on the first tick; `StreamSelectLoop` refreshes at arm time. Mechanism in `sugar-testing/src/LoopPin.php`, measurements on `sugar-core/src/Program.php`.
+- **Loop-pinning bootstrap**: a suite that bounds waits with timers on the shared `Loop::get()` sets `bootstrap="tests/bootstrap.php"` and calls `\SugarCraft\Testing\LoopPin::pinStableClock()` there (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `candy-code`). Under ext-uv, timer deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue and fires on the first tick; `StreamSelectLoop` refreshes at arm time. Mechanism in `sugar-testing/src/LoopPin.php`, measurements on `sugar-core/src/Program.php`.
 
 **Patterns** (`sugar-widgets/tests/`, `sugar-core/tests/`, `sugar-vterm/tests/`):
 - **Snapshot byte** — call `view()`, assert raw `\x1b[1m`-style SGR strings. Don't abstract.
@@ -17,7 +17,7 @@ paths:
 - **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]` tuple.
 - **Coercion** — feed negative/oversized index, empty, null; assert clamp/no-op matching upstream.
 - **Cross-lib parity** — `candy-vcr/tests/VtParityTest.php` diffs the `candy-vcr` renderer against the `sugar-vterm` engine and must stay green against BOTH the linked monorepo `sugar-vterm` and the stale Packagist `dev-master` the CI matrix resolves. Gate a version-dependent assertion on a feature marker (`Scrollback::clear()`) probed through the `vtCarriesMarker()` helper — a bare `\method_exists()` on a literal class name constant-folds under PHPStan and the arm reports as always-true/always-false. Delete the legacy arm once published `dev-master` carries the fix.
-- **Documentation drift** — `sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php` re-derive the rosters printed in `sugar-crush/README.md` + `sugar-crush/docs/*.md` from their generators in `sugar-crush/src/`. Adding a tool, slash command, env var, or key binding without the doc edit goes red.
+- **Documentation drift** — `candy-code/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `candy-code/tests/Commands/KeyBindingDriftTest.php` re-derive the rosters printed in `candy-code/README.md` + `candy-code/docs/*.md` from their generators in `candy-code/src/`. Adding a tool, slash command, env var, or key binding without the doc edit goes red.
 
 **Stream-write gotcha**: don't `ftruncate; rewind;` between writes — slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `sugar-core/tests/RendererTest.php`).
 

@@ -17,7 +17,7 @@ namespace SugarCraft\Core\Util\Executable;
  * `is_executable()` calls only.
  *
  * WHY UPSTREAM AT ALL: this resolution was solved sideways at least five
- * times across the monorepo — three copies inside sugar-crush alone
+ * times across the monorepo — three copies inside candy-code alone
  * (`ProcessContainment::locateOnPath()`, `ClaudeCodeMcpClient::resolveExecutable()`
  * and the `DetectsCapabilities` stat walk, the last pair of docblocks naming
  * the duplication on purpose) plus per-lib walkers in sugar-core's own

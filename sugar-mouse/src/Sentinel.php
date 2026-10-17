@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Sanitize;
  * Trust boundary: these codepoints are public constants, not secrets — the
  * sentinel DELIMITS our markup but authenticates nothing, so neutralising
  * foreign-sentinel bytes inside untrusted content is the CONSUMER's duty
- * (sugar-crush sweeps pasted/foreign frames through
+ * (candy-code sweeps pasted/foreign frames through
  * {@see Sanitize::stripZoneSentinels()} / {@see Sanitize::untrustedForMarkedFrames()}
  * before they can forge a zone boundary; any other host of marked frames
  * owns the same responsibility).

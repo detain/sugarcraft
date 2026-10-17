@@ -5,7 +5,7 @@ directory that does not survive a compact or a client restart. If a workflow scr
 `/tmp/claude-*` path, repoint it here: `docs/plans/crush_agent_rules.md`.
 
 
-Repo: /home/sites/sugarcraft (monorepo root). Lib: /home/sites/sugarcraft/sugar-crush.
+Repo: /home/sites/sugarcraft (monorepo root). Lib: /home/sites/sugarcraft/candy-code.
 Bash CWD does NOT persist between calls — use absolute paths or chain with &&.
 
 ## Forbidden
@@ -14,8 +14,8 @@ Bash CWD does NOT persist between calls — use absolute paths or chain with &&.
   The only visible signal is the skipped count going 1 -> 2, and then every figure you report is void.
 - NO global pkill (even the [p]hpunit bracket trick — it kills sibling agents). Kill only PIDs you started.
 - NO `caliber` anything.
-- Do not edit: sugar-crush/phpunit.xml, /home/sites/sugarcraft/.sugar-crush/config.json,
-  docs/plans/plans_cleaning.md, sugar-crush/python_port/.
+- Do not edit: candy-code/phpunit.xml, /home/sites/sugarcraft/.candy-code/config.json,
+  docs/plans/plans_cleaning.md, candy-code/python_port/.
 - Never `-c core.hooksPath=/dev/null`, never `--no-verify`.
 - Never delete dormant/unwired code because it looks incomplete. Wire it or document it as a seam.
 
@@ -51,15 +51,15 @@ So:
    claim, and it decays.**
 
 ## Running tests — KEEP CONTEXT SMALL
-- While iterating, run ONE test FILE: `cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/X/YTest.php`
+- While iterating, run ONE test FILE: `cd /home/sites/sugarcraft/candy-code && vendor/bin/phpunit tests/X/YTest.php`
   (~0.05-6s). Running `tests/Cli` as a DIRECTORY is allowed — the old ">4min hang" claim is
-  OBSOLETE: re-timed 2026-09-10, linked mode, cwd=sugar-crush, PHP 8.3.6 on a 64-core AMD
+  OBSOLETE: re-timed 2026-09-10, linked mode, cwd=candy-code, PHP 8.3.6 on a 64-core AMD
   Eng-Sample devbox: `timeout 300 php vendor/bin/phpunit tests/Cli --colors=never </dev/null`
   finished OK (860 tests, 8503 assertions) in 16.7s wall. Cwd matters for config resolution:
   the same directory argument from the sandbox ROOT (no `phpunit.xml`/bootstrap there) also
-  ran fast (18.3s) but failed the 4 stdin-pin tests — measure from cwd=sugar-crush.
+  ran fast (18.3s) but failed the 4 stdin-pin tests — measure from cwd=candy-code.
 - Run the FULL suite at most TWICE (once to see where you are, once at the end):
-  `cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit > /tmp/o.txt 2>&1; echo "rc=$?"; tail -5 /tmp/o.txt`
+  `cd /home/sites/sugarcraft/candy-code && vendor/bin/phpunit > /tmp/o.txt 2>&1; echo "rc=$?"; tail -5 /tmp/o.txt`
   REDIRECT, never pipe — `phpunit | tail` reports tail's exit code. Judge by rc, never the banner.
   Needs a 600000 ms timeout (~3 min).
 - Skipped MUST be exactly 1 (a known McpClient skip). 2 means the symlinks broke; say so loudly.
@@ -67,7 +67,7 @@ So:
 - tests/SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves is a KNOWN pre-existing
   timing flake. Don't skip it, don't weaken it, don't report it as your finding.
 
-BASELINE at commit 6c1e51c8: sugar-crush 7618 tests, 89206 assertions, 1 skipped, rc 0.
+BASELINE at commit 6c1e51c8: candy-code 7618 tests, 89206 assertions, 1 skipped, rc 0.
 
 ## Conventions
 declare(strict_types=1); first line. PSR-12, PHP 8.3+. final unless extension is the contract.

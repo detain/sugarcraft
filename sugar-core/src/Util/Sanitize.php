@@ -292,7 +292,7 @@ final class Sanitize
      * misrepresenting what was printed, and a progress bar's frames would read
      * as one garbled line. As a line break every byte of the payload stays on
      * screen, nothing is hidden, and the result agrees with consumers that
-     * already split on `\r\n|\r|\n` (sugar-crush's collapsed tool output,
+     * already split on `\r\n|\r|\n` (candy-code's collapsed tool output,
      * {@see cellValue()} with `$preserveNewlines`). A caller that needs a
      * single row still folds LF itself, exactly as with {@see untrusted()}.
      *

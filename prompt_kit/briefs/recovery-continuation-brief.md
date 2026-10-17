@@ -38,8 +38,8 @@ Read what is there first, then close only the gaps you find.
 
 - Worktree `/home/sites/prompt-step-P3.audit-fix-2`, branch `prompt/P3.audit-fix-2`, HEAD
   `0f415e493`. Already synced with master by the orchestrator — no conflicts, and the sync touched
-  no `sugar-crush/` file.
-- `sugar-crush/vendor/` is materialised; the PSR-4 root is verified to print the worktree's own
+  no `candy-code/` file.
+- `candy-code/vendor/` is materialised; the PSR-4 root is verified to print the worktree's own
   `src/`. **Never run `composer install`/`composer update`** — it de-symlinks `vendor/sugarcraft/*`
   and silently voids every measurement taken after it.
 - Your PRIVATE scratchpad: `<SCRATCH>/<STEP_ID>-cont/`. Every sub-agent you spawn gets its own
@@ -62,7 +62,7 @@ c4bbd9dda  seven figures re-derived; six of them were mine and wrong
 ```
 
 Scope, VERIFIED by the orchestrator (`git diff --stat master...HEAD`): exactly the six declared
-files, nothing outside `sugar-crush/` —
+files, nothing outside `candy-code/` —
 `src/Agents/Agent.php` +76 · `src/Runtime.php` +34 · `tests/Agents/AgentTest.php` +210 ·
 `tests/Context/EnvironmentBlockTest.php` +220 · `tests/RuntimeTest.php` +419 ·
 `tests/TreeWideGuardRosterTest.php` +2359 (NEW). 3303 insertions, 15 deletions.
@@ -117,7 +117,7 @@ read it). Its original brief, if `/tmp` still has it:
 
 ## YOUR JOB, IN THIS ORDER
 
-1. **Read the diff and the six files.** `git diff master...HEAD -- sugar-crush/`. Then read each
+1. **Read the diff and the six files.** `git diff master...HEAD -- candy-code/`. Then read each
    touched file in full — a diff hides what the surrounding code does.
 2. **Build the A1–A7 ledger.** For each finding: did it land? Name the `file:line` or test that
    satisfies it. **A finding you cannot point at is not done** — close it yourself.
@@ -138,7 +138,7 @@ read it). Its original brief, if `/tmp` still has it:
 
 ## VERIFY
 
-From `/home/sites/prompt-step-P3.audit-fix-2/sugar-crush`, each figure naming its cwd and command:
+From `/home/sites/prompt-step-P3.audit-fix-2/candy-code`, each figure naming its cwd and command:
 
 ```sh
 vendor/bin/phpunit tests/RuntimeTest.php
@@ -166,8 +166,8 @@ vendor/bin/phpunit \
 The full suite, **from the CHECKOUT ROOT**, box quiet, stdin redirected:
 ```sh
 ps -eo pid,cmd | /usr/bin/grep -c '[v]endor/bin/phpunit'     # must print 0 FIRST
-cd /home/sites/prompt-step-P3.audit-fix-2 && php sugar-crush/vendor/bin/phpunit \
-  -c sugar-crush/phpunit.xml --colors=never \
+cd /home/sites/prompt-step-P3.audit-fix-2 && php candy-code/vendor/bin/phpunit \
+  -c candy-code/phpunit.xml --colors=never \
   --log-junit <SCRATCH>/<STEP_ID>-cont/junit.xml </dev/null | tail -5
 ```
 **Master's figure: `Tests: 10526, Assertions: 162447, Skipped: 1`** — measured twice independently.
@@ -177,7 +177,7 @@ attribute every assertion of the delta** with `prompt_kit/tools/cmp.py`
 it in place). It names a mover in one pass; twenty-five guards were once measured one at a time
 before anyone thought of this.
 
-Then, **from the repo root** (not `sugar-crush/` — from the wrong cwd `php` cannot find the script
+Then, **from the repo root** (not `candy-code/` — from the wrong cwd `php` cannot find the script
 and it "fails"; that misread has happened twice):
 ```sh
 cd /home/sites/prompt-step-P3.audit-fix-2 && php tools/check-path-repos.php --no-lib-path-repos

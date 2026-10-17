@@ -1,6 +1,6 @@
 # SugarDiff
 
-Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. Extracted from `sugar-crush` (`Tools\Concerns\BuildsUnifiedDiff` + the `Tui\DiffGutter` region model) so every SugarCraft surface that shows or produces patches shares one faithful implementation. First-party: this is the ecosystem's own engine.
+Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. Extracted from `candy-code` (`Tools\Concerns\BuildsUnifiedDiff` + the `Tui\DiffGutter` region model) so every SugarCraft surface that shows or produces patches shares one faithful implementation. First-party: this is the ecosystem's own engine.
 
 ## Installation
 
@@ -10,9 +10,9 @@ composer require sugarcraft/sugar-diff
 
 ## Role
 
-- **`Diff::compute()`** — prefix/suffix-trimmed LCS over lines (same algorithmic guarantees as the sugar-crush trait: `>=` tie-break deletes first, `maxLcsCells` budget falls back to a whole-middle replace block), producing numbered `Line` rows grouped into `Hunk`s.
+- **`Diff::compute()`** — prefix/suffix-trimmed LCS over lines (same algorithmic guarantees as the candy-code trait: `>=` tie-break deletes first, `maxLcsCells` budget falls back to a whole-middle replace block), producing numbered `Line` rows grouped into `Hunk`s.
 - **`Writer\UnifiedFormat`** — renders `diff -u` shaped text: `--- / +++` headers, `@@ -a,b +c,d @@` hunk headers, optional `\ No newline at end of file` markers and `/dev/null` empty-side labels.
-- **`Reader\UnifiedScan`** — walks any rendered unified diff and tells a viewer which old/new line each row points at (the gutter model the sugar-crush TUI consumes), without owning any view code.
+- **`Reader\UnifiedScan`** — walks any rendered unified diff and tells a viewer which old/new line each row points at (the gutter model the candy-code TUI consumes), without owning any view code.
 
 ## Quickstart
 
@@ -33,7 +33,7 @@ echo $diff->unified('file.txt');
 // -Hello World
 // +Hello PHP
 
-// Options are immutable + fluent; defaults reproduce the sugar-crush output byte-for-byte.
+// Options are immutable + fluent; defaults reproduce the candy-code output byte-for-byte.
 $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withContextLines(10)
     ->withIgnoreWhitespace()
@@ -67,7 +67,7 @@ Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, col
 
 ## Fidelity notes
 
-- Default options reproduce `sugar-crush`'s `BuildsUnifiedDiff` output byte-for-byte; the `\ No newline` markers and `/dev/null` labels are opt-in GNU affordances the trait never emitted.
+- Default options reproduce `candy-code`'s `BuildsUnifiedDiff` output byte-for-byte; the `\ No newline` markers and `/dev/null` labels are opt-in GNU affordances the trait never emitted.
 - Header printing is GNU-faithful (oracle-verified vs `/usr/bin/diff -U0`): a zero-length side anchors at the line the hunk sits after (`@@ -1,0 +2 @@` mid-file, `@@ -0,0 +1 @@` at the head) and keeps its `,0`, while a single-line range drops its count (`-2`, not `-2,1`).
 - Hunk ranges always carry an explicit count: a single line renders `@@ -4,1 +4,1 @@`, where both GNU `diff -u` and git elide the `,1` as `@@ -4 +4 @@`.
 - File headers are git-style `--- a/<path>` / `+++ b/<path>` with no timestamps; GNU emits bare paths tab-separated from a date column.

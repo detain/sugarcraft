@@ -10,12 +10,12 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * An MCP server reached over a child process' stdin/stdout, speaking
  * newline-delimited JSON-RPC 2.0.
  *
- * Extracted from the sugar-crush MCP stack (src/MCP/StdioMcpServer.php); the
+ * Extracted from the candy-code MCP stack (src/MCP/StdioMcpServer.php); the
  * framing, handshake and lifecycle algorithms are faithful, with two
  * deliberate deltas documented below.
  *
  * DELTA — containment policy stays downstream, injected through a seam:
- * sugar-crush launches through ProcessContainment (setsid-wrapped detached
+ * candy-code launches through ProcessContainment (setsid-wrapped detached
  * spawn, PATH pre-check, curated environment). That is product policy about
  * WHO may be spawned, not part of the wire protocol, so the library spawns
  * plainly by default — plain argv array, ambient environment unless overrides
@@ -49,7 +49,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * callTool() carries NO deadline by default — a tool call is somebody's real
  * work (a build, a fetch) and minutes are legitimate; it is bounded by child
  * liveness rather than by a wall-clock kill of in-flight work. An embedder
- * that wants a bound OPTS IN per call (`$timeoutSeconds`, which sugar-crush
+ * that wants a bound OPTS IN per call (`$timeoutSeconds`, which candy-code
  * reads from a server's `toolTimeout`): the wait is abandoned at the deadline,
  * the server is told with `notifications/cancelled`, and the late reply is
  * skipped by the strict id match like any foreign one. That liveness bound is
@@ -66,7 +66,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * serverIsRunning()).
  *
  * FORK SAFETY (audit B1 / AG-1). An embedder may start a server in one process
- * and use the object from pcntl_fork()ed children — sugar-crush runs every turn
+ * and use the object from pcntl_fork()ed children — candy-code runs every turn
  * in a fork and parallel sub-agents in further forks. Every child inherits the
  * same pipes, so ONE server is shared by the whole process tree, and sharing
  * is made safe rather than avoided (re-spawning per process would relaunch an
@@ -531,7 +531,7 @@ final class StdioMcpServer implements McpServer
      * at start with signal 0.
      *
      * Signal 0 alone is not enough there: a server that died while the owner
-     * is busy elsewhere (sugar-crush's parent blocks in waitpid() on the turn,
+     * is busy elsewhere (candy-code's parent blocks in waitpid() on the turn,
      * never in proc_get_status()) stays an unreaped ZOMBIE, and kill(zombie, 0)
      * succeeds — so a forked turn would wait out a helper still holding the
      * pipes. Where /proc exists the probe therefore also reads the pid's state
@@ -653,7 +653,7 @@ final class StdioMcpServer implements McpServer
      * $onWait is the caller's liveness beat: it is called at least once per
      * READ_POLL_SECONDS for as long as this call waits — for the exchange
      * lock, for stdin to drain, for the reply — so an embedder whose own
-     * watchdog measures SILENCE (sugar-crush kills a turn after 120 s with no
+     * watchdog measures SILENCE (candy-code kills a turn after 120 s with no
      * frame) can tell "a tool is working" from "the turn is hung" without
      * this library guessing a deadline for somebody else's work. It may be
      * called far more often than that; throttling is the caller's business.

@@ -1,0 +1,1088 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Cli;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Commands\CommandLoader;
+use SugarCraft\Code\Config\LayeredSettings;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Memory\UnreadableNotes;
+use SugarCraft\Code\Skills\SkillLoader;
+
+/**
+ * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
+ * migrated ONE caller onto it. This file is the guard for the other twenty-six.
+ *
+ * HOW THAT NUMBER IS OBTAINED — not by `grep`, which overstates it by roughly
+ * double because the identifier is mostly prose in `Bootstrap.php`'s
+ * doc-blocks. `Bootstrap.php` holds TWENTY-SEVEN calls to the seam by a token scan
+ * (`token_get_all()`, whitespace and comments stripped, T_STRING of that name
+ * both preceded by `::` and followed by `(`); one of them is round 39's, so
+ * this file guards the other twenty-six. Re-derive it in one command:
+ * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest`,
+ * which also fails on this sentence by name if the count moves.
+ *
+ * WHAT THIS SAID: "the other fourteen — thirteen until round 42 (E78) routed
+ * Bootstrap::reportPrunedSessions()'s retention summary onto the seam as the
+ * fifteenth call site". WHAT IS TRUE NOW: E78's summary was indeed the
+ * fifteenth, E86 (round 43) routed `mcpClient()`'s start-then-throw catch as
+ * the sixteenth, and P7.S3 routed the two enabled-skill drop notices in
+ * `Bootstrap::promptEnabledSkills()` as the seventeenth and eighteenth, and
+ * the same step's two `enabledSkills` shape notices in that method as the
+ * nineteenth and twentieth, and E653 (round 65) routed the narrowed-grant
+ * aggregate drain as the twenty-first, and E172 (round 70) routed the
+ * command-file skip aggregate as the twenty-second, and the audit 15d-02
+ * follow-up routed the unreadable-memory-note aggregate as the twenty-third,
+ * so on that writing "the other" stood at twenty-two and not twenty-one. WHY THE
+ * HISTORY STILL EARNS ITS PLACE: it records that this file's scope GROWS with
+ * the seam — a reader who adds a further call site and does not add a case
+ * here has left it unguarded, and the ordinals are what make that obligation
+ * visible. Round 44 (E97) turned the obligation into a failing test rather
+ * than a sentence, since three rounds of readers walked past the sentence.
+ *
+ * WHAT IS PINNED, AND WHY IT IS NOT "THE NOTICE EXISTS". A test asserting that
+ * the transcript list is non-empty passes while the sentence is wrong, and a
+ * test asserting only the transcript passes while stderr has silently stopped
+ * saying it — which would be a regression for `-p` and for the scrollback a user
+ * gets back after quitting. So every case below reads BOTH channels off ONE
+ * child launch and asserts the same fact on each: `[$stderr, $notices]`.
+ *
+ * EVERY CASE IS A REAL LAUNCH IN A CHILD PROCESS under a sandboxed HOME, not a
+ * reflection call on the seam. The seam is three lines; the thing that can break
+ * is which call sites reach it, and only a launch measures that.
+ *
+ * @see \SugarCraft\Code\Tests\Chat\LaunchNoticesTest for the Chat end.
+ * @see BootstrapToolAndPermissionSettingsTest for the round-39 caller's own
+ *      block, whose harness this file's runInChildLaunch() is modelled on.
+ */
+final class BootstrapLaunchNoticeRoutingTest extends TestCase
+{
+    private string $tmpDir = '';
+    private string $home = '';
+    private string $configDir = '';
+    private string $projectRoot = '';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tmpDir = sys_get_temp_dir() . '/bootstrap_noticeroute_' . uniqid('', true);
+        $this->home = $this->tmpDir . '/home';
+        $this->configDir = $this->home . '/.candy-code';
+        $this->projectRoot = $this->tmpDir . '/repo';
+
+        mkdir($this->configDir, 0o700, true);
+        mkdir($this->projectRoot . '/' . LayeredSettings::dir(), 0o700, true);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeTree($this->tmpDir);
+
+        parent::tearDown();
+    }
+
+    /**
+     * THE MOST USER-VISIBLE DEGRADATION THIS CLASS REPORTS, and the one whose
+     * stderr-only routing was hardest to defend: a launch whose provider threw
+     * runs on {@see \SugarCraft\Code\Providers\EchoProvider}, so every reply is
+     * a parrot, and the only line saying why was painted over 0.47s later.
+     *
+     * BOTH TIERS IN ONE LAUNCH, which is not a contrivance — the env-var tier
+     * falling through is exactly what makes the persisted tier run, so a real
+     * misconfiguration reaches both. Asserted as two DISTINCT sentences, because
+     * the per-launch de-dup keys on the message and a routing that collapsed
+     * them would report the wrong one.
+     */
+    public function testBothProviderFallbacksReachBothChannels(): void
+    {
+        $this->writeUserConfig(['provider' => 'nope-persisted']);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::backend(null);\n",
+            ['CANDY_CODE_PROVIDER' => 'nope-env'],
+        );
+
+        // The routing this case guards is the fallback NOTICE reaching both
+        // channels once each, in order — not the provider-copy inside it, which
+        // rv-enduser-3 widened (valid-types list + nearest match). Assert the
+        // stable head/tail of each message so a change to the middle copy does
+        // not silently un-route the notice.
+        self::assertCount(2, $notices);
+        self::assertStringContainsString(
+            "provider 'nope-env' unavailable (Unknown provider type: nope-env",
+            $notices[0],
+        );
+        self::assertStringEndsWith('; falling back to echo', $notices[0]);
+        self::assertStringContainsString(
+            "persisted provider 'nope-persisted' unavailable (Unknown provider type: nope-persisted",
+            $notices[1],
+        );
+        self::assertStringEndsWith('; falling back to echo', $notices[1]);
+
+        self::assertStringContainsString(
+            "candy-code: provider 'nope-env' unavailable (Unknown provider type: nope-env",
+            $stderr,
+        );
+        self::assertStringContainsString(
+            "candy-code: persisted provider 'nope-persisted' unavailable "
+            . "(Unknown provider type: nope-persisted",
+            $stderr,
+        );
+    }
+
+    /**
+     * A DROPPED RULE IS A SILENT WIDENING — {@see \SugarCraft\Code\Permissions\PermissionRule}
+     * degrades a malformed pattern to a name no real tool matches, so a `deny`
+     * typo'd this way denies NOTHING for the whole session.
+     *
+     * AND IT USED TO BE SAID TWICE. {@see Bootstrap::chat()} reaches
+     * {@see Bootstrap::permissionRules()} through BOTH
+     * {@see Bootstrap::permissionGate()} and {@see Bootstrap::agentManager()},
+     * and these were raw {@see Bootstrap::warnPermissionConfig()} calls with no
+     * de-duplication — measured at 8add627b, two bad rules printed FOUR stderr
+     * lines. The `substr_count` assertions are the regression guard for that,
+     * and they are the reason this case drives both entry points rather than
+     * just the gate.
+     */
+    public function testDroppedPermissionRulesReachBothChannelsExactlyOnce(): void
+    {
+        $this->writeUserConfig(['permissionRules' => [
+            ['pattern' => '((', 'action' => 'deny'],
+            ['pattern' => 'Bash', 'action' => 'nonsense'],
+        ]]);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::permissionGate();\n"
+            . '\\SugarCraft\\Code\\Cli\\Bootstrap::agentManager(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(2, $notices);
+        self::assertStringContainsString("permissionRules[0] ('((')", $notices[0]);
+        self::assertStringContainsString('rule skipped rather than loaded', $notices[0]);
+        self::assertStringContainsString("permissionRules[1] ('Bash') has no valid 'action'", $notices[1]);
+
+        self::assertSame(1, substr_count($stderr, "permissionRules[0] ('((')"));
+        self::assertSame(1, substr_count($stderr, "permissionRules[1] ('Bash')"));
+    }
+
+    /**
+     * The strictly more severe sibling of the report round 39 migrated: that one
+     * says which tools a project took, this one says there are none left. An
+     * operator watching a model refuse to read a file has no other way to learn
+     * why — and `disabledTools: ["*"]` is a SUPPORTED configuration, so there is
+     * no refusal to fall back on.
+     */
+    public function testAnEmptyToolSetReachesBothChannels(): void
+    {
+        $this->writeUserSettings(['disabledTools' => ['*']]);
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::tools(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertSame(
+            ['allowedTools/disabledTools left no tools at all, so the model will be given an empty '
+                . 'tool set and can do nothing but talk'],
+            $notices,
+        );
+        self::assertStringContainsString('left no tools at all', $stderr);
+    }
+
+    /**
+     * A project `hooks.yaml` this user has not opted into is shell the session
+     * will NOT run — the repository author expects it to, and the operator
+     * finds out by a guard silently not firing.
+     *
+     * The stderr count is pinned at 1 because {@see Bootstrap::chat()} builds
+     * two hook chains; that was already guarded per PATH, and the assertion is
+     * here so the seam's own message-keyed de-dup cannot be mistaken for it.
+     */
+    public function testARefusedProjectHookFileReachesBothChannels(): void
+    {
+        file_put_contents($this->projectRoot . '/.candy-code/hooks.yaml', "hooks: []\n");
+
+        // A REAL chat(), not a direct hooks() call: chat() builds TWO hook
+        // chains (its own and the engine backend's), which is the shape the
+        // stderr count below is guarding against.
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringContainsString('hooks.yaml was NOT loaded', $notices[0]);
+        self::assertStringContainsString('trustedProjectHooks', $notices[0]);
+        self::assertSame(1, substr_count($stderr, 'was NOT loaded'));
+    }
+
+    /**
+     * A skill file that could not be read is a capability the session does not
+     * have, and the user meets it as `/skill` not offering something they wrote.
+     *
+     * ONE ROW WHATEVER THE COUNT — this message is an aggregate, and that is
+     * what makes it safe to seat in a transcript that also carries
+     * twenty-six other sources (twenty-seven seam call sites by the token scan in
+     * {@see BootstrapTranscriptSeamCallSiteCensusTest}, of which this is one;
+     * `grep` gives about double and is the wrong tool). Two unreadable files,
+     * one notice, and the notice says two.
+     */
+    public function testSkippedSkillFilesReachBothChannelsAsOneAggregateRow(): void
+    {
+        foreach (['alpha', 'beta'] as $name) {
+            mkdir($this->projectRoot . '/.candy-code/skills/' . $name, 0o700, true);
+            $file = $this->projectRoot . '/.candy-code/skills/' . $name . '/SKILL.md';
+            file_put_contents($file, "---\nname: {$name}\n---\nbody\n");
+            chmod($file, 0o000);
+        }
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringContainsString(
+            sprintf(Bootstrap::SKILL_SKIP_NOTICE_FORMAT, 2, 's', 'were', SkillLoader::DEBUG_SKIPS_ENV, 'them'),
+            $notices[0],
+        );
+        self::assertSame(1, substr_count($stderr, 'skill files were not loaded'));
+    }
+
+    /**
+     * A memory note the store could not read is a note the user wrote that has
+     * silently stopped working — skipped since audit 15d-04, and until the
+     * 15d-02 follow-up reported only to the MODEL, inside the prompt. Both
+     * stores the session reads are scanned, every scope, and the result is ONE
+     * row in both channels: two broken notes (one per store and scope) plus a
+     * clean one that must not be counted.
+     */
+    public function testUnreadableMemoryNotesReachBothChannelsAsOneAggregateRow(): void
+    {
+        mkdir($this->configDir . '/memory/user', 0o700, true);
+        file_put_contents($this->configDir . '/memory/user/broken.md', "no frontmatter at all\n");
+        file_put_contents(
+            $this->configDir . '/memory/user/fine.md',
+            "---\nid: fine\ntype: pattern\nscope: user\n---\nA readable note.\n",
+        );
+        mkdir($this->projectRoot . '/.candy-code/memory/project', 0o700, true);
+        file_put_contents($this->projectRoot . '/.candy-code/memory/project/broken.md', "---\n: : :\n---\nbody\n");
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        $expected = sprintf(UnreadableNotes::NOTICE_FORMAT, 2, 's', 'were', 'project: 1, user: 1', 'they are');
+        self::assertSame([$expected], $notices);
+        self::assertSame(1, substr_count($stderr, $expected));
+    }
+
+    /**
+     * Audit 15d-05: unkeyed project notes an earlier build left in the shared
+     * home `project/` directory bind to the first project that reads them —
+     * and the user is told so ONCE, in both channels. The second launch, in
+     * a fresh process, says nothing: the notes are this project's now.
+     */
+    public function testLegacyHomeProjectNotesBindToTheFirstLaunchWithOneNotice(): void
+    {
+        mkdir($this->configDir . '/memory/project', 0o700, true);
+        file_put_contents(
+            $this->configDir . '/memory/project/legacy.md',
+            "---\nid: legacy\ntype: pattern\nscope: project\n---\nWritten before keying.\n",
+        );
+
+        $launch = '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n";
+        [$stderr, $notices] = $this->launch($launch);
+
+        $expected = sprintf(
+            Bootstrap::MEMORY_LEGACY_BOUND_NOTICE_FORMAT,
+            1,
+            '',
+            'is',
+            $this->projectRoot,
+            $this->configDir . '/memory/project/' . MemoryStore::projectKeyFor($this->projectRoot),
+        );
+        self::assertSame([$expected], $notices);
+        self::assertSame(1, substr_count($stderr, $expected));
+        self::assertFileExists(
+            $this->configDir . '/memory/project/' . MemoryStore::projectKeyFor($this->projectRoot) . '/legacy.md',
+        );
+
+        [, $again] = $this->launch($launch);
+        self::assertSame([], $again);
+    }
+
+    /**
+     * AUDIT R1: an instruction file the system prompt leaves out was a pointer
+     * line the MODEL saw and a `refusedPaths()` entry nothing drained, so the
+     * user who wrote the CLAUDE.md learned nothing. Both kinds of verdict are
+     * here — AGENTS.md is over the loader's read ceiling and never read, and
+     * CLAUDE.md is read but its escaped frame overruns the splice's
+     * per-document budget — and both land in ONE row in both channels, worded
+     * with the verdicts the prompt itself makes.
+     */
+    public function testInstructionFilesLeftOutOfThePromptReachBothChannelsAsOneRow(): void
+    {
+        file_put_contents($this->projectRoot . '/CLAUDE.md', "# Tags\n\n" . str_repeat('<env>', 12_000));
+        file_put_contents($this->projectRoot . '/AGENTS.md', str_repeat("Convention line for the fixture.\n", 2_200));
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringStartsWith('2 instruction files were left out of the system prompt — ', $notices[0]);
+        self::assertSame(1, substr_count($stderr, '2 instruction files were left out of the system prompt'));
+        // Named relative to the root, so the clipped transcript row still
+        // reaches both verdicts.
+        self::assertStringContainsString('AGENTS.md (is 72,600 bytes, over the ', $notices[0]);
+        self::assertStringContainsString('; CLAUDE.md (renders to ', $notices[0]);
+        self::assertStringContainsString('per-document instruction budget', $stderr);
+        self::assertStringNotContainsString($this->projectRoot . '/CLAUDE.md', $stderr);
+    }
+
+    /**
+     * AUDIT R1, the skill half: an enabled skill whose body is over the skill
+     * budget reaches the prompt as its heading and a pointer, and that verdict
+     * used to be recorded nowhere. One row, naming the skill and the budget.
+     * Driven through the `-p` construction path's report directly, since the
+     * enabled skill is the user's own and needs no project at all.
+     */
+    public function testAnEnabledSkillOverTheSkillBudgetReachesBothChannels(): void
+    {
+        mkdir($this->configDir . '/skills/huge', 0o700, true);
+        file_put_contents(
+            $this->configDir . '/skills/huge/SKILL.md',
+            "---\nname: huge\ndescription: an oversized skill\n---\n" . str_repeat('Step of the oversized skill. ', 1_000),
+        );
+        $this->writeUserConfig(['enabledSkills' => ['huge']]);
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::reportPromptBudgetDeferrals(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertMatchesRegularExpression(
+            '/^1 enabled skill is over the skill budget, so only its heading and a pointer reach the system prompt'
+                . ' — huge \(about [\d,]+ tokens, over the 5,000-token per-skill budget\)$/u',
+            $notices[0],
+        );
+        self::assertSame(1, substr_count($stderr, '1 enabled skill is over the skill budget'));
+    }
+
+    /**
+     * AUDIT R12: a `maxToolSteps` or `maxOutputTokens` value the resolvers will
+     * not use resolves to the default — that stays — and the operator used to
+     * hear nothing about the typo. One row per bad key, value in its JSON
+     * spelling, through a real launch.
+     */
+    public function testNonsenseStepAndTokenCeilingsReachBothChannels(): void
+    {
+        $this->writeUserConfig(['maxToolSteps' => 1.5, 'maxOutputTokens' => 'lots']);
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertSame(
+            [
+                'maxToolSteps is 1.5, which is not a positive whole number; the shipped per-turn step ceiling applies',
+                'maxOutputTokens is "lots", which is not a positive token count; '
+                    . "no output ceiling is sent, so the provider's own default applies",
+            ],
+            $notices,
+        );
+        self::assertSame(1, substr_count($stderr, 'maxToolSteps is 1.5'));
+        self::assertSame(1, substr_count($stderr, 'maxOutputTokens is "lots"'));
+    }
+
+    /**
+     * ...and a usable value, an unset one, or the set-but-empty `""` this lib
+     * reads as unset everywhere, says nothing — the notice is for values the
+     * resolver ignored, not for every key that is present.
+     */
+    public function testUsableOrUnsetCeilingsRaiseNoNotice(): void
+    {
+        $this->writeUserConfig(['maxToolSteps' => '16', 'maxOutputTokens' => '']);
+
+        [, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::reportNonsenseLimits();\n",
+        );
+
+        self::assertSame([], $notices);
+    }
+
+    /**
+     * The R16 follow-up: `TuiErrorLog::install()` falls back from the home log
+     * to a private temp-dir log and then to the null device, silently by
+     * design. The launch now says which — and says nothing when the home log
+     * was used or the operator kept their own destination. Registered before
+     * `chat()`, as `bin/candy-code` does, because `chat()` starts the launch's
+     * notice list empty.
+     */
+    public function testATuiErrorLogFallbackIsReportedAtLaunch(): void
+    {
+        $chat = '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n";
+        $register = static fn(?string $destination): string
+            => '\\SugarCraft\\Code\\Cli\\Bootstrap::useTuiErrorLog(' . var_export($destination, true) . ");\n";
+
+        [$stderr, $notices] = $this->launch($register('/tmp/candy-code-1000/candy-code.log') . $chat);
+        $expected = sprintf(
+            Bootstrap::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT,
+            '~/.candy-code/logs/candy-code.log',
+            '/tmp/candy-code-1000/candy-code.log',
+        );
+        self::assertSame([$expected], $notices);
+        self::assertSame(1, substr_count($stderr, $expected));
+
+        [, $notices] = $this->launch($register('/dev/null') . $chat);
+        self::assertSame(
+            [sprintf(Bootstrap::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT, '~/.candy-code/logs/candy-code.log')],
+            $notices,
+        );
+
+        [, $notices] = $this->launch($register($this->home . '/.candy-code/logs/candy-code.log') . $chat);
+        self::assertSame([], $notices, 'the home log is where the docs send the user; nothing to say');
+
+        [, $notices] = $this->launch($register(null) . $chat);
+        self::assertSame([], $notices, "the operator's own destination is theirs to know");
+
+        // The production route: bin/candy-code hands install()'s answer to app().
+        [, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::app(' . var_export($this->projectRoot, true) . ", tuiErrorLog: '/dev/null');\n",
+        );
+        self::assertSame(
+            [sprintf(Bootstrap::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT, '~/.candy-code/logs/candy-code.log')],
+            $notices,
+        );
+    }
+
+    /**
+     * {@see Bootstrap::reportNonsenseLimits()} judges `maxOutputTokens` with a
+     * mirror of `EngineBackend::maxOutputTokens()`, because that resolver runs
+     * per turn where no launch channel exists. A mirror can drift, so both are
+     * run here over the edge cases the two doc-blocks name, the engine's by
+     * reflection, and must answer alike.
+     */
+    public function testTheTokenVerdictMirrorsTheEngineResolver(): void
+    {
+        $engine = new \ReflectionMethod(\SugarCraft\Code\Backend\EngineBackend::class, 'maxOutputTokens');
+        $mirror = new \ReflectionMethod(Bootstrap::class, 'resolvedMaxOutputTokens');
+
+        $values = [
+            null, '', 0, -1, 1, 2047, 2047.9, 0.5, '16', '16x', 'lots', true, false, [], [4096],
+            1e19, INF, -INF, NAN, PHP_INT_MAX, (float) PHP_INT_MAX, '99999999999999999999', ' 12', '1e3',
+        ];
+        foreach ($values as $value) {
+            $config = ['maxOutputTokens' => $value];
+            self::assertSame(
+                $engine->invoke(null, $config),
+                $mirror->invoke(null, $config),
+                'the launch verdict disagrees with the engine for ' . var_export($value, true),
+            );
+        }
+    }
+
+    /**
+     * A command file the loader could not read is a `/command` the user typed
+     * and did not get — the same class of loss as the skill row above, and
+     * E172's drain half wired it with the same one-row shape for the same
+     * flood argument (the map is per-FILE; the transcript is bounded).
+     *
+     * TWO SYMLINKS LEAVING `.candy-code/commands`, which lands both entries
+     * on the containment skip without any permission theater — a chmod-based
+     * fixture would run blind as root, and the escape IS the failure the
+     * loader exists to refuse. Two files, one notice, and the notice says
+     * two; the paths ride only behind the loader's debug gate, which this
+     * launch does not enable.
+     */
+    public function testSkippedCommandFilesReachBothChannelsAsOneAggregateRow(): void
+    {
+        $outside = $this->tmpDir . '/outside-commands';
+        mkdir($outside, 0o700, true);
+        mkdir($this->projectRoot . '/.candy-code/commands', 0o700, true);
+
+        foreach (['alpha', 'beta'] as $name) {
+            $target = $outside . '/' . $name . '.md';
+            file_put_contents($target, "---\nname: {$name}\n---\nbody\n");
+            symlink($target, $this->projectRoot . '/.candy-code/commands/' . $name . '.md');
+        }
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringContainsString(
+            sprintf(
+                Bootstrap::COMMAND_SKIP_NOTICE_FORMAT,
+                2,
+                's',
+                'were',
+                CommandLoader::DEBUG_REFUSALS_ENV,
+                'them',
+            ),
+            $notices[0],
+        );
+        self::assertSame(1, substr_count($stderr, 'could not be read'));
+
+        // The unbounded half stays off both channels: the row COUNTS, the
+        // paths are the gated detail, and an aggregate that leaked them
+        // would re-open the flood the summary exists to prevent.
+        self::assertStringNotContainsString('alpha.md', $notices[0]);
+        self::assertStringNotContainsString('beta.md', $notices[0]);
+    }
+
+    /**
+     * A directory this REPOSITORY committed and the launch refused: the
+     * project's skills, commands, agents or workflows are absent from the
+     * session, and the operator meets that by typing a name that does not
+     * resolve. The path plus the reason is the whole of what they need, which is
+     * why this stayed one row per path rather than a count — and why it is the
+     * one per-PATH source on the seam, which is what
+     * {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists for.
+     */
+    public function testARefusedProjectDirectoryReachesBothChannels(): void
+    {
+        $outside = $this->tmpDir . '/outside/skills';
+        mkdir($outside, 0o700, true);
+        symlink($outside, $this->projectRoot . '/.candy-code/skills');
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringStartsWith(
+            'ignoring ' . $this->projectRoot . '/.candy-code/skills — resolves to ' . $outside,
+            $notices[0],
+        );
+        self::assertStringContainsString('outside the directory it is anchored to', $notices[0]);
+        self::assertSame(1, substr_count($stderr, 'ignoring ' . $this->projectRoot));
+    }
+
+    /**
+     * THE CAP, measured rather than restated. Six malformed rules past the cap
+     * is a real shape for a hand-edited config, and it is the per-ENTRY fan-out
+     * {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists for: these rows are part of
+     * the CONVERSATION, so an unbounded list is a per-token cost on every turn
+     * for the whole session, not a scrolling nuisance.
+     *
+     * THE OVERFLOW IS SAID, NOT SWALLOWED. A bare truncation would be the same
+     * silence the seam was built to end, so the tail row carries the count and
+     * names the channel that has the rest — and stderr really does have every
+     * one, which is the half that makes the tail row honest.
+     *
+     * The row counts are DERIVED from {@see Bootstrap::LAUNCH_NOTICE_LIMIT}
+     * (audit CLI-3 raised it from 24 to 36): what this pins is the shape — cap
+     * rows, then one overflow row counting the six — not a number that has to
+     * be re-typed here every time the cap moves.
+     */
+    public function testAFanOutOfNoticesIsCappedAndTheOverflowIsCounted(): void
+    {
+        $limit = self::launchNoticeLimit();
+        $total = $limit + 6;
+        $rules = [];
+        for ($i = 0; $i < $total; $i++) {
+            $rules[] = ['pattern' => "Bogus{$i}", 'action' => 'nonsense'];
+        }
+        $this->writeUserConfig(['permissionRules' => $rules]);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::permissionGate();\n",
+        );
+
+        self::assertCount($limit + 1, $notices, 'the cap\'s worth of notices plus one overflow row');
+        $last = $limit - 1;
+        self::assertStringContainsString("permissionRules[{$last}] ('Bogus{$last}')", $notices[$last]);
+        self::assertSame(
+            sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            $notices[$limit],
+        );
+
+        // …and not vacuously: the channel the tail row points at really does
+        // carry every one of them, including the six the transcript could not
+        // fit.
+        self::assertSame($total, substr_count($stderr, 'rule skipped rather than coerced'));
+        $final = $total - 1;
+        self::assertStringContainsString("permissionRules[{$final}] ('Bogus{$final}')", $stderr);
+
+        // AND THROUGH A REAL chat(), which is the half that pins the plumbing
+        // rather than the cap: {@see Bootstrap::chat()} has to read the
+        // ACCESSOR, because reading the raw list would hand the transcript a
+        // cap's worth of rows with no indication that six more existed — a silent truncation
+        // inside the seam built to end silence. Measured without this: the
+        // assertions above all still pass.
+        [, $history] = $this->launch(
+            '$chat = \\SugarCraft\\Code\\Cli\\Bootstrap::chat('
+            . var_export($this->projectRoot, true) . ");\n"
+            . '$rows = [];' . "\n"
+            . 'foreach ($chat->history as $m) { $rows[] = $m->content; }' . "\n"
+            . 'echo json_encode($rows);' . "\n",
+        );
+
+        // $limit capped notices + the overflow row + rv-enduser-4's offline-echo
+        // notice, which rides OUTSIDE the cap (a single fixed row, not flood
+        // traffic) and lands after the overflow tail through both entry points.
+        self::assertCount($limit + 2, $history);
+        self::assertStringContainsString(
+            sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            $history[$limit],
+        );
+        self::assertStringContainsString('offline echo backend', $history[$limit + 1]);
+    }
+
+    /**
+     * THE PER-MESSAGE CLIP. A `pattern` is a string out of the user's config and
+     * nothing bounds its length, so one entry could otherwise contribute a
+     * kilobyte to every prompt of the session.
+     *
+     * Asserted on the TRANSCRIPT copy only, because the stderr copy is
+     * deliberately not clipped — that channel is the complete record, and it is
+     * what the clip marker points the reader at. Both halves are checked here,
+     * since a clip that also truncated stderr would destroy the thing it
+     * advertises.
+     */
+    public function testAnOverlongNoticeIsClippedForTheTranscriptButNotForStderr(): void
+    {
+        $pattern = '(' . str_repeat('z', 900);
+        $this->writeUserConfig(['permissionRules' => [['pattern' => $pattern, 'action' => 'deny']]]);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::permissionGate();\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertSame(400, mb_strlen($notices[0], 'UTF-8'));
+        self::assertStringEndsWith('… (clipped; full text on stderr)', $notices[0]);
+
+        // The full 900-character pattern survives on the channel the marker
+        // names — otherwise the marker is a lie.
+        self::assertStringContainsString($pattern, $stderr);
+        self::assertStringNotContainsString('clipped; full text on stderr', $stderr);
+    }
+
+    /**
+     * {@see Bootstrap::app()} — the entry point `bin/candy-code` actually runs —
+     * calls {@see Bootstrap::reportSkillSkips()} and
+     * {@see Bootstrap::reportProjectTierRefusals()} a SECOND time, AFTER
+     * {@see Bootstrap::chat()} has already read the notice list on its way out.
+     *
+     * So the hosted chat has to be given the DELTA, and only the delta:
+     * {@see \SugarCraft\Code\Chat::withLaunchNotices()} appends, so handing it
+     * the whole list a second time puts every launch warning in the transcript
+     * TWICE. That is the failure this case measures — the notice count in the
+     * App's hosted chat against the notice count in a bare `chat()`, from two
+     * launches of the same fixture.
+     */
+    public function testTheAppShellDoesNotDoubleTheNoticesChatAlreadySeeded(): void
+    {
+        $this->writeUserSettings(['disabledTools' => ['*']]);
+
+        $root = var_export($this->projectRoot, true);
+        $rows = static fn (string $expr): string => "\$chat = {$expr};\n"
+            . "\$out = [];\n"
+            . "foreach (\$chat->history as \$m) { \$out[] = \$m->content; }\n"
+            . "echo json_encode(\$out);\n";
+
+        [, $viaChat] = $this->launch($rows("\\SugarCraft\\Code\\Cli\\Bootstrap::chat({$root})"));
+        [, $viaApp] = $this->launch(
+            $rows("\\SugarCraft\\Code\\Cli\\Bootstrap::app({$root})->chat"),
+        );
+
+        self::assertSame(
+            ['allowedTools/disabledTools left no tools at all, so the model will be given an empty '
+                . 'tool set and can do nothing but talk',
+                // rv-enduser-4 (crush-review-1014): the sandbox HOME has no provider, so
+                // chat() seeds the offline-echo notice as its own baseline row; read
+                // through Lang because pinning THIS test's point — the delta invariant —
+                // to the copy's exact wording was never its purpose.
+                trim(Lang::t('chat.launch.echo_backend'))],
+            $viaChat,
+            'the bare chat() transcript is the baseline the shell must not change',
+        );
+        self::assertSame($viaChat, $viaApp, 'app() must add the delta, never re-apply the whole list');
+    }
+
+    /**
+     * The delta's TWO SIDES MUST READ THE SAME LIST, and only an overflowed
+     * launch can tell whether they do.
+     *
+     * {@see Bootstrap::app()} takes its offset before the second scan and
+     * slices at the end; {@see Bootstrap::launchNotices()} SYNTHESISES the
+     * "and N more" row rather than storing it, so the accessor is one longer
+     * than the raw property exactly when a launch has overflowed. Take the
+     * offset from the raw property and slice from the accessor and the two
+     * bases disagree by that one row — the slice then carries an "and N more"
+     * the hosted chat ALREADY had, and the transcript says it twice.
+     *
+     * {@see testTheAppShellDoesNotDoubleTheNoticesChatAlreadySeeded()} cannot
+     * see this: its fixture raises one notice, so nothing overflows, the
+     * accessor and the raw property are the same length, and the two bases
+     * agree by accident. MEASURED — with the offset changed to
+     * `\count(self::$launchNotices)`, every other case in this file still
+     * passes and only this one fails.
+     */
+    public function testTheAppShellDeltaSurvivesALaunchThatOverflowedBeforeTheShellWasBuilt(): void
+    {
+        $limit = self::launchNoticeLimit();
+        $rules = [];
+        for ($i = 0; $i < $limit + 6; $i++) {
+            $rules[] = ['pattern' => "Bogus{$i}", 'action' => 'nonsense'];
+        }
+        $this->writeUserConfig(['permissionRules' => $rules]);
+
+        $root = var_export($this->projectRoot, true);
+        $rows = static fn (string $expr): string => "\$chat = {$expr};\n"
+            . "\$out = [];\n"
+            . "foreach (\$chat->history as \$m) { \$out[] = \$m->content; }\n"
+            . "echo json_encode(\$out);\n";
+
+        [, $viaChat] = $this->launch($rows("\\SugarCraft\\Code\\Cli\\Bootstrap::chat({$root})"));
+        [, $viaApp] = $this->launch(
+            $rows("\\SugarCraft\\Code\\Cli\\Bootstrap::app({$root})->chat"),
+        );
+
+        // The cap's notices + exactly ONE overflow row + the one offline-echo
+        // notice (rv-enduser-4; outside the cap by design), through both entry
+        // points — the delta law the case exists for is the assertSame below.
+        self::assertCount($limit + 2, $viaChat, 'the cap holds through a bare chat()');
+        self::assertSame($viaChat, $viaApp, 'the shell must not re-append the overflow row');
+
+        // Not vacuous: the row that would be duplicated is really present, and
+        // really appears once.
+        self::assertSame(
+            1,
+            substr_count(
+                implode("\n", $viaApp),
+                sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            ),
+            'the overflow row must appear exactly once in the hosted transcript',
+        );
+    }
+
+    /**
+     * RETENTION DELETED CONVERSATIONS, and this is the only thing on the seam
+     * whose subject is data the launch destroyed rather than a setting it
+     * declined. Migrated in round 42 (E78).
+     *
+     * WHAT THE ROUTING RULE USED TO SAY ABOUT IT, in
+     * {@see Bootstrap::warnPermissionConfigInTranscript()}: stderr only,
+     * because this is "about history already deleted, not about this session's
+     * capabilities". WHAT IS TRUE NOW: the rule is "iff it names something the
+     * session can no longer DO", and after a prune the session can no longer
+     * resume, branch, rename or rewind the rows named here — `/resume` and
+     * `session list` are shorter than the user left them. The 0.47s alternate-
+     * screen window the seam's doc-block measures applies to this line exactly
+     * as it does to a provider fallback.
+     *
+     * THE SPLIT IS THE POINT: ONE summary row on the transcript whatever the
+     * prune deleted, and the per-session ids on stderr ONLY. A prune of fifty
+     * sessions must not put fifty rows into a list that is re-sent to the model
+     * on every turn — that is the per-ENTRY fan-out
+     * {@see Bootstrap::LAUNCH_NOTICE_LIMIT} exists to refuse. So this fixture
+     * prunes TWO sessions and asserts the transcript carries one row naming
+     * neither id, while stderr carries both.
+     *
+     * WHAT THIS DOC-BLOCK USED TO CLAIM: that the split is "asserted from both
+     * sides".
+     * WHAT IS TRUE NOW, and round 42's review is what worked it out: only the
+     * stderr side is asserted by a clause that can fail first. The transcript
+     * side is pinned by an exact `assertSame` on the whole notice list, and an
+     * exact equality already excludes every string an
+     * `assertStringNotContainsString` below it could catch — PHPUnit stops at
+     * the first failure, so those calls are unreachable as failures.
+     * WHY THEY STILL EARN THEIR PLACE: they are the clause that survives the
+     * `assertSame` being loosened. An exact-equality assertion on a formatted
+     * message is the first thing a later change relaxes to a `assertCount` or a
+     * `assertStringContainsString` — and the moment it is, "the ids are not in
+     * the transcript" stops being implied and starts being the only thing
+     * saying so. They are documentation with a trigger, not a second
+     * measurement, and this doc-block now says which is which. The LIVE stderr
+     * clause is the `'<id> (last used …'` containment: emptying the detail loop
+     * reds it and nothing else.
+     *
+     * THE EXEMPTION IS EXERCISED, which it previously was not. `keeper` is the
+     * row {@see Bootstrap::sessionStore()} passes to `pruneSessions()` as
+     * `$exemptSessionId` (it takes `listSessions(1)[0]['id']`, and
+     * `LIST_SESSIONS_SQL` orders `updated_at DESC`). The first version of this
+     * fixture left `keeper` at a current timestamp, so it survived on AGE and
+     * deleting the exemption outright would not have moved this test. It is now
+     * aged to 2021 — a year past the 30-day cutoff, and still the newest of the
+     * three, so it is both a prune candidate and the resumable row. It survives
+     * for exactly one reason now, and the assertion that says so is placed
+     * BEFORE the summary so that reason is what a failure names.
+     *
+     * DRIVEN THROUGH Bootstrap::sessionStore() rather than chat(): that is the
+     * production caller (chat() calls it early and reads launchNotices() last,
+     * which is what makes the notice reachable at all), and it keeps the
+     * fixture to a session.db instead of a whole project tree.
+     */
+    public function testRetentionSummaryReachesBothChannelsWhileTheIdsStayOnStderr(): void
+    {
+        $db = $this->configDir . '/session.db';
+        $store = new \SugarCraft\Code\Session\EnhancedSessionStore($db);
+        // All three are unnamed and all three are aged past the cutoff, so all
+        // three are prune candidates. `keeper` is aged to 2021 rather than 2020
+        // so it is the NEWEST — which is what makes it `listSessions(1)[0]` and
+        // therefore the row sessionStore() hands pruneSessions() as its
+        // exemption. It survives on the exemption alone; see the doc-block.
+        foreach (['keeper', 'gone-one', 'gone-two'] as $id) {
+            $store->createSession($id, 'p', 'm', null, null);
+        }
+        $store->addMessage('gone-one', ['role' => 'user', 'content' => 'a month of work']);
+        unset($store);
+
+        $pdo = new \PDO('sqlite:' . $db);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->prepare('UPDATE sessions SET updated_at = ? WHERE id IN (?, ?)')
+            ->execute(['2020-01-01 00:00:00', 'gone-one', 'gone-two']);
+        $pdo->prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')
+            ->execute(['2021-01-01 00:00:00', 'keeper']);
+        unset($pdo);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::sessionStore();\n",
+            ['CANDY_CODE_SESSION_RETENTION_DAYS' => '30'],
+        );
+
+        // FIRST, so that a lost exemption is what the failure names. `keeper`
+        // is a full year past the cutoff and unnamed; the only thing standing
+        // between it and deletion is sessionStore() passing the resumable id to
+        // pruneSessions(). Drop that argument and this reds here, before the
+        // summary's arithmetic reds two lines down.
+        self::assertStringNotContainsString(
+            'keeper',
+            $stderr,
+            'the session the launch would resume must survive retention however old it is',
+        );
+
+        self::assertSame(
+            [sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 2, 'sessions', 30)],
+            $notices,
+            'the transcript must carry exactly one aggregate row for the prune',
+        );
+        self::assertStringContainsString(
+            sprintf(
+                Bootstrap::STDERR_LINE_FORMAT,
+                sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 2, 'sessions', 30),
+            ),
+            $stderr,
+            'the stderr half of the seam must still say it',
+        );
+
+        // The ids are the unbounded half, and they are on stderr ONLY. The
+        // containment is the live clause; the exclusion is the one the
+        // assertSame above already implies — kept for the day that assertSame
+        // is loosened, and labelled as such in the doc-block rather than sold
+        // as a second measurement.
+        // The fixture above gave `gone-one` one message and left `gone-two`
+        // empty, so the two rows take different plural forms — a hand-typed
+        // identical needle for both would miss a plural bug either way.
+        foreach (['gone-one' => 1, 'gone-two' => 0] as $id => $messages) {
+            self::assertStringContainsString(
+                sprintf(
+                    Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+                    $id,
+                    '2020-01-01 00:00:00',
+                    $messages,
+                    $messages === 1 ? 'message' : 'messages',
+                ),
+                $stderr,
+            );
+            self::assertStringNotContainsString($id, $notices[0]);
+        }
+    }
+
+    /**
+     * The complement, and the reason the case above is not just "a string
+     * appears": a launch that pruned NOTHING must seed no row at all. Without
+     * this, a seam that unconditionally announced retention would pass every
+     * assertion above and put a line about deleted history into the transcript
+     * of every single launch.
+     */
+    public function testALaunchThatPrunedNothingSeedsNoRetentionRow(): void
+    {
+        $store = new \SugarCraft\Code\Session\EnhancedSessionStore($this->configDir . '/session.db');
+        $store->createSession('fresh', 'p', 'm', null, null);
+        unset($store);
+
+        [$stderr, $notices] = $this->launch(
+            "\\SugarCraft\\Code\\Cli\\Bootstrap::sessionStore();\n",
+            ['CANDY_CODE_SESSION_RETENTION_DAYS' => '30'],
+        );
+
+        self::assertSame([], $notices);
+        self::assertStringNotContainsString('retention removed', $stderr);
+    }
+
+    /**
+     * X-37a: a key that a file which LOADED declares and nothing acts on is
+     * named at launch — one aggregated row per format, on both channels — and
+     * the file is never refused for it. One fixture per format: a preset with
+     * an inert `color:` and a misspelt key, a skill with
+     * `allowed-tools` and `context: fork`, a command with `subtask: true`,
+     * and a rule whose `enable: false` silently leaves it enabled.
+     */
+    public function testIgnoredFrontmatterReachesBothChannelsAsOneRowPerFormat(): void
+    {
+        $sc = $this->projectRoot . '/.candy-code';
+        mkdir($sc . '/agents', 0o700, true);
+        file_put_contents($sc . '/agents/rev.md', "---\ndescription: Reviews.\ncolor: red\npermisionMode: plan\n---\nReview.\n");
+        mkdir($sc . '/skills/fork-me', 0o700, true);
+        file_put_contents($sc . '/skills/fork-me/SKILL.md', "---\ndescription: Forks.\nallowed-tools: Read\ncontext: fork\n---\nbody\n");
+        mkdir($sc . '/commands', 0o700, true);
+        file_put_contents($sc . '/commands/iso.md', "---\ndescription: Isolated.\nsubtask: true\n---\nDo it.\n");
+        mkdir($sc . '/rules', 0o700, true);
+        file_put_contents($sc . '/rules/style.md', "---\nenable: false\n---\nUse tabs.\n");
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        $rows = array_values(array_filter(
+            $notices,
+            static fn (string $n): bool => str_contains($n, 'frontmatter candy-code ignores'),
+        ));
+        self::assertCount(4, $rows, implode("\n", $notices));
+        self::assertContains(
+            '1 agent preset declares frontmatter candy-code ignores: `color` is not acted on (rev); '
+            . '`permisionMode` is not an agent preset field (did you mean `permissionMode`?) (rev)',
+            $rows,
+        );
+        self::assertContains(
+            '1 skill declares frontmatter candy-code ignores: `allowed-tools` is not acted on (fork-me); '
+            . '`context: fork` is not acted on (fork-me)',
+            $rows,
+        );
+        self::assertContains(
+            '1 command declares frontmatter candy-code ignores: `subtask: true` is not acted on (/iso)',
+            $rows,
+        );
+        self::assertContains(
+            '1 rule declares frontmatter candy-code ignores: `enable` is not a rule field (did you mean `enabled`?) (style)',
+            $rows,
+        );
+
+        foreach ($rows as $row) {
+            self::assertSame(1, substr_count($stderr, $row), "stderr did not carry the row once: {$row}");
+        }
+    }
+
+    /**
+     * E156: the per-spawn redirection below is LOAD-BEARING, not tidiness.
+     * WHAT WAS SAID: the file should stop leaking sixty-odd `candy-code:`
+     * notices onto the suite's stderr. TRUE NOW: it cannot — every child this
+     * harness spawns writes stdout and stderr into per-launch files
+     * (`>%s 2>%s`), and those files ARE the assertion channels, so the suite's
+     * own streams never see a byte of child noise. WHY IT EARNS ITS PLACE:
+     * silencing at the source (error_log routing, ini flags) would blind the
+     * exact checks that live in this file — the stderr half of every seam is
+     * read back from `$errFile`. The noise the round-62 audit counted came
+     * from spawns in OTHER harness files that inherit the suite's streams;
+     * those files carry their own E156 entry (seam list in the lane report).
+     *
+     * @param array<string, string> $env
+     * @return array{0: string, 1: mixed} stderr, decoded stdout
+     */
+    private function launch(string $body, array $env = []): array
+    {
+        $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $name = 'launch' . count(glob($this->tmpDir . '/launch*.php') ?: []);
+        $script = $this->tmpDir . '/' . $name . '.php';
+        $errFile = $this->tmpDir . '/' . $name . '-stderr.txt';
+        $outFile = $this->tmpDir . '/' . $name . '-stdout.txt';
+
+        // Only the cases that build a Chat print their own payload; the rest
+        // report the notice list, so it is appended when the body has not
+        // already echoed something.
+        $emitsOwnPayload = str_contains($body, 'echo json_encode');
+
+        file_put_contents(
+            $script,
+            "<?php\nrequire " . var_export($autoload, true) . ";\n" . $body
+            . ($emitsOwnPayload ? '' : "echo json_encode(\\SugarCraft\\Code\\Cli\\Bootstrap::launchNotices());\n"),
+        );
+
+        // `default` (not the empty/absent spelling) so these launches resolve
+        // to a NON-bypass permission mode. rv-sec-1 added an unavoidable
+        // bypass-mode launch notice, and every case below launches headless —
+        // under the headless bypass default that notice would ride into the
+        // exact-count and cap arithmetic these tests pin. It is orthogonal to
+        // what this file guards (provider-fallback, dropped-rule, empty-tool-set
+        // and over-long-notice ROUTING, none of which depend on the mode) and
+        // has its own pin in {@see BypassLaunchBannerTest}.
+        $prefix = 'HOME=' . escapeshellarg($this->home) . ' CANDY_CODE_PERMISSION_MODE=default ';
+        foreach ($env as $key => $value) {
+            $prefix .= $key . '=' . escapeshellarg($value) . ' ';
+        }
+
+        exec(sprintf(
+            '%stimeout -s KILL 20 %s %s >%s 2>%s',
+            $prefix,
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($script),
+            escapeshellarg($outFile),
+            escapeshellarg($errFile),
+        ));
+
+        $stdout = is_file($outFile) ? (string) file_get_contents($outFile) : '';
+        $stderr = is_file($errFile) ? (string) file_get_contents($errFile) : '';
+
+        self::assertNotSame('', $stdout, "child launch produced no stdout; stderr was:\n" . $stderr);
+
+        return [$stderr, json_decode($stdout, true, 512, JSON_THROW_ON_ERROR)];
+    }
+
+    /** @param array<string, mixed> $data */
+    private function writeUserConfig(array $data): void
+    {
+        $path = $this->configDir . '/config.json';
+        file_put_contents($path, (string) json_encode($data));
+        chmod($path, 0o600);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function writeUserSettings(array $data): void
+    {
+        $path = $this->configDir . '/' . LayeredSettings::USER_FILE;
+        file_put_contents($path, (string) json_encode($data));
+        chmod($path, 0o600);
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $entries = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        /** @var \SplFileInfo $entry */
+        foreach ($entries as $entry) {
+            if ($entry->isDir() && !$entry->isLink()) {
+                @rmdir($entry->getPathname());
+                continue;
+            }
+
+            @chmod($entry->getPathname(), 0o600);
+            @unlink($entry->getPathname());
+        }
+
+        @rmdir($dir);
+    }
+
+    /** {@see Bootstrap::LAUNCH_NOTICE_LIMIT}, which is private. */
+    private static function launchNoticeLimit(): int
+    {
+        $limit = (new \ReflectionClass(Bootstrap::class))->getConstant('LAUNCH_NOTICE_LIMIT');
+        self::assertIsInt($limit);
+
+        return $limit;
+    }
+}

@@ -1,0 +1,73 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Providers;
+
+interface ProviderInterface
+{
+    public function name(): string;
+
+    public function supportsStreaming(): bool;
+
+    public function supportsFunctionCalling(): bool;
+
+    public function supportsVision(): bool;
+
+    public function supportsJsonSchema(): bool;
+
+    /**
+     * The model's context window in PROVIDER-COUNTED tokens, or 0 when this
+     * provider has no way to know one.
+     *
+     * 0 means UNKNOWN and must never be read as "no limit": it is the signal
+     * {@see \SugarCraft\Code\Context\ContextWindow::resolve()} turns into
+     * the one named fallback. A provider that guesses a large number instead
+     * silently becomes the denominator of every context tier in
+     * {@see \SugarCraft\Code\Chat} — the reminder, the automatic
+     * compaction and the blocking refusal are all percentages of this — and a
+     * guess that is too large switches all three off rather than erring
+     * toward compacting early. {@see EchoProvider} is the in-repo case.
+     */
+    public function contextWindow(): int;
+
+    /**
+     * USD per 1,000 tokens for one model, or null when this provider has NO
+     * price on file for it.
+     *
+     * null IS THE ANSWER, not an error to average away: the pre-billing-fix
+     * OpenAI table fabricated $0.01/1k for EVERY unknown model, inventing a
+     * bill the provider never sent and silently arming spend caps against a
+     * made-up rate. A null says "I do not know", the caller keeps the dollar
+     * figure at its honest lower bound of 0.0, and {@see \SugarCraft\Code\Usage::$unpricedModel}
+     * carries the blindness to the transcript notice and the spend-cap
+     * disclosure. Providers whose service IS free (self-hosted Sglang, Custom)
+     * keep returning a real 0.0 — that is a measurement, not a shrug.
+     *
+     * @param 'input'|'output' $direction
+     */
+    public function costPer1kTokens(string $model, string $direction): ?float;
+
+    public function complete(CompleteRequest $request): CompleteResponse;
+
+    /**
+     * Stream the completion as a generator of per-chunk deltas.
+     *
+     * STREAMED USAGE IS PER-DELTA, NOT CUMULATIVE. Each yielded
+     * CompleteResponse's `tokensUsed`/`costUsd` is that chunk's own increment;
+     * consumers sum the values across the whole stream to obtain the turn's
+     * total ({@see \SugarCraft\Code\Runtime::runStreaming()} then
+     * {@see \SugarCraft\Code\Usage::sum()}). Implementers whose wire protocol
+     * reports cumulative totals must emit each total exactly once — on the
+     * terminal chunk, or split across disjoint bucket events as
+     * {@see \SugarCraft\Code\Providers\VertexProvider} does — never repeated on
+     * every chunk, because a repeated cumulative total is summed N times.
+     * All-zero chunks are compliant when the wire carried no usage: they sum to
+     * the true "nothing reported" answer.
+     *
+     * @return \Generator<int, CompleteResponse>
+     */
+    public function completeStream(CompleteRequest $request): \Generator;
+
+    public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse;
+}

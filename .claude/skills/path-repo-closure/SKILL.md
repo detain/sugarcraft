@@ -66,16 +66,16 @@ So wiring a new `sugarcraft/<dep>` is **one edit**: the `require` line. Do not a
 
 ## Examples
 
-**User says:** "Wire up a dependency on sugar-forms in sugar-crush."
+**User says:** "Wire up a dependency on sugar-forms in candy-code."
 
 **Actions taken:**
 1. Confirm `sugar-forms/composer.json` exists.
-2. Add `"sugarcraft/sugar-forms": "dev-master"` to `sugar-crush/composer.json` `require`. **No `repositories[]` edit.**
-3. `cd sugar-crush && composer update sugarcraft/sugar-forms` → resolves from Packagist, pulling `sugar-async` with it.
+2. Add `"sugarcraft/sugar-forms": "dev-master"` to `candy-code/composer.json` `require`. **No `repositories[]` edit.**
+3. `cd candy-code && composer update sugarcraft/sugar-forms` → resolves from Packagist, pulling `sugar-async` with it.
 4. `vendor/bin/phpunit` → green.
 5. `php tools/check-path-repos.php --no-lib-path-repos` → clean.
 
-**Result:** one added line. A fresh clone of `sugarcraft/sugar-crush` installs successfully, and CI still tests against the monorepo's own `sugar-forms` because it injects the path-repos before installing.
+**Result:** one added line. A fresh clone of `sugarcraft/candy-code` installs successfully, and CI still tests against the monorepo's own `sugar-forms` because it injects the path-repos before installing.
 
 ## Common Issues
 

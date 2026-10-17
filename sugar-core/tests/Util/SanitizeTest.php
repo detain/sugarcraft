@@ -614,7 +614,7 @@ final class SanitizeTest extends TestCase
         // allocator moved to U+E002 + id (a32c4faae ruling, follow-up 2 of 2),
         // so image ids 0/1 are no longer the zone sentinels and a rendered
         // screenshot can never speak the zone language. The whole PUA sweep in
-        // sugar-crush's maskImageMarkers() stays as defense-in-depth, but the
+        // candy-code's maskImageMarkers() stays as defense-in-depth, but the
         // byte-identity premise it documented is hereby retired.
         $this->assertNotSame(Sanitize::ZONE_SENTINEL_OPEN, ImageOverlay::marker(0));
         $this->assertNotSame(Sanitize::ZONE_SENTINEL_CLOSE, ImageOverlay::marker(1));

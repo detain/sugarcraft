@@ -81,7 +81,7 @@ final class Color
      *                        docblock. {@see toSgr()} is the only reader INSIDE
      *                        this class; the property is `public readonly`, so
      *                        it is new public API and callers read it directly
-     *                        (sugar-core's own ColorTest does, and sugar-crush's
+     *                        (sugar-core's own ColorTest does, and candy-code's
      *                        contrast suite asserts on it to tell a palette
      *                        slot from a nudged absolute colour).
      */

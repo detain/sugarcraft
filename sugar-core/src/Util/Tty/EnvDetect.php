@@ -130,7 +130,7 @@ final class EnvDetect
      *
      * WHAT IS TRUE NOW: it has no caller anywhere.  Verified by symbol
      * across this package's `src`, and across `src`/`bin` of every
-     * sibling reachable from `sugar-crush`'s vendor closure: the only
+     * sibling reachable from `candy-code`'s vendor closure: the only
      * occurrence of the name is this declaration.  {@see \SugarCraft\Core\Util\Tty::backend()}
      * and `Tty::concreteBackendClass()` reach {@see isWsl()},
      * {@see isMintty()} and {@see isCygwin()} out of this same class and

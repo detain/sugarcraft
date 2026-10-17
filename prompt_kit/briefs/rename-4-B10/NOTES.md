@@ -44,7 +44,7 @@ State file, updated incrementally per step. History lines mentioning old vocabul
 - Capital-hyphen `Sugar-tick`→`Candy-codetime` ×10 (research 5, repo_map 1, repo_map update 4). <!-- @rename-keep -->
 - Glued-path sweep: 5 `sugarcraft_sugar-tick.md` cites + `plan_sugar-tick.md` pointer rewritten (renamed targets exist under new names). <!-- @rename-keep -->
 - R5: root composer require+repositories auto (tool), lock updated, refresh-deps full linked serial, gen-docs --check 0, gen-ansi-readme --check 0.
-- R6: residue 0 findings; suite EXACT 144T/349A rc=0; tools/tests EXACT 426T/1484A; path-repos rc=0; child-lifetimes rc=0 (60/28/8); sugar-crush consumers ZERO refs.
+- R6: residue 0 findings; suite EXACT 144T/349A rc=0; tools/tests EXACT 426T/1484A; path-repos rc=0; child-lifetimes rc=0 (60/28/8); candy-code consumers ZERO refs.
 - R7: renames.json line 17 status pending→renamed (compact `"status":"pending"` format — space-form sed silently no-ops; first space-form sed silently no-ops && chain died pre-stage = correct fail-closed, compact form then numstat 1/1 verified); <!-- @rename-keep -->
   gen-docs re-run minted docs/lib/sugar-tick.html redirect stub (tagged, self-declared); final residue gate 0 at status=renamed. <!-- @rename-keep -->
 - Deviations: composer.json keywords dup 'sugarcraft' pre-existing → 'codetime'; none other.

@@ -1,8 +1,8 @@
-# sugar-crush: feature baseline (verified against source, 2026-10-01)
+# candy-code: feature baseline (verified against source, 2026-10-01)
 
 Feeds steps: 0.1, 0.2, 0.3, 0.4-a, 0.4-b, 0.5, 0.6, 0.7, 0.8, 0.10, 0.11, 0.12, 0.13-a, 0.13-b, 0.14-b, 0.14-c, 0.15, 0.16, X-31a, X-31b, X-37a, 1.A-1, 1.A-2, 1.B-2, 1.B-3, 1.C-1, 1.C-2, 1.C-3, 1.C-4a, 1.C-5, RELAY, DEF-MODE, 2.1, 2.2-1, 2.3, 2.4-1, 2.5, 2.6, 2.7-1a, 2.8, 2.9, 2.10, 2.11, 2.12, 3.A-1, 3.B-2, 3.C, 3.D-1, 3.E, 3.F, 3.G, 3.H, 3.I-1, 4.1-1, 4.2, 4.3-1, 4.3-3, 4.4, 4.6-2, 4.7-1, 4.7-2, 4.9, 4.10-1, 5.1-1, 5.2, 5.3-1, 5.4-1, 5.5-1, 5.6, 5.7-1, 5.9-1, 5.10, 5.11-1, 5.12, 5.13a, 5.14a, 5.14c, 5.14i, N-P3, N-P3a, N-P4e, P-A1, P-B1, P-D3, O-2a, O-2f
 
-A map of the current `sugar-crush` code that the remaining steps build on: where each subsystem lives, its entry points, and what is DORMANT or PARTIAL and must be wired. Paths are relative to `sugar-crush/`. Line anchors are deliberately omitted (they drift); use the method names here and the current anchors in `impact/*.md`.
+A map of the current `candy-code` code that the remaining steps build on: where each subsystem lives, its entry points, and what is DORMANT or PARTIAL and must be wired. Paths are relative to `candy-code/`. Line anchors are deliberately omitted (they drift); use the method names here and the current anchors in `impact/*.md`.
 
 **Status legend**
 
@@ -12,7 +12,7 @@ A map of the current `sugar-crush` code that the remaining steps build on: where
 | **DORMANT** | The code exists (usually unit-tested), but nothing on the live path reaches it. Wire it; never delete it. |
 | **ABSENT** | Not implemented. |
 
-The live path is `bin/sugarcrush` → `Bootstrap::app()` → `Program(App)` → `Chat` → `EngineBackend` → `Runtime` → provider.
+The live path is `bin/candy-code` → `Bootstrap::app()` → `Program(App)` → `Chat` → `EngineBackend` → `Runtime` → provider.
 
 ---
 
@@ -20,7 +20,7 @@ The live path is `bin/sugarcrush` → `Bootstrap::app()` → `Program(App)` → 
 
 ### 1.1 Entry points
 
-- `bin/sugarcrush` parses argv (`Cli\ArgvParser::parse()`), applies launch overrides (`Bootstrap::useConfigPath/useModel/usePermissionMode/useSessionLaunch`), then dispatches:
+- `bin/candy-code` parses argv (`Cli\ArgvParser::parse()`), applies launch overrides (`Bootstrap::useConfigPath/useModel/usePermissionMode/useSessionLaunch`), then dispatches:
   1. a subcommand → `Cli\Subcommands::dispatch()` (`doctor`, `models`, `session list|delete`, `mcp list|auth|import`, `completion`). There is no `serve`, web UI or ACP mode (→ O-*, 5.9).
   2. `-p` / `run "<prompt>"` → `Cli\NonInteractive::run()`: a synchronous in-process `EngineBackend::complete()` with `HeadlessPermissionPrompt` as approver; `--output-format text|json` only (no `stream-json`).
   3. the TUI: `new Program(Bootstrap::app($root), Chat::programOptions())`.
@@ -30,7 +30,7 @@ The live path is `bin/sugarcrush` → `Bootstrap::app()` → `Program(App)` → 
 
 ### 1.2 Backend selection — `Bootstrap::backend()` / `backendFor()`
 
-First match wins: `$SUGARCRUSH_PROVIDER` → `$SUGARCRUSH_BACKEND_CMD` (`CommandBackend`) → `$SUGARCRUSH_BACKEND_CMD_STREAM` (`StreamingCommandBackend`) → `provider` in `~/.sugar-crush/config.json` → `EngineBackend(EchoProvider)`.
+First match wins: `$CANDY_CODE_PROVIDER` → `$CANDY_CODE_BACKEND_CMD` (`CommandBackend`) → `$CANDY_CODE_BACKEND_CMD_STREAM` (`StreamingCommandBackend`) → `provider` in `~/.candy-code/config.json` → `EngineBackend(EchoProvider)`.
 
 `backendFor()` builds an `EngineBackend` with the provider, model, `tools()`, `hooks()`, `permissionGate`, skills, `InstructionFileLoader`, root, `MemoryStore` and `maxSteps` (`maxToolSteps`, default 1000). Its signature accepts `taskManager`/`taskPool`/`rulesState`, but `Chat::selectPaletteProvider()` (used by `/model` and the palette) does not pass them, so after a provider switch the Task tool disappears and rule toggles detach (PARTIAL → N-P3a). `/model <x>` takes a **provider** name, not a model id.
 
@@ -40,7 +40,7 @@ Two tool pipelines:
 
 ### 1.3 Providers (`src/Providers/`)
 
-`ProviderFactory::availableTypes()`: `openai, anthropic, claude-code, sglang, bedrock, vertex, custom`. Named configs come from `.sugar-crush/config.dev.json` `providers{}`.
+`ProviderFactory::availableTypes()`: `openai, anthropic, claude-code, sglang, bedrock, vertex, custom`. Named configs come from `.candy-code/config.dev.json` `providers{}`.
 
 | Type | Facts steps rely on |
 |---|---|
@@ -48,7 +48,7 @@ Two tool pipelines:
 | `custom` | `CustomProvider::openAiCompatible()`, hand-parsed SSE, near-duplicate `resolveStreamedToolCalls`. Fixed 128,000 context default and $0 pricing (→ 5.13a). |
 | `openai` | `OpenAIProvider`. Always streams, and `parseChunk()` hard-codes `toolCalls: null`, so tool calls are dropped on the live path (batch `parseResponse` does build them) (→ X-31a). |
 | `anthropic` | `ProviderFactory::createAnthropic()` builds an OpenAI-shaped `CustomProvider` with `supportsFunctionCalling: false`, and the default base URL lacks `/v1` (→ X-31b). |
-| `claude-code` | Shells out to `claude -p`; Claude Code's own tools run there, outside sugar-crush hooks and gate. |
+| `claude-code` | Shells out to `claude -p`; Claude Code's own tools run there, outside candy-code hooks and gate. |
 | `bedrock`, `vertex` | Native tool calls; system as `systemBlocks`. |
 
 Cross-cutting:
@@ -56,7 +56,7 @@ Cross-cutting:
 - **Watchdog:** `EngineBackend::COMPLETE_TIMEOUT_SECONDS = 120` kills a turn after 120 s with no frame from the child; re-armed by token, reasoning, heartbeat and event frames. Parallel groups heartbeat (`toolWaitHeartbeat`); **sequential tools send nothing**, so a silent sequential Bash/Grep/MCP call over 120 s kills the whole turn (→ 0.4-b). Never add a total timeout on the provider call.
 - **Output tokens:** `max_tokens` defaults to 4096 on Custom/OpenAI when `maxOutputTokens` is unset (→ 2.7).
 - **Usage:** `Usage::promptTokens()` is null unless input, cache-read and cache-creation are all reported; OpenAI-shaped providers never report cache-creation, so `Renderer::cacheIndicator()` is unreachable there (→ 0.13-b, 2.1).
-- **Session affinity:** `Providers/Concerns/SessionAffinity.php` (`X-SugarCrush-Session`) is DORMANT: no caller passes an id, and engine-path hooks receive an empty `sessionId` (→ 0.13-a).
+- **Session affinity:** `Providers/Concerns/SessionAffinity.php` (`X-CandyCode-Session`) is DORMANT: no caller passes an id, and engine-path hooks receive an empty `sessionId` (→ 0.13-a).
 - **Embeddings:** `ProviderInterface::embeddings()` is implemented on every provider but has no consumer (DORMANT → 5.3-1).
 
 ### 1.4 How a turn executes
@@ -77,7 +77,7 @@ Cross-cutting:
 
 ### 2.1 Roster and presets
 
-`Bootstrap::agentManager()` → `agentRoster()` merges, lowest precedence first: foreign imports (`ForeignAgentPresetRegistry`: `~/.claude/agents`, `<root>/.claude/agents`, opencode dirs), six built-ins in `AgentDefinition` (`coder`, `reviewer` with `['Read','Grep','Bash(git *)']`, `debugger`, `architect`, `tester`, `devops`), and native presets `<root>/.sugar-crush/agents/*.md`, `~/.sugar-crush/agents/*.md` (`AgentPresetRegistry`, DTO `AgentPreset`). Fields: `name`, `description`, `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`.
+`Bootstrap::agentManager()` → `agentRoster()` merges, lowest precedence first: foreign imports (`ForeignAgentPresetRegistry`: `~/.claude/agents`, `<root>/.claude/agents`, opencode dirs), six built-ins in `AgentDefinition` (`coder`, `reviewer` with `['Read','Grep','Bash(git *)']`, `debugger`, `architect`, `tester`, `devops`), and native presets `<root>/.candy-code/agents/*.md`, `~/.candy-code/agents/*.md` (`AgentPresetRegistry`, DTO `AgentPreset`). Fields: `name`, `description`, `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`.
 
 | Field | Status |
 |---|---|
@@ -97,7 +97,7 @@ Cross-cutting:
 - Args: `description`, `prompt`, `agent` (alias `subagent_type`), optional `resume`.
 - `runOnEngine()`: the grant (or full set) minus every `DelegatesToEngine` tool, so **depth is fixed at 1** (→ 4.7-2). Messages are `[SystemMessage(preset prompt + skills), UserMessage(task)]` plus the harness prompt. Runs synchronously via `$engine->withTools()->withMaxSteps()->completeTranscript()`, i.e. through `runTurn`, so step-level context work (2.1, 2.2-1, 2.4-1) covers sub-agents automatically.
 - The parent gets **only the final text**, unfenced, with no "no authority" framing; the pool arm in `execute()` and the failure string that embeds partial output are also unfenced (→ 0.15).
-- **Resume:** failed, interrupted, report-less and step-capped runs are serialised by `SuspendedDelegations` (`sys_get_temp_dir()/sugarcrush-suspended-delegations/<id>.run`, 0600, 7-day expiry); clean reports are not resumable (→ 4.7-1).
+- **Resume:** failed, interrupted, report-less and step-capped runs are serialised by `SuspendedDelegations` (`sys_get_temp_dir()/candy-code-suspended-delegations/<id>.run`, 0600, 7-day expiry); clean reports are not resumable (→ 4.7-1).
 - **Telemetry PARTIAL:** `SubAgentActivity` events cross the socket as `subagent` frames and are projected by `AgentManager::projectRemoteSubAgent()` into `AgentsPane` / `AgentDashboardPane`. The emitter in `turnTools()` is pid-bound, so **parallel Tasks (grandchildren) produce no dashboard rows** (→ RELAY, P-B1).
 - **Cancel PARTIAL:** `KeyboardHandler` emits `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`, `QuitAgentViewCmd`, `GroupInputCmd`, but `App::consumeShellCmd()` maps them to no-ops (→ P-D3).
 - **Fallback path DORMANT:** `AgentManager::executeAll()` → `AgentWorkerPool`, `Chat::executeAgents()`, `AgentManager::executeSubAgent()` have no live callers.
@@ -117,13 +117,13 @@ Cross-cutting:
 
 ### 2.5 Workflows (`src/Workflows/`)
 
-- `/workflow run|pause|resume|status|list` via `Chat::handleWorkflowCommand`; engine from `Bootstrap::workflowEngine()`; discovery in `WorkflowRegistry` (`<root>/.sugar-crush/workflows/*.yaml`, `~/.sugar-crush/workflows/*.{yaml,php}`).
+- `/workflow run|pause|resume|status|list` via `Chat::handleWorkflowCommand`; engine from `Bootstrap::workflowEngine()`; discovery in `WorkflowRegistry` (`<root>/.candy-code/workflows/*.yaml`, `~/.candy-code/workflows/*.{yaml,php}`).
 - A stage's `agent:` is a label only (no preset load); each stage runs through `AgentManager` → `AgentWorkerPool` with `EngineExecutor` bound to the chat engine.
 - Only the first task of a stage runs (`WorkflowEngine`). This is intentional and unreachable from YAML; it matters only once model-authored plans can list several tasks per stage (→ 4.10-1).
 
 ### 2.6 Worktree isolation (DORMANT → 4.9)
 
-`WorktreeManager` (git worktree per agent, `.worktreeinclude` copying, cleanup policy), `WorktreeConfig` and `PathJail(Config)` are never constructed. `EngineBackend::withWorktreeRoot()` — the only registrar of `BashEscapeDenyHook`, and the method that re-jails every path tool (`AcceptsWorktreeJail`) — has no caller. `worktreeCleanupPeriodDays`, `worktreeIncludeFile` and `SUGARCRUSH_WORKTREES_DIR` are read only by these classes.
+`WorktreeManager` (git worktree per agent, `.worktreeinclude` copying, cleanup policy), `WorktreeConfig` and `PathJail(Config)` are never constructed. `EngineBackend::withWorktreeRoot()` — the only registrar of `BashEscapeDenyHook`, and the method that re-jails every path tool (`AcceptsWorktreeJail`) — has no caller. `worktreeCleanupPeriodDays`, `worktreeIncludeFile` and `CANDY_CODE_WORKTREES_DIR` are read only by these classes.
 
 ---
 
@@ -152,7 +152,7 @@ All checks run **only in `Chat::submit()`**; nothing compacts between steps (→
 | Trigger | Behaviour |
 |---|---|
 | ≥70% | `contextReminderMessage()` row rides along (old reminders stripped in `dispatchTurn`). |
-| ≥85% with `summaryBackend` | `scheduleParkedCompaction()`: the prompt is parked; older exchanges go to a tool-less `EngineBackend` (`summaryModel` / `SUGARCRUSH_SUMMARY_MODEL`) with `COMPACT_SUMMARY_PROMPT`, a per-exchange six-facet record (`asked / did / files / decided / corrected / error`), prior summaries passed back; spliced by `applyModelCompaction()` on `HistoryCompactedMsg`. Different prompt and prefix from the main loop, so no cache reuse (→ 2.4-1, 2.5). |
+| ≥85% with `summaryBackend` | `scheduleParkedCompaction()`: the prompt is parked; older exchanges go to a tool-less `EngineBackend` (`summaryModel` / `CANDY_CODE_SUMMARY_MODEL`) with `COMPACT_SUMMARY_PROMPT`, a per-exchange six-facet record (`asked / did / files / decided / corrected / error`), prior summaries passed back; spliced by `applyModelCompaction()` on `HistoryCompactedMsg`. Different prompt and prefix from the main loop, so no cache reuse (→ 2.4-1, 2.5). |
 | ≥85% otherwise | Heuristic `ContextCompactor::compact()`. |
 | ≥95% after compaction | `intraExchangeTruncation()` (`ContextCompactor::truncateOversizedExchange()`), else refuse (`foregroundBlockedResponse`); thrash breaker `IdleCompactionPolicy::REFILL_LIMIT = 3`. |
 | Idle > 1 h | `idleCompactionPromptResponse`. |
@@ -197,9 +197,9 @@ No spill-to-file (→ 2.8). `SglangProvider::flagTruncationRiskInLatestToolResul
 | 2 | Maxims | Static | `Context/Sections/MaximsSection`. |
 | 3 | Tool guidance | Static | `Runtime::toolGuidanceSection()` joins `PromptGuidance::promptGuidance()` from Bash, Read, Write, Task. **`Bash::promptGuidance()` hard-codes the SugarCraft git/PR cadence** (`ai/<slug>` branches, `unset GITHUB_TOKEN && gh pr create`, `gh pr merge`, `git pull --ff-only`) and is sent to every project; the cadence already lives in the repo's `AGENTS.md`, so the fix is deletion plus generic git-safety rules (→ 0.3). |
 | 4 | `<repo-map>` | PerSession | `Context/RepoMapBlock`: composer/PSR-4 only (packages, namespaces, `.php` counts); no symbols, no non-PHP (→ 5.5-1). |
-| 5 | `<user-rules>` | PerSession | `Context/RuleLoader`: `~/.sugar-crush/rules/**`, `~/.sugar-crush/rulebooks/**`; `paths:` rules are not standing (`RulePathNudge`); 64 KiB shared budget. |
-| 6 | `<project-instructions>` (documents) | PerSession | `InstructionFileLoader::loadRoot()`: `CLAUDE.md`, `AGENTS.md` at root and ancestors up to `.git`; `@path` imports (`ImportResolver`); forced `instructions` globs. **Not loaded:** `~/.claude/CLAUDE.md`, any personal `~/.sugar-crush/AGENTS.md`, `.cursorrules`, `GEMINI.md`, `.clinerules` (→ 5.14). Nested files are injected into tool results on first touch (`loadForPath`). |
-| 7 | `<project-instructions>` (rules) | PerSession | `<root>/.sugar-crush/rules/**`, `<root>/RULES.md`. |
+| 5 | `<user-rules>` | PerSession | `Context/RuleLoader`: `~/.candy-code/rules/**`, `~/.candy-code/rulebooks/**`; `paths:` rules are not standing (`RulePathNudge`); 64 KiB shared budget. |
+| 6 | `<project-instructions>` (documents) | PerSession | `InstructionFileLoader::loadRoot()`: `CLAUDE.md`, `AGENTS.md` at root and ancestors up to `.git`; `@path` imports (`ImportResolver`); forced `instructions` globs. **Not loaded:** `~/.claude/CLAUDE.md`, any personal `~/.candy-code/AGENTS.md`, `.cursorrules`, `GEMINI.md`, `.clinerules` (→ 5.14). Nested files are injected into tool results on first touch (`loadForPath`). |
+| 7 | `<project-instructions>` (rules) | PerSession | `<root>/.candy-code/rules/**`, `<root>/RULES.md`. |
 | 8 | `<project-memory>` | PerSession | `Context/MemoryBlock::capture()`: project scope only, newest 12 bodies, 4 KiB, 512 B each (→ 0.6, 5.1-1). |
 | 9 | Enabled skill bodies | PerTurn | `enabledSkills` config. |
 | 10 | Skill listing | PerTurn | `SkillMatcher::listForPrompt()`. |
@@ -215,8 +215,8 @@ Delivery per provider: Sglang joins `systemPrompt` and history system rows into 
 
 ## 5. Memory (`src/Memory/`)
 
-- `MemoryStore` at `~/.sugar-crush/memory`: `<scope>/<uuid>.md` with YAML frontmatter; scopes `user/`, `project/`, `agent/` (`MemoryScope::Local` → `agent/`). Each scope keeps a `MEMORY.md` index (`generateIndex()`, `loadIndex()`, `MAX_INDEX_LINES = 200`, `MAX_INDEX_BYTES = 25 KiB`) that is **never injected** (→ 5.1-1).
-- `ProjectMemoryWriter`: `/memory add --scope project` writes `<repo>/.sugar-crush/memory/` (8 KiB cap, refused not truncated).
+- `MemoryStore` at `~/.candy-code/memory`: `<scope>/<uuid>.md` with YAML frontmatter; scopes `user/`, `project/`, `agent/` (`MemoryScope::Local` → `agent/`). Each scope keeps a `MEMORY.md` index (`generateIndex()`, `loadIndex()`, `MAX_INDEX_LINES = 200`, `MAX_INDEX_BYTES = 25 KiB`) that is **never injected** (→ 5.1-1).
+- `ProjectMemoryWriter`: `/memory add --scope project` writes `<repo>/.candy-code/memory/` (8 KiB cap, refused not truncated).
 - `MemoryEntry` types `pattern|convention|decision|preference`; `/memory add` always writes `pattern` with no tags.
 - Recall: `Runtime::memorySnapshot()` → `MemoryBlock::capture()` reads only the project scope (home + repo; repo wins on id clash), newest first, cut at 12; no relevance selection (→ 5.3-1).
 - `/memory add` defaults to **user** scope, which never reaches the prompt (`Chat::memoryAdd`) (→ 0.6). `ForeignMemoryImporter` (`/memory import claude|opencode`) lands notes in `agent` scope, also never injected.
@@ -250,7 +250,7 @@ ABSENT tools: TodoWrite/plan/ExitPlanMode (→ 3.C, 5.7-1), AskUserQuestion (→
 ### 6.4 Web
 
 - WebFetch: http(s), SSRF guards (DNS pinning, ≤3 re-checked redirects), 30 s, 2 MiB, raw body (no HTML→markdown).
-- WebSearch: SearXNG JSON; no default endpoint by design (`SUGARCRUSH_SEARCH_ENDPOINT`); localhost/private endpoints refused (→ N-P4e for the settings key).
+- WebSearch: SearXNG JSON; no default endpoint by design (`CANDY_CODE_SEARCH_ENDPOINT`); localhost/private endpoints refused (→ N-P4e for the settings key).
 - `/websearch` (`Commands/WebSearchCommand`) runs synchronously in the TUI process.
 
 ### 6.5 LSP (→ 3.F)
@@ -263,12 +263,12 @@ ABSENT tools: TodoWrite/plan/ExitPlanMode (→ 3.C, 5.7-1), AskUserQuestion (→
 
 - **Git:** state reaches the model only via `<env>`. No auto-commit, commit-message generation or attribution (→ 3.G). The in-process git MCP server (`MCP/GitMcpServer`, `GitCommandHandlers`) is reachable only via a `"type":"git"` entry in a trusted `.mcp.json`.
 - **File checkpoints/undo: ABSENT** (→ 3.A-1). `/rewind [n]` restores only the transcript and input from a checkpoint.
-- **Store:** `Session/EnhancedSessionStore` (SQLite `~/.sugar-crush/session.db`; tables `session_meta`, `checkpoints`, `checkpoint_blobs`, `session_transcripts`; `saveCheckpoint`, `saveTranscript`/`loadTranscript`, `forkSession`, `latestResumableSession`, `pruneEmptySessions`). Max 100 checkpoints per session. Single-writer lock: `Session/SessionLock` (flock), `lockSession` / `sessionLockHolder`, read-only fallback in `Chat::relockedForCurrentSession` (reuse it; no lease table → O-*).
+- **Store:** `Session/EnhancedSessionStore` (SQLite `~/.candy-code/session.db`; tables `session_meta`, `checkpoints`, `checkpoint_blobs`, `session_transcripts`; `saveCheckpoint`, `saveTranscript`/`loadTranscript`, `forkSession`, `latestResumableSession`, `pruneEmptySessions`). Max 100 checkpoints per session. Single-writer lock: `Session/SessionLock` (flock), `lockSession` / `sessionLockHolder`, read-only fallback in `Chat::relockedForCurrentSession` (reuse it; no lease table → O-*).
 - `Chat::persistTranscript()` rewrites the whole history after every change; running tools are revived as interrupted.
 - `dispatchTurn()` saves one checkpoint per turn (messages, input, cursor, session id); 3.A-1 adds the git ref to that row.
 - Forks (`/branch`) are named `"<name> (branch)"` but carry **no parent link** (→ P-A1).
 - `SessionMeta` (tasks, modifiedFiles, agentStates) is read/written only inside the store (→ 3.C).
-- Titles: `scheduleTitleGeneration()` on a tool-less `titleBackend` (`titleModel` / `SUGARCRUSH_TITLE_MODEL`) — the cheap-model seam for 3.D (`/goal` judge), 3.G (commit messages) and 5.11-1 (exec reviewer).
+- Titles: `scheduleTitleGeneration()` on a tool-less `titleBackend` (`titleModel` / `CANDY_CODE_TITLE_MODEL`) — the cheap-model seam for 3.D (`/goal` judge), 3.G (commit messages) and 5.11-1 (exec reviewer).
 - `/share`: `ShareCommand` builds a `ShareSession` via `Util\Exporter`, but `ShareUploader::upload()` always throws; no local export (→ 5.14).
 
 ---
@@ -277,7 +277,7 @@ ABSENT tools: TodoWrite/plan/ExitPlanMode (→ 3.C, 5.7-1), AskUserQuestion (→
 
 ### 8.1 Skills (`src/Skills/`)
 
-Tiers: built-in `src/Skills/BuiltIn/` < `~/.sugar-crush/skills/` < `<root>/.sugar-crush/skills/`; foreign `.claude`/`.opencode` trees imported read-only (`ForeignSkillDiscovery`, `SkillManager::loadAll()`).
+Tiers: built-in `src/Skills/BuiltIn/` < `~/.candy-code/skills/` < `<root>/.candy-code/skills/`; foreign `.claude`/`.opencode` trees imported read-only (`ForeignSkillDiscovery`, `SkillManager::loadAll()`).
 - Frontmatter applied: `description`, `user-invocable`, `disable-model-invocation`, `paths`.
 - Inert: `allowed-tools`, `disallowed-tools`, `effort`, `model` (read only by `App::dispatchSkill()`, which has no caller), `context: fork` — README claims `context: fork` is enforced; it is not (→ X-37a).
 - The Ctrl+S picker (`App::handleSelectSkill()`) enables a skill for the session but splices only a heading, no body (→ 5.14 `$skill`).
@@ -286,15 +286,15 @@ Tiers: built-in `src/Skills/BuiltIn/` < `~/.sugar-crush/skills/` < `<root>/.suga
 ### 8.2 Slash commands (`src/Commands/`)
 
 Dispatched in `Chat::dispatchCommand()`; roster generated by `CommandRegistry::all()` into `docs/COMMANDS.md` (drift-tested). Not present: `/init`, `/undo`, `/redo`, `/diff`, `/context`, `/goal`, `/btw`, `/handoff`, `/editor` (→ 3.A-1, 5.6, 3.D, 5.14).
-Custom commands (`CommandLoader`, `CommandSpec`): `~/.sugar-crush/commands/**/*.md`, `<root>/.sugar-crush/commands/**/*.md`; `$ARGUMENTS`, `$1..$9`; `` !`cmd` `` (10 s budget, 16 KiB, project tier needs `trustedProjectCommands`); `@file` includes. Frontmatter `model` and `subtask` are parsed but ignored (DORMANT).
+Custom commands (`CommandLoader`, `CommandSpec`): `~/.candy-code/commands/**/*.md`, `<root>/.candy-code/commands/**/*.md`; `$ARGUMENTS`, `$1..$9`; `` !`cmd` `` (10 s budget, 16 KiB, project tier needs `trustedProjectCommands`); `@file` includes. Frontmatter `model` and `subtask` are parsed but ignored (DORMANT).
 
 ### 8.3 Hooks (`src/Hooks/`)
 
-- `~/.sugar-crush/hooks.yaml` always; `<root>/.sugar-crush/hooks.yaml` only if `trustedProjectHooks` lists the root. Keys: `name`, `matcher` (regex on tool name), `command`, `description`, `disabled`, `timeout` (60 s).
+- `~/.candy-code/hooks.yaml` always; `<root>/.candy-code/hooks.yaml` only if `trustedProjectHooks` lists the root. Keys: `name`, `matcher` (regex on tool name), `command`, `description`, `disabled`, `timeout` (60 s).
 - `ScriptHook` exit codes: 0 allow (stdout ≤10 KB appended as a note), 1 deny, 2 hard block, 3 ask, 4 modify (JSON args). No JSON stdout protocol (→ 3.D-1). `HookResult::$refusedBy` / `withRefusedBy` / `refusingHook` exist.
 - `HookManager::resolveAsk(HookResult, bool, string $feedback = '')` already takes feedback; only the approver's `bool` return blocks it (→ 1.C-2).
 - Events (`HookEvent`): LIVE `PreToolUse` (`Runtime::gate`), `PostToolUse` (`Runtime::settle`), `UserPromptSubmit`, `SessionStart` (`Chat::dispatchTurnHooks`). DORMANT (no dispatch site): `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` (→ 3.D-1, 2.12); `TaskCreated`, `TaskCompleted`, `TeammateIdle` and `HookDispatcher` only on the dormant `TaskList` (→ 4.6-2).
-- Built-ins (`Hooks/BuiltIn/`): `ProtectFilesHook` (`DEFAULT_PROTECTED_PATTERNS` covers `.env`, `.env.*`, `.envrc`; `WRITE_ONLY_PATTERNS` cover `.sugar-crush/{hooks.yaml,config.json,agents/}`, `.git/{hooks,info}` — missing: `settings*.json`, `.mcp.json`, `.sugar-crush/{skills,commands,rules}/`, `*.pem`, private keys → 0.8, 0.14-c), `ConfirmRemoveHook`, `AuditHook`, `PermissionGateHook` (last), `BashEscapeDenyHook` (DORMANT).
+- Built-ins (`Hooks/BuiltIn/`): `ProtectFilesHook` (`DEFAULT_PROTECTED_PATTERNS` covers `.env`, `.env.*`, `.envrc`; `WRITE_ONLY_PATTERNS` cover `.candy-code/{hooks.yaml,config.json,agents/}`, `.git/{hooks,info}` — missing: `settings*.json`, `.mcp.json`, `.candy-code/{skills,commands,rules}/`, `*.pem`, private keys → 0.8, 0.14-c), `ConfirmRemoveHook`, `AuditHook`, `PermissionGateHook` (last), `BashEscapeDenyHook` (DORMANT).
 
 ### 8.4 MCP (`src/MCP/`)
 
@@ -305,7 +305,7 @@ Custom commands (`CommandLoader`, `CommandSpec`): `~/.sugar-crush/commands/**/*.
 
 ### 8.5 Permissions (`src/Permissions/`)
 
-- Modes (`PermissionMode`): `default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`. Built-in default **`bypass-permissions`** (`Bootstrap::DEFAULT_PERMISSION_MODE`) (→ DEF-MODE). Precedence: `--permission-mode` > `SUGARCRUSH_PERMISSION_MODE` > `permissionMode` (user tier).
+- Modes (`PermissionMode`): `default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`. Built-in default **`bypass-permissions`** (`Bootstrap::DEFAULT_PERMISSION_MODE`) (→ DEF-MODE). Precedence: `--permission-mode` > `CANDY_CODE_PERMISSION_MODE` > `permissionMode` (user tier).
 - `PermissionGate::decide()`: `rm -rf /`/`~` breaker → `permissionRules` (argument-scoped via `PermissionRule::matches()` / `matchesShellSubject()`, allow fails closed on `$(…)`, backticks, redirects) → mode evaluator. `auto` uses the regex `SafetyClassifier` with `STRIKE_THRESHOLD = 3` / `TOTAL_BLOCK_THRESHOLD = 20` → Ask; no LLM verdict (→ 5.11-1). Plan mode's command guard exists (`evaluatePlan`, `PLAN_READ_ONLY_COMMANDS`); the Plan→exit transition is in `AgentManager::PLAN_EXIT_MODES` (→ 5.7-1).
 - **The TUI engine path cannot ask.** `Bootstrap::chat()` → `backend()` uses `consolePermissionPrompt=false`, so `EngineBackend::$permissionApprover` (set by `withPermissionApprover()`) stays null and `Runtime::settleAsk()` turns every Ask into a deny (→ 1.C-1, 1.C-2). Asks come from default/accept-edits/plan/auto modes, `ask` rules and exit-3 hooks. `-p` and daemons use `HeadlessPermissionPrompt`.
 - Grants: exact-call session grants exist (`Chat::$permissionGrants`, `permissionGrantKey`; `Runtime::taskGrantMemoKey`); pattern grants are new (→ 1.C-2).
@@ -313,7 +313,7 @@ Custom commands (`CommandLoader`, `CommandSpec`): `~/.sugar-crush/commands/**/*.
 
 ### 8.6 Settings (`src/Config/`)
 
-- Files, lowest first: `<root>/.sugar-crush/settings.json`, `settings.local.json`, `~/.sugar-crush/settings.json`, `~/.sugar-crush/config.json` (app-written: `provider`, `theme`, `layout`; `Bootstrap::writeUserConfig()`). Project layers apply only when `trustedProjectSettings` lists the root.
+- Files, lowest first: `<root>/.candy-code/settings.json`, `settings.local.json`, `~/.candy-code/settings.json`, `~/.candy-code/config.json` (app-written: `provider`, `theme`, `layout`; `Bootstrap::writeUserConfig()`). Project layers apply only when `trustedProjectSettings` lists the root.
 - `LayeredSettings::LAYERED_KEYS` (21, incl. `contextWindow`, `promptCache`, `extraBody`, `thinkingBudget`, `secretEnvAllowlist`); `PROJECT_TIER_KEYS` (5). `maxToolSteps`, `enabledSkills`, permission and `trustedProject*` keys are user-tier only.
 - The Settings pane is a read-only readout (→ N-P3).
 
@@ -359,7 +359,7 @@ Wire, do not delete.
 
 | Area | Files |
 |---|---|
-| Entry | `bin/sugarcrush` · `src/Cli/{ArgvParser,Bootstrap,NonInteractive,Subcommands,Help,HeadlessPermissionPrompt}.php` |
+| Entry | `bin/candy-code` · `src/Cli/{ArgvParser,Bootstrap,NonInteractive,Subcommands,Help,HeadlessPermissionPrompt}.php` |
 | UI models | `src/App/App.php` (shell) · `src/Chat.php` (conversation) · `src/Renderer.php`, `src/Tui/**` |
 | Loop | `src/Backend/EngineBackend.php` (fork + step loop + frames) · `src/Runtime.php` (step, tools, gate, system prompt) · `src/Messages/HistorySanitizer.php` |
 | Providers | `src/Providers/*` (+ `ToolCallParser/*`, `Concerns/*`) |

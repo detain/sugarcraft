@@ -1,14 +1,14 @@
 # PHASE 3 CLOSE REVIEW — cycle 1
 
-You are a PHASE reviewer for the sugar-crush prompt-architecture plan. This is a phase close
+You are a PHASE reviewer for the candy-code prompt-architecture plan. This is a phase close
 review under `prompt_plan.md` §1.7. You review a WHOLE PHASE as ONE change-set, not a step.
 
 ## Your sandbox
 
 Worktree: `/home/sites/prompt-step-P3.CLOSE-r1` (branch `prompt/P3.CLOSE-r1`, at master `d1633da63`).
-Its `sugar-crush/vendor/` is materialised and VERIFIED — `vendor/composer/autoload_psr4.php`
-resolves `SugarCraft\Crush\` to `/home/sites/prompt-step-P3.CLOSE-r1/sugar-crush/src`. Run
-`vendor/bin/phpunit` from `/home/sites/prompt-step-P3.CLOSE-r1/sugar-crush`.
+Its `candy-code/vendor/` is materialised and VERIFIED — `vendor/composer/autoload_psr4.php`
+resolves `SugarCraft\Code\` to `/home/sites/prompt-step-P3.CLOSE-r1/candy-code/src`. Run
+`vendor/bin/phpunit` from `/home/sites/prompt-step-P3.CLOSE-r1/candy-code`.
 
 Your PRIVATE scratchpad: `<your-scratchpad>/`
 Everything you write goes in there. See the two ORCHESTRATION RULES at the bottom — they are hard.
@@ -20,7 +20,7 @@ check 12 and check 13). You MUST NOT commit, and you MUST NOT touch `/home/sites
 ## The change-set
 
 ```sh
-git -C /home/sites/prompt-step-P3.CLOSE-r1 diff 924c71a0d HEAD -- sugar-crush/
+git -C /home/sites/prompt-step-P3.CLOSE-r1 diff 924c71a0d HEAD -- candy-code/
 ```
 
 `924c71a0d` is the Phase 3 base (master immediately before P3.S1 merged). 26 files,
@@ -78,7 +78,7 @@ entries are the ones for P3.S1 … P3.S6, P3.audit-fix-1, P3.S4-fix-1, P3.S5-fix
 > an invariant that step 3 relied on and step 5 changed; a test in step 2 that step 6 made
 > vacuous; an abstraction introduced in one step and bypassed in another; documentation that
 > now contradicts the code; and any claim in the phase's worklog entries that the merged code
-> does not support. Re-run the whole `sugar-crush` suite yourself and report the real numbers
+> does not support. Re-run the whole `candy-code` suite yourself and report the real numbers
 > against the baseline in `prompt_worklog.md`.
 
 **That last sentence is not optional.** The baseline, never edited, is
@@ -94,8 +94,8 @@ Four hard-won rules. Break any one and your figures are noise:
    (`Chat\CompactModelSummaryTest`, `MouseModalGuardTest`) — so `</dev/null`, always.
    The CI-equivalent form, from the CHECKOUT ROOT:
    ```sh
-   cd /home/sites/prompt-step-P3.CLOSE-r1 && php sugar-crush/vendor/bin/phpunit \
-     -c sugar-crush/phpunit.xml --colors=never </dev/null | tail -5
+   cd /home/sites/prompt-step-P3.CLOSE-r1 && php candy-code/vendor/bin/phpunit \
+     -c candy-code/phpunit.xml --colors=never </dev/null | tail -5
    ```
    It takes about seven minutes.
 2. **Confirm the box is quiet first.** `ps -eo pid,cmd | /usr/bin/grep -c '[v]endor/bin/phpunit'`
@@ -126,7 +126,7 @@ a disagreement here is a finding, not a rounding error.
 
 This tree keeps **tree-wide guard tests** that walk `src/` and `tests/` wholesale. They are in no
 step's declared file list, so no step-scoped review runs them, and they go red four minutes into
-somebody else's full suite. Run all nine, from `/home/sites/prompt-step-P3.CLOSE-r1/sugar-crush`:
+somebody else's full suite. Run all nine, from `/home/sites/prompt-step-P3.CLOSE-r1/candy-code`:
 
 ```sh
 vendor/bin/phpunit \

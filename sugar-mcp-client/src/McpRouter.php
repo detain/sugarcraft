@@ -8,8 +8,8 @@ namespace SugarCraft\McpClient;
  * Tool/server narrowing over a keyed map of MCP servers: deny patterns first,
  * then an explicit allow-list.
  *
- * Extracted from the sugar-crush MCP stack (src/MCP/McpRouter.php). The
- * product-coupled half stayed downstream: sugar-crush reads the allow-list out
+ * Extracted from the candy-code MCP stack (src/MCP/McpRouter.php). The
+ * product-coupled half stayed downstream: candy-code reads the allow-list out
  * of an AgentPreset; this library takes the already-extracted `list<string>`
  * of server keys, so routing is policy-free and any preset, config layer or
  * CLI flag can feed it.
@@ -30,7 +30,7 @@ final class McpRouter
     /**
      * @param array<string,McpServer> $servers keyed by server name
      * @param array<string,string|array{action:string}> $denyPatterns pattern =>
-     *        action string (the sugar-crush config spelling, e.g. 'fs-*' => 'deny')
+     *        action string (the candy-code config spelling, e.g. 'fs-*' => 'deny')
      *        or a spec array carrying a string "action"; only "deny" applies,
      *        other actions are ignored. Any other shape — including an array
      *        with no usable string action — throws at construction: a
@@ -145,9 +145,9 @@ final class McpRouter
      * {@see serverAllowed()} is).
      *
      * Public static because the same question gets asked without a router in
-     * sight: sugar-crush's McpClient applies the operator's deny map to the
+     * sight: candy-code's McpClient applies the operator's deny map to the
      * servers it starts and to its unrestricted arm, which never builds a
-     * router over the servers it refuses (lane-A2 fold of the sugar-crush
+     * router over the servers it refuses (lane-A2 fold of the candy-code
      * original — this class is now the single home of both predicates).
      *
      * A pattern that is not a non-empty string never matches. PHP casts
@@ -175,7 +175,7 @@ final class McpRouter
      * THE LAW, EXPOSED. Whether ONE server name passes an allow-list.
      *
      * `applyAllowList()` filters a whole server map; downstream gate checks
-     * answer the same question one entry at a time — sugar-crush's sub-agent
+     * answer the same question one entry at a time — candy-code's sub-agent
      * roster narrows MCP bridges out of a preset's grant at resolution
      * (E696-α, `AgentManager::resolveGrantedTools()`). Both must read the same
      * law — empty list allows all, `*` entries `fnmatch`, everything else is
@@ -183,11 +183,11 @@ final class McpRouter
      * its router view diverge, which is the two-dialects defect a permission
      * layer refuses to host for tool names. One spelling of the membership
      * rule, one implementation; the filter delegates here rather than
-     * mirroring it. (Lane-A2 fold: this is the sugar-crush original's wording
+     * mirroring it. (Lane-A2 fold: this is the candy-code original's wording
      * and doctrine, now the single home.)
      *
      * RAW BOTH SIDES ON PURPOSE: entries are compared against the config key
-     * as authored (`.mcp.json` for sugar-crush), never against the sanitised
+     * as authored (`.mcp.json` for candy-code), never against the sanitised
      * `mcp__<key>__` wire spelling (E42) — a caller holding only a wire name
      * must not route it in here.
      *

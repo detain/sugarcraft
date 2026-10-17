@@ -1,0 +1,925 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Context;
+
+use SugarCraft\Code\Agents\MemoryScope;
+use SugarCraft\Code\Memory\MemoryEntry;
+use SugarCraft\Code\Memory\MemoryStore;
+
+/**
+ * Renders the memory INDEX for the system prompt — one line per saved note
+ * (type, id, opening words, tags), never the note bodies — plus the standing
+ * instructions that tell the model when to save a note and when not to
+ * (roadmap 5.1-1; crush_code.md Phase 5 item 9 before it).
+ *
+ * Shaped after {@see EnvironmentBlock} — same directory, same
+ * capture-then-render split — so
+ * {@see \SugarCraft\Code\Runtime::buildSystemPrompt()} folds it in the same
+ * way it folds the environment and the instruction documents.
+ *
+ * Unlike `EnvironmentBlock`, whose capture freezes only cwd/model/timestamp
+ * while its git section is polled per render, EVERYTHING here is frozen at
+ * {@see capture()}: `render()` reads no filesystem at all. A note written
+ * mid-turn therefore reaches the prompt on the next `Runtime`, not the next
+ * step — asserted by
+ * `tests/Integration/MemoryPromptWiringTest::testAFreshRuntimeSeesTheNewNote()`.
+ *
+ * AN INDEX, NOT BODIES (roadmap 5.1-1)
+ * ------------------------------------
+ * This block used to render the twelve newest note BODIES. A body is up to
+ * {@see MAX_ENTRY_BYTES}, so the byte budget admitted as few as eight notes and
+ * the rest were invisible: the model could not know a note existed, let alone
+ * read it. Each line is now an index entry in the shape
+ * {@see MemoryStore}'s own `MEMORY.md` index uses — `[type] id`, the tags and
+ * the first {@see MemoryStore::INDEX_PREVIEW_BYTES} bytes of the content — so
+ * the same budget lists several times as many notes, each addressable by id.
+ * The full text is read on demand, not paid for on every step.
+ *
+ * WHY SCOPE, NOT SEARCH
+ * --------------------
+ * The index is query-independent: {@see MemoryStore::list()} per scope, one
+ * directory read each, captured once per session. A query-dependent block was
+ * rejected three times over — {@see MemoryStore::search()} is a substring
+ * match, so a whole user turn as the query matches nothing; a per-term search
+ * would re-scan the store on every step of the loop; and turn-varying text in
+ * the system prompt voids the cached prefix behind it. Turn-dependent
+ * retrieval belongs in the turn, not in the preamble — and that is where it
+ * now lives: roadmap 5.3-2 ranks every note against the user's latest message
+ * once per turn ({@see \SugarCraft\Code\Memory\HybridMemoryRanker}, BM25
+ * plus optional embeddings) and sends the few that matter as a
+ * {@see MemoryRecallBlock} inside the `<turn-context>` row, at the tail of
+ * the request. This index stays query-independent, so the two never compete
+ * for the same bytes: the index says a note exists, the recall puts the
+ * relevant ones' text in front of the model for this message.
+ *
+ * USER SCOPE FIRST, UNDER ITS OWN SUB-BUDGET (roadmap 0.6, decision D4)
+ * ---------------------------------------------------------------------
+ * User memory follows the operator across every project, which is the point of
+ * it — "I prefer tabs", "answer tersely" — and also the risk 5.1-1 records as a
+ * decision rather than an accident: the operator's index reaches the prompt in
+ * every repository the operator opens. It is bounded apart for that reason.
+ * User notes come only from the HOME store (a clone's `.candy-code/memory`
+ * cannot speak as the operator), are listed FIRST under their own label, and
+ * spend at most {@see USER_MAX_ENTRIES} lines and {@see USER_MAX_BYTES} bytes of
+ * the one {@see MAX_ENTRIES} / {@see MAX_BYTES} budget, so project notes always
+ * keep the rest. Project notes follow from the repo-local store and the home
+ * store's keyed project scope.
+ *
+ * STANDING INSTRUCTIONS
+ * ---------------------
+ * {@see STANDING_INSTRUCTIONS} follow the fence: harness-written text on when
+ * to save, which types exist, and what NOT to save (what the code already
+ * says). They are rendered whenever a store is wired, even with no notes yet —
+ * an empty memory is exactly when the model needs to know it may write one.
+ * They sit OUTSIDE the fence because they are the harness's words; only the
+ * index is the operator's (and possibly a checkout's) text.
+ *
+ * WHAT IS DELIBERATELY NOT HERE
+ * -----------------------------
+ * Agent-scope entries. That scope is where `/memory import` lands another
+ * tool's memory on purpose (see {@see \SugarCraft\Code\Memory\ForeignMemoryImporter}),
+ * so those notes stay listable and searchable until the user promotes what
+ * they want; `/memory add --scope agent` says so in its reply.
+ *
+ * A NOTE ON THE FENCE NAME
+ * ------------------------
+ * `<project-memory>`, not `<project-instructions>`. The plan says "the same
+ * `<project-instructions>`-STYLE block" and the style is what is copied, not
+ * the tag: `<project-instructions>` means "a document the project's authors
+ * checked in", while these are notes accreted at runtime by the user and the
+ * agent. Filing them under the same tag would remove the model's ability to
+ * weigh a curated convention differently from an accreted note.
+ *
+ * PROVENANCE: TWO GROUPS INSIDE ONE FENCE (audit 15d-07)
+ * ------------------------------------------------------
+ * The notes come from two places that deserve different weight. The home
+ * store's are the operator's own (written by `/memory add`, a previous
+ * session, or an import of the operator's other tools). The repo-local
+ * store's (`<repo>/.candy-code/memory/project/`) arrive with the clone, with
+ * no trust gate in front of them — for a foreign or hostile checkout they
+ * are the repository's words, not the user's. The header used to say "notes
+ * the user or a previous session wrote down" over both, and the model weighs
+ * "the user wrote this" differently from "the repository ships this".
+ *
+ * So when the repo store contributes any rendered note, the block lists the
+ * two sources as separately labelled groups, each label stating where its
+ * notes came from, and only the groups that have notes get a label. One fence
+ * still, because both are the same KIND of thing — standing project notes,
+ * one budget, one omission count — and a second tag would only add a roster
+ * entry {@see PromptFence} must neutralise. A block whose notes all come from
+ * the home store keeps the original single header byte for byte: there the
+ * old provenance claim is simply true, and every pre-E25 prompt (and the
+ * golden fixture) stays unchanged.
+ *
+ * AS A PROMPT SECTION (P5.S2)
+ * ---------------------------
+ * This class implements {@see PromptSection} directly: `Runtime`'s memoized
+ * `memorySnapshot()` IS the `<project-memory>` section, and the empty string
+ * {@see render()} returns for a store with nothing to say is now the ONE place
+ * the absence is expressed — the assembler's documented rule ("an absent layer
+ * adds nothing") folds it away, replacing the `!== ''` guard this used to sit
+ * behind. Same bytes, one fewer voice.
+ */
+final readonly class MemoryBlock implements PromptSection
+{
+    /**
+     * Most index lines rendered (one per note), newest first. Anything past
+     * this is dropped and the block says so.
+     *
+     * Bounded because the fold happens on EVERY turn: the block is part of the
+     * system prompt, so an unbounded one grows the prompt for the rest of the
+     * session, and the context window and the compaction tiers are now real
+     * (crush_code.md Phase 5 items 4/5) — an inflating prompt pushes a session
+     * into automatic compaction sooner. Forty, up from the twelve BODIES this
+     * block used to carry (roadmap 5.1-1): an index line is a fraction of a
+     * body, so forty of them fit the same {@see MAX_BYTES} that twelve bodies
+     * could overflow, and the byte budget rather than this count is what
+     * usually binds.
+     */
+    public const MAX_ENTRIES = 40;
+
+    /**
+     * Total budget for the rendered note lines, in BYTES.
+     *
+     * Bytes, not characters and emphatically not tokens: what this bound exists
+     * to control is how much of the prompt the block occupies, and the only
+     * figure this class can know exactly is its own byte length. The token cost
+     * is whatever the provider counts it as — see {@see ContextWindow} for why
+     * this codebase keeps estimated and provider-counted figures apart.
+     *
+     * DOMAIN, stated exactly because the first version of this docblock got it
+     * wrong: the budget covers the summed RENDERED INDEX LINES — `- `, the
+     * `[type]`, the id, the preview and the `(tags: …)` suffix all inside it, because
+     * that is what {@see render()} measures with `strlen($line)`. Outside it:
+     * the `<project-memory>` fence, the header sentence, the provenance group
+     * labels ({@see PERSONAL_GROUP_LABEL}, {@see REPOSITORY_GROUP_LABEL},
+     * {@see USER_GROUP_LABEL}) and the newlines that join the lines. Those are
+     * fixed overhead a note cannot inflate — at most one header and three
+     * constant labels per block, whatever the notes say — which is why they
+     * are the ones left out. The budget is ONE budget across the project
+     * groups, spent newest-first over the merged list, so splitting the
+     * listing by provenance neither doubles it nor changes which notes it
+     * admits; the user-scope notes are spent first, out of the same budget,
+     * under their own {@see USER_MAX_BYTES} sub-cap.
+     */
+    public const MAX_BYTES = 4096;
+
+    /**
+     * Most user-scope notes rendered (D4), counted INSIDE {@see MAX_ENTRIES}:
+     * the operator's cross-project notes may take four of the forty lines and
+     * never more, so a long personal list cannot push the project's own
+     * conventions out of the block.
+     */
+    public const USER_MAX_ENTRIES = 4;
+
+    /**
+     * Byte budget for the user-scope note lines (D4), spent INSIDE
+     * {@see MAX_BYTES} and measured over the same span (whole rendered lines).
+     * `MAX_ENTRY_BYTES <= USER_MAX_BYTES` keeps the first user note admissible
+     * without an exemption, for the reason {@see MAX_ENTRY_BYTES} gives.
+     */
+    public const USER_MAX_BYTES = 1024;
+
+    /**
+     * Per-note ceiling for the WHOLE rendered line, in bytes, so one runaway
+     * note cannot consume the {@see MAX_BYTES} budget and crowd out every
+     * other note.
+     *
+     * Applied to the assembled line rather than to `content()` alone, which is
+     * the fix for a hole the first version of this class shipped: it clipped
+     * only the content, so an entry carrying a long `type` or many `tags`
+     * rendered unbounded. Measured on one project entry with 400 tags: an
+     * 11119-byte block against a 4096-byte budget, going out on every turn of
+     * the session. Clipping the line bounds every field at once, whichever one
+     * carries the bytes.
+     *
+     * `MAX_ENTRY_BYTES <= MAX_BYTES` is what makes {@see MAX_BYTES} a real
+     * ceiling with no first-entry exemption — see {@see render()}. The relation
+     * is asserted, not assumed.
+     *
+     * A note over this is TRUNCATED with a visible marker rather than dropped.
+     * Dropping it would be tidier, but a note is dropped silently while a
+     * truncation is something the model can see and discount — and a note
+     * silently cut in half mid-sentence is the worst of the three, because
+     * half an instruction can read as a whole one.
+     */
+    public const MAX_ENTRY_BYTES = 512;
+
+    /**
+     * The harness's standing guidance on memory, rendered before the fence
+     * whenever a store is wired (roadmap 5.1-1). What a note is for, the four
+     * types {@see \SugarCraft\Code\Memory\MemoryEntry} carries, and above
+     * all what NOT to save: anything the repository already says, which goes
+     * stale the moment the code changes.
+     */
+    public const STANDING_INSTRUCTIONS = <<<'TXT'
+        # Memory
+
+        You have a persistent memory that outlives this session. When it holds notes, the project-memory block is its index: one line per saved note with its type, id, opening words and tags. A note's full text is not in this prompt.
+
+        Save a note when you learn something a future session will need and cannot get from the repository: a preference or correction the user gave you, a decision and the reason for it, a convention the user stated, where something non-obvious lives. Save when the user asks you to remember something.
+
+        Types: `preference` (how the user wants you to work), `convention` (how this project does things), `decision` (a choice and why it was made), `pattern` (a recurring fix or technique). Scopes: `user` notes follow the user into every project; `project` notes belong to this repository.
+
+        Do not save what the code says. Anything you can read from the files, the git history or the docs is already remembered, and a note that restates it goes stale the moment the code changes. Do not save secrets, one-off task details or the transcript of this conversation. Prefer updating an existing note to adding a near-duplicate.
+
+        Use the `Memory` tool when it is available: `view` a note by id (or the whole index), `recall` to search, `save` a new note, `str_replace` to correct one, `delete` one that is wrong. The user manages the same notes with the memory slash command.
+
+        Search memory before answering a question about prior work: earlier decisions, dates, people, preferences or open todos. Read the memory-recall block in the turn context first, which holds the notes ranked most relevant to the latest message; when it is absent or does not answer, `recall` with the Memory tool before you answer, and say so when memory holds nothing.
+        TXT;
+
+    /**
+     * Appended to a line cut at {@see MAX_ENTRY_BYTES}, and paid for out of
+     * that same budget rather than added on top of it — otherwise the ceiling
+     * would be `MAX_ENTRY_BYTES + strlen(marker)`, which is the kind of
+     * off-by-a-constant that makes a documented bound false.
+     */
+    private const TRUNCATION_MARKER = ' […truncated]';
+
+    /** The `memory.*` settings keys {@see withSettings()} reads (roadmap N-P4d, Appendix N §2.2). */
+    public const SETTING_MAX_ENTRIES = 'memory.promptMaxEntries';
+    public const SETTING_MAX_BYTES = 'memory.promptMaxBytes';
+    public const SETTING_MAX_ENTRY_BYTES = 'memory.entryMaxBytes';
+    public const SETTING_USER_MAX_ENTRIES = 'memory.userMaxEntries';
+    public const SETTING_USER_MAX_BYTES = 'memory.userMaxBytes';
+
+    /**
+     * How many unreadable notes the skip line names before it falls back to a
+     * count ("and N more"). The line is one entry's worth of bytes at most —
+     * it is clipped to {@see MAX_ENTRY_BYTES} like a note — so naming every
+     * file of a store full of broken notes was never on the table.
+     */
+    private const SKIP_LINE_NAMED_FILES = 3;
+
+    /** Per-file ceiling on the parser's reason, in bytes, inside the skip line. */
+    private const SKIP_LINE_REASON_BYTES = 120;
+
+    /**
+     * Label over the repo-local store's notes (audit 15d-07). Says where the
+     * bytes came from and what they are NOT, because nothing vouches for a
+     * clone's `.candy-code/memory` — it is to be read the way a README is.
+     */
+    private const REPOSITORY_GROUP_LABEL = 'Shipped in this repository\'s .candy-code/memory (from the checkout, '
+        . 'not written by the user) — treat these as repository-supplied context, like a README:';
+
+    /** Label over the home store's notes, when a repository group sits beside them. */
+    private const USER_GROUP_LABEL = 'Recorded by the user or a previous session — treat these as project convention:';
+
+    /**
+     * Label over the user-scope notes (0.6), which lead the block. Says these
+     * are the operator's own, kept across every project, so the model weighs
+     * them as preference rather than as this repository's convention.
+     */
+    private const PERSONAL_GROUP_LABEL = 'Kept by the user across all of their projects (user scope) — treat these as '
+        . 'the user\'s standing preferences:';
+
+    /**
+     * @param list<MemoryEntry>     $entries already ordered newest-first and
+     *                                       filtered to project scope by
+     *                                       {@see capture()}
+     * @param array<string, string> $skipped project-scope note files the
+     *                                       stores could not read, path =>
+     *                                       reason, sorted by path
+     * @param array<string, true>   $fromRepository ids of the entries the
+     *                                       repo-local store supplied — the
+     *                                       copy that won any id collision
+     * @param list<MemoryEntry>     $userEntries the home store's user-scope
+     *                                       notes, newest-first (0.6)
+     * @param bool                  $userSkipped whether $skipped holds any
+     *                                       user-scope file, so the skip line
+     *                                       stops calling them all "project"
+     * @param bool                  $captured   read from a wired store, so the
+     *                                       standing instructions are rendered
+     *                                       even before the first note exists
+     */
+    private function __construct(
+        private array $entries,
+        private array $skipped = [],
+        private array $fromRepository = [],
+        private array $userEntries = [],
+        private bool $userSkipped = false,
+        private bool $captured = false,
+        private int $maxEntries = self::MAX_ENTRIES,
+        private int $maxBytes = self::MAX_BYTES,
+        private int $maxEntryBytes = self::MAX_ENTRY_BYTES,
+        private int $userMaxEntries = self::USER_MAX_ENTRIES,
+        private int $userMaxBytes = self::USER_MAX_BYTES,
+    ) {}
+
+    /**
+     * The same notes under different caps (roadmap N-P4d): the
+     * `memory.*` settings, which {@see withSettings()} reads. The constants
+     * above are the defaults and stay the documented figures.
+     *
+     * The relations the constants' docblocks argue are REQUIRED here, not
+     * assumed: a line may never exceed the budget it is spent from
+     * (`entry <= user bytes <= total bytes`, so the first note of either
+     * group is always admissible without an exemption), and the user
+     * sub-caps sit inside the totals (`user entries <= entries`).
+     *
+     * @throws \InvalidArgumentException when a cap is below 1 or a relation fails
+     */
+    public function withLimits(int $maxEntries, int $maxBytes, int $maxEntryBytes, int $userMaxEntries, int $userMaxBytes): self
+    {
+        if (min($maxEntries, $maxBytes, $userMaxEntries, $userMaxBytes) < 1 || $maxEntryBytes <= strlen(self::TRUNCATION_MARKER)) {
+            throw new \InvalidArgumentException('every memory cap must be positive, and a line must have room for its truncation marker');
+        }
+        if ($maxEntryBytes > $userMaxBytes || $userMaxBytes > $maxBytes || $userMaxEntries > $maxEntries) {
+            throw new \InvalidArgumentException('memory caps must nest: entry bytes <= user bytes <= total bytes, user entries <= entries');
+        }
+
+        return new self(
+            $this->entries,
+            $this->skipped,
+            $this->fromRepository,
+            $this->userEntries,
+            $this->userSkipped,
+            $this->captured,
+            $maxEntries,
+            $maxBytes,
+            $maxEntryBytes,
+            $userMaxEntries,
+            $userMaxBytes,
+        );
+    }
+
+    /**
+     * This block under the caps the `memory.*` settings name, over the
+     * defaults. Never throws, like every per-turn settings reader: a value
+     * that is not a positive int keeps its default, and a sub-cap that would
+     * not nest inside its total ({@see withLimits()}) is LOWERED to it — so
+     * `memory.promptMaxEntries: 2` alone lists two notes rather than being
+     * refused for leaving the user sub-cap at four. A per-line cap too small
+     * for the truncation marker leaves every cap at its default.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`), and
+     *        unreadable settings are the defaults
+     */
+    public function withSettings(?array $config = null): self
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Code\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        $read = static function (string $key, int $default) use ($config): int {
+            $value = $config[$key] ?? null;
+            if (\is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 1e15) {
+                $value = (int) $value;
+            }
+
+            return \is_int($value) && $value >= 1 ? $value : $default;
+        };
+
+        $maxEntries = $read(self::SETTING_MAX_ENTRIES, self::MAX_ENTRIES);
+        $maxBytes = $read(self::SETTING_MAX_BYTES, self::MAX_BYTES);
+        $userMaxEntries = min($read(self::SETTING_USER_MAX_ENTRIES, self::USER_MAX_ENTRIES), $maxEntries);
+        $userMaxBytes = min($read(self::SETTING_USER_MAX_BYTES, self::USER_MAX_BYTES), $maxBytes);
+        $maxEntryBytes = min($read(self::SETTING_MAX_ENTRY_BYTES, self::MAX_ENTRY_BYTES), $userMaxBytes);
+        $limits = [$maxEntries, $maxBytes, $maxEntryBytes, $userMaxEntries, $userMaxBytes];
+        if ($limits === [$this->maxEntries, $this->maxBytes, $this->maxEntryBytes, $this->userMaxEntries, $this->userMaxBytes]) {
+            return $this;
+        }
+
+        try {
+            return $this->withLimits(...$limits);
+        } catch (\InvalidArgumentException) {
+            return $this;
+        }
+    }
+
+    /**
+     * The caps this block renders under: the constants, or what
+     * {@see withLimits()} / {@see withSettings()} set.
+     *
+     * @return array{maxEntries: int, maxBytes: int, maxEntryBytes: int, userMaxEntries: int, userMaxBytes: int}
+     */
+    public function limits(): array
+    {
+        return [
+            'maxEntries' => $this->maxEntries,
+            'maxBytes' => $this->maxBytes,
+            'maxEntryBytes' => $this->maxEntryBytes,
+            'userMaxEntries' => $this->userMaxEntries,
+            'userMaxBytes' => $this->userMaxBytes,
+        ];
+    }
+
+    /**
+     * Read the project-scope entries out of one or two stores.
+     *
+     * A snapshot, exactly like {@see EnvironmentBlock::capture()}: the caller
+     * takes one and reuses it, rather than this class re-reading the directory
+     * once per step of the agentic loop.
+     *
+     * Since E25 piece 2 there are two sources of project notes: the shared
+     * home store ($store, written since Phase 5) and the repo-local tree an
+     * {@see ProjectMemoryWriter} maintains ($projectStore, absent until the
+     * project grows its own `.candy-code/memory/`). The repo-local store is
+     * listed FIRST and wins any id collision — when the project owns a copy
+     * of a note, that copy is the project's statement about itself. The
+     * optional parameter keeps every pre-E25 call site byte-identical. Which
+     * store each surviving entry came from is kept, so {@see render()} can
+     * label the repository's notes apart from the user's (audit 15d-07); the
+     * label follows the copy that won, so a note both stores hold is shown
+     * once, under the repository's label.
+     *
+     * Newest-first by {@see MemoryEntry::modifiedAt()} because when the cap
+     * bites, the note most recently written is the one most likely to still be
+     * true — memory entries are edited in place, so modification time tracks
+     * relevance better than creation time.
+     *
+     * Ties break on the entry id, and the credit that clause deserves is
+     * narrower than the obvious one. Determinism WITHIN a machine comes for
+     * free: `MemoryStore::list()` reads each scope directory with `scandir()`
+     * and sorts the names by byte order, and PHP 8's `usort` is stable, so
+     * equal timestamps already keep discovery order.
+     * What the id tie-break adds is that the order follows the entry's own
+     * identity rather than the FILENAME it was discovered under — normally the
+     * same thing, since a file is named for its id, but not for a store whose
+     * files were renamed or written by hand, which this store's markdown format
+     * invites. Pinned by
+     * `tests/Context/MemoryBlockTest::testTheIdTieBreakOutranksTheOnDiskDiscoveryOrder()`,
+     * which is the only place the clause can be observed at all.
+     */
+    public static function capture(MemoryStore $store, ?MemoryStore $projectStore = null): self
+    {
+        $byId = [];
+        $fromRepository = [];
+
+        foreach ($projectStore?->list(MemoryScope::Project) ?? [] as $entry) {
+            $byId[$entry->id()] ??= $entry;
+            $fromRepository[$entry->id()] = true;
+        }
+
+        foreach ($store->list(MemoryScope::Project) as $entry) {
+            $byId[$entry->id()] ??= $entry;
+        }
+
+        $newestFirst = static function (MemoryEntry $a, MemoryEntry $b): int {
+            return [$b->modifiedAt()->getTimestamp(), $a->id()]
+                <=> [$a->modifiedAt()->getTimestamp(), $b->id()];
+        };
+
+        $entries = array_values($byId);
+        usort($entries, $newestFirst);
+
+        // 0.6: the operator's own cross-project notes, from the HOME store
+        // only — the repo-local store arrives with a clone and cannot speak as
+        // the user, so it is never asked for this scope.
+        $userEntries = $store->list(MemoryScope::User);
+        usort($userEntries, $newestFirst);
+
+        // Read AFTER the list() calls above, which are what fill the maps.
+        // Narrowed to the two scopes this block lists; an agent-scope note an
+        // earlier search skipped is not a note missing from THIS block. Sorted
+        // so the line is byte-stable for the same broken files whatever order
+        // the stores met them in.
+        $userSkipped = $store->skipped(MemoryScope::User);
+        $skipped = [
+            ...($projectStore?->skipped(MemoryScope::Project) ?? []),
+            ...$store->skipped(MemoryScope::Project),
+            ...$userSkipped,
+        ];
+        ksort($skipped, \SORT_STRING);
+
+        return new self(array_values($entries), $skipped, $fromRepository, array_values($userEntries), $userSkipped !== [], true);
+    }
+
+    /**
+     * An explicitly empty block, for a session with no memory store at all:
+     * it renders nothing, not even the standing instructions, because there
+     * is no memory for them to describe.
+     */
+    public static function empty(): self
+    {
+        return new self([]);
+    }
+
+    /**
+     * The project-scope notes this block was captured with, newest first and
+     * before any cap is applied.
+     *
+     * @return list<MemoryEntry>
+     */
+    public function entries(): array
+    {
+        return $this->entries;
+    }
+
+    /**
+     * The user-scope notes this block was captured with (0.6), newest first
+     * and before {@see USER_MAX_ENTRIES} / {@see USER_MAX_BYTES} apply.
+     *
+     * @return list<MemoryEntry>
+     */
+    public function userEntries(): array
+    {
+        return $this->userEntries;
+    }
+
+    /**
+     * The project- and user-scope note files the stores could not read when this block
+     * was captured, path => reason — what {@see render()}'s skip line names.
+     *
+     * @return array<string, string>
+     */
+    public function skipped(): array
+    {
+        return $this->skipped;
+    }
+
+    /**
+     * The fenced index followed by the standing instructions, the instructions
+     * alone when the store holds nothing to list, or the empty string for a
+     * session with no store at all ({@see empty()}).
+     *
+     * No empty fence: a store with no notes adds the instructions and nothing
+     * the model has to interpret as a listing.
+     */
+    public function render(): string
+    {
+        if (!$this->captured) {
+            return '';
+        }
+
+        $fenced = $this->index();
+
+        // Index FIRST, so a block with notes still opens on its fence, and the
+        // harness's guidance follows it outside the fence.
+        return $fenced === ''
+            ? self::STANDING_INSTRUCTIONS
+            : $fenced . "\n\n" . self::STANDING_INSTRUCTIONS;
+    }
+
+    /**
+     * The fenced index alone — what {@see render()} appends to the standing
+     * instructions — or the empty string when there is nothing to list.
+     */
+    public function index(): string
+    {
+        // 0.6 / D4: the user's own notes are admitted FIRST, under their own
+        // sub-budget, and what they spend comes out of the one total budget —
+        // so the project walk below sees exactly what is left, and can never
+        // be left with less than MAX_ENTRIES - USER_MAX_ENTRIES notes and
+        // MAX_BYTES - USER_MAX_BYTES bytes. Same rules as the project walk: no
+        // first-entry exemption, and a note that does not fit ends the list.
+        $personal = [];
+        $bytes = 0;
+        foreach ($this->userEntries as $entry) {
+            if (count($personal) >= $this->userMaxEntries) {
+                break;
+            }
+
+            $line = $this->renderEntry($entry);
+            if ($bytes + strlen($line) > $this->userMaxBytes) {
+                break;
+            }
+
+            $personal[] = $line;
+            $bytes += strlen($line);
+        }
+
+        $rendered = [];
+
+        foreach ($this->entries as $entry) {
+            if (count($personal) + count($rendered) >= $this->maxEntries) {
+                break;
+            }
+
+            $line = $this->renderEntry($entry);
+            $lineBytes = strlen($line);
+
+            // Checked before appending and with NO exemption for the first
+            // note, which is what makes MAX_BYTES a ceiling rather than a
+            // ceiling-plus-one-entry. The exemption used to be here to keep a
+            // single oversized note from zeroing the block out; that job now
+            // belongs to renderEntry()'s per-line clip, and because
+            // MAX_ENTRY_BYTES <= MAX_BYTES the first note always fits, so the
+            // exemption protected nothing and admitted an unbounded line.
+            //
+            // A note that does not fit ends the list: continuing to look for a
+            // smaller one further down would reorder the newest-first guarantee
+            // the header states.
+            if ($bytes + $lineBytes > $this->maxBytes) {
+                break;
+            }
+
+            $rendered[] = [$line, isset($this->fromRepository[$entry->id()])];
+            $bytes += $lineBytes;
+        }
+
+        $skipLine = $this->skippedLine();
+
+        if ($personal !== []) {
+            return $this->renderWithPersonalGroup($personal, $rendered, $skipLine);
+        }
+
+        if ($rendered === []) {
+            // A store whose only project notes are unreadable still says so:
+            // the note the user wrote is missing from the prompt either way,
+            // and this is the one place the model could learn why.
+            return $skipLine === '' ? '' : "<project-memory>\n" . $skipLine . "\n</project-memory>";
+        }
+
+        $omitted = count($this->entries) - count($rendered);
+
+        // Partitioned AFTER the budget walk, so the caps above stay one
+        // newest-first pass over the merged list and the order inside each
+        // group is still newest-first. Partitioning first would spend the
+        // budget per group and change which notes are admitted.
+        $repositoryLines = [];
+        $userLines = [];
+        foreach ($rendered as [$line, $isRepository]) {
+            if ($isRepository) {
+                $repositoryLines[] = $line;
+            } else {
+                $userLines[] = $line;
+            }
+        }
+
+        // Every figure interpolated from the constant that enforces it, so the
+        // sentence cannot go on claiming a limit the code stopped applying.
+        // This is a promise made to the model INSIDE the prompt, so its domain
+        // has to be the one render() actually bounds: whole listed lines, not
+        // "note text" — an earlier wording said the latter while the code
+        // measured the former, and an entry with many tags then exceeded the
+        // stated total by 2.7x.
+        //
+        // With no repository notes rendered the header is the one this block
+        // always sent, byte for byte: its provenance sentence is then true of
+        // every listed note. Otherwise the header makes no authorship claim at
+        // all and each group's label makes its own (audit 15d-07).
+        if ($repositoryLines === []) {
+            $header = sprintf(
+                'Index of the notes recorded for this project across earlier sessions, one line per note, '
+                . 'most recently updated first. At most %d notes and %d bytes of index lines are included, '
+                . 'and any single line longer than %d bytes is shown truncated, so this index may be incomplete. These '
+                . 'are notes the user or a previous session wrote down, not verified fact — treat '
+                . 'them as project convention, and prefer what you can confirm in the repository '
+                . 'itself.',
+                $this->maxEntries,
+                $this->maxBytes,
+                $this->maxEntryBytes,
+            );
+            $body = implode("\n", $userLines);
+        } else {
+            $header = sprintf(
+                'Index of the notes for this project, one line per note, grouped by where they come from, '
+                . 'most recently updated first within each group. At most %d notes and %d bytes of index lines '
+                . 'are included across all groups, and any single line longer than %d bytes is shown truncated, '
+                . 'so this index may be incomplete. None of these notes is verified fact — prefer what you can confirm '
+                . 'in the repository itself.',
+                $this->maxEntries,
+                $this->maxBytes,
+                $this->maxEntryBytes,
+            );
+            $body = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
+            if ($userLines !== []) {
+                $body .= "\n\n" . self::USER_GROUP_LABEL . "\n" . implode("\n", $userLines);
+            }
+        }
+
+        if ($omitted > 0) {
+            $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
+        }
+
+        return "<project-memory>\n" . $header . "\n\n" . $body
+            . ($skipLine === '' ? '' : "\n\n" . $skipLine) . "\n</project-memory>";
+    }
+
+    /**
+     * The block when user-scope notes are listed (0.6): the personal group
+     * first, then the project groups under the labels {@see render()} gives
+     * them. The header makes no authorship claim of its own — each group's
+     * label does — and states the user sub-cap from the constants enforcing it.
+     *
+     * Only reached with at least one personal line, so every block without a
+     * user note keeps {@see render()}'s bytes exactly.
+     *
+     * @param list<string>                    $personal rendered user-scope lines
+     * @param list<array{0: string, 1: bool}> $rendered project lines and whether each is the repository's
+     */
+    private function renderWithPersonalGroup(array $personal, array $rendered, string $skipLine): string
+    {
+        $omitted = count($this->entries) + count($this->userEntries) - count($rendered) - count($personal);
+
+        $header = sprintf(
+            'Index of the notes for this session, one line per note, grouped by where they come from, '
+            . 'most recently updated first within each group. At most %d notes and %d bytes of index lines '
+            . 'are included across all groups — the user\'s own cross-project notes at most %d notes and '
+            . '%d bytes of that — and any single line longer than %d bytes is shown truncated, so this '
+            . 'index may be incomplete. None of these notes is verified fact — prefer what you can confirm in the '
+            . 'repository itself.',
+            $this->maxEntries,
+            $this->maxBytes,
+            $this->userMaxEntries,
+            $this->userMaxBytes,
+            $this->maxEntryBytes,
+        );
+        if ($omitted > 0) {
+            $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
+        }
+
+        $groups = [self::PERSONAL_GROUP_LABEL . "\n" . implode("\n", $personal)];
+        $repositoryLines = [];
+        $homeLines = [];
+        foreach ($rendered as [$line, $isRepository]) {
+            if ($isRepository) {
+                $repositoryLines[] = $line;
+            } else {
+                $homeLines[] = $line;
+            }
+        }
+        if ($repositoryLines !== []) {
+            $groups[] = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
+        }
+        if ($homeLines !== []) {
+            $groups[] = self::USER_GROUP_LABEL . "\n" . implode("\n", $homeLines);
+        }
+
+        return "<project-memory>\n" . $header . "\n\n" . implode("\n\n", $groups)
+            . ($skipLine === '' ? '' : "\n\n" . $skipLine) . "\n</project-memory>";
+    }
+
+    /**
+     * One line announcing the project notes that could not be read, or the
+     * empty string when every note parsed.
+     *
+     * WHY IT EXISTS (audit 15d-04's open end). {@see MemoryStore} now skips a
+     * malformed note instead of failing every turn, and records why in
+     * {@see MemoryStore::skipped()} — but nothing read that record, so the
+     * note the user wrote simply vanished from the prompt with no trace. This
+     * line is the trace, in the one place the model reads memory.
+     *
+     * Bounded like a note: at most {@see SKIP_LINE_NAMED_FILES} files named, each
+     * reason clipped to {@see SKIP_LINE_REASON_BYTES}, and the whole line
+     * escaped then clipped to {@see MAX_ENTRY_BYTES} — escape before clip, for
+     * {@see renderEntry()}'s reason. Basenames only: the directory is the
+     * memory store's, and spelling it would put this machine's home path into
+     * a block that is otherwise free of it. Outside {@see MAX_BYTES} for the
+     * reason the header is: notes cannot inflate it.
+     */
+    private function skippedLine(): string
+    {
+        if ($this->skipped === []) {
+            return '';
+        }
+
+        $named = [];
+        foreach (array_slice($this->skipped, 0, self::SKIP_LINE_NAMED_FILES, true) as $file => $reason) {
+            $reason = $this->oneLine($reason);
+            if (strlen($reason) > self::SKIP_LINE_REASON_BYTES) {
+                $reason = rtrim(mb_strcut($reason, 0, self::SKIP_LINE_REASON_BYTES - 3, 'UTF-8')) . '...';
+            }
+            $named[] = $this->oneLine(basename((string) $file)) . ' (' . $reason . ')';
+        }
+
+        $count = count($this->skipped);
+        // "project" only while it is true: once a user-scope file is among
+        // them (0.6) the line names no scope rather than mislabel one.
+        $line = sprintf(
+            '%d %s note(s) could not be read and are not included here: %s',
+            $count,
+            $this->userSkipped ? 'memory' : 'project memory',
+            implode('; ', $named),
+        );
+        if ($count > count($named)) {
+            $line .= sprintf('; and %d more', $count - count($named));
+        }
+
+        return $this->clip(PromptFence::escape($line . '.'));
+    }
+
+    /**
+     * The opening fence this block's body sits inside.
+     *
+     * {@see render()} emits BOTH ends itself (and returns the empty string for
+     * an absent layer, fence and all), so this names the layer for metadata
+     * only — the answer P5.S3's fence-escaping step reads when it asks
+     * "escape against which fence?". The A NOTE ON THE FENCE NAME section
+     * above is why the value is this tag and not `<project-instructions>`.
+     */
+    public function fence(): string
+    {
+        return '<project-memory>';
+    }
+
+    /**
+     * Session-stable: {@see capture()} reads the project- and user-scope lists once and
+     * `Runtime::memorySnapshot()` memoizes the block per Runtime, so a note
+     * added mid-turn does not retroactively join a prompt already in flight —
+     * the snapshot contract stated on that accessor.
+     *
+     * This is the tier P5.S1's inline wrapper already declared for this layer;
+     * the migration restates it, it does not invent it.
+     */
+    public function stability(): Stability
+    {
+        return Stability::PerSession;
+    }
+
+    /**
+     * Advisory ceiling; see {@see PromptSection::byteBudget()}.
+     *
+     * PHP_INT_MAX because no ceiling is enforced at the assembler, and this
+     * block's real bounds are the per-entry caps {@see render()} applies
+     * ({@see MAX_ENTRIES}, {@see MAX_BYTES}, {@see MAX_ENTRY_BYTES}) — the
+     * {@see MAX_BYTES} docblock is explicit that the fence, header, provenance
+     * group labels and joining newlines sit OUTSIDE that budget, so no single constant here is a
+     * whole-section ceiling to promote. Wiring one would pre-empt the
+     * compaction tiers' decision; every production section reports this same
+     * value until then (pinned by
+     * {@see \SugarCraft\Code\Tests\Context\PromptSectionTest::testTheProductionSectionListOrdersBaseFirstAndEnvLast()}).
+     */
+    public function byteBudget(): int
+    {
+        return \PHP_INT_MAX;
+    }
+
+    /**
+     * One note as a single index line: `- [type] id: opening words (tags: a, b)`.
+     *
+     * The fields are those of {@see MemoryStore}'s `MEMORY.md` index: the id
+     * (so the note can be asked for by name), the type, the tags and the first
+     * {@see MemoryStore::INDEX_PREVIEW_BYTES} bytes of the content, cut on a
+     * character boundary and marked with `...` when cut. Collapsed to one line
+     * because the block is a list and a multi-line note would make the next
+     * "- " ambiguous about whether it starts a new note.
+     *
+     * Clipped ONCE, at the end, over the assembled line: the preview bounds the
+     * content, but `tags()` is a list and scales without limit — entries are
+     * hand-editable markdown, and `ForeignMemoryImporter` writes tags from
+     * another tool's files.
+     */
+    private function renderEntry(MemoryEntry $entry): string
+    {
+        $content = $this->oneLine($entry->content());
+        if (strlen($content) > MemoryStore::INDEX_PREVIEW_BYTES) {
+            $content = rtrim(mb_strcut($content, 0, MemoryStore::INDEX_PREVIEW_BYTES, 'UTF-8')) . '...';
+        }
+
+        $line = '- [' . $this->oneLine($entry->type()) . '] ' . $this->oneLine($entry->id()) . ': ' . $content;
+
+        $tags = array_values(array_filter(array_map(
+            fn(string $tag): string => $this->oneLine($tag),
+            $entry->tags(),
+        ), static fn(string $tag): bool => $tag !== ''));
+
+        if ($tags !== []) {
+            $line .= ' (tags: ' . implode(', ', $tags) . ')';
+        }
+
+        // P5.S3: escape BEFORE clip, in that order and for one reason — every
+        // byte budget in this class is a promise the header makes about the
+        // rendered line, and rendering happens after escaping, so the clip
+        // must measure escaped bytes. See PromptFence for why the roster is
+        // escaped whole.
+        return $this->clip(PromptFence::escape($line));
+    }
+
+    /**
+     * Every run of whitespace — newlines included — collapsed to one space.
+     *
+     * Scrubbed first: a `/u` pattern does not degrade on invalid UTF-8, it
+     * returns null, and the `(string)` cast turned that null into '' — so a
+     * note carrying one Latin-1 byte rendered as an empty `- [pattern] ` line
+     * (audit 15d-08). {@see MemoryStore} scrubs at load; this keeps an entry
+     * built any other way from vanishing the same way.
+     */
+    private function oneLine(string $text): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', Utf8Scrub::clean($text)));
+    }
+
+    /**
+     * Cut to {@see MAX_ENTRY_BYTES} INCLUDING the marker, without splitting a
+     * UTF-8 character.
+     *
+     * `mb_strcut()` rather than `substr()` because the budget is in bytes but
+     * the cut must land on a character boundary: a bare `substr()` can leave a
+     * partial multi-byte sequence, and invalid UTF-8 in the system prompt does
+     * not degrade gracefully — `json_encode()` refuses it, which would fail the
+     * whole provider request rather than mangling one note. `mb_strcut()` is
+     * the one function that takes a byte budget and respects the boundary; it
+     * is already used elsewhere in this library for the same reason.
+     */
+    private function clip(string $text): string
+    {
+        if (strlen($text) <= $this->maxEntryBytes) {
+            return $text;
+        }
+
+        // The marker comes out of the budget, not on top of it: a cut line is
+        // at most MAX_ENTRY_BYTES bytes, marker included.
+        $room = $this->maxEntryBytes - strlen(self::TRUNCATION_MARKER);
+
+        return rtrim(mb_strcut($text, 0, $room, 'UTF-8')) . self::TRUNCATION_MARKER;
+    }
+}

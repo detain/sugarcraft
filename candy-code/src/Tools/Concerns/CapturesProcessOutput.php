@@ -1,0 +1,752 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tools\Concerns;
+
+use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ProcessReaper;
+
+/**
+ * Runs a shell command capturing BOTH stdout and stderr.
+ *
+ * `exec()` captures only stdout. The child inherits the PHP process's stderr,
+ * so anything a command writes there goes straight to the real terminal —
+ * underneath a running TUI that means text painted outside the managed frame,
+ * at whatever cursor position the terminal happens to be at, surviving until
+ * the next full repaint. A `grep … | head` pipeline emitting
+ * `grep: write error: Broken pipe` was enough to corrupt the display.
+ *
+ * It is also a diagnostic loss: stderr is where a failing command explains
+ * itself, so `exec()` handed the model an empty result with an error flag and
+ * no reason. Capturing it means the agent can actually see why something
+ * failed.
+ *
+ * stdout and stderr are kept SEPARATE rather than merged with `2>&1`, because
+ * plenty of well-behaved tools write progress and warnings to stderr on a
+ * successful run and folding that into the result would corrupt the output
+ * the model reasons about.
+ *
+ * ## NO CONTROLLING TERMINAL FOR TOOL CHILDREN — Phase 9 layer A
+ *
+ * A closed stdin pipe does NOT make a command non-interactive. `sudo`, `ssh`,
+ * git's credential path and every pager reach for `/dev/tty` — the
+ * CONTROLLING TERMINAL, resolved by the kernel, not through fd 0/1/2 — so
+ * their prompts paint outside the app frame at whatever cursor the terminal
+ * is on, and the tool hangs waiting for a human the TUI cannot see. Closing
+ * or redirecting stdin cannot help: the child never asked fd 0 for anything.
+ *
+ * The one lever that reaches `/dev/tty` is removing the session's controlling
+ * terminal before exec. Every child is therefore spawned through
+ * `setsid -w`, which starts a new session with no terminal attached;
+ * `/dev/tty` then fails at OPEN time (ENXIO, "No such device or address"),
+ * so an interactive command exits immediately and its diagnostic —
+ * `sudo: a password is required`, `Permission denied (publickey,password)` —
+ * arrives on the stderr pipe this trait already captures and the renderer
+ * already displays. Detach is a PREREQUISITE for the display fix, not an
+ * alternative to it: a child that still holds the controlling terminal can
+ * scribble on the screen at any time, and a renderer that paints by diffing
+ * its own model of the screen has no way to know it happened. The plan's
+ * `sudo -n` rides as a note rather than a flag: this trait cannot know which
+ * argv belongs to sudo, and the detach makes sudo's -n outcome unconditional.
+ *
+ * {@see \SugarCraft\Code\Support\ProcessContainment::env()} carries the
+ * fail-fast half the detach cannot reach — prompts that consult the environment before touching a device.
+ * Both run paths take it through {@see \SugarCraft\Code\Support\ProcessContainment::scrubbedEnv()},
+ * which also drops credential-shaped variables (audit F-E1): this trait's
+ * output is the model's to read, so a provider key in the child's env is
+ * one `env` away from the transcript.
+ * Both halves apply to EVERY runCaptured() caller (Bash, Grep,
+ * EnvironmentBlock share this one choke point), which is what "sweep the
+ * behaviour, not the token" asked for.
+ *
+ * FALLBACK IS MEASURED, NOT ASSUMED: on a host with no usable `setsid(1)`
+ * (macOS ships none) the env block still applies and the spawn proceeds
+ * attached; {@see detachedSpawnBinary()} proves `-w` exit-status forwarding
+ * by running it, because a wrapper that laundered every command's exit code
+ * into the wrapper's own would trade a hang for a lie.
+ *
+ * LAYER C SEAM, BUILT (round 65): the PTY-backed interactive mode is the
+ * optional `interactive` PARAMETER on Bash — a parameter, never a second
+ * tool, because a second name splits every permission and hook rule in
+ * two. The default is OFF, and the default path is runCaptured() exactly
+ * as layer A shipped it: setsid-detached, stdin closed, fail-fast env
+ * forced. When ON, {@see runCapturedInteractive()} routes the same
+ * command through a pty THIS process allocates and captures from — the
+ * child paints on a terminal the user never sees, and never on their
+ * screen. Neither mode accepts secrets: env() forcing is identical on
+ * both paths, and a program that blocks waiting for input is terminated
+ * at the idle ceiling with its transcript and a refusal — an interactive
+ * pty is a terminal, not a typist, and no askpass surface exists here.
+ * InteractivePromptContainmentTest pinned this parameter's ABSENCE until
+ * the mechanism landed; the flip of that pin is the chosen change.
+ */
+trait CapturesProcessOutput
+{
+    /**
+     * Stands in for a successful command's discarded stderr.
+     *
+     * A constant rather than an inline string because {@see Bash::description()}
+     * has to tell the model the same thing this marker says, and two
+     * hand-maintained spellings of one fact drift.
+     */
+    private const SUPPRESSED_STDERR_MARKER =
+        '... [stderr suppressed: the command succeeded and also wrote to stderr; re-run with 2>&1 to see it]';
+
+    /**
+     * $maxBytes bounds what is RETAINED per stream, not what is read: the
+     * pipes are still drained to completion so the child never blocks on a
+     * full buffer, but bytes past the bound are counted and discarded instead
+     * of accumulated. Without it a `cat` of a multi-gigabyte file is an
+     * out-of-memory kill of the agent itself, long before {@see
+     * TruncatesOutput} would get a chance to clip the finished string. Null
+     * keeps the capture unbounded for callers that want the whole thing.
+     *
+     * The discard counts are reported PER STREAM, not only as a total. Which
+     * stream lost bytes is not bookkeeping trivia: {@see
+     * mergeCapturedOutput()} routinely drops one stream from the result
+     * entirely, and folding that stream's discards into the reported loss
+     * labels a complete answer partial — bytes that were never going to
+     * appear at any cap counted as if the cap had cost them. `truncatedBytes`
+     * remains the sum for callers that genuinely want both.
+     *
+     * `stdoutMidLine`/`stderrMidLine` say whether the bound landed INSIDE a
+     * line. The bound is a byte count, so it lands wherever it lands; the
+     * retained text can therefore end on half a path or half a grep hit,
+     * which the presentation layer has to repair (it cannot infer this from a
+     * discard count alone, since a cut that happened to fall on a newline
+     * needs no repair).
+     *
+     * $timeoutSeconds is an OPTIONAL wall-clock bound (audit 15d-14), and
+     * null — the default — keeps the historical unbounded wait byte for
+     * byte for callers that pass none (Grep). Bash passes its `timeout`
+     * parameter (default 120 s, item 0.4). A caller that cannot afford to wait, the prompt
+     * assembly's git reads above all, passes one: the drain stops at the
+     * deadline, and a child that closed its pipes but has not exited is
+     * waited on only until the same deadline, because bounding the drain
+     * alone leaves the unbounded wait inside `proc_close()`. On expiry the
+     * child's whole process group (it leads one under the `setsid -w`
+     * spawn) gets the reaper's 15→9 ladder on short graces, the pipes are
+     * closed and the child reaped; the result is exit 124 (timeout(1)'s
+     * number) with `timedOut` true and whatever output arrived before the
+     * deadline. `timedOut` is the discriminator to read — an exit code of
+     * 124 can also be a command's own answer.
+     *
+     * $envOverrides is handed to {@see ProcessContainment::scrubbedEnv()} and
+     * wins over the inherited environment — and over the credential scrub,
+     * which runs before it; the default `[]` is the inherited environment
+     * minus credentials (audit F-E1). EnvironmentBlock passes `GIT_OPTIONAL_LOCKS=0` this way
+     * (audit 15d-12) so the lock rule stays scoped to its own git reads.
+     *
+     * $onWait is called once per select slice (at most every 200 ms) for as
+     * long as the drain waits — the hook a sequential tool's heartbeat rides
+     * (item 0.4-b, {@see \SugarCraft\Code\Tools\AcceptsHeartbeat}), so a
+     * long-running command reads as alive to the turn's idle watchdog. It
+     * is only ever called from this process; the caller throttles.
+     *
+     * @param array<string, string> $envOverrides
+     * @param (\Closure(): void)|null $onWait
+     * @return array{
+     *     stdout: string,
+     *     stderr: string,
+     *     exitCode: int,
+     *     truncatedBytes: int,
+     *     stdoutDropped: int,
+     *     stderrDropped: int,
+     *     stdoutMidLine: bool,
+     *     stderrMidLine: bool,
+     *     timedOut: bool,
+     * }
+     */
+    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null): array
+    {
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        // Phase 9 layer A, routed through the choke point under E672: the
+        // spec comes from ProcessContainment::spawnSpec() (a proven
+        // `setsid -w` wrapper naming /bin/sh explicitly, because that is
+        // exactly the shell PHP's string form runs, or the original command
+        // where no usable detach exists) and the env from ::scrubbedEnv() —
+        // ::env() minus credentials (audit F-E1), because what this child
+        // prints is handed to the model. ONE
+        // proc_open call, with the spec chosen above, not a ternary of two:
+        // DescriptorInheritanceGuardTest licenses spawn sites by name, and a
+        // doubly-anonymous result would read as two unclassifiable exposed
+        // children where one known site lives. The env block rides both
+        // paths: detach is the half that needs a binary, fail-fast env needs
+        // none.
+        $spawnSpec = ProcessContainment::spawnSpec($command);
+        $env = ProcessContainment::scrubbedEnv($envOverrides);
+        // Clear the last error before the @-suppressed call so error_get_last()
+        // below can only describe THIS spawn, never a stale diagnostic from
+        // earlier in the process; proc_open() failure always pairs with a
+        // warning, so a null here means the call failed silently and the
+        // message says only what is known.
+        error_clear_last();
+        $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
+        if (!is_resource($process)) {
+            $cause = error_get_last()['message'] ?? null;
+            $shown = strlen($command) > 120 ? substr($command, 0, 117) . '...' : $command;
+            return [
+                'stdout' => '',
+                'stderr' => 'Could not start the command ' . $shown . ' — proc_open() failed'
+                    . ($cause === null ? '' : ' (' . $cause . ')')
+                    . '; the command was never run. This is a system-level spawn failure (process-table exhaustion or a denied fork), not a problem with the command text; check `ulimit -u` / system process limits and retry.',
+                'exitCode' => 127,
+                'truncatedBytes' => 0,
+                'stdoutDropped' => 0,
+                'stderrDropped' => 0,
+                'stdoutMidLine' => false,
+                'stderrMidLine' => false,
+                'timedOut' => false,
+            ];
+        }
+
+        // Close stdin immediately: a command that reads from it (and nothing
+        // supplies input) would otherwise block the agent forever.
+        fclose($pipes[0]);
+
+        // Non-blocking reads on both pipes. Draining only stdout first can
+        // deadlock: a command producing more stderr than the pipe buffer holds
+        // blocks writing it while we sit waiting on stdout.
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $stdout = '';
+        $stderr = '';
+        $stdoutDropped = 0;
+        $stderrDropped = 0;
+        $deadline = $timeoutSeconds === null ? null : microtime(true) + max(0.0, $timeoutSeconds);
+        $timedOut = false;
+        while (!feof($pipes[1]) || !feof($pipes[2])) {
+            if ($onWait !== null) {
+                $onWait();
+            }
+            $read = array_filter([$pipes[1], $pipes[2]], static fn($p) => !feof($p));
+            if ($read === []) {
+                break;
+            }
+            $selectMicros = 200000;
+            if ($deadline !== null) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0.0) {
+                    $timedOut = true;
+                    break;
+                }
+                // Never sleep past the deadline: a silent child must be
+                // noticed AT the bound, not up to one 200 ms slice after it.
+                $selectMicros = max(1, min($selectMicros, (int) ceil($remaining * 1_000_000)));
+            }
+            $write = $except = null;
+            if (@stream_select($read, $write, $except, 0, $selectMicros) === false) {
+                break;
+            }
+            foreach ($read as $pipe) {
+                $chunk = fread($pipe, 8192);
+                if ($chunk === false || $chunk === '') {
+                    continue;
+                }
+                if ($pipe === $pipes[1]) {
+                    $stdout = self::appendBounded($stdout, $chunk, $maxBytes, $stdoutDropped);
+                } else {
+                    $stderr = self::appendBounded($stderr, $chunk, $maxBytes, $stderrDropped);
+                }
+            }
+        }
+
+        // Bounded mode only: EOF on both pipes does not mean the child
+        // exited (`cmd >/dev/null 2>&1` closes them at once), and proc_close()
+        // would then wait for as long as it runs. The status observed here is
+        // kept because it, not proc_close(), is the one known to carry the
+        // exit code once proc_get_status() has seen the exit.
+        $observedExit = null;
+        if ($deadline !== null && !$timedOut) {
+            $observedExit = self::awaitExitUntil($process, $deadline, $onWait);
+            $timedOut = $observedExit === null;
+        }
+
+        if ($timedOut) {
+            // Kill BEFORE closing the pipes — StatusLineCommand's order: a
+            // stuck child is not writing, so EPIPE would never reach it.
+            self::terminateGroup($process);
+        }
+
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $closedExit = proc_close($process);
+        $exitCode = $timedOut ? 124 : ($observedExit ?? $closedExit);
+
+        // Decided BEFORE the rtrim: a stream that lost bytes but happened to
+        // stop on a newline is intact, and repairing it anyway would throw
+        // away a complete line for nothing.
+        $stdoutMidLine = $stdoutDropped > 0 && !str_ends_with($stdout, "\n");
+        $stderrMidLine = $stderrDropped > 0 && !str_ends_with($stderr, "\n");
+
+        return [
+            'stdout' => rtrim($stdout, "\n"),
+            'stderr' => rtrim($stderr, "\n"),
+            'exitCode' => $exitCode,
+            'truncatedBytes' => $stdoutDropped + $stderrDropped,
+            'stdoutDropped' => $stdoutDropped,
+            'stderrDropped' => $stderrDropped,
+            'stdoutMidLine' => $stdoutMidLine,
+            'stderrMidLine' => $stderrMidLine,
+            'timedOut' => $timedOut,
+        ];
+    }
+
+    /**
+     * Grace budgets for the deadline path's 15→9 ladder: StatusLineCommand's
+     * 0.5 s each rather than the reaper's 1 s defaults, because the caller
+     * that set a deadline has already spent its patience — the ladder is the
+     * tail of that budget, not a second one of the same size.
+     */
+    private const DEADLINE_TERMINATE_GRACE_SECONDS = 0.5;
+    private const DEADLINE_KILL_GRACE_SECONDS = 0.5;
+
+    /**
+     * Poll until the child exits or $deadline passes; the exit code on exit,
+     * null on expiry. The status is read BEFORE the clock so a child that
+     * exited right at the bound still counts as exited. $onWait beats here
+     * too: `cmd >/dev/null 2>&1` closes both pipes at once and then spends
+     * its whole run in this loop.
+     *
+     * @param resource $process
+     * @param (\Closure(): void)|null $onWait
+     */
+    private static function awaitExitUntil($process, float $deadline, ?\Closure $onWait = null): ?int
+    {
+        while (true) {
+            if ($onWait !== null) {
+                $onWait();
+            }
+            $status = proc_get_status($process);
+            if (($status['running'] ?? false) !== true) {
+                return (int) ($status['exitcode'] ?? -1);
+            }
+            if (microtime(true) >= $deadline) {
+                return null;
+            }
+            usleep(ProcessReaper::POLL_INTERVAL_US);
+        }
+    }
+
+    /**
+     * The shared 15→9 ladder over the child's process GROUP, so git's own
+     * helpers (an fsmonitor hook, a credential helper) die with it rather
+     * than being orphaned holding the repository.
+     *
+     * The group id is read ONCE, while the child is still alive: if SIGTERM
+     * kills the wrapper first, a re-derivation would find no group and the
+     * signal-9 rung would reach only the dead wrapper, missing a descendant
+     * that trapped TERM.
+     *
+     * @param resource $process
+     */
+    private static function terminateGroup($process): void
+    {
+        $groupId = ProcessContainment::groupId($process);
+
+        ProcessReaper::escalate(
+            static function (int $signal) use ($process, $groupId): void {
+                if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
+                    return;
+                }
+                ProcessContainment::terminate($process, $signal);
+            },
+            static fn(): bool => (proc_get_status($process)['running'] ?? false) !== true,
+            self::DEADLINE_TERMINATE_GRACE_SECONDS,
+            self::DEADLINE_KILL_GRACE_SECONDS,
+        );
+    }
+
+    /**
+     * Idle ceiling for an interactive run: a program that emits NOTHING for
+     * this long while still alive is waiting on a keystroke nobody is there
+     * to send. Bounded refusal is the whole contract — an unbounded wait is
+     * the hang Phase 9 exists to end, and a "success" laundered from a
+     * frozen screen would be the second lie.
+     *
+     * The default of `bashInteractiveIdleSeconds` (roadmap N-P4c),
+     * which is read when an interactive run starts
+     * ({@see \SugarCraft\Code\Tools\ToolLimits::current()}); the setting's
+     * range keeps it a bound, never "wait forever".
+     */
+    private const INTERACTIVE_IDLE_CEILING_SECONDS = 8.0;
+
+    /**
+     * Run $command attached to a pty this process allocates and captures —
+     * the mechanism behind Bash's optional `interactive` parameter (Phase 9
+     * layer C).
+     *
+     * The return shape is runCaptured()'s, and every semantic difference is
+     * one the presentation layer already handles: a pty multiplexes
+     * stdout, stderr and every escape sequence onto ONE stream, so the
+     * transcript rides `stdout` and `stderr` stays empty — there is no
+     * second channel to lose bytes to. `stdoutMidLine` says the byte cap
+     * cut the transcript mid-line (same rule as the captured path).
+     *
+     * Three exits, each honest about which it is:
+     *  - the program EXITS: transcript + its real status (pty children
+     *    report through the same 0/signal-number convention the captured
+     *    path already keeps);
+     *  - it goes SILENT past the idle ceiling while alive, OR outlives the
+     *    wall bound while still painting: run the reaper's signal-15→9
+     *    ladder over its group, reap, exit 124, stderr names which bound
+     *    fired — the transcript up to the stop still arrives so the model
+     *    can read WHY (usually its own "[sudo] password" prompt);
+     *  - the host CANNOT give a pty (or allocation itself fails): refusal
+     *    before anything starts, exit 126, stdout empty. A degraded
+     *    pipe-mode answer to an explicit interactive request would be the
+     *    schema-flag lie the absent-pin was guarding against, in costume.
+     *
+     * $timeoutSeconds is the WALL bound beside the idle ceiling — Bash's
+     * `timeout` parameter, so one model-chosen number bounds both modes. The
+     * idle ceiling answers "is anyone going to type?", the wall bound "how
+     * long may this run at all?"; a program that keeps repainting a progress
+     * bar never trips the first. Null keeps the historical 3x-idle bound.
+     * `timedOut` is true whichever bound fired, matching runCaptured().
+     * $onWait is runCaptured()'s wait beat, called on every 50 ms read pass.
+     *
+     * @param (\Closure(): void)|null $onWait
+     * @return array{
+     *     stdout: string,
+     *     stderr: string,
+     *     exitCode: int,
+     *     truncatedBytes: int,
+     *     stdoutDropped: int,
+     *     stderrDropped: int,
+     *     stdoutMidLine: bool,
+     *     stderrMidLine: bool,
+     *     timedOut: bool,
+     * }
+     */
+    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null, ?\Closure $onWait = null): array
+    {
+        $idle = $idleCeilingSec
+            ?? \SugarCraft\Code\Tools\ToolLimits::current()->seconds(\SugarCraft\Code\Tools\ToolLimits::INTERACTIVE_IDLE_KEY)
+            ?? self::INTERACTIVE_IDLE_CEILING_SECONDS;
+
+        if (!ProcessContainment::interactiveAvailable()) {
+            return self::interactiveRefusal(
+                'interactive mode is unavailable on this host (no pty mechanism); the command was refused and never started',
+            );
+        }
+
+        try {
+            $pty = \SugarCraft\Pty\Pty::open();
+            $child = $pty->spawn(
+                ProcessContainment::interactiveSpawnCommand($command, $cwd),
+                // Scrubbed for the same reason as runCaptured(): the pty's
+                // transcript is the model's to read (audit F-E1).
+                ProcessContainment::scrubbedEnv(),
+                80,
+                24,
+                true,
+            );
+        } catch (\Throwable $failure) {
+            return self::interactiveRefusal(
+                'interactive mode refused: the pty could not be allocated (' . $failure->getMessage() . ')',
+            );
+        }
+
+        $transcript = '';
+        $dropped = 0;
+        $stuck = false;
+        $wallExpired = false;
+        $lastProgressAt = \microtime(true);
+        $wall = $timeoutSeconds !== null && $timeoutSeconds > 0.0 ? $timeoutSeconds : 3.0 * $idle;
+        $hardDeadline = $lastProgressAt + $wall;
+
+        try {
+            while (true) {
+                if ($onWait !== null) {
+                    $onWait();
+                }
+                $chunk = $pty->read(8192, 0.05);
+                if ($chunk !== null && $chunk !== '') {
+                    $transcript = self::appendBounded($transcript, $chunk, $maxBytes, $dropped);
+                    $lastProgressAt = \microtime(true);
+
+                    // A program that never stops painting never reaches the
+                    // idle check below, so the wall bound is checked here too.
+                    if ($lastProgressAt < $hardDeadline) {
+                        continue;
+                    }
+                }
+
+                if ($child->exited()) {
+                    break;
+                }
+
+                $now = \microtime(true);
+                if ($now - $lastProgressAt >= $idle || $now >= $hardDeadline) {
+                    $stuck = true;
+                    $wallExpired = $now >= $hardDeadline;
+
+                    // THE REAPER'S LADDER, not a lone TERM: the old shape
+                    // signalled 15 and then called `wait()` — an UNBOUNDED
+                    // poll — so a child that trapped SIGTERM turned the
+                    // bounded refusal back into the exact hang Phase 9
+                    // exists to end (E676's doctrine: one shared ladder,
+                    // caller keeps its budgets; the idle ceiling already
+                    // spent this run's patience, so the ladder's default
+                    // graces ride). terminatePid() is the group-first twin
+                    // of the reaper's own rung helper — the pty child leads
+                    // its session, and killing only the shell would orphan
+                    // the program behind it.
+                    $gone = ProcessReaper::escalate(
+                        static fn(int $signal): bool => ProcessContainment::terminatePid($child->pid(), $signal),
+                        static fn(): bool => $child->exited(),
+                    );
+
+                    // Bounded EITHER WAY — the property the ladder exists to
+                    // guarantee. When it reports the child gone, `wait()`
+                    // reaps from its fast path; when even signal 9 missed
+                    // (an uninterruptible kernel wait), not waiting is the
+                    // point: the answer still leaves at 124 on the clock and
+                    // the handle's non-blocking destructor reaps late.
+                    if ($gone) {
+                        $child->wait();
+                    }
+
+                    $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
+
+                    break;
+                }
+            }
+
+            // The exited() break can beat the last buffered screen repaint;
+            // one more short drain so the transcript ends where the program
+            // did, not one frame earlier.
+            $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
+        } finally {
+            $pty->close();
+        }
+
+        $exitCode = $stuck ? 124 : ($child->exitCode() ?? 0);
+        $stderr = match (true) {
+            !$stuck => '',
+            $wallExpired => sprintf(
+                'the interactive program was still running after %gs and was terminated at its timeout',
+                round($wall, 3),
+            ),
+            default => sprintf(
+                'the interactive program went silent for %gs and was terminated — it was waiting for input on a terminal no one can type at, and no password is ever accepted here',
+                round($idle, 3),
+            ),
+        };
+
+        return [
+            'stdout' => \rtrim($transcript, "\r\n"),
+            'stderr' => $stderr,
+            'exitCode' => $exitCode,
+            'truncatedBytes' => $dropped,
+            'stdoutDropped' => $dropped,
+            'stderrDropped' => 0,
+            'stdoutMidLine' => $dropped > 0 && !\str_ends_with($transcript, "\n"),
+            'stderrMidLine' => false,
+            'timedOut' => $stuck,
+        ];
+    }
+
+    /**
+     * Read the pty master until it answers nothing twice in a row, bounded
+     * so a program STILL writing (impossible right after exit/TERM, cheap
+     * insurance anyway) cannot extend the drain forever.
+     */
+    private static function drainPty(\SugarCraft\Pty\Pty $pty, int $maxChunks = 32): string
+    {
+        $seen = '';
+        $quiet = 0;
+        while ($quiet < 2 && $maxChunks-- > 0) {
+            $chunk = $pty->read(8192, 0.05);
+            if ($chunk === null || $chunk === '') {
+                ++$quiet;
+
+                continue;
+            }
+            $quiet = 0;
+            $seen .= $chunk;
+        }
+
+        return $seen;
+    }
+
+    /**
+     * The never-started answer: exit 126 (found-but-cannot-execute, the
+     * shell's own number for this exact complaint), empty stdout, reason on
+     * stderr so mergeCapturedOutput() surfaces it on the non-zero branch.
+     *
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool}
+     */
+    private static function interactiveRefusal(string $reason): array
+    {
+        return [
+            'stdout' => '',
+            'stderr' => $reason,
+            'exitCode' => 126,
+            'truncatedBytes' => 0,
+            'stdoutDropped' => 0,
+            'stderrDropped' => 0,
+            'stdoutMidLine' => false,
+            'stderrMidLine' => false,
+            'timedOut' => false,
+        ];
+    }
+
+    /**
+     * DELEGATED TO THE CHOKE POINT (E672): the setsid probe and its memo now
+     * live in {@see \SugarCraft\Code\Support\ProcessContainment::detachedSpawnBinary()}
+     * — one answer per process, not one per host class. Kept as trait entry
+     * points because host tests reach them through `self::`.
+     */
+    private static function detachedSpawnBinary(): string
+    {
+        return ProcessContainment::detachedSpawnBinary();
+    }
+
+    /**
+     * DELEGATED TO THE CHOKE POINT (E672) — {@see ProcessContainment::env()}.
+     */
+    private static function containmentEnv(): array
+    {
+        return ProcessContainment::env();
+    }
+
+    /**
+     * Append as much of $chunk as the bound still allows, adding the remainder
+     * to $discarded.
+     *
+     * The partial-append case matters: a bound reached mid-chunk keeps the
+     * prefix rather than dropping the whole 8 KiB read, so the retained output
+     * lands on the bound instead of somewhere up to a chunk short of it.
+     */
+    private static function appendBounded(string $buffer, string $chunk, ?int $maxBytes, int &$discarded): string
+    {
+        if ($maxBytes === null || $maxBytes <= 0) {
+            return $buffer . $chunk;
+        }
+
+        $room = $maxBytes - strlen($buffer);
+        if ($room <= 0) {
+            $discarded += strlen($chunk);
+
+            return $buffer;
+        }
+
+        if (strlen($chunk) <= $room) {
+            return $buffer . $chunk;
+        }
+
+        $discarded += strlen($chunk) - $room;
+
+        return $buffer . substr($chunk, 0, $room);
+    }
+
+    /**
+     * Decide which captured streams belong in the result, and hand the
+     * presentation layer everything it needs to bound them honestly.
+     *
+     * stderr is surfaced when the command FAILED (that is where the reason
+     * lives) or when it succeeded silently on stdout but said something on
+     * stderr. A successful command with real stdout keeps its output clean --
+     * but not silently: that branch now carries a byte-count marker in place
+     * of the text, because a dropped stream nobody mentions is the same
+     * failure as a truncation nobody mentions.
+     *
+     * The return is a two-part shape rather than one joined string because
+     * the two parts have different claims on a limited budget. `head` is the
+     * bulk answer and `tail` is the trailing explanation; concatenating them
+     * first and clipping from the front afterwards is precisely how the
+     * explanation gets lost, since it is by construction the last thing in
+     * the string. {@see TruncatesOutput::truncateMerged()} is what acts on
+     * the distinction.
+     *
+     * `dropped` counts ONLY the streams that made it into this result.
+     * Reporting the discards of a stream this merge just threw away tells the
+     * model a complete answer is partial and sends it back to re-run a
+     * command that already answered the question.
+     *
+     * @param array{
+     *     stdout: string,
+     *     stderr: string,
+     *     exitCode: int,
+     *     stdoutDropped?: int,
+     *     stderrDropped?: int,
+     *     stdoutMidLine?: bool,
+     *     stderrMidLine?: bool,
+     * } $run
+     *
+     * @return array{head: string, tail: string, dropped: int, headMidLine: bool, tailMidLine: bool}
+     */
+    private function mergeCapturedOutput(array $run): array
+    {
+        $stdoutDropped = $run['stdoutDropped'] ?? 0;
+        $stderrDropped = $run['stderrDropped'] ?? 0;
+        $stdoutMidLine = $run['stdoutMidLine'] ?? false;
+        $stderrMidLine = $run['stderrMidLine'] ?? false;
+
+        $onlyStdout = [
+            'head' => $run['stdout'],
+            'tail' => '',
+            'dropped' => $stdoutDropped,
+            'headMidLine' => $stdoutMidLine,
+            'tailMidLine' => false,
+        ];
+        $onlyStderr = [
+            'head' => $run['stderr'],
+            'tail' => '',
+            'dropped' => $stderrDropped,
+            'headMidLine' => $stderrMidLine,
+            'tailMidLine' => false,
+        ];
+
+        if ($run['stderr'] === '') {
+            return $onlyStdout;
+        }
+
+        if ($run['stdout'] === '') {
+            return $onlyStderr;
+        }
+
+        if ($run['exitCode'] !== 0) {
+            return [
+                'head' => $run['stdout'],
+                'tail' => $run['stderr'],
+                'dropped' => $stdoutDropped + $stderrDropped,
+                'headMidLine' => $stdoutMidLine,
+                'tailMidLine' => $stderrMidLine,
+            ];
+        }
+
+        // A succeeding command's stderr still does not join the answer -- that
+        // is the whole point of keeping the streams apart -- but its EXISTENCE
+        // now does. Dropping it in total silence is how a green `phpunit`,
+        // `composer` or compiler run reads as warning-free to a model that
+        // never saw the warnings; the marker costs one line and names the
+        // redirect that recovers them.
+        //
+        // Deliberately WITHOUT a byte count. The only figure available here is
+        // `strlen($run['stderr']) + $stderrDropped`, and it is not stable
+        // across the cap: `runCaptured()` rtrims the retained text, so an
+        // UNCAPPED capture loses its trailing newline while a capped one --
+        // whose retained slice ends mid-line -- does not. The same command
+        // would then report two different totals depending on $maxOutputBytes,
+        // which is a number travelling without its domain and would also break
+        // the cap-invariance the two OutputTruncationTest chatty-stderr cases
+        // pin. Presence plus the recovery instruction is the part that is true
+        // at every cap.
+        return [
+            'head' => $run['stdout'],
+            'tail' => self::SUPPRESSED_STDERR_MARKER,
+            'dropped' => $stdoutDropped,
+            'headMidLine' => $stdoutMidLine,
+            'tailMidLine' => false,
+        ];
+    }
+}

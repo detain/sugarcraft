@@ -1,0 +1,301 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests;
+
+use SugarCraft\Code\Attachment;
+use SugarCraft\Code\AttachmentType;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Role;
+use PHPUnit\Framework\TestCase;
+
+final class MessageTest extends TestCase
+{
+    public function testFactoriesSetTheRoleField(): void
+    {
+        $this->assertSame(Role::User,      Message::user('hi')->role);
+        $this->assertSame(Role::Assistant, Message::assistant('hi')->role);
+        $this->assertSame(Role::System,    Message::system('hi')->role);
+    }
+
+    public function testToWireMatchesProviderShape(): void
+    {
+        $m = Message::user('hello world', 1700000000);
+        $this->assertSame(
+            ['role' => 'user', 'content' => 'hello world'],
+            $m->toWire(),
+        );
+    }
+
+    public function testCreatedAtIsUsedWhenProvided(): void
+    {
+        $m = Message::assistant('reply', 12345);
+        $this->assertSame(12345, $m->createdAt);
+    }
+
+    public function testAttachFileAddsAttachment(): void
+    {
+        $m = Message::user('hello');
+        $m2 = $m->attachFile('/path/to/file.txt');
+        $this->assertNotSame($m, $m2);
+        $this->assertCount(1, $m2->attachments);
+        $this->assertSame('/path/to/file.txt', $m2->attachments[0]->path);
+        $this->assertSame(AttachmentType::File, $m2->attachments[0]->type);
+    }
+
+    public function testAttachImageAddsImageAttachment(): void
+    {
+        $m = Message::user('hello');
+        $m2 = $m->attachImage('/path/to/image.png');
+        $this->assertCount(1, $m2->attachments);
+        $this->assertSame('/path/to/image.png', $m2->attachments[0]->path);
+        $this->assertSame(AttachmentType::Image, $m2->attachments[0]->type);
+    }
+
+    public function testAttachMultipleAttachments(): void
+    {
+        $m = Message::user('hello')
+            ->attachFile('/path/to/file.txt')
+            ->attachImage('/path/to/image.png');
+        $this->assertCount(2, $m->attachments);
+        $this->assertSame(AttachmentType::File, $m->attachments[0]->type);
+        $this->assertSame(AttachmentType::Image, $m->attachments[1]->type);
+    }
+
+    public function testToWireIncludesAttachments(): void
+    {
+        $m = Message::user('hello')
+            ->attachFile('/path/to/file.txt')
+            ->attachImage('/path/to/image.png');
+        $wire = $m->toWire();
+        $this->assertArrayHasKey('attachments', $wire);
+        $this->assertCount(2, $wire['attachments']);
+        $this->assertSame('File', $wire['attachments'][0]['type']);
+        $this->assertSame('/path/to/file.txt', $wire['attachments'][0]['path']);
+        $this->assertSame('Image', $wire['attachments'][1]['type']);
+        $this->assertSame('/path/to/image.png', $wire['attachments'][1]['path']);
+    }
+
+    public function testToWireOmitsAttachmentsWhenEmpty(): void
+    {
+        $m = Message::user('hello');
+        $wire = $m->toWire();
+        $this->assertArrayNotHasKey('attachments', $wire);
+    }
+
+    public function testToolRunningSetsPendingToolCallIdToTheCallId(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls'], 'call_1');
+        $m = Message::toolRunning($call);
+
+        $this->assertSame('call_1', $m->pendingToolCallId);
+        $this->assertSame(Role::System, $m->role);
+        $this->assertStringContainsString('bash', $m->content);
+    }
+
+    public function testToolRunningFallsBackToNameWhenCallHasNoId(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', []);
+        $m = Message::toolRunning($call);
+
+        $this->assertSame('bash', $m->pendingToolCallId);
+    }
+
+    public function testWithToolResultsClearsPendingToolCallId(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', [], 'call_1');
+        $result = \SugarCraft\Code\ToolResult::ok('bash', 'ok', 'call_1');
+
+        $m = Message::toolRunning($call)->withToolResults([$result]);
+
+        $this->assertNull($m->pendingToolCallId);
+        $this->assertSame([$result], $m->toolResults);
+    }
+
+    public function testDescribeToolCallFormatsArguments(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls -la']);
+        $this->assertSame('bash(command: "ls -la")', Message::describeToolCall($call));
+    }
+
+    public function testDescribeToolCallWithNoArguments(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', []);
+        $this->assertSame('bash()', Message::describeToolCall($call));
+    }
+
+    /**
+     * crush_feat.md §3 E2: the model-authored `description` argument is the
+     * label, not the mechanical argument dump. Fails against the old code,
+     * which rendered `bash(command: "ls -la", description: "...")`.
+     */
+    public function testDescribeToolCallPrefersTheModelAuthoredDescription(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', [
+            'command' => 'ls -la',
+            'description' => 'List files in current directory',
+        ]);
+
+        $this->assertSame('List files in current directory', Message::describeToolCall($call));
+    }
+
+    /**
+     * The running placeholder keeps the call's raw arguments beside its
+     * one-liner, every with*() carries them, and the finished result message
+     * drops them (they have moved onto its ToolResult).
+     */
+    public function testToolRunningKeepsTheCallsArgumentsUntilTheResultReplacesIt(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls -la'], 'call_1');
+        $placeholder = Message::toolRunning($call);
+
+        $this->assertSame(['command' => 'ls -la'], $placeholder->pendingToolArguments);
+        $this->assertSame(['command' => 'ls -la'], $placeholder->withReasoning('hmm')->pendingToolArguments);
+        $this->assertSame([], $placeholder->withToolResults([\SugarCraft\Code\ToolResult::ok('bash', 'x')])->pendingToolArguments);
+        $this->assertArrayNotHasKey('pendingToolArguments', $placeholder->toWire());
+    }
+
+    /**
+     * The placeholder names its tool, so a surface can tell a running Task
+     * from a running Bash before the result does; the name goes when the
+     * result replaces the placeholder, survives a resume, and never reaches
+     * a model.
+     */
+    public function testToolRunningNamesItsToolUntilTheResultReplacesIt(): void
+    {
+        $placeholder = Message::toolRunning(new \SugarCraft\Code\ToolCall('Task', ['agent' => 'reviewer'], 'call_1'));
+
+        $this->assertSame('Task', $placeholder->pendingToolName);
+        $this->assertSame('Task', $placeholder->withReasoning('hmm')->pendingToolName);
+        $this->assertNull($placeholder->withToolResults([\SugarCraft\Code\ToolResult::ok('Task', 'x')])->pendingToolName);
+        $this->assertSame('Task', Message::fromArray($placeholder->jsonSerialize())->pendingToolName);
+        $this->assertArrayNotHasKey('pendingToolName', Message::user('hi')->jsonSerialize(), 'other rows serialise exactly as before');
+        $this->assertArrayNotHasKey('pendingToolName', $placeholder->toWire());
+    }
+
+    public function testDescribeToolCallFallsBackWhenDescriptionIsMissingOrUnusable(): void
+    {
+        $noDescription = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls -la']);
+        $this->assertSame('bash(command: "ls -la")', Message::describeToolCall($noDescription));
+
+        // Blank / whitespace-only is as useless as absent, so fall back too.
+        $blank = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls -la', 'description' => "  \n "]);
+        $this->assertStringStartsWith('bash(command: "ls -la"', Message::describeToolCall($blank));
+
+        // A non-string description is not a label; the dump still describes it.
+        $wrongType = new \SugarCraft\Code\ToolCall('bash', ['command' => 'ls', 'description' => ['nope']]);
+        $this->assertStringStartsWith('bash(command: "ls"', Message::describeToolCall($wrongType));
+    }
+
+    /**
+     * Tool arguments are model-controlled and the label lands on a single row
+     * of the frame, so newlines and raw ESC bytes must never survive.
+     */
+    public function testDescribeToolCallFlattensControlBytesToASingleLine(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', [
+            'command' => 'ls',
+            'description' => "List files\n\x1b[31mred\x1b[0m\tnow",
+        ]);
+
+        $described = Message::describeToolCall($call);
+
+        $this->assertSame('List files [31mred [0m now', $described);
+        $this->assertStringNotContainsString("\n", $described);
+        $this->assertStringNotContainsString("\x1b", $described);
+    }
+
+    public function testDescribeToolCallElidesAnOverlongDescription(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', [
+            'command' => 'ls',
+            'description' => str_repeat('x', 200),
+        ]);
+
+        $described = Message::describeToolCall($call);
+
+        $this->assertSame(str_repeat('x', 80) . '…', $described);
+        $this->assertSame(81, mb_strlen($described));
+    }
+
+    public function testToolRunningUsesTheModelAuthoredDescriptionAsItsContent(): void
+    {
+        $call = new \SugarCraft\Code\ToolCall('bash', [
+            'command' => 'ls -la',
+            'description' => 'List files in current directory',
+        ], 'call_1');
+
+        $m = Message::toolRunning($call);
+
+        $this->assertSame('List files in current directory', $m->content);
+        $this->assertSame('call_1', $m->pendingToolCallId);
+    }
+
+    public function testAssistantFactoryAcceptsOptionalReasoning(): void
+    {
+        $m = Message::assistant('answer', 12345, reasoning: 'thinking...');
+
+        $this->assertSame('thinking...', $m->reasoning);
+        $this->assertNull(Message::assistant('answer')->reasoning);
+    }
+
+    public function testWithReasoningReturnsNewInstanceWithReasoningSet(): void
+    {
+        $m = Message::assistant('answer');
+        $m2 = $m->withReasoning('because');
+
+        $this->assertNull($m->reasoning);
+        $this->assertSame('because', $m2->reasoning);
+        $this->assertNotSame($m, $m2);
+    }
+
+    public function testFluentWithersPreserveReasoning(): void
+    {
+        $m = Message::assistant('answer', reasoning: 'because')
+            ->attachFile('/tmp/f.txt')
+            ->withToolCalls([]);
+
+        $this->assertSame('because', $m->reasoning);
+    }
+
+    /**
+     * W1.G2 reachability fix: an image-bearing tool result (e.g. Doctor's
+     * capability swatch) is threaded onto the root Message at the
+     * EngineBackend conversion seam via withImage() -- mirroring
+     * withReasoning()'s role for the parallel `reasoning` field.
+     */
+    public function testImageFieldsDefaultToNullAndHasImageIsFalse(): void
+    {
+        $m = Message::assistant('answer');
+
+        $this->assertNull($m->imageBytes);
+        $this->assertNull($m->imageProtocol);
+        $this->assertFalse($m->hasImage());
+    }
+
+    public function testWithImageReturnsNewInstanceWithImageSet(): void
+    {
+        $m = Message::assistant('answer');
+        $m2 = $m->withImage("\x89PNGfake", 'kitty');
+
+        $this->assertFalse($m->hasImage());
+        $this->assertTrue($m2->hasImage());
+        $this->assertSame("\x89PNGfake", $m2->imageBytes);
+        $this->assertSame('kitty', $m2->imageProtocol);
+        $this->assertNotSame($m, $m2);
+    }
+
+    public function testFluentWithersPreserveImage(): void
+    {
+        $m = Message::assistant('answer')
+            ->withImage('bytes', 'sixel')
+            ->attachFile('/tmp/f.txt')
+            ->withToolCalls([])
+            ->withReasoning('because');
+
+        $this->assertTrue($m->hasImage());
+        $this->assertSame('bytes', $m->imageBytes);
+        $this->assertSame('sixel', $m->imageProtocol);
+    }
+}

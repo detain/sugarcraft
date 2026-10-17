@@ -1,0 +1,184 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Commands;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Commands\CommandRegistry;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Palette\PaletteAction;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
+use SugarCraft\Code\Tui\Settings\SettingsSources;
+
+/**
+ * Every door to the settings view (roadmap N-P1): `/settings [search]`, its
+ * `/config` alias, the Ctrl+P row, the F10 App-menu row, and the shell message
+ * all of them end in. The view itself is {@see \SugarCraft\Code\Tests\Tui\Settings\SettingsEditorTest}'s.
+ */
+final class SettingsCommandTest extends TestCase
+{
+    use HomeSandboxTrait;
+
+    private string $sandbox = '';
+
+    protected function setUp(): void
+    {
+        $this->sandbox = sys_get_temp_dir() . '/crush-settings-cmd-' . bin2hex(random_bytes(5));
+        $this->useHomeSandbox($this->sandbox . '/home');
+        MenuBar::closeMenu();
+    }
+
+    protected function tearDown(): void
+    {
+        MenuBar::closeMenu();
+        $this->restoreHomeSandbox();
+        exec('rm -rf ' . escapeshellarg($this->sandbox));
+    }
+
+    private function chat(string $draft = '', int $cols = 100): Chat
+    {
+        return (new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            inputBuf: $draft,
+            backend: new EchoBackend(),
+        ))->withSize($cols, 30);
+    }
+
+    private function app(?Chat $chat = null): App
+    {
+        return App::new($this->createMock(ProviderInterface::class), 'test-model')
+            ->withChat($chat ?? $this->chat())
+            ->withSettingsSources(static fn (): SettingsSources => SettingsSources::fromLaunch(null, null, null, null, []));
+    }
+
+    /** The message a Cmd closure produces, or null. */
+    private static function sent(?\Closure $cmd): ?object
+    {
+        return $cmd === null ? null : $cmd();
+    }
+
+    public function testSlashSettingsAsksTheShellForTheViewAndWritesNothing(): void
+    {
+        [$next, $cmd] = $this->chat('/settings')->update(new KeyMsg(KeyType::Enter));
+
+        $msg = self::sent($cmd);
+        self::assertInstanceOf(OpenSettingsMsg::class, $msg);
+        self::assertSame('', $msg->query);
+        self::assertSame('', $next->inputBuf);
+        self::assertFalse($next->inFlight, 'nothing went to the model');
+        self::assertCount(2, $next->history, 'and nothing was written to the transcript');
+    }
+
+    public function testTheArgumentPrefillsTheSearchAndConfigIsTheSameCommand(): void
+    {
+        foreach (['/settings compaction' => 'compaction', '/config' => '', '/config parallel tools' => 'parallel tools'] as $draft => $query) {
+            [, $cmd] = $this->chat($draft)->update(new KeyMsg(KeyType::Enter));
+            $msg = self::sent($cmd);
+
+            self::assertInstanceOf(OpenSettingsMsg::class, $msg, $draft);
+            self::assertSame($query, $msg->query, $draft);
+        }
+    }
+
+    public function testBothNamesAreReservedToTheApplication(): void
+    {
+        self::assertTrue(CommandRegistry::isControlPlane('settings'));
+        self::assertTrue(CommandRegistry::isControlPlane('config'));
+    }
+
+    public function testThePaletteRowAsksForTheSameView(): void
+    {
+        $spec = PaletteAction::OpenSettings->spec();
+        self::assertSame('settings', $spec->name);
+
+        [, $cmd] = $this->chat()->runPaletteAction(PaletteAction::OpenSettings->label());
+
+        self::assertInstanceOf(OpenSettingsMsg::class, self::sent($cmd));
+    }
+
+    /**
+     * Like Exit, the palette row is let through while a turn runs — the view
+     * writes nothing — and the draft typed meanwhile stays in the box.
+     */
+    public function testThePaletteRowOpensTheViewWhileATurnRunsAndKeepsTheDraft(): void
+    {
+        [$busy] = $this->chat('hello there')->update(new KeyMsg(KeyType::Enter));
+        self::assertTrue($busy->inFlight, 'fixture: a turn is running');
+        foreach (mb_str_split('next question') as $rune) {
+            [$busy] = $busy->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        self::assertSame('next question', $busy->inputBuf, 'fixture: a draft typed mid-turn');
+        $before = \count($busy->history);
+
+        [$viaShell, $cmd] = $busy->runPaletteAction(PaletteAction::OpenSettings->label());
+        self::assertInstanceOf(OpenSettingsMsg::class, self::sent($cmd));
+        self::assertSame('next question', $viaShell->inputBuf);
+        self::assertCount($before, $viaShell->history, 'no refusal notice');
+        self::assertTrue($viaShell->inFlight);
+
+        // Enter on the row in an open palette takes the same exemption.
+        $typed = $busy;
+        [$typed] = $typed->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (mb_str_split('View settings') as $rune) {
+            [$typed] = $typed->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        [$picked, $cmd] = $typed->update(new KeyMsg(KeyType::Enter));
+        self::assertInstanceOf(OpenSettingsMsg::class, self::sent($cmd));
+        self::assertSame('next question', $picked->inputBuf);
+        self::assertNull($picked->palette());
+        self::assertCount($before, $picked->history, 'no refusal notice');
+    }
+
+    public function testTheShellOpensTheViewOnTheMessage(): void
+    {
+        [$app] = $this->app()->update(new OpenSettingsMsg('trusted'));
+
+        self::assertNotNull($app->settingsEditor);
+        self::assertSame('trusted', $app->settingsEditor->query);
+    }
+
+    public function testTheAppMenuRowOpensTheViewEvenWhileATurnRuns(): void
+    {
+        [$busy] = $this->chat('hello there')->update(new KeyMsg(KeyType::Enter));
+        self::assertTrue($busy->inFlight, 'fixture: a turn is running');
+
+        [$app] = $this->app($busy)->consumeShellCmd(new MenuSelectedMsg('App', PaletteAction::OpenSettings->label()));
+
+        self::assertNotNull($app->settingsEditor, 'the view writes nothing, so a running turn does not refuse it');
+        self::assertSame($busy, $app->chat, 'and the chat was not touched');
+    }
+
+    public function testTheOpenViewIsModalButCtrlCStillQuits(): void
+    {
+        [$open] = $this->app()->update(new OpenSettingsMsg());
+
+        [$typed] = $open->update(new KeyMsg(KeyType::Char, 'x'));
+        self::assertSame('', $typed->chat?->inputBuf, 'a key aimed at the view does not type into the chat it covers');
+        self::assertNotNull($typed->settingsEditor);
+
+        [, $quit] = $open->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        self::assertNotNull($quit, 'Ctrl+C reaches the chat, which quits');
+
+        [$closed] = $open->update(new KeyMsg(KeyType::Escape));
+        self::assertNull($closed->settingsEditor);
+    }
+
+    public function testAnotherMenuRowClosesTheViewSoItsAnswerIsVisible(): void
+    {
+        [$open] = $this->app()->update(new OpenSettingsMsg());
+
+        [$app] = $open->consumeShellCmd(new MenuSelectedMsg('Session', PaletteAction::SwitchSession->label()));
+
+        self::assertNull($app->settingsEditor);
+    }
+}

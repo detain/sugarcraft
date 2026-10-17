@@ -1,0 +1,585 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Backend;
+
+use SugarCraft\Code\Events\PermissionResolved;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Permissions\ApprovalVerdict;
+use SugarCraft\Code\Permissions\PermissionReply;
+use SugarCraft\Code\Tools\ToolCall;
+
+/**
+ * The turn child's half of the two-way frame channel (roadmap 1.C-1 =
+ * Appendix O §5.1, frame vocabulary decision D1).
+ *
+ * {@see EngineBackend::completeAsync()} forks the turn and, until this class,
+ * used the socketpair ONE way: the child wrote `token`/`reasoning`/`started`/
+ * `finished`/`subagent`/`spend_cap`/`result` frames and the parent never wrote
+ * at all. That is why an ASK raised inside a TUI turn could only be refused —
+ * the question had no way out of the child and an answer had no way back in.
+ *
+ * Same framing in both directions (4-byte big-endian length + `serialize()`,
+ * decoded with `allowed_classes => false`), so the parent's existing reader
+ * needed new KINDS rather than a new codec:
+ *
+ * | Direction     | `kind`        | Fields                                                    |
+ * |---------------|---------------|-----------------------------------------------------------|
+ * | child→parent  | `ask`         | `askId`, `toolCallId`, `tool`, `arguments`, `reason`, `source`, `mode`, `suggestions`, `alwaysScope` (`tool`, and `pattern` when `always` remembers one), optional `alwaysAsks` (why a question offering no `always` is put every time), optional `origin` (P-E2) |
+ * | parent→child  | `ask_reply`   | `askId`, `reply` (`once`/`always`/`reject`), `note`       |
+ * | parent→child  | `steer`       | `steerId`, `text`                                         |
+ * | parent→child  | `cancel_soft` | —                                                         |
+ * | parent→child  | `cancel_tool` | `callId`                                                  |
+ * | parent→child  | `agent_cancel` | `agentId`, `callId`                                      |
+ * | child→parent  | `steer_ack`   | `steerId`, `step`                                         |
+ * | child→parent  | `usage`       | `step`, `usage`                                           |
+ * | child→parent  | `step`        | `step`, `maxSteps`                                        |
+ *
+ * 1.C-1 built the channel and the ask round trip; the other kinds ride the
+ * same seam. Inbound `steer`/`cancel_*` frames are parsed and BUFFERED here
+ * (an ask blocked on its reply must not drop a steer that overtook the
+ * reply). Since roadmap 1.C-4 every forked turn carries a channel, not only
+ * an interactive one: the turn loop writes a `step` frame before each
+ * provider call and a `usage` frame after each response through
+ * {@see send()}, and asks {@see softCancelRequested()} at each step boundary,
+ * so a `cancel_soft` from the parent ends the turn once the step's tools have
+ * finished. Steering (1.C-3) reads {@see takeSteers()} through
+ * {@see SocketSteerInbox}, which answers each delivered steer with a
+ * `steer_ack`. A `cancel_tool{callId}` (1.C-4b) stops only that running
+ * call: the turn child reads it through {@see takeToolCancels()} (behind
+ * {@see \SugarCraft\Code\Support\ToolCancelRequests}), kills a concurrent
+ * member's process or stops a lone Task at its next boundary, and the call
+ * settles as cancelled while the turn goes on to its boundary. An
+ * `agent_cancel{agentId, callId}` (P-E1) is the Agent View's hard stop of
+ * one delegated run: read through {@see takeAgentCancels()} (behind
+ * {@see \SugarCraft\Code\Support\AgentCancelRequests}), it SIGTERMs a
+ * concurrent member — SIGKILL two seconds later if it has not gone — and
+ * stops a lone Task at its next boundary.
+ *
+ * ## No deadline in the child
+ *
+ * {@see ask()} blocks on the socket for as long as it takes. The parent owns
+ * the policy — it pauses its idle ceiling while a question is open, and tears
+ * the turn down on cancel — and the parent going away shows up here as EOF,
+ * which settles the question as unanswered (`Permission required:`), never as
+ * a grant.
+ *
+ * ## Owned by one process
+ *
+ * A parallel Task sub-agent runs in a GRANDCHILD forked below the turn child,
+ * and it inherits this object (through the approver the turn's engine copies
+ * into the sub-engine) and the socket under it. Two processes writing one
+ * stream interleave frames, which is the same reason the sub-agent emitter is
+ * pid-bound in {@see EngineBackend}. So every write checks the pid it was
+ * built in, and an ask from any other process is refused with
+ * {@see GRANDCHILD_REFUSAL}.
+ *
+ * Since roadmap 1.C-5 that refusal is the FALLBACK, not the rule: the turn
+ * child opens a {@see \SugarCraft\Code\Support\PermissionAskRelay} per
+ * parallel Task member, the member asks over it, and the turn child puts the
+ * question to the parent through THIS channel — so a parallel sub-agent's
+ * write reaches the user's modal like any other. Only a member whose relay
+ * could not be opened still gets the refusal. The member also gives up its
+ * inherited copy of the turn socket ({@see releaseInherited()}), so nothing
+ * in it can write onto this stream even by accident.
+ */
+final class ChildChannel
+{
+    public const ASK = 'ask';
+    public const ASK_REPLY = 'ask_reply';
+    public const STEER = 'steer';
+    public const STEER_ACK = 'steer_ack';
+    public const CANCEL_SOFT = 'cancel_soft';
+    public const CANCEL_TOOL = 'cancel_tool';
+    public const AGENT_CANCEL = 'agent_cancel';
+    public const USAGE = 'usage';
+    public const STEP = 'step';
+
+    /** The D1 kinds the child writes. */
+    public const TO_PARENT = [self::ASK, self::STEER_ACK, self::USAGE, self::STEP];
+
+    /** The D1 kinds the parent writes. */
+    public const TO_CHILD = [self::ASK_REPLY, self::STEER, self::CANCEL_SOFT, self::CANCEL_TOOL, self::AGENT_CANCEL];
+
+    /** A reply's `note` and a cancellation's reason are clipped to this many bytes (§5.1). */
+    public const MAX_NOTE_BYTES = 2048;
+
+    public const GRANDCHILD_REFUSAL = 'approval from a parallel sub-agent is not yet supported; run it alone or allow it by rule';
+
+    public const PARENT_GONE = 'the turn ended before the question was answered';
+
+    /**
+     * Consecutive failed `stream_select()` calls (EINTR and friends) tolerated
+     * before the socket is treated as gone, so a select that fails for good
+     * cannot spin the child forever.
+     */
+    private const MAX_SELECT_FAILURES = 100;
+
+    private const MAX_HELD_REPLIES = 64;
+
+    /**
+     * Every channel built in this process or inherited by it through a fork,
+     * held weakly, so {@see releaseInherited()} can find the ones a forked
+     * process does not own.
+     *
+     * @var list<\WeakReference<self>>
+     */
+    private static array $live = [];
+
+    private string $inbound = '';
+
+    private bool $closed = false;
+
+    /**
+     * The `always` answers given during this turn, remembered with the SAME
+     * scope the parent remembers them with
+     * ({@see \SugarCraft\Code\Permissions\SessionPermissionMemo} — a
+     * pattern such as `Bash(sed * | sort * | uniq *)`, else the exact call),
+     * so a later call of this turn, a parallel member's included, that the
+     * parent's grant covers is not put again. It was the exact call only, so
+     * `a` on `git status` still asked about `git status -s` until the turn
+     * ended.
+     */
+    private \SugarCraft\Code\Permissions\SessionPermissionMemo $grants;
+
+    /** @var list<array{steerId: string, text: string}> */
+    private array $steers = [];
+
+    /** @var list<array<string, mixed>> buffered `cancel_soft` / `cancel_tool` / `agent_cancel` frames */
+    private array $controls = [];
+
+    /** Latched once a `cancel_soft` has been read: a soft cancel is never withdrawn. */
+    private bool $softCancelled = false;
+
+    /**
+     * @var array<string, array<string, mixed>> `ask_reply` frames that arrived
+     *      for a question other than the one being waited on, by askId — kept,
+     *      not dropped, so a read that happens to carry two replies cannot
+     *      lose the second; bounded by {@see MAX_HELD_REPLIES}
+     */
+    private array $heldReplies = [];
+
+    /**
+     * @param resource                                              $socket      the child's end
+     * @param \Closure(array<string, mixed>): void                  $writeFrame  writes one frame (and ends the
+     *                                                                           process on a dead stream, as
+     *                                                                           every other child write does)
+     * @param \Closure(string, bool): list<array<string, mixed>>    $drainFrames by-reference `(string &$buffer,
+     *                                                                           bool &$corrupt)`: the parent's
+     *                                                                           own frame decoder
+     * @param string|null                                           $projectRoot the turn's root: a leading
+     *                                                                           in-project `cd` is not part of
+     *                                                                           the per-turn memo's key
+     */
+    public function __construct(
+        private $socket,
+        private readonly \Closure $writeFrame,
+        private readonly \Closure $drainFrames,
+        private readonly string $mode,
+        private readonly int $ownerPid,
+        private readonly ?string $projectRoot = null,
+    ) {
+        // Reads go select-then-fread. With PHP's own read buffer in between,
+        // bytes it had already pulled off the fd would be invisible to the
+        // next select and the child would block on a reply it already has.
+        if (is_resource($this->socket)) {
+            stream_set_read_buffer($this->socket, 0);
+        }
+        $this->grants = \SugarCraft\Code\Permissions\SessionPermissionMemo::new();
+        self::$live[] = \WeakReference::create($this);
+    }
+
+    /**
+     * Close this process's copy of every channel socket it inherited rather
+     * than built (roadmap 1.C-5, the RELAY design's "the grandchild closes
+     * its copy of the turn socket"). Called by a forked member that has a
+     * channel of its own: the turn's frame writers it inherited also hold
+     * the socket, and a write from here would interleave with the turn
+     * child's frames — with the copy closed, such a write fails instead.
+     * The turn child's own end is untouched (a separate descriptor table).
+     *
+     * @return int how many sockets were closed
+     */
+    public static function releaseInherited(): int
+    {
+        $pid = (int) getmypid();
+        $closed = 0;
+        $kept = [];
+        foreach (self::$live as $ref) {
+            $channel = $ref->get();
+            if ($channel === null) {
+                continue;
+            }
+            if ($channel->ownerPid === $pid) {
+                $kept[] = $ref;
+
+                continue;
+            }
+            if (is_resource($channel->socket)) {
+                @fclose($channel->socket);
+                $closed++;
+            }
+            $channel->closed = true;
+        }
+        self::$live = $kept;
+
+        return $closed;
+    }
+
+    /**
+     * @param resource                                           $socket
+     * @param \Closure(array<string, mixed>): void               $writeFrame
+     * @param \Closure(string, bool): list<array<string, mixed>> $drainFrames
+     */
+    public static function new($socket, \Closure $writeFrame, \Closure $drainFrames, string $mode = '', ?string $projectRoot = null): self
+    {
+        return new self($socket, $writeFrame, $drainFrames, $mode, (int) getmypid(), $projectRoot);
+    }
+
+    /**
+     * The approver {@see EngineBackend::withPermissionApprover()} takes: put
+     * the question to the parent and grant only on an actual `once`/`always`.
+     *
+     * It answers an {@see ApprovalVerdict} rather than a `bool` (roadmap
+     * 1.C-2), because the settlement carries two things a bit drops: a
+     * question nobody answered (the parent gone, the stream corrupt) reaches
+     * the model as `Permission required:` rather than as a refusal, and a
+     * reply's note — the user's feedback, or {@see GRANDCHILD_REFUSAL} —
+     * reaches it beside the question.
+     *
+     * @return \Closure(ToolCall, HookResult): ApprovalVerdict
+     */
+    public function approver(): \Closure
+    {
+        return fn (ToolCall $call, HookResult $ask): ApprovalVerdict => ApprovalVerdict::fromResolution($this->ask($call, $ask));
+    }
+
+    /**
+     * Put one ASK to the parent and block until it is answered or the parent
+     * is gone.
+     *
+     * $call is the call that will RUN — {@see \SugarCraft\Code\Runtime::settleAsk()}
+     * applies the question's rewrite before it reaches an approver.
+     */
+    public function ask(ToolCall $call, HookResult $ask): PermissionResolved
+    {
+        $frame = PendingAsk::describe($call, $ask, $this->mode, $this->projectRoot === '' ? null : $this->projectRoot);
+        $askId = (string) $frame['askId'];
+
+        if ((int) getmypid() !== $this->ownerPid) {
+            return PermissionResolved::replied($askId, PermissionReply::Reject, self::GRANDCHILD_REFUSAL);
+        }
+
+        $root = $this->projectRoot === '' ? null : $this->projectRoot;
+        $rememberable = $ask->isRememberable();
+        if ($rememberable && $this->grants->allows($call->name(), $call->arguments(), $root)) {
+            return PermissionResolved::replied($askId, PermissionReply::Always);
+        }
+
+        if ($this->closed) {
+            return PermissionResolved::cancelled($askId, self::PARENT_GONE);
+        }
+
+        ($this->writeFrame)($frame);
+
+        $reply = $this->heldReplies[$askId] ?? null;
+        unset($this->heldReplies[$askId]);
+        while ($reply === null) {
+            if (!$this->readInbound(true, $askId, $reply)) {
+                return PermissionResolved::cancelled($askId, self::PARENT_GONE);
+            }
+        }
+
+        $parsed = PermissionReply::tryFrom(is_string($reply['reply'] ?? null) ? $reply['reply'] : '');
+        $note = self::clipNote(is_string($reply['note'] ?? null) ? $reply['note'] : '');
+        // An answer this build cannot read is not consent.
+        $resolution = PermissionResolved::replied($askId, $parsed ?? PermissionReply::Reject, $note);
+
+        if ($parsed === PermissionReply::Always && $rememberable) {
+            $this->grants = $this->grants->withGrant($call->name(), $call->arguments(), $root);
+        }
+
+        return $resolution;
+    }
+
+    /**
+     * Write one child→parent frame that is not an ask (`steer_ack`, `usage`,
+     * `step`).
+     *
+     * @param array<string, mixed> $fields
+     *
+     * @return bool false when it was not written: an unknown kind, or a
+     *              process that does not own the socket
+     */
+    public function send(string $kind, array $fields = []): bool
+    {
+        if ($kind === self::ASK || !in_array($kind, self::TO_PARENT, true)) {
+            return false;
+        }
+        if ((int) getmypid() !== $this->ownerPid) {
+            return false;
+        }
+
+        ($this->writeFrame)(['kind' => $kind] + $fields);
+
+        return true;
+    }
+
+    /**
+     * Steers the parent sent, in arrival order, each handed out once. Polls
+     * the socket without blocking first, so a steer is seen at a step
+     * boundary even when no ask was open to buffer it.
+     *
+     * @return list<array{steerId: string, text: string}>
+     */
+    public function takeSteers(): array
+    {
+        $this->poll();
+        $steers = $this->steers;
+        $this->steers = [];
+
+        return $steers;
+    }
+
+    /**
+     * Buffered `cancel_soft` / `cancel_tool` / `agent_cancel` frames, each
+     * handed out once.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function takeControls(): array
+    {
+        $this->poll();
+        $controls = $this->controls;
+        $this->controls = [];
+
+        return $controls;
+    }
+
+    /**
+     * Whether the parent has asked the turn to stop at its next step boundary
+     * (`cancel_soft`, roadmap 1.C-4). Polls the socket without blocking first,
+     * and takes every `cancel_soft` out of the buffered controls while leaving
+     * any other control (`cancel_tool`) for {@see takeControls()}. Latched:
+     * once true it stays true, however many times it is asked.
+     *
+     * Always false in a process that does not own the socket — a grandchild
+     * that inherited this object has no turn loop to stop.
+     */
+    public function softCancelRequested(): bool
+    {
+        if ((int) getmypid() !== $this->ownerPid) {
+            return false;
+        }
+
+        $this->poll();
+        $kept = [];
+        foreach ($this->controls as $control) {
+            if (($control['kind'] ?? null) === self::CANCEL_SOFT) {
+                $this->softCancelled = true;
+            } else {
+                $kept[] = $control;
+            }
+        }
+        $this->controls = $kept;
+
+        return $this->softCancelled;
+    }
+
+    /**
+     * The call ids the parent has asked to stop (`cancel_tool{callId}`,
+     * roadmap 1.C-4b), each handed out once, in arrival order. Polls the
+     * socket without blocking first, and takes only the `cancel_tool` frames
+     * out of the buffered controls, so a `cancel_soft` waiting for
+     * {@see softCancelRequested()} is never consumed here.
+     *
+     * Always empty in a process that does not own the socket.
+     *
+     * @return list<string>
+     */
+    public function takeToolCancels(): array
+    {
+        if ((int) getmypid() !== $this->ownerPid) {
+            return [];
+        }
+
+        $this->poll();
+        $ids = [];
+        $kept = [];
+        foreach ($this->controls as $control) {
+            if (($control['kind'] ?? null) !== self::CANCEL_TOOL) {
+                $kept[] = $control;
+
+                continue;
+            }
+            $callId = $control['callId'] ?? null;
+            if (is_string($callId) && $callId !== '') {
+                $ids[] = $callId;
+            }
+        }
+        $this->controls = $kept;
+
+        return $ids;
+    }
+
+    /**
+     * The delegated runs the parent has asked to hard-stop
+     * (`agent_cancel{agentId, callId}`, roadmap P-E1), each handed out once,
+     * in arrival order. Polls without blocking first and takes only the
+     * `agent_cancel` frames, leaving every other control where it is.
+     *
+     * Always empty in a process that does not own the socket.
+     *
+     * @return list<array{agentId: string, callId: string}>
+     */
+    public function takeAgentCancels(): array
+    {
+        if ((int) getmypid() !== $this->ownerPid) {
+            return [];
+        }
+
+        $this->poll();
+        $requests = [];
+        $kept = [];
+        foreach ($this->controls as $control) {
+            if (($control['kind'] ?? null) !== self::AGENT_CANCEL) {
+                $kept[] = $control;
+
+                continue;
+            }
+            $agentId = $control['agentId'] ?? null;
+            $callId = $control['callId'] ?? null;
+            if (is_string($agentId) && $agentId !== '' && is_string($callId) && $callId !== '') {
+                $requests[] = ['agentId' => $agentId, 'callId' => $callId];
+            }
+        }
+        $this->controls = $kept;
+
+        return $requests;
+    }
+
+    /**
+     * True once the parent's end has been seen closed (or the stream stopped
+     * parsing): every later ask settles unanswered without writing.
+     */
+    public function isClosed(): bool
+    {
+        return $this->closed;
+    }
+
+    public static function clipNote(string $note): string
+    {
+        return strlen($note) <= self::MAX_NOTE_BYTES ? $note : mb_strcut($note, 0, self::MAX_NOTE_BYTES, 'UTF-8');
+    }
+
+    private function poll(): void
+    {
+        if ($this->closed || (int) getmypid() !== $this->ownerPid) {
+            return;
+        }
+        $reply = null;
+        $this->readInbound(false, null, $reply);
+    }
+
+    /**
+     * Read what the socket has and route every whole frame in it.
+     *
+     * @param ?array<string, mixed> $reply set to the `ask_reply` for $awaiting when one arrives
+     *
+     * @return bool false once the parent's end is gone
+     */
+    private function readInbound(bool $block, ?string $awaiting, ?array &$reply): bool
+    {
+        $failures = 0;
+        while (true) {
+            if (!is_resource($this->socket)) {
+                $this->closed = true;
+
+                return false;
+            }
+            $read = [$this->socket];
+            $write = null;
+            $except = null;
+            $ready = @stream_select($read, $write, $except, $block ? null : 0);
+            if ($ready === false) {
+                if (++$failures >= self::MAX_SELECT_FAILURES || feof($this->socket)) {
+                    $this->closed = true;
+
+                    return false;
+                }
+
+                continue;
+            }
+            if ($ready === 0) {
+                return true;
+            }
+
+            $chunk = @fread($this->socket, 65536);
+            if ($chunk === '' || $chunk === false) {
+                $this->closed = true;
+
+                return false;
+            }
+
+            $this->inbound .= $chunk;
+            $corrupt = false;
+            foreach (($this->drainFrames)($this->inbound, $corrupt) as $frame) {
+                $this->route($frame, $awaiting, $reply);
+            }
+            if ($corrupt) {
+                // The offset no longer means anything, so no later reply can
+                // be trusted either: the question settles unanswered.
+                $this->closed = true;
+
+                return false;
+            }
+
+            if (!$block || $reply !== null) {
+                return true;
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed>  $frame
+     * @param ?array<string, mixed> $reply
+     */
+    private function route(array $frame, ?string $awaiting, ?array &$reply): void
+    {
+        $kind = $frame['kind'] ?? null;
+
+        if ($kind === self::ASK_REPLY) {
+            $askId = $frame['askId'] ?? null;
+            if (!is_string($askId)) {
+                return;
+            }
+            if ($awaiting !== null && $reply === null && $askId === $awaiting) {
+                $reply = $frame;
+
+                return;
+            }
+            // The parent settles each question once, so a reply for another
+            // id is held for the ask that will want it rather than dropped.
+            if (!isset($this->heldReplies[$askId]) && count($this->heldReplies) < self::MAX_HELD_REPLIES) {
+                $this->heldReplies[$askId] = $frame;
+            }
+
+            return;
+        }
+
+        if ($kind === self::STEER) {
+            $text = $frame['text'] ?? null;
+            if (is_string($text) && $text !== '') {
+                $steerId = $frame['steerId'] ?? null;
+                $this->steers[] = ['steerId' => is_string($steerId) ? $steerId : '', 'text' => $text];
+            }
+
+            return;
+        }
+
+        if ($kind === self::CANCEL_SOFT || $kind === self::CANCEL_TOOL || $kind === self::AGENT_CANCEL) {
+            $this->controls[] = $frame;
+        }
+    }
+}

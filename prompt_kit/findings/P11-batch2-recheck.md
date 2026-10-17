@@ -11,11 +11,11 @@ foreign by subject P-token; where a subject lacks a token, topology decides via
 
 | file | last-touch | P-token? | verdict |
 |------|-----------|----------|---------|
-| `sugar-crush/docs/ARCHITECTURE.md` | `da178befb` "P7.S6 fix-cycle-2: importer docblocks told the truth post-wiring; ARCHITECTURE/MEMORY/Bootstrap prose; nit batch" | YES (P7.S6) | prompt-lane |
-| `sugar-crush/docs/PROMPT_ENGINEERING.md` | — (file absent on disk; empty `git log`) | new file | prompt-lane (net-new) |
-| `sugar-crush/src/Context/MemoryBlock.php` | `e9b3d204a` "P5.S3: route `<project-memory>` and `<repo-map>` bodies through PromptFence" | YES (P5.S3) | prompt-lane |
-| `sugar-crush/tests/Integration/PromptEndToEndTest.php` | — (file absent on disk; empty `git log`) | new file | prompt-lane (net-new) |
-| `sugar-crush/tests/Integration/SystemPromptWiringTest.php` | `129587a97` "sugar-crush: P7.S3 cycle-2 review nits - derive the seam figure, write config through production, make the pins bite" | YES (P7.S3) | prompt-lane |
+| `candy-code/docs/ARCHITECTURE.md` | `da178befb` "P7.S6 fix-cycle-2: importer docblocks told the truth post-wiring; ARCHITECTURE/MEMORY/Bootstrap prose; nit batch" | YES (P7.S6) | prompt-lane |
+| `candy-code/docs/PROMPT_ENGINEERING.md` | — (file absent on disk; empty `git log`) | new file | prompt-lane (net-new) |
+| `candy-code/src/Context/MemoryBlock.php` | `e9b3d204a` "P5.S3: route `<project-memory>` and `<repo-map>` bodies through PromptFence" | YES (P5.S3) | prompt-lane |
+| `candy-code/tests/Integration/PromptEndToEndTest.php` | — (file absent on disk; empty `git log`) | new file | prompt-lane (net-new) |
+| `candy-code/tests/Integration/SystemPromptWiringTest.php` | `129587a97` "candy-code: P7.S3 cycle-2 review nits - derive the seam figure, write config through production, make the pins bite" | YES (P7.S3) | prompt-lane |
 
 All three last-touch shas confirmed ancestors of master (`merge-base --is-ancestor <sha> master` → OK).
 The two net-new files have no history to classify.
@@ -24,7 +24,7 @@ The two net-new files have no history to classify.
 
 ```
 git log --oneline --full-history 3e053e3c9..master \
-  -- sugar-crush/src/Context/MemoryBlock.php sugar-crush/tests/Integration/
+  -- candy-code/src/Context/MemoryBlock.php candy-code/tests/Integration/
 ```
 
 Returns ZERO commits. No commit in `3e053e3c9..master` touches `MemoryBlock.php` or any
@@ -37,11 +37,11 @@ worklog/resume/staffing housekeeping:
 
 ```
 6aa5dc30e prompt/P11 batch-1 staffing ...        08f6cbb22 Merge branch 'prompt/P24' ...
-322a970fa prompt-resume: pair (24)+(29) closed   30867d24f sugar-crush: P24 review-1 prose fixes
+322a970fa prompt-resume: pair (24)+(29) closed   30867d24f candy-code: P24 review-1 prose fixes
 6e95d881f prompt-plan: pair (24)+(29) closed     cb8a6c456 Merge P29: ...
-458d0f47a prompt-worklog: P29 + P24 pair entries 901453f5c sugar-crush: ... rider source (E38, P29)
+458d0f47a prompt-worklog: P29 + P24 pair entries 901453f5c candy-code: ... rider source (E38, P29)
 c585f64e9 prompt-kit: Phase-11 premise scout     a695ef9a4 prompt/P24-P29 staffing: ...
-b14a81e00 sugar-crush: widen PromptFence roster ...
+b14a81e00 candy-code: widen PromptFence roster ...
 ```
 
 No foreign (crush_code / non-prompt) subject touches any batch-2 path.

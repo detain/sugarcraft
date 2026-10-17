@@ -167,7 +167,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in candy-ssh-launcher.
 
-10. **Buffer diffing / dirty-region tracking** — sugar-panels, sugar-dashboard, sugar-crush, sugar-overlay, sugar-flexbox, sugar-treelist all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
+10. **Buffer diffing / dirty-region tracking** — sugar-panels, sugar-dashboard, candy-code, sugar-overlay, sugar-flexbox, sugar-treelist all do full re-render every frame. Should emit only delta ANSI sequences via ECH/REP/ICH/DCH.
 
 11. **Input driver / TTY integration** — sugar-readline cannot read actual terminal keypresses — only processes pre-decoded symbolic key names. No mechanism to decode terminal escape sequences (Kitty keyboard protocol, SGR mouse). Blocking real-world interactive usage.
 
@@ -185,7 +185,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 1. **Shared `Buffer`/`Cell` value object hierarchy** — No package has a shared cell buffer. This means: cell-level diffing cannot be shared, canvas layering is per-package, and a future cell-based renderer would need per-package implementation.
 
-2. **StatefulWidget / Event-Driven separation** — sugar-dashboard, sugar-crush, sugar-readline, sugar-treelist mix state and rendering. ratatui/textual separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). Enables testability and multiple views of same data.
+2. **StatefulWidget / Event-Driven separation** — sugar-dashboard, candy-code, sugar-readline, sugar-treelist mix state and rendering. ratatui/textual separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). Enables testability and multiple views of same data.
 
 3. **Consistent mouse hit-testing infrastructure** — Mouse support relies on external sugar-mouse Manager wiring rather than bubblezone's self-contained Mark/Scan/Get pattern. No consistent coordinate translation or zone tracking.
 
@@ -353,7 +353,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 | 8 | Wire `Mosaic::auto()` + `diagnose()` | sugar-image | High | Low | Low | P0 |
 | 9 | Implement Cassowary constraint solver | sugar-style, sugar-core, sugar-widgets, sugar-panels, sugar-dashboard | Critical | High | Medium | P1 |
 | 10 | Implement cell-based buffer model | sugar-core, sugar-widgets, sugar-style | Critical | High | Medium | P1 |
-| 11 | Implement buffer diffing / dirty-region tracking | sugar-panels, sugar-dashboard, sugar-crush, sugar-overlay, sugar-flexbox, sugar-treelist | High | Medium | Low | P1 |
+| 11 | Implement buffer diffing / dirty-region tracking | sugar-panels, sugar-dashboard, candy-code, sugar-overlay, sugar-flexbox, sugar-treelist | High | Medium | Low | P1 |
 | 12 | Add input driver for terminal keypress decoding | sugar-readline | Critical | High | Medium | P1 |
 | 13 | Add `charmbracelet/x/ansi` state machine sharing | candy-ansi-inspect, sugar-quickpick, candy-codeshot, sugar-vterm | High | Medium | Low | P1 |
 | 14 | Implement GitHub/GitLab README fetching | candy-mdview | High | Medium | Low | P1 |

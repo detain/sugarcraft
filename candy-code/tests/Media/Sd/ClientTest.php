@@ -1,0 +1,494 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Media\Sd;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Media\MediaRequest;
+use SugarCraft\Code\Media\Sd\CallableSdTransport;
+use SugarCraft\Code\Media\Sd\Endpoints;
+use SugarCraft\Code\Media\Sd\Client;
+use SugarCraft\Code\Media\Sd\HeaderAwareSdTransport;
+use SugarCraft\Code\Media\Sd\Response;
+use SugarCraft\Code\Media\Sd\SdException;
+use SugarCraft\Code\Media\Sd\SdTransport;
+use SugarCraft\Code\Media\Sd\SdTransportResult;
+
+/**
+ * W1.3 client-side laws: error mapping to SdException, wire-body edge
+ * normalisation (data-URI strip, save_images derivation), precedence of the
+ * base-URL chain, and the machine-lawed egress census (fact (c)).
+ */
+final class ClientTest extends TestCase
+{
+    /** @var list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, scalar>, 4: ?float}> */
+    private array $calls = [];
+
+    protected function tearDown(): void
+    {
+        putenv(Client::BASE_URL_ENV);
+        putenv('CRUSH_TEST_SD_KEY');
+        putenv('CRUSH_TEST_SD_PAIR');
+        putenv('CRUSH_TEST_SD_EMPTY');
+        parent::tearDown();
+    }
+
+    private function clientReturning(array $result): Client
+    {
+        return $this->clientRespondingWith(static fn (): array => $result);
+    }
+
+    /** @param callable(string, string, array, array): array $responder */
+    private function clientRespondingWith(callable $responder): Client
+    {
+        $transport = new CallableSdTransport(
+            function (string $method, string $path, array $json, array $query, ?float $totalTimeoutSeconds = null) use ($responder): array {
+                $this->calls[] = [$method, $path, $json, $query, $totalTimeoutSeconds];
+
+                return $responder($method, $path, $json, $query);
+            },
+        );
+
+        return Client::withBase('http://sd.test:7860', $transport);
+    }
+
+    // ------------------------------------------------------------------ errors
+
+    public function testSdapiErrorEnvelopeLandsOnEverySdExceptionField(): void
+    {
+        $envelope = [
+            'error' => 'RequestValidationError',
+            'detail' => [[
+                'loc' => ['body', 'steps'],
+                'msg' => 'ensure this value is less than 150',
+                'type' => 'value_error.number.not_lt',
+            ]],
+            'body' => ['prompt' => 'x', 'steps' => 400],
+            'errors' => [['loc' => ['body', 'steps'], 'msg' => 'bad steps']],
+        ];
+        $client = $this->clientReturning(['status' => 422, 'body' => json_encode($envelope)]);
+
+        try {
+            $client->txt2img(['prompt' => 'x', 'steps' => 400]);
+            self::fail('expected SdException');
+        } catch (SdException $e) {
+            self::assertSame(422, $e->status());
+            self::assertSame('RequestValidationError', $e->error());
+            self::assertStringContainsString('less than 150', $e->detail());
+            self::assertStringContainsString('"steps"', $e->rawBody());
+            self::assertCount(1, $e->errors());
+        }
+    }
+
+    public function testNonJsonServerErrorKeepsRawDetailAndStatus(): void
+    {
+        $client = $this->clientReturning(['status' => 502, 'body' => '<html>Bad Gateway</html>', 'contentType' => 'text/html']);
+
+        try {
+            $client->sdModels();
+            self::fail('expected SdException');
+        } catch (SdException $e) {
+            self::assertSame(502, $e->status());
+            self::assertStringContainsString('Bad Gateway', $e->detail());
+            self::assertSame('', $e->error());
+        }
+    }
+
+    public function testEchoedRequestBodyIsTruncatedAndKeptOutOfTheMessage(): void
+    {
+        $huge = str_repeat('A', SdException::MAX_RETAINED_BODY_CHARS + 500);
+        $client = $this->clientReturning(['status' => 400, 'body' => json_encode(['detail' => 'nope', 'body' => $huge])]);
+
+        try {
+            $client->txt2img(['prompt' => 'x']);
+            self::fail('expected SdException');
+        } catch (SdException $e) {
+            self::assertStringEndsWith('…[truncated]', $e->rawBody());
+            self::assertLessThanOrEqual(SdException::MAX_RETAINED_BODY_CHARS + 20, \strlen($e->rawBody()));
+            self::assertStringNotContainsString('AAAA', $e->getMessage());
+        }
+    }
+
+    public function testTransportThrowablesAreWrappedNeverRethrownRaw(): void
+    {
+        $client = $this->clientRespondingWith(static fn (): never => throw new \RuntimeException('socket said no'));
+
+        try {
+            $client->skip();
+            self::fail('expected wrapped SdException');
+        } catch (SdException $e) {
+            self::assertSame(0, $e->status());
+            self::assertStringContainsString('socket said no', $e->detail());
+        }
+    }
+
+    // ----------------------------------------------------------- body edges
+
+    public function testDataUriPrefixesAreStrippedAtTheClientEdge(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $client->img2img([
+            'init_images' => ['data:image/png;base64,QUJD', 'plainB64', 'https://host/still-a-url.png'],
+            'mask' => 'data:image/png;BASE64,RElJ',
+        ]);
+
+        $sent = $this->calls[0][2];
+        self::assertSame(['QUJD', 'plainB64', 'https://host/still-a-url.png'], $sent['init_images']);
+        self::assertSame('RElJ', $sent['mask']);
+    }
+
+    public function testPngInfoStripsDataUriToo(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{"info":""}']);
+        $client->pngInfo('data:image/png;base64,WFla');
+
+        self::assertSame('WFla', $this->calls[0][2]['image']);
+    }
+
+    public function testSaveImagesDerivesDoNotSaveFlagsUnlessCallerStatedThem(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $client->txt2img(['prompt' => 'p', 'save_images' => true]);
+        self::assertFalse($this->calls[0][2]['do_not_save_samples']);
+        self::assertFalse($this->calls[0][2]['do_not_save_grid']);
+
+        $this->calls = [];
+        $client->txt2img(['prompt' => 'p', 'save_images' => true, 'do_not_save_samples' => true]);
+        self::assertTrue($this->calls[0][2]['do_not_save_samples'], 'explicit field must win over derivation');
+
+        $this->calls = [];
+        $client->txt2img(['prompt' => 'p']);
+        self::assertArrayNotHasKey('do_not_save_samples', $this->calls[0][2], 'no save_images stated, nothing derived');
+    }
+
+    public function testTypedMethodsSerializeMediaRequestThroughItsWireArray(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $request = MediaRequest::new()->withPrompt('a cat')->withSteps(7);
+        $client->txt2img($request);
+
+        self::assertSame('a cat', $this->calls[0][2]['prompt']);
+        self::assertSame(7, $this->calls[0][2]['steps']);
+    }
+
+    public function testExplicitNullsAreDroppedAtEgressAndNowhereElse(): void
+    {
+        // R8-ADVISORY-1 (W5 egress law). The W3.5 stale-clear path emits
+        // "enable_hr":null rows into the draft; the DTO's XSet law KEEPS them
+        // (round-trip fidelity), the wire must never see them — A1111's
+        // dynamically generated models type every field Optional[T], so a
+        // null validates and then overrides the server's defaults table with
+        // Python None, while an ABSENT key is what "revert to default" means
+        // there (Client::stripExplicitNulls docblock, plan Appendix F).
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $request = MediaRequest::fromArray([
+            'prompt' => 'a cat',
+            'steps' => 20,
+            'enable_hr' => null,
+            'hr_scale' => null,
+        ]);
+        // Pin the DTO side first: the nulls are SET values, not absence.
+        self::assertTrue($request->isSet('enable_hr'), 'the DTO round-trip law must not move');
+        self::assertNull($request->toArray()['enable_hr']);
+
+        $client->txt2img($request);
+
+        $sent = $this->calls[0][2];
+        self::assertArrayNotHasKey('enable_hr', $sent, 'set-to-null must not reach the wire');
+        self::assertArrayNotHasKey('hr_scale', $sent);
+        self::assertSame('a cat', $sent['prompt']);
+        self::assertSame(20, $sent['steps'], 'non-null values ride untouched');
+    }
+
+    public function testNullDropIsExactOnNullAndOnlyOnNull(): void
+    {
+        // Array-shaped callers take the same funnel (JobClient reuse in W5.2),
+        // and the falsy neighbours of null — false, 0, '', [] — are VALUES the
+        // server must receive, never absence to be laundered away.
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $client->img2img([
+            'prompt' => 'p',
+            'enable_hr' => false,
+            'denoising_strength' => 0,
+            'negative_prompt' => '',
+            'alwayson_scripts' => [],
+            'hr_second_pass_steps' => null,
+            'mask_blur' => null,
+        ]);
+
+        $sent = $this->calls[0][2];
+        self::assertArrayHasKey('enable_hr', $sent);
+        self::assertFalse($sent['enable_hr']);
+        self::assertSame(0, $sent['denoising_strength']);
+        self::assertSame('', $sent['negative_prompt']);
+        self::assertSame([], $sent['alwayson_scripts']);
+        self::assertArrayNotHasKey('hr_second_pass_steps', $sent);
+        self::assertArrayNotHasKey('mask_blur', $sent);
+    }
+
+    // ------------------------------------------------------------------ paths
+
+    public function testEveryClientCallReachesTheTransportServerRelative(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+        $client->txt2img(['prompt' => 'x']);
+        $client->img2img(['prompt' => 'x', 'init_images' => ['QUJD']]);
+        $client->progress(true);
+        $client->interrupt();
+        $client->options();
+        $client->memory();
+
+        foreach ($this->calls as [$method, $path]) {
+            self::assertMatchesRegularExpression('#^/[a-z0-9/_-]+$#', $path, 'no absolute URL may reach the transport: ' . $path);
+        }
+
+        // progress polarity per §4.7: preview frames need skip_current_image=false.
+        self::assertSame(['skip_current_image' => 'false'], $this->calls[2][3]);
+        $this->calls = [];
+        $client->progress(false);
+        self::assertSame(['skip_current_image' => 'true'], $this->calls[0][3]);
+    }
+
+    public function testTwoStageInterruptRidesARealHeaderOnlyOnHeaderCapableTransports(): void
+    {
+        $headerAware = new class implements HeaderAwareSdTransport {
+            /** @var list<array<string, string>> rows recorded by the header-aware path ONLY */
+            public array $seenHeaders = [];
+
+            public function request(string $method, string $path, array $json = [], array $query = [], ?float $totalTimeoutSeconds = null): SdTransportResult
+            {
+                return SdTransportResult::new(200, '{}', 'application/json');
+            }
+
+            public function requestWithHeaders(string $method, string $path, array $json = [], array $query = [], array $headers = [], ?float $totalTimeoutSeconds = null): SdTransportResult
+            {
+                $this->seenHeaders[] = $headers;
+
+                return SdTransportResult::new(200, '{}', 'application/json');
+            }
+        };
+
+        $client = Client::withBase('http://sd.test:7860', $headerAware);
+        $client->interrupt(true);
+        self::assertSame([['interrupt_after_current' => 'true']], $headerAware->seenHeaders);
+
+        // Plain (immediate) interrupt stays on the generic seam.
+        $client->interrupt(false);
+        self::assertCount(1, $headerAware->seenHeaders, 'immediate interrupt must not fabricate a header row');
+
+        $plainClient = $this->clientReturning(['status' => 200, 'body' => '{}']);
+
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('header-capable transport');
+        $plainClient->interrupt(true);
+    }
+
+    /**
+     * R1 MAJOR-2 polarity #2: the total-timeout door exists for the discovery
+     * ladder ONLY. Nothing dialed through Client — generation POSTs included —
+     * ever supplies a budget; the E646 connect-bound-only law stays whole.
+     */
+    public function testEgressFromThisClientNeverCarriesATotalTimeoutBudget(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '{}']);
+
+        $client->txt2img(['prompt' => 'x']);
+        $client->img2img(['prompt' => 'x']);
+        $client->progress();
+        $client->interrupt();
+        $client->skip();
+        $client->options();
+
+        self::assertCount(6, $this->calls);
+        foreach ($this->calls as $row) {
+            self::assertNull($row[4], "Client egress {$row[1]} must not carry a wall-clock total (E646)");
+        }
+    }
+
+    // ------------------------------------------------------------- base chain
+
+    public function testExplicitOverrideOutranksTheEnvironmentVariable(): void
+    {
+        putenv(Client::BASE_URL_ENV . '=http://env-host:7860');
+
+        // Env beats the layered settings when it speaks (the precedence hop
+        // the env-roster guard exists for).
+        self::assertSame('http://env-host:7860', Client::resolveBaseUrl());
+        self::assertSame('http://explicit.test', Client::resolveBaseUrl('http://explicit.test'));
+        // A blank override is "not stated", never "override with empty".
+        self::assertSame('http://env-host:7860', Client::resolveBaseUrl('   '));
+    }
+
+    public function testAuthHeaderShapes(): void
+    {
+        self::assertSame([], Client::authHeaders(null));
+        self::assertSame([], Client::authHeaders('  '));
+        self::assertSame(
+            ['Authorization' => 'Basic ' . base64_encode('user:pass')],
+            Client::authHeaders('user:pass'),
+        );
+        self::assertSame(
+            ['Authorization' => 'Bearer tok3n'],
+            Client::authHeaders('tok3n'),
+        );
+    }
+
+    /**
+     * W7 security MED-2: the `sd.apiKey` doc advertises `${VAR}` expansion —
+     * authHeaders is the single header-minting choke point every media reader
+     * funnels through (Client::withBase, JobClient::configured, ImportPng), so
+     * the law lives here, mirroring ProviderFactory::resolveEnv(): env value
+     * wins, `${VAR:-default}` fills an unset/empty var, a bare unset
+     * placeholder collapses to empty means NO header is sent. Removing the
+     * expandEnvPlaceholders() call reddens this pin with a literal
+     * `${CRUSH_TEST_SD_KEY}` riding out as a Bearer value.
+     */
+    public function testAuthHeadersExpandEnvPlaceholdersLikeTheProviderLaw(): void
+    {
+        putenv('CRUSH_TEST_SD_KEY=s3cr3t-from-env');
+        putenv('CRUSH_TEST_SD_PAIR=user:pass');
+        putenv('CRUSH_TEST_SD_EMPTY=');
+
+        // Placeholder set → env value, then the normal colon/Bearer ladder.
+        self::assertSame(
+            ['Authorization' => 'Bearer s3cr3t-from-env'],
+            Client::authHeaders('${CRUSH_TEST_SD_KEY}'),
+        );
+        self::assertSame(
+            ['Authorization' => 'Basic ' . base64_encode('user:pass')],
+            Client::authHeaders('${CRUSH_TEST_SD_PAIR}'),
+        );
+        // Surrounding blanks are cosmetic around a placeholder value.
+        self::assertSame(
+            ['Authorization' => 'Bearer s3cr3t-from-env'],
+            Client::authHeaders('  ${CRUSH_TEST_SD_KEY}  '),
+        );
+        // An unset placeholder WITHOUT a default resolves to empty — no key.
+        self::assertSame([], Client::authHeaders('${CRUSH_TEST_SD_UNSET}'));
+        // …and an env var set-but-empty behaves as unset (provider-path parity).
+        self::assertSame([], Client::authHeaders('${CRUSH_TEST_SD_EMPTY}'));
+        // Default form: fills the unset, loses to a set var.
+        self::assertSame(
+            ['Authorization' => 'Bearer fallback-key'],
+            Client::authHeaders('${CRUSH_TEST_SD_UNSET:-fallback-key}'),
+        );
+        self::assertSame(
+            ['Authorization' => 'Bearer s3cr3t-from-env'],
+            Client::authHeaders('${CRUSH_TEST_SD_KEY:-fallback-key}'),
+        );
+        // Embedded placeholders expand inside surrounding literal text.
+        self::assertSame(
+            ['Authorization' => 'Bearer pre-s3cr3t-from-env-post'],
+            Client::authHeaders('pre-${CRUSH_TEST_SD_KEY}-post'),
+        );
+        // Non-placeholder literals ride out untouched.
+        self::assertSame(
+            ['Authorization' => 'Bearer tok3n'],
+            Client::authHeaders('tok3n'),
+        );
+    }
+
+    // ------------------------------------------------------------------ census
+
+    /**
+     * Machine-lawed fact (c): NOTHING under src/Media references WebFetch's
+     * permission-rule host FetchTarget in CODE (a docblock citing it as the
+     * anti-pattern is exactly what the law wants). Token-level walk so comment
+     * prose cannot false-positive and imports cannot hide.
+     */
+    public function testNoMediaCodeReferencesFetchTarget(): void
+    {
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+            \dirname(__DIR__, 3) . '/src/Media',
+            \FilesystemIterator::SKIP_DOTS,
+        ));
+        $offenders = [];
+
+        foreach ($files as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            foreach (\token_get_all((string) file_get_contents($file->getPathname())) as $token) {
+                if (!\is_array($token)) {
+                    continue;
+                }
+
+                if (!\in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
+                    && $token[1] === 'FetchTarget') {
+                    $offenders[] = $file->getFilename();
+                }
+            }
+        }
+
+        self::assertSame([], $offenders, 'media egress must never import the WebFetch/FetchTarget dialing law');
+    }
+
+    public function testConfiguredWithoutAnyBaseRefusesWithAPointedMessage(): void
+    {
+        putenv(Client::BASE_URL_ENV);
+        // Settings may legitimately carry sd.baseUrl on a developer box; only
+        // pin the refusal when the whole chain is silent.
+        if (Client::resolveBaseUrl() !== null) {
+            $this->markTestSkipped('an sd.baseUrl is configured in this environment');
+        }
+
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('no SD base URL configured');
+        Client::configured();
+    }
+
+    public function testReadoutPayloadShapeErrorsAreProtocolNotRaw(): void
+    {
+        $client = $this->clientReturning(['status' => 200, 'body' => '"a string"' ]);
+
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('expected a JSON array payload');
+        $client->samplers();
+    }
+
+    public function testAGenerationCallFeedsTheResponseBuilderEndToEnd(): void
+    {
+        $body = file_get_contents(__DIR__ . '/../../fixtures/sd/txt2img-response-single.json');
+        self::assertNotFalse($body);
+        $client = $this->clientReturning(['status' => 200, 'body' => $body, 'contentType' => 'application/json']);
+
+        $parsed = Response::generation($client->txt2img(['prompt' => 'a cat']));
+
+        self::assertCount(1, $parsed->artifacts());
+        self::assertNull($parsed->grid());
+        self::assertSame(12345, $parsed->artifacts()[0]->tokenValues()['seed']);
+    }
+
+    public function testTheEndpointRegistryIsWiredInTheClientPathFunnel(): void
+    {
+        // The client dials only registry members; an unregistered spelling
+        // dies in resolve() before the transport is touched (calls stays 0).
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('never guesses');
+        Endpoints::resolve('/sdapi/v1/nope');
+    }
+
+    public function testHeaderAwareSeamExtendsTheFrozenGenericSeam(): void
+    {
+        // The widening is additive: every header-aware transport IS-A SdTransport,
+        // so lane a's frozen consumers keep working untouched.
+        self::assertTrue((new \ReflectionClass(HeaderAwareSdTransport::class))->isSubclassOf(SdTransport::class));
+    }
+
+    public function testTheDeadReadoutMethodsStayDeleted(): void
+    {
+        // rv-php-5: cmdFlags/latentUpscaleModes/promptStyles/scriptInfo had zero
+        // production and test callers (the Endpoints consts remain the registry's
+        // own record of the dialable routes). This pin refuses a silent
+        // reintroduction of public API nobody asked for; re-add them WITH a
+        // caller, not before.
+        foreach (['cmdFlags', 'latentUpscaleModes', 'promptStyles', 'scriptInfo'] as $gone) {
+            self::assertFalse(
+                method_exists(Client::class, $gone),
+                "Client::{$gone}() returned without a caller — dead API is deleted API (rv-php-5)",
+            );
+        }
+    }
+}

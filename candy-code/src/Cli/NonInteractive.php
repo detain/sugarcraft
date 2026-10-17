@@ -1,0 +1,1499 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Cli;
+
+use SugarCraft\Code\Attachments\ContextMentions;
+use SugarCraft\Code\Attachments\FileMentions;
+use SugarCraft\Code\AttachmentType;
+use SugarCraft\Code\Backend;
+use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Hooks\HookManager;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Permissions\DenialKind;
+use SugarCraft\Code\Permissions\ToolRefusal;
+use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
+use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
+
+/**
+ * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
+ *
+ * Mirrors Claude Code's `-p`/`--print`, opencode's `run` subcommand, Codex's
+ * `exec`, and Gemini CLI's `-p`/`--prompt`: take a single prompt (optionally
+ * with piped stdin prepended as context), run it through the existing
+ * synchronous backend, print the result, and exit with a Unix-style status
+ * code — no TUI, no alt-screen, no render loop.
+ *
+ * `EngineBackend::complete()` already
+ * runs the full bounded agentic loop synchronously and returns a finished
+ * `Message` with no `Program`/`Chat` involved — this class is purely the
+ * argv/stdin/stdout/exit-code plumbing wrapped around that existing
+ * capability. See crush_feat.md section 2 ("CLI commands, parameters, help
+ * screens & non-interactive mode"), Recommendations 2 ("Add candy-code -p
+ * ... one-shot mode built directly on EngineBackend::complete()"), 3
+ * ("--output-format text|json on the one-shot path"), and 4 ("Exit codes
+ * matching the Unix convention already implied by other bins in the repo").
+ *
+ * Production reachability: `bin/candy-code` calls `ArgvParser::parse($argv)`
+ * first, then `exit(NonInteractive::run($args, null, $args->outputFormat))`
+ * whenever `$args->promptRequested` is true (`-p`/`--prompt`/`--prompt=` or
+ * the `run "<prompt>"` form appeared at all — including with no value, so the
+ * "no prompt given" branch below is the single owner of that error rather
+ * than the binary silently opening the TUI), ahead of ever constructing
+ * `Bootstrap::chat()`/`Program` — so a real `candy-code -p "..." \
+ * --output-format json` invocation reaches this class directly, with
+ * `$args->outputFormat` (parsed from `--output-format`/`--output-format=`,
+ * defaulting to `ParsedArgs::DEFAULT_OUTPUT_FORMAT`) flowing straight into
+ * {@see self::format()}, and no TUI or alt-screen ever entered.
+ *
+ * Provider selection here is deliberately STRICTER than the TUI's. Both paths
+ * agree on WHICH provider a run selected — {@see
+ * Bootstrap::selectedProviderName()} is the single definition — but they
+ * disagree on what to do when that provider cannot be built:
+ * {@see Bootstrap::backend()} warns and degrades to the offline
+ * {@see \SugarCraft\Code\Providers\EchoProvider}, which is right for a
+ * developer opening an editor, while this class calls
+ * {@see Bootstrap::backendFor()} and hard-fails, which is right for a caller
+ * whose entire view of the run is stdout plus an exit code (crush_code.md
+ * Phase 0 item 10 / §5). The Echo provider is still reachable from here — it
+ * is simply never *substituted* for something else.
+ */
+final class NonInteractive
+{
+    public const FORMAT_TEXT = 'text';
+    public const FORMAT_JSON = 'json';
+
+    /**
+     * Top-level version of every `--output-format json` envelope (rv-tui-5).
+     *
+     * THE GAP THIS CLOSES: the envelope carried `result`, `error` and
+     * `refusals` but no way for a machine consumer to tell which contract it is
+     * reading, so the first future reshape (a `usage` block, a streamed answer)
+     * lands on `jq` pipelines with no signal to branch on. Every document this
+     * package puts on stdout — one-shot success, one-shot error, subcommand,
+     * and the autoload-guard twin in `bin/candy-code` — now opens with
+     * `"schema": 1`; a reader treats a document without the key as schema 0.
+     *
+     * FIRST KEY on every side, deliberately: `array_keys()` order is pinned
+     * pair-wise between NonInteractive's real documents and the hand-rolled
+     * guard literal (BinSugarcrushAutoloadGuardTest), and putting the version
+     * before the payload means a streaming parser sees it before any bytes it
+     * might need to interpret differently.
+     */
+    public const SCHEMA = 1;
+
+    /** The prompt ran and produced an answer. */
+    public const EXIT_OK = 0;
+
+    /**
+     * "Ran and failed": the backend was usable and threw anyway — an
+     * unreachable host, a rejected key, a rate limit, a model error. Also the
+     * code for an answer that arrived but could not be rendered in the
+     * requested output format ({@see self::format()}'s `encoding` type).
+     *
+     * Everything under this code has the same operational meaning: something
+     * was attempted, and attempting it again might produce a different result.
+     *
+     * Since crush_code.md Phase 5 item 8 that is a weaker statement than it
+     * used to be FOR ONE OF THE BACKENDS, and both halves of that matter to
+     * whoever wires a CI gate on this code.
+     *
+     * When the run's backend is the engine — which is every provider-selected
+     * run and the offline default — the transient shapes
+     * ({@see \SugarCraft\Code\Providers\TransientFailure}) have already been
+     * attempted `TransientFailure::MAX_ATTEMPTS` times inside the provider call
+     * before this code is returned. That is TOTAL attempts, not retries: at the
+     * current value, one call and up to two retries. So a 1 from the engine
+     * means "every attempt this run was willing to make failed", an outer retry
+     * is still worth having for an outage longer than the seconds of backoff
+     * that policy spends, and a gate that retries instantly is duplicating work
+     * that just happened.
+     *
+     * When `$CANDY_CODE_BACKEND_CMD` selects {@see \SugarCraft\Code\Backend\CommandBackend}
+     * or `$CANDY_CODE_BACKEND_CMD_STREAM` selects
+     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend}
+     * — or an embedder injects its own {@see \SugarCraft\Code\Backend} — nothing
+     * has been retried at all: `grep -rn TransientFailure src/` reaches only
+     * `Runtime`, `AgentManager` and the providers, so a delegating backend's
+     * failure arrives here on its first attempt. For those runs a 1 still means
+     * "one attempt failed", exactly as it did before item 8.
+     */
+    public const EXIT_FAILURE = 1;
+
+    /**
+     * "Never ran": the invocation or the configuration is wrong, so nothing
+     * was attempted and a retry cannot help. Three shapes reach it —
+     *
+     *   - the provider this run explicitly selected could not even be
+     *     CONSTRUCTED: an unknown name, or a required credential/field missing
+     *     ({@see \SugarCraft\Code\Providers\ProviderFactory::validateRequiredKeys()});
+     *   - a usage error `bin/candy-code` catches pre-flight: an unrecognised
+     *     flag, a `--root` naming no directory (both via {@see
+     *     self::failUsage()});
+     *   - a one-shot invocation with no prompt VALUE (`candy-code -p`,
+     *     `candy-code run`), which is the same class: the invocation is
+     *     malformed and nothing ran.
+     *
+     * That last one exited 1 in the first cut of this class and was moved here
+     * deliberately. "No prompt given" is not "ran and failed" by any reading —
+     * the backend is never even selected — and a CI gate that retries on 1
+     * would have retried it forever. The 1 is preserved for the case it
+     * describes (see {@see self::EXIT_FAILURE}); the one-shot path is
+     * unreleased (pre-1.0, no tagged version of this binary exists), so the
+     * back-compat cost of correcting it now is limited to this repo's own
+     * tests, and correcting it later would not be.
+     *
+     * 2 rather than 1 deliberately, and it is the whole point of
+     * crush_code.md Phase 0 item 10: no provider constructor in this codebase
+     * performs any I/O (the OpenAI/Anthropic/SGLang factories only build a
+     * Guzzle client, Bedrock only an AWS SDK client, Vertex only stores
+     * strings), so a throw from construction is *always* a configuration
+     * error and *never* a network one. Network failures surface later, from
+     * `Backend::complete()`, and keep {@see self::EXIT_FAILURE}. A CI gate
+     * can therefore tell "my config is wrong, retrying will not help" from
+     * "the model was unreachable, retry might" — a distinction that did not
+     * exist while both shapes silently became a canned Echo reply at exit 0.
+     *
+     * The value matches `bin/candy-code`'s existing usage-error exit (an
+     * unrecognised flag, a `--root` naming no directory): same class of
+     * problem — the invocation is wrong, nothing was attempted.
+     */
+    public const EXIT_CONFIG = 2;
+
+    /**
+     * Matches Claude Code's documented 10MB piped-stdin cap
+     * (code.claude.com/docs/en/headless) so a runaway pipe can't exhaust
+     * memory before the prompt is even sent to a backend.
+     */
+    private const MAX_STDIN_BYTES = 10 * 1024 * 1024;
+
+    /**
+     * Why a `-p` run puts no question to anyone (roadmap 5.7-2): what the
+     * model reads when it calls `AskUser` or `PlanExit` here.
+     */
+    public const NO_INTERACTIVE_USER = 'this is a non-interactive `-p` run, which asks nobody anything';
+
+    /**
+     * Run one prompt to completion and print the result.
+     *
+     * $backend can be supplied directly — used by tests to avoid depending on
+     * `SUGARCRUSH_*` environment state, and available to a future headless
+     * server mode that already holds a constructed `Backend`. When it is
+     * null, one is built here — and that is where this path deliberately
+     * stops matching the TUI's leniency, see {@see
+     * self::failUnusableProvider()}.
+     *
+     * @return int Unix exit code: {@see self::EXIT_OK} on success,
+     *   {@see self::EXIT_CONFIG} when no prompt was given or an explicitly
+     *   selected provider is unusable, {@see self::EXIT_FAILURE} when the
+     *   backend threw — extending the existing `candy-mail`/`candy-ssh-launcher`
+     *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
+     *   `bin/candy-code`'s own 2-means-usage-error.
+     */
+    public static function run(ParsedArgs $args, ?Backend $backend = null, string $outputFormat = self::FORMAT_TEXT): int
+    {
+        if ($args->prompt === null || \trim($args->prompt) === '') {
+            return self::failUsage(
+                'candy-code: ' . Lang::t('cli.noninteractive.no_prompt'),
+                $outputFormat,
+            );
+        }
+
+        // Step 3.D-2: only a run that built its own backend owns the session
+        // whose end it reports — a caller that supplied one (the tests, a
+        // headless host) owns that session's lifecycle, SessionEnd included.
+        $ownsSession = $backend === null;
+
+        if ($backend === null) {
+            $providerName = Bootstrap::selectedProviderName();
+
+            if ($providerName === null) {
+                // No provider was asked for, so nothing is being substituted
+                // for one — see noticeOfflineDefault() for why this stays
+                // lenient. The notice is still worth a line of stderr.
+                $backend = self::consoleBackend($args->root, null);
+                self::noticeOfflineDefault();
+            } else {
+                try {
+                    $backend = self::consoleBackend($args->root, $providerName);
+                } catch (PermissionConfigException $e) {
+                    // An unusable permission policy is not this provider's
+                    // fault and must not be reported as if it were — it
+                    // propagates to `bin/candy-code`, which reports it with
+                    // its own message. See Bootstrap::permissionGate().
+                    throw $e;
+                } catch (\Throwable $e) {
+                    return self::failUnusableProvider($providerName, $e, $outputFormat);
+                }
+            }
+
+            // Building a backend scans the skill trees, and this path never
+            // went through Bootstrap::chat(), which is where the one-line
+            // "some skill files were not loaded" notice was raised — so a
+            // `-p` run collected the skips and told nobody. Only meaningful
+            // when a backend was actually built here: a caller that supplied
+            // one (the tests, a headless server) has scanned nothing.
+            Bootstrap::reportSkillSkips();
+            // The memory twin of the same silence (audit R10): the backend's
+            // prompt reads both memory stores, and a note it skipped as
+            // unreadable — or legacy notes it just bound to this project —
+            // reached a `-p` user nowhere.
+            Bootstrap::reportMemorySkips($args->root);
+            // Audit R1 and R12: what the prompt leaves out for budget, and a
+            // step or token ceiling the resolvers ignored as nonsense — both
+            // shape this run's answer and were reported to nobody.
+            Bootstrap::reportPromptBudgetDeferrals($args->root);
+            Bootstrap::reportNonsenseLimits();
+            // And the other half of the same silence: a project skills
+            // directory refused wholesale for resolving out of the checkout.
+            Bootstrap::reportProjectTierRefusals();
+        }
+
+        $backend = self::withoutInteractiveUser($backend);
+
+        // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
+        // against the same root the TUI's Chat uses (`--root`, else the cwd)
+        // - and NEVER from piped stdin, which is context of unknown origin: a
+        // `cat untrusted.txt | candy-code -p '...'` must not attach whatever
+        // file that text happens to name.
+        $mentionNotices = [];
+        $mentionRoot = $args->root ?? (getcwd() ?: '');
+        // The keyword mentions: `@session:` opens the session store only when
+        // one is named (read-only - no retention sweep from a -p run), and a
+        // URL a permission rule denies WebFetch is not fetched.
+        $gate = $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->permissionGate() : null;
+        $history = self::historyFrom(
+            $args->prompt,
+            self::readStdinIfPiped(),
+            $mentionRoot,
+            $mentionNotices,
+            ContextMentions::new($mentionRoot)
+                ->withSessionStore(static fn () => Bootstrap::sessionStore(prune: false))
+                ->withUrlPolicy(static fn (string $url): ?string => $gate?->ruleDecision(
+                    new \SugarCraft\Code\ToolCall('WebFetch', ['url' => $url]),
+                ) === \SugarCraft\Code\Permissions\PermissionDecision::Deny
+                    ? 'a permission rule denies WebFetch for it.'
+                    : null),
+        );
+        foreach ($mentionNotices as $notice) {
+            self::noticeAttachment($notice);
+        }
+
+        // E173, THEN E219. A refusal this turn raises reached the JSON consumer
+        // nowhere at all: the document said `{"result": "<the answer>"}` for a
+        // turn in which a tool was stopped and the model answered around it.
+        //
+        // THIS COMMENT ONCE OPENED "every refusal this turn raises reaches the
+        // operator on stderr". Round 47 measured that false — only
+        // {@see HeadlessPermissionPrompt} wrote to stderr, and it is reached
+        // only for a hook verdict of ASK, while a plain
+        // {@see \SugarCraft\Code\Hooks\HookResult::deny()} returns out of
+        // {@see \SugarCraft\Code\Runtime::gate()} before `settleAsk()` is
+        // called. Round 47 then rewrote it to say the gap was open and belonged
+        // on the deny path in `Runtime`. WHAT IS TRUE NOW: the gap is closed
+        // and it was NOT closed in `Runtime` — see {@see self::noticeRefusal()}
+        // for the measurement that ruled that out. This observer writes the
+        // line, so every refusal reaches BOTH channels on BOTH formats: stderr
+        // as it happens, and the `refusals` array on `--output-format json`.
+        // WHY THE HISTORY STILL EARNS ITS PLACE: the false sentence was the
+        // stated reason `--output-format text` carried no refusal list, and
+        // that decision is still the right one for a different reason — see
+        // {@see self::format()}.
+        //
+        // The tool-lifecycle observer is the only seam this class has for it —
+        // the approver itself is built four frames away inside
+        // {@see Bootstrap::backend()} — and it is enough, because a blocked call
+        // terminates through {@see \SugarCraft\Code\Runtime::failure()},
+        // which emits a {@see ToolFinished} carrying the reason.
+        // THE ARM QUALIFIER (E375). Both prompt arms — nobody at the keyboard,
+        // and a person who answered `n` — settle through the SAME
+        // {@see DenialKind::Refused}, so the `kind` token cannot tell them
+        // apart ({@see \SugarCraft\Code\Tests\Cli\RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()}
+        // pins that they are byte-identical). The no-tty arm therefore records
+        // the fact that it ran ({@see self::noteUnattendedAsk()}) and
+        // {@see self::refusalFrom()} converts that note into an optional
+        // `unattended` key on the row it assembles for exactly that call. The
+        // carrier is scoped to THIS invocation: cleared on entry, consumed on
+        // assembly, so no earlier run — or an approver driven outside this
+        // method — can qualify a row this document carries.
+        self::$askWasUnattended = false;
+
+        /** @var list<array{tool: string, kind: string, reason: string, unattended?: bool}> $refusals */
+        $refusals = [];
+        $observeRefusals = static function (object $event) use (&$refusals): void {
+            $refusal = self::refusalFrom($event);
+            if ($refusal !== null) {
+                $refusals[] = $refusal;
+                self::noticeRefusal($refusal['tool'], $refusal['kind'], $refusal['reason']);
+            }
+        };
+
+        try {
+            $message = $backend->complete($history, null, $observeRefusals);
+        } catch (\Throwable $e) {
+            \fwrite(\STDERR, $e->getMessage() . "\n");
+            self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null, $refusals);
+
+            return self::EXIT_FAILURE;
+        }
+
+        // The answer exists but may not be representable in the format the
+        // caller asked for. Emitting the typed document instead of an empty
+        // stdout keeps the JSON contract intact on this branch too, and 1
+        // rather than 2 because something really did run.
+        try {
+            $rendered = self::format($message, $outputFormat, $refusals);
+        } catch (\JsonException $e) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
+            self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
+
+            return self::EXIT_FAILURE;
+        }
+
+        // The TUI shows this as a UI-only notice after the reply: an image the
+        // active model cannot see went out as a text placeholder.
+        if ($message->attachmentNotice !== null) {
+            self::noticeAttachment($message->attachmentNotice);
+        }
+
+        echo $rendered . "\n";
+
+        // Step 3.D-2: the run is over and its answer is out — the one point
+        // a successful `-p` session ends, so SessionEnd fires here, once,
+        // after stdout carries the whole document.
+        // The chain is rebuilt from the launch's own sources (the hook files
+        // are read once per launch, so it is the chain the run used); a chain
+        // that cannot be built now changes nothing about a run that is done.
+        if ($ownsSession) {
+            try {
+                $hooks = Bootstrap::hooks(null, $args->root);
+            } catch (\Throwable) {
+                $hooks = null;
+            }
+            self::fireSessionEnd(
+                $hooks,
+                $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? ($backend->sessionId() ?? '') : '',
+                $args->root ?? (getcwd() ?: ''),
+                'other',
+            );
+        }
+
+        return self::EXIT_OK;
+    }
+
+    /**
+     * $backend with the model's own questions closed (roadmap 5.7-2): every
+     * `AskUser` fails closed with a "no interactive user" result and every
+     * `PlanExit` is refused, so plan mode is never left in a `-p` run.
+     *
+     * Applied whatever approver the run carries. At a terminal
+     * {@see HeadlessPermissionPrompt} can take a `y`/`n` for a permission
+     * question, but an `AskUser` answer is words and a plan approval needs
+     * the plan in front of someone, so neither is put to stderr: the model is
+     * told nobody can answer and decides for itself, saying what it assumed.
+     * A backend that is not an engine has no tools to close.
+     */
+    public static function withoutInteractiveUser(Backend $backend): Backend
+    {
+        if (!$backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+            return $backend;
+        }
+
+        $closed = false;
+        $tools = [];
+        foreach ($backend->tools() as $key => $tool) {
+            if ($tool instanceof AskUserTool || $tool instanceof PlanExitTool) {
+                $tool = $tool->withoutInteractiveUser(self::NO_INTERACTIVE_USER);
+                $closed = true;
+            }
+            $tools[$key] = $tool;
+        }
+
+        return $closed ? $backend->withTools($tools) : $backend;
+    }
+
+    /**
+     * Run the `SessionEnd` chain (step 3.D-2) as the process is about to
+     * exit: after a `-p` run's answer ({@see run()}), and after the TUI's
+     * program loop returns (`bin/candy-code`, with the hosted Chat's own
+     * chain). Once per process, never from the TUI's `Cmd::quit()` sites,
+     * which are ways OUT of the loop rather than the end of the session.
+     *
+     * $reason is Claude Code's vocabulary: `prompt_input_exit` when the
+     * person left the interactive prompt, `other` otherwise. Observe-only —
+     * nothing is left to stop — so a refusal, a timeout or a hook that threw
+     * is one line on stderr (by now the terminal is the operator's again),
+     * and an unhooked session does nothing at all. Returns that line, or
+     * null when nothing was written.
+     */
+    public static function fireSessionEnd(?HookManager $hooks, string $sessionId, string $root, string $reason): ?string
+    {
+        $event = HookEvent::SessionEnd;
+        if ($hooks === null || !$hooks->hasHooksFor($event, $event->value)) {
+            return null;
+        }
+
+        $verdict = $hooks->sessionEnd(HookManager::eventContext($event, ['reason' => $reason], $sessionId, $root));
+        if ($verdict->permitsExecution()) {
+            return null;
+        }
+
+        $hook = $verdict->refusingHook();
+        $reason = \trim($verdict->message) === '' ? Lang::t('cli.noninteractive.no_reason_given') : \trim($verdict->message);
+        $line = 'candy-code: ' . ($hook === null
+            ? Lang::t('cli.noninteractive.session_end_refused', ['reason' => $reason])
+            : Lang::t('cli.noninteractive.session_end_hook_refused', ['hook' => HookManager::displayName($hook), 'reason' => $reason]))
+            . "\n";
+        \fwrite(\STDERR, $line);
+
+        return $line;
+    }
+
+    /**
+     * Report a usage error — the invocation itself is malformed, so nothing
+     * ran — and return {@see self::EXIT_CONFIG}.
+     *
+     * Public because `bin/candy-code` detects two of these BEFORE this class
+     * is reached (an unrecognised flag, a `--root` naming no directory) and
+     * used to `exit(2)` straight from the binary with an empty stdout — which
+     * broke the "`--output-format json` always puts exactly one JSON object on
+     * stdout" contract on two of the three exit-2 causes the README lists.
+     * Routing them through here rather than hand-rolling a second document in
+     * the binary is what keeps the two from drifting: there is one definition
+     * of the failure shape, in {@see self::emitErrorDocument()}.
+     *
+     * THAT ARGUMENT USED TO BE STATED WITHOUT AN EXCEPTION, and there is one.
+     * WHAT IS TRUE NOW: `bin/candy-code`'s autoload guard DOES hand-roll a
+     * second document (E84), because it runs before `vendor/autoload.php` has
+     * been found and cannot call this method at all. WHY THE RULE STILL EARNS
+     * ITS PLACE: that is the only site in the project where this class is
+     * unreachable, so it is the only site where the choice is between a
+     * duplicate and an empty pipe. Every OTHER pre-flight check in the binary
+     * can reach here and therefore must — a second hand-rolled document
+     * anywhere the autoloader is available would be drift with no reason
+     * behind it.
+     *
+     * @param string $message One line, and also the JSON document's
+     *   `error.message`.
+     * @param string|null $hint An extra stderr-only line (e.g. "Try
+     *   `candy-code --help`…"). Deliberately not part of the document: a
+     *   machine consumer branches on `error.type`, and the hint is prose
+     *   aimed at whoever is reading the terminal.
+     */
+    public static function failUsage(string $message, string $outputFormat, ?string $hint = null): int
+    {
+        \fwrite(\STDERR, $message . "\n" . ($hint === null ? '' : $hint . "\n"));
+        self::emitErrorDocument($outputFormat, 'usage', $message, null);
+
+        return self::EXIT_CONFIG;
+    }
+
+    /**
+     * Report an explicitly selected provider that could not be constructed,
+     * and refuse to answer (crush_code.md Phase 0 item 10).
+     *
+     * This is the asymmetry the item exists to create. {@see
+     * Bootstrap::backend()} — which the interactive TUI still reaches through
+     * {@see Bootstrap::app()} — catches this same throw, warns, and hands back
+     * a working offline backend, because refusing to open the editor over a
+     * missing API key would be a worse experience than an offline session a
+     * developer can still browse files and run `/help` in. A one-shot run has
+     * no such consolation: its entire observable output is one string on
+     * stdout and one exit code, and a canned Echo sentence at exit 0 is
+     * indistinguishable from a real answer to the CI job consuming it.
+     *
+     * The provider name is named in the message because the whole failure is
+     * "you asked for X and X is unusable" — and the remediation line names the
+     * SOURCE, because {@see Bootstrap::selectedProviderName()} has two of them
+     * and they are fixed in completely different places. Telling an operator
+     * to "unset CANDY_CODE_PROVIDER" when the name actually came from a
+     * persisted Ctrl+P "Switch model" choice sends them looking for a variable
+     * nothing ever set; the config file is named instead, since that is the
+     * file they have to edit. The branch mirrors
+     * {@see Bootstrap::selectedProviderName()}'s own precedence: a non-empty
+     * `$CANDY_CODE_PROVIDER` wins, so if it is set it IS the source.
+     *
+     * Note this also refuses the `$CANDY_CODE_BACKEND_CMD` /
+     * `$CANDY_CODE_BACKEND_CMD_STREAM` tiers that {@see
+     * Bootstrap::backend()} would drop to next when BOTH are set. Substituting
+     * a shell-out for a requested provider is a smaller lie than substituting
+     * Echo, but it is the same lie: the caller reads one string and cannot see
+     * which backend produced it. Clearing the selection selects the command
+     * backend deliberately, which is what the message says.
+     */
+    private static function failUnusableProvider(string $providerName, \Throwable $e, string $outputFormat): int
+    {
+        $fromEnv = \getenv('CANDY_CODE_PROVIDER');
+        $remedy = ($fromEnv !== false && $fromEnv !== '')
+            ? Lang::t('cli.noninteractive.provider_remedy_env')
+            : Lang::t('cli.noninteractive.provider_remedy_config', ['path' => Bootstrap::userConfigPath()]);
+
+        \fwrite(
+            \STDERR,
+            'candy-code: ' . Lang::t('cli.noninteractive.provider_unusable', [
+                'provider' => $providerName,
+                'error' => $e->getMessage(),
+            ]) . "\n"
+            . 'candy-code: ' . Lang::t('cli.noninteractive.provider_refusing', ['remedy' => $remedy]) . "\n",
+        );
+
+        self::emitErrorDocument($outputFormat, 'provider_configuration', $e->getMessage(), $providerName);
+
+        return self::EXIT_CONFIG;
+    }
+
+    /**
+     * Say on stderr that this run has no provider at all and the reply below
+     * came from the offline {@see \SugarCraft\Code\Providers\EchoProvider}.
+     *
+     * Not an error, and deliberately not fatal: with nothing configured
+     * nothing was substituted for anything, `candy-code -p "hi"` with zero
+     * config is the documented zero-network smoke test, and turning "no
+     * config" into a crash would make the offline provider unreachable from
+     * the one-shot path entirely rather than merely un-substitutable. But the
+     * CI caller who simply forgot to export `$CANDY_CODE_PROVIDER` hits the
+     * same "plausible canned sentence" trap as the misconfigured one, so the
+     * run says so out loud on the stream that is not the result.
+     *
+     * Silent when either shell-out tier is what got selected
+     * (`$CANDY_CODE_BACKEND_CMD` or `$CANDY_CODE_BACKEND_CMD_STREAM`): that IS
+     * an explicit backend choice, and it really did run. The condition asks
+     * {@see Bootstrap::selectedProviderLabel()} rather than reading env vars
+     * here, so a tier added to {@see Bootstrap::backend()} cannot leave this
+     * notice claiming nothing was configured on a run that configured
+     * something — which is what a second copy of the list would have done.
+     *
+     * DECISION STAMP (E78c, round 62): the raw `fwrite(STDERR, …)` is the
+     * INTENTIONAL route, not an unmigrated one. The launch-notice seam cannot
+     * reach this path by design — `Bootstrap::launchNotices()` is read only by
+     * `Bootstrap::chat()`/`app()`, which are TUI entries; a one-shot run has no
+     * alt-screen, no transcript for a row to survive into, and no later paint
+     * that could swallow the line, so stderr IS the user-facing channel and it is
+     * still the stream that is not the result under `--output-format json`.
+     * Plumbing the notice into the model's prompt for symmetry with the TUI was
+     * considered and declined: nothing is dropped where the user sees neither,
+     * and the process exits after the answer. Recorded on the NO-FIX ledger.
+     */
+    private static function noticeOfflineDefault(): void
+    {
+        if (Bootstrap::selectedProviderLabel()[0] !== 'echo') {
+            return;
+        }
+
+        \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.offline_default') . "\n");
+    }
+
+    /**
+     * Write the machine-readable failure document, for `--output-format json`
+     * only.
+     *
+     * Every failure branch above already writes a human line to stderr, which
+     * is the whole story for `--output-format text`. It is NOT the whole story
+     * for JSON: a caller running `candy-code -p ... --output-format json | jq
+     * -r .result` reads stdout and nothing else, and on every failure path
+     * stdout used to be completely empty — so `jq` failed on an unexpected EOF
+     * and the caller learned nothing beyond "something went wrong somewhere in
+     * the pipeline". Emitting a document keeps the contract "if you asked for
+     * JSON, stdout is always one JSON object" true on both outcomes.
+     *
+     * `result` is present and null rather than omitted so a consumer reading
+     * only `.result` keeps working; `error.type` is the field to branch on.
+     *
+     * `error.type` is NOT the exit code by another name — the earlier claim
+     * that it "mirrors" it was wrong, because `usage` reaches this method from
+     * two different places. Each type does determine exactly one exit code,
+     * but the mapping is many-to-one:
+     *
+     *   `usage`                 -> {@see self::EXIT_CONFIG} (2), from the
+     *                              no-prompt branch here and from
+     *                              `bin/candy-code`'s pre-flight checks via
+     *                              {@see self::failUsage()}
+     *   `provider_configuration`-> {@see self::EXIT_CONFIG} (2)
+     *   `backend`               -> {@see self::EXIT_FAILURE} (1)
+     *   `encoding`              -> {@see self::EXIT_FAILURE} (1)
+     *
+     * A consumer that kept the exit code and wants to know WHICH kind of 2 it
+     * got is exactly who `type` is for.
+     *
+     * ## `refusals`, and why it is the one OPTIONAL key (E173)
+     *
+     * Every other key in these documents is unconditional. `refusals` is
+     * emitted only when the run actually blocked a tool call, and that
+     * asymmetry is a decision with two measurements behind it rather than a
+     * shortcut.
+     *
+     * FIRST — AND THIS REASON REACHES THIS METHOD'S DOCUMENT ONLY, which the
+     * paragraph did not say when it landed and which is the whole of what
+     * makes it a measurement rather than an appeal. THE ERROR DOCUMENT WITH NO
+     * REFUSALS HAS TO STAY BYTE-IDENTICAL TO THE ONE THIS PACKAGE ALREADY
+     * SHIPS, because a second party is compared against it key-for-key.
+     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushAutoloadGuardTest::testTheGuardsDocumentHasTheSameShapeAsNonInteractives()}
+     * asserts `array_keys()` equality between this method's document and the
+     * one `bin/candy-code`'s autoload guard hand-rolls — and that guard runs
+     * BEFORE `vendor/autoload.php` has been found, in a process where no tool
+     * could ever have run, so it can never grow the key. An unconditional
+     * `refusals` would therefore have to be added to a hand-rolled literal in
+     * the binary purely to satisfy a comparison, which is the drift that
+     * comparison exists to prevent.
+     *
+     * WHAT THAT TEST DOES NOT CONSTRAIN, stated because {@see self::format()}
+     * used to redirect a reader here for the SUCCESS document's shape too, and
+     * this paragraph does not answer for it: that test drives
+     * {@see self::failUsage()}, so it compares this method's ERROR document and
+     * never `format()`'s. MEASURED on PHP 8.3.6 at round 47 by making the key
+     * unconditional in each place separately, full-suite scope both times —
+     * unconditional here reds that test, and unconditional in `format()` reds
+     * exactly one test, {@see \SugarCraft\Code\Tests\Cli\NonInteractiveRefusalDocumentTest::testATurnThatRefusesNothingEmitsExactlyTheKeysItAlwaysDid()},
+     * with the autoload guard staying green. The success document's shape is
+     * held by that one test and by nothing external. It is held for the SAME
+     * reason — a consumer of `{"result": …}` should not have to learn a new
+     * key to keep working — but that is this package's own promise, not a
+     * constraint imposed from outside it, and conflating the two is how a
+     * justification stops being checkable.
+     *
+     * SECOND, IT RIDES ON THE ERROR DOCUMENT AS WELL AS THE ANSWER, because a
+     * turn can refuse a tool call and then throw. Attaching it only to
+     * {@see self::format()}'s success document would lose the refusals of
+     * exactly the runs whose consumer has least other information — which is
+     * the shape of the gap E173 recorded in the first place.
+     *
+     * WHAT IT IS NOT: it is not a list of tool calls that FAILED. A tool that
+     * ran and returned an error is a result, and it is the model's business —
+     * it saw the error and answered around it. A refusal is a call the run
+     * stopped, which the model also saw, and which the OPERATOR could not
+     * see at all from stdout. {@see self::refusalFrom()} draws that line, and
+     * draws it with the roster the TUI renderer already uses.
+     *
+     * THREE MORE TYPES EXIST THAT THIS METHOD NEVER EMITS, and this table used
+     * to name one of them and call it the only one.
+     *
+     *   WHAT IT SAID. That `installation` was "the one type this method never
+     *   emits". WHAT IS TRUE NOW. It is one of three. WHY THE ENTRY STILL EARNS
+     *   ITS PLACE. `installation` is the only one that is a DUPLICATE of this
+     *   shape rather than another caller of it, which is why it is the one with
+     *   a justification below; the other two are ordinary callers that happen
+     *   not to route through this method. The count was the wrong thing to
+     *   lean on, not the distinction.
+     *
+     *   `installation`          -> {@see self::EXIT_CONFIG} (2), hand-rolled by
+     *                              `bin/candy-code`'s autoload guard — see below
+     *   `not-found`             -> {@see self::EXIT_FAILURE} (1), from
+     *                              `candy-code session delete <id>` on an id the
+     *                              store does not hold
+     *   `mcp-config`            -> {@see self::EXIT_FAILURE} (1), from
+     *                              `candy-code mcp list` on a trusted
+     *                              `.mcp.json` that could not be read or decoded
+     *
+     * The last two are {@see Subcommands}', built through its own
+     * `emitDocument()` over {@see self::encodeDocument()} — the same shape and
+     * the same flags, a different caller. They are listed here because this
+     * doc-block is the closest thing the source has to an index of the contract,
+     * and an index that lists five of seven sends a reader looking in the wrong
+     * file. {@see \SugarCraft\Code\Tests\Config\ReadmeJsonErrorContractDriftTest}
+     * derives the full set from `src/` and `bin/` and reds if this list or
+     * README.md falls behind it again.
+     *
+     * `installation` IS EMITTED BY `bin/candy-code`'s AUTOLOAD GUARD, hand-rolled
+     * there rather than routed here, and the duplication is deliberate: that
+     * branch fires when `vendor/autoload.php` was not found, so THIS CLASS
+     * CANNOT BE LOADED at that point in the boot. `json_encode()` is core and
+     * needs no autoloader, which is why the guard can still honour the contract
+     * (E84) — the shape's OWNER is unreachable there, the shape is not. The two
+     * are kept from drifting by
+     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushAutoloadGuardTest},
+     * which asserts them key-for-key against each other; change the keys here
+     * and that test reds until the guard is changed to match.
+     *
+     * THE KEY COMPARISON CANNOT SEE AN ENCODE FLAG, and this doc-block used to
+     * claim it could ("change the keys OR THE FLAGS here"). It cannot: that test
+     * `json_decode()`s both documents, so the flags are gone by the time it
+     * looks, and the guard's only payload is an ASCII literal with no slash and
+     * no non-ASCII byte, so its flag set has no observable effect on any output
+     * in the suite. Round 43's review dropped
+     * `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE` from the guard, and
+     * separately from {@see self::encodeDocument()}, and the suite stayed green
+     * both times. The flags are pinned by SOURCE instead — that test compares
+     * the two `json_encode()` flag expressions token-for-token, with
+     * `JSON_THROW_ON_ERROR` expected on this side only (the guard has no
+     * exception handler and tests the `string|false` return directly).
+     */
+    private static function emitErrorDocument(
+        string $outputFormat,
+        string $type,
+        string $message,
+        ?string $provider,
+        array $refusals = [],
+    ): void {
+        if ($outputFormat !== self::FORMAT_JSON) {
+            return;
+        }
+
+        $error = ['type' => $type, 'message' => $message];
+        if ($provider !== null) {
+            $error['provider'] = $provider;
+        }
+
+        $document = ['schema' => self::SCHEMA, 'result' => null, 'error' => $error];
+        if ($refusals !== []) {
+            $document['refusals'] = $refusals;
+        }
+
+        try {
+            $json = self::encodeDocument($document);
+        } catch (\JsonException) {
+            // Unreachable with the flags below, and handled anyway because an
+            // empty stdout is the one outcome this whole method exists to
+            // prevent. $type is always one of this class's own ASCII literals,
+            // so the replacement document is encodable by construction; the
+            // provider-supplied message and the refusal list — the two fields
+            // that can carry bytes we do not control — are dropped. Losing the
+            // refusals here rather than in the ordinary document is the right
+            // trade in the one branch where the alternative is an empty pipe,
+            // and the JSON consumer is told the message could not be encoded
+            // rather than handed an empty pipe.
+            //
+            // THIS COMMENT SAID "and stderr still carried every one of them",
+            // round 47 measured that false, and the correction it was replaced
+            // with — "so the refusals dropped here are dropped from every
+            // channel" — is now false in its turn. WHAT IS TRUE NOW: E219 put
+            // the line back, from {@see self::noticeRefusal()}, and it is
+            // written as each refusal ARRIVES rather than when the document is
+            // built — so a refusal dropped from this replacement document has
+            // already reached the operator on stderr. WHY THE PARAGRAPH STILL
+            // EARNS ITS PLACE: the loss is real for the MACHINE consumer, which
+            // reads stdout and never sees stderr, and that is the reader this
+            // branch is apologising to. It fires only when the message itself
+            // is unencodable, and an empty stdout at exit 1 is worse.
+            $json = \sprintf(
+                '{"schema":%d,"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
+                self::SCHEMA,
+                $type,
+            );
+        }
+
+        echo $json . "\n";
+    }
+
+    /**
+     * Encode one contract document.
+     *
+     * WHY the flags, and why this is not an inline `json_encode()` any more:
+     * `json_encode()` returns `false` — not a partial string — on a single
+     * invalid UTF-8 byte, and `(string) false` is `''`, so the JSON contract
+     * broke in precisely the case it exists to cover. A provider exception
+     * quoting a response body (Guzzle embeds body excerpts, and a 500 from a
+     * proxy is routinely not UTF-8) put a bare newline on stdout at exit 1 and
+     * `jq` died on a syntax error — the empty pipe, from the code written to
+     * prevent it. `JSON_INVALID_UTF8_SUBSTITUTE` replaces those bytes with
+     * U+FFFD so a document is always produced, and `JSON_THROW_ON_ERROR` makes
+     * any other failure loud at the call site rather than silently empty.
+     *
+     * PUBLIC because {@see Subcommands} emits contract documents of its own
+     * (`candy-code models --output-format json`, `doctor`, `session list`) and
+     * has to produce the SAME shape with the SAME flags. A second
+     * `json_encode()` over there would be a second definition of the document —
+     * exactly the drift {@see failUsage()} routes through
+     * {@see emitErrorDocument()} to avoid — and it would re-open the
+     * invalid-UTF-8 hole described above for every session name and MCP command
+     * string, which are bytes this package does not control.
+     *
+     * @param array<string, mixed> $document
+     *
+     * @throws \JsonException
+     */
+    public static function encodeDocument(array $document): string
+    {
+        $json = \json_encode(
+            $document,
+            \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR,
+        );
+
+        // json_encode() is declared `string|false`; JSON_THROW_ON_ERROR turns
+        // every false into an exception, so this is unreachable — asserted
+        // rather than silently cast, because the silent cast IS the bug above.
+        return $json === false
+            ? throw new \JsonException('json_encode() returned false without raising')
+            : $json;
+    }
+
+    /**
+     * Build the one-shot conversation history: piped stdin context (if
+     * any) followed by the CLI prompt, collapsed into a single user turn —
+     * mirrors Claude Code's `cat file | claude -p '...'` contract, where
+     * stdin is context prepended to the prompt rather than a separate
+     * message.
+     *
+     * @param string|null $mentionRoot Where the prompt's `@` mentions
+     *   resolve; null resolves none.
+     * @param list<string>|null $mentionNotices Set to the mention notices
+     *   ({@see FileMentions::resolve()}, {@see ContextMentions::resolve()})
+     *   for the caller to show.
+     * @param ContextMentions|null $contextMentions The keyword resolver
+     *   (`@diff`, `@session:<id>`, `@https://…`, roadmap 5.8); null builds a
+     *   bare one over $mentionRoot, which has no session store and applies no
+     *   permission rule to a URL.
+     * @return list<Message>
+     */
+    public static function historyFrom(
+        string $prompt,
+        ?string $stdinContext,
+        ?string $mentionRoot = null,
+        ?array &$mentionNotices = null,
+        ?ContextMentions $contextMentions = null,
+    ): array {
+        $content = ($stdinContext !== null && $stdinContext !== '')
+            ? $stdinContext . "\n\n" . $prompt
+            : $prompt;
+
+        $message = Message::user($content);
+        $mentionNotices = [];
+        // Audit 15b-15 residual: `@file` mentions, the TUI's rule. Only
+        // $prompt is scanned - the words the user typed on the command line -
+        // never $stdinContext, which can be anything a pipeline produced. A
+        // null root keeps the pre-attachment behaviour for a caller that
+        // does not ask.
+        if ($mentionRoot !== null && str_contains($prompt, '@')) {
+            $resolved = FileMentions::resolve($prompt, $mentionRoot);
+            $context = ($contextMentions ?? ContextMentions::new($mentionRoot))->resolve($prompt);
+            foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
+                $message = $attachment->type === AttachmentType::Image
+                    ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
+                    : $message->attachFile($attachment->path, $attachment->data);
+            }
+            $mentionNotices = [...$resolved['notices'], ...$context['notices']];
+        }
+
+        return [$message];
+    }
+
+    /**
+     * One attachment notice on stderr (audit 15b-15 residual): a mention that
+     * matched nothing, a refused file, or an image the model could not see.
+     * The TUI posts these as UI-only transcript rows; headless, the one
+     * channel that is not the answer is fd 2, and stdout stays the answer
+     * alone. The text comes from {@see FileMentions} and
+     * {@see \SugarCraft\Code\Backend\EngineBackend}, which already
+     * flatten the user's path to one line.
+     */
+    private static function noticeAttachment(string $notice): void
+    {
+        \fwrite(\STDERR, 'candy-code: ' . $notice . "\n");
+    }
+
+    /**
+     * The stream this class's `-p` console family reads when no caller names
+     * one, and the seam a test process uses to keep the suite off its own
+     * descriptor 0. Two readers: {@see readStdinIfPiped()} and
+     * {@see HeadlessPermissionPrompt::__construct()} — see
+     * {@see stdinDefault()} for why the second one shares this pin rather than
+     * declaring its own.
+     *
+     * Null means "the real STDIN", which is what every production entry point
+     * gets: nothing in `src/` or `bin/` ever assigns this.
+     *
+     * @var resource|null
+     */
+    private static $stdinDefault = null;
+
+    /**
+     * The E375 arm-qualifier carrier: set by
+     * {@see HeadlessPermissionPrompt::__invoke()}'s no-terminal arm when it
+     * auto-refuses an ASK, read-and-cleared by {@see self::refusalFrom()} when
+     * it assembles a `refused`-kind row, and cleared at the top of every
+     * {@see self::run()} so the note cannot outlive the invocation that wrote
+     * it.
+     *
+     * WHY A CARRIER IS THE ONLY CARRIER. The approver answers
+     * `Runtime::settleAsk()`'s `\Closure(ToolCall, HookResult): bool` — one
+     * bit — and the refusal's `reason` renders in `Runtime.php` behind the
+     * `Permission denied:` prefix whose byte-identity across the two arms the
+     * test cited above pins, so neither the verdict nor the text can carry
+     * WHICH arm ran. The decision (round 69) is a qualifier on the row, not a
+     * fourth {@see DenialKind} case; the only code that knows the arm is the
+     * arm itself, and the only surface that survives to the JSON consumer is
+     * this row. {@see HeadlessPermissionPrompt}'s class doc-block carries the
+     * full decision record.
+     */
+    private static bool $askWasUnattended = false;
+
+    /**
+     * Point {@see readStdinIfPiped()}'s DEFAULT at $stream instead of the
+     * process's real STDIN (E212).
+     *
+     * THIS IS A HAZARD FIX, NOT TIDINESS. Every direct
+     * {@see run()} call in the suite reached
+     * `readStdinIfPiped(\STDIN)`, so what a `-p` test did depended on the
+     * descriptor 0 the runner happened to inherit. Three outcomes, all real on
+     * PHP 8.3.6: a terminal (`stream_isatty()` true) returns null and the test
+     * passes; `/dev/null` or a closed pipe returns `''` and the test passes;
+     * and a pipe that is OPEN AND NEVER WRITTEN blocks in
+     * `stream_get_contents()` forever — the whole suite, not one test, with no
+     * verdict and no output. A CI runner, a supervising agent, or a plain
+     * `cat | vendor/bin/phpunit` all produce the third. The other two are not
+     * safety either: an ambient pipe carrying bytes prepends them to the prompt
+     * of every `-p` test as stdin context.
+     *
+     * PRODUCTION IS DELIBERATELY UNTOUCHED. The parameter of
+     * {@see readStdinIfPiped()} still wins over this, and this still defers to
+     * `\STDIN` when it was never set, so a real `candy-code -p "…" < file`
+     * reads exactly the stream it always did. `tests/bootstrap.php` is the only
+     * caller, which is why the pin covers test files that do not exist yet
+     * rather than each `run()` call site one at a time.
+     *
+     * @param resource|null $stream a stream to read instead of `\STDIN`, or
+     *   null to go back to `\STDIN`
+     */
+    public static function pinStdinDefault($stream): void
+    {
+        self::$stdinDefault = $stream;
+    }
+
+    /**
+     * The stream this `-p` console family reads when its caller names none —
+     * the pin from {@see pinStdinDefault()}, or the real `\STDIN`.
+     *
+     * Public because the pin is worth ASSERTING rather than trusting: a
+     * `tests/bootstrap.php` that quietly stopped installing it would put the
+     * suite back on the runner's descriptor 0 with every test still green, and
+     * the failure that shape produces is a hang rather than a red.
+     *
+     * TWO READERS NOW, NOT ONE (E243). WHAT THIS SAID: "the stream
+     * {@see readStdinIfPiped()} reads when its caller names none". WHAT IS
+     * TRUE NOW: {@see HeadlessPermissionPrompt::__construct()} resolves its
+     * own `$in` default through here as well, because it had the same
+     * `?? \STDIN` and the same hazard — an approver built by
+     * {@see Bootstrap::withConsolePermissionPrompt()} takes no `$in` at all.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE: `readStdinIfPiped()` is the
+     * reader this seam was BUILT for and the one whose failure mode is a hang
+     * rather than a prompt, so it is still the reason the seam is worth
+     * having; the prompt is a second beneficiary of one pin rather than a
+     * second pin.
+     *
+     * IT ANSWERS `null` FOR A DEAD DESCRIPTOR, WHICH IS NEW (E338), and the
+     * reason is that the `?? \STDIN` fallback stopped being a live handle.
+     * `tests/bootstrap.php` closes descriptor 0 on every non-tty run (E296's
+     * option (a)), so inside the suite this method used to hand its callers a
+     * CLOSED resource, and — MEASURED, PHP 8.3.6 — `stream_isatty()`,
+     * `stream_get_contents()` and `fgets()` all throw
+     * `TypeError: supplied resource is not a valid stream resource` on one.
+     * `is_resource()` is the only member of that family that answers rather
+     * than throwing, so it is the one this method uses.
+     *
+     * WHAT `@` DOES NOT DO, recorded because it is the trap this fix exists
+     * to avoid re-opening: `@\stream_get_contents()` throws exactly the same
+     * `TypeError` as the unsuppressed call. `@` suppresses DIAGNOSTICS, not
+     * exceptions (measured alongside the above). A fix that guarded only the
+     * `stream_isatty()` in {@see readStdinIfPiped()} — the shape a reader
+     * spots first — would have RELOCATED the throw two lines down rather than
+     * removed it.
+     *
+     * THE RETURN TYPE WIDENED AND BOTH CONSUMERS WERE CHECKED, not assumed.
+     * {@see readStdinIfPiped()} takes the guard below, which covers a null
+     * from here AND an explicitly-passed dead handle in one place.
+     * {@see HeadlessPermissionPrompt::__construct()} needs no change: its
+     * `$in` is only ever read behind `HeadlessPermissionPrompt::isInteractive()`,
+     * which already opens with `\is_resource($this->in)`, so a null makes it
+     * answer "not interactive" — which is the truth about a process with no
+     * descriptor 0 — instead of throwing on the `\fgets()` below it.
+     *
+     * @return resource|null the stream, or null when there is no live
+     *   descriptor 0 to hand back
+     */
+    public static function stdinDefault()
+    {
+        $stream = self::$stdinDefault ?? \STDIN;
+
+        return \is_resource($stream) ? $stream : null;
+    }
+
+    /**
+     * Read piped stdin, capped at {@see self::MAX_STDIN_BYTES}. Returns
+     * null when $stream is a TTY (nothing was piped, mirrors
+     * `candy-mail/bin/candy-mail`'s `!stream_isatty(STDIN)` guard) or when the
+     * pipe was empty.
+     *
+     * THE DEFAULT USED TO BE THE `\STDIN` CONSTANT ITSELF, spelled in this
+     * signature. WHAT THAT SAID: "$stream defaults to the real STDIN; tests
+     * pass a `php://memory` stream instead so the suite never blocks on, or
+     * depends on, the PHPUnit process's actual stdin." WHAT IS TRUE NOW: the
+     * second half described only the three tests that call this method
+     * DIRECTLY. Every test that goes through {@see run()} — which is where the
+     * production call lives — passed nothing and got `\STDIN`, so the suite
+     * both depended on and could block on the runner's descriptor 0. The
+     * default is now {@see stdinDefault()}, which `tests/bootstrap.php` pins
+     * once for the whole process. WHY THE SENTENCE STILL EARNS ITS PLACE: it
+     * states the property the suite is supposed to have, and that property is
+     * now enforced in one place instead of asserted per call site.
+     *
+     * ONE `is_resource()` GUARD COVERS BOTH READS, and that is deliberate
+     * rather than tidy (E338). Two stream functions are called below and BOTH
+     * throw `TypeError` on a closed resource — `@` in front of the second one
+     * suppresses diagnostics, not exceptions — so a guard placed at either
+     * call alone moves the throw to the other. Placing it on the resolved
+     * `$stream` also covers the third route in, which neither call-site guard
+     * would: a caller passing its own handle that has since been closed.
+     * `null` is the answer because it is already this method's no-answer
+     * value for every caller.
+     *
+     * DECISION STAMP (E78c, round 62): the truncation notice is a raw
+     * `fwrite(\STDERR, …)` INTENTIONALLY, for the route reasons stamped at
+     * {@see noticeOfflineDefault()} — one-shot has no alt-screen and no
+     * transcript; stderr reaches the caller, and under `--output-format json`
+     * stdout stays machine-clean. What the write does NOT do is tell the MODEL it
+     * is answering half a question. That gap is recorded, not news: closing it
+     * means appending a note onto the outgoing one-shot prompt — a different
+     * mechanism with a different blast radius, which E78c itself declined to
+     * assume. Left on the NO-FIX ledger pending that prompt-level decision.
+     *
+     * @param resource|null $stream the stream to read, or null for
+     *   {@see stdinDefault()}
+     */
+    public static function readStdinIfPiped($stream = null): ?string
+    {
+        $stream ??= self::stdinDefault();
+
+        if (!\is_resource($stream)) {
+            return null;
+        }
+
+        if (\stream_isatty($stream)) {
+            return null;
+        }
+
+        $data = @\stream_get_contents($stream, self::MAX_STDIN_BYTES + 1);
+        if ($data === false || $data === '') {
+            return null;
+        }
+
+        if (\strlen($data) > self::MAX_STDIN_BYTES) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.stdin_truncated') . "\n");
+            $data = \substr($data, 0, self::MAX_STDIN_BYTES);
+        }
+
+        return $data;
+    }
+
+    /**
+     * The backend a one-shot run executes on — the ONLY route `run()` has to
+     * one when the caller did not supply it.
+     *
+     * Two things happen here rather than at the two call sites. The first is
+     * the existing strictness split: a run that named no provider gets
+     * {@see Bootstrap::backend()}, which may degrade to the offline engine,
+     * and a run that named one gets {@see Bootstrap::backendFor()}, which
+     * throws instead (see the class docblock).
+     *
+     * The second is new, and is the reason this is a method: BOTH branches
+     * pass `$consolePermissionPrompt: true`, attaching
+     * {@see HeadlessPermissionPrompt} as the engine's approver. That closes the
+     * hole where a `-p` run under `default`/`accept-edits`/`auto` had every
+     * ASK settled as "permission required and no approver is attached to this
+     * run" — {@see \SugarCraft\Code\Runtime::settleAsk()}'s fail-closed arm —
+     * because nothing in `src/` or `bin/` called
+     * {@see \SugarCraft\Code\Backend\EngineBackend::withPermissionApprover()}
+     * at all. This path is the right owner: it holds stdin, it is synchronous
+     * all the way down to `complete()`, and it never enters an alt-screen.
+     *
+     * Flag passed at BOTH branches, never one: an approver attached on only
+     * one of them is an ASK answered when the run happens to reach that
+     * branch and refused when it reaches the other, which is worse than
+     * either behaviour applied consistently.
+     *
+     * @throws \SugarCraft\Code\Permissions\PermissionConfigException
+     * @throws \Throwable when $providerName names a provider that cannot be built
+     */
+    public static function consoleBackend(?string $root, ?string $providerName): Backend
+    {
+        return $providerName === null
+            ? Bootstrap::backend($root, null, null, true)
+            : Bootstrap::backendFor($providerName, $root, null, null, true);
+    }
+
+    /**
+     * Render the finished Message per --output-format.
+     *
+     * `text` (default): the assistant's raw content, matching the plain
+     * stdout contract of every tool surveyed in crush_feat.md section 2.
+     * `json`: `{"schema": 1, "result": "<content>"}`, plus a `refusals` array when the turn
+     * blocked at least one tool call — see {@see self::emitErrorDocument()}
+     * for why that key alone is conditional, and {@see self::refusalFrom()}
+     * for what counts as one and for the optional per-row `unattended`
+     * qualifier an auto-refusal carries (E375).
+     *
+     * `text` CARRIES NO REFUSALS ON STDOUT, AND THE REASON GIVEN FOR THAT HAS
+     * BEEN WRONG TWICE.
+     *
+     * WHAT IT SAID FIRST: that the format does not need them, because "on that
+     * format the operator is reading the terminal, where
+     * {@see HeadlessPermissionPrompt} has already written every one of them to
+     * stderr". Round 47 measured that false — that class is reached only for a
+     * hook verdict of ASK, so it covers the prompt-shaped refusals and not the
+     * commonest one; a plain hook DENY returns out of
+     * {@see \SugarCraft\Code\Runtime::gate()} before `settleAsk()`.
+     *
+     * WHAT IT SAID SECOND: that the gap was real and "its fix belongs on the
+     * DENY path in `Runtime`, not here". The diagnosis was right and the owner
+     * was not — {@see self::noticeRefusal()} carries the measurement, in short
+     * that the TUI forks into the same `Runtime` with descriptor 2 pointing at
+     * a terminal in the alternate screen.
+     *
+     * WHAT IS TRUE NOW: every refusal reaches the operator on stderr, from
+     * {@see self::noticeRefusal()}, on both formats. THE DECISION HERE IS
+     * UNCHANGED AND ITS ORIGINAL REASON IS THE ONE THAT SURVIVED: stdout under
+     * `text` is the answer and nothing else, and a second list there would
+     * break the one contract this format has for the one caller — a shell
+     * pipeline — that cannot tolerate it. That is why the line went to stderr
+     * rather than here.
+     * {@see \SugarCraft\Code\Tests\Cli\NonInteractiveRefusalDocumentTest}
+     * pins both halves: the answer alone on stdout, the refusal alone on
+     * stderr, asserted in one child process because splitting them would pass
+     * with the two channels merged.
+     *
+     * This is a deliberately minimal
+     * first cut of crush_feat.md Recommendation 3 — the recommendation's own
+     * sketch also includes `session_id` and `usage` (token-cost) fields,
+     * which this step does not yet surface; a caller piping through `jq
+     * '.usage'` per that recommendation's full intent gets nothing today.
+     * Any value other than `self::FORMAT_JSON` falls back to plain text.
+     *
+     * The success path had the same invalid-UTF-8 hole the failure path did
+     * (see {@see self::encodeDocument()}): a model that returns a byte
+     * sequence PHP will not accept as UTF-8 — a hexdump, a file excerpt read
+     * by the Read tool, a mojibake'd paste — used to produce a bare newline at
+     * exit 0, which is the worst shape of all: an empty pipe that claims
+     * success. Those bytes are now substituted, and the residual impossible
+     * failure throws instead of returning `''`.
+     *
+     * @throws \JsonException When `--output-format json` was asked for and the
+     *   answer cannot be encoded even with invalid bytes substituted.
+     *   {@see self::run()} turns this into an `encoding`-typed document at
+     *   {@see self::EXIT_FAILURE}; never into an empty stdout.
+     */
+    public static function format(Message $message, string $outputFormat, array $refusals = []): string
+    {
+        if ($outputFormat === self::FORMAT_JSON) {
+            $document = ['schema' => self::SCHEMA, 'result' => $message->content];
+            if ($refusals !== []) {
+                $document['refusals'] = $refusals;
+            }
+
+            return self::encodeDocument($document);
+        }
+
+        return $message->content;
+    }
+
+    /**
+     * Tell the operator, on stderr, that a tool call was stopped (E219).
+     *
+     * THE GAP THIS CLOSES. Before it, a blocked call reached the operator on
+     * exactly one surface and only in one format: the `refusals` array of an
+     * `--output-format json` document. On the default `text` format a hook
+     * DENY — the commonest refusal there is, and the one the shipped
+     * `ConfirmRemoveHook` raises against `rm -rf` — produced the answer on
+     * stdout, no tool execution, and NOTHING anywhere saying so. A tool
+     * silently not running is the failure a headless caller has the least
+     * chance of noticing: the model sees the refusal and answers around it, so
+     * the reply reads as a completed piece of work.
+     *
+     * WHY THIS IS NOT ON `Runtime`'s DENY PATH, WHICH IS WHERE FIVE PLACES IN
+     * THIS TREE SAID THE FIX BELONGED. That prescription does not survive
+     * contact with the other caller. {@see \SugarCraft\Code\Runtime} is the
+     * ENGINE, and the TUI reaches it too:
+     * {@see \SugarCraft\Code\Backend\EngineBackend::completeAsync()}
+     * `pcntl_fork()`s and runs the same `Runtime` in the child, and that child
+     * inherits the parent's descriptor 2 — VERIFIED at the fork site and in
+     * `runCompleteInChild()`, which between them close and re-block the socket
+     * pair and touch no standard stream. VERIFIED at the other end too, rather
+     * than assumed from "it is a TUI": `bin/candy-code` constructs its
+     * `Program` with {@see \SugarCraft\Code\Chat::programOptions()}, which
+     * passes `useAltScreen: true` — the parameter's own default is FALSE — and
+     * `sugar-core`'s `Program::setupTerminal()` writes `Ansi::altScreenEnter()`
+     * on exactly that flag. An `fwrite(STDERR, …)` in `Runtime::gate()` would
+     * therefore paint a refusal line straight onto a live TUI frame on every
+     * denied call — the hazard
+     * {@see Bootstrap::warnPermissionConfigInTranscript()} exists to avoid for
+     * launch-time writes. `Runtime` writing to stderr nowhere is a PROPERTY,
+     * not an omission, and
+     * {@see \SugarCraft\Code\Tests\Cli\NonInteractiveRefusalDocumentTest}
+     * now pins it as one.
+     *
+     * The right owner is a class that knows it owns the console, and there are
+     * exactly two such paths in `src/` — this one and
+     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}, whose fd 2
+     * is the session log. Neither opens an alternate screen. The TUI is not
+     * silent about these either; it draws a refusal struck through
+     * ({@see \SugarCraft\Code\Chat::isDeniedResult()}), which is why the gap
+     * was headless-only in the first place.
+     *
+     * STDERR, NEVER STDOUT, and unconditionally on both formats. Under `text`
+     * stdout is the answer and nothing else — a shell pipeline's whole
+     * contract. Under `json` it is exactly one document, which is why
+     * {@see HeadlessPermissionPrompt} puts its question here too.
+     *
+     * A DELIBERATE DOUBLE, ON EVERY ASK AND NOT ONLY AT A TERMINAL, stated
+     * because it is visible and looks like a bug. WHAT THIS SAID: that an ASK
+     * refused "at a real terminal" already writes the terse
+     * `candy-code: refused <tool>.` from
+     * {@see HeadlessPermissionPrompt::__invoke()}, "so that one case produces
+     * two lines". WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 49 in a
+     * child process with fd 2 on a plain file: the NO-TTY arm doubles too —
+     * that class's eight-line refusal block plus this line. Both arms, not one.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the reason neither is
+     * suppressed is unchanged and is the half a reader needs. The approver's
+     * text records WHICH ARM — a person answering no, versus nobody being
+     * there — and this line records the OUTCOME with the reason the MODEL was
+     * handed. The second cannot substitute for the first: BOTH arms produce a
+     * reason opening
+     * {@see \SugarCraft\Code\Permissions\DenialKind::Refused}, so this
+     * line alone cannot say which happened. Suppressing it would additionally
+     * need this closure to know which refusals some approver had already
+     * announced — and the approver is constructed four frames away inside
+     * {@see Bootstrap::backend()}, so that coupling does not exist and should
+     * not be invented.
+     * {@see \SugarCraft\Code\Tests\Cli\RefusalStderrSurfaceTest} pins it.
+     *
+     * IT ALSO WRITES INTO THE TEST SUITE'S OWN CONSOLE, and that is a
+     * decision rather than an accident. Several suites drive `self::run()`
+     * IN-PROCESS rather than through a child, and `\STDERR` is bound to
+     * descriptor 2 at startup with no `dup2` in PHP to redirect it, so those
+     * turns put their refusal lines in PHPUnit's output. The alternative was
+     * a settable stream on this class — a second piece of global state, on the
+     * path whose whole point is that it has none — bought for tidier logs. The
+     * lines are the same class as the `candy-code: ignoring …` notices already
+     * in that output; the tests that must ASSERT on the bytes pay for a child
+     * process instead ({@see \SugarCraft\Code\Tests\Cli\NonInteractiveRefusalDocumentTest}),
+     * which is where the claim is made and where it is safe to make it.
+     * Deliberately no count is written down: it is a property of how many
+     * suites happen to drive a refusal, and a cardinality in prose is stale
+     * the next time one is added.
+     *
+     * IT NOW CARRIES THE KIND AS A TOKEN, AND THE REASON IS NOT THE ONE E306
+     * GAVE (E306). WHAT THAT ENTRY SAID: that "the terse arm-distinguishing
+     * line is not machine-readable", and that naming the kind here would let
+     * stderr tell "a person typed n" from "there was nobody at the keyboard".
+     * WHAT IS TRUE, and it is checked rather than argued —
+     * {@see \SugarCraft\Code\Tests\Cli\RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()}
+     * asserts the two arms' observer lines are BYTE-IDENTICAL: both arms
+     * produce a {@see DenialKind::Refused}, so their token is the same word
+     * and this line still cannot say which arm ran. Adding it did not close
+     * that gap and was never going to.
+     *
+     * THAT CITATION WAS OVERSTATED WHEN IT LANDED, and is named here because
+     * the sentence is load-bearing — it is the whole of why E306's premise was
+     * refuted rather than implemented. The test asserted equality of the two
+     * arms' `observerBytes`, i.e. of two INTS: equal LENGTH, which two
+     * different reasons of the same size satisfy. It now compares the strings
+     * themselves and keeps the length figures beside them, so "byte-identical"
+     * is what is measured and not merely what was concluded. The conclusion
+     * did not move — the strings are in fact identical — but a reader checking
+     * the claim would have found an assertion that could not support it.
+     *
+     * WHY IT EARNS ITS PLACE ANYWAY: the gap it DOES close is the first of
+     * E306's two, which is the one with a consumer. Under
+     * `--output-format json` a refusal reaches a machine as the `kind` field
+     * of a `refusals` entry; under `--output-format text` stdout carries
+     * nothing about refusals at all by design, so stderr is the whole surface
+     * — and it offered the classification only as a PREFIX inside the reason,
+     * i.e. as the exact `str_starts_with` against published prose that
+     * {@see DenialKind::token()} exists so a consumer never has to write. The
+     * two formats now hand out the same three words.
+     *
+     * @param string $tool The runtime tool name, as the model called it.
+     * @param string $kind {@see DenialKind::token()} — `hook`, `refused` or
+     *   `unanswered`. The stable machine key, deliberately not the prefix.
+     * @param string $reason The finished result text, which opens with one of
+     *   {@see DenialKind}'s three prefixes — so the line says WHICH of the
+     *   three twice over, once for a person and once for a script.
+     */
+    private static function noticeRefusal(string $tool, string $kind, string $reason): void
+    {
+        \fwrite(\STDERR, self::refusalNotice($tool, $kind, $reason));
+    }
+
+    /**
+     * The exact bytes {@see noticeRefusal()} puts on stderr for one refusal.
+     *
+     * SPLIT OUT SO THE LINE CAN BE MEASURED WITHOUT BEING RE-SPELLED (E256).
+     * E240 recorded that a refused ASK writes two things to stderr and put
+     * byte and line totals for both arms in two doc-blocks; neither had a
+     * runnable generator, so nobody could re-derive them and nothing would
+     * notice when they stopped being true.
+     * {@see \SugarCraft\Code\Tests\Cli\RefusalStderrSurfaceTest} is the
+     * generator now, and it needs this half of the pair. It cannot capture
+     * the write itself — `\STDERR` is bound to descriptor 2 at startup and
+     * PHP has no `dup2` — and reconstructing the format in the test would
+     * make the measurement agree with a second copy of the thing it is
+     * measuring rather than with the code that runs.
+     *
+     * STILL ONE `fwrite` AT ONE CALL SITE. This is a rendering, not a second
+     * emitter: {@see \SugarCraft\Code\Tests\Cli\StderrEmitterCensusTest}
+     * counts writes to fd 2 per file and this change does not move that count.
+     */
+    private static function refusalNotice(string $tool, string $kind, string $reason): string
+    {
+        return 'candy-code: ' . Lang::t('cli.noninteractive.refusal', ['kind' => $kind, 'tool' => $tool, 'reason' => $reason]) . "\n";
+    }
+
+    /**
+     * `$event` as one `refusals` entry, or null when it is not a refusal.
+     *
+     * THE CLASSIFICATION IS NOT THIS CLASS'S TO INVENT, and that is the whole
+     * design of the method. The party that refused a call stamps a
+     * {@see DenialKind} on its result — "this call never ran" rather than
+     * "this call ran and failed" — and that field is what
+     * {@see \SugarCraft\Code\Chat::isDeniedResult()} reads to draw a
+     * refusal as its own struck-through state in the TUI. Reusing it
+     * makes the headless document and the interactive frame agree on
+     * what a refusal IS by construction; a second list here would be two
+     * parties disagreeing about the same tool call depending on which surface
+     * the operator happened to be looking at.
+     *
+     * THE LAZINESS ARGUMENT THAT USED TO LIVE HERE IS OBSOLETE, AND IT IS
+     * REWRITTEN RATHER THAN DROPPED, because it is the reason the roster was
+     * moved. WHAT IT SAID, across two paragraphs: that
+     * `Chat::DENIED_ERROR_PREFIXES` was "TOUCHED LAZILY, ON PURPOSE" since the
+     * `-p` path exists partly so a run can avoid building a `Chat` at all and
+     * a class constant is still a class load; and, correcting its own earlier
+     * claim, that the guard below is `!isError()` rather than "is a refusal",
+     * so a turn whose tool RAN AND FAILED — a `Read` on a missing path, a
+     * `Bash` exiting non-zero — reached the roster and loaded `Chat` while
+     * refusing nothing at all. That correction carried the measurement
+     * {@see \SugarCraft\Code\Runtime}'s `DENIAL_HOOK` doc-block cites by
+     * name: `class_exists(Chat::class, false)` after a full {@see self::run()}
+     * on PHP 8.3.6 — FALSE for a turn with no tool events and for one whose
+     * tool succeeded, TRUE for an errored non-refusal and TRUE for a refusal.
+     *
+     * WHAT IS TRUE NOW: the roster is {@see DenialKind}, a leaf enum in
+     * `src/Permissions/` with no `use` statements at all, so this method
+     * classifies without naming `Chat` and the load does not happen on ANY
+     * turn. RE-MEASURED on PHP 8.3.6 by driving this method through reflection
+     * with one errored {@see ToolFinished} carrying `Hook denied: nope`:
+     * `class_exists(Chat::class, false)` is FALSE before AND after, where
+     * against the previous line it was false before and TRUE after. WHY THE
+     * PARAGRAPH STILL EARNS ITS PLACE: "do not make the headless path pay for
+     * the TUI model" is the constraint that chose where the roster went, and
+     * without it a future reader sees only a shorter `foreach` and puts the
+     * list back on the nearest convenient class.
+     *
+     * THE KNOWN LIMIT RECORDED HERE IS CLOSED (E210). WHAT IT SAID: "a
+     * permission refusal and a plain hook DENY are indistinguishable here, and
+     * the reason is upstream of this class rather than a shortcut taken in it…
+     * recovering it needs a distinguishable verdict from `Runtime`". WHAT IS
+     * TRUE NOW: `Runtime` gives one. {@see \SugarCraft\Code\Runtime::gate()}
+     * picks its {@see DenialKind} BEFORE `settleAsk()` flattens the verdict,
+     * so a `reason` now opens with one of three roster entries —
+     * {@see DenialKind::Hook} for a hook objecting,
+     * {@see DenialKind::Refused} for an approver answering no,
+     * {@see DenialKind::Unanswered} for an ASK that reached a run with no
+     * approver attached.
+     *
+     * AND THE CONSUMER NO LONGER RE-DERIVES IT (E250). WHAT THIS PARAGRAPH
+     * ENDED WITH: "a consumer reading the `refusals` array can tell the three
+     * apart with the same `str_starts_with` this method uses". WHAT IS TRUE
+     * NOW: it does not have to. Each entry carries a `kind` field —
+     * {@see DenialKind::token()}, one of `hook`, `refused`, `unanswered` —
+     * so the classification crosses the process boundary as a stable token
+     * instead of as a prefix a `jq` script would have to re-match. WHY THE
+     * SENTENCE STILL EARNS ITS PLACE: it is the reason the field is ADDITIVE
+     * rather than a replacement. `reason` still opens with the prefix, so the
+     * `str_starts_with` a consumer wrote against the old document keeps
+     * working; the field is the supported way to stop.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the diagnosis in it is the
+     * reason the fix went where it did. The collapse happened in `Runtime`, not
+     * here, so no amount of work in this method could have recovered the
+     * distinction — and the same is true of the next one. This method
+     * classifies; it does not author. {@see \SugarCraft\Code\Tests\DenialPrefixRosterTest}
+     * pins the three, and pins that every one of them is on the roster.
+     *
+     * THE CLASSIFICATION IS NO LONGER SPELLED HERE EITHER (E292). WHAT THIS
+     * METHOD USED TO BE: an `instanceof ToolFinished`, an `isError()` guard
+     * and a {@see DenialKind::classify()} call —
+     * {@see \SugarCraft\Code\Sessions\BackgroundSessionRunner::noticeRefusal()}
+     * asked the same three questions in another file. Not the same LINES,
+     * which is the part that mattered: its copy walked
+     * `Chat::DENIED_ERROR_PREFIXES` with a `foreach` and a `str_starts_with`,
+     * so the two decisions were spelled differently AND reached the roster
+     * through different classes — and when E239 moved the roster off `Chat`,
+     * only one of them was re-pointed. WHAT IS TRUE NOW:
+     * {@see ToolRefusal::fromEvent()} owns the shape and both callers ask it.
+     * This method is the `refusals`-entry projection of the answer and nothing
+     * else.
+     *
+     * AND THE ANSWER IS NO LONGER READ OFF THE TEXT (audit F-P8). Every
+     * paragraph above that speaks of a reason "opening with" a roster entry
+     * describes how refusals are WRITTEN; until F-P8 it was also how they were
+     * RECOGNISED, and that let any tool forge one — a Bash
+     * `printf 'Permission denied: …'; exit 1` or an MCP server's error text
+     * landed in this array as a call the policy blocked, though it ran.
+     * {@see ToolRefusal::fromEvent()} now reads the result's structural
+     * {@see \SugarCraft\Code\Tools\ToolResult::denial()}, which only the
+     * refusing party sets, so such a call is an ordinary failed call here.
+     *
+     * THE OPTIONAL FOURTH KEY (E375). A `refused`-kind row additionally
+     * carries `unattended: true` when — and only when — the note left by
+     * {@see HeadlessPermissionPrompt::__invoke()}'s no-terminal arm is
+     * standing, which is the one fact the shared `Permission denied:` reason
+     * cannot spell: nobody was asked, as opposed to somebody was and said no.
+     * The key is CONSUMED by this read, so exactly the row for the call the
+     * arm refused carries it; hook denies and unanswered ASKs never consume
+     * and never qualify, because their `kind` already names what happened.
+     * Human answers (a typed `n`, an EOF at a live prompt) leave the note
+     * unset, so their rows keep the byte-identical three-key shape the
+     * existing pins assert.
+     *
+     * @return array{tool: string, kind: string, reason: string, unattended?: bool}|null
+     */
+    private static function refusalFrom(object $event): ?array
+    {
+        $refusal = ToolRefusal::fromEvent($event);
+        if ($refusal === null) {
+            return null;
+        }
+
+        $row = [
+            'tool' => $refusal->tool,
+            'kind' => $refusal->kind->token(),
+            'reason' => $refusal->reason,
+        ];
+
+        if ($refusal->kind === DenialKind::Refused && self::takeUnattendedAsk()) {
+            $row['unattended'] = true;
+        }
+
+        return $row;
+    }
+
+    /**
+     * Record that the console approver refused an ASK because there was no
+     * terminal to ask at (E375).
+     *
+     * The ONE write site in `src/` is
+     * {@see HeadlessPermissionPrompt::__invoke()}'s no-tty arm; the only
+     * reader is {@see self::refusalFrom()}, and {@see self::run()} clears the
+     * note before it installs the observer that reads it. This is deliberately
+     * not a constructor argument or a return value: the approver's `bool` is
+     * the grant contract `Runtime::settleAsk()` settles on, and the refusal's
+     * text is rendered by `Runtime` behind a prefix two arms share byte for
+     * byte — the carrier is the only additive route that touches neither.
+     */
+    public static function noteUnattendedAsk(): void
+    {
+        self::$askWasUnattended = true;
+    }
+
+    /**
+     * Read-and-clear the E375 arm note (see {@see self::$askWasUnattended}).
+     */
+    private static function takeUnattendedAsk(): bool
+    {
+        $noted = self::$askWasUnattended;
+        self::$askWasUnattended = false;
+
+        return $noted;
+    }
+}

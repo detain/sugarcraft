@@ -78,8 +78,8 @@ fwrite(STDERR, sprintf("K=%d buckets=%s\n", $K, implode(' ', array_map(static fn
  * Aggregate a PHPUnit 10 JUnit XML into per-test-FILE durations and totals.
  *
  * Grouping key: the `<testcase class=...>` attribute mapped through the
- * autoload-dev PSR-4 rule SugarCraft\Crush\Tests\<Path> ->
- * sugar-crush/tests/<Path>. Class-first is NOT cosmetic: a test method
+ * autoload-dev PSR-4 rule SugarCraft\Code\Tests\<Path> ->
+ * candy-code/tests/<Path>. Class-first is NOT cosmetic: a test method
  * inherited from a trait carries a `file=` pointing at the TRAIT file, which
  * phpunit cannot execute as a suite ("Class ... cannot be found") — measured
  * 2026-09-10 with tests/Support/RefusesAnUnreadableSourceTrait.php absorbing
@@ -154,9 +154,9 @@ function parseJunit(string $xmlPath, string $tsvPath): array
 
 function classToFile(string $class): ?string
 {
-    $needle = 'SugarCraft\\Crush\\Tests\\';
+    $needle = 'SugarCraft\\Code\\Tests\\';
     if (str_starts_with($class, $needle)) {
-        return 'sugar-crush/tests/' . str_replace('\\', '/', substr($class, strlen($needle))) . '.php';
+        return 'candy-code/tests/' . str_replace('\\', '/', substr($class, strlen($needle))) . '.php';
     }
 
     return null;

@@ -6,7 +6,7 @@
 
 ## Goal
 
-Wire `Buffer::diff()` into six renderers that currently do full re-render every frame: `sugar-panels`, `sugar-dashboard`, `sugar-crush`, `sugar-overlay`, `sugar-flexbox`, `sugar-treelist`. Each becomes capable of emitting only the delta — major SSH-bandwidth + flicker-reduction win.
+Wire `Buffer::diff()` into six renderers that currently do full re-render every frame: `sugar-panels`, `sugar-dashboard`, `candy-code`, `sugar-overlay`, `sugar-flexbox`, `sugar-treelist`. Each becomes capable of emitting only the delta — major SSH-bandwidth + flicker-reduction win.
 
 Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 
@@ -50,7 +50,7 @@ Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 
 ## Ship brief
 
-- **PR title**: `sugar-panels + sugar-dashboard + sugar-crush + sugar-overlay + sugar-flexbox + sugar-treelist: emit Buffer diffs`
+- **PR title**: `sugar-panels + sugar-dashboard + candy-code + sugar-overlay + sugar-flexbox + sugar-treelist: emit Buffer diffs`
 - **PR body**:
   ```
   ## Summary

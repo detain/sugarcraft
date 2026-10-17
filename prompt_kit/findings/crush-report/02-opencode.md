@@ -1,4 +1,4 @@
-# opencode vs sugar-crush: competitor deep-dive
+# opencode vs candy-code: competitor deep-dive
 
 Feeds steps: 0.3, 0.4-a, 0.4-b, 0.5, 0.10, 0.12, 0.13-a, 1.A-1, 1.A-2, 1.B-2, 1.C-1, 1.C-2, 1.C-3, 2.1, 2.2-1, 2.2-2, 2.4-1, 2.5, 2.6, 2.7-1b, 2.8, 2.12, 3.A-1, 3.A-2, 3.B-2, 3.C, 3.F, 3.I-1, 3.I-2, 3.I-3, 4.1-2, 4.3-2, 4.4, 4.7-1, 5.7-1, 5.7-2, 5.10, 5.14a, 5.14e, 5.14g, 5.14j, X-35a, X-37a, DEF-MODE, O-3b, O-8a, P-A2, P-C1, P-D2, P-D3, P-E3
 
@@ -13,7 +13,7 @@ Feeds steps: 0.3, 0.4-a, 0.4-b, 0.5, 0.10, 0.12, 0.13-a, 1.A-1, 1.A-2, 1.B-2, 1.
 | `TUI/` | `packages/tui/src/` | the terminal client |
 | `PLUGIN/` | `packages/plugin/src/` | the public plugin API |
 
-sugar-crush paths are relative to `/home/sites/sugarcraft/sugar-crush/` (line numbers may have drifted; re-locate by symbol).
+candy-code paths are relative to `/home/sites/sugarcraft/candy-code/` (line numbers may have drifted; re-locate by symbol).
 
 ---
 
@@ -446,7 +446,7 @@ Edit asks carry the diff (§7.1). Sub-agents inherit the parent's deny rules (§
 
 ---
 
-## 13. Recommended improvements for sugar-crush
+## 13. Recommended improvements for candy-code
 
 ### P0-1: Interactive permission asks on the engine path, then retire the `bypass-permissions` default (→ 1.C-1, 1.C-2, DEF-MODE)
 
@@ -487,7 +487,7 @@ Earlier tool results are replayed as plain assistant text with no call or argume
 
 ### P1-6: Truncate-to-file with a navigation hint; cap MCP output (→ 2.8, 0.5)
 
-- Extend `Tools/Concerns/TruncatesOutput.php`: write the full text to `sys_get_temp_dir()/sugarcrush-tool-output/` (0600), return a preview plus the hint, and apply it in `McpToolBridge` (`:587-622`, uncapped).
+- Extend `Tools/Concerns/TruncatesOutput.php`: write the full text to `sys_get_temp_dir()/candy-code-tool-output/` (0600), return a preview plus the hint, and apply it in `McpToolBridge` (`:587-622`, uncapped).
 - Allow-list that directory in `PathJail` for Read and Grep.
 
 ### P1-7: Read with offset/limit and line numbers (→ 0.12)
@@ -507,7 +507,7 @@ Port `LineTrimmed`, `BlockAnchor`, `WhitespaceNormalized`, `IndentationFlexible`
 
 ### P1-10: Shadow-git snapshots and file-level undo (→ 3.A-1, 3.A-2)
 
-- New `src/Snapshot/ShadowGit.php`, git dir `~/.sugar-crush/snapshot/<sha1(root)>` for non-repos.
+- New `src/Snapshot/ShadowGit.php`, git dir `~/.candy-code/snapshot/<sha1(root)>` for non-repos.
 - Call `track()` in `EngineBackend::runTurn()` before and after each step; ship `{fromTree, toTree, files}` in the `result` frame.
 - Store it in the per-turn checkpoint (`EnhancedSessionStore::saveCheckpoint`, `Chat::dispatchTurn`).
 - Extend `/rewind` to revert files; add `/undo` and `/redo` (restoring the reverted prompt text into the input).
@@ -529,7 +529,7 @@ When `Chat::enqueuePrompt()` runs during an engine turn, also write a `user_mess
 
 ### P2-16: Plan agent with a plan file and an exit tool (→ 5.7-1, 5.7-2)
 
-Plan-mode path rules: allow Write/Edit to `.sugar-crush/plans/*.md`. Add a `PlanExit` tool ("switch to build?", then inject "The plan at X has been approved, you can now edit files. Execute the plan") and a `question` tool, both over the 1.C modal plumbing. Use the plan/build-switch reminders (§5.3).
+Plan-mode path rules: allow Write/Edit to `.candy-code/plans/*.md`. Add a `PlanExit` tool ("switch to build?", then inject "The plan at X has been approved, you can now edit files. Execute the plan") and a `question` tool, both over the 1.C modal plumbing. Use the plan/build-switch reminders (§5.3).
 
 ### P2-17: Per-model-family base prompts (→ 5.10)
 
@@ -549,4 +549,4 @@ In `Chat::expandCustomCommand()`, route `subtask: true` through `TaskTool`, then
 |---|---|
 | Notifications (→ 5.14a) | Bell/desktop notification on turn done or permission needed |
 | Share fallback (→ X-35a) | Local markdown/JSON export for `/share` (`ShareUploader` always throws) |
-| Global instructions (→ 5.14j) | Load `~/.claude/CLAUDE.md` / `~/.sugar-crush/AGENTS.md` |
+| Global instructions (→ 5.14j) | Load `~/.claude/CLAUDE.md` / `~/.candy-code/AGENTS.md` |

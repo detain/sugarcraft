@@ -18,13 +18,13 @@ use PHPUnit\Framework\TestCase;
  * `--no-lib-path-repos` are hard CI gates. Until this round both variables were
  * documented only in a comment beside their own `getenv()` call.
  *
- * WHY NO EXISTING ROSTER COVERS THEM. `sugar-crush`'s `EnvRosterDriftTest`
- * walks `sugar-crush/src` and `sugar-crush/bin` under the
+ * WHY NO EXISTING ROSTER COVERS THEM. `candy-code`'s `EnvRosterDriftTest`
+ * walks `candy-code/src` and `candy-code/bin` under the
  * `SUGARCRUSH_`/`SUGAR_CRUSH_` alphabet. A `SUGARCRAFT_`-prefixed variable at
  * the monorepo root is outside both its population and its alphabet, and
- * reaching `tools/` from a `sugar-crush` test is the dependency inversion
+ * reaching `tools/` from a `candy-code` test is the dependency inversion
  * `StackedDocCommentTest`'s doc-block measures and refuses: a guard HERE may
- * read `sugar-crush`, never the reverse.
+ * read `candy-code`, never the reverse.
  *
  * THE ALPHABET IS EVERY NAME, NOT A PREFIX, AND THAT IS THE WHOLE POINT.
  * A census keyed on `SUGARCRAFT_` would report a clean `tools/` on the day

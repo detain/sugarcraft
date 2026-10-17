@@ -7,7 +7,7 @@ declare(strict_types=1);
  * Self-check for scripts/merge-clover.php (E691).
  *
  * Not a PHPUnit test — merge-clover.php is a CI script, not suite code, and
- * the sugar-crush suite figure is deliberately untouched by this lane (+0T).
+ * the candy-code suite figure is deliberately untouched by this lane (+0T).
  * This script is invoked by the sharded coverage job BEFORE the expensive
  * merge of real data, so a merger regression fails in seconds.
  *

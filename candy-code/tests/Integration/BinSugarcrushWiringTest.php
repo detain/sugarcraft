@@ -1,0 +1,1410 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Integration;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Context\InstructionFileLoader;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
+use SugarCraft\Code\Tests\Tools\BuiltInToolCorpus;
+use SugarCraft\Code\Tools\BuiltIn\ApplyPatch;
+use SugarCraft\Code\Tools\BuiltIn\Edit;
+use SugarCraft\Code\Tools\BuiltIn\Glob;
+use SugarCraft\Code\Tools\BuiltIn\Grep;
+use SugarCraft\Code\Tools\BuiltIn\Read;
+use SugarCraft\Code\Tools\BuiltIn\Write;
+
+/**
+ * R19: bin/candy-code previously built `new Chat(backend: $backend)` with no
+ * SessionStore/MemoryStore/InstructionFileLoader ever constructed, and built
+ * Read/Edit/Glob with no InstructionFileLoader either -- leaving the
+ * already-built /branch, /rewind, /memory, and nested-instruction-loading
+ * features (P6.S9/S11/S12/S15) unreachable through the real CLI binary.
+ *
+ * This exercises SugarCraft\Code\Cli\Bootstrap -- the construction logic
+ * extracted out of bin/candy-code's IIFE -- directly, rather than shelling
+ * out to bin/candy-code itself: the bin script ends in Program::run(), which
+ * attaches to a real TTY and blocks, so it cannot be driven from a
+ * deterministic, CI-safe test.
+ *
+ * HOME and the whole backend-selection chain
+ * ({@see BackendSelectionEnvSandboxTrait}) are sandboxed per test. The chain
+ * matters because these tests assert on the ENGINE backend `Bootstrap::backend()`
+ * builds — its tool set, its loaders — and either shell-out variable merely
+ * exported in the developer's shell selects a `CommandBackend` instead, which
+ * has none of them. Measured before the clearing was added: one error here in a
+ * full run.
+ */
+final class BinSugarcrushWiringTest extends TestCase
+{
+    use BackendSelectionEnvSandboxTrait;
+
+    private string $tempDir;
+    private string $originalHome;
+    private mixed $originalServerHome;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_bin_wiring_' . uniqid('', true);
+        mkdir($this->tempDir . '/home', 0700, true);
+        mkdir($this->tempDir . '/repo', 0755, true);
+
+        // Isolate the real ~/.candy-code/ from this test's session db and
+        // memory directory, same convention as SessionTest/WorkflowEngineTest.
+        $this->originalHome = getenv('HOME') ?: '';
+        putenv('HOME=' . $this->tempDir . '/home');
+
+        // BOTH SPELLINGS, and the REASON has changed since this comment was
+        // written even though the action has not. It said "the code under test
+        // does not agree with itself about where HOME lives: Bootstrap reads
+        // getenv('HOME'), while ForeignSkillDiscovery reads $_SERVER['HOME']" —
+        // that disagreement is gone, every `~` reader in src/ now resolves
+        // through HomeDirectory, which prefers getenv(). The superglobal is set
+        // anyway for the reason {@see HomeSandboxTrait} states: half a sandbox is
+        // not a sandbox, and it costs nothing to keep it honest for anything that
+        // reads $_SERVER directly. Redirecting only one of them once left this
+        // scanning the DEVELOPER's ~/.claude/skills.
+        $this->originalServerHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $this->tempDir . '/home';
+
+        $this->clearBackendSelectionEnv();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreBackendSelectionEnv();
+
+        if ($this->originalHome !== '') {
+            putenv('HOME=' . $this->originalHome);
+        } else {
+            putenv('HOME');
+        }
+
+        if ($this->originalServerHome === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
+        }
+
+        $this->removeDirectory($this->tempDir);
+
+        parent::tearDown();
+    }
+
+    public function testChatIsWiredWithANonNullSessionStore(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+
+        $this->assertInstanceOf(EnhancedSessionStore::class, $chat->sessionStore());
+    }
+
+    public function testChatIsWiredWithANonNullMemoryStore(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+
+        $this->assertInstanceOf(MemoryStore::class, $chat->memoryStore());
+    }
+
+    public function testSessionStoreDatabaseIsCreatedUnderTheUserConfigDir(): void
+    {
+        Bootstrap::chat($this->tempDir . '/repo');
+
+        $this->assertFileExists($this->tempDir . '/home/.candy-code/session.db');
+    }
+
+    /**
+     * The O-2b..O-2d host services are registered where the workspace is
+     * built, so every consumer of one root shares one instance — and the
+     * transcript store and its event log sit over THE workspace's session store.
+     */
+    public function testWorkspaceRegistersTheHostServicesOverItsOwnSessionStore(): void
+    {
+        $workspace = Bootstrap::workspace($this->tempDir . '/repo');
+
+        $this->assertInstanceOf(\SugarCraft\Code\Host\TitleService::class, $workspace->service(\SugarCraft\Code\Host\TitleService::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Host\SpendLedger::class, $workspace->service(\SugarCraft\Code\Host\SpendLedger::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Host\ContextMeter::class, $workspace->service(\SugarCraft\Code\Host\ContextMeter::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Host\CompactionService::class, $workspace->service(\SugarCraft\Code\Host\CompactionService::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Agents\Live\AgentLiveRegistry::class, $workspace->service(\SugarCraft\Code\Agents\Live\AgentLiveRegistry::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Host\TurnRunner::class, $workspace->service(\SugarCraft\Code\Host\TurnRunner::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Host\TurnController::class, $workspace->service(\SugarCraft\Code\Host\TurnController::class));
+        $this->assertInstanceOf(\SugarCraft\Code\Config\Settings\SettingsWriter::class, $workspace->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class));
+
+        $transcripts = $workspace->service(\SugarCraft\Code\Host\TranscriptStore::class);
+        $this->assertInstanceOf(\SugarCraft\Code\Host\TranscriptStore::class, $transcripts);
+        $this->assertSame($workspace->sessionStore, $transcripts->store());
+        $this->assertSame($transcripts->events(), $workspace->service(\SugarCraft\Code\Host\EventLog::class));
+        $this->assertNotNull($transcripts->events());
+    }
+
+    public function testMemoryStoreDirectoryIsCreatedUnderTheUserConfigDir(): void
+    {
+        Bootstrap::chat($this->tempDir . '/repo');
+
+        $this->assertDirectoryExists($this->tempDir . '/home/.candy-code/memory');
+    }
+
+    /**
+     * Same reachability class as the Doctor pin below, and the same cause: the
+     * tool existed, was tested, and was never listed in Bootstrap::tools(), so
+     * the live EngineBackend/Runtime loop — which resolves every model tool
+     * call against exactly that array — could not advertise or dispatch it.
+     * With Write absent, Edit's `file_exists()` precondition left `Bash` as the
+     * model's only way to create a file.
+     *
+     * THE EXPECTED SET IS SCANNED, NOT WRITTEN DOWN, and that is the whole point
+     * of this revision. The previous version asserted `assertCount(10, …)` plus a
+     * literal name list, which pins only the direction where a tool is ADDED to
+     * `Bootstrap::tools()`.
+     *
+     * MEASURED, in a scratch copy of the lib with an eleventh `Tool` implementor
+     * (`src/Tools/BuiltIn/Notify.php`) present and deliberately NOT listed in
+     * `Bootstrap::tools()`:
+     *
+     *   - with the old literal assertions: this file `OK (298 tests, 1692
+     *     assertions)`, the whole Integration tier `OK (467 tests, 2681
+     *     assertions)` — the omitted-from-the-array direction, the one that
+     *     actually happened to `Write`, was invisible;
+     *   - with the scanned set below: `1 failure` in this file, naming the class.
+     *
+     * `Bootstrap::tools()`' doc-block claimed the two halves "agree by
+     * construction"; nothing constructs either from the other, so this assertion
+     * is the mechanism that makes them agree, and it is named as such there now.
+     */
+    public function testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $this->assertArrayHasKey(\SugarCraft\Code\Tools\BuiltIn\Write::class, $byClass);
+
+        // MINUS the dynamically-constructed tools, and the subtraction is the
+        // whole of the exemption — see
+        // {@see BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES} for why it had to exist
+        // and how narrow it is kept. `array_values` because `array_diff`
+        // preserves keys and `assertSame` compares them.
+        // And minus the tools no launch carries (roadmap 4.5's shared-board
+        // pair, which TaskTool hands to a parallel batch's members): the
+        // catalog declares them `onLaunch: false`, and they must be absent.
+        $memberOnly = array_map(
+            static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->class,
+            array_values(array_filter(\SugarCraft\Code\Tools\Catalog\ToolCatalog::entries(), static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): bool => !$e->onLaunch)),
+        );
+        $expected = array_values(array_diff(
+            BuiltInToolCorpus::classNames(),
+            BuiltInToolCorpus::dynamicToolClasses(),
+            $memberOnly,
+        ));
+        $wired = array_keys($byClass);
+        sort($wired);
+
+        $this->assertSame(
+            $expected,
+            $wired,
+            'every concrete Tool under src/Tools/BuiltIn/ must be wired into Bootstrap::tools(), and nothing '
+            . 'else may be: a class in that directory that no run can dispatch is the Write defect again',
+        );
+
+        // The exemption may not become a hiding place: this repo has no
+        // `.mcp.json`, so the fixture repo Bootstrap::tools() was called against
+        // has none either, and every exempted class must therefore be ABSENT
+        // here. If one ever appears, it is constructible as a literal after all
+        // and belongs in the array rather than on the list.
+        foreach (BuiltInToolCorpus::dynamicToolClasses() as $dynamic) {
+            $this->assertArrayNotHasKey($dynamic, $byClass);
+        }
+
+        $names = array_map(static fn (object $t): string => $t->name(), array_values($byClass));
+        sort($names);
+        $this->assertSame(
+            // Still a literal, and deliberately: this asserts the WIRE NAMES the
+            // provider schema advertises, which the class names do not determine
+            // (`SkillTool` announces itself as `Skill`) and which the model has
+            // learned. `doctor` is lower-case where the other eleven are TitleCase —
+            // asserted as it actually is rather than as it ought to be, since
+            // renaming a tool the model already knows is not this test's business.
+            // A SUBSET pin: a new tool adds a name without editing this list,
+            // while a learned name that disappears or is respelled still reds.
+            ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'Task', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
+            array_values(array_intersect(
+                $names,
+                ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'Task', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
+            )),
+            'a wire name the model has learned is gone or respelled',
+        );
+
+        // DH-TOOLS: and the launch set is exactly the catalog — a new tool joins
+        // by declaring itself, not by editing this list.
+        $catalogued = array_map(static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->name, \SugarCraft\Code\Tools\Catalog\ToolCatalog::onLaunch());
+        sort($catalogued);
+        $this->assertSame($catalogued, $names);
+
+        // The same loader instance Read/Edit/Glob hold, not merely a non-null
+        // one: loadForPath()'s "already injected this session" map is
+        // per-instance, so a Write on its own loader would re-announce a nested
+        // CLAUDE.md the model had already been shown.
+        $this->assertSame(
+            $this->instructionLoaderOf($byClass[Read::class]),
+            $this->instructionLoaderOf($byClass[\SugarCraft\Code\Tools\BuiltIn\Write::class]),
+        );
+    }
+
+    /**
+     * THE LIVE `Lsp` TOOL REFUSES; IT DOES NOT ANSWER EMPTY.
+     *
+     * This is the assertion that makes the whole design decision behind
+     * {@see \SugarCraft\Code\Tools\BuiltIn\LspTool} real on the wiring path
+     * rather than only in a unit test of the class. With no `lsp` setting —
+     * the default, and this fixture's — {@see Bootstrap::lspClient()} builds no
+     * {@see \SugarCraft\Code\LSP\LspClient}, so the tool a real launch
+     * gets has NO servers, and the one thing it must never do is hand back a
+     * successful empty result: to a model, "no references" is a fact about the
+     * codebase it will then act on, and it would be a fabrication.
+     *
+     * MEASURED AS A FALSIFIABLE PAIR rather than a keyword scan. `isError` true
+     * is the load-bearing half; the `php` in the message is what says the refusal
+     * names the language it could not ask, which is the difference between a
+     * usable diagnostic and "something went wrong". A build whose `LspTool`
+     * returned `new ToolResult(id, '[]')` passes any test that only greps the
+     * content for a word.
+     *
+     * The path is a file that really exists in the fixture repo, so a green here
+     * cannot be an accidental "file not found": the refusal is about the missing
+     * SERVER, and the tool checks the server before it touches the path
+     * deliberately, for exactly this reason.
+     */
+    public function testTheWiredLspToolRefusesRatherThanAnsweringEmptyWithNoServerConfigured(): void
+    {
+        $byClass = $this->toolsByClass();
+        $lsp = $byClass[\SugarCraft\Code\Tools\BuiltIn\LspTool::class] ?? null;
+        $this->assertNotNull($lsp, 'Bootstrap::tools() must wire an LspTool');
+
+        $target = $this->tempDir . '/repo/Present.php';
+        file_put_contents($target, "<?php\n");
+
+        $result = $lsp->execute([
+            'id' => 'call_lsp',
+            'operation' => 'references',
+            'path' => $target,
+        ]);
+
+        $this->assertTrue($result->isError(), 'an unconfigured language server must be an ERROR result');
+        $this->assertStringContainsString('no language server configured for php', $result->content());
+        $this->assertSame('call_lsp', $result->toolCallId());
+    }
+
+    /**
+     * The roster this file used to hand-maintain, now DERIVED and pinned.
+     *
+     * The three tests below each named a literal `[Read, Edit, Glob]` — two as
+     * a `foreach` over that array, the third
+     * (`…ShareTheSameInstructionLoaderInstance`) as three explicit
+     * `instructionLoaderOf()` calls — while `Bootstrap::tools()` handed the
+     * pair to FIVE tools, and the gap that literal left was real but NARROWER
+     * than it looks — worth stating precisely, because the imprecise version
+     * is the bug this project keeps shipping. MEASURED at 82b8ee3e by dropping
+     * one argument at a time and re-running, from `candy-code/`:
+     *
+     *   vendor/bin/phpunit tests/Integration/FeatWiringReachabilityTest.php \
+     *     tests/Integration/SkillPathScopingWiringTest.php \
+     *     tests/Integration/BinSugarcrushWiringTest.php \
+     *     tests/Tools/BuiltIn/WriteTest.php \
+     *     tests/Tools/BuiltIn/SkillPathScopingTest.php
+     *
+     *  - Unmutated, that command reports `OK (376 tests, 1980 assertions)`.
+     *  - `Write` losing `skillNudge:` reports `OK (376 tests, 1980
+     *    assertions)` — not merely still green, byte-identical to the
+     *    unmutated run. THAT was the unguarded half.
+     *  - `Write` losing `instructionLoader:` reports `Tests: 376, Assertions:
+     *    1980, Failures: 1`, at
+     *    `testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()` in this
+     *    file — which carries its own same-instance assertion for Write,
+     *    written when Write was wired. So the LOADER half was covered, just
+     *    not by these loops.
+     *
+     * (An earlier draft of this block claimed "428 tests, 2039 assertions".
+     * No command produces that over these files; it was a figure measured
+     * against some other selection and then written down next to this one —
+     * which is the precise defect the rest of this docblock exists to warn
+     * about. The figures above were re-measured before being written.)
+     *
+     * Which is the argument for deriving rather than for adding two more
+     * names: the covered half was covered by an assertion in a different test
+     * with a different subject, so nothing connected the lists and nobody
+     * could see which half was which. The loops now walk
+     * {@see loaderCarryingToolClasses()} — read off the real tool set — and
+     * this test is the one place the expected membership is written down.
+     *
+     * Which makes the assertion below the deliberate acknowledgement step
+     * rather than a restatement: a new tool that takes an
+     * `instructionLoader` property is automatically covered by every loop,
+     * and fails HERE until someone adds it, which is exactly the moment to
+     * decide whether it should have had the pair at all.
+     */
+    public function testTheLoaderCarryingToolRosterIsExactlyTheSixToolsThatDeclareIt(): void
+    {
+        $this->assertSame(
+            [ApplyPatch::class, Edit::class, Glob::class, Grep::class, Read::class, Write::class],
+            $this->loaderCarryingToolClasses(),
+            'A tool gained or lost an $instructionLoader property. Widen or narrow this list '
+            . 'deliberately — every other loader/nudge assertion in this file is derived from it.',
+        );
+    }
+
+    public function testEveryLoaderCarryingToolReceivesANonNullInstructionLoader(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        foreach ($this->loaderCarryingToolClasses() as $class) {
+            $this->assertArrayHasKey($class, $byClass, "Expected {$class} among the built-in tools");
+            $this->assertInstanceOf(
+                InstructionFileLoader::class,
+                $this->instructionLoaderOf($byClass[$class]),
+                "{$class} must be wired with a non-null InstructionFileLoader",
+            );
+        }
+    }
+
+    public function testEveryLoaderCarryingToolSharesTheSameInstructionLoaderInstance(): void
+    {
+        // loadForPath() tracks "already injected this session" per loader
+        // instance (InstructionFileLoader::$emittedPaths) -- a shared
+        // instance across the tools is what makes the nested
+        // CLAUDE.md/AGENTS.md dedup semantics apply CLI-wide instead of
+        // once per tool.
+        $byClass = $this->toolsByClass();
+
+        $loaders = [];
+        foreach ($this->loaderCarryingToolClasses() as $class) {
+            $loaders[$class] = $this->instructionLoaderOf($byClass[$class]);
+        }
+
+        $first = array_key_first($loaders);
+        foreach ($loaders as $class => $loader) {
+            $this->assertSame($loaders[$first], $loader, "{$class} must share the one session loader");
+        }
+    }
+
+    /**
+     * Read/Edit/Glob's nudge wiring WAS already asserted — by
+     * `SkillPathScopingWiringTest::testBootstrapGivesReadEditAndGlobTheSameNudgeTracker()`
+     * and again inside `FeatWiringReachabilityTest` (Read+Edit). Both name
+     * their tools as literals, so `Write` and `Grep` fell outside all of them;
+     * see this file's roster docblock for the measurement.
+     *
+     * It matters that this failure is silent rather than loud:
+     * {@see SkillPathNudge} dedups per INSTANCE (`$announced`), so a tool given
+     * its own tracker still nudges. It just re-announces a skill the model was
+     * already told about, once more per tool, for the rest of the session —
+     * which reads as a working feature.
+     */
+    public function testEveryLoaderCarryingToolSharesTheOneSkillPathNudge(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $nudges = [];
+        foreach ($this->loaderCarryingToolClasses() as $class) {
+            $nudge = $this->privateValue($byClass[$class], 'skillNudge');
+            $this->assertInstanceOf(
+                SkillPathNudge::class,
+                $nudge,
+                "{$class} carries an InstructionFileLoader, so it must carry the nudge tracker too",
+            );
+            $nudges[$class] = $nudge;
+        }
+
+        $first = array_key_first($nudges);
+        foreach ($nudges as $class => $nudge) {
+            $this->assertSame($nudges[$first], $nudge, "{$class} must share the one session nudge tracker");
+        }
+    }
+
+    /**
+     * W1.B3a: EngineBackend::withInstructionLoader() exists so the engine's
+     * loadRoot()/loadForced() reads and the tools' on-touch loadForPath()
+     * reads run against ONE loader. Both docblocks assert that invariant; a
+     * Bootstrap that built a second loader for the engine would still pass
+     * every "non-null" check above while silently splitting
+     * InstructionFileLoader::$emittedPaths in two, so the same-instance
+     * claim is asserted against a single real Bootstrap::backend() here.
+     */
+    public function testBackendSharesItsInstructionLoaderWithEveryLoaderCarryingTool(): void
+    {
+        $backend = Bootstrap::backend($this->tempDir . '/repo');
+
+        $backendLoader = $this->privateValue($backend, 'instructionLoader');
+        $this->assertInstanceOf(InstructionFileLoader::class, $backendLoader);
+
+        /** @var list<object> $tools */
+        $tools = $this->privateValue($backend, 'tools');
+        $byClass = [];
+        foreach ($tools as $tool) {
+            $byClass[$tool::class] = $tool;
+        }
+
+        foreach ($this->loaderCarryingToolClasses() as $class) {
+            $this->assertArrayHasKey($class, $byClass, "Expected {$class} among the backend's tools");
+            $this->assertSame(
+                $backendLoader,
+                $this->instructionLoaderOf($byClass[$class]),
+                "{$class} must share the backend's InstructionFileLoader instance",
+            );
+        }
+    }
+
+    /**
+     * The inverse of what this test used to assert. It previously pinned the
+     * R20.fix GAP -- `Bootstrap::chat()` never constructs/passes an
+     * `agentManager:` -- documenting it where a reader would see it rather
+     * than only in a docblock. crush_code.md Phase 1 item 1 closed the gap, so
+     * the pin flips: a launch must now carry a real manager, because
+     * everything downstream of it (`/agents`, Ctrl+A, the transcript's agent
+     * strip, `AgentDashboardPane`'s agent rows, `PermissionGate`) is reachable
+     * only through this reference.
+     */
+    public function testChatIsWiredWithARealAgentManager(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+
+        $this->assertNotNull($chat->agentManager());
+    }
+
+    /**
+     * R20.fix regression: typing "/agents" (or pressing Ctrl+A) against a real
+     * `Bootstrap::chat()`-constructed Chat used to throw an uncaught
+     * `RuntimeException('AgentManager not set')` straight out of
+     * `Chat::update()` -- sugar-core's `Program` has no try/catch around its
+     * synchronous update() dispatch, so this crashed the live CLI outright
+     * (and skipped `teardownTerminal()`). It was then made to degrade to a
+     * "not configured" response; with Phase 1 item 1's wiring it must answer
+     * from the real roster instead, so neither the crash nor the degradation
+     * is what a CLI user sees.
+     */
+    public function testAgentsCommandAnswersFromTheRealRosterOnABootstrapConstructedChat(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+        $ref = new \ReflectionMethod($chat, 'withInputBuf');
+        $ref->setAccessible(true);
+        $chat = $ref->invoke($chat, '/agents');
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $reply = $next->history[array_key_last($next->history)]->content;
+
+        $this->assertStringNotContainsString('Agent manager not configured', $reply);
+        $this->assertStringContainsString('agent(s) registered and idle', $reply);
+    }
+
+    /**
+     * W1.G2 reachability fix (reviewer-reported): the previous 'doctor'
+     * wiring only ever reached Chat's own registerTool()/beginToolCalls()/
+     * forkToolCalls() dispatch, which never fires in production -- every
+     * real completion goes through EngineBackend, which resolves tool
+     * calls internally against the Tool[] array Bootstrap::tools() builds.
+     * A real Bootstrap::tools($root) call must now include a Doctor tool,
+     * so the live LLM tool-calling schema actually advertises it.
+     */
+    public function testBootstrapToolsIncludesARealDoctorTool(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $this->assertArrayHasKey(\SugarCraft\Code\Tools\BuiltIn\Doctor::class, $byClass);
+    }
+
+    /**
+     * Calling the real Doctor::execute() (the method
+     * SugarCraft\Code\Runtime::executeToolCalls() calls for every 'doctor'
+     * ToolCall the live EngineBackend/Runtime/App loop resolves) must
+     * produce a genuinely image-bearing Tools\ToolResult.
+     */
+    public function testDoctorToolProducesAnImageBearingToolResult(): void
+    {
+        $result = (new \SugarCraft\Code\Tools\BuiltIn\Doctor())->execute([]);
+
+        $this->assertInstanceOf(\SugarCraft\Code\Tools\ToolResult::class, $result);
+        $this->assertTrue($result->hasImage());
+        $this->assertNotNull($result->imageBytes());
+        $this->assertStringStartsWith("\x89PNG", (string) $result->imageBytes());
+        $this->assertNotNull($result->imageProtocol());
+    }
+
+    /**
+     * End-to-end through the REAL production pipeline a model-issued
+     * "doctor" tool call takes: Chat::submit() -> EngineBackend::completeAsync()
+     * (pcntl_fork() when available, the same fork boundary every real
+     * bin/candy-code completion crosses) -> Runtime::run()/executeToolCalls()
+     * resolving the call against Bootstrap::tools($root)'s real Doctor
+     * instance -> EngineBackend::complete() threading the image onto the
+     * root Message -> Chat::update(AssistantMsg) appending it to history.
+     *
+     * Only the provider's HTTP layer is a stub (a ProviderInterface returning
+     * a canned tool_call then a canned answer, exactly like
+     * EngineBackendTest's own agentic-loop tests) -- unlike the fake
+     * reachability test this replaces, the assistant Message carrying the
+     * toolCalls is never hand-constructed; Chat drives the whole loop
+     * itself via a real submit()/backend round-trip.
+     */
+    public function testDoctorToolIsReachableEndToEndThroughARealChatTurn(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $provider = new class implements \SugarCraft\Code\Providers\ProviderInterface {
+            public int $calls = 0;
+            public function name(): string { return 'stub-doctor'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(\SugarCraft\Code\Providers\CompleteRequest $r): \SugarCraft\Code\Providers\CompleteResponse
+            {
+                $this->calls++;
+
+                return $this->calls === 1
+                    ? new \SugarCraft\Code\Providers\CompleteResponse(
+                        content: 'checking terminal capability',
+                        toolCalls: [new \SugarCraft\Code\Tools\ToolCall('call_doctor_1', 'doctor', [])],
+                    )
+                    : new \SugarCraft\Code\Providers\CompleteResponse(content: 'done checking');
+            }
+            public function completeStream(\SugarCraft\Code\Providers\CompleteRequest $r): \Generator
+            {
+                yield new \SugarCraft\Code\Providers\CompleteResponse(content: '');
+            }
+            public function embeddings(\SugarCraft\Code\Providers\EmbeddingsRequest $r): \SugarCraft\Code\Providers\EmbeddingsResponse
+            {
+                return new \SugarCraft\Code\Providers\EmbeddingsResponse([]);
+            }
+        };
+
+        $backend = \SugarCraft\Code\Backend\EngineBackend::new($provider, 'stub-doctor')
+            ->withTools(Bootstrap::tools($root));
+        $chat = new \SugarCraft\Code\Chat(backend: $backend, mosaic: \SugarCraft\Code\ToolResult::mosaic());
+
+        $inputBufRef = new \ReflectionMethod($chat, 'withInputBuf');
+        $inputBufRef->setAccessible(true);
+        $chat = $inputBufRef->invoke($chat, "check my terminal's image support");
+
+        [$afterSubmit, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $asyncCmd);
+
+        $loop = \React\EventLoop\Loop::get();
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved, $loop): void {
+            $resolved = $msg;
+            $loop->stop();
+        });
+
+        if ($resolved === null) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        // Since W2.S1c a turn whose backend ran tools resolves to a
+        // BackendToolEventsMsg queue (the ToolStarted/ToolFinished pair for the
+        // doctor call) that hands off to the AssistantMsg once drained - so
+        // follow the Cmd chain instead of applying a single Msg.
+        $this->assertInstanceOf(
+            \SugarCraft\Code\BackendToolEventsMsg::class,
+            $resolved,
+            'doctor tool call did not complete within the test timeout',
+        );
+
+        $final = $afterSubmit;
+        $msg = $resolved;
+        $steps = 0;
+        while ($msg !== null && $steps++ < 20) {
+            [$final, $nextCmd] = $final->update($msg);
+            $msg = $nextCmd === null ? null : $nextCmd();
+        }
+
+        $lastMessage = $final->history[array_key_last($final->history)];
+
+        $this->assertTrue($lastMessage->hasImage(), 'image captured by the real Doctor tool must survive EngineBackend + the completeAsync() fork boundary and reach Chat history');
+        $this->assertStringStartsWith("\x89PNG", (string) $lastMessage->imageBytes);
+        $this->assertNotNull($lastMessage->imageProtocol);
+    }
+
+    // =========================================================================
+    // Skills subsystem wiring (crush_feat.md section 7 E1)
+    // =========================================================================
+
+    /**
+     * section 7 D's finding: `bin/candy-code` contained zero references to
+     * Skill, so the whole BuiltIn/ roster plus anything a user dropped under
+     * .candy-code/skills was invisible to a real run. Bootstrap::app() is
+     * the binary's entry point (bin/candy-code -> Bootstrap::app() -> App),
+     * so the registry it hands the App must actually carry the on-disk skill.
+     */
+    public function testBootstrapAppPopulatesAvailableSkillsFromDisk(): void
+    {
+        $this->writeProjectSkill('bin-wiring-marker', 'Marker skill for the bin wiring test.');
+
+        $app = Bootstrap::app($this->tempDir . '/repo');
+
+        $this->assertNotNull($app->availableSkills->get('bin-wiring-marker'));
+        $this->assertNotNull($app->availableSkills->get('security-audit'));
+    }
+
+    /**
+     * N-P3b: `/model` saves through the workspace's SettingsWriter, and the
+     * settings editor the shell opens writes through the SAME instance — one
+     * write door per launch, not two built from separate trust answers.
+     */
+    public function testBootstrapAppHandsTheEditorTheWorkspacesSettingsWriter(): void
+    {
+        $app = Bootstrap::app($this->tempDir . '/repo');
+
+        $this->assertNotNull($app->chat);
+        $registered = $app->chat->workspace()?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
+        $this->assertInstanceOf(\SugarCraft\Code\Config\Settings\SettingsWriter::class, $registered);
+        $this->assertSame($registered, $app->settingsWriter);
+    }
+
+    /**
+     * N-P1: the settings view the shell opens is built from THIS launch's
+     * trust answer — a project the launch did not trust is listed "ignored",
+     * never "not shown" (bestEffort()'s answer when it was not told).
+     */
+    public function testBootstrapAppHandsTheSettingsViewTheLaunchsTrustAnswer(): void
+    {
+        $root = $this->tempDir . '/repo';
+        mkdir($root . '/.candy-code', 0755, true);
+        file_put_contents($root . '/.candy-code/settings.json', '{}');
+
+        $app = Bootstrap::app($root);
+
+        $this->assertNotNull($app->settingsSources);
+        $sources = ($app->settingsSources)();
+        $statuses = [];
+        foreach ($sources->files as $file) {
+            $statuses[$file->path] = $file->status;
+        }
+        $this->assertSame('ignored', $statuses[$root . '/.candy-code/settings.json'] ?? null);
+    }
+
+    /**
+     * Populating the registry is only half of "auto-triggerable": the model
+     * reaches a skill through the `Skill` tool, which is resolved out of the
+     * Tool[] EngineBackend/Runtime hold, so Bootstrap::tools() has to ship it.
+     */
+    public function testBootstrapToolsIncludesTheModelFacingSkillTool(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $this->assertArrayHasKey(\SugarCraft\Code\Tools\BuiltIn\SkillTool::class, $byClass);
+        $this->assertSame('Skill', $byClass[\SugarCraft\Code\Tools\BuiltIn\SkillTool::class]->name());
+    }
+
+    /**
+     * The shell's Skills pane and the model's Skill tool must read ONE
+     * registry instance — two independent scans could disagree about which
+     * skills exist or which are disabled.
+     */
+    public function testSkillToolSharesTheAppsRegistryInstance(): void
+    {
+        $app = Bootstrap::app($this->tempDir . '/repo');
+
+        $skillTool = null;
+        foreach ($app->tools as $tool) {
+            if ($tool instanceof \SugarCraft\Code\Tools\BuiltIn\SkillTool) {
+                $skillTool = $tool;
+            }
+        }
+
+        $this->assertNotNull($skillTool);
+        $this->assertSame($app->availableSkills, $this->privateValue($skillTool, 'registry'));
+    }
+
+    /**
+     * End of the chain: the tool Bootstrap built must return the on-disk
+     * SKILL.md body when the model invokes it by name.
+     */
+    public function testSkillToolInvocationReturnsTheOnDiskSkillBody(): void
+    {
+        $this->writeProjectSkill('bin-invoke-marker', 'Marker skill invoked through the tool.');
+
+        $tool = $this->skillToolFromBootstrap();
+        $result = $tool->execute(['name' => 'bin-invoke-marker']);
+
+        $this->assertFalse($result->isError());
+        $this->assertStringContainsString('BIN INVOKE MARKER BODY', $result->content());
+    }
+
+    /**
+     * section 7 E1's `disableFromConfig()` step: a name listed under
+     * `disabledSkills` in the persisted user config must be unreachable
+     * through the tool, not merely hidden from the picker.
+     */
+    public function testDisabledSkillsInUserConfigAreNotInvocable(): void
+    {
+        $this->writeProjectSkill('bin-disabled-marker', 'Marker skill turned off by config.');
+        mkdir($this->tempDir . '/home/.candy-code', 0700, true);
+        file_put_contents(
+            $this->tempDir . '/home/.candy-code/config.json',
+            json_encode(['disabledSkills' => ['bin-disabled-marker']]),
+        );
+
+        $result = $this->skillToolFromBootstrap()->execute(['name' => 'bin-disabled-marker']);
+
+        $this->assertTrue($result->isError());
+    }
+
+    // =========================================================================
+    // `--root` propagation (crush_code.md Phase 0 item 6)
+    //
+    // Every test below points --root at $this->tempDir . '/repo', which is
+    // NEVER the process cwd (PHPUnit runs from the package directory). That
+    // divergence IS the bug: `--root candy-shine` correctly jailed the tools @rename-keep historical provenance: real-defect narrative naming the then-live lib path
+    // to candy-shine/ while telling the model — through the environment block @rename-keep historical provenance: real-defect narrative naming the then-live lib path
+    // and through every HookContext — that it was standing in the enclosing
+    // monorepo. A test where the configured root and getcwd() coincide cannot
+    // observe that at all.
+    // =========================================================================
+
+    public function testBootstrapAppCarriesTheConfiguredRootRatherThanTheProcessDirectory(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $this->assertNotSame(getcwd(), $root, 'the fixture root must diverge from the process cwd');
+
+        $app = Bootstrap::app($root);
+
+        $this->assertSame($root, $app->root);
+    }
+
+    public function testAnAppConstructedWithoutARootReportsNullRatherThanGuessing(): void
+    {
+        // Null, not getcwd(): App::$root has to stay distinguishable from
+        // "explicitly rooted at the process directory" so each consumer can
+        // spell its own fallback. Bootstrap::app() with no argument does
+        // resolve one, so this exercises the App seam directly.
+        $this->assertNull(\SugarCraft\Code\App\App::new(new \SugarCraft\Code\Providers\EchoProvider(), 'echo')->root);
+    }
+
+    public function testBootstrapChatResolvesTheConfiguredRootRatherThanTheProcessDirectory(): void
+    {
+        $root = $this->tempDir . '/repo';
+
+        $chat = Bootstrap::chat($root);
+
+        $this->assertSame($root, $chat->projectRoot());
+        $this->assertNotSame(getcwd(), $chat->projectRoot());
+    }
+
+    /**
+     * The Settings sidebar is the one place a user can SEE which root the
+     * session is on. It read `getcwd()` because App carried no root to read
+     * back, so it agreed with the (wrong) environment block rather than with
+     * the tools.
+     */
+    public function testSettingsPaneReportsTheConfiguredRootNotTheProcessDirectory(): void
+    {
+        $root = $this->tempDir . '/repo';
+
+        $settings = [];
+        foreach (\SugarCraft\Code\Tui\Components\SettingsPane::settings(Bootstrap::app($root)) as [$label, $value]) {
+            $settings[$label] = $value;
+        }
+
+        $this->assertSame($root, $settings['Root'] ?? null);
+    }
+
+    /**
+     * The engine pipeline, end to end through the real production seam
+     * `Bootstrap::backend($root)` builds: a model-issued tool call reaches
+     * `Runtime::executeToolCalls()`, which builds the `HookContext` every
+     * PreToolUse/PostToolUse hook gates on. That context's `projectRoot` used
+     * to be `getcwd()`, so a `protect-files`-style guard on a `--root` run
+     * would have resolved paths against the wrong tree.
+     *
+     * `complete()` (not `completeAsync()`) on purpose: the async path forks,
+     * and a hook recording into the child's memory is unobservable here.
+     */
+    public function testEngineHookContextsReportTheConfiguredRoot(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $recorder = $this->recordingHook();
+
+        $hooks = new \SugarCraft\Code\Hooks\HookManager(new \SugarCraft\Code\Hooks\HookRegistry());
+        $hooks->register($recorder);
+
+        $backend = \SugarCraft\Code\Backend\EngineBackend::new($this->toolCallingProvider(), 'stub')
+            ->withTools([$this->noopTool()])
+            ->withHooks($hooks)
+            ->withRoot($root);
+
+        $backend->complete([\SugarCraft\Code\Message::user('go')]);
+
+        $this->assertNotSame([], $recorder->roots, 'the recording hook never saw a PreToolUse call');
+        $this->assertSame([$root], array_values(array_unique($recorder->roots)));
+    }
+
+    /**
+     * Chat's OWN tool pipeline (crush_feat.md §1 D's second dispatcher) builds
+     * its own `HookContext`, with no App or Runtime in reach — which is why it
+     * needed its own copy of the root rather than reading the engine's.
+     */
+    public function testChatsOwnHookContextsReportTheConfiguredRoot(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $recorder = $this->recordingHook();
+
+        $hooks = new \SugarCraft\Code\Hooks\HookManager(new \SugarCraft\Code\Hooks\HookRegistry());
+        $hooks->register($recorder);
+
+        $chat = (new \SugarCraft\Code\Chat(hooks: $hooks, projectRoot: $root))
+            ->registerTool('noop', static fn(array $args): string => 'ok');
+
+        $gate = new \ReflectionMethod($chat, 'gateToolCall');
+        $gate->setAccessible(true);
+        $gate->invoke($chat, new \SugarCraft\Code\ToolCall('noop', [], 'call_1'));
+
+        $this->assertSame([$root], $recorder->roots);
+    }
+
+    /**
+     * Bootstrap is what actually hands Chat that root on a real run, so the
+     * two halves above are only joined once this holds — and it is asserted
+     * on the CONTEXT a hook receives, not on the stored field, because the
+     * field being right while the context is not is exactly the failure the
+     * neighbouring tests exist to catch.
+     */
+    public function testBootstrapChatDeliversTheConfiguredRootAllTheWayIntoAHookContext(): void
+    {
+        $root = $this->tempDir . '/repo';
+        // registerTool() only adds the callable gateToolCall() dispatches on;
+        // the root, the guard chain and everything else still come from
+        // Bootstrap, and registerTool() returns a NEW Chat sharing the same
+        // HookManager instance.
+        $chat = Bootstrap::chat($root)->registerTool('noop', static fn(array $args): string => 'ok');
+
+        $hooks = $this->privateValue($chat, 'hooks');
+        $this->assertInstanceOf(\SugarCraft\Code\Hooks\HookManager::class, $hooks, 'Bootstrap::chat() must wire the guard chain');
+
+        // Registered onto the guard chain Bootstrap already built, so nothing
+        // about the construction path under test is replaced by the fixture.
+        $recorder = $this->recordingHook();
+        $hooks->register($recorder);
+
+        $gate = new \ReflectionMethod($chat, 'gateToolCall');
+        $gate->setAccessible(true);
+        $gate->invoke($chat, new \SugarCraft\Code\ToolCall('noop', [], 'call_1'));
+
+        $this->assertSame([$root], $recorder->roots);
+    }
+
+    /**
+     * The one `bin/candy-code` path that can be executed end-to-end without
+     * blocking: the root check runs before either dispatch, so the process
+     * exits before `Program::run()` ever attaches to a TTY.
+     *
+     * Worth an actual subprocess rather than a call to
+     * {@see \SugarCraft\Code\Cli\ArgvParser::rootError()} alone, because the
+     * defect being pinned is a WIRING one — rootError() existing but never
+     * being consulted would leave `--root /typo` reaching App::$root, every
+     * HookContext, and every ScriptHook's proc_open() cwd exactly as before.
+     */
+    public function testBinRejectsARootThatNamesNoDirectory(): void
+    {
+        $missing = $this->tempDir . '/no_such_root';
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-code';
+
+        $process = proc_open(
+            [PHP_BINARY, $bin, '--root', $missing],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(2, $exitCode, 'a --root naming no directory is a usage error');
+        $this->assertStringContainsString($missing, $stderr);
+        $this->assertSame('', $stdout, 'the TUI must not have started');
+    }
+
+    public function testBinAcceptsARootThatExists(): void
+    {
+        // The complement: proving the check is not simply rejecting every
+        // --root. Paired with `--help` so the process still terminates.
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-code';
+
+        $process = proc_open(
+            [PHP_BINARY, $bin, '--root', $this->tempDir . '/repo', '--help'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        $this->assertSame(0, proc_close($process));
+        $this->assertNotSame('', $stdout);
+    }
+
+    /**
+     * A dead working directory (deleted out from under the process) must
+     * produce a clear error naming --root, not a TypeError from whichever
+     * `string`-typed constructor `false` happened to reach first.
+     */
+    public function testBootstrapReportsAMissingRootRatherThanHandingAPathJailAFalse(): void
+    {
+        $dead = $this->tempDir . '/dead_cwd';
+        mkdir($dead, 0755, true);
+
+        $original = getcwd();
+        $this->assertIsString($original);
+
+        try {
+            chdir($dead);
+            rmdir($dead);
+            $this->assertFalse(getcwd(), 'this test is meaningless unless getcwd() actually fails');
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessageMatches('/--root/');
+            Bootstrap::tools(null);
+        } finally {
+            chdir($original);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Scrape-and-pin: a NEW root-resolving site must not be able to skip this
+    // -------------------------------------------------------------------------
+
+    /**
+     * Positions where a bare `getcwd()` means "this site silently ignores
+     * `--root`". Spelled several ways rather than one, for the same reason
+     * ProviderConnectTimeoutTest scrapes several timeout spellings: a
+     * single-pattern scrape is trivially evadable and would then read as
+     * proof of something it never checked.
+     *
+     * Both the named-argument form (`projectRoot: getcwd()`) and the local
+     * form (`$workingDirectory = getcwd()`) are covered — the two original
+     * offenders were spelled one each way. `$root ??= getcwd()` is
+     * deliberately NOT matched: that is Bootstrap resolving the DEFAULT root
+     * for a run that named none, which is the one correct use.
+     */
+    private const BARE_GETCWD_ROOT_SPELLINGS = [
+        '/projectRoot:\s*(\(string\)\s*)?getcwd\(\)/',
+        '/workingDirectory:\s*(\(string\)\s*)?getcwd\(\)/',
+        self::ROOT_CAPTURE_EXEMPT_PATTERN,
+        '/\$projectRoot\s*=\s*(\(string\)\s*)?getcwd\(\)/',
+        '/\$workingDirectory\s*=\s*(\(string\)\s*)?getcwd\(\)/',
+        '/\$root\s*=\s*(\(string\)\s*)?getcwd\(\)/',
+    ];
+
+    /**
+     * The one file allowed to capture an environment block at `getcwd()`.
+     *
+     * {@see \SugarCraft\Code\Agents\Agent} is a PERSISTED config value
+     * object — it has no root of its own and must not grow one, since a root
+     * written into an agent definition file would outlive the session that
+     * captured it. Its rooted path is the `?EnvironmentBlock $environment`
+     * parameter/field a caller holding a session snapshot passes in; the
+     * capture is the documented last resort for the callers that hold none
+     * (AgentManager, ProcessExecutor, WorkflowEngine). The pin below asserts
+     * that rooted path still exists, so the exemption cannot quietly become
+     * a licence to ignore the root.
+     *
+     * The exemption is per-PATTERN, not per-file: only
+     * {@see ROOT_CAPTURE_EXEMPT_PATTERN} is skipped for this file, and the
+     * other five spellings still apply to it. A whole-file `return` would
+     * have disarmed the guard for the one file most likely to grow a new
+     * root-resolving site — a `$projectRoot = getcwd();` added here would
+     * have slid through the check that exists to catch precisely that.
+     */
+    private const ROOT_CAPTURE_EXEMPT = 'Agents/Agent.php';
+
+    /** The single spelling {@see ROOT_CAPTURE_EXEMPT} is excused from. */
+    private const ROOT_CAPTURE_EXEMPT_PATTERN = '/EnvironmentBlock::capture\(\s*(\(string\)\s*)?getcwd\(\)/';
+
+    /**
+     * Every PHP source the guard below scans: all of `src/`, plus the
+     * `bin/candy-code` entry point — which is `src/`-adjacent, carries no
+     * `.php` extension, and is exactly where a "resolve the root here"
+     * shortcut would be most tempting to add.
+     *
+     * Comments are stripped before the patterns run. The scrape is
+     * source-TEXT based, so without this a future docblock quoting
+     * `$root = getcwd()` as the anti-pattern it warns against would fail the
+     * guard spuriously — and the natural "fix" for that is to weaken the
+     * pattern, which is the outcome worth avoiding.
+     *
+     * COST, KNOWINGLY (E257): this yields one data row per `src/` file plus
+     * `bin/candy-code`, so every source file added to the library adds one
+     * test total to the suite. Same growth lands in
+     * {@see \SugarCraft\Code\Tests\Tools\BuiltInToolCorpusTest}'s real-tree
+     * cases, whose class doc-block states the full price.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function crushSourceFiles(): array
+    {
+        $lib = (string) realpath(\dirname(__DIR__, 2));
+        $root = $lib . '/src';
+        $files = [];
+
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+        ) as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $path = (string) $file->getPathname();
+            $relative = str_replace('\\', '/', substr($path, strlen($root) + 1));
+            $files[$relative] = [$relative, self::codeWithoutComments((string) file_get_contents($path))];
+        }
+
+        ksort($files);
+
+        $bin = $lib . '/bin/candy-code';
+        if (is_file($bin)) {
+            $files['bin/candy-code'] = ['bin/candy-code', self::codeWithoutComments((string) file_get_contents($bin))];
+        }
+
+        return $files;
+    }
+
+    /**
+     * The PHP source with every comment and docblock removed, so the scrape
+     * matches real code rather than prose that quotes it.
+     */
+    private static function codeWithoutComments(string $source): string
+    {
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token)) {
+                if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT) {
+                    continue;
+                }
+                $code .= $token[1];
+                continue;
+            }
+            $code .= $token;
+        }
+
+        return $code;
+    }
+
+    /**
+     * @dataProvider crushSourceFiles
+     */
+    public function testNoRootResolvingSiteFallsBackToBareGetcwd(string $name, string $source): void
+    {
+        $exempt = $name === self::ROOT_CAPTURE_EXEMPT;
+        if ($exempt) {
+            $this->assertStringContainsString(
+                '?EnvironmentBlock $environment',
+                $source,
+                'the exemption is only defensible while the rooted path (an injected snapshot) still exists',
+            );
+        }
+
+        foreach (self::BARE_GETCWD_ROOT_SPELLINGS as $pattern) {
+            // One pattern is excused for one file — never the whole list.
+            if ($exempt && $pattern === self::ROOT_CAPTURE_EXEMPT_PATTERN) {
+                continue;
+            }
+
+            $this->assertDoesNotMatchRegularExpression(
+                $pattern,
+                $source,
+                $name . ' resolves a project root with a bare getcwd(). Read the configured root '
+                    . '(App::$root / Chat::$projectRoot / EngineBackend::withRoot()) and fall back to '
+                    . 'getcwd() only when it is null, or `--root` stops here (crush_code.md Phase 0 item 6).',
+            );
+        }
+    }
+
+    /**
+     * Known-OFFENDERS for every bare-`getcwd()` spelling (E322, round 69).
+     *
+     * The real-tree guard above is a one-sided proof: every scanned file is
+     * compliant, so a pattern typo'd into matching NOTHING stays green forever
+     * — and the one file whose shape would exercise
+     * {@see ROOT_CAPTURE_EXEMPT_PATTERN} is exactly the file the guard skips.
+     * These fixtures are the missing positive side. Each row must fire its own
+     * pattern, must spare the sanctioned `$configured ?? getcwd()` fallback,
+     * and must NOT be caught by any sibling pattern — the cross-exclusion
+     * keeps a wildcarded typo from swallowing a neighbour's spelling and
+     * letting its own row go untested.
+     *
+     * @return array<string, array{0: int, 1: string, 2: string}>
+     */
+    public static function bareGetcwdSpellingFixtures(): array
+    {
+        return [
+            'named-argument projectRoot'      => [0, '$chat = Chat::new(projectRoot: getcwd());', '$chat = Chat::new(projectRoot: $configured ?? getcwd());'],
+            'named-argument workingDirectory' => [1, 'spawn(workingDirectory: (string) getcwd(), argv: $argv);', 'spawn(workingDirectory: $configured ?? getcwd(), argv: $argv);'],
+            'capture fallback'                => [2, 'EnvironmentBlock::capture(getcwd())', 'EnvironmentBlock::capture($snapshot ?? self::root())'],
+            'assigned projectRoot'            => [3, '$projectRoot = (string) getcwd();', '$projectRoot = $config->root ?? (string) getcwd();'],
+            'assigned workingDirectory'       => [4, '$workingDirectory = getcwd();', '$workingDirectory = $config->dir ?? getcwd();'],
+            'assigned root'                   => [5, '$root = getcwd();', '$root = $config->root ?? getcwd();'],
+        ];
+    }
+
+    /**
+     * @dataProvider bareGetcwdSpellingFixtures
+     */
+    public function testEachBareGetcwdSpellingCatchesItsOffenderAndSparesItsNeighbours(int $index, string $offender, string $fallback): void
+    {
+        $patterns = array_values(self::BARE_GETCWD_ROOT_SPELLINGS);
+        $this->assertArrayHasKey($index, $patterns, 'fixture row drifted past the spelling list');
+        $own = $patterns[$index];
+
+        $this->assertMatchesRegularExpression(
+            $own,
+            $offender,
+            'spelling ' . $index . ' no longer catches a bare getcwd() — the guard is dormant',
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            $own,
+            $fallback,
+            'spelling ' . $index . ' also fires on the SANCTIONED configured-root fallback — '
+                . 'the guard would reject its own recommended fix',
+        );
+
+        foreach ($patterns as $otherIndex => $other) {
+            if ($otherIndex === $index) {
+                continue;
+            }
+
+            $this->assertDoesNotMatchRegularExpression(
+                $other,
+                $offender,
+                'spelling ' . $otherIndex . ' reached into spelling ' . $index
+                    . "'s offender — two patterns test the same shape and the other's row goes untested",
+            );
+        }
+    }
+
+    public function testTheRootScrapeActuallyFoundTheKnownRootResolvingFiles(): void
+    {
+        // Guards the scrape above from silently passing on an empty or
+        // mis-rooted file set.
+        $found = array_keys(self::crushSourceFiles());
+
+        foreach ([
+            'Runtime.php',
+            'Chat.php',
+            'Cli/Bootstrap.php',
+            'App/App.php',
+            'Agents/TaskList.php',
+            'bin/candy-code',
+            self::ROOT_CAPTURE_EXEMPT,
+        ] as $expected) {
+            $this->assertContains($expected, $found);
+        }
+    }
+
+    /**
+     * A PreToolUse hook that records the `projectRoot` of every context it is
+     * handed, and permits the call so the pipeline runs to completion.
+     */
+    private function recordingHook(): \SugarCraft\Code\Hooks\HookInterface
+    {
+        return new class implements \SugarCraft\Code\Hooks\HookInterface {
+            /** @var list<string> */
+            public array $roots = [];
+
+            public function name(): string { return 'root-recorder'; }
+
+            public function event(): \SugarCraft\Code\Hooks\HookEvent
+            {
+                return \SugarCraft\Code\Hooks\HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string { return '.*'; }
+
+            public function execute(\SugarCraft\Code\Hooks\HookContext $context): \SugarCraft\Code\Hooks\HookResult
+            {
+                $this->roots[] = $context->projectRoot;
+
+                return \SugarCraft\Code\Hooks\HookResult::allow();
+            }
+        };
+    }
+
+    /** A tool that does nothing but exist, so the gate has something to resolve. */
+    private function noopTool(): \SugarCraft\Code\Tools\Tool
+    {
+        return new class implements \SugarCraft\Code\Tools\Tool {
+            public function name(): string { return 'noop'; }
+
+            public function description(): string { return 'Does nothing.'; }
+
+            public function inputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+
+            public function execute(array $args): \SugarCraft\Code\Tools\ToolResult
+            {
+                return \SugarCraft\Code\Tools\ToolResult::success('noop', 'ok', 'call_noop_1');
+            }
+        };
+    }
+
+    /** Issues one `noop` tool call, then answers plainly. No network. */
+    private function toolCallingProvider(): \SugarCraft\Code\Providers\ProviderInterface
+    {
+        return new class implements \SugarCraft\Code\Providers\ProviderInterface {
+            private int $calls = 0;
+
+            public function name(): string { return 'stub-root'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+
+            public function complete(\SugarCraft\Code\Providers\CompleteRequest $r): \SugarCraft\Code\Providers\CompleteResponse
+            {
+                $this->calls++;
+
+                return $this->calls === 1
+                    ? new \SugarCraft\Code\Providers\CompleteResponse(
+                        content: 'calling noop',
+                        toolCalls: [new \SugarCraft\Code\Tools\ToolCall('call_noop_1', 'noop', [])],
+                    )
+                    : new \SugarCraft\Code\Providers\CompleteResponse(content: 'done');
+            }
+
+            public function completeStream(\SugarCraft\Code\Providers\CompleteRequest $r): \Generator
+            {
+                yield new \SugarCraft\Code\Providers\CompleteResponse(content: '');
+            }
+
+            public function embeddings(\SugarCraft\Code\Providers\EmbeddingsRequest $r): \SugarCraft\Code\Providers\EmbeddingsResponse
+            {
+                return new \SugarCraft\Code\Providers\EmbeddingsResponse([]);
+            }
+        };
+    }
+
+    private function skillToolFromBootstrap(): \SugarCraft\Code\Tools\BuiltIn\SkillTool
+    {
+        $tool = $this->toolsByClass()[\SugarCraft\Code\Tools\BuiltIn\SkillTool::class] ?? null;
+        $this->assertInstanceOf(\SugarCraft\Code\Tools\BuiltIn\SkillTool::class, $tool);
+
+        return $tool;
+    }
+
+    private function writeProjectSkill(string $name, string $description): void
+    {
+        $dir = $this->tempDir . '/repo/.candy-code/skills/' . $name;
+        mkdir($dir, 0755, true);
+        file_put_contents(
+            $dir . '/SKILL.md',
+            "---\ndescription: {$description}\nuser-invocable: true\ndisable-model-invocation: false\n---\n"
+            . "# {$name}\n\nBIN INVOKE MARKER BODY\n",
+        );
+    }
+
+    /**
+     * @return array<class-string, object>
+     */
+    private function toolsByClass(): array
+    {
+        $byClass = [];
+        // E675: THE PRODUCTION SHAPE passes a manager — chat() always has one —
+        // so the scanned set this helper feeds is the launch set, Task included.
+        foreach (Bootstrap::tools($this->tempDir . '/repo', taskManager: new AgentManager(
+            $this->createMock(ProviderInterface::class),
+            new SkillRegistry(),
+        )) as $tool) {
+            $byClass[$tool::class] = $tool;
+        }
+
+        return $byClass;
+    }
+
+    private function privateValue(object $target, string $property): mixed
+    {
+        $ref = new \ReflectionProperty($target, $property);
+        $ref->setAccessible(true);
+
+        return $ref->getValue($target);
+    }
+
+    /**
+     * Every class in the real built-in tool set that declares an
+     * `instructionLoader` property, sorted for a stable assertion.
+     *
+     * Reflection over `Bootstrap::tools()` rather than a literal, so the
+     * roster cannot drift from the tools that actually exist. The property is
+     * the right discriminator rather than an interface: `CarriesSessionState`
+     * is about surviving a fork and something could implement it for other
+     * state, whereas declaring this property IS taking the pair.
+     *
+     * @return list<class-string>
+     */
+    private function loaderCarryingToolClasses(): array
+    {
+        $classes = [];
+        foreach ($this->toolsByClass() as $class => $tool) {
+            if ((new \ReflectionClass($tool))->hasProperty('instructionLoader')) {
+                $classes[] = $class;
+            }
+        }
+
+        sort($classes);
+
+        return $classes;
+    }
+
+    private function instructionLoaderOf(object $tool): ?InstructionFileLoader
+    {
+        $property = new \ReflectionProperty($tool, 'instructionLoader');
+        $property->setAccessible(true);
+
+        /** @var InstructionFileLoader|null $value */
+        $value = $property->getValue($tool);
+
+        return $value;
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $this->removeDirectory($path);
+            } else {
+                unlink($path);
+            }
+        }
+
+        rmdir($dir);
+    }
+}

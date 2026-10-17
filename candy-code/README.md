@@ -1,0 +1,2287 @@
+<img src=".assets/icon.png" alt="candy-code" width="160" align="right">
+
+# CandyCode
+
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-code)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-code)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-code?label=packagist)](https://packagist.org/packages/sugarcraft/candy-code)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+
+![demo](.vhs/chat.gif)
+
+A terminal AI coding agent for PHP 8.3+, built on the SugarCraft libraries. It is a SugarCraft program (a real `Model`/`Program` render loop — the MVC-style Model–Update–View pattern — with buffer-diffed output and Markdown-rendered replies) wrapped around a full agent engine: **multiple LLM providers**, model-driven **tool calling** gated by **hooks**, prompt-injecting **skills**, **sub-agents**, an **MCP** (Model Context Protocol — the standard for plugging external tool servers into an agent) client/server, and **SQLite** session history. The interface is a **TUI** (terminal user interface — a full-screen keyboard-and-mouse app drawn in your terminal window).
+
+> **Before you start.** You need **PHP 8.3+**, **Composer**, and the extensions
+> listed under [Install](#install). Platform support: **Linux** is the primary,
+> fully tested target; **macOS** is best-effort; **Windows is not supported**.
+> Terminal acronyms are glossed where they first appear and collected in
+> [docs/GLOSSARY.md](docs/GLOSSARY.md).
+
+```
+┌─ CandyCode ───────────────────────────────────────┐
+│ user> add a test for the Width helper              │
+│                                                    │
+│ assistant                                          │
+│ I'll read the helper first, then write the test.   │
+│   ⚙ Read  src/Util/Width.php                       │
+│   ⚙ Edit  tests/Util/WidthTest.php                 │
+│ Done — added 4 cases covering the clamp edges.     │
+└────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ > run them█                                        │
+└────────────────────────────────────────────────────┘
+ Enter to send · Ctrl+P menu · /exit or ^C to quit
+```
+
+## Contents
+
+This README is the user guide. It runs from installing to everyday use, then
+configuration, then the reference material. Each topic links to its own page
+under [`docs/`](docs/) for the full detail.
+
+| Section | What it covers |
+|---|---|
+| [Install](#install) · [Quick start](#quick-start) | Requirements, picking a provider, the first launch |
+| [Using the TUI](#using-the-tui) | Keys, mouse, panes, steering and queueing, attachments and `$skill` mentions, `!` shell commands, `AI!` comments, slash commands, what a running turn shows, sub-agents |
+| [Sessions and checkpoints](#sessions-and-checkpoints) | New, continue and resume; `/handoff`; `/undo`, `/redo`, `/rewind`, `/diff` |
+| [Configuration](#configuration) | Settings files and tiers, project trust, permission modes, `AskUser`/`PlanExit`, automation |
+| [Providers](#providers) | Provider types, model metadata, fallback models, SGLang specifics |
+| [Scripting and automation](#scripting-and-automation) | `-p`/`run`, flags, exit codes, the JSON document, subcommands, shell-out backends |
+| [Server mode, web UI and attach](#server-mode-web-ui-and-attach) | `candy-code serve`, the browser UI, `candy-code attach`, editors through `candy-code acp` |
+| [The agent loop](#the-agent-loop) · [Capabilities](#capabilities) · [Architecture](#architecture) | How a turn runs and what ships |
+| [Limitations](#limitations) · [Tests](#tests) | What is not finished; how the suite is run |
+| [Credits & inspiration](#credits--inspiration) | Where the design came from |
+
+### Documentation index
+
+| Page | Topic |
+|---|---|
+| [`docs/README.md`](docs/README.md) | The docs index — every page below, grouped, with reading-order notes |
+| [`docs/SETTINGS.md`](docs/SETTINGS.md) | Every settings key, the four file tiers plus the session tier, the settings view (its project-shared tier and narrow layout included), when a change applies |
+| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Every environment variable, including provider credentials and the shell-out backends |
+| [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | The six permission modes, plan mode, `AskUser` and `PlanExit`, the `auto` classifier and its reviewer, rules (and how they bind `ApplyPatch`), read-only shell lines that run unasked, per-part "always" grants and `/permissions`, the four `trustedProject*` keys, the Bash sandbox |
+| [`docs/CONTEXT.md`](docs/CONTEXT.md) | The context engine: pruning, `Prune`/`Compress`/`Recall`, compaction tiers, background summaries, re-injection, overflow recovery |
+| [`docs/AGENTS.md`](docs/AGENTS.md) | Sub-agents: `Task`, background and nested runs, worktree isolation, teams, messaging between agents, the shared board, the live agent lines, the agents strip and the Agent View |
+| [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md) | Writing an agent preset: where it goes, its frontmatter, how grants are enforced, the shared board and the messaging tools in detail |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Every built-in slash command (`/handoff`, `/newrule` among them), and writing your own |
+| [`docs/HOOKS.md`](docs/HOOKS.md) | `hooks.yaml`, every hook event, the exit-code and JSON stdout contract, post-edit lint, diagnostics, auto-commit and auto-test |
+| [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
+| [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
+| [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
+| [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
+| [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, serving your own |
+| [`docs/SERVER.md`](docs/SERVER.md) | `candy-code serve`, remote access (`--allowed-host`, `--allowed-ips`), picking a new session's directory (`--allow-dir-browse`), the `candy-code.v1` protocol, the web UI, `candy-code attach`, editors through `candy-code acp` |
+| [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
+| [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear |
+| [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) | The browser UI that `candy-code serve` hosts |
+
+## Install
+
+```bash
+composer require sugarcraft/candy-code        # as a dependency; the binary is vendor/bin/candy-code
+# or, from a checkout of this package:
+composer install && ./bin/candy-code
+```
+
+Requirements: PHP 8.3+, `ext-sqlite3` and `pdo_sqlite` (the session store),
+`ext-curl` for the HTTP providers, and `ext-mbstring` with `ext-intl` (text
+width and locale handling, used directly by the rendering stack). `ext-pcntl` is strongly recommended:
+each turn runs in a forked child, and without it turns, parallel tool calls and
+sub-agents run in-process and the screen only updates when they finish.
+`candy-code serve` additionally needs `ext-pcntl`, `ext-posix` and `ext-ffi`,
+and serves the browser UI when `sugarcraft/sugar-crush-web` is installed
+beside it. `candy-code doctor` checks all of this for you.
+
+### Install as a user
+
+To put `candy-code` on your PATH without a project of your own:
+
+```bash
+composer global require sugarcraft/candy-code
+export PATH="$HOME/.config/composer/vendor/bin:$PATH"   # older Composer: ~/.composer/vendor/bin
+candy-code doctor
+```
+
+If instead you cloned the `sugarcraft` monorepo, note what you have: it is the
+contributor workspace for all 52 SugarCraft libraries, with `candy-code` as one
+directory inside it. Work from that directory — `cd candy-code && composer
+install && ./bin/candy-code` — which is also what the rest of this README
+assumes.
+
+## Quick start
+
+```bash
+./bin/candy-code            # or vendor/bin/candy-code in a project that requires the package
+```
+
+With no configuration the binary runs the **offline `EchoProvider`** through the full engine, so it launches with zero network and zero keys. Point it at a real model with environment variables:
+
+```bash
+# OpenAI
+export CANDY_CODE_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+export CANDY_CODE_MODEL=gpt-4o          # optional; provider default otherwise
+./bin/candy-code
+```
+
+`CANDY_CODE_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires its built-in tools and the safety hooks automatically — twenty-eight of them ship on every launch (among them Bash, Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, `doctor`, Skill, Lsp — code navigation through a language server — Memory, RepoMap, Todo, Compress, Recall, Workflow, Team and GenerateImage), plus `Task` whenever the launch carries an agent manager; this list is illustrative, the [Capabilities](#capabilities) roster names every one beside its class file. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all (the class is `Tools\BuiltIn\Doctor`; the [Capabilities](#capabilities) roster lists every runtime name beside its class file).
+
+**Generating images and video.** Point the app at a Stable Diffusion server — `sd.baseUrl` in your settings, or `CANDY_CODE_SD_BASE_URL` — then ask the agent for a picture, or type `/generate a cat astronaut --steps 30` yourself. Without a configured server every door refuses **before dialing**: no connection is attempted. The speakable dialects are the A1111/SD.Next `sdapi` family (`sdapi` — the HTTP API shape popularised by Stable Diffusion WebUI; images) and `sglang-diffusion` (images and video); other families the capability probe can detect — ComfyUI, OpenAI-style image endpoints — stay named refusals. Finished files land under `~/.candy-code/media/` (private: directories `0700`, files `0600`); previews are display-only and never stored. `auto` render mode asks the terminal what it supports — the **kitty** and **iTerm2** graphics protocols, **sixel** (a bitmap escape older terminals speak), **chafa** (a fallback that paints images as colored text cells), or half-block characters — `/rendermode` switches it mid-session, and `ui.imageRenderMode` / `CANDY_CODE_MEDIA_RENDER_MODE` pin it at launch. The whole surface — form tabs, presets, the PNG infotext round-trip, the video job ledger, the RPC methods — lives in [`docs/MEDIA.md`](docs/MEDIA.md).
+
+Every environment variable CandyCode reads is documented in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+
+**Where the interactive TUI's diagnostics go.** Parser, provider and runtime warnings are written through PHP's `error_log()`, and in the TUI stderr is the screen being drawn on — so before the TUI starts, `error_log` is pointed at `~/.candy-code/logs/candy-code.log` (directory 0700, file 0600; a log over 5 MiB at launch is rotated to `candy-code.log.1`, and each launch writes a `session start pid=…` header). The ones meant for you also show up in the transcript as system rows. PHP's own warnings and notices go to the same file instead of being displayed, and if PHP hits a fatal error the screen gets one line saying so and naming the log. If your PHP ini already sets `error_log` to something other than stderr, that is left alone. `-p`/`run` and the subcommands are unaffected: they keep writing to stderr. If the log can't be set up (no home directory this process can confirm is yours, or a log directory it can't create), the TUI still launches. In that case the warnings that also have a transcript row are shown only there, and are not written to the screen. Any other `error_log()` line can still appear on the screen, as it did before this change.
+
+### Choosing a provider without editing anything
+
+Three ways to get off the offline `EchoProvider`, from the one you will want
+for real work down to the quickest test:
+
+1. **Bring your own provider key (the recommended path):** the environment
+   variables from the [Quick start](#quick-start) fence above —
+   `$CANDY_CODE_PROVIDER` plus that provider's own credential — with zero
+   third-party involvement. Option 3 persists the same choice so you stop
+   exporting it.
+2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.candy-code/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it; `/model dev-sglang <model id>` switches to that model on it as well. **Switch theme** works the same way for color themes.
+3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.candy-code/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/candy-code` (with no env vars set at all) uses it automatically. `$CANDY_CODE_PROVIDER`/`$CANDY_CODE_BACKEND_CMD`/`$CANDY_CODE_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides. The **model** persists too, separately and per provider: `"models": {"dev-sglang": "<model id>"}` in `config.json` (or your `settings.json`) is the model that provider runs whenever it is selected — at launch and after a switch — unless `--model` or `$CANDY_CODE_MODEL` names one; keyed by provider because a model id means nothing to any other provider. `/model <provider> <model>` writes that entry for you (through the settings view's writer, carrying the other providers' entries along) and switches to it at once — a session started with `--model` or `$CANDY_CODE_MODEL` still runs the model you just picked, and keeps outranking the saved entry at the next launch. There is no top-level `model` key.
+
+For a zero-key look at a real model there is one shortcut: `CANDY_CODE_PROVIDER=dev-sglang ./bin/candy-code`
+selects a maintainer-run test SGLang endpoint (declared in the `.candy-code/config.dev.json`
+that ships inside the candy-code package — not a file in the project you run it in).
+Be honest with yourself about what that is: a demo box (`skynet2.interserver.net`), not a
+service — your prompts leave your machine and are read by a server you do not control, and
+there is no uptime guarantee. Try it; do not bring private code to it.
+
+### Starting in a project, with a first prompt
+
+The project root can also be given as a bare argument: a **first** argument
+that looks like a path (`candy-code ../other-project`, `./app`, `/srv/app`) or
+names an existing directory (`candy-code src`). It is what the
+Bash/Read/Edit/Glob tools are jailed to and where `CLAUDE.md`/`AGENTS.md` and
+`.candy-code/skills` are looked for.
+
+Any other bare words open the TUI with them as its **first prompt**, the way
+`claude "<prompt>"` does: `candy-code fix the login bug` starts a session and
+sends `fix the login bug` as soon as it is up, and `candy-code src fix the
+login bug` does the same rooted at `src`. Only the first argument can be the
+root, so a directory or file named later is part of the prompt
+(`candy-code explain src/Chat.php`). Words are joined with single spaces; quote
+the prompt to keep its own spacing. With `-c`/`--resume <id>` the prompt goes
+to the reopened session (a bare `--resume` puts it in the box once you have
+picked one). On a `-p`/`run` one-shot run, where the prompt was already given,
+a word left over is still a usage error (exit 2) that asks you to quote the
+whole prompt (`-p hi extra`, `-p hi -- extra`), and so is a word before a
+subcommand. A lone second directory — another bare one, or one beside
+`--root` — is refused rather than letting one of them win. `--root` itself
+needs a value that is not an option: `--root --model x` is a usage error rather
+than a root named `--model` (use `--root=<dir>` for a directory whose name
+begins with `-`). Subcommand operands (`session delete <id>`) are not affected.
+
+## Using the TUI
+
+The interactive binary boots a **pane shell** (`App`) that hosts the chat
+model, so the menu bar, pane strip, session tabs and the chat transcript are
+all one component tree — not two parallel UIs.
+
+### Keys
+
+> **Reference — safe to skim.** The full keyboard map for the chat pane; the in-app `?` overlay below is
+> generated live and is always the authority.
+
+| Key | Does |
+|-----|------|
+| `?` (blank input) | Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only two of those six bytes can be typed — space, and `NUL` via `Ctrl`+`Space`. A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other three (tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way, and not in the shipped binary — **`/rewind` to a checkpoint whose transcript contains a tool result, in a `Chat` embedded without a prompt-history file.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; with no prompt file wired, `↑` recalls from the transcript's user rows and so returns that revived message verbatim. `bin/candy-code` always wires `~/.candy-code/prompt_history.jsonl`, whose entries are prompts you typed and sent (trimmed), so there `↑` never produces such a draft. Same for the form feed in the non-blank list above — `Ctrl`+`L` types the letter `l`, not `U+000C`. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
+| `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
+| `/keys` | The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
+| `Enter` | Send |
+| `Enter` (mid-turn) | **Steer** the running turn: the agent reads the message at its next step, and the step's tool calls that have not started yet are skipped (`Skipped to process an incoming message.`) so it reads it before doing more. If the turn ends before its next step, the message is sent as the next prompt instead — never lost. The `queueMode` setting changes what Enter does here: `followup` queues it like `Tab`, `interrupt` stops the turn at its next step (and the call running now) and then sends it |
+| `Tab` (mid-turn, draft in the box) | **Queue** the draft for after the running turn instead of steering it in; it is sent when the turn ends, like any queued message |
+| `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change things; on the **Settings** pane it opens the settings view instead (see `Ctrl+,`). A non-empty draft sends exactly as before, from any pane |
+| `Ctrl+,` | Focus the Settings pane; press it again there (or `Enter` on an empty draft, or type `/settings` — alias `/config` — or pick **View settings** from `Ctrl+P` or the `F10` App menu) to open the **settings view**: every setting, by category, with the value this launch runs with, where it came from (default, a project file, your `settings.json` or `config.json`, the environment, a flag), whether an environment variable or flag locks it, and when a change would apply (live, next turn, restart, next launch). `/` searches every category (`/settings compaction` opens with the search filled in), `←`/`→` switch category, `↑`/`↓` move, and `Esc` clears the search, then closes the view. The last tab, **Files**, lists the settings files and whether this launch reads them — including a project's own `.candy-code/config.json`, which is *not* a settings layer. It also edits: `Enter` opens the highlighted setting in a field (`Enter` stages the value, `Esc` drops it), `r` stages a reset to the default, `t` cycles the file a save writes — **You** (your `config.json`), **This project (local)**, **This project (shared)** (the project's committed `.candy-code/settings.json`; the preview warns it is committed) and **This session only** (memory, until exit) — `i` swaps the list for the highlighted setting's details in a narrow terminal, `s` shows the save preview — the target file, a diff of it and when each change applies — `↑`/`↓` scroll a long one, and `y` (or `Enter`) writes it, `n` (or `Esc`) goes back with everything still staged. `Enter` on one of the `trustedProject*` lists asks whether to trust this project for it and `y` adds the project to that list in your `config.json` (from the next launch). `Esc` with changes staged asks first: `d` discards them, `k` keeps editing, `s` previews the save; `d` on the list arms that same discard question — a second `d` discards, and with nothing staged it closes directly. `e` opens the file the chosen tier saves to (or, on the **Files** tab, the highlighted file) in `$VISUAL`/`$EDITOR` and re-reads it when the editor exits, and `x` / `p` export or import a settings profile (a path prompt; an import only stages). `permissionRules` is edited there too, as one JSON list the launch's own parser must accept whole. Nothing is written without that preview, so the view opens mid-turn too (except as a typed `/settings`, refused mid-turn like every slash command but `/btw`). Many terminals cannot send `Ctrl+,`; the slash command, the palette row and the menu row always work |
+| `Esc` | On an engine turn that reports its steps: stop the running tool, then the turn after the current step. The running call is cancelled, not waited for: a parallel member's process is killed, and a lone `Task` stops at its sub-agent's next tool or step and stays resumable. A sequential tool such as `Bash` still runs to its end. The cancelled call reads `Cancelled by the user (Esc) while it was running.` and the turn's other results are kept. The status bar then reads `stopping after step N · Esc to cancel now`, and any later `Esc` cancels hard |
+| `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (the `doubleEscSeconds` setting). On a turn that reports no steps a single `Esc` only arms the cancel, which is why the status bar reads `Esc Esc to cancel` while thinking |
+| `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
+| `/new` | **Folder picker** for a new session, opened on this project with **▶ Start session here** highlighted (so `/new` `Enter` is a plain new session). `↑`/`↓` move, `Enter` or `→` opens the highlighted directory, `Backspace` or `←` goes to the parent (the directory you left stays highlighted; there is no upper limit — it is your machine), `.` shows hidden directories, `/` types or pastes a path (`Enter` goes, `Esc` stops typing), `s` (or `Enter` on **▶ Start session here**) chooses the directory on screen, `Esc` cancels. Directories only, with a `[project]` badge on those holding `.git`, `composer.json`, `package.json` or `.candy-code`; one you cannot read is refused rather than entered. Another directory asks first — *This restarts CandyCode there* — because one process serves one project: `y`/`Enter` restarts in it with your `--config`/`--model`/`--permission-mode` and a new session, `n`/`Esc` stays. `/new <dir>` skips the browsing. The palette has both **New session** (here, at once) and **New session…** (the picker), and so does the **Session** menu |
+| `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
+| `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
+| `Ctrl+O` | Expand/collapse the most recent tool call's output and thought. Press again within 3 s and each further press walks one transcript row older, cycling back to the newest when the transcript runs out; a burst that times out restarts at the newest. With a palette, picker or overlay open the walk disarms and the key reaches the modal as before |
+| `Ctrl+V` | Attach the **image** on the system clipboard (a screenshot): it is read through `pngpaste` (macOS), `wl-paste` (Wayland) or `xclip` (X11), saved to a private temp directory and inserted into the draft as an `@` mention, so it is attached when you send. Text pastes with your terminal's own paste key as before. No image (or no tool) leaves a notice and the draft untouched. See [Attachments](#attachments) |
+| `Ctrl+R` | Session picker (persisted across turns; `/sessions <query>` opens it already filtered). Rows are grouped Pinned / Today / Yesterday / by date and show the title, when it was last used, its turns, provider/model and a badge (`⠋ live`, `⧗ bg`, `+N ag` sub-agents, `⑂` branch); the footer names where it was opened, its branch and the last prompt. With the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page. `/` filters (fuzzy, over title, last prompt, agent, id and branch — `k`/`j` keep moving outside it; `Enter` on a filter word that reads like a slash command is refused with a notice routing you back to the input, so a command is never mistaken for a filter), `Space` previews the last messages, `r` renames in place, `d` deletes after a second `d` (sub-agent sessions go with it, branches are kept unless you confirm with `D`), `p` pins, `f` forks and switches to the copy, `x` archives, `a` shows archived sessions and `u` brings one back, `Tab` shows sub-agent sessions under their parent, and `Ctrl+B` keeps the current git branch's sessions. Inside the filter `Ctrl+E` / `Ctrl+D` / `Ctrl+F` rename, delete and pin. The highlighted row also carries a clickable `✎ ★ ✕` (rename, pin, delete). The session on screen cannot be deleted or archived |
+| `Ctrl+D` | Open the image generation form: prompt, params and seed sections with `g` to generate (same door as the **Generate image** palette row and a bare `/generate`; dead while another modal is up. img2img, inpaint, hires, refiner and scripts rows are live; video controls — frame ladder, fps, resolution class, CFG and a first-frame slot — live on the form's video tab) |
+| `Ctrl+A` | Same dispatch as typing `/agents` |
+| `Alt+↓` | Focus the **live agents strip**, the one row above the input box that lists the delegated runs that are live, plus finished ones for 30 s: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`. Then `←`/`→` (or `↑`/`↓`) move, `Enter` opens the run in the **Agent View** (its own transcript in place of the main one — see *What you see while a turn runs*), `c` stops it (only that run's `Task` call; the turn goes on), `x` dismisses a finished run or stops a running one, and `Esc` or `Alt+↑` gives the keyboard back. Any other key gives it back too, and lands in the input box. A click on a run on the strip opens it the same way. While the strip shows, it replaces the agent list below the input |
+| `Alt+M` | Toggle **plan mode** between turns: into `plan` from any mode, and back to the mode you left. In `plan` the agent reads and explores but every change is refused except a Markdown plan in `.candy-code/plans/`, and the prompt tells it so. The agent is told about each switch once — a switch you undo before sending anything is never sent — and the status bar shows any mode other than `default` (`plan mode (Alt+M to leave)`). `Shift+Tab` stays the backward pane cycle. See [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#setting-the-mode) |
+| `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
+| `Ctrl+X` `c` / `p` / `s` / `o` / `b` (Agent View) | Control the agent on screen: `c` **cancels** it at its next tool or step (it stays resumable; press again within 3 s to stop it at once), `p` **pauses** it at its next step boundary — `⏸ paused` on its line, for 10 minutes at most, then it goes on by itself so the parent turn never hangs — and `p` again lets it go on, `s` cancels **every** running agent, `o` **opens it as a session**: once it has finished, its stored sub-agent session becomes the session on screen, a normal one to type into (not while a turn runs), and `b` **sends it to the background**: at its next tool or step it is saved and a background session continues the same conversation, its `Task` call returns at once (`⧗ moved to the background` on its line) so the parent turn goes on, and the result is announced into the chat when the session finishes, like any background agent. Only a run the main conversation delegated can go — a nested run, or one on a launch that cannot start background sessions, says so and keeps running |
+| `Ctrl+G` | **Broadcast**: the composer sends to every running agent of the batch at once (an empty box reads `message all 3 agents…`); it opens the Agent View on the newest running agent when none is open. `Ctrl+G` again goes back to the one on screen |
+| `Enter` (Agent View) | Send the draft **to the agent on screen** — the input box is its composer while the view is open (an empty box says `message <agent>…`). A running agent reads it at its next step; a finished one is continued by a follow-up run of the same conversation. Idle or mid-turn alike, and never to the main model. A `/command` or `!command` still runs as one |
+| `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
+| `Up` (empty input) | Recall the last prompt you sent — press again to walk further back, into earlier sessions too (a fresh launch's first `Up` is the previous session's last prompt). History lives in `~/.candy-code/prompt_history.jsonl`; editing a recalled prompt ends the walk |
+| `Down` (while recalling) | Step forward through recalled prompts; past the newest one, the draft you were typing comes back |
+| `Right` (empty input) | Take the grayed suggestion — after each turn the empty box shows a guess at your next message (`CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1` turns it off) |
+| `Page Up` / `Page Down` | Scroll the transcript a screenful |
+| `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead, and with the cursor at the end of an `@path` mention it completes the path the way a shell does (a unique file gets a trailing space, a directory its `/`, several matches their common prefix; no match leaves the draft as it is) — and at the end of a `$name` mention, the name of a skill you can invoke (`$sec` → `$security-audit `; a `$` word no skill name starts with, such as `$HOME`, leaves `Tab` alone): completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
+| `Shift+Tab` | Cycle pane focus backwards (same docked list) |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions |
+| `Ctrl+L` | Repaint the whole frame - clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
+| `F10` | Open the menu bar |
+| `y` / `n` / `a` / `p` / `e` / `r` / `x` | Answer a permission prompt: once / refuse / allow calls like this one for the session (the `a` row names the scope — `Bash(git status *)`, or one grant per part of a pipeline or chain such as `Bash(npm test *), Bash(tail *)`, which then covers any later line made only of those commands and read-only ones — and a transcript row says what was allowed; `/permissions` lists and revokes, part by part) / **save** that scope for good (`p` — `a`'s answer plus its patterns written to `permissionRules` in `config.json`, so later sessions allow it without asking; only offered where a configured rule reproduces the grant — a per-part pipeline scope and an exact-call grant have no rule form — and saved rules land after any you wrote by hand, so your `deny` still wins) / **edit** that scope first (the draft box is prefilled with it — a comma-separated list for a per-part grant; `Enter` saves it and allows the call, refused unless it covers this call; `Esc` goes back) / refuse **with a note** — type why (it goes into the draft box and the modal shows it), `Enter` sends the refusal with your words for the agent to read, `Esc` goes back to the question / refuse **and stop** the turn after the current step. **While a prompt is up it owns the keyboard** — nothing reaches the input box — but it only answers to a letter while it is *armed*, and the first key you press that is not an answer disarms it. So typing a slash command at a live prompt now does nothing at all: measured, `/keys`, `/init`, `/agents`, `/branch main`, `/compact` and `/new` are all swallowed whole. `Enter` re-arms (and answers nothing), `Esc` refuses in any state, and the modal says which state it is in. The one thing that still answers on the first keystroke is a message that *begins* with `y`, `n`, `a` or `p` — those are the answers. A question that cannot be remembered (one of your hooks asked it, or `auto` flagged a security finding) offers no `a` and says why; where `p` has no rule form to save (a per-part pipeline scope, an exact-call grant) its row is left out too. When the agent asks you a question itself (`AskUser`, `PlanExit`) the modal is titled for it and words the same keys as answers: `1…6` picks one of `AskUser`'s choices, `y` takes the first (or approves the plan), `r` is your answer in your own words (or what should change in the plan), `n` declines, and `a` is not offered |
+
+`Ctrl+P`, `Ctrl+O`, `Ctrl+V`, `Ctrl+A`, `Ctrl+W`, `Ctrl+L` and `Ctrl+C` always belong to the chat
+content model — the shell never claims them, in any pane, so hosting chat
+inside the shell cannot silently steal a binding. `Ctrl+R` belongs to the chat
+too, with one declared exception: while a shell view is itself driving the
+keyboard (the agent dashboard, an open skill picker, an open `F10` menu) the
+shell keeps it, because the picker it opens is painted by the chat those views
+cover and moved by the `↑`/`↓`/`Enter` those views claim. Leave the view and
+`Ctrl+R` works as usual.
+
+The table above is a summary of the chat pane; **the reference `?` opens is the
+authority**, and it covers the overlays too (palette, session picker, permission
+prompt, agent view, agents strip, agent transcript, skill picker, menu bar, mouse). It is generated from
+the same registry the running app consults for its bindings — so the screen
+cannot describe a keyboard the app does not have — and the suite presses every
+row it lists (and every "or …" alternate a row's description promises) through
+the real handlers, so a binding that stops working fails the suite instead of
+quietly staying in the docs. A chord that some handler claims but nothing acts on yet is
+marked dormant in the registry and deliberately left OUT of the reference —
+still claimed, so it cannot regress into typing its own letter into the input
+box, but not advertised either.
+
+### Mouse
+
+Mouse mode is on by default (`CANDY_CODE_DISABLE_MOUSE=1` turns it off). Zones
+are registered during the render pass, so clicks land on what you see: wheel
+scrolls the transcript, clicking a tool call or a `💭 Thought` row
+expands/collapses it, clicking a `Task` row's live agent line (or an agent on
+the strip) opens that agent's transcript, clicking a session tab switches sessions, clicking a docked pane's header focuses that
+pane, clicking a pane tab on the menu bar toggles its docking (see below),
+clicking a palette/picker row selects it, clicking the menu bar opens a
+menu, and in the settings view a click on a category tab switches to it, a
+click on a row highlights it and the wheel moves the highlight. Click-vs-drag is
+discriminated so a text-selection drag does not fire the zone underneath it.
+
+Dragging across the transcript selects text: the covered rows highlight as
+you drag, and releasing copies the selection — OSC 52 (the terminal clipboard escape sequence) to the terminal, plus
+the host clipboard tool (`tmux load-buffer -w` inside tmux, where an app's own
+OSC 52 is ignored by default; otherwise `pbcopy`, `wl-copy`, `xclip` or
+`xsel`). The status bar confirms `✓ copied N chars`, and the highlight stays up
+until the next click, key, wheel notch or resize (Ctrl+C over it just dismisses
+it). Only the transcript's text column is selectable, so borders and padding
+never land on the clipboard.
+
+### Pane docking
+
+Six panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**,
+**Settings** and **Todo** to the right — and the chat owns whatever is left over. The
+menu bar's right end carries a tab for chat plus each dockable pane, and the
+tab tells you the whole state at a glance: muted when the pane is undocked,
+full foreground when it is docked, bold-underlined when it also holds focus.
+Below about a hundred columns each tab shrinks to its icon (`[◫]` for Files)
+so the menus keep their room, the `Currently:` indicator still naming the
+focused pane; on a very narrow terminal the indicator drops its prefix too.
+Clicking a tab toggles docking — docking lands the pane on its home side and
+focuses it; undocking the focused pane hands focus back to chat. Clicking the
+**Chat** tab never hides anything (the center pane is always up); it just
+returns focus. `/pane dock left|right` and `/pane toggle [name]` drive the
+same state from the keyboard. Dragging either header of a docked pane — the
+frame's title row, or the menu-bar tab standing for it — carries the pane to
+the side under the release: the side band itself, or the outer third of the
+chat facing it (so an empty side, which paints no band, is still a target);
+dropping in the chat's middle third cancels, and the release row picks the
+slot within the destination stack. While the drag is live, a heavy `┏━┓`
+outline marks the region the release would dock into (labelled with the pane
+and side), or a "release here to cancel" hint shows over the middle third. A pane may dock on either side, not only
+its home side. To resize a side, press on the border between it and the chat —
+the side box's edge, the divider, or the chat's own edge, anywhere down the
+full height — and drag; no modifier key is needed (Esc mid-drag cancels).
+
+Focus decides who answers `Tab`, `Shift+Tab` and `Enter`; typing a printable
+character always reaches the chat draft regardless of focus, as do `Ctrl+O`
+(expand/collapse the newest tool output and thought) and the other always-chat chords.
+`Tab`/`Shift+Tab` walk the docked frame — chat, then the left column
+top-to-bottom, then the right — and wrap; `Esc` from any docked pane falls
+back to chat; `Enter` on an empty draft from a docked pane opens the command
+palette (see the keys table). What a focused pane then does with the keys the
+shell leaves alone varies, and is by design: the docked panes reuse the
+existing feature views rather than new bodies — **Chat** is the full editor, the `/`
+popup completing as you type; **Agents** is a real dashboard (`c` cancels the
+selected run — again within 3 s to stop it now — `r` resumes a paused run or
+continues a finished one, `s` stops every running run — press again within 3 s to confirm — `q` leaves; `Alt+1…9`,
+enter to peek or attach); **Skills** drives its picker (arrows and
+enter) whenever the picker is open — `Ctrl+S` opens it; **Files** and **Tools**
+are read-only listings — their focus buys you the divider-resized view, the
+`Ctrl+O` peek, and the `Enter` palette door; **Settings** is a read-out pane
+summarising the live configuration — its footer names its door, and `Enter`
+from that pane (or `/settings`) opens the full settings view, every key with its
+value, source and apply mode; theme and model still change through `/theme`,
+`/model` and the palette; **Todo** is a read-out of the agent's own checklist —
+the list its `Todo` tool last wrote for this session (☑ done, ▸ in progress,
+☐ pending, ☒ cancelled, the done count in the title), updated live as the
+turn runs. The list is kept in the session's metadata, so it survives
+compaction and `/resume`; once the model has gone six steps without seeing it
+— or compaction took the call that wrote it — the next turn re-shows it to the
+model as a hidden reminder ending "Never redo or re-verify completed work
+because of these notes." A list with nothing left open is never re-shown.
+
+### Sending, steering and queueing
+
+`Enter` sends the draft; `Alt+Enter` (or `Shift+Enter` / `Ctrl+Enter` where
+the terminal reports them) starts a new line, and `/editor` composes a long
+prompt in `$VISUAL`/`$EDITOR`. `Up` on an empty box recalls earlier prompts,
+across sessions, and `Right` takes the greyed suggestion of what you might
+send next.
+
+While a turn is running, what you type is not lost and does not wait for you
+to cancel:
+
+- **`Enter` steers** the running turn (the default, `"queueMode": "steer"`):
+  the agent reads your message at its next step, and the step's tool calls
+  that have not started yet are skipped so it reads it before doing more. If
+  the turn ends first, the message is sent as the next prompt.
+- **`Tab` queues** the draft for after the turn instead, and queued messages
+  go out in order as each turn ends.
+- `"queueMode": "followup"` makes `Enter` queue like `Tab`;
+  `"queueMode": "interrupt"` makes it stop the turn at its next step (and the
+  call running now) and then send.
+- **`Esc`** stops the running tool and then the turn after its current step,
+  keeping the reply so far; **`Esc` `Esc`** (within `doubleEscSeconds`)
+  cancels at once.
+- Slash commands are refused mid-turn (they could rewrite the history the turn
+  is appending to), except `/btw <question>`, which asks the cheap title model
+  a side question about the conversation and keeps both out of it, and bare
+  `/exit`. A `!command` waits in the queue and runs when the turn ends.
+
+With `"notify": "bell"` (or `"osc9"` for a desktop notification) the terminal
+is told when a turn ends and when a permission question is waiting.
+`/goal <condition>` and `/grind <condition>` keep the agent working, turn after
+turn, until the title model judges the condition met from the evidence in the
+transcript (at most 10 and 50 follow-up rounds); see
+[`docs/COMMANDS.md`](docs/COMMANDS.md#the-built-in-commands).
+
+### Attachments
+
+Mention a file with `@` and it is attached to that prompt: `explain @src/Chat.php`
+or, for a path with spaces, `@"design notes.md"`. A mention is `@` at the start of
+the draft or after whitespace (so `me@example.com` stays text); relative paths
+resolve against the project root, `~/` against your home, and an absolute path is
+taken as written. `Tab` completes the path under the cursor.
+
+- **Files** are read once, when you press `Enter`, and that snapshot rides on the
+  message — so a later edit does not change what an earlier turn showed the model,
+  and the request's cached prefix stays stable. The model receives the text inline
+  as a `<file path="…">` block after your prompt, on every provider. Text over
+  256 KiB is truncated (and the transcript says so); a binary file that is not an
+  image is refused with a notice.
+- **Images** (PNG, JPEG, GIF, WebP, by their magic bytes, up to 5 MiB) are sent as
+  the provider's own image part — `image_url` on OpenAI, SGLang, Custom and the
+  `anthropic` type; `image` blocks on Claude-on-Vertex and Bedrock; `inlineData` on
+  Gemini. Attach one with `@shot.png`, by dropping the file onto the terminal (a
+  paste that is nothing but an image's path becomes a mention), or with `Ctrl+V`,
+  which reads the clipboard's image.
+- **A model without vision never drops an image silently.** Whether a provider may
+  be sent one is its `supportsVision()`: OpenAI's vision families (`gpt-4o`,
+  `gpt-4.1`, `gpt-4-turbo`, `gpt-4.5`, `gpt-5`, `o1`, `o3`, `o4-mini` — not
+  `gpt-4`, `gpt-3.5-turbo` or `o1-mini`/`o3-mini`), `anthropic`, Claude and Gemini on
+  Vertex, and Claude 3+/Nova Lite/Pro/Premier on Bedrock answer yes; SGLang asks
+  the server (`/model_info`'s `has_image_understanding`); `custom`, `claude-code`,
+  an OpenAI model outside that list and the offline echo provider answer no. For a
+  no, the image goes to the model as a one-line text placeholder naming it, and a
+  notice after the reply tells you it was not seen. The `openai`, `sglang` and
+  `custom` provider blocks accept `"supportsVision": true|false` to override that
+  answer.
+- Under each prompt the transcript shows a `📎` row naming what it attached; a
+  mention that looks like a path but matches nothing, a directory, or the
+  21st file of one prompt gets a notice instead of an attachment.
+- `@` forms inside a [file-based command](#your-own-slash-commands) are that
+  command's own include syntax, resolved (or refused) by its trust tier — they are
+  never read as attachments.
+- **Keyword mentions** attach context that is not a file, as a
+  `<context source="…">` block (at most five per prompt, each capped at 256 KiB):
+  - `@diff` — your staged and unstaged changes to tracked files against `HEAD`
+    (untracked files are not in it); `@diff:<ref>` against a branch, tag or commit.
+    Read with plumbing `git diff-index`, so it never rewrites your index, bounded
+    at 5 s.
+  - `@session:<id>` — another session's conversation, by id, name or a unique id
+    prefix (the `--resume` rule); a long one keeps its most recent 256 KiB.
+  - `@https://…` / `@http://…` — a web page, fetched through `WebFetch`'s guards
+    (loopback, private, link-local and metadata addresses are refused before any
+    connection, redirects and status codes are checked) and refused outright when a
+    `Deny WebFetch(domain:…)` rule names its host; the model is told the page is
+    untrusted data, and fence tags inside it are escaped.
+
+  The keywords are reserved **before** any path lookup: `@diff` is the diff even
+  when the project has a file named `diff`, which is still `@./diff` or `@"diff"`.
+  Like files, they are read once, on `Enter`, and survive a resume.
+- **Skill mentions** — `$name` attaches a skill's body for this turn only:
+  `$security-audit the auth module`. A token counts only when it names a skill
+  you can invoke, so `$HOME` or `$1` in a pasted shell line stays text, and a
+  `$` inside a code span or fence is never a mention. At most three per prompt;
+  a disabled skill gets a notice instead. See
+  [`docs/SKILLS.md`](docs/SKILLS.md#name-in-a-prompt-one-skill-for-one-turn).
+
+### Shell commands (`!`)
+
+Start a line with `!` to run it as a shell command yourself: `!git status`,
+`!vendor/bin/phpunit tests/Foo.php`. It runs the way the agent's `Bash` tool
+runs, as `bash -c` in the project root, in the background so the TUI stays live.
+It is bounded at 600 s and at the tool's output cap. When it finishes, its exit
+code and output land in the transcript as context the model reads on your next
+prompt. It calls no model and costs nothing until then. While it runs it holds
+the turn the way a reply does: what you send meanwhile waits behind it, and
+Esc Esc stops it, killing the command and everything it started. Escape
+sequences are stripped from the output.
+
+Nothing asks permission, because you typed it. Policy you configured still
+applies: a `Deny` rule that matches the command refuses it in every mode, plan
+mode runs only a command it can prove read-only, and a read-only window refuses
+it like any prompt. Typed mid-turn, it waits in the queue and runs when the turn
+finishes. A lone `!` is an ordinary prompt.
+
+### Prompts from your editor (`AI!` comments)
+
+With `"watchFiles": true` in your own settings, you can leave the instruction
+where the change belongs and save the file:
+
+```php
+// retry this call on a timeout AI!
+```
+
+A comment that ends (or starts) with `AI!` asks for a change and `AI?` asks a
+question; the idle TUI then sends one prompt naming every `AI` comment it
+knows of, with their files attached as `@` mentions. A plain `AI` comment is
+context: it is listed with the others but sends nothing on its own. `#`, `//`,
+`--`, `;`, `/*` and `<!--` comments count, at the end of a code line too.
+
+- Only what changes **after launch** fires: the first scan reads nothing, so an
+  `AI!` already committed in a cloned tree does not start a turn.
+- Each action comment fires **once**, until it disappears from its file; the
+  agent's own edits to that file do not send it again.
+- The watcher polls every 2 seconds and only while the chat is idle — no turn
+  running, an empty input box, nothing queued and no modal open — so it never
+  sends over a draft. Dot-directories, `vendor/` and `node_modules/` are not
+  walked, symlinks are not followed, and it watches at most 5,000 files.
+- The prompt goes through the same pipeline as a typed one: the turn hooks, the
+  permission gate and the attachment bounds all apply.
+- `watchFiles` is **user tier only**: a project file cannot turn it on, because
+  it makes text in the repository's files your next instruction.
+
+### Slash commands
+
+<!-- commands:roster:begin -->
+`/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
+`/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
+`/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff` `/help`
+`/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices`
+`/pane` `/permissions` `/play` `/pruning` `/recompress` `/redo` `/rename`
+`/rendermode` `/rewind` `/rules` `/sendto` `/sessions` `/settings` (`/config`)
+`/share` `/skills` `/sweep` `/theme` `/undo` `/websearch` `/workflow`.
+<!-- commands:roster:end -->
+
+The parenthesised spellings are aliases: they dispatch, but they have no
+`CommandRegistry` row of their own, so no surface advertises them. The roster is
+generated from the one-file-per-command specs under `builtin-commands/` by
+`php tools/gen-command-docs.php --write`.
+
+By task (every command, with its arguments, is in
+[`docs/COMMANDS.md`](docs/COMMANDS.md#the-built-in-commands)):
+
+| Task | Commands |
+|---|---|
+| Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/clear` |
+| Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n]` |
+| Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
+| Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
+| Agents | `/agents [name\|run id]` |
+| Configuration | `/settings [search]`, `/model [provider [model]]`, `/theme`, `/permissions [mode <name> \| revoke <n\|all>]`, `/rules [name]`, `/newrule [focus]`, `/memory …`, `/mcp …`, `/budget [amount\|off]` |
+| Interface | `/pane …`, `/layout reset`, `/keys`, `/help`, `/notices`, `/exit` |
+
+`/permissions` answers, in the transcript, what this session is actually gated
+by: the mode, the source it came from (`--permission-mode`, the env var, or the
+file — named), the rules in the order they are tried, and where the Auto-mode
+circuit breaker stands. Every line is read off the launch's live
+`PermissionGate` rather than re-derived from config, because a permission
+screen that disagrees with the gate is worse than no screen. It is READ-ONLY in
+the strong sense — `PermissionGate::evaluate()` moves the Auto strike counters,
+so opening this must not, and does not, go anywhere near it. To CHANGE the
+mode for this session, type `/permissions mode <name>` between turns
+(`default`, `accept-edits`, `plan`, `auto` or `bypass-permissions`; `dont-ask`
+only when the session was launched in that mode). Switching into
+`bypass-permissions` is a human-typed choice, prints
+a loud warning beside the confirmation, and keeps only the deny-rule +
+`rm -rf /` floor. Or press `Alt+M`
+to toggle `plan` — the report says so, and so does every permission prompt
+(`mode: default · Alt+M plan · /permissions mode <name>`). To change it for
+every launch, use `--permission-mode`, `$CANDY_CODE_PERMISSION_MODE`, or
+edit `permissionMode` in `~/.candy-code/config.json` — or in
+`~/.candy-code/settings.json`, which is read for `permissionMode` and
+`permissionRules` too and which `config.json` outranks where both set a key.
+Naming only one of the two files is how this paragraph, and the report itself,
+read for one round: rules written in the file that was not named still load,
+so a reader who followed the sentence and saw no change had been sent to edit
+the wrong file. Below the policy it lists the session's **grants** — what
+`a` remembered at a permission prompt, numbered — and `/permissions revoke
+<n>` (or `revoke all`) takes them back. Those two subcommands are the only
+things it changes. Every other spelling is answered locally — `/permissions rules` and
+`/permissions --help` get the same screen. Unlike `/keys`, it is never
+handed to the model: a question about the local gate answered by the one
+participant that cannot see it comes back fluent and wrong.
+
+`/notices` is the launch's warning record with the caps taken off. The
+transcript seeds launch warnings as clipped rows on a 24-slot shelf, and the
+narrowed agent-tool-grant sentences arrive pair-packed into at most two
+aggregate rows — enough to say "something was configured quietly", not enough
+to read. `/notices` restates the whole shelf, the sentences the shelf overflowed
+past its cap, and the full grant list from the live collector, one numbered
+line per fact. Nothing new is stored: it reads the same sources stderr printed,
+which is the point — the panel exists so truncation ends somewhere inside the
+app rather than only in a scrollback. It takes no argument; the record is
+already total.
+
+`/context` (or `/tokens`) answers "what is filling my context window?". The
+status bar's `~81K / 131K` is the history alone; every request also carries the
+system prompt and the tool schemas. `/context` prints the next request's
+estimated size split into the system prompt **per layer** (base, maxims, repo
+map, rules, project instructions, memory, skills, `<env>` — each with its
+stability), the tool schemas, the history (and how many UI-only rows were never
+sent), the five largest messages, and the share of each prompt the provider
+served from its cache — for the last reply and across the session — and how
+many requests lost the prefix the request before them had cached (cache
+breaks, the newest with its cached share before and after). It also
+says what the session's pruning takes out of what the model is sent — pruned
+tool outputs (the newest named by ref, `r17`, with why and by whom, and the
+files they read grouped by kind, `code ×3, config ×1`), superseded
+state rows and an active step summary — and the total is the estimate after
+it. `/sweep` prunes the tool outputs since your last prompt (`/sweep 5`: the
+last five), and `/pruning auto|manual|off` sets how much happens on its own for
+this session (default from `contextPruning.mode`); the transcript keeps every
+row either way. `/compress [focus]` asks the model to compress the most
+significant closed part of the conversation into its own summary (the
+`Compress` tool, offered only on that turn); the transcript marks each such
+section with a `▣ Compressed b3 · <topic> · −41K +2.4K` row, the status bar adds
+what the ledger takes out (`−52K pruned`), and `/decompress b3` /
+`/recompress b3` send the section in full again or restore the summary. Token figures are script-weighted estimates (`~`); the cache
+figures are the provider's own. A part a backend cannot report — a command backend assembles no
+prompt of its own — prints as "not measured", never as zero. It is read-only,
+local and calls no model.
+
+Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
+(`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each
+command's **argument hint** (`/rename [<name>|--auto]`) — fitting the whole row to the
+terminal rather than letting it run off the edge: the description gives up
+columns first, then the hint, and the name (the row's identity) last.
+
+`/help` lists every command the registry advertises, with its argument hint —
+that is the list above without the five aliases: `/agents`, `/bg`, `/context`,
+`/exit` and `/settings` appear, `/agent`, `/background`, `/tokens`, `/quit` and
+`/config` do not. `tests/Commands/SlashDispatchTest.php` fails if a sixth unadvertised alias
+turns up without a reason written next to it. `/model` on its own opens the
+same provider picker `Ctrl+P` → **Switch model** opens; `/model <provider>`
+switches straight to one, and an unknown name says so in the transcript instead
+of failing silently. `/clear` empties the transcript and **keeps** the session —
+its id, its name on disk and its checkpoints all survive, so `/rewind` still
+reaches the turns it cleared. That is the opposite trade to **New session**,
+which mints a fresh id and leaves the conversation where it was.
+
+**New session**, **Pin or unpin session**, **Delete session…** and **Open docs**
+are palette-only actions (`Ctrl+P`) — they
+have no slash spelling, so `CommandRegistry` keeps them out of the `/` popup and
+`tests/Commands/SlashDispatchTest.php` fails if a row gains a popup entry
+without gaining a dispatch handler.
+
+**File-based custom commands** (`.candy-code/commands/*.md`) are loaded and
+dispatched: `bin/candy-code` builds a `Commands\CommandLoader` per launch, and a
+`*.md` under either commands directory is listed in the "/" popup and in `/help`
+and runs when you type it. See [Your own slash commands](#your-own-slash-commands)
+for the template syntax and for what a command file is and is not allowed to do.
+
+`/bg` really does run the work: it dispatches onto a `BackgroundSupervisor`
+that `bin/candy-code` constructs per launch, and the result comes back into
+the transcript. When the session settles — completed, failed or timed out —
+its answer arrives as a user-role message the model reads: a
+`[Background session <id> ('<name>') completed]` header, the task, the output
+(up to 16,000 characters, the clip announced), and a stats line with the
+runtime, the tokens and cost once the daemon reports them, and for a `/fork`
+session the `candy-code --resume <id>` that reopens its transcript. If no turn
+is running it is sent at once as the next turn; otherwise it waits in the queue
+and goes out when the running turn finishes, exactly like a prompt typed
+mid-turn, and the half-typed draft in the box is kept either way. Sessions that
+settle together share one turn, and a session you ended with `/bg stop` starts
+none. The daemon outlives the TUI: quit and relaunch in the same project, and
+the new launch re-adopts it from a per-uid session index and reports its result
+the same way, even one that finished while candy-code was closed. `/fork`
+branches the current session.
+
+`/budget` reports what this launch has spent, as the **provider** counted it,
+and optionally caps it. `/budget 5` sets a $5 ceiling, `/budget off` clears one,
+and `/budget` on its own prints the running total plus the token breakdown that
+does not fit on the status bar. `$CANDY_CODE_MAX_COST` sets the same ceiling at
+launch, and so does the `maxCostUsd` setting when the variable is unset; either
+refuses to start at all if what you set is not a ceiling (`5USD`, `0`, `1e309`)
+rather than running uncapped without saying so. Four things about it are worth
+knowing before you rely on it:
+
+- It refuses the **next** turn once the reported spend has reached the cap; it
+  does not abort a turn in flight (the work happens in a forked child, whose
+  figures only reach the parent when the turn settles). So the final total
+  overshoots by at most the one turn that crossed the line, and the refusal
+  message says so.
+- It only ever refuses on numbers a provider actually reported. A streamed turn
+  commonly reports **no** usage at all, and a self-hosted provider genuinely
+  costs nothing — so a session nothing has been reported for is never refused.
+  That is a budget guard, not a spending control.
+- It governs every provider call this app makes on your key, not only the turns
+  you type. `/compact`'s model-written summaries are the other one — a capped
+  session still compacts, on the local heuristic, and the transcript says the cap
+  is why. The session titler needs no separate gate: it only ever rides along
+  with a turn the cap already let through.
+- What `/budget` sets lives for the launch: it is never written back, so a cap
+  you typed for one session cannot silently refuse turns in a later one whose
+  spend you never looked at. A cap meant to outlive the launch is the
+  `maxCostUsd` setting, in your own `settings.json` or `config.json` (or the
+  settings view, whose save also applies it to the running session — unless
+  `$CANDY_CODE_MAX_COST` is set, which still wins): every launch starts with it, `/budget`
+  can still raise, lower or clear it for the session at hand, and a project file
+  can never set it — a checkout may neither cap your turns nor lift your cap.
+
+### Your own slash commands
+
+Drop a markdown file in `~/.candy-code/commands/` (yours) or
+`<project>/.candy-code/commands/` (the checkout's) and its name becomes a slash
+command: `review.md` gives `/review`, `deploy/staging.md` gives
+`/deploy/staging`. Optional YAML frontmatter (`description`, `argument-hint`,
+`model`, `subtask`) sets what the "/" popup and `/help` show; everything after it
+is the prompt that gets sent.
+
+```markdown
+---
+description: Review a diff and be blunt
+argument-hint: <path>
+---
+Review $1 for correctness bugs. Focus on: $ARGUMENTS
+```
+
+- `$ARGUMENTS` is everything typed after the command name, verbatim apart from
+  the surrounding whitespace: interior quotes and doubled spaces are kept,
+  leading and trailing whitespace is trimmed.
+- `$1` … `$9` are the same text split on whitespace, with shell quotes honoured
+  and stripped — `/deploy "us east" prod` puts `us east` in `$1`.
+- A placeholder with no argument becomes the empty string; it is not left in the
+  prompt for the model to puzzle over.
+- `$$` is a literal `$`. A `$` that is not a placeholder (`$PATH`, `$(date)`) is
+  left alone, so shell snippets inside a template survive.
+- Substitution is one pass over the whole body, so text that came *from* an
+  argument is never re-expanded.
+- A project file overrides a built-in of the same name, in both the popup and
+  dispatch — and in both spellings, `/compact` and `/compact:arg`.
+- **Except the control plane.** `budget`, `clear`, `exit`, `help`, `model`,
+  `permissions` and `quit` are reserved: a file with one of those names is
+  ignored, the built-in keeps running, and the refusal is printed at launch with
+  the path of the file. These are how you drive and leave the app, so a clone
+  cannot redefine them.
+- A command whose template expands to nothing — a body of just `$ARGUMENTS`,
+  invoked with no arguments — is refused with a note rather than sent as an empty
+  prompt.
+
+The project directory is resolved and checked against the checkout before
+anything under it is read: a committed `.candy-code/commands` symlink pointing
+outside is refused, with the reason printed at launch, rather than turning an
+outside file's contents into a prompt. Commands are discovered once, at launch —
+add a file, restart.
+
+#### Running a command and including a file
+
+Two template forms leave the string. Both are gated, and they are gated
+differently, because they are not the same risk.
+
+``!`cmd` `` runs `cmd` and substitutes what it printed:
+
+```markdown
+Current branch: !`git rev-parse --abbrev-ref HEAD`
+```
+
+- **A command file in your home** (`~/.candy-code/commands/`) is yours, as much
+  as `~/.bashrc` is, and its ``!`cmd` `` runs.
+- **A command file in the checkout** (`<project>/.candy-code/commands/`) arrived
+  with the repository. Its ``!`cmd` `` does **not** run unless you have listed
+  that project under `trustedProjectCommands` in `~/.candy-code/config.json` —
+  the same shape of opt-in as `trustedProjectHooks` and `trustedProjectMcp`, and
+  a separate key so trusting one thing does not trust the others. Untrusted, the
+  form is replaced by a note saying so and the rest of the template is still
+  sent. Clone a hostile repo, type its innocuous-looking `/review`, and nothing
+  runs.
+- Your permission rules apply on top of the above: an explicit `Deny Bash` or
+  `Deny Bash(rm *)` refuses the substitution. A mode that would *ask* proceeds
+  instead — there is no prompt to show mid-expansion, and the file was already
+  authorised by the two rules above.
+- Arguments can never become part of a command. Substitution is a single pass, so
+  a ``!`…` `` you *type* as an argument is prose, and a `$ARGUMENTS` written
+  *inside* ``!`…` `` is not substituted.
+- All the ``!`…` `` forms in one command share **10 seconds** of wall clock
+  between them, not 10 seconds each; whatever is left is what the next one gets,
+  and a form that arrives with nothing left says so. The app is single-threaded,
+  so that budget is how long the terminal can freeze. It is not configurable, and
+  deliberately not settable from frontmatter — that file may be the repository's.
+- Output is capped at 16 KB per substitution and the clip announces itself.
+  stderr joins the prompt only when the command failed, along with its exit code.
+
+`@path` splices in a file:
+
+```markdown
+Follow the conventions in @CONVENTIONS.md when you answer.
+```
+
+- The path is **relative to the checkout and confined to it**, for command files
+  from either directory. `@../../.ssh/id_rsa.pub`, and a symlink under the
+  checkout pointing at the same, are refused with a note. An absolute
+  `@/etc/passwd` is not an include at all — it stays literal and nothing is read.
+- It must end in an extension, and the extension has to be on the LAST segment,
+  so an `@name` mention, an email address, and an extensionless
+  `@../../.ssh/id_rsa` are all left alone — the last of those is not refused with
+  a note, it is simply never treated as an include.
+- 16 KB per substitution, same cap and same announced clip.
+- Unlike ``!`cmd` ``, an include needs no trust opt-in: it is a bounded read
+  inside a checkout you already opened. If you want a file from *outside* the
+  checkout, say ``!`cat ~/notes.md` `` and let the permission gate see it.
+
+### What you see while a turn runs
+
+Tool calls stream into the transcript **as they happen** — the forked child
+emits lifecycle events rather than buffering until the turn ends — each with a
+human-readable description and the command it actually ran, then a
+running→done transition. `Edit`/`Write` results render a real unified diff. A
+no-op edit reports as a no-op instead of success. Denied and interrupted calls
+get their own visual state. Tool results that carry images are labelled and
+rendered inline via sugar-image. Successful tool bodies are hidden by default
+(`Ctrl+O` or a click opens them); an expanded call shows the invocation above
+its output — `$ <command>` for shell calls, `key: value` for other tools. The
+model's thinking streams in full while it thinks, then folds into a collapsed
+`💭 Thought` row once the reply (or a tool call) starts; click the row to open
+or close it (`Ctrl+O` toggles the newest one).
+
+**Context.** The status bar shows the history against the **live model's own
+context window** as its provider reports it (a backend with no model behind
+it, such as the offline echo default, falls back to 100,000 estimated tokens),
+as a token count and a percentage, plus what pruning has taken out
+(`~81K / 131K context (62%, −52K pruned)`). That budget drives compaction at
+submit: at 70% a reminder rides along with the turn (and the summaries the next
+tier will need are requested in the background), at 85% older exchanges are
+summarised first and the rewrite is reported in the transcript, and at 95% a
+turn still over the window after compacting is refused rather than spent on a
+request the provider would reject. By default the reminder is also capped at
+100,000 tokens and automatic compaction at 150,000, whichever comes first, so a
+1M-token window need not reach 700,000 tokens before the first reminder; the
+`compaction.*` settings change every figure, per model too
+([`docs/SETTINGS.md`](docs/SETTINGS.md#compaction-thresholds)). Inside a turn,
+every step's request is measured before it is sent and, when it is over the
+step budget, older tool output is pruned to a one-line placeholder
+(`[Read src/Foo.php — output pruned to save context; re-run the tool if you need
+it]`) and then summarised by the agent's own model; a request the provider
+still rejects as too long, a reply cut off at its output limit and a stream
+that drops mid-reply are all recovered rather than failed. Your transcript
+keeps every output and every row. All of it — and the agent's own `Prune`,
+`Compress` and `Recall` tools with `/sweep`, `/pruning`, `/compress`,
+`/decompress` and `/recompress` — is in [`docs/CONTEXT.md`](docs/CONTEXT.md).
+
+**Steps.** While the turn runs, the status bar names the step it is on, adds
+that step's context figure once the request is over budget, and moves the spend
+readout as each step is billed. On such a turn the first `Esc` stops it after
+the current step's tools finish, with its reply kept, and a further `Esc`
+cancels it at once. A message you send while it runs **steers** it (see
+[Sending, steering and queueing](#sending-steering-and-queueing)).
+
+Beside the context readout, a **spend** readout appears once the provider has
+reported something to show — dollars, and the cap if one is set. It is a
+separate segment from the context figure on purpose: the context number is a
+script-weighted **estimate** (about four characters a token for English and
+code, about one for CJK, more for emoji) and wears a `~`, while the spend is
+the provider's own **count** and wears a `$`. They are never summed. A session
+under a cap that nothing has been reported for reads `$?` rather than `$0.0000`,
+because the two are different claims and the cap is inert in that state.
+
+When you type `/compact` and a provider is configured, the older exchanges are
+summarised **by a model** rather than by the local truncate-and-placeholder
+heuristic — and so is the automatic 85% tier, which usually does not wait,
+because the summaries were already requested in the background when the
+session crossed 70%. The request is the conversation's own (same system prompt,
+tools and history, plus an instruction not to call tools), so it reuses the
+provider's cache and can never raise a permission prompt; it runs on the
+conversation's own model unless `CANDY_CODE_SUMMARY_MODEL` (or the
+`summaryModel` setting) names another, and the spend cap gates it. It goes out
+off the render loop, so nothing freezes, and if it fails the compaction still
+happens on the heuristic and the transcript says which one did it.
+`/compact --self [focus]` instead has the turn's own model write the summary
+with its `Compress` tool, and **you preview it** in the permission modal before
+it applies. See [`docs/CONTEXT.md`](docs/CONTEXT.md#compaction-tiers-between-prompts).
+
+Sessions get a name automatically: after the first exchange a **cheap
+small-model backend** (supplied separately from the conversation backend, so
+naming never costs a second tool-capable agent turn) generates a title, which
+is what `/sessions`, the tab strip and `Ctrl+R` list.
+
+### Sub-agents and the Agent View
+
+The agent delegates with the `Task` tool: a sub-agent from the roster (six
+built-ins — `coder`, `reviewer`, `debugger`, `architect`, `tester`, `devops` —
+plus your own presets under `.candy-code/agents/`) gets a self-contained task,
+runs its own tool loop in its own context, and reports back one result with a
+resume id. Several `Task` calls in one message run in parallel; a sub-agent can
+delegate in turn, up to three levels down; concurrent runs are uncapped by
+default and can be capped through `subagentMaxConcurrent` and `subagentMaxActive`
+(0 or unset means no cap); a
+`background: true` run returns at once and reports when it settles; and an
+`isolation: worktree` agent works in a git worktree of its own.
+
+Each `Task` row gets a **live line** for the run —
+`└ ⠋ Grep "LoginController" routes/ · 7 tools · 0:12 · 4.1K tok` — naming the
+call the agent is in right now, its tool count, elapsed time, tokens and spend,
+ending in `✓`, `✗`, `⏹` or `⏸`. `Alt+↓` focuses the **agents strip** above the
+input box, and a click on a live line (or `Enter` on the strip) opens the
+**Agent View**: that agent's own transcript, live, with the input box as its
+composer — `Enter` sends it a message it reads at its next step, or continues
+it once it has finished — and `Ctrl+X` `c`/`p`/`s`/`o`/`b` to cancel, pause,
+stop all, open it as a session, or send it to the background (it is saved at
+its next step and a background session carries on, so the parent turn stops
+waiting for it). `Esc` goes back. Finished runs are stored as sub-agent child
+sessions under the session that delegated them.
+
+The agent has the same reach without you. `SendMessage` steers a running
+sub-agent it launched or continues a finished one, `Subagents` lists, waits for
+or cancels them, and `InterruptAgent` makes one skip the rest of its step and
+read a message first; a sub-agent answers its parent with `SendMessage` to
+`parent`, and the reply reaches the session's agent the next time it calls
+`Subagents`, fenced as a worker's report that approves nothing. Members of one
+parallel batch also share a **board**: `BoardPost` leaves a short note for one
+peer or for all of them, `BoardRead` reads the board, and a member hears of a
+post for it on its next tool result. Messages go only between an agent and the
+sub-agents it launched, never between siblings, and the board is advice, not a
+lock. Everything about sub-agents, teams, messaging and these controls is in
+[`docs/AGENTS.md`](docs/AGENTS.md).
+
+## Sessions and checkpoints
+
+### Sessions: new, continue, resume
+
+Every launch opens a **new** session. The conversation is saved as it changes —
+every message, tool call, tool result and thought — so any session can be picked
+up again later, with the model seeing the whole earlier exchange. Saves are
+batched: a change is written within half a second, and at once when you switch
+sessions, `/branch`, `/fork` or quit (Ctrl+C included), so only a hard kill
+(`kill -9`, a power cut) can lose the last half-second:
+
+```sh
+candy-code                  # a new session (Up still recalls prompts from earlier ones)
+candy-code --continue       # reopen the most recently used session (short: -c)
+candy-code --resume 3f9a    # reopen one by id, unique id prefix, or name
+candy-code --resume         # open the session picker at launch
+```
+
+Inside the TUI, `/new` starts another one: a folder picker opens on this
+project (`Enter` starts the session right here; browse anywhere else and the
+choice restarts candy-code in that directory, on a new session, after asking —
+one process serves one project root), and `/new <dir>` goes straight there. See
+[Keys](#keys) for the picker's keys. The terminal is restored before the
+restart (the same exit path as `/exit`); without `pcntl_exec()` candy-code
+prints the `cd … && php …/bin/candy-code …` command to run instead.
+
+`--resume <id>` also accepts `--resume=<id>`; ids come from `candy-code session
+list` or the picker. A target that names no stored session is a usage error
+(exit 2) before the TUI starts. `--continue` and `--resume` cannot be combined
+with each other or with `-p`/`run`. Inside the TUI, `Ctrl+R` (or `/sessions`)
+opens the same picker and `Enter` loads the chosen session's transcript;
+`Ctrl+Tab` and the tab strip switch the same way. A tool call that was still
+running when its session was last saved comes back marked interrupted.
+`--continue` only considers your own conversations: it skips sub-agent
+sessions and sessions you have archived. The picker and the tab strip leave
+them out too.
+
+A session is named after its first reply by a cheap title model, and a name
+you give it always wins over a generated one — even one still in flight when
+you typed yours. `/rename <title>` names the current session; a bare `/rename`
+(or **Rename session…** in `Ctrl+P`, or a double-click on the current tab)
+opens an inline title row above the input box — `Enter` saves, `Esc` cancels,
+and saving it empty clears the name and asks the title model for a new one,
+which is also what `/rename --auto` does. Pinned sessions (`p` in the picker,
+or **Pin or unpin session** in `Ctrl+P`) lead the tab strip with a `★`.
+
+**Starting over without losing the thread: `/handoff [focus]`.** When a
+conversation is full of dead ends, `/handoff` opens a new session that starts
+from a **state summary** of this one instead of its transcript — goal,
+constraints, progress, key decisions, current work, next step, pending tasks,
+and errors and fixes, written by the summary model and steered by the optional
+focus, with the files read and modified and your latest request read off the
+transcript. Without a summary model (or when it fails) the whole summary is
+read off the transcript, so the command always opens a session. The new
+session is a branch of this one: the picker shows it under its source, and it
+keeps the todos and checkpoints, so `/rewind` there can step back into the full
+conversation. See [`docs/COMMANDS.md`](docs/COMMANDS.md#the-built-in-commands).
+
+**One window writes a session at a time.** A launch that opens a session
+another candy-code already has open — `--continue` in a second terminal, the
+same `--resume` twice, or picking it in the picker — opens it **read-only**: the
+transcript is shown, but prompts and the commands that would change the session
+(`/clear`, `/compact`, `/rename`, `/rewind`, `/undo`, `/redo`,
+`/workflow run|resume`, any custom command) are refused and nothing is saved, and the status bar leads with
+`read-only: /branch to fork` (narrowing to `RO` on a small terminal). `/branch` forks the session into a
+new one this window owns and carries on there, and the refused draft comes back
+in the box;
+commands that only read or change the window itself (`/help`, `/sessions`,
+`/theme`, `/model`, …) still work, and so does switching to another session.
+Close the other window and this one notices within a second: it takes the
+session over, reloads the transcript (so whatever the other window saved is
+kept), says so, and puts a refused draft back in the box.
+The guard is a `flock()` on `~/.candy-code/sessions/<id>.lock`, so it is
+released the moment the holding process exits, however it exits. Where the lock
+cannot be taken at all (a home directory that refuses the file), the session
+opens writable, as before.
+
+Launches that were quit without typing leave empty sessions behind; the next
+launch deletes the ones older than an hour (unnamed, with no transcript and no
+checkpoint — nothing that could be wanted back).
+
+### Checkpoints: undo, redo, rewind and diff
+
+**Each turn also snapshots your files.** Just before a prompt is sent, the
+project's files are recorded with the turn's checkpoint, so a turn's edits can
+be undone later. In a git repository the snapshot is a hidden commit under
+`refs/candy-code/checkpoints/<session>/<n>`. Your branch, index and stash list
+are not touched, and `git stash list` does not show it. Outside a repository it
+goes into a private git directory under `~/.candy-code/checkpoints/`, and
+nothing is written into the project. Untracked files over 2 MiB, dependency and
+build directories (`node_modules/`, `vendor/`, `dist/`, …), media, archives,
+binaries, databases, logs and `.env*` files are left out. No snapshot is taken
+in your home directory itself, a directory above it, or `~/Desktop`,
+`~/Documents` and `~/Downloads`. A snapshot that cannot be taken never holds up
+the turn, but the first time it is refused or fails in a directory the
+transcript says why, once.
+
+**Taking a turn back.** `/undo` restores the conversation to the checkpoint
+before your last prompt, puts that prompt back in the box, and puts the files
+back the way that turn found them. `/redo` steps forward again, one checkpoint
+at a time, until you send another prompt. `/rewind [n]` steps back `n`
+checkpoints and restores the conversation only (`--chat`, the default); it
+tells you when the files differ from that checkpoint, and `/rewind --files`
+then puts them back too. `--files` alone restores the files and leaves the
+conversation, `--both` does both. `/diff [n]` shows what changed in the files
+since checkpoint `n` (`1`, the one before your last prompt, by default), as the
+list of files and the patch. A file restore is refused once HEAD has moved since
+the checkpoint (it would undo those commits): `--both` and `/undo` then change
+nothing, and `--chat` still works. Files a snapshot leaves out are never
+touched by a restore. `/redo` moves the files only when they still match the
+checkpoint the conversation is at, so edits you made after a rewind are kept.
+The refs are deleted with their checkpoints: old ones past the per-session
+limit, a deleted session's, and the ones a rewind set aside once the next
+prompt is sent. `/branch` keeps its own copy. Unused snapshots in the private
+directories are cleaned up by a `git gc` at most once a day.
+
+## Configuration
+
+Most behaviour is a **setting**: a key in one of four JSON files, or for this
+session only. The quickest way to see and change them is the settings view —
+`/settings` (alias `/config`), `Ctrl+,`, **View settings** in `Ctrl+P` or the
+`F10` App menu — which lists every key by category with its live value, where
+that value came from, whether an environment variable or flag locks it, and
+when a change applies, and saves only after showing you a diff of the file it
+will write. Every key is in [`docs/SETTINGS.md`](docs/SETTINGS.md); every
+environment variable in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+
+### Settings files
+
+Four files are read, and the **highest one that mentions a key wins** for that
+key:
+
+| # | File | Who wrote it | Wins over |
+|---|------|--------------|-----------|
+| 4 | `~/.candy-code/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider`, and the settings view's save writes the keys it changes (never `provider` or `theme`) | everything |
+| 3 | `~/.candy-code/settings.json` | you, by hand | the project's two |
+| 2 | `<project>/.candy-code/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below), or you, through the settings view's **This project (local)** tier once you trust the project | the shared project file |
+| 1 | `<project>/.candy-code/settings.json` | whoever wrote the repository, or you, through the settings view's **This project (shared)** tier once you trust the project — it is committed, so everyone who clones the repository (and trusts it) gets what you save there | nothing |
+
+Two things about that order are deliberate and the reverse of what most editors
+do. **Your files beat the project's**, because a project file arrived with a
+`git clone` — a repository can fill in what you left unsaid and never overrule
+a choice you made. And **`config.json` beats `settings.json`**, because it is
+the file the CLI *writes*: ranked the other way, a `settings.json` naming
+`theme` would outrank what Ctrl+P "Switch theme" **or `/theme <name>`** had just
+written, and the choice would fail to stick with no error anywhere and nothing
+pointing at the file responsible.
+
+> **About the names:** `config.json` is not "the deprecated name" — nothing
+> marks it as such. It is simply the *older* of the two, and the only file the
+> CLI itself writes back to: every persisted `theme` and `provider` lands there
+> via `Bootstrap::writeUserConfig()`. Keep using it; there is nothing to
+> migrate *to* — your `~/.candy-code/settings.json` is never written by the
+> app.
+
+The settings view (`/settings`, `t` to pick the tier) writes either project
+file only for a project you already trust, and only the keys a project file may
+set; the save preview names the file and, for the shared one, warns that it is
+committed.
+
+**Above all four sits the session tier.** The settings view can save a change
+**for this session only**: nothing is written to disk, the value outranks every
+file until the process exits, and the environment and flags still outrank it.
+A turn's forked child and the Task
+sub-agents it runs inherit it; a `/bg` daemon is a separate process and starts
+from the files alone. Only keys that take effect without a restart can be set
+there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) lists
+them, and says when every other key a save changes applies.
+
+> **Reference — safe to skim.** The complete layered-key roster follows, generated
+> and drift-checked as one block; per-key meaning, tiers and defaults live in
+> [`docs/SETTINGS.md`](docs/SETTINGS.md).
+
+<!-- settings:layered:begin -->
+Only these one hundred and nineteen keys are layered — `provider`, `models`,
+`providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
+`extraBody`, `thinkingBudget`, `promptCache`, `parallelToolCalls`,
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
+`compaction.reminderPercent`, `compaction.autoPercent`,
+`compaction.blockPercent`, `compaction.keepRecent`,
+`compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
+`compaction.toolOutputChars`, `compaction.reminderTokens`,
+`compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+`compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
+`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
+`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
+`repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
+`env.diffMaxBytes`, `contextWindow`, `autoReview`,
+`permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
+`permissions.autoAllowReadOnly`, `secretEnvAllowlist`, `allowedTools`,
+`disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`,
+`toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
+`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
+`webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `sd.baseUrl`, `sd.apiKey`,
+`sd.timeoutSeconds`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
+`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
+`instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
+`enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
+`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+`watchFiles`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`,
+`scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
+`toolOutputPreviewLines`, `sessionRetentionDays`, `sessions.autoTitle`,
+`promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
+`maxCheckpoints`, `lintCommands`, `disabledMcpServers`, `mcp.enabled`,
+`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
+`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
+<!-- settings:layered:end -->
+
+That roster (and its count) is generated from `SettingsSchema` by
+`php tools/gen-settings-doc.php --write`. The `trustedProject*` lists are read
+from `~/.candy-code/config.json` **alone**, so no lower layer can grant itself
+trust.
+
+`permissionMode` and `permissionRules` are the one pair that is neither: they
+are read from `~/.candy-code/settings.json` **and** `config.json` (the latter
+wins), and from **no project file at any trust level** — a checked-in
+`bypass-permissions` would be a sandbox escape delivered by `git clone`. They
+also do not go through the layered reader, because that reader is *tolerant* by
+design (a malformed file just contributes nothing) and a permission policy may
+not be: a `settings.json` that exists and cannot be parsed now **stops the
+launch**, exactly as such a `config.json` already did. That is the same bargain,
+one file wider — and it is louder rather than newly broken, since such a file
+already cost you your theme and provider without saying so.
+
+**A project's settings files are ignored until you opt that project in.**
+`<project>/.candy-code/settings.json` was written by whoever wrote the
+repository, so honouring it out of the box would let `git clone <repo> && cd
+<repo> && candy-code` pick your model and turn off your skills. Same gate shape
+as project hooks and `.mcp.json`, separate key — list the project in
+`trustedProjectSettings` in your own `~/.candy-code/config.json`:
+
+```json
+{ "trustedProjectSettings": ["/home/you/src/that-project"] }
+```
+
+Absolute (or `~/`-rooted) paths only; a relative entry like `"."` would trust
+every repository you ever run from, so it is refused and reported. And
+`settings.local.json` gets **the same gate** as its tracked sibling: `.gitignore`
+is advice to whoever commits, not a property of a repo someone else wrote, so a
+`git add -f`'d "local" file arrives with a clone just as readily. The two differ
+in precedence only.
+
+> **Reference — safe to skim.** The full exception list follows with its reasoning;
+> the one-line version is that anything spending the operator's money, choosing
+> their models or hosts, moving their windows, or executing anything runs
+> user-tier only. Details per key in
+> [`docs/SETTINGS.md`](docs/SETTINGS.md).
+
+Even for a trusted project, sixty-four keys are **never** taken from a project file:
+`statusLine`, because its value is a shell command this app runs on a timer —
+a project-tier one would be arbitrary code execution on clone-and-launch, with
+no tool call and no permission gate anywhere in the path; `lintCommands`, for
+the same reason — each value is a lint command the post-edit hook runs after an
+edit; `lsp`, for the same reason again — each entry is a language server this app
+starts at launch; `mcp.enabled`, because whether a checkout's
+`.mcp.json` servers start is the trust list's decision, and the checkout's own
+settings file must not be a second door to it; `autoCommit`, because a commit runs the repository's own git
+hooks and writes into the operator's history, and a checkout must not be able to
+switch that on; `maxCheckpoints`, because it decides how much of the
+operator's own session history `/rewind` can still return to, and a checkout
+setting it to 1 would quietly prune that history at every turn; `sessionRetentionDays`, for the same reason with
+more at stake — each launch deletes the unnamed sessions it outlives, and a
+checkout setting it to 1 would delete yesterday's conversations; `testCommand` and `autoTest`, for the lint reason — the first is
+a shell command auto-test runs at the end of a turn that edited a file, the
+second switches that run on;
+`provider`, because it decides which host every prompt in the session is sent
+to;
+`providers`, for the same host-and-bill reason — each entry pins a provider's base URL
+and key material, so a checkout choosing them would route the operator's paid traffic
+through an endpoint it picked; `instructions`, because it decides which files become authoritative
+system-prompt text; `disabledRules`, because its value is a list of names
+pointing at the operator's own rule packs, so a project-tier one would let a
+checkout choose which of the operator's instructions go silent — a different
+power from the `disabledSkills` a project *may* set, because a rule pack is
+prompt prose the operator wrote, not a capability the harness enforces (see
+`RulesState`); `maxOutputTokens`, because it is the one layered key whose
+meaningful direction is UP — every raise sends bigger paid requests on the
+operator's credential, and a spend ceiling a checkout can lift is a bill a
+clone can run up; `modelPrices`, because it sets the rate every billed token
+converts at — the mirrored direction on the same money axis, where a
+project-supplied map could zero a rate and silently blind the spend cap and the
+`/budget` totals, the exact failure the unpriced-model notice exists to make
+loud; `models`, `titleModel`, `summaryModel`, `subagentModel` and
+`embeddingModel`, because they choose the model the session itself and every
+title, prompt suggestion, `/compact` summary, delegated sub-agent run and
+memory-recall embedding run on with the operator's key — within one provider the price spread is over 100×, and a model with no
+price on file bills as $0, so a project-chosen one blinds the spend cap the same
+way a zeroed rate would; `layout`, because it records where the operator chose to put
+their own windows — frame geometry is a personal habit, not a property of the
+checked-out code, and a project that moves your panes behind your back is
+answering to the wrong owner; `maxToolSteps`, because it multiplies how many
+billed provider round-trips one turn may fan out — the `maxOutputTokens` money
+axis counted in calls instead of tokens, and a ceiling a checkout can raise is
+still a bill a clone can run up on the operator's credential; `maxCostUsd`,
+because it is the spend ceiling itself — a checkout must be able neither to lift
+the operator's cap nor to impose one that refuses their turns;
+`promptSuggestionHistory`, because every message it adds is sent to the
+operator's title model after every turn — input tokens on their credential, the
+same money axis; `compaction.refillLimit`, because it is how many automatic compactions that
+bought nothing the thrash breaker lets a session pay for in a row — the same
+argument counted in summarisation calls; `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent` and `toolInstructionCapBytes`, the seven caps on what
+one tool result may hand the model,
+because every byte a result carries is replayed into each later request of the
+turn — the same money axis paid in input tokens, so a checkout may not raise
+them (the timeouts and memory bounds beside them only cost time, and a trusted
+project *may* set those); `repoMap.maxBytes` and `env.diffMaxBytes`, the repo
+map's and the git diffs' byte budgets, for the same reason — both ride the
+requests of every turn, so raising them is the same input-token bill (switching
+either block off only removes text, and a trusted project *may* do that);
+`webSearchEndpoint`, because it decides which host
+receives every WebSearch query, and those queries routinely quote the
+repository's code, file names and error text — the `provider` argument applied
+to search; `sd.baseUrl` and `sd.apiKey`, because they decide which host and
+credential every generation request is sent to — the `provider` and
+`webSearchEndpoint` arguments applied to the diffusion server; `sd.defaultModel`
+and `sd.presets`, because they choose which model burns the operator's GPU time
+and under which preset; `sd.timeoutSeconds`, because it bounds that same
+generation; `sd.savePattern`, because it names where artifacts land on the
+operator's disk; `ui.imageRenderMode` and `ui.mediaDisplayOverrides`, the
+display half of the same surface, held user-tier so the media settings cannot
+be split across tiers by a checkout; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
+and `subagentMaxActive`, because each multiplies the provider calls one turn
+may fan out through delegated runs — the `maxToolSteps` argument applied to
+sub-agents;
+`secretEnvAllowlist`, because it names which of the operator's credentials
+Bash, Grep and script hooks may still inherit after the scrub that keeps them
+out of model-visible output — a project-tier `["*"]` would read every key in
+the operator's shell back through one `env` call; `autoReview`, because every
+flagged `auto` call it reviews is a paid request on the operator's title model —
+the money axis again, and a checkout must not be able to switch a per-call
+charge on; `permissions.autoStrikeLimit` and `permissions.autoTotalLimit`,
+because they decide how many blocked calls `auto` lets the model make before a
+person is asked, and a checkout raising them would buy its own commands more
+attempts at the gate; `contextWindow`,
+`extraBody`, `thinkingBudget` and `promptCache`, the four provider-shaping
+keys, because each moves the bill — an inflated window switches
+auto-compaction off so requests grow until the server refuses them, an extra
+body field such as `n` multiplies every request, a thinking budget is billed as
+output, and switching prompt caching off bills every prompt in full;
+`bashSandbox`, because its meaningful direction is `off` — a checkout able to
+set it could lift the write jail the operator put around every command `Bash`
+runs, from inside the very repository that jail confines;
+`attribution`, because it is the trailer the model is told to stamp on every
+commit it makes under the operator's git identity, and a checkout choosing that
+text would be a repository writing into the operator's own history (its sibling
+`includeGitInstructions` only removes prompt text, so a trusted project *may*
+set that one); `enabledSkills`, because it names skills whose full bodies
+ride the system prompt every turn — the `instructions` argument applied to
+skills, where a checkout could make any skill it ships standing,
+authoritative prompt text (the `disabledSkills` a project *may* set only ever
+removes one); `watchFiles`, because it turns an `AI!` comment saved into the
+repository's files into a prompt the agent acts on, and a checkout must not be
+able to make its own text your next instruction; `debug.skills`, `debug.commands`, `debug.rules` and
+`debug.stream`, because they are the operator's own diagnostic switches — each
+puts what a loader refused (or a failing token observer) on stderr, and a checkout has no business deciding what is
+printed under the operator's screen; and
+`allowedTools`, for a reason worth spelling
+out because on capability alone it looks harmless. A whitelist is an intersection — it
+cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
+defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all twenty-seven of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo` and `PtyRun` —<!-- tools:others:end --> in one line, and what the model does next is the
+same work through `Bash`, which reaches the permission gate as opaque shell text
+instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
+
+Its sibling `disabledTools` *is* available to a trusted project — but not for
+the reason this section used to give.
+
+> **This paragraph used to say that expressing the same attack through
+> `disabledTools` "means naming every tool it removes — a value you can see".
+> That is false**: the filter matches names with bare `fnmatch()`, which
+> honours negated character classes, so in a project you have listed under
+> `trustedProjectSettings`:
+>
+> ```json
+> { "disabledTools": ["[!B]*"] }
+> ```
+>
+> leaves exactly `Bash` out of the twenty-eight built-in tools the project tier can filter.
+> The glob is five characters and names none of the twenty-seven it removes.
+> The negation is not the trick either — `["[C-Z]*", "[a-z]*"]` leaves exactly
+> `Bash` too — so no restriction on *pattern shape* could make the old sentence
+> true again. (`Task` is wired after the filter, outside every project glob's
+> reach.) What earns this paragraph its place is the shape argument for
+> `allowedTools` above, which does hold; what it lost is the claim that
+> `disabledTools` cannot express the same thing.
+
+**Two things narrow it, and both are measured.** An *untrusted* project's
+`disabledTools` never reaches the merge at all — all twenty-eight filterable tools survive, and `Task`, being post-filter, was never in this setting's reach to lose — so
+this needs a `trustedProjectSettings` grant you made yourself. And the layers
+merge key by key rather than as a union: if *you* name any `disabledTools`,
+yours replaces the project's outright — your `["Read"]` against a trusted
+project's `["[!B]*"]` removes exactly `Read` and leaves everything the
+project's glob named. The gap is open only for an operator who trusted a
+repository and set no `disabledTools` of their own.
+
+So **a trusted project's `disabledTools` can choose your tool set** — do not
+grant `trustedProjectSettings` to a repository you would not trust with
+`allowedTools`. What it can no longer do is choose it *unnoticed*: a trusted
+project's tool removals are reported at launch, naming the file, the tools it
+took and the tools it left.
+
+```text
+candy-code: /repo/.candy-code/settings.json (disabledTools) disabled 27 of the
+28 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+WebSearch, doctor, Skill, Lsp, Memory, RepoMap, Prune, Todo, Compress, Workflow,
+Recall, Team, ApplyPatch, AskUser, PlanExit, SendMessage, Subagents,
+InterruptAgent, GenerateImage, GenerateVideo, PtyRun — leaving: Bash.
+```
+
+The two keys are combined as one condition rather than as two passes — a
+tool survives only if your allow-list admits it *and* no deny entry names it —
+so there is no later step in which a project's `disabledTools` could re-admit
+something your `allowedTools` left out. Put the whitelist in your own file where
+you can see it.
+
+### Permission modes and plan mode
+
+Every tool call passes a permission gate in one of six modes. The full table,
+the rule grammar and the sandbox are in
+[`docs/PERMISSIONS.md`](docs/PERMISSIONS.md); in short:
+
+| Mode | Reads | Edits and shell | Notes |
+|---|---|---|---|
+| `default` | run | ask — except a shell line made only of read-only commands (`ls`, `git log`, `grep` …), which runs | the **TUI's default**: the y/n/a modal asks for every write, other shell command and network call |
+| `accept-edits` | run | in-project `Edit`/`Write` and read-only shell lines run; most other shell commands ask | |
+| `plan` | run | refused, except a Markdown plan in `.candy-code/plans/` and read-only `Bash` | toggle with **`Alt+M`** between turns; the model leaves it with `PlanExit`, which asks you to approve the plan |
+| `auto` | classified | classified by `SafetyClassifier`: a security finding (fetched code into a shell, data sent out, credentials, policy files) asks; any other flagged call is refused — or first reviewed by the title model with `autoReview` — and asks after three blocks in a row or twenty in all | |
+| `dont-ask` | run | refused | never prompts |
+| `bypass-permissions` | run | run | the default for `-p` and background sessions, which have nobody to ask |
+
+Set the mode with `--permission-mode`, `$CANDY_CODE_PERMISSION_MODE` or
+`permissionMode` in your own settings — never from a project file — and narrow
+it with `permissionRules` such as `{"pattern": "Bash(rm *)", "action":
+"deny"}`. `/permissions` shows the live policy and the session's grants. At the modal,
+`y` allows once, `a` allows calls like this one for the session (`e` edits
+that scope first), `n` refuses, `r`
+refuses with a note the model reads, and `x` refuses and stops the turn.
+Whatever you allow, `/undo` and `/rewind` can take the files back. On Linux,
+`"bashSandbox": "on"` (or `"no-network"`) additionally runs every `Bash`
+command inside bubblewrap, writable only in the project.
+
+- **Read-only shell commands run unasked** under `default` and
+  `accept-edits` — alone or as a chain or pipeline made entirely of them, so
+  `cd <project> && ls -d */ | head -80 && echo --- && git log --oneline -3`
+  never asks. The list is conservative (`ls`, `cat`, `head`, `tail`, `wc`,
+  `grep`/`rg`, `find` without `-exec`/`-delete`, `sort` without `-o`, `git`'s
+  read subcommands, `php -l`, `composer show`, `npm ls`, `sed` with a script
+  that only reads, `awk` with a simple inline program …), and `for`/`while
+  read` loops whose every command is one of them qualify too; a writing
+  redirection, a substitution, `sed -i` or a sed `w`/`e`, awk's `system()`,
+  pipes or `print >`, `xargs`, `python3 -c`, a `cd` out of the project,
+  a protected file (`.env`, keys) or anything else off the list makes the
+  whole line ask as before. Configured rules and hooks still win;
+  `"permissions.autoAllowReadOnly": false` (yours; a project may only switch
+  it off) asks about every shell line again. See
+  [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#read-only-shell-commands-run-unasked).
+- **`ApplyPatch` is judged per file.** A patch runs without asking only when
+  every path it adds, updates, moves or deletes would; a `deny` or `ask` rule
+  fires when any path matches. A restrictive `Edit` or `Write` rule binds a
+  patch too (`Deny Edit(.env)` refuses a patch touching `.env`), but an `Allow
+  Edit` does **not** grant one — a patch can also delete and move — so allow
+  `ApplyPatch(...)` itself.
+- **The model's own questions.** `AskUser` puts one question to you, with up to
+  six choices; `PlanExit` puts the plan the model wrote up for approval and is
+  plan mode's way out. Both come up in the same modal: `y` takes the first
+  choice or approves the plan, `r` answers (or gives plan feedback) in your own
+  words, `n` declines. An approved plan returns to the mode plan was entered
+  from when the turn ends. Where nobody can answer (`-p`, `dont-ask`) `AskUser`
+  tells the model to decide and say what it assumed, and `PlanExit` refuses.
+- **`"autoReview": true`** (your own settings only — every review is a paid
+  call) sends each non-security call `auto` flags to the title model, which
+  allows it, asks you or denies it; anything it cannot settle cleanly asks.
+  See [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#what-auto-classifies).
+
+### Hooks and automation
+
+A `PreToolUse` hook can allow, deny, rewrite or ask about a tool call; other
+events fire around the prompt, the turn's end (`Stop`, `SubagentStop`), the
+session's end and every compaction. Hooks are shell commands in
+`~/.candy-code/hooks.yaml` (or a trusted project's), answering by exit code or
+a JSON object on stdout. Built on the same chain, each opt-in in your own
+settings:
+
+- **Post-edit lint** — every `Edit`/`Write` (each file of an `ApplyPatch`) is linted (`php -l` built in,
+  others through `lintCommands`) and the errors are appended to the result.
+- **Post-edit diagnostics** — with language servers under `lsp`, each edit is
+  re-checked and its errors appended; the same servers answer the `Lsp` tool.
+- **Auto-test** — `"autoTest": true` with a `testCommand` runs your tests at
+  the end of a turn that edited a file and hands failures back to the model, up
+  to three times.
+- **Auto-commit** — `"autoCommit": "turn"` commits each turn's changes with a
+  generated Conventional-Commits subject, `"edit"` commits each edit; your own
+  uncommitted work is never mixed in, and `/undo` reverts the last such commit.
+
+All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
+
+### Memory, instructions, skills and MCP
+
+- **Instruction files** — `CLAUDE.md`/`AGENTS.md` at the project root (or
+  another agent's alias), nested ones when a tool touches their directory, and
+  your personal `~/.candy-code/AGENTS.md`, all with `@import`. `/init` writes
+  a starting `AGENTS.md` for the project; `/rules` toggles rule packs for the
+  session, and `/newrule [focus]` has the agent draft a new project rule under
+  `.candy-code/rules/` from the conversation — the write is always put to you,
+  in every mode.
+- **Memory** — notes that outlive the session. The prompt carries an index of
+  them; the model reads, saves and searches them with the `Memory` tool, you
+  with `/memory`. Auto-memory saves durable facts at the end of a turn, a
+  periodic dream pass folds the compaction journal into them, and the home
+  store keeps a git history (`/memory log`, `/memory restore`). See
+  [`docs/MEMORY.md`](docs/MEMORY.md).
+- **Skills** — `SKILL.md` files whose name and description ride the prompt and
+  whose body the model loads with the `Skill` tool; `$name` in a prompt
+  attaches one for that turn, `Ctrl+S` picks one for the session and
+  `enabledSkills` makes one standing. See
+  [`docs/SKILLS.md`](docs/SKILLS.md).
+- **MCP** — the servers a trusted project's `.mcp.json` declares become `mcp__<server>__<tool>` tools; `/mcp` lists the servers and manages
+  their auth, and `candy-code mcp list|trust|import` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
+- **Workflows** — staged multi-agent pipelines in YAML or PHP, run with
+  `/workflow run` or written by the model itself through the `Workflow` tool.
+  See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
+- **Media** — images and video generated against a diffusion server you
+  configure (`sdapi` or `sglang-diffusion`), from `/generate`, the `Ctrl+D`
+  form, the agent's own tools, or `candy-code serve`. Saved PNGs carry their
+  parameters and round-trip through `/sendto`. See
+  [`docs/MEDIA.md`](docs/MEDIA.md).
+
+### Interface settings
+
+`theme` (`/theme` or **Switch theme** in `Ctrl+P`), `statusLine` (a command
+whose output becomes a custom status line), `layout` (pane docking, saved as
+you change it), `notify` (`bell` or `osc9` desktop notifications when a turn
+ends or an approval waits), `queueMode` (what `Enter` does mid-turn), `mouse`,
+`scrollWheelLines`, `doubleEscSeconds` and the preview sizes are all live
+settings — see the *Interface* rows of [`docs/SETTINGS.md`](docs/SETTINGS.md#every-key).
+`watchFiles` (saved [`AI!` comments](#prompts-from-your-editor-ai-comments)
+become prompts) is user tier only and read at launch.
+
+## Providers
+
+`SugarCraft\Code\Providers\ProviderInterface` is the single LLM abstraction (capability introspection, batch + `\Generator` streaming, function calling, embeddings, per-model cost). Build one directly or from config via `ProviderFactory` (which resolves `${VAR}` / `${VAR:-default}` from the environment):
+
+```php
+use SugarCraft\Code\Providers\ProviderFactory;
+
+$factory  = new ProviderFactory();
+$provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}', 'model' => 'gpt-4o']);
+```
+
+| Provider        | Type key      | Notes                                                            |
+|-----------------|---------------|------------------------------------------------------------------|
+| OpenAI          | `openai`      | `openai-php/client`; function calling, embeddings, cost table    |
+| Anthropic       | `anthropic`   | `x-api-key` + `anthropic-version` auth, OpenAI-shaped `/v1/chat/completions` body with tool calling — see below |
+| Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; JSON schema    |
+| SGLang          | `sglang`      | OpenAI-compatible self-hosted endpoints (Guzzle)                 |
+| AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
+| GCP Vertex      | `vertex`      | Anthropic-on-Vertex via an injectable predictor seam             |
+| Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
+| Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
+
+The `anthropic` type key is **not** a native Messages API client. `ProviderFactory::createAnthropic()` builds a `CustomProvider` with Anthropic's `x-api-key`/`anthropic-version` headers, and that class POSTs an OpenAI-shaped body to Anthropic's OpenAI-compatibility endpoint, `<ANTHROPIC_BASE_URL>/v1/chat/completions`. Tools go out as OpenAI `tools` and come back as `tool_calls`, streamed or not. For an Anthropic-native path, use `claude-code` (which drives the `claude` binary) or point `CANDY_CODE_BACKEND_CMD` at a shell script.
+
+Context windows and prices for models a provider has no built-in figure for come from a **model database**: LiteLLM's `model_prices_and_context_window.json`, cached at `~/.candy-code/cache/` for 24 hours and refreshed in a detached background process, so it never holds the terminal (`ModelMetadata`). The `openai`, `anthropic` and `custom` types consult it, in this order: your own `contextWindow` / `modelPrices` (the provider block's keys, else the user-tier settings), then the database, then the provider's built-in table. That is what sizes a Claude model behind `anthropic` (no longer a fixed 128,000 tokens) and prices it (no longer $0), and what sizes a hosted model behind a `custom` gateway. A `custom` model the database does not list — a self-hosted id — keeps 128,000 tokens and a real $0; give it a `contextWindow` to size it. Matching is exact (case-insensitive, or LiteLLM's own `provider/id` form), never fuzzy, so a self-hosted model is not billed at a hosted model's price because their names overlap. Offline, a failed refresh keeps the old file and waits a day; `CANDY_CODE_DISABLE_MODEL_METADATA=1` turns the database off entirely — see [`ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+
+**Fallback models.** A provider block may name `fallbackModels`: other model ids on the same provider, tried in order (`"fallbackModels": ["gpt-4o-mini"]`, or a single string). `ProviderFactory` then wraps the provider in a `FallbackProvider`, which re-sends a request to the next model when it fails in one of the two ways another model can fix: a transient failure still failing after the provider's own retries (overloaded, rate-limited, a 5xx, a dropped connection), or a context-window overflow — and an overflow only moves to a model the model database knows to have a larger window, or whose size it does not know. Every other failure is raised exactly as before. On the streaming path the switch happens only before the first chunk arrives; after that the reply is that model's, and a failure mid-reply is the turn's to recover. Each switch puts one notice in the transcript naming both models and why, and a transient switch keeps the fallback first for 60 seconds — the status bar names it while it answers — before the original model is tried again (an overflow does not, since the next request may fit). Each fallback is the same block with only `model` replaced, so it is sized and priced as itself. No timeout is added to any call.
+
+The `sglang` type accepts an optional `toolCallParser` key, with three values:
+
+- `'openai'` — read the server's parsed `tool_calls[]` array, and nothing else.
+- `'minimax-xml-fallback'` — the same, but when that array is absent, recover
+  MiniMax's raw `<minimax:tool_call>` XML out of the message content.
+- `'dsml'` — the same, but recover DeepSeek-V4's native DSML markup
+  (`<｜DSML｜tool_calls>`) instead.
+
+All three read `tool_calls[]` first, so the two fallbacks cost one `isset` on a
+correctly configured server. They matter only if your SGLang deployment was
+launched *without* `--tool-call-parser`, which leaves the model's native
+tool-call syntax unparsed in the content — and the DeepSeek-V4 model card's own
+documented launch command omits that flag, which is why `dsml` exists.
+
+**Omit the key** and the parser is derived from the model: `dsml` for the
+DeepSeek-V4 family, `openai` for everything else. That is why
+`defaultConfig('sglang')` reports `toolCallParser: null` rather than a name — a
+stamped literal would keep applying after you edited `model` to another family.
+This differs from `reasoningEffort` in no way; both are model-derived for the
+same reason.
+
+The setting applies to **both** the batch `complete()` path and the streaming
+path. On the streaming path the fallback runs over the reassembled content once
+the response ends, and only when the structured `delta.tool_calls[]` route
+produced nothing, so it cannot duplicate a call. A recovered envelope is cut
+out of the assistant's text on both paths, so the markup is neither shown nor
+sent back to the model next to the structured call. To make that possible on
+the streaming path, `minimax-xml-fallback` and `dsml` hold text back from the
+screen from the first bytes that could open an envelope: a chunk ending in a
+partial marker or a line break waits for the next one, and anything after a
+complete marker waits for the end of the response. Text that turns out not to
+be a recovered call is then shown unchanged. `openai` holds nothing back.
+
+It also accepts an optional `reasoningEffort` key — SGLang's top-level
+`reasoning_effort` request field. One of `none`, `minimal`, `low`, `medium`,
+`high`, `xhigh`, `max`, or a float. Omit it and the value is derived from the
+model: `max` for the DeepSeek-V4 family, and nothing at all for any other
+model.
+
+A misspelled **level name** is refused when the provider is built, so a typo in
+a config file fails immediately. A **number** is not: the float range is the
+server's (`0.0`–`0.99` inclusive when measured, `le: 0.99`) and is deliberately
+not re-checked locally, since a later SGLang may widen it. The catch is that
+JSON has no float/int distinction to lean on here — a whole number is read as a
+float, so `"reasoningEffort": 1` becomes `1.0`, the one value just outside that
+bound, and every request then fails with an HTTP 400 from the server rather than
+at startup. Write `0.99`, not `1`.
+
+Configure the **real model id**, not a `--served-model-name` alias. The
+DeepSeek-V4 defaults above are selected by matching `deepseek-v4` in the `model`
+string, so a server launched as `--served-model-name default` reports `default`
+from `/v1/models`, and copying that into `model` silently gets you the legacy
+`temperature = 0.7`, no `top_p`, no `reasoning_effort` and a 196,608-token
+context window while you are in fact talking to DeepSeek-V4. There is no way to
+detect that from the id alone — but the server can say, see below.
+
+The provider also asks the server about itself: once per session it reads
+`GET /model_info` and `GET /server_info` from the server root (`baseUrl` minus
+`/v1`), with a 3-second bound, and fails soft. From them it takes the context
+window (`min(context_length, max_req_input_len − 4096)`, so the compaction
+tiers follow the deployment rather than a transcription of it) and the default
+`max_tokens` (`min(262144, the room the prompt leaves)`; `maxOutputTokens`
+still wins). When the reads fail, per-family figures stand in: 262144 output
+tokens for DeepSeek-V4 and Qwen3.8, 4096 for anything else. The same read
+names the served model and its `--tool-call-parser`: a served model of another
+family than `model`, or a server with no tool-call parser while no textual
+fallback is armed, raises a one-time transcript notice. The chat's status bar
+ends with the served model's id (the configured `model` until the server has
+named one) whenever the row has room left over — it is the bar's
+lowest-priority piece, shortened to the part after the last `/` and then
+ellipsised before it is dropped. Set
+`"discoverServerInfo": false` in the provider block to skip the reads.
+
+That default exists because an *absent* `reasoning_effort` is not neutral. On
+DeepSeek-V4-Flash, a request without it comes back with `reasoning_content:
+null` and the model's thinking written straight into `content` — so the
+reasoning ends up in the reply the user reads instead of the collapsible
+thinking pane. Sending a level moves it back to `reasoning_content`, which is
+where `CompleteResponse::$reasoning` reads from.
+
+The default `sglang` model is **whatever the server serves**. With no model
+named (the generic `sglang` config, no `--model`, no `$CANDY_CODE_MODEL`), the
+provider reads `served_model_name` from `/model_info` and addresses every
+request to it, picking that model's sampling, reasoning-effort and tool-call
+parser defaults; the served-model notice above does not fire, since there is no
+configured model to contradict. Only when the server cannot be asked does it
+fall back to `Qwen/Qwen3.8-Flash-Next-FP8` — a placeholder pinned to whatever
+the maintainer's test endpoint happened to serve when it was written, nothing
+more. A model you do name is sent as named. Once the served name is
+known — read by the TUI process itself, or reported back by the first turn —
+the Settings pane's `Model` row shows it instead of the fallback id.
+
+The DeepSeek-V4 family also gets `temperature = 1.0` plus `top_p = 0.95` when
+the request offers tools / `1.0` when it does not — the model card's own figures
+for agentic and non-agentic use. MiniMax-M2.x is unaffected by all of the above: name it as the
+`model` and the provider keeps its previous `temperature = 0.7`, sends no
+`top_p`, and sends no `reasoning_effort` unless you set one explicitly. A
+per-request override lives on `CompleteRequest::$reasoningEffort`.
+
+## Scripting and automation
+
+Everything the TUI does is also reachable without it: a one-shot prompt on
+the command line (`-p`/`run`) with a machine-readable result, a set of
+subcommands that answer without a provider or a terminal, and two shell-out
+backends that swap the provider for a script of your own. The exit-code and
+JSON contracts below are stable and test-pinned, so CI gates can rely on them.
+
+### Non-interactive (one-shot) mode
+
+`bin/candy-code` parses `argv` *before* it constructs a `Program`, so the
+scriptable paths never attach to the TTY or enter the alt-screen:
+
+```bash
+candy-code -p "explain the Width helper"        # one prompt, print, exit
+candy-code run "explain the Width helper"       # same thing
+candy-code -p "audit this" --output-format json # machine-readable envelope
+candy-code --output-format json run "audit this" # `run` works after flags too
+candy-code doctor                               # check the install (see Subcommands)
+candy-code --root /path/to/project              # set the project root explicitly
+candy-code src                                  # an existing directory as the only argument is the root too
+candy-code --config ~/policies/crush.json       # read settings/permissions from this file
+candy-code --model gpt-5 -p "audit this"        # pick the model (not the provider)
+candy-code --permission-mode plan -p "audit this" # pick the permission mode for this run
+candy-code --help                               # prints and exits (never opens the TUI)
+candy-code --version                            # prints the installed version and exits
+candy-code -- --not-a-flag                      # `--` ends options; everything after is positional
+```
+
+`--model <name>` (also `--model=<name>`) names the conversation MODEL and
+overrides `$CANDY_CODE_MODEL`, the model persisted for the provider (the
+`models` setting) and the provider's own default. It does not pick a
+provider — that still comes from `$CANDY_CODE_PROVIDER` or the persisted
+`provider` setting, and the two are independent axes. The Ctrl+P palette entry
+labelled "Switch model" switches the PROVIDER, which is why the distinction is
+worth stating twice.
+
+`--permission-mode <mode>` (also `--permission-mode=<mode>`) runs this launch
+under one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`,
+`bypass-permissions`. It is the highest-precedence source, beating
+`$CANDY_CODE_PERMISSION_MODE` and the `permissionMode` config key. With none of
+the three set, the **TUI starts in `default`** — every write and shell command
+asks through the y/n/a modal — while `-p` and background sessions start in
+`bypass-permissions`, because their console approver refuses whenever no
+terminal is attached (see *Permission modes* below).
+
+A **non-empty** value that is not one of those modes refuses the launch with
+exit 2 rather than falling back to the default — the same refusal,
+with the same message shape, that the environment variable and the config key
+already produce; only the named source differs. (`candy-code doctor` is not a
+launch: it reports the same bad value as a failed `permission policy` check and
+exits 1.)
+
+An **empty** value — `--permission-mode=` or `--permission-mode ""` — is a
+usage error, also exit 2, but raised by the argument parser before any of that.
+Here the flag is deliberately **stricter than the other two sources**: an empty
+`$CANDY_CODE_PERMISSION_MODE` or `"permissionMode": ""` is read as *absent* and
+the run proceeds on the next source down, whereas an empty flag refuses. The
+asymmetry is intentional. An unset variable is a normal state of an environment,
+but typing the flag is an explicit act, and `candy-code --permission-mode="$MODE"`
+with `$MODE` unset otherwise leaves the operator believing a mode is in force
+when none is — succeeding silently at exit 0 under whatever the config said.
+`--config` refuses an empty value for exactly this reason; this flag now follows
+that precedent instead of half of it. `--model`/`--model=` is refused the same
+way.
+
+Both flags apply to the TUI and to `-p`/`run` alike.
+
+`--config <file>` (also `--config=<file>`) replaces the per-user
+`~/.candy-code/config.json` for this run: the theme, the persisted provider,
+the `instructions` globs, the `permissionMode`, the `permissionRules` and the
+`trustedProjectHooks` list all come out of the named file, and the discovered
+one is not merged in. It names one **file**, not a config directory — agents,
+skills, workflows, sessions and memory still live under `~/.candy-code`, and
+`--config` does not relax the "is this home directory yours" check that guards
+them. **`settings.json` is one of the things it does not move**: layer 3 above
+is always `~/.candy-code/settings.json`, never a `settings.json` sitting next
+to the file you named. Otherwise `--config ./anything.json` would hand a
+directory nobody vetted the user tier — the tier that may set `provider` and
+`instructions`. One consequence of that, worth stating because "replaces the
+per-user config" reads like a clean substitution and this is not one: since
+`~/.candy-code/settings.json` may now carry `permissionMode`, it is a policy
+file, and a policy file that exists and cannot be parsed stops the launch —
+including when you named a perfectly good file with `--config`. `--config` is
+not an escape hatch from a broken home config, and deliberately so: it is
+documented above as *not* disarming the gate, and letting it suppress an
+unreadable policy file would be exactly that. Move or fix the broken
+`settings.json`. The file must already exist and be readable; naming one that does not is
+a usage error (exit `2`) rather than a fall-back to discovery, for the same
+reason `--root /typo` is one — silently running the DEFAULT permission policy
+while the operator believes a restrictive one is in force is worse than not
+starting. So is a `--config` with no value at all, or one followed by another
+option (`--config -p "hi"`, which used to eat the `-p` as the file name): a
+missing value is indistinguishable from an absent flag once parsed, so
+accepting it is the same silent fall-back to discovery.
+
+Because the named file carries the permission policy, it is held to the **same
+standard as `~/.candy-code/config.json`**: it must be owned by you, and
+neither it nor its directory may be world-writable. That rules out the two
+paths people reach for first — a file under `/tmp` is refused for the
+directory's `o+w` bit, and a root-owned `/etc/crush.json` for its ownership —
+and the refusal is a launch-time `PermissionConfigException` (exit `2`) from
+`Bootstrap`, worded about the file rather than about the flag. The check is
+deliberately not duplicated in `ArgvParser::configError()`, which validates
+existence and readability only: two copies of an ownership/mode rule is how the
+two drift apart.
+
+`--output-format` accepts exactly `text` (the default) and `json`, matched
+case-sensitively; anything else is a usage error (exit `2`) on both the
+one-shot and the TUI path. It used to be accepted verbatim and then compared
+for equality against `json` at each consumer, so `--output-format xml` printed
+plain text and exited `0` — a `| jq` caller got an empty pipe with a success
+status.
+
+**One-shot mode never falls back to the offline echo provider.** If this run
+selected a provider — via `$CANDY_CODE_PROVIDER` or a persisted Ctrl+P "Switch
+model" choice — and that provider cannot be constructed (unknown name, missing
+credential), `-p`/`run` prints the reason to stderr and exits **2** rather than
+returning a canned reply at exit 0. The stderr line names the source it came
+from, so a persisted choice sends you to `~/.candy-code/config.json` rather
+than to a `$CANDY_CODE_PROVIDER` nothing ever set. The interactive TUI keeps
+the opposite, lenient behaviour: it warns and opens an offline session, because
+refusing to launch an editor over a missing API key is worse than an offline
+one.
+
+### Exit codes and the JSON document
+
+The same three exit codes govern every subcommand below.
+
+| exit | meaning |
+| --- | --- |
+| `0` | the prompt ran and produced an answer, or the subcommand answered |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+
+`2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
+the invocation is malformed, no backend is ever selected, and a CI gate that
+retries on `1` would otherwise retry it forever. It also covers a subcommand
+handed a missing or unknown operand (`candy-code session`, `candy-code mcp
+bogus`, `candy-code completion tcsh`).
+
+`--output-format json` applies to `doctor`, `models`, every `session` verb,
+`mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
+one-shot path does, and
+the same `{"result":null,"error":{"type":…,"message":…}}` document on any
+failure — an operand error, an unknown session id, or an unreadable trusted
+`.mcp.json`. **The exit code never depends on the format**: `candy-code mcp
+list` and `candy-code --output-format json mcp list` return the same code for
+the same install, so a CI gate can be written either way. A refused config
+(absent, out of tree, untrusted) is an answer and exits `0` in both. `completion` is the exception, and deliberately: its output is a shell
+script you `eval`, and JSON-quoting it would produce something no shell can
+source — the same reasoning that keeps `--help` and `--version` plain text.
+
+A `1` from the engine already had its retries. Transient provider failures — a
+connect failure, a 5xx, a 408/429, an Anthropic `overloaded_error` — are retried
+inside the provider call with exponential backoff before the run gives up, so
+for a provider-selected run (and for the offline default, which is the engine
+too) `1` means "every attempt failed", not "one attempt failed". An outer retry
+still helps for an outage longer than the couple of seconds of backoff that
+spends; it is just not the first one.
+
+The retry lives in the provider call, so it covers the engine and nothing else.
+A run whose backend is either `$CANDY_CODE_BACKEND_CMD` variable's external command delegates
+instead of calling a provider, and its `1` is a first attempt — retrying it from
+outside is the only retry it gets.
+
+With `--output-format json`, stdout is always exactly one JSON object: either
+`{"result": <the answer>}` or `{"result": null, "error": {"type": "usage" |
+"provider_configuration" | "installation" | "backend" | "encoding" |
+"not-found" | "mcp-config", "message":
+"...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
+a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
+and `--root` usage errors too, which `bin/candy-code` catches before the one-shot
+path is entered, and for a reply or an error message carrying bytes that are
+not valid UTF-8 (they are substituted, not dropped along with the whole
+document). `error.type` is not the exit code renamed — `usage`,
+`provider_configuration` and `installation` are all `2`, `backend`,
+`encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
+that kept the code tells apart the kinds of each. The set's spellings are
+mixed by history, not by mistake: five names are single words or
+`snake_case`, while `not-found` and `mcp-config` are the two `kebab-case`
+names `src/Cli/Subcommands.php` added when its subcommand errors joined the
+contract. Renaming them to `snake_case` was weighed and declined;
+match exact strings, never an inferred alphabet. The one-shot JSON envelope also carries a top-level `"schema"` version key — currently `1` — so a consumer can branch on the document shape without sniffing for keys.
+
+One key is **conditional**, and it is the only one: `refusals`. A turn that
+blocked a tool call — a permission ASK that nothing could answer, an explicit
+`n` at the prompt, a hook that denied the call outright — adds
+`"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
+"<why it was stopped>"}, …]` to whichever document it emits, the answer and
+the error one alike. A row for an ASK that the run answered by refusing it
+because there was no terminal to ask at carries one extra key,
+`"unattended": true`; a refusal a human answered — with `n`, or an EOF at a
+live prompt — never does. One `kind` covers both nobody-being-there and a
+person-saying-no, whose reason texts are byte-identical, so this key is a
+qualifier on the row, not a fourth `kind`. `kind` is one of exactly three tokens and says which of
+those three things happened: `hook` (a hook denied the call outright),
+`refused` (an approver was asked and answered no) and `unanswered` (the call
+needed permission and there was nobody to ask). It is there so a consumer does
+not have to re-match the prefix `reason` opens with — that prefix is still
+present and unchanged, so a script written against the older document keeps
+working. Before this,
+the document read `{"result": "<the answer>"}` for a turn in which a tool was
+quietly not run, and the model — which *did* see the refusal — had simply
+answered around it. `refusals` is **absent, not empty**, on a run that refused
+nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
+the way to read it unconditionally. It is not a list of tool calls that
+*failed*: a tool that ran and returned an error is a result the model acted
+on, whereas a refusal is a call that never happened. That distinction is carried on
+the result by whoever refused the call, never read off its text, so a tool
+that ran and printed a line opening `Permission denied:` before failing — a
+shell script, an MCP server — is not listed (audit F-P8).
+
+On stdout, `--output-format text` carries no such list — it does not need one:
+**on the `-p` one-shot path, every refused tool call is announced on stderr,**
+one line per refusal, naming the tool and quoting the reason the model was
+given — which opens with `Hook denied:`, `Permission denied:` or `Permission
+required:` depending on whether a hook objected, you answered no, or nothing
+was attached to ask. The announcement happens on the one-shot path itself, so
+it appears on **both** formats: stdout under `text` stays the answer and
+nothing else, and under `json` it stays exactly one object, so a shell
+pipeline and `jq` are both unaffected. The interactive TUI has never had this
+gap — it draws a refused call struck through — but a **background session**
+still does: its runner calls the backend with a token callback and no event
+callback, so nothing downstream ever sees the refusal to announce it. That
+gap is known and recorded.
+
+Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
+that is the thing to know if you are reading the source to find where a type
+comes from. `installation` is hand-rolled by `bin/candy-code`'s autoload guard
+— see the one exception below for why it has to be. `not-found` and
+`mcp-config` come from the subcommands, which build their own documents
+through `Subcommands::emitDocument()`: `session delete <id>` on an id the store
+does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
+read or decoded. Both exit `1` — the store and the file were opened, so
+something was attempted; an absent, out-of-tree or untrusted `.mcp.json` is an
+answer rather than a failure and exits `0` with a `status` field saying so.
+
+Two shapes of that contract are easy to over-read, so both are stated
+plainly. **`result` is not always a string.** It is one on the one-shot path
+(`-p`/`run`), where the answer *is* text; every subcommand puts an object
+there — `{"result":{"checks":[…],"failed":2}}`, `{"result":{"sessions":[…]}}`.
+And **a failure does not always carry an `error` object.** `doctor` exits `1`
+when any check came back `FAIL`, and its document is still
+`{"result":{…}}` with no `error` key at all, because the failing checks *are*
+the answer and naming one of them `error.type` would say less than the report
+already does. (MEASURED: `candy-code doctor --output-format json` on an
+install with a failing check → rc 1, one `result` object, no `error`.) So
+branch on the **exit code** first and on `error.type` second; a consumer that
+reads `.error.type` to decide whether the run failed will read `null` on that
+one.
+
+There is exactly one exception, and it is not a case of the JSON renderer
+being unavailable — it is the caller asking for a rendering nothing implements:
+an **`--output-format` value that is not `text` or `json`**. That run exits `2`
+with an **empty stdout** and its message on stderr, because the requested
+rendering is the thing being rejected, so there is no format left to honour —
+emitting the JSON document anyway would mean guessing that `--output-format
+xml` meant `json`, and `text` is what an unrecognised value has always fallen
+back to. (MEASURED: `candy-code -p hi --output-format xml` → rc 2, stdout 0
+bytes.) Note the scope: it is the **invalid value** that is exempt, not the
+flag — a *valid* `--output-format json` alongside any other usage error, such
+as `--output-format json --config /nonexistent`, still emits the document.
+
+**A checkout with no `vendor/autoload.php` is not an exception either:** the
+guard in `bin/candy-code` emits the standard document itself.
+
+> The section used to claim *exactly two exceptions* to this contract, the
+> second being that missing-autoloader case, on the theory that the class
+> owning the document shape could not be loaded. `json_encode()` is a core
+> function; the shape never was unreachable. So today, on a checkout with no
+> `vendor/autoload.php`, `candy-code --output-format json -p hi` prints
+> `{"result":null,"error":{"type":"installation","message":"candy-code: cannot
+> find composer autoload.php"}}` and a newline on stdout, the same message on
+> stderr, and exits `2`. Because that copy is hand-rolled, a drift guard pins
+> it against `NonInteractive::emitErrorDocument()` key-for-key **and** the two
+> `json_encode()` flag expressions token-for-token, and each names the other.
+> The guard honours `--output-format json` read straight out of raw `argv`
+> (the option parser lives behind the same missing autoloader); any other
+> requested value leaves stdout empty, as before. Run `composer install` all
+> the same — the document reports a broken checkout, it does not repair one.
+
+With no provider configured at all, one-shot mode still answers offline from
+the `EchoProvider` and exits 0 — nothing was substituted for anything — but
+says so on stderr.
+
+### Running in CI and containers
+
+A bare interactive launch where neither stdin nor stdout is a terminal is
+refused with exit `2` rather than rendering into a pipe — an unattended run should say so
+explicitly, and that is what `-p` (or `run`) is for: one prompt in, text or
+`--output-format json` out, exit codes as above. `candy-code serve` is the
+long-running shape: the WebSocket/HTTP server behind the web UI, headless by
+design, which is what you keep alive in a container.
+
+Three knobs cover the container case. `HOME` roots all state — the
+`~/.candy-code` directory, session store, and trust records all hang off it,
+so a writable `HOME` (even a tmpfs one) is the only hard requirement.
+`CANDY_CODE_SERVER_DIR` relocates the server's private state directory (token,
+lock, control socket; default `~/.candy-code/server`), and
+`CANDY_CODE_SERVER_TOKEN` supplies the web sign-in token directly — there is
+no unauthenticated mode, so with the variable unset the server mints its own
+token into the state directory and prints a one-time sign-in URL, which is
+fine interactively but wrong for automation; set the variable from your secret
+store instead. Binding anything but loopback additionally needs the explicit
+`--allow-remote` acknowledgement.
+
+### Subcommands
+
+```sh
+candy-code doctor                    # check this installation, exit 1 if anything FAILs
+candy-code models                    # providers this install can select; * marks the selected one
+candy-code session list              # stored sessions, pinned then newest first
+                                     #   [--children] [--archived] [--all] [--limit N]
+candy-code session show <target>     # one session's details + transcript (Markdown)
+candy-code session rename <target> <title…>
+candy-code session delete <target>   # sub-agent children go too; [--with-children] takes branches
+candy-code session pin|unpin|archive|unarchive <target>
+candy-code mcp list                  # what .mcp.json declares — without starting anything
+candy-code mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
+candy-code mcp import claude|opencode <path>
+                                     # translate a foreign MCP config, print the block — writes nothing
+candy-code serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
+                                     #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
+                                     #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]
+                                     #   [--detach] [--parent-pid PID]
+candy-code serve status|stop|logs|url|token
+                                     # the running server: stop [--force], logs [-f], token [--rotate]
+candy-code attach [<session>]        # the TUI on a session of the running server — turns run there
+                                     #   [--url URL]
+candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start
+candy-code completion bash|zsh|fish  # a shell completion script on stdout
+```
+
+Every one of these is dispatched in the same pre-flight place `--help` and
+`--version` are, **before** `Program` is constructed: they answer on a machine
+with no provider, no API key and no TTY, and none of them but `attach` enters
+the alt-screen. `serve` is the one that keeps running: it binds `127.0.0.1:7420`,
+prints a one-time sign-in URL, and answers until `Ctrl+C` or `SIGTERM`. Every
+client must authenticate — loopback is not trusted on its own — and a
+non-loopback `--host`, the bypass permission modes and running as root are each
+refused unless their `--allow-*` flag is given; it also refuses to start
+without `ext-pcntl`, `ext-posix` and `ext-ffi` (`doctor` reports all three).
+On a wildcard `--host 0.0.0.0 --allow-remote` bind it answers to this
+machine's own addresses and its sign-in URLs name them; any other host name
+needs `--allowed-host` (or `server.allowedHosts`), and plain HTTP beyond
+loopback is cleartext — an SSH tunnel or a TLS reverse proxy is the safer
+route ([Remote access](docs/SERVER.md#remote-access)).
+`--allowed-ips 1.2.3.4,10.0.0.0/8` (or `server.allowedIps`) refuses every
+other client address before sign-in; loopback is always allowed.
+`--allow-dir-browse [--browse-root <dir>]` (off by default) lets the web UI's
+New session pick the project directory to start in, from the directory names
+under the browse root ([details](docs/SERVER.md#choosing-a-new-sessions-directory---allow-dir-browse)).
+The flags belong to `serve` (before it they are unknown options). `serve
+--detach` runs it in the background instead, printing the URL and pid once the
+port is bound; `serve status`, `stop`, `logs`, `url` (a fresh sign-in link) and
+`token` manage whichever server holds the state directory's lock, and
+`--parent-pid` stops it when the process that started it exits. `attach` is
+the one verb that opens the TUI, and only once it has connected: it follows a
+session of that server (an id, name or unique prefix; a new one without) and
+runs the usual screen over it — the server runs the turns and their tools,
+this terminal streams them and answers their permission questions, and
+quitting leaves a running turn running. Its
+transport, auth flow, background mode and security model are in
+[docs/SERVER.md](docs/SERVER.md). `acp` is the verb an editor runs rather than
+a person: Zed, JetBrains or Neovim starts it and speaks the Agent Client
+Protocol on its stdin and stdout — sessions open in the editor's project root,
+turns run here with this install's provider and tools, and the editor answers
+their permission questions ([docs/SERVER.md](docs/SERVER.md#editors-candy-code-acp)). `doctor` is the sharpest case — it is a health check for an install
+that may be broken, so it must not require the thing it is diagnosing. A
+config whose `permissionMode` is unusable makes the launch refuse to start
+(exit `2`, above); `doctor` still runs, names that as the failing check, and
+exits `1`.
+
+A session `<target>` is an id, a name or a unique id prefix — the resolver
+`--resume` uses, over every kind and archived rows too. Nothing matching exits
+`1` (`not-found`); an ambiguous prefix exits `2` and lists the candidates. The
+flags after `session list` and `session delete` belong to that verb: before it
+they are unknown options. `list` prints `★ id updated kind turns
+provider/model name` (★ = pinned, `[archived]` after an archived name), and its
+JSON rows carry every stored column (`kind`, `parent_id`, `pinned`,
+`archived_at`, `turns`, …). A pinned session lists first and is never pruned;
+an archived one leaves the default list, the tab strip and `--continue` but
+keeps its transcript.
+
+`doctor` is **read-only**: it counts the rows in the session database through
+`Bootstrap::sessionStore(prune: false)` rather than the plain accessor, so the
+opt-in `CANDY_CODE_SESSION_RETENTION_DAYS` sweep that a *launch* applies cannot
+delete conversations on the way to a health check. `doctor` and `models` take
+no operands and reject one at exit `2` rather than ignoring it.
+
+`candy-code doctor` is **not** the model-callable `doctor` tool. That one is
+registered in `Bootstrap::tools()`, advertised to the LLM, and answers a
+completely different question — which image protocol this terminal speaks, with
+a PNG capability swatch attached. The CLI subcommand reports PHP, the
+extensions the session store and `serve` need, the config file, the permission policy, the
+selected provider, the session database and the project MCP config, takes no
+model, and cannot be reached by a tool call.
+
+`mcp list` **reads and never runs**. `Bootstrap::mcpClient()` starts every
+configured server as a side effect of being asked for the client, so routing a
+listing through it would `proc_open()` every program the repository names — the
+exact act the trust gate exists to make deliberate, performed by the command
+you run *because* you do not yet trust the file. It shares its path,
+containment and trust decision with `mcpClient()` (both go through
+`Bootstrap::mcpConfigDecision()`), so it can never report a verdict the launch
+disagrees with; an untrusted or out-of-tree config is reported rather than
+enumerated.
+
+### Dependency-free shell-out
+
+To avoid PHP SDKs entirely, set `CANDY_CODE_BACKEND_CMD` to a command that reads JSON history on stdin and writes the reply to stdout:
+
+```bash
+export CANDY_CODE_BACKEND_CMD=~/bin/anthropic.sh
+./bin/candy-code
+```
+
+```bash
+#!/usr/bin/env bash
+# ~/bin/anthropic.sh — keeps PHP network-dep-free, swap models by editing this file
+payload=$(jq -nc --argjson h "$(cat)" '{model:"claude-opus-4-8", max_tokens:4096, messages:$h}')
+curl -sN https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" -d "$payload" | jq -r '.content[0].text'
+```
+
+There is a second variable for the *streaming* shell-out,
+`CANDY_CODE_BACKEND_CMD_STREAM`, and it is deliberately not the same one. It is
+a **token-stream** protocol, not a prose one: the wrapper writes **one token per
+line**, the newline *between* two tokens is framing and is dropped, and a
+**blank line means a literal newline** in the answer (an unterminated empty
+remainder at EOF means nothing). That blank-line rule is the only way the
+protocol can express a line break at all, and it is what makes it able to
+express any string.
+
+So the two contracts are mutually exclusive in both directions. Run the prose
+wrapper above through the streaming variable and every newline it emitted is
+gone while each blank line it emitted comes back as *one* newline rather than
+two — a paragraph break, a list and a code fence do not survive the trip. Run a
+token-per-line wrapper through `CANDY_CODE_BACKEND_CMD` and you get its framing
+newlines verbatim, one word per line. That is why the streaming backend has its
+own variable instead of inheriting this one. `CANDY_CODE_BACKEND_CMD` wins if
+both are set; for either variable, unset, empty and whitespace-only all count as
+absent. Neither path imposes any completion deadline.
+
+**"Streaming" buys you a live screen, not just the callback.** The backend
+invokes its per-token callback as each token's newline lands on the pipe, *and*
+the TUI repaints between the tokens. The second half used to be false and is
+worth recording because it was measured both ways: the read loop ran to
+completion inside one ReactPHP `futureTick`, so the event loop was blocked for
+the duration of the completion and the TUI repainted once, when the answer
+resolved. Measured against a wrapper emitting six tokens 300ms apart, with a
+50ms periodic timer standing in for the render tick:
+
+| | before | after |
+|---|---|---|
+| callbacks | 6, at 0.005s/0.304s/0.608s/0.907s/1.210s/1.514s | 6, at 0.010s/0.309s/0.609s/0.914s/1.214s/1.515s |
+| loop ticks during the stream | **0** | **36** |
+
+The read loop was not rewritten, it was hoisted: one implementation of the
+stdout protocol, driven either by the blocking path's own loop or by a periodic
+timer on the event loop. `CANDY_CODE_BACKEND_CMD` had the same defect in a worse
+form — its promise executor ran the blocking call *immediately*, so the freeze
+started before the promise was even returned — and is drained from a timer now
+too. The one-shot `-p` path passes no callback at all and blocks deliberately.
+See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md#the-two-shell-out-variables) for
+the byte-level comparison and for the Windows `bypass_shell` note.
+
+```bash
+export CANDY_CODE_BACKEND_CMD_STREAM=~/bin/ollama-stream.sh
+./bin/candy-code
+```
+
+```bash
+#!/usr/bin/env bash
+# ~/bin/ollama-stream.sh — satisfies the TOKEN protocol, not the prose one:
+# `jq -r` prints one line per streamed content chunk, and prints an EMPTY line
+# for a chunk that is just "\n" — which is exactly how this protocol spells a
+# line break. Do not point this variable at the prose wrapper above.
+payload=$(jq -nc --argjson h "$(cat)" '{model:"llama3", stream:true, messages:$h}')
+curl -sN http://localhost:11434/api/chat -d "$payload" | jq -r '.message.content'
+```
+
+## Server mode, web UI and attach
+
+`candy-code serve` runs the same engine headless, behind an HTTP + WebSocket
+server on `127.0.0.1:7420`, and prints a one-time sign-in URL. Three kinds of
+client drive it over the `candy-code.v1` JSON-RPC protocol:
+
+- **A browser.** With [`sugarcraft/sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web)
+  installed, `serve` hands out its pre-built Vue UI on the same port: a
+  sessions sidebar, a streaming transcript with tool cards and diffs,
+  permission cards, a composer that queues, steers or interrupts, tabs and a
+  tiled grid of live sessions, a server-wide approvals drawer, the settings
+  form, and the Agents, Todo, Background, Workflows and Memory panes.
+- **A terminal.** `candy-code attach [<session>]` opens the usual TUI as a
+  client of the running server: turns and their tools run on the server, this
+  terminal streams them and answers their permission questions, and quitting
+  leaves a running turn running.
+- **A script**, speaking the protocol directly; its JSON Schema is generated
+  into [`docs/protocol/candy-code.v1.schema.json`](docs/protocol/candy-code.v1.schema.json).
+
+`serve --detach` runs it in the background, and `serve status|stop|logs|url|token`
+manage it. Every client must authenticate (loopback is not trusted on its
+own), and a non-loopback `--host`, the bypass permission modes and running as
+root are each refused unless their `--allow-*` flag is given. Binding,
+authentication, the protocol's methods and events, background mode, workspace
+hosts, reverse proxies and the security model are in
+[`docs/SERVER.md`](docs/SERVER.md).
+
+**Editors** need no server. `candy-code acp` is an [Agent Client
+Protocol](https://agentclientprotocol.com) agent on stdio: Zed, a JetBrains IDE
+or Neovim (through an ACP plugin) starts it as a child process, for example in
+Zed's settings:
+
+```json
+{ "agent_servers": { "CandyCode": { "command": "candy-code", "args": ["acp"] } } }
+```
+
+Sessions open in the editor's project root and run through the same session
+host as `serve`: the same provider, tools, hooks, permission gate and session
+store, so an editor's session can be reopened in the TUI with `--resume`. The
+editor answers permission questions, switches the permission mode, cancels a
+turn, reloads a stored session and shows each edit in its own diff view. See
+[`docs/SERVER.md`](docs/SERVER.md#editors-candy-code-acp).
+
+## The agent loop
+
+`EngineBackend` bridges the chat-shell `Backend` seam to the engine. Each user turn runs a **bounded agentic loop**: call the provider through the `Runtime`, execute any tool calls through the hook gate, feed the results back, and repeat until the model answers without calling tools — or a `maxSteps` ceiling is hit (default 1000, `maxToolSteps` in `~/.candy-code/config.json`; `Task` sub-agents default to 200). A **repeat-call loop guard** watches the same tool called with the same arguments and getting the same result: the 3rd such call is warned, the 5th refused, the 8th ends the turn — the brake the spend cap cannot be on a provider that reports $0. A turn the ceiling or the guard stops gets one final request with tools disabled, asking the model to summarise what is done, what remains and what comes next. A reply that calls no tool and says nothing is not taken as the answer: one that only reasoned gets a single nudge asking for an answer or a tool call, and a fully empty one is re-requested up to twice — each extra call only while a step is left and the spend cap is not reached. After a compaction — `/compact`, the automatic tier, or a step summary inside the turn — the next request re-injects what the summary took out of view: up to five of the files the agent was working on, re-read from disk, its plan-mode plan, the bodies of the skills it had loaded, a fresh git snapshot and its open todo list (see docs/PROMPT_ENGINEERING.md). A delegated run (a `Task` sub-agent, a workflow or pool agent) also watches its own context window: once a request it sends still uses 80% of it after the step's own relief, the model is told once to wrap up or hand off, and at 90% the run is stopped — the `Task` result then carries its partial output and the resume id, so resuming it is the hand-off.
+
+```php
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Hooks\{HookManager, HookRegistry};
+use SugarCraft\Code\Tools\BuiltIn\{Bash, Read, Edit, Glob, Grep, WebFetch};
+
+$hooks = new HookManager(new HookRegistry());
+$hooks->registerBuiltIns();                       // audit + confirm-rm + protect-files
+
+$backend = (EngineBackend::new($provider, 'gpt-4o'))
+    ->withTools([new Bash(), new Read(), new Edit(), new Glob(), new Grep(), new WebFetch()])
+    ->withHooks($hooks);
+
+(new Program(new Chat(backend: $backend)))->run();
+```
+
+## Capabilities
+
+The subsystems one by one, with the security reasoning behind each default.
+Each has a page of its own under [`docs/`](#documentation-index) with the
+full detail; this section is the summary of record for what ships.
+
+- **Tools** — `Tools\BuiltIn\*`: <!-- tools:roster:begin -->`Bash`, `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch` (against `$CANDY_CODE_SEARCH_ENDPOINT`), `doctor` (a capability probe the model can call to report what this build/deployment actually supports), `Skill` (level 2 of the progressive-disclosure design below), `Lsp` (definitions/references/hover/symbols/code-actions/diagnostics from a language server), `Memory` (view, save, edit, delete and recall the persistent memory notes indexed in the system prompt), `RepoMap` (a ranked outline of the definitions the rest of the project references most, sized to a token budget), `Prune` (drop or distill its own finished tool outputs from what it is sent, by their `<ctx-ref r="N"/>` refs), `Todo` (the session's own checklist, rewritten whole on each call, at most one item in progress), `Compress` (replace a closed range of the conversation with its own summary — only on a turn you start with `/compress`), `Workflow` (runs a model-authored YAML plan of staged sub-agents), `Recall` (bring back, word for word, a tool output it pruned or a section it compressed, by its `rN` / `bN` ref), `Team` (a team task board for background teammates: claim, complete and dependencies over a shared task list, plus team messages), `ApplyPatch` (add, change, move and delete several files in one call from a `*** Begin Patch` patch, all or nothing), `AskUser` (put one question to the user, with optional choices, and wait for the answer), `PlanExit` (leave plan mode: put the written plan to the user for approval), `SendMessage` (message a sub-agent it launched — steer a running one, continue a finished one — or, from inside a sub-agent, its parent), `Subagents` (list, wait for or cancel the sub-agents it launched, and read the messages they sent back), `InterruptAgent` (make a running sub-agent skip the rest of its current step and read a message first), `GenerateImage` (render a still image from a text prompt on the configured Stable Diffusion server (sdapi or sglang-diffusion)), `GenerateVideo` (render a short video from a text prompt on the configured video job server), and `PtyRun` (runs a terminal program on a real pseudo-terminal and drives it — each step types keystrokes and captures the screen bytes that follow, and an expectation fails loudly when the frame does not change as predicted). These are **runtime tool names**, the same spelling the launch report and every `allowedTools`/`disabledTools`/`permissionRules` pattern uses; twelve of them differ from their class file, which is why the list is not a directory listing — `doctor` is `Doctor.php`, `Skill` is `SkillTool.php`, `Lsp` is `LspTool.php`, `Memory` is `MemoryTool.php`, `RepoMap` is `RepoMapTool.php`, `Workflow` is `WorkflowTool.php`, `Team` is `TeamTool.php`, `AskUser` is `AskUserTool.php`, `PlanExit` is `PlanExitTool.php`, `SendMessage` is `SendMessageTool.php`, `Subagents` is `SubagentsTool.php`, `InterruptAgent` is `InterruptAgentTool.php`. Twenty-eight classes ship on every launch, and `Bootstrap::tools()` ships all twenty-eight; `src/Tools/BuiltIn/` also holds `BoardPostTool.php`, whose runtime name `BoardPost` is offered only to the members of a parallel `Task` batch, to post to the board they share, `BoardReadTool.php`, whose runtime name `BoardRead` is offered only to the members of a parallel `Task` batch, to read the board they share, and `TaskTool.php`, whose runtime name `Task`<!-- tools:roster:end --> joins the set only when the launcher threads an `AgentManager` into the build — every live `chat()` threads one, so `Task` is present in every real run and absent only from a bare `tools()` call built without a manager. **Be precise about what "ships" buys for `Lsp`:** it is REACHABLE on every launch and USEFUL once you list a language server under `lsp` in your own `~/.candy-code/config.json` (e.g. `{"lsp": {"php": {"command": "intelephense", "args": ["--stdio"]}}}`; user tier only, because starting a server is code execution). With none configured every call returns an *error* naming the language it could not ask — an empty success would read to the model as "this symbol has no references", which is a fabricated fact about your code. With one, `LspLauncher` starts each server once at launch, in the TUI parent, and stops it at exit; `LspConnection` is fork-safe, so forked turns and sub-agents share it — request ids are process-unique, every exchange is serialised under a cross-process lock that also carries unread output, a frame half-written or half-read by a killed process is repaired by the next caller, server notifications reach every sharer, and only the starting process can shut the server down. The same servers re-check every file `Edit`/`Write` touches and append up to 20 errors per file to the edit's result (`PostEditDiagnosticsHook`, waiting at most 5 s), answer `Lsp`'s `diagnostics` by re-checking the file on demand, and give `Read` an outline of a file too long for one page — from the server when there is one, from the source text otherwise. `Lsp` is classified read-only by the permission gate, so `plan` mode allows it without prompting: every one of its operations is a query, and the mutating half of LSP (rename, formatting, applying a code action's edit) is absent from the tool by construction. `Skill` is classified read-only too: loading a text file into context is the same risk class as `Read`, so no permission mode prompts or denies for the call itself — what the loaded body then tempts the model to *do* passes each later call's own gate. The tool resolves `name` by exact registry key first, then by a display name unique among the listed skills (a shared one answers an error naming the colliding keys), and the result carries a `> Base directory for this skill:` line so a body's relative references have an anchor. `RepoMap` is Aider's repo map as a tool: it ranks the files `git ls-files` lists by PageRank over which files reference which definitions and outlines the winners to a token budget, mapping PHP with the engine's own tokenizer and every other language only when Universal Ctags built with `+json` is on `PATH` (`doctor` says which); symbols are cached per project under `~/.candy-code/cache/repomap/`, so only the first call in a checkout pays for the parse. `Write` was the odd one out until recently: it was written, tested and referenced from this README, but never listed in that array, so no real run could reach it and `Edit`'s `file_exists()` precondition left `Bash` as the model's only way to create a file. `Bash` takes an optional `timeout` in seconds (default 120, max 600 — the `bashTimeoutSeconds` and `bashMaxTimeoutSeconds` settings; out-of-range values are clamped, never unbounded): past it the command and its whole process group are killed, and the result keeps the output produced so far plus a line saying it timed out — `interactive: true` runs take the same number as their wall bound beside the idle ceiling. `Edit` matches `old_string` exactly first and then through a chain of looser stages — one indentation shift, whitespace-trimmed lines, collapsed runs of spaces, a block anchored by its first and last lines, folded curly quotes and dashes — each of which must find exactly one place; the result names the stage that matched, a loose match far out of proportion to `old_string` is refused, and further replacements in `edits` are applied in order, all or nothing. `ApplyPatch` brings the same chain to a `*** Begin Patch` patch that adds, updates, moves and deletes several files in one call: each hunk is found by its text (after its `@@` anchor lines and the hunk before it) and must match exactly one place, every path goes through the same jail, permission check and `protect-files` screen as `Edit`, and if any section fails no file is changed. `Read`, `Edit`, `Write` and `ApplyPatch` share one session read ledger (`Tools\ReadLedger`, one per launch's tool build): an edit, an overwrite or a patch of a file that changed on disk after the model last read it — by the user, a formatter or a command; compared by content, so a `touch` is not a change — is refused with the file left untouched until the model reads it again, and each turn's context lists the files that changed since they were read. A file the model never read is never refused. Implement `Tools\Tool` for your own.
+- **Hooks** — `Hooks\*`: pre/post-tool-use guards (allow / deny / **modify** the input / **ask** the user). `HookManager::registerBuiltIns()` registers `AuditHook`, `ConfirmRemoveHook` and `ProtectFilesHook`; `BashEscapeDenyHook` is registered separately by `EngineBackend::withWorktreeRoot()`, since it needs the worktree root to decide what counts as an escape; and every engine turn registers a fresh `RepeatCallGuardHook`/`RepeatCallCountHook` pair (the repeat-call loop guard, see [The agent loop](#the-agent-loop)) on its own copy of the chain. YAML config and external `ScriptHook` supported: a hook script's exit code selects the outcome — `0` allow, `1` deny, `2` hard block, `3` ask (stdout becomes the question), `4` modify (stdout must be a JSON object replacing the tool input, or the call is denied rather than run unmodified). Hook files are read from `~/.candy-code/hooks.yaml` and — **only if you have opted that project in** — `<project>/.candy-code/hooks.yaml`, after the built-ins and before the permission gate. Both files are **additive**: a hook may not reuse the name of a built-in guard, of the permission gate, or of a hook the other file already declared — a config file may add to the chain, never replace what is in it.
+
+  - Note the flip side of refusing rather than overriding: if a project file you have trusted declares a hook `name:` your own file already uses, `candy-code` stops with exit 2 in that directory until one of the two names changes. A hook that rewrites the tool input (exit `4`) has its rewrite **re-judged by the whole chain** before anything runs — so a rewrite to `rm -rf /` is caught by `ConfirmRemoveHook` on the next pass rather than executed.
+
+  - Read that as "a rewrite gets no privilege the original call would not have had", **not** as a safety net: the re-scan is only as wide as the hooks in the chain, and a rewrite to something the built-ins have no opinion about (`curl … | sh`) re-scans clean and runs.
+
+  **A project hook file is code execution, so it is off by default.** A hook entry is a shell command and a `matcher: '.*'` entry runs it on the model's first tool call — so honouring `<project>/.candy-code/hooks.yaml` means that `git clone <repo> && cd <repo> && candy-code` runs shell **that repository's author wrote**, with no prompt and nothing in the transcript. No permission mode protects you from it (`plan` included): config hooks are registered before the permission gate, and a scan stops at the first refusal, so the payload has already run by the time the gate would have refused. CandyCode therefore ignores a project hook file unless *your* `~/.candy-code/config.json` — a file no repository can write — names that project in `trustedProjectHooks`:
+
+  ```json
+  { "trustedProjectHooks": ["/home/you/work/my-repo", "~/src/other-repo"] }
+  ```
+
+  Paths are matched by real path, so a symlinked or trailing-slash spelling of a trusted root still matches. The match is **exact, not a subtree**: trusting `~/src` does not trust `~/src/anything` — list each repository you mean, and note that a trusted root's sibling sharing its spelling (`my-repo-evil` beside `my-repo`) is never trusted by accident. An entry must also be **absolute** (or `~/`-rooted): a relative one like `"."` is resolved fresh against the current directory on every launch, exactly as the project root is, so it would always agree and turn a per-path allowlist into "trust every repository I `cd` into". Such an entry is refused and reported rather than honoured. When a project hook file is present and *not* trusted, the launch says so on stderr — once per launch, naming the canonical absolute path to add — rather than dropping it silently. Your own `~/.candy-code/hooks.yaml` is never gated: you wrote it, and that premise is enforced rather than assumed — if this process cannot determine which home directory is yours (`$HOME` unset, `$USERPROFILE` unset, and no passwd entry for its uid) the launch **stops** rather than reading a hook chain or a permission policy out of a world-writable fallback directory.
+- **Permission modes** — `Permissions\*`: `PermissionGate` evaluates a tool call against one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`), with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured. Under `auto` a security finding — fetched code piped to a shell, data sent to an endpoint, credentials, `.git` and policy files — is put to you rather than refused unseen, and with `"autoReview": true` (user tier only) every other flagged call is first reviewed by the title model, which may allow it, ask you or deny it ([`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#what-auto-classifies)). It reaches the main loop as `PermissionGateHook`, registered *after* the built-ins so a narrow, specific hazard ("Bash path outside the workspace root") reports before the broad policy one ("mode `plan` does not allow Edit"). Set the mode with `$CANDY_CODE_PERMISSION_MODE` or a `permissionMode` key in `~/.candy-code/config.json` (or `settings.json`, which it outranks); add `permissionRules` entries like `{"pattern": "Bash*", "action": "deny"}` for per-pattern overrides. A pattern is `Tool` or `Tool(argument-glob)`, both halves `fnmatch()` — so `Bash(rm -rf *)`, `Read(./.env)`, `Read(./secrets/*)`, `mcp__*__push`. **Argument-scoped patterns matched nothing at all before this release**: the matcher compared the tool name only, so `Deny Bash(rm -rf *)` evaluated to `allow` while the documentation said otherwise. They work now, and two things about them are worth knowing rather than discovering. **Every argument-scoped `Deny` is advisory**, shell and path alike. A shell one survives whitespace runs and a command hidden behind `&&`/`;`/`|`/newline, and does *not* survive `/bin/rm`, `$(echo rm)`, `bash -c '…'` or `find -delete`, because no pattern over shell text can. A path one survives the `./` prefix, `//` runs and `.`/`..` segments — all normalised away on both sides, so `Read(./.env)` also covers `.env`, `.//.env` and `./foo/../.env`, none of which it caught in the first cut of this feature — and a *restrictive* path pattern spelled relatively additionally reads as "at any depth", so it covers `/home/you/proj/.env` too (a permissive one does not, or `Allow Read(.env)` would grant `/etc/.env`). It does *not* survive a symlinked spelling of the same file, and nothing here touches the filesystem: resolving would make the decision depend on the process's cwd and race the tool being gated. So treat any `Tool(...)` deny as a guard rail against the model doing something by *accident*, not as containment. The boundaries that do not depend on a spelling are `plan` mode, which refuses whole tool kinds, and the path jails, which resolve. The mode-independent `rm -rf /` breaker reads like a third and is not one: unswitchable is not unevadable — it reads `arguments['command']` and tokenises it without expanding anything, so while `/bin/rm -rf /` and `rm '-rf' ~` are caught, `bash -c 'rm -rf /'` and `$(echo rm) -rf /` are past it. (Its own newline-chain hole *was* real and is fixed here: `echo hi⏎rm -rf /` was **allowed** under `bypass-permissions` while `echo hi && rm -rf /` was denied.) And an argument-scoped rule does **not** refuse a *declaration* (a workflow stage's `tools: [Bash]`), only a real call: one `Deny Bash(rm -rf *)` should not make every stage that declares `Bash` unusable. A pattern the grammar cannot parse is reported on stderr — naming the reason it actually gave, which is either an unterminated `(`, a `)` that never opened, an empty pattern, or a missing tool-name half (`(rm *)`) — and skipped rather than loaded as a rule that would match nothing. **The default depends on the path.** The **TUI starts in `default`**: reads run, and every write, shell command and network call asks through the y/n/a modal — on `Chat`'s own tool path and, through the turn's two-way frame channel, on the engine path too — with `/rewind`'s workspace checkpoints behind whatever you allowed. It used to start in `bypass-permissions`, because an ASK on the engine path could not reach the screen and an asking default would have refused every edit; that is fixed (see *Permission prompts* below). A `Task` sub-agent asks through the same modal, a parallel member included: its question is relayed through the turn, one at a time, naming the agent that asked. **`-p` and background sessions start in `bypass-permissions`**: their approver asks on stderr at a terminal and *refuses* without one, so an asking default would turn an unattended CI run's first edit into a refusal. Be clear about what that costs, and what it now buys (owner ruling 2026-10-06): under `bypass-permissions` the guard hooks **stand down** — `ConfirmRemoveHook` stops refusing, the secret and file-class rows of `ProtectFilesHook` stop refusing, and `Ask`-class rules answer allow — so the shipped console default deliberately decides *less* than having no gate, which enforces the full chain. What still refuses in bypass: the unswitchable `rm -rf /` circuit breaker, your own `Deny` rules, and the policy-self-grant floor (`.candy-code/hooks.yaml`, `config.json`, `agents/`, `.git/hooks/`, `.git/info/` writes), which is what keeps the bypass switch itself from being turned off by the model. Any mode you configure (flag, variable or key) applies on every path alike.
+
+A permission setting that is **present but unusable stops the launch** (exit 2 — see the exit-code table above) instead of falling back to the permissive default: a `~/.candy-code/config.json` that is unreadable, unparseable, whose top level is a JSON *list* rather than an object, or that is not a regular file at all (a directory or a dangling symlink of that name); a config directory this process cannot search (so whether a policy is configured there is unknowable); or a `permissionMode` — in either source — that names no real mode. A **hook file** is held to the same standard, for the same reason: an unreadable or unparseable `hooks.yaml`, a top level that is a YAML *list* rather than a mapping, a top-level key that is not `hooks:` (a typo'd `hook:` used to install zero guards and say nothing), a key on a hook *entry* that is not one of `name` / `matcher` / `command` / `description` / `disabled` / `timeout` (`mather:` used to fall back to the `.*` default and run the hook on every call; `enabled: false` was accepted and ignored, and so was `timeout:` back when this format had no such key — it has one now, and it is honoured), an unknown event name, a matcher that is not a valid regular expression, a `disabled` that is not `true`/`false`, a `timeout` that is not a positive *finite* number of seconds (`0`, `-1`, `.inf`, `1e400` and `.nan` are all refused rather than read as “no timeout”, and so is a `timeout:` written with no value after it), a hook with no command, or a name collision all stop the launch rather than quietly leaving the chain a guard short. `disabled: true` keeps that entry out of the chain while still validating everything else about it; a matcher may contain `/` (the delimiter is chosen to avoid whatever the pattern uses). Absence is not an error: a fresh install with no config, no hook file, and a zero-byte config all get the default. Individual malformed `permissionRules` entries are skipped (never coerced to `allow`) and reported on stderr, because the list is item-wise in a way a JSON syntax error is not; so is a `"permissionRules": null` that is *present* rather than absent, since someone who typed the key believes they configured rules. An error message also names the file the bad value came from, `settings.json` or `config.json`, rather than always naming the one the CLI writes.
+- **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins (`src/Skills/BuiltIn/`), `<project>/.candy-code/skills`, and `~/.candy-code/skills` (lowest to highest: **your own skill beats a project's** of the same name, and a project's beats a built-in; every shadowed skill is reported through `SkillManager::skipped()`, the launch notice and `CANDY_CODE_DEBUG_SKILLS=1`). Ships 8 built-ins spanning language/framework conventions (`php-best-practices`, `laravel-best-practices`, `symfony-best-practices`), testing (`phpunit-master`, `testing-strategies`), `api-design`, `security-audit` and `composer-wizard`. The SugarCraft monorepo's own skills (`explore-codebase`, `worktree-workflow`, `mcp-authoring`, `matchups-sync`) live in the monorepo's project tier (`.candy-code/skills/` at its repository root), so they load only inside that checkout — as built-ins they were listed to every project, and one told the model to discard a dirty tree's uncommitted work. `disable-model-invocation` and `user-invocable` frontmatter flags are enforced, not decorative. `context: fork`, `allowed-tools`, `disallowed-tools`, `model` and `effort` are parsed and **not acted on** — there is no fork executor, so a `context: fork` skill behaves exactly like a `thread` one — and the launch says so: one aggregated row names every skill, agent preset, command or rule that declares an inert field or an unknown key (with a did-you-mean for a near miss such as `permisionMode`), and never refuses the file for it ([`docs/SKILLS.md`](docs/SKILLS.md#diagnostics)).
+
+  - Loading is **progressive**: the system prompt carries only each skill's name + description, and the model pulls the full `SKILL.md` body through the `Skill` tool when it decides one is relevant.
+
+  - Path-scoped skills self-announce — the first time `Read`/`Edit`/`Glob` touches a file a skill's `paths:` covers, that skill is surfaced (once per session, via one shared announce-set across the three tools). Those `paths:` globs are `fnmatch()` semantics **without `FNM_PATHNAME`**, so a single `*` crosses `/`, and `**` means zero or more directory levels **at any position, the first included** — which is a behaviour change worth knowing about if you wrote a skill against the older matcher: a leading `**` used not to claim files at the tree root and now does, so the three shipped skills scoped `**/*.php` or `**/*Test.php` (`security-audit`, `php-best-practices`, `phpunit-master`) now fire on a root-level file where they used to stay silent. [`docs/SKILLS.md`](docs/SKILLS.md) has the measured table.
+
+  - Skills authored for other CLIs are imported rather than ignored — `~/.agents/skills`, `<project>/.agents/skills`, `~/.claude/skills`, `<project>/.claude/skills`, `~/.opencode/skills`, `~/.config/opencode/skills` and `<project>/.opencode/skills` are all scanned, and the picker shows a provenance badge for where each one came from (symlinked skill directories are followed, which is how those trees are commonly laid out — but a link is **confined**: one in your own `~/.claude/skills` may point anywhere else in your home, while one in a cloned repository's `<project>/.claude/skills` may not leave that skills directory. That confinement is enforced on the *directory* as well as on each entry in it, and both halves are needed: an entry is judged against the skills directory's real path, so committing `.claude/skills` **itself** as a link used to relocate the boundary rather than trip it — every `SKILL.md` under the target was read, and a skill body is prompt context. The directory is therefore held inside the checkout it came from, which is the one path in the pair a repository cannot have forged; a link that stays inside the checkout (`.claude/skills -> shared/skills`) is still honoured, and a refused tree is dropped without disturbing your own or the built-ins. Be precise about what that buys, though: "inside the checkout" is not the same as "committed", since a checkout also holds untracked and gitignored files — so what is closed is a repo reading files from *outside* the tree you cloned, not every conceivable in-tree misdirection. A refused directory is named on stderr at launch rather than silently skipped. Both directory-level checks — this one and the workflow tier's — are the single predicate in `Support\ContainedPath`, which is also where the difference between them is written down: an entry resolving *onto* its boundary is fine, a directory resolving onto its trust anchor is not. The walk is also depth- and breadth-bounded, so a link to a huge tree cannot cost seconds per launch).
+
+  - Collisions resolve so that **nothing you did not write can re-point a name you already use**: the tier decides first — built-in < project < user, whatever the format — so a cloned repository's `.candy-code/skills` or `.claude/skills` copy cannot replace a skill in your `~/.candy-code/skills`, `~/.agents/skills`, `~/.claude/skills` or `~/.config/opencode/skills`, because a project's skill arrives with whatever you cloned (it used to: native project skills outranked yours, audit 15d-03). Inside one tier a native skill wins over an imported one, and among the foreign tools the fixed order is spec < claude < opencode (the least tool-specific convention loses). An imported `SKILL.md` that will not parse is another tool's file and not something you can fix, so it is skipped quietly rather than logged to stderr on every launch; the launch prints **one** line saying how many were skipped, and `CANDY_CODE_DEBUG_SKILLS=1` lists them (they are also readable from `SkillManager::skipped()` and, for the launch as a whole, `Bootstrap::skillSkips()`).
+- **Agents** — `Agents\*`: 6 sub-agent presets (coder/reviewer/debugger/architect/tester/devops) with their own model, tools, skills, and a streaming lifecycle, dispatched through `AgentWorkerPool` (`pcntl_fork`-based, with a synchronous fallback + warning when `pcntl` is unavailable).
+- **Teams & worktrees** — the `Team` tool over `Agents\{Team,TeamManager,Teammate,TaskList,Mailbox}`: the lead `create`s a team and `add`s tasks with dependencies, staffs it with background `Task` teammates (capped per team), and each teammate atomically `claim`s, `complete`s or `fail`s `TaskList` tasks (SQLite `flock`-backed, compare-and-swap on a revision, contention-tested) and exchanges append-only JSON-lines mailbox messages (`message` / `inbox`); see [Teams and worktrees](docs/AGENTS_AUTHORING.md#teams-and-worktrees). `Agents\{WorktreeConfig,WorktreeManager,PathJail}` give each teammate an isolated git worktree (`.worktreeinclude`-aware, swept for staleness) sandboxed by a path jail.
+- **Workflows** — `Workflows\*`: `WorkflowBuilder`/`WorkflowRegistry`/`WorkflowEngine` run multi-stage agent pipelines — sequential `stage()`, fan-out `parallel()`, chained `pipeline()`, and task-then-verifier `withVerification()` — defined as PHP DSL files or YAML (`WorkflowRegistry::loadYaml()`). SIGINT/SIGTERM during `run()` captures a real pause file for later resumption at stage granularity. Discovered from `~/.candy-code/workflows` and `<project>/.candy-code/workflows` (project wins), and driven from the chat with `/workflow run|pause|resume|status|list`.
+
+  - The two tiers are **not** equally capable: a `.php` workflow is loaded by `require`ing it, so only the user tier honours one — a `.php` file in a project's directory is neither listed nor loaded, because a workflow you cloned should not be able to run its own code the moment you name it.
+
+  - Symlinks in a project's workflow directory are **confined** to it: a committed `deploy.yaml -> ~/.ssh/id_rsa` is neither listed nor loaded, so a repo cannot ship a link that reads your files — not even into an error message (a rejected file used to be reported with the YAML parser's message, which quotes the line it choked on). That confinement is enforced on the *directory* as well as on each entry in it, and the two are separate checks for a reason worth knowing: an entry is judged against the workflows directory's real path, which is an answer that moves with the directory, so committing `.candy-code/workflows` **itself** as a link used to relocate the boundary rather than trip it — every `*.yaml` basename in the target was listed and every one that parsed was loaded. The directory is therefore held inside the checkout it came from, which is the one path in the pair a repository cannot have forged. A link that stays inside the checkout (`.candy-code/workflows -> tools/workflows`) is still honoured: that is repo content pointing at repo content, the same trust as a committed `.yaml`. A link inside your own `~/.candy-code/workflows` is still followed; that directory is yours. A *dangling* link is refused rather than granted — it names no workflows, and a committed link to a path that does not exist yet is a request to read whatever appears there later — while a directory you simply have not created is still named in the "not found" message. And note the boundary is the checkout, not the workflows directory, for the directory-level check, which has a residual worth stating: a checkout also holds untracked, gitignored, developer-local files, so a repo committing `.candy-code/workflows -> <some other directory in the checkout>` can still disclose that directory's `*.yaml` basenames and descriptions. What the check refuses is the version of that worth having — a link resolving **onto the checkout root**, which is where local files like `local-secrets.yaml` actually sit and which `-> ..` reached in one committed line. Reduction, not elimination. Whichever tier refuses a directory, the launch says so on stderr, naming the path and where it resolved to. The same boundary and the same predicate (`Support\ContainedPath`) hold a cloned repository's `.claude` / `.opencode` / `.candy-code` **skills** directories — see the Skills bullet above; the two tiers ran separate copies of the idiom until the skills one turned out to be missing the directory-level half entirely.
+
+  - A project's `.yaml` workflow is declarative and does run: its tasks are dispatched as sub-agents carrying the launch's `PermissionGate`, and a stage that **declares** a tool the session's permission mode denies (`tools: [Bash]` under `dont-ask`, say) is refused before the workflow's *first* stage is dispatched, not when that stage is reached. Be precise about the limit of that, though, because "denied tools are refused" reads as more than it is. Which modes can refuse a *declaration* is a per-mode answer: `dont-ask` refuses every non-read-only tool; `plan` refuses `Edit`/`Write`/`mcp__*` but **not** `Bash`, because Plan judges each Bash call by its command (read-only commands run, everything else is denied) and a declaration has none; `auto` refuses **nothing** through its mode logic, since its judgement is `SafetyClassifier`'s and the classifier reads the command out of the arguments too — under `auto` only an explicit `Deny` rule refuses a declaration. `default`/`accept-edits` *ask*, and an `Ask` is deliberately not a refusal: the question belongs to the call, not to the declaration.
+
+  - Nor is the declared list a capability *boundary*: a parallel stage's agents are all handed the first task's `tools`, so the list is a request that gets permission-checked, not a sandbox. Per-*call* gating does happen now: on a launch with a provider, every stage agent is a real tool loop through the chat's own engine (`Agents\EngineExecutor`, run in the pool's forked child), so each tool call a stage makes passes the session's hook chain and `PermissionGate` at the moment the model asks for it — the declaration check above is the up-front half, the per-call gate the second. (`/workflow run` does not block the TUI while it runs — see *Limitations* below.) See [`examples/workflows/lint-then-fix.yaml`](examples/workflows/lint-then-fix.yaml) for a runnable YAML example and [`workflows/deep-research.php`](workflows/deep-research.php) for the PHP DSL form.
+- **MCP** — `MCP\*`: multi-server client (stdio + HTTP, `.mcp.json`, `${VAR}` interpolation) and stdio/HTTP servers to host your own tools. Per-agent-preset `mcpServers` allowlists are enforced at grant-resolution: `AgentManager::resolveGrantedTools()` narrows a sub-agent's roster to the bridges of the servers its preset names, consulting the same law `McpRouter` applies (`McpRouter::serverAllowed`) — an empty or absent list means allow-all, and the main interactive chat carries no preset, so it stays unrestricted as recorded. The `McpClient`-side `AgentPreset` arm remains the tested fail-closed mechanism for a routed client.
+
+  - The `disabledMcpServers` setting (server names or `fnmatch` globs such as `untrusted_*`) is the global deny list: a matching server is never started, listed or called, for the main chat and every sub-agent alike.
+
+  - A configured server's tools reach the model as ordinary tools named `mcp__<server>__<tool>` (`Tools\McpToolBridge`), on the same PreToolUse chain `Bash` rides; a call is addressed to the server the bridge belongs to, so two servers each exposing `search` do not collide. The chain is shared, but the *decision* is not always the same one: measured across all six permission modes, an unhinted `mcp__*` name and `Bash` agree in four and diverge under `plan`, where `Bash` is allowed for exploration and the `mcp__*` name is denied as a write tool, and under `auto`, where the `mcp__*` call asks — the conservative direction, since a server-side tool's effects are unknowable from here. `dont-ask` denies every unhinted MCP call outright. A tool whose trusted server declares `annotations.readOnlyHint: true` (and not `openWorldHint: true`) is classified as a read instead, so it runs unasked wherever `Read` does ([`docs/PERMISSIONS.md`](docs/PERMISSIONS.md)).
+
+  - Note also that the wire name is the *sanitised* one, so a permission rule for the `.mcp.json` key `github.com/foo` must be written `mcp__github_com_foo__*`; the permission prompt shows you the sanitised name at the moment it asks.
+
+  - Configs copied from other tools are read verbatim — `type: local`/`remote`, a whole-argv `command` array, `environment`, and `enabled` are normalised at launch — and a no-auth `http` remote runs from its `url` alone with nothing to register; [`docs/MCP.md`](docs/MCP.md) works both spellings through under "Adding servers".
+
+  **A project `.mcp.json` is code execution too, so it is off by default — same gate, separate key.** Starting an MCP server means `proc_open()`ing a program the *repository* chose, at launch, before any tool call and in **every** permission mode including `plan` — the permission gate sees tool calls, and this happens earlier. It is not even conditional on the server working: a bogus entry's command runs, the handshake fails, and the server is discarded. So `<project>/.mcp.json` is honoured only when *your* `~/.candy-code/config.json` names that project in `trustedProjectMcp`:
+
+  ```json
+  { "trustedProjectMcp": ["/home/you/work/my-repo"] }
+  ```
+
+  **The grant covers the servers you trusted, not whatever the file says next** (audit MCP-5). Each server's command, args, env (as written, `${VAR}` unresolved), url, headers and type are fingerprinted per project in `~/.candy-code/mcp-trust.json`: the first launch under a grant records what it starts, and from then on a server whose fingerprint changed — a `git pull`, a branch switch, a contributor's checkout — or that was added is **not started**, and the launch names it with the command line it was recorded as and the one it has now. `candy-code mcp trust`, run in the project, shows every entry as `new`/`changed`/`unchanged`, adds the root to `trustedProjectMcp` if it is missing, and records the file as it is now.
+
+  Everything said above about `trustedProjectHooks` — real-path matching, exact roots rather than subtrees, absolute-or-`~/` entries only, the list frozen for the process — holds here identically, because it is the same parser. It is a **separate** key on purpose: trusting a repo's `hooks.yaml` is not the same decision as letting it start long-lived server processes, and reusing the hooks list would have widened an existing grant on upgrade rather than at the user's request. An untrusted `.mcp.json` is reported on stderr, naming the file, the reason and the key to add, rather than dropped silently — and a *trusted* config that is broken is reported too: an unreadable file, invalid JSON, a top level with no `mcpServers` object, and an entry that cannot be built (an unknown `type` such as `sse`) each put a line naming the file and the reason on stderr and in the transcript, and every other server still starts. The one quiet case is a server whose program will not start — a `command` that is misspelled or not installed: it is skipped at launch, and `/mcp` marks it ` · not up` (see [`docs/MCP.md`](docs/MCP.md#liveness-in-a-running-session)).
+
+  - A server's handshake (`initialize` + `tools/list`) is bounded by a 60s wall clock — generous because a first-run `npx` server fetches a package tree before it answers — overridable per server with `"startTimeout": <seconds>`; a `tools/call` carries its own ceiling and is **bounded by default at 120 s** (`StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS`) — a hung third-party server must cost one call, never the session, and a legitimately slow one (a build, a crawl) raises the number per entry with `"toolTimeout": <seconds>`; there is deliberately no way to switch the bound off. While a call runs alone in a turn it sends the turn a heartbeat, so the turn’s 120 s idle watchdog does not kill a long call; when a call reaches its ceiling the wait is abandoned and the server gets `notifications/cancelled` ([`docs/MCP.md`](docs/MCP.md)). Every MCP answer is capped at 65,536 bytes, with a marker naming what was cut.
+- **Sessions** — `Session\SessionStore`: SQLite (WAL) persistence of sessions/messages/tool-calls with FK-enforced cascade. **Retention is opt-in and off by default**: set `$CANDY_CODE_SESSION_RETENTION_DAYS` (or the `sessionRetentionDays` setting) to a positive number of days and each launch drops sessions untouched for that long, reporting on stderr exactly what it removed. **A session you have named or pinned is never pruned, whatever its age** — a name is the signal you meant to keep it, and a pin is the explicit form of it — and neither is the session the launch is about to resume. A sub-agent's session is pruned only with the session that spawned it, and a branch outlives its pruned or deleted source (it is detached, not deleted).
+
+  - Each row records its kind (`main`, `branch`, `subagent`, `background`), its parent, whether it is pinned or archived, its turn count and the last prompt you sent; `Session\SessionQuery` filters on them.
+
+  - A finished `Task` sub-agent is stored as a `subagent` child of the session that delegated it — named `<description> (@<agent>)`, with the whole conversation the sub-agent's own process logged to `~/.candy-code/subagents/` — so it can be reopened after it ends ([`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#sessions-and-state)).
+
+  - `Session\EnhancedSessionStore` adds the per-turn `/rewind` checkpoints on top; message bodies are content-addressed and stored once each, so the conversation itself costs storage proportional to its length rather than to its length squared (the per-checkpoint list of message references is still proportional to the length).
+- **Tokens & export** — `Util\TokenTracker` (token + cost accumulation, fed one entry per settled turn from the provider-counted figures on `Usage`, and read by `/budget` and the status bar's spend readout) and `Util\Exporter` (Markdown / JSON / text transcripts).
+- **Messages** — typed `Messages\{System,User,Assistant,ToolResult}Message`; `UserMessage` carries file/image attachments; `AssistantMessage` carries tool calls + reasoning.
+- **Context files** — `CLAUDE.md`/`AGENTS.md` at the project root (or another agent's `GEMINI.md`/`.cursorrules`/`.clinerules`) are loaded into the system prompt, after your personal `~/.candy-code/AGENTS.md`, with `@import` expansion (cycle- and traversal-guarded, and de-duplicated so an imported doc is not injected twice). `Forced` instructions come from user config. An `EnvironmentBlock` (cwd, platform, model, date) closes the system prompt so the model is not guessing at its surroundings; the live git state (branch, status, recent log, diffs after a write) and the files the agent touched ride a `<turn-context>` row at the end of each request instead, so the prompt itself stays byte-stable for the provider's prefix cache.
+- **Permission prompts** — the blocking request/reply flow is wired end to end: `Chat` runs the whole batch of a turn's tool calls through the `PreToolUse` chain *before* forking any of them, and a `HookResult::ask()` suspends the turn on a `PermissionRequestMsg` rendered as a Veil modal over the transcript. `y`/`n`/`a` settles the paused call rather than being advisory, and `a` records a session-scoped grant for calls like this one (the same scope on both paths, below), saved with the session so `--resume` keeps it; `e` edits that scope before it is remembered, and `/permissions revoke` takes a grant back. The modal shows a `Bash` call's command itself, with the model's caption beneath it, and names what `a` would remember. The grant answers only the permission gate's own question: when one of your hooks asks, or `auto` flags a security finding, the modal offers no `a`, says why, and the question is put again on the next call. The prompt is *armed* when it goes up and any non-answer keystroke disarms it (`Enter` re-arms), so an ordinary slash command typed at a live prompt is swallowed instead of answering it. The TUI's default mode, `default`, asks for every write, shell command and network call; `accept-edits` and `auto` ask for less, and `bypass-permissions` and `dont-ask` never prompt (a hook that returns `ask()` still does). The **engine** path asks through the same modal: an engine turn runs in a forked child, and each ASK it raises crosses the turn's two-way frame channel as an `ask` frame, goes up as the same y/n/a prompt, and the answer goes back down as `ask_reply` while the child waits (its idle ceiling is paused for as long as the question is open). There, `n`/`Esc` hands the model a `Permission denied:` result and the turn carries on, and `a` remembers a **pattern** for the rest of the session rather than one exact call — `git status` grants `Bash(git status)` and `Bash(git status *)`, an `Edit` grants that path, a `WebFetch` that host, an MCP tool that tool; a pipeline or chain is generalised per segment with its operators kept (`sed -n 1,5p f | sort | uniq` → `Bash(sed * | sort * | uniq *)`), with launchers (`bash -c`, `sudo`, `xargs`), destructive commands (`rm`, `mv`, `chmod`, …), a writing redirection's target and a `curl` piped on kept literal. A leading `cd <dir inside the project> &&` is a no-op for grants on every path: `a` on `cd /repo && git status --short` remembers `Bash(git status *)`, which then covers `git status` and `cd /repo/sub && git status` too (a `cd` out of the project, or through an expansion, stays part of the command). A remembered pattern only ever answers a question: it never lifts a configured `Deny`, Plan mode's refusals or the `rm -rf /` breaker, and it is never written to a settings file. A question the turn ends underneath (the child gone, the stream corrupt) reaches the model as `Permission required:` — nobody answered it — not as a refusal. The one-shot `-p` path is different: it attaches a console approver, prompts on stderr at a terminal, and refuses with a reason when there is no terminal.
+
+## Architecture
+
+CandyCode keeps the proven candy-code **chassis** (the `Chat` sugar-core `Model`, buffer-diff `Renderer`) and runs its full agent **engine** behind it. The interactive binary boots the **pane shell** that hosts that chassis:
+
+```
+bin/candy-code
+  └─ Bootstrap::app()
+       └─ Program → App (root sugar-core Model: menu bar, pane focus, session tabs)
+            ├─ Tui\Renderer → ChatPane ─┐
+            │                            └→ Renderer (the live buffer-diff chat renderer)
+            └─ Chat (Model: input, scrollback, inFlight gate, permissions, zones)
+                 └─ Backend  ── EchoBackend / CommandBackend (simple)
+                             └─ EngineBackend (agent loop, emits tool-lifecycle events)
+                                  └─ Runtime → ProviderInterface  (+ Tools · Hooks · Skills via App)
+```
+
+`App` plays two roles that are easy to confuse: it is the **engine's state object** (`Runtime::run(App $app, …)` and `EngineBackend` both take it, carrying tools/hooks/skills) *and* the root TUI `Model` the pane shell renders. `Chat` is untouched by the shell — it is still a standalone `Model` you can run directly with `new Program(new Chat(...))`.
+
+The chassis speaks the root `Message` value object; the engine speaks the typed `Messages\*` hierarchy; `EngineBackend` converts at the seam.
+
+Below `Chat`, the session logic a server needs lives in `src/Host/`: `Host\TurnController` decides what a submitted line becomes (steer, queue, refusal, command-file expansion, turn hooks, the dispatch's checkpoint and `message.created` event), and `Host\SessionHost` drives one session without a screen through that same controller and the same `TurnRunner`, with `Host\SessionHub` holding the open sessions and their locks. `Chat` delegates to the same services, so the TUI and a headless host cannot drift (see [ARCHITECTURE](docs/ARCHITECTURE.md)).
+
+## Limitations
+
+Things that are genuinely not finished, stated plainly rather than left for you to discover:
+
+- **`toolCallParser` reaches only one of the three OpenAI-wire providers.** It is closed for `SglangProvider`, which now consults the selected parser on the streaming path as well as the batch one. `CustomProvider` and `OpenAIProvider` accept no `toolCallParser` argument at all and read only the structured `tool_calls[]` shape (streamed fragments included), so on those two a deployment launched without `--tool-call-parser` still loses every tool call, with no setting that would recover it.
+- **An ASK is answered on every interactive path; an unattended one is refused.** It used to fail closed everywhere, because **nothing anywhere attached an approver**. The **one-shot `-p` path** now attaches `HeadlessPermissionPrompt`, which puts the question on **stderr** (never stdout — `--output-format json` promises exactly one JSON object there), reads the answer from stdin, and grants only on a literal `y`/`yes`; with no terminal on stdin it does not read at all and refuses, naming the tool, the mode and what to change (`--permission-mode`, or a `permissionRules` entry). The **TUI** answers through its modal: `Chat` starts every engine turn through `completeInteractive()`, the forked child puts each question up the turn's socket, and the answer goes back the same way (see *Permission prompts* above), and `r` there refuses with a note the model reads as `the user said: …` beside the refusal. A background session, which has no terminal, refuses every ASK.
+
+  The TUI's default mode is `default`, which asks; `-p` and background sessions keep `bypass-permissions` (see *Permission modes*).
+- **The `anthropic` provider type key is not the native Messages API.** It authenticates as Anthropic but posts an OpenAI-shaped body to Anthropic's OpenAI-compatibility endpoint (`/v1/chat/completions`); tools and images work, but nothing Messages-only does (see [Providers](#providers)). Use `claude-code` or `CANDY_CODE_BACKEND_CMD` for a native Anthropic path.
+- **Agent controls reach delegated runs only, and only softly at first.** The dashboard's `c`/`r`/`s`, `Ctrl+G` and the Agent View's `Ctrl+X` chords act through each run's mailbox, which a `Task` run reads while it works — a dashboard row that is not one (a `/workflow` stage, a background session) is refused on the status line. A cancel or pause takes effect at the run's next tool or step, so a long `Bash` call finishes first; a second cancel within 3 s stops the run's `Task` call at once (a parallel member's process gets `SIGTERM`, then `SIGKILL` after 2 s; a lone `Task` stops at its next tool or step), but a nested run or a detached follow-up gets only the soft cancel. `Ctrl+X b` (send to the background) likewise waits for the run's next tool or step, and is not offered for a nested run — over the wire either: the web client's `agents.control` takes `background` (its Agent View's *Background* button) and refuses it for a nested run. See [`docs/AGENTS.md`](docs/AGENTS.md#not-yet-available).
+- **Worktree isolation covers `Task` and `/bg`, not workflow stages, and never merges.** An agent whose preset says `isolation: worktree` runs a delegation (or a `/bg`/`/fork` session) in its own git worktree under `<root>/.candy-code/worktrees/`, with its tools jailed there; a run that cannot be isolated is refused rather than run in your checkout. A tree that ends with work in it is kept and named in the result — merging it is yours (or the delegating model's) to do, and nothing does it automatically. A `/workflow` stage ignores the field and runs in the checkout. See [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md#teams-and-worktrees).
+- **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
+- **Workflow stages run the real tool loop — on a launch with a provider.** `Bootstrap::workflowEngine()` gives the pool an `Agents\EngineExecutor` as its forked executor, and `Chat`'s constructor binds the chat's current backend into it (re-bound on a provider switch). Each stage agent — sequential, pipeline, verification or parallel — then runs through that engine's bounded loop in a forked child: same provider, hook chain, permission gate and root as the chat, narrowed to the stage's `tools:`, with `Task` withheld and a 200-step cap. With no provider, the pool keeps `ProcessExecutor`'s worker, which fails closed naming the absence, and a provider that fails to build (the chat then degrades to echo) is refused by the executor itself — echoed text is never reported as a stage's work.
+- **`/workflow run` keeps the TUI alive, with two limits worth knowing.** `Chat::workflowRun()` hands the run to a `\Fiber` that a periodic timer on the loop steps, suspending at `AgentWorkerPool::idle()` — the one point where the parent is idle while forked workers run — so the spinner turns, keystrokes land, and the live-agent split pane paints tiles while the workflow is still going. The fork-plus-socket shape `EngineBackend::completeAsync()` uses does not fit here: `AgentManager::liveOutputs()` reads an object graph in the parent, so forking the workflow would put every sub-agent somewhere the renderer cannot see.
+  - **Double-Escape stops the run.** It releases the turn at once and cancels the run's `CancellationToken`, which `WorkflowEngine` answers by calling `AgentWorkerPool::cancelAll()` on the stage's live pool — the stage's forked agents are killed (asynchronously, with a grace) — and by starting no further stage. The partial report still lands, headed **cancelled**, with the stages that ran and what they spent; it is only appended to the transcript, so a turn you started after the cancel is not disturbed. An engine double that ignores the token simply finishes. A second `/workflow run` is refused while one is live (including while a cancelled one winds down) rather than started alongside it.
+  - **Only forked workers publish live output.** The pane is fed by `AgentWorkerPool::pumpProgress()`, which mirrors what a forked child writes to its progress file. An engine-run stage (the bullet above) streams while it works: its prose as it arrives and a `▸ Tool(args)` line per tool call, coalesced to at most one append per 250ms, so a long stage's tile fills in live. Because the progress file is append-only it reads as an activity log ("said this, then called that"); the stage's result, and what `{{stage.output}}` interpolates, is the final answer alone. The three paths that do NOT fork — an injected `ExecutorInterface` (see the bullet above), a build without `pcntl`, and a failed `fork()` — run `execute()` synchronously in the parent, which blocks the loop for its duration: no progress, and the fiber cannot help because nothing yields. Injecting your own executor to reach a real model therefore costs you the live pane.
+- **`pcntl` is required for real parallelism.** Without it `AgentWorkerPool` falls back to sequential execution and logs a one-time visible warning rather than pretending to fan out.
+- **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by the `doctor` tool (model-invocable; there is no `/doctor` slash command) and by using it, not by CI.
+- **The `doctor` tool reports capabilities, it does not repair them.**
+- **A background session is re-adopted only by a launch of the same project.** Its result is announced into the conversation that adopts it, so a relaunch elsewhere leaves it for the project it was started for. The index lives in the system temp directory, so a reboot (which ends the daemons anyway) or a temp cleaner forgets it.
+
+## Custom provider
+
+```php
+use SugarCraft\Code\Providers\{ProviderInterface, CompleteRequest, CompleteResponse, EmbeddingsRequest, EmbeddingsResponse};
+
+final class MyProvider implements ProviderInterface
+{
+    public function name(): string { return 'mine'; }
+    public function supportsStreaming(): bool { return false; }
+    public function supportsFunctionCalling(): bool { return true; }
+    public function supportsVision(): bool { return false; }
+    public function supportsJsonSchema(): bool { return false; }
+    public function contextWindow(): int { return 128_000; }
+    public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+    public function complete(CompleteRequest $r): CompleteResponse { /* ... */ }
+    public function completeStream(CompleteRequest $r): \Generator { /* yield CompleteResponse chunks */ }
+    public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { /* ... */ }
+}
+```
+
+## Tests
+
+```bash
+cd candy-code && composer install && vendor/bin/phpunit
+```
+
+**22,564 tests / 423,652 assertions, 0 failures, 2 skipped** — the whole of
+`candy-code/tests/` (that suite only, not the monorepo) in one
+`vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
+in 32m40s (measured 2026-10-11). The two skips are expected and rostered: one
+test self-skips because its branch needs a file that exists but cannot be read
+without mocking a built-in function, and the skip-roster guard fails the suite
+on any *unrostered* skip or on a roster entry that stops skipping.
+`failOnWarning="true"` means the run is also warning-free. How the suite grew
+to this size is in [`CHANGELOG.md`](CHANGELOG.md), not here.
+
+**The tests figure above is pinned, not promised.** A drift test re-enumerates
+the suite live on every run (`phpunit --list-tests`) and reds if this line's
+test count differs from what PHPUnit collects. The assertions figure cannot be
+re-derived without the full run — a guard that re-ran the suite inside itself
+could never see its own count — so it is a *junit-derived maintained artifact*
+(`tests/Config/Support/suite-figure.json`, regenerated with
+`tests/Config/Support/refresh-suite-figure.php` after `--log-junit`), kept from
+silent age by the same live recount: add a test without regenerating, and both
+the README pin and the artifact pin go red on the next run of anything.
+
+**Sharded local runs.** From the
+monorepo root, `scripts/parallel-tests.sh` shards the same suite by committed
+per-file durations and gates on conservation — the per-shard JUnit sums must
+equal `tests/Config/Support/suite-figure.json` exactly:
+
+```bash
+bash scripts/parallel-tests.sh \
+  --durations scripts/parallel-tests-durations.tsv \
+  --against-json candy-code/tests/Config/Support/suite-figure.json
+```
+
+K defaults to min(nproc, 8): wall time falls roughly with K until the slowest
+single test file becomes the floor, past which extra shards stop paying. CI pins
+K=min(nproc, 4) because its 2-4 vCPU runners must not be oversubscribed. The
+conservation gate is fail-closed by design: a test file added without a
+`scripts/parallel-tests-durations.tsv` row lands in zero shards, the shard sum
+falls short of the pinned figure, and the run goes RED. To refresh the
+manifest after adding tests, take one serial baseline with `--log-junit` and
+feed it back once — `bash scripts/parallel-tests.sh --junit <xml> --out <dir>`
+writes `<dir>/durations.tsv`; copy it over
+`scripts/parallel-tests-durations.tsv` and re-pin the figure with
+`tests/Config/Support/refresh-suite-figure.php`, in the same step as the
+README headline.
+
+Coverage spans every subsystem: typed messages + attachments, every built-in
+tool — all twenty-eight of them (the whole of `src/Tools/BuiltIn/`, which is exactly the built-in half of
+the tool set a launch hands the engine — the set itself is longer whenever a
+trusted project's MCP servers advertise anything), all 7
+`Providers\ProviderFactory` type
+keys (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client/servers (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
+
+A dedicated `tests/Integration/` tier asserts **reachability** rather than behaviour: that the session store, session tabs, background sessions, the skills subsystem, mouse mode, the environment block and root context-file loading are actually reached from `bin/candy-code` → `Bootstrap::app()`, not merely implemented somewhere in `src/`. That tier exists because an independent line-by-line audit found well-tested subsystems that no real run could ever touch — the `Write` tool being the most recent: a full suite of its own, and one missing line in `Bootstrap::tools()`. The tier now also pins the whole built-in tool set by count and by name, since an omission from a literal array is not something a per-tool test can see.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for how the suite got here.
+
+## Credits & inspiration
+
+SugarCraft is a PHP-native project. Its original design inspiration came from the Go terminal ecosystem — notably [Bubble Tea](https://github.com/charmbracelet/bubbletea) and the wider [Charm](https://github.com/charmbracelet) family of libraries — reimagined here for PHP 8.3+. The candy-code agent also drew early feature inspiration from [Crush](https://github.com/charmbracelet/crush).
+
+CandyCode absorbed the former experimental `candy-crush` codebase. There is now a single `SugarCraft\Code` library.

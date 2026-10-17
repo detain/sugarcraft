@@ -9,7 +9,7 @@ namespace SugarCraft\Constraints\Dock;
  * as a rational (weightNum / weightDenom).
  *
  * Original SugarCraft design (no upstream mirror). The rational numerator/
- * denominator storage echoes the drift-free proportion approach of sugar-crush's
+ * denominator storage echoes the drift-free proportion approach of candy-code's
  * `Tui\SplitLayout` — referenced here in prose only, sugar-constraints stays a leaf
  * package and does not depend on it.
  */

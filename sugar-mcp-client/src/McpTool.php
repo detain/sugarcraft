@@ -8,7 +8,7 @@ namespace SugarCraft\McpClient;
  * One tool definition advertised by an MCP server: name, description,
  * JSON-Schema input contract, and the owning server.
  *
- * Extracted from the sugar-crush MCP stack (src/MCP/McpTool.php).
+ * Extracted from the candy-code MCP stack (src/MCP/McpTool.php).
  *
  * WHY `tryFromArray()` gates construction: a misbehaving server used to be
  * able to send `{"tools":[{"name":5}]}`, and the resulting TypeError escaped

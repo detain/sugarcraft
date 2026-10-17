@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Style\Style;
 
 /**
- * The process-ambient default profile (rv-devops-1 / sugar-crush colour
+ * The process-ambient default profile (rv-devops-1 / candy-code colour
  * negotiation): {@see Style::new()} mints styles on the ambient profile when
  * a host application has negotiated one, and on TrueColor otherwise. The
  * resting state MUST stay byte-identical for the ~50 libraries that never

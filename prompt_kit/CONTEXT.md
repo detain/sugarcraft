@@ -71,23 +71,23 @@ authoritative and more current.
 - `candy-wish PTY upgrade — dual-mode (in-process default, host sshd opt-in)` — candy-wish must keep supporting host-sshd execution via a parameter even after the in-process SSH session upgrade lands; in-process becomes the default but the legacy path stays <!-- @rename-keep -->
 - `project-ci-matrix-and-pr-path-repo-gotchas` — "Two non-obvious SugarCraft CI behaviors — empty-matrix run failure shape, and why force-all PRs go all-red while master is green"
 - `project_crush_feat_plan_reachability_contradiction` — "crush_feat_plan.md's category-11 reachability rule contradicts its own Wave-1 file lists; crush_feat.md is the authority when they conflict"
-- `crush-feat-research` — "crush_feat.md is a 12-agent research dossier comparing sugar-crush to opencode/Claude Code/other AI coding CLIs, with prioritized recommendations"
+- `crush-feat-research` — "crush_feat.md is a 12-agent research dossier comparing candy-code to opencode/Claude Code/other AI coding CLIs, with prioritized recommendations"
 - `findings-plan-files-are-historical` — "findings/plan_*.md are deliberately unmarked historical records — completion is tracked in git history, not checkbox markers"
 - `project-grep-is-ugrep-in-agent-shells` — "A bare `grep` in a Bash-tool shell is a function shadowing GNU grep with ugrep; the real hazard is that recursive scans honour .gitignore, so an absence census silently skips vendor/ and ignored files"
 - `project_image_marker_zone_sentinel_collision` — candy-core image markers and candy-mouse zone sentinels both start at U+E000 — combining them silently kills every mouse zone after the first image <!-- @rename-keep historical provenance -->
 - `opencode-task-vs-delegate-routing` — "OpenCode routes agent spawns through task (write-capable) vs delegate (read-only) tools based on the target agent's permission profile — using the wrong one fails immediately with a routing error"
 - `project_plan_missing_execution` — "In-progress execution of plan_missing.md (58-lib remediation) via a supervised fix→verify agent loop; tracks what's shipped and what's next"
 - `qwen38-flashnext-serving-constraints` — "Two hard constraints of serving Qwen3.8-Flash-Next on the local sm_120 SGLang box: FlashInfer GDN prefill can't take bf16 states, and the chat template allows exactly one system message"
-- `skynet2-sglang-deploy-config` — "Confirmed launch command/flags for the skynet2.interserver.net SGLang server backing sugar-crush's dev-sglang provider (MiniMax-M2.7)"
+- `skynet2-sglang-deploy-config` — "Confirmed launch command/flags for the skynet2.interserver.net SGLang server backing candy-code's dev-sglang provider (MiniMax-M2.7)"
 - `splitsh-not-equal-git-subtree` — "splitsh-lite split SHAs differ from `git subtree split` in this monorepo — the sync-sugarcraft.yml comment claiming they're identical is wrong"
 - `stale-vendor-false-test-failures` — A bare composer update de-symlinks vendor/sugarcraft into Packagist copies and silently voids suite figures; "closure intact" is a PER-LIB fact, strict-closure walks require only, and ls lies — verify with PHP is_link plus a content md5
 - `project_subscriptions_pump_default` — candy-core Program now calls model->subscriptions() by default; was dead code repo-wide <!-- @rename-keep historical provenance -->
-- `project_sugar_crush_absorbed_candy_crush` — candy-crush was merged into sugar-crush and deleted; sugar-crush is the sole SugarCraft\Crush
-- `project-sugarcrush-async-and-double-diff` — "sugar-crush architecture facts learned fixing the async-completion freeze, a double-diffing render corruption bug, and tool-call visibility — read before touching Chat.php/EngineBackend.php/Renderer.php again."
-- `project-sugarcrush-guzzle-baseurl-bug` — "sugar-crush's sglang/custom OpenAI-compatible providers 404'd because Guzzle drops a base_uri path suffix when the request URI starts with '/' — fixed in PR #1399, but the same gotcha applies to any future provider built the same way."
-- `project-sugarcrush-orchestration-plan` — "crush_code_plan.md + .opencode/agents/sugarcrush-* define an automated multi-agent build of sugar-crush's own multi-agent features, run on OpenCode against a local MiniMax-M2.7 endpoint"
+- `project_sugar_crush_absorbed_candy_crush` — candy-crush was merged into candy-code and deleted; candy-code is the sole SugarCraft\Code
+- `project-candy-code-async-and-double-diff` — "candy-code architecture facts learned fixing the async-completion freeze, a double-diffing render corruption bug, and tool-call visibility — read before touching Chat.php/EngineBackend.php/Renderer.php again."
+- `project-candy-code-guzzle-baseurl-bug` — "candy-code's sglang/custom OpenAI-compatible providers 404'd because Guzzle drops a base_uri path suffix when the request URI starts with '/' — fixed in PR #1399, but the same gotcha applies to any future provider built the same way."
+- `project-candy-code-orchestration-plan` — "crush_code_plan.md + .opencode/agents/candy-code-* define an automated multi-agent build of candy-code's own multi-agent features, run on OpenCode against a local MiniMax-M2.7 endpoint"
 - `project-sugarcrush-render-overflow-bug` — "sugar-crush Renderer must clip the frame to terminal height, not just pad it — candy-core's Renderer clamps out-of-bounds cursorTo() and collides rows once content grows past one screen. Read before touching Renderer::render()'s full-window layout code again." <!-- @rename-keep historical provenance -->
-- `project-sugarcrush-tui-and-parallel-tools` — "COMPLETED 2026-08-10 — sugar-crush TUI feature plan (slash popup, Ctrl+P palette, themes, full-window layout, backend switching) plus a real fix for R14b's disabled parallel tool-call routing. 6 PRs merged to master."
+- `project-candy-code-tui-and-parallel-tools` — "COMPLETED 2026-08-10 — candy-code TUI feature plan (slash popup, Ctrl+P palette, themes, full-window layout, backend switching) plus a real fix for R14b's disabled parallel tool-call routing. 6 PRs merged to master."
 - `project_tui_render_invariants` — "candy-core diff renderer invariants — no over-wide lines, WindowSizeMsg is size truth, sanitize DB/binary data" <!-- @rename-keep historical provenance -->
 - `project_vhs_tape_multi_directive_lines` — Many .tape demos put a key + inline Sleep on one line (Down Sleep 200ms); candy-vcr must tokenize multiple directives per line
 
@@ -143,7 +143,7 @@ Rule: when working on multi-step orchestration tasks (acting as supervisor, mast
 
 When a feature is broken, fix the root cause rather than disabling it and falling back to a safer/simpler path with a docblock promising a future fix.
 
-**Why:** Surfaced when reviewing `crush_code_update.md`'s R14b (sugar-crush remediation): parallel tool-call routing through `AgentWorkerPool`/`executeToolsParallel()` was broken (PHP closures can't cross the pool's process boundary), and the shipped fix disabled that path — falling back unconditionally to sequential tool execution with an `@todo` docblock describing the real fix (a name-keyed tool registry lookup inside the worker process instead of closures). The user explicitly said this should have been fixed for real instead, and asked for the real fix now: [[project_sugarcrush_tui_and_parallel_tools]].
+**Why:** Surfaced when reviewing `crush_code_update.md`'s R14b (candy-code remediation): parallel tool-call routing through `AgentWorkerPool`/`executeToolsParallel()` was broken (PHP closures can't cross the pool's process boundary), and the shipped fix disabled that path — falling back unconditionally to sequential tool execution with an `@todo` docblock describing the real fix (a name-keyed tool registry lookup inside the worker process instead of closures). The user explicitly said this should have been fixed for real instead, and asked for the real fix now: [[project_sugarcrush_tui_and_parallel_tools]].
 
 **How to apply:** Before proposing "disable X, fall back to Y, leave a TODO" as a fix for any bug in this codebase (or similar audit/remediation work), prefer designing and implementing the actual fix, even if it's more work — flag the tradeoff to the user rather than defaulting to the disable-and-defer path. If a genuine fix is out of scope for time/complexity reasons, say so explicitly and ask before shipping a disable-with-TODO as the resolution.
 
@@ -161,7 +161,7 @@ and "everything working nicely" before tightening anything down.
 **Why:** stated 2026-08-17 while driving `crush_code.md` to completion — "i want the
 functionality stuff up front and all implemented first and everything working
 nicely, we can tighten it all down at the end". Reaffirmed 2026-08-18 with the
-goal made explicit: **the user wants to start daily-driving sugar-crush as soon as
+goal made explicit: **the user wants to start daily-driving candy-code as soon as
 the functionality is done, while the security pass is still being worked.** That is
 the acceptance target — "usable" gates on functionality, not on containment.
 
@@ -189,7 +189,7 @@ start an end-of-plan pass from).
   * work already in flight finishes ("after these changes are done").
 
 Related: [[feedback_no_remove_wire_instead]], [[project_crush_feat_research]] — the
-dominant research finding was that sugar-crush already *built* most of what is
+dominant research finding was that candy-code already *built* most of what is
 missing and never wired it into the live runtime, which is why the wiring phase is
 where the functionality value actually is.
 
@@ -213,9 +213,9 @@ Before any `gh` invocation in /home/sites/sugarcraft, prefix with `unset GITHUB_
 
 <sub>originally `feedback_llm_request_timeouts.md`, type `feedback`</sub>
 
-When recommending or adding timeouts to provider/LLM HTTP clients (Guzzle or otherwise), distinguish `connect_timeout` from the overall request `timeout`. A short `connect_timeout` (10-30s) is correct — it fails fast when a host is genuinely unreachable. A blanket total-request `timeout` copied from a short-lived call pattern (e.g. sugar-crush's MCP client's `timeout => 30`) is wrong for LLM completions — a real, in-progress completion can legitimately take tens of minutes on a loaded or slow/remote server, so a flat 30s ceiling would abort legitimate work, not just hung requests.
+When recommending or adding timeouts to provider/LLM HTTP clients (Guzzle or otherwise), distinguish `connect_timeout` from the overall request `timeout`. A short `connect_timeout` (10-30s) is correct — it fails fast when a host is genuinely unreachable. A blanket total-request `timeout` copied from a short-lived call pattern (e.g. candy-code's MCP client's `timeout => 30`) is wrong for LLM completions — a real, in-progress completion can legitimately take tens of minutes on a loaded or slow/remote server, so a flat 30s ceiling would abort legitimate work, not just hung requests.
 
-**Why:** user correction during the crush_code.md sugar-crush audit (2026-08-13): "requests can take 30 minuts easily if on a laggd srver th timeout suggestd is way too low .. maybe a connect timeout of 30 but not a timout of 30." The plan had recommended copying `src/MCP/McpClient.php`'s `timeout => 30` onto the LLM provider clients — correct for MCP's short tool calls, wrong for completions.
+**Why:** user correction during the crush_code.md candy-code audit (2026-08-13): "requests can take 30 minuts easily if on a laggd srver th timeout suggestd is way too low .. maybe a connect timeout of 30 but not a timout of 30." The plan had recommended copying `src/MCP/McpClient.php`'s `timeout => 30` onto the LLM provider clients — correct for MCP's short tool calls, wrong for completions.
 
 **How to apply:** any time a plan/fix proposes adding an HTTP timeout to an LLM-completion code path, propose only a short connect-timeout, and explicitly call out that the overall request timeout must stay high/unset — don't reuse a timeout value from a different, shorter-lived call type without checking whether the target call can legitimately run long.
 
@@ -259,7 +259,7 @@ means the agent died, never `NO FINDINGS`), drop the *how*. Related:
 
 When an audit or review finds a subsystem that's built but not wired into the live app (dormant class, dead render arm, unreachable feature), the correct fix is to wire it in — never to remove it. Moving/consolidating overlapping code (e.g. merging two parallel systems into one) is fine; deleting the losing side outright is not the default — prefer folding its still-useful pieces in, and only actually delete with explicit user sign-off on that specific item.
 
-**Why:** stated directly by the user during the crush_code.md 13-angle sugar-crush audit (2026-08-13): "no part of this should remove anything really.. maybe move but not remove ... if you think something isnt wired the fix is nevr to remove it .. its to fix it."
+**Why:** stated directly by the user during the crush_code.md 13-angle candy-code audit (2026-08-13): "no part of this should remove anything really.. maybe move but not remove ... if you think something isnt wired the fix is nevr to remove it .. its to fix it."
 
 **How to apply:** in any findings/plan doc (crush_code.md, crush_feat_plan.md, future audits), phrase every "dead code" finding's proposed solution as a wiring/integration task, not a removal task. Related: [[feedback_fix_not_disable]] (root-cause fixes over disable-and-TODO), same underlying preference — don't take the shortcut of erasing a problem instead of solving it.
 
@@ -490,7 +490,7 @@ Related: [[feedback-gh-unset-token]], [[feedback-ship-as-you-go]].
 
 When orchestrating a multi-step build via the Workflow tool where each step has its own review agent, **commit each step before the next one starts**. Do not run parallel tracks that all write into one shared, uncommitted working tree.
 
-**Why:** in the first sugar-crush Wave 1 run (2026-08-10), 7 tracks ran concurrently with no commits until the end. Every reviewer ran `git diff` and saw all 16 steps' work at once, so nearly every review returned a traceability blocker along the lines of "this diff bundles unrelated work from five other steps and cannot be committed as just this step." Those BLOCKED verdicts were artifacts of the harness design, not code defects — the code was fine and the suite was green. It also made the results genuinely hard to untangle afterward: shared files (`Message.php`, `EngineBackend.php`, `Bootstrap.php`) carried several steps' changes at once and could not be split into per-step commits without hand-editing.
+**Why:** in the first candy-code Wave 1 run (2026-08-10), 7 tracks ran concurrently with no commits until the end. Every reviewer ran `git diff` and saw all 16 steps' work at once, so nearly every review returned a traceability blocker along the lines of "this diff bundles unrelated work from five other steps and cannot be committed as just this step." Those BLOCKED verdicts were artifacts of the harness design, not code defects — the code was fine and the suite was green. It also made the results genuinely hard to untangle afterward: shared files (`Message.php`, `EngineBackend.php`, `Bootstrap.php`) carried several steps' changes at once and could not be split into per-step commits without hand-editing.
 
 **How to apply:** structure the workflow as strictly serial steps — Build → Review → Fix (capped) → **Commit** — with a dedicated commit agent per step. Have commit agents commit only; the supervisor pushes once at the end (keeps push races impossible and keeps the supervisor in control of what reaches the remote). If parallelism is needed for speed, tracks must be file-disjoint *and* each still commit per step. Tell reviewers the tree was clean before the step so everything uncommitted is that step's own work.
 
@@ -629,7 +629,7 @@ refuses a lone `\x80`, which fabricates divergences that look like real ones.
 **In CI it is the other way round**, verified against `.github/workflows/vhs.yml`
 on 2026-08-14:
 
-- The `render` job (line 188) carries a ~49-lib matrix **including `sugar-crush`**,
+- The `render` job (line 188) carries a ~49-lib matrix **including `candy-code`**,
   runs `working-directory: ${{ matrix.lib }}`, and calls the **upstream `vhs`**
   binary baked into `ghcr.io/<owner>/vhs-runner:latest`. It uploads `gifs-<lib>`.
 - The `vhs-candy-vcr` job (line 50) is `lib: [candy-core]` **only** — a <!-- @rename-keep historical provenance -->
@@ -726,9 +726,9 @@ Per-lib jobs run `cd <lib> && composer install` with no lock, against `../<dep>`
 
 <sub>originally `project_crush_feat_plan_reachability_contradiction.md`, type `project`</sub>
 
-`crush_feat_plan.md` (the sugar-crush feature build plan) contains an internal contradiction that reliably blocks agent runs:
+`crush_feat_plan.md` (the candy-code feature build plan) contains an internal contradiction that reliably blocks agent runs:
 
-- **Category 11 (Production Reachability)** makes "code exists and is tested but isn't reachable from `bin/sugarcrush`" a mandatory **blocker** finding.
+- **Category 11 (Production Reachability)** makes "code exists and is tested but isn't reachable from `bin/candy-code`" a mandatory **blocker** finding.
 - But Wave 1's per-step **file lists exclude** `Chat.php`, `Renderer.php`, and often `Bootstrap.php` — the exact files where production wiring lives (`Chat.php`/`Renderer.php` are reserved for Wave 2 by design).
 
 For any step whose spec says "surface X to the user," those two rules **cannot both be satisfied**. Observed consequences in the first Claude Code run (2026-08-10, 66 agents):
@@ -745,7 +745,7 @@ Related: [[project_sugarcrush_orchestration_plan]], [[project_crush_feat_researc
 
 ## `crush-feat-research`
 
-*"crush_feat.md is a 12-agent research dossier comparing sugar-crush to opencode/Claude Code/other AI coding CLIs, with prioritized recommendations"*
+*"crush_feat.md is a 12-agent research dossier comparing candy-code to opencode/Claude Code/other AI coding CLIs, with prioritized recommendations"*
 
 <sub>originally `project_crush_feat_research.md`, type `project`</sub>
 
@@ -755,13 +755,13 @@ Related: [[project_sugarcrush_orchestration_plan]], [[project_crush_feat_researc
 
 Other confirmed real bugs (not just gaps) found during the research:
 - `SglangProvider`/`CustomProvider`'s `parseChunk()` never reads `delta.tool_calls` — streaming mode can't deliver tool calls at all, only non-streaming `complete()` can.
-- Two parallel, non-unified tool-calling pipelines: `Chat.php`'s own path has UI but zero permission/hook gating; `EngineBackend`/`Runtime`'s path has real hooks but its intermediate tool calls are thrown away (only the final message escapes an up-to-8-round agentic loop), so a user watching sugar-crush's "full agent" mode sees nothing during tool use.
+- Two parallel, non-unified tool-calling pipelines: `Chat.php`'s own path has UI but zero permission/hook gating; `EngineBackend`/`Runtime`'s path has real hooks but its intermediate tool calls are thrown away (only the final message escapes an up-to-8-round agentic loop), so a user watching candy-code's "full agent" mode sees nothing during tool use.
 - A second, fully-built but provably unreachable `App`/`Tui\Renderer`/`AgentsPane`/`ToolsPane` UI system exists in parallel to the live `Chat`/`Renderer.php` — own docblocks admit this.
-- `bin/sugarcrush` does zero argv parsing — `--help` opens the blocking TUI instead of printing usage; no non-interactive/`-p` mode exists at all.
+- `bin/candy-code` does zero argv parsing — `--help` opens the blocking TUI instead of printing usage; no non-interactive/`-p` mode exists at all.
 
-**Why**: user asked for a broad multi-agent comparative investigation into how sugar-crush could catch up to / differentiate from opencode and Claude Code, spanning 10 specific areas plus open-ended "anything else."
+**Why**: user asked for a broad multi-agent comparative investigation into how candy-code could catch up to / differentiate from opencode and Claude Code, spanning 10 specific areas plus open-ended "anything else."
 
-**How to apply**: when picking up sugar-crush feature work, check crush_feat.md's Executive Summary first — it separates "wire up what's already built" (cheap, high-leverage) from "genuinely new feature" (bigger lift) from "confirmed bug" (fix regardless of feature work). Read the relevant numbered section for file:line citations and ready-to-adapt code sketches before re-deriving a design from scratch.
+**How to apply**: when picking up candy-code feature work, check crush_feat.md's Executive Summary first — it separates "wire up what's already built" (cheap, high-leverage) from "genuinely new feature" (bigger lift) from "confirmed bug" (fix regardless of feature work). Read the relevant numbered section for file:line citations and ready-to-adapt code sketches before re-deriving a design from scratch.
 
 
 ## `findings-plan-files-are-historical`
@@ -839,7 +839,7 @@ $s = Scanner::new(); $s->scan($m->wrap('tab1','A')."\u{E000}".$m->wrap('tab2','B
 count($s->all()); // 1, not 2 — tab2 is gone
 ```
 
-**Why:** neither library is wrong alone; the collision only exists in a lib that uses both. sugar-crush hit it when the image-rendering and mouse-zone features merged (fixed in `c5e925c9`).
+**Why:** neither library is wrong alone; the collision only exists in a lib that uses both. candy-code hit it when the image-rendering and mouse-zone features merged (fixed in `c5e925c9`).
 
 **How to apply:** mask the PUA block (`U+E000`–`U+F8FF`) out of the copy the **scanner** reads, never the copy sent to the terminal — the real markers still have to reach `Program` to be resolved into paints. Match well-formed sentinel triples first in the alternation so genuine markup survives, and replace other PUA cells with a single space (width-1 → width-1) so zone column arithmetic is unchanged. See `Renderer::maskImageMarkers()` and `tests/ImageMarkerZoneCollisionTest.php`. Any new rendered glyph must stay outside that block. Related: [[project_tui_render_invariants]].
 
@@ -852,11 +852,11 @@ count($s->all()); // 1, not 2 — tab2 is gone
 
 OpenCode classifies a custom agent as read-only if its permission profile has `edit: "deny"`, `write: "deny"`, AND `bash` whose top-level wildcard (`bash["*"]`) is `"deny"` — even if specific command overrides inside that bash object are `"allow"`. Read-only agents must be spawned via the **`delegate`** tool; write-capable agents (anything with `edit`/`write` allowed, or `bash["*"]: "allow"`) must be spawned via **`task`**. Calling `task` on a read-only-classified agent fails immediately with: "Agent 'X' is read-only and should use the delegate tool."
 
-**Why:** Discovered live during the first bootstrap run of the sugar-crush orchestration plan (`crush_code_plan.md`, "Execution Protocol for Orchestrated Implementation"). `sugarcrush-committer` was originally configured like `sugarcrush-reviewer` — `bash: {"*": "deny", "git add *": "allow", "git commit *": "allow", ...}` — which got it classified read-only despite needing to actually mutate git state. `delegate` still runs whatever commands an agent's bash allowlist permits; the tool choice is purely about spawn routing (write-capable agents get more careful/sequential handling), not an additional restriction on top of the permission block.
+**Why:** Discovered live during the first bootstrap run of the candy-code orchestration plan (`crush_code_plan.md`, "Execution Protocol for Orchestrated Implementation"). `candy-code-committer` was originally configured like `candy-code-reviewer` — `bash: {"*": "deny", "git add *": "allow", "git commit *": "allow", ...}` — which got it classified read-only despite needing to actually mutate git state. `delegate` still runs whatever commands an agent's bash allowlist permits; the tool choice is purely about spawn routing (write-capable agents get more careful/sequential handling), not an additional restriction on top of the permission block.
 
-**Fix pattern:** For an agent that genuinely needs to write/commit but should stay narrowly scoped, flip the bash default to `"*": "allow"` with the *dangerous* operations explicitly denied (`git push --force*`, `git reset*`, `git checkout --*`, `git clean*`, `git add -A`/`.`, `git commit --amend*`), rather than `"*": "deny"` with only safe operations allowlisted. This gets it correctly classified write-capable (spawn via `task`) while still hard-blocking the destructive commands at the permission layer — see `sugarcrush-committer`'s block in `.opencode/opencode.jsonc`.
+**Fix pattern:** For an agent that genuinely needs to write/commit but should stay narrowly scoped, flip the bash default to `"*": "allow"` with the *dangerous* operations explicitly denied (`git push --force*`, `git reset*`, `git checkout --*`, `git clean*`, `git add -A`/`.`, `git commit --amend*`), rather than `"*": "deny"` with only safe operations allowlisted. This gets it correctly classified write-capable (spawn via `task`) while still hard-blocking the destructive commands at the permission layer — see `candy-code-committer`'s block in `.opencode/opencode.jsonc`.
 
-**How to apply:** Whenever adding a new custom OpenCode agent to this repo that needs `bash` access but should stay restricted, decide up front whether it's conceptually read-only (→ `bash: {"*": "deny", <allowlist>}`, spawn via `delegate`, e.g. `sugarcrush-reviewer`/`reviewer`/`explore`) or conceptually write-capable-but-guarded (→ `bash: {"*": "allow", <denylist of dangerous ops>}`, spawn via `task`, e.g. `sugarcrush-committer`). Don't try to allowlist a write-capable agent's commands the same way a read-only agent's are allowlisted — it will silently misclassify and every spawn will fail at the routing layer before the agent's own prompt even matters. See [[project_sugarcrush_orchestration_plan]] for the full plan this agent set implements.
+**How to apply:** Whenever adding a new custom OpenCode agent to this repo that needs `bash` access but should stay restricted, decide up front whether it's conceptually read-only (→ `bash: {"*": "deny", <allowlist>}`, spawn via `delegate`, e.g. `candy-code-reviewer`/`reviewer`/`explore`) or conceptually write-capable-but-guarded (→ `bash: {"*": "allow", <denylist of dangerous ops>}`, spawn via `task`, e.g. `candy-code-committer`). Don't try to allowlist a write-capable agent's commands the same way a read-only agent's are allowlisted — it will silently misclassify and every spawn will fail at the routing layer before the agent's own prompt even matters. See [[project_sugarcrush_orchestration_plan]] for the full plan this agent set implements.
 
 
 ## `project_plan_missing_execution`
@@ -1062,7 +1062,7 @@ Removing the plugin also works but loses the feature.
 real constraint, and neither is discoverable from opencode's `--log-level DEBUG` (it never logs
 request bodies).
 
-**How to apply**: when an opencode/sugar-crush request against this server 400s, capture the actual
+**How to apply**: when an opencode/candy-code request against this server 400s, capture the actual
 body with a logging reverse proxy plus `OPENCODE_CONFIG=<copy with rewritten baseURL>` — that is the
 only way to see what was sent. See [[project_skynet2_sglang_deploy_config]] for the MiniMax-M2.7 arm
 of the same box.
@@ -1070,11 +1070,11 @@ of the same box.
 
 ## `skynet2-sglang-deploy-config`
 
-*"Confirmed launch command/flags for the skynet2.interserver.net SGLang server backing sugar-crush's dev-sglang provider (MiniMax-M2.7)"*
+*"Confirmed launch command/flags for the skynet2.interserver.net SGLang server backing candy-code's dev-sglang provider (MiniMax-M2.7)"*
 
 <sub>originally `project_skynet2_sglang_deploy_config.md`, type `project`</sub>
 
-The `dev-sglang` provider in `sugar-crush/.sugar-crush/config.dev.json` points at `https://skynet2.interserver.net/v1`. Confirmed 2026-08-10 (user-provided) actual launch command, SGLang `v0.5.16` via Docker:
+The `dev-sglang` provider in `candy-code/.candy-code/config.dev.json` points at `https://skynet2.interserver.net/v1`. Confirmed 2026-08-10 (user-provided) actual launch command, SGLang `v0.5.16` via Docker:
 
 ```bash
 export ver=v0.5.16
@@ -1110,15 +1110,15 @@ docker run --gpus all --rm -p 30000:8000 \
     --host 0.0.0.0 --port 8000
 ```
 
-Key facts for sugar-crush client work:
+Key facts for candy-code client work:
 - `--tool-call-parser minimax-m2` IS set — server-side XML→JSON tool-call translation is active, so [[project_crush_feat_research]]'s SGLang §12 D1 risk ("is the parser flag even set?") is resolved. The real remaining gap is client-side: `SglangProvider::parseChunk()`/`CustomProvider::parseChunk()` never read `delta.tool_calls`, so streaming mode still can't deliver tool calls (non-streaming `complete()` works fine).
-- `--reasoning-parser minimax` — confirmed NOT an alias of `minimax-append-think` (read SGLang's actual `python/sglang/srt/parser/reasoning_parser.py` source on `main`). `"minimax"` maps to `Qwen3Detector` with `force_reasoning=True` forced for that model_type — it properly splits reasoning into a real `reasoning_content` field. `"minimax-append-think"` maps to a different, narrower `MiniMaxAppendThinkDetector` that never populates `reasoning_content` at all — it just prepends a `<think>` token for well-formedness and leaves everything (including think markup) inline in `content`. The deployed config (`minimax`) is the better choice, not a downgrade. sugar-crush's client-side D3 fix should be parser-agnostic anyway (check `reasoning_content` first, fall back to stripping `<think>...</think>` from `content` if empty) so it's correct under either value — see updated D3 in crush_feat.md for the exact `extractReasoning()` sketch.
+- `--reasoning-parser minimax` — confirmed NOT an alias of `minimax-append-think` (read SGLang's actual `python/sglang/srt/parser/reasoning_parser.py` source on `main`). `"minimax"` maps to `Qwen3Detector` with `force_reasoning=True` forced for that model_type — it properly splits reasoning into a real `reasoning_content` field. `"minimax-append-think"` maps to a different, narrower `MiniMaxAppendThinkDetector` that never populates `reasoning_content` at all — it just prepends a `<think>` token for well-formedness and leaves everything (including think markup) inline in `content`. The deployed config (`minimax`) is the better choice, not a downgrade. candy-code's client-side D3 fix should be parser-agnostic anyway (check `reasoning_content` first, fall back to stripping `<think>...</think>` from `content` if empty) so it's correct under either value — see updated D3 in crush_feat.md for the exact `extractReasoning()` sketch.
 - `--context-length 196608` — use this exact value (not a rounded 196_000) when fixing `SglangProvider::contextWindow()`'s hardcoded `128_000`.
 - `--enable-strict-thinking` is set — not covered in the original opencode/Claude-Code-comparison research; likely improves tool-call reliability but produces longer thinking traces, worth watching against the known MiniMax `</parameter>`-truncation bug in long tool-call arguments.
 
-**Why**: came up while compiling `crush_feat.md`, a 12-agent research dossier comparing sugar-crush to opencode/Claude Code/other AI coding CLIs. See `/home/sites/sugarcraft/crush_feat.md` for the full writeup (executive summary flags several other real bugs and a recurring "fully built but never wired up" pattern across sugar-crush's Skills/Sessions/Mouse/Image/Context subsystems).
+**Why**: came up while compiling `crush_feat.md`, a 12-agent research dossier comparing candy-code to opencode/Claude Code/other AI coding CLIs. See `/home/sites/sugarcraft/crush_feat.md` for the full writeup (executive summary flags several other real bugs and a recurring "fully built but never wired up" pattern across candy-code's Skills/Sessions/Mouse/Image/Context subsystems).
 
-**How to apply**: when doing any SGLang/MiniMax provider work in `sugar-crush/src/Providers/`, this is the ground truth for what the actual deployed server supports — don't re-guess or re-verify the parser flags, they're confirmed. Do still fix the client-side gaps (D2 streaming tool-calls, D3 reasoning wiring, D4 extra_body/sampling params, D8 context window).
+**How to apply**: when doing any SGLang/MiniMax provider work in `candy-code/src/Providers/`, this is the ground truth for what the actual deployed server supports — don't re-guess or re-verify the parser flags, they're confirmed. Do still fix the client-side gaps (D2 streaming tool-calls, D3 reasoning wiring, D4 extra_body/sampling params, D8 context window).
 
 
 ## `splitsh-not-equal-git-subtree`
@@ -1144,7 +1144,7 @@ Each lib has its own `vendor/` + `composer.lock`. Siblings resolve from **Packag
 
 **Stale direction:** a lib's local `vendor`/`composer.lock` pins a pre-change snapshot of a sibling — spurious `Class "…" not found` for a class that exists in the sibling's source.
 
-**The dangerous direction, because it is SILENT:** a bare `composer install`/`composer update` **replaces `vendor/sugarcraft/*` symlinks with real Packagist copies**. The suite still passes, still prints a total, and is **no longer testing the working tree**. Measured 2026-08-22: it voided two full sugar-crush runs and a 14-lib sibling sweep in one session — the fix under test was never loaded.
+**The dangerous direction, because it is SILENT:** a bare `composer install`/`composer update` **replaces `vendor/sugarcraft/*` symlinks with real Packagist copies**. The suite still passes, still prints a total, and is **no longer testing the working tree**. Measured 2026-08-22: it voided two full candy-code runs and a 14-lib sibling sweep in one session — the fix under test was never loaded.
 
 **"The closure is intact" is a PER-LIB fact, not a repo-wide one.** After sugar-crush was restored to 18/18 and verified, a 16-lib sibling sweep came back **all rc 0** while **nine** libs still vendored a stale `candy-core` (`Width.php` md5 `f2a3558f…`/33,275 B vs the worktree's `270fc3f2…`/38,125 B). Only 4 of 16 were signal. ⚠️ **The oft-cited `candy-buffer` "1,621 → 1,661" proof is NOISE — do not reuse it.** Measured 2026-08-22 on one clean correctly-linked tree, three runs gave 1569 / 1545 / 1507 assertions (spread 62 > the +40 treated as signal); `candy-buffer/tests/BufferTest.php` uses `rand()`. Its TEST count (274) is stable; its assertion count measures nothing. The conclusion still holds — `--fix --strict-closure` really does inject zero repos for `candy-buffer` — but verify that by reading the manifest after `--fix`, never by a suite delta. **The sugar-crush skip-count alarm (1 → 2, `GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed`) has NO sibling equivalent**, so siblings must be checked by content, per lib. <!-- @rename-keep historical provenance -->
 
@@ -1184,19 +1184,19 @@ Related: [[project_candy_query_admin_async]], [[project_candy_query_react_db]], 
 
 ## `project_sugar_crush_absorbed_candy_crush`
 
-*candy-crush was merged into sugar-crush and deleted; sugar-crush is the sole SugarCraft\Crush*
+*candy-crush was merged into candy-code and deleted; candy-code is the sole SugarCraft\Code*
 
 <sub>originally `project_sugar_crush_absorbed_candy_crush.md`, type `project`</sub>
 
 As of 2026-06-20, `candy-crush` no longer exists. Its entire feature surface
 (7 providers, Runtime, built-in tools, hooks, skills, agents, MCP client/server,
 SQLite SessionStore, TokenTracker, Exporter, Tui panes) was merged into
-`sugar-crush` under sub-namespaces, all defects from `crusher.md` fixed, and the
-`candy-crush/` dir + monorepo wiring removed. sugar-crush is now the single
-`SugarCraft\Crush` library — a full TUI AI coding agent, not just a chat shell.
+`candy-code` under sub-namespaces, all defects from `crusher.md` fixed, and the
+`candy-crush/` dir + monorepo wiring removed. candy-code is now the single
+`SugarCraft\Code` library — a full TUI AI coding agent, not just a chat shell.
 
 **Architecture:** the tested sugar-crush *chassis* (`Chat` candy-core Model, <!-- @rename-keep historical provenance -->
-buffer-diff `Renderer`, `bin/sugarcrush`) is preserved and reaches the *engine*
+buffer-diff `Renderer`, `bin/candy-code`) is preserved and reaches the *engine*
 (`Runtime` + `ProviderInterface`) through `Backend\EngineBackend`, which runs a
 bounded multi-turn agentic loop (maxSteps guard) and converts root `Message`
 <-> typed `Messages\*` at the seam. `EchoProvider` is the offline default.
@@ -1208,12 +1208,12 @@ is gone). `CommandParser` exists but isn't yet wired into the Chat input loop.
 (The repo-root composer.lock was regenerated to drop candy-crush in PR #1088.)
 
 Full suite: 1239 tests green / 1 skip. All 7 providers unit-tested with mocks.
-Work landed on branch `ai/sugar-crush-merge-candy`. See [[reference_monorepo]].
+Work landed on branch `ai/candy-code-merge-candy`. See [[reference_monorepo]].
 
 
-## `project-sugarcrush-async-and-double-diff`
+## `project-candy-code-async-and-double-diff`
 
-*"sugar-crush architecture facts learned fixing the async-completion freeze, a double-diffing render corruption bug, and tool-call visibility — read before touching Chat.php/EngineBackend.php/Renderer.php again."*
+*"candy-code architecture facts learned fixing the async-completion freeze, a double-diffing render corruption bug, and tool-call visibility — read before touching Chat.php/EngineBackend.php/Renderer.php again."*
 
 <sub>originally `project_sugarcrush_async_and_double_diff.md`, type `project`</sub>
 
@@ -1228,13 +1228,13 @@ Work landed on branch `ai/sugar-crush-merge-candy`. See [[reference_monorepo]].
 **How to apply:** before adding new async work to `Chat.php`/`EngineBackend.php`, reuse the fork+non-blocking-socket-or-timer pattern already established (don't reinvent). Before adding a new `Backend` implementation, never call `Loop::stop()` from inside it. Before writing a test that touches `Loop::get()`, always await/settle every promise you create in it.
 
 
-## `project-sugarcrush-guzzle-baseurl-bug`
+## `project-candy-code-guzzle-baseurl-bug`
 
-*"sugar-crush's sglang/custom OpenAI-compatible providers 404'd because Guzzle drops a base_uri path suffix when the request URI starts with '/' — fixed in PR #1399, but the same gotcha applies to any future provider built the same way."*
+*"candy-code's sglang/custom OpenAI-compatible providers 404'd because Guzzle drops a base_uri path suffix when the request URI starts with '/' — fixed in PR #1399, but the same gotcha applies to any future provider built the same way."*
 
 <sub>originally `project_sugarcrush_guzzle_baseurl_bug.md`, type `project`</sub>
 
-`SglangProvider`/`CustomProvider` (`sugar-crush/src/Providers/`) build a Guzzle `Client` with `base_uri` set to a config value that can carry a path (e.g. `.sugar-crush/config.dev.json`'s `dev-sglang` → `https://skynet2.interserver.net/v1`), then issue requests against `/chat/completions` (leading slash). Guzzle resolves relative request URIs against `base_uri` per RFC 3986: an absolute-path URI (`/chat/completions`) REPLACES the whole base path instead of appending, silently dropping `/v1` — every completion request 404'd at the bare host.
+`SglangProvider`/`CustomProvider` (`candy-code/src/Providers/`) build a Guzzle `Client` with `base_uri` set to a config value that can carry a path (e.g. `.candy-code/config.dev.json`'s `dev-sglang` → `https://skynet2.interserver.net/v1`), then issue requests against `/chat/completions` (leading slash). Guzzle resolves relative request URIs against `base_uri` per RFC 3986: an absolute-path URI (`/chat/completions`) REPLACES the whole base path instead of appending, silently dropping `/v1` — every completion request 404'd at the bare host.
 
 Fix (PR #1399): trailing-slash `base_uri` (`rtrim($baseUrl, '/') . '/'`) and use relative request paths with no leading slash (`chat/completions`, `embeddings`) in both providers' `openAiCompatible()` constructors.
 
@@ -1242,25 +1242,25 @@ Same PR also fixed a second, independent live crash in `SglangProvider::complete
 
 **Why:** the user hit this live testing the sglang backend wired up in [[project_sugarcrush_tui_and_parallel_tools]] — reported "404" and then, after the base_uri fix, a live crash on `readLine()` on the very next message.
 
-**How to apply:** any new OpenAI-compatible provider added to `sugar-crush/src/Providers/` must trailing-slash `base_uri` + use relative request paths, and must implement `completeStream()` via manual `read()`+buffer+`strpos("\n")`, never `readLine()`.
+**How to apply:** any new OpenAI-compatible provider added to `candy-code/src/Providers/` must trailing-slash `base_uri` + use relative request paths, and must implement `completeStream()` via manual `read()`+buffer+`strpos("\n")`, never `readLine()`.
 
 
-## `project-sugarcrush-orchestration-plan`
+## `project-candy-code-orchestration-plan`
 
-*"crush_code_plan.md + .opencode/agents/sugarcrush-* define an automated multi-agent build of sugar-crush's own multi-agent features, run on OpenCode against a local MiniMax-M2.7 endpoint"*
+*"crush_code_plan.md + .opencode/agents/candy-code-* define an automated multi-agent build of candy-code's own multi-agent features, run on OpenCode against a local MiniMax-M2.7 endpoint"*
 
 <sub>originally `project_sugarcrush_orchestration_plan.md`, type `project`</sub>
 
-`/home/sites/sugarcraft/crush_code_plan.md` is a feature plan for sugar-crush (the PHP terminal AI coding agent this monorepo builds) to add OpenCode/Claude-Code-style capabilities: parallel agent execution, agent teams, worktree isolation, permission modes, dynamic workflows, context compaction, and more. It's organized into phases (P0, P1, P2, P2B, P3–P7), each ending in a **Step Manifest** table breaking that phase into ~110 small steps total, each scoped to fit well under a 150K-token context budget.
+`/home/sites/sugarcraft/crush_code_plan.md` is a feature plan for candy-code (the PHP terminal AI coding agent this monorepo builds) to add OpenCode/Claude-Code-style capabilities: parallel agent execution, agent teams, worktree isolation, permission modes, dynamic workflows, context compaction, and more. It's organized into phases (P0, P1, P2, P2B, P3–P7), each ending in a **Step Manifest** table breaking that phase into ~110 small steps total, each scoped to fit well under a 150K-token context budget.
 
 The plan is meant to be *executed*, not just read: its "Execution Protocol for Orchestrated Implementation" section defines a 4-tier agent hierarchy (Plan Orchestrator → Phase Agent → Step Builder/Review/Fix loop → Step Commit) that runs unattended on OpenCode against `MiniMax-M2.7` at `https://skynet2.interserver.net/v1` (wired in as the free/unlimited dev-test provider in step P0.S1). Every review cycle spawns a completely fresh reviewer agent (no memory of prior cycles) that must independently confirm a ten-category checklist before a step can be committed — up to 5 review/fix cycles before a step is marked `"blocked"` and the whole run halts rather than proceeding on a broken foundation.
 
 **Why:** User wants a self-driving build of this feature set with tight context discipline (OpenCode + MiniMax-M2.7, 200K max context, target <150K/agent) and full traceability (every step independently reviewed before landing), git commits going straight to `master` for this run only (no PRs — an explicit, scoped exception to this repo's normal [[feedback_pr_size]]/[[feedback_ship_as_you_go]] cadence).
 
-**How to apply:** The concrete OpenCode wiring lives in `.opencode/agents/sugarcrush-orchestrator.md`, `sugarcrush-phase-lead.md`, `sugarcrush-reviewer.md`, `sugarcrush-committer.md`, plus permission blocks of the same names in `.opencode/opencode.jsonc`, plus the `/sugarcrush-build` command. Step Builder/Fix reuses the existing `coder` agent as-is. See [[project_opencode_task_vs_delegate_routing]] for a routing gotcha hit while wiring this up. If asked to resume, extend, or debug this build, read `crush_code_plan.md`'s Execution Protocol section first — it's the source of truth the agent `.md` files intentionally defer to rather than duplicate.
+**How to apply:** The concrete OpenCode wiring lives in `.opencode/agents/candy-code-orchestrator.md`, `candy-code-phase-lead.md`, `candy-code-reviewer.md`, `candy-code-committer.md`, plus permission blocks of the same names in `.opencode/opencode.jsonc`, plus the `/candy-code-build` command. Step Builder/Fix reuses the existing `coder` agent as-is. See [[project_opencode_task_vs_delegate_routing]] for a routing gotcha hit while wiring this up. If asked to resume, extend, or debug this build, read `crush_code_plan.md`'s Execution Protocol section first — it's the source of truth the agent `.md` files intentionally defer to rather than duplicate.
 
 
-## `project-sugarcrush-render-overflow-bug`
+## `project-candy-code-render-overflow-bug`
 
 *"sugar-crush Renderer must clip the frame to terminal height, not just pad it — candy-core's Renderer clamps out-of-bounds cursorTo() and collides rows once content grows past one screen. Read before touching Renderer::render()'s full-window layout code again."* <!-- @rename-keep historical provenance -->
 
@@ -1270,26 +1270,26 @@ The plan is meant to be *executed*, not just read: its "Execution Protocol for O
 
 **Fix:** clip `$contentLines` to the tail (`array_slice($contentLines, -$available)`) when it exceeds `rows - 1`, instead of only padding when it's short. Frame is now unconditionally exactly `$rows` lines. Old history scrolls off the top (lost, not scrollback-preserved — alt-screen mode has no native scrollback anyway); the input box (rendered as the tail of `$content`) and newest turns stay visible right above the status bar.
 
-**Also fixed same PR:** 5 test files (`tests/LSP/LspClientTest.php`, `tests/Workflows/Workflow{Engine,Result}Test.php`, `tests/Context/InstructionFileLoaderTest.php`, `tests/Tui/AgentOutputPaneTest.php`) had their namespace nesting inverted — `SugarCraft\Crush\<Sub>\Tests` instead of the `autoload-dev` map's expected `SugarCraft\Crush\Tests\<Sub>` — composer silently skipped them from the autoloader with a PSR-4 warning on every install/dump-autoload. Simple namespace-declaration swap, no other file referenced the wrong namespace.
+**Also fixed same PR:** 5 test files (`tests/LSP/LspClientTest.php`, `tests/Workflows/Workflow{Engine,Result}Test.php`, `tests/Context/InstructionFileLoaderTest.php`, `tests/Tui/AgentOutputPaneTest.php`) had their namespace nesting inverted — `SugarCraft\Code\<Sub>\Tests` instead of the `autoload-dev` map's expected `SugarCraft\Code\Tests\<Sub>` — composer silently skipped them from the autoloader with a PSR-4 warning on every install/dump-autoload. Simple namespace-declaration swap, no other file referenced the wrong namespace.
 
 **Follow-up (PR #1404): the #1403 fix alone didn't fully land, because $rows itself could be wrong.** #1403 clipped to `TuiRenderer::getTerminalSize()['rows']` — but that's a SECOND, independent, statically-cached size detector (`(new Tty(STDOUT))->size()`, cached forever, never invalidated) separate from the size candy-core's `Program` itself detects and dispatches via `WindowSizeMsg` at startup and on every SIGWINCH resize (project invariant: "WindowSizeMsg is size truth" — see [[project_tui_render_invariants]]). `Chat` never handled `WindowSizeMsg` at all before this. If the two size sources disagree even slightly — or the terminal is resized mid-session, which the cache never re-learns — the exact row-collision bug comes right back, indistinguishable from the original symptom, which is why the user still saw it after #1403 shipped. Fix: `Chat` now stores `rows`/`cols` from `WindowSizeMsg` (`rows()`/`cols()` accessors, falling back to `TuiRenderer::getTerminalSize()` only when no `WindowSizeMsg` has arrived yet, e.g. a `Chat` built directly in a test); `Renderer::render()`/`renderAgentView()` read `$chat->rows()`/`$chat->cols()` instead of querying terminal size themselves. <!-- @rename-keep historical provenance -->
 
 **How to apply:** any future change to `Renderer::render()`'s layout math must preserve "frame is always exactly `$rows` lines, never more" — candy-core's Renderer has no scrolling and will silently corrupt the screen the instant that invariant breaks, no matter how correct the content generation logic is otherwise. Get `$rows`/`$cols` from `Chat::rows()`/`cols()` (sourced from `WindowSizeMsg`), never from a fresh, independent terminal-size query — two independent size detectors for the same terminal is itself the bug class. Before trusting a "diff renderer" bug report as fixed, check whether the frame can just be too tall for the terminal, AND whether the size used to bound it actually matches Program's own live-detected size — either mismatch produces an identical-looking symptom. <!-- @rename-keep historical provenance -->
 
 
-## `project-sugarcrush-tui-and-parallel-tools`
+## `project-candy-code-tui-and-parallel-tools`
 
-*"COMPLETED 2026-08-10 — sugar-crush TUI feature plan (slash popup, Ctrl+P palette, themes, full-window layout, backend switching) plus a real fix for R14b's disabled parallel tool-call routing. 6 PRs merged to master."*
+*"COMPLETED 2026-08-10 — candy-code TUI feature plan (slash popup, Ctrl+P palette, themes, full-window layout, backend switching) plus a real fix for R14b's disabled parallel tool-call routing. 6 PRs merged to master."*
 
 <sub>originally `project_sugarcrush_tui_and_parallel_tools.md`, type `project`</sub>
 
-**Status: done.** Both workstreams below shipped and merged to master on 2026-08-10 (PRs #1392-#1398): R14b real parallel-tool fix first, then the TUI plan's Phases 0/1/3/2/4/5 in that landing order (3 and 2 swapped from the plan's original numbering so the Ctrl+P palette's Switch Theme action had a real, already-wired theme system to act on the moment it shipped, rather than landing temporarily inert). Final state: 3217 tests / 8273 assertions / 0 failures on master. Nothing left pending — see `git log --oneline -20` in `sugar-crush` for the exact commit sequence if picking this back up for a follow-on feature.
+**Status: done.** Both workstreams below shipped and merged to master on 2026-08-10 (PRs #1392-#1398): R14b real parallel-tool fix first, then the TUI plan's Phases 0/1/3/2/4/5 in that landing order (3 and 2 swapped from the plan's original numbering so the Ctrl+P palette's Switch Theme action had a real, already-wired theme system to act on the moment it shipped, rather than landing temporarily inert). Final state: 3217 tests / 8273 assertions / 0 failures on master. Nothing left pending — see `git log --oneline -20` in `candy-code` for the exact commit sequence if picking this back up for a follow-on feature.
 
 **1. TUI feature plan** (approved plan file: `/home/my/.claude/plans/misty-stirring-tulip.md`) — user compared the live `bin/sugarcrush` TUI against Claude Code/opencode and wanted: a `/`-triggered filterable command popup, a Ctrl+P categorized command palette (search box, switch session/model/theme/agent, share, docs, exit, MCP status), full-terminal-height layout with a bottom status bar (processing indicator + context %), selectable color themes, and a real (non-echo) backend reachable for testing against the dev-sglang endpoint (`.sugar-crush/config.dev.json`'s `dev-sglang` → `https://skynet2.interserver.net/v1`). Delivered as 6 separate PRs (one per phase, standard branch+PR workflow, not the earlier remediation's direct-to-master exception): `Chat.php`'s `mutate()` consolidation enabler, the slash popup (`CommandRegistry`), the theme system (`SugarCraft\Crush\Theme` resolving `candy-shine`+`candy-sprinkles` presets), the Ctrl+P palette (`candy-fuzzy`+`sugar-veil`, resolved via plain Packagist `require` — see [[feedback_packagist_not_path_repos]], NOT path-repos), full-window layout + context-% status bar, and `Bootstrap` provider/theme persistence to `~/.sugar-crush/config.json`. <!-- @rename-keep historical provenance -->
 
 **2. R14b real fix** — added mid-session per [[feedback_fix_not_disable]]: the original diagnosis (closures can't cross a fork boundary) was itself slightly off — a plain `pcntl_fork()` DOES preserve closures (COW memory duplication); the real problem was routing through `AgentWorkerPool`/`SubAgent`/`ProcessExecutor`'s SECOND boundary, a `proc_open()`-spawned worker with no shared memory. Fix: `Chat::executeToolsParallel()` now forks directly per tool call (bypassing the agent-team machinery entirely), verified with a deterministic PID-based test proving genuine multi-process parallelism.
 
-**How to apply:** if a future session touches `sugar-crush/src/Chat.php`, `Renderer.php`, `Theme.php`, `Cli/Bootstrap.php`, or `Palette/*`, this plan file + commit sequence is the design rationale — read it before assuming any of that code needs re-deriving from scratch.
+**How to apply:** if a future session touches `candy-code/src/Chat.php`, `Renderer.php`, `Theme.php`, `Cli/Bootstrap.php`, or `Palette/*`, this plan file + commit sequence is the design rationale — read it before assuming any of that code needs re-deriving from scratch.
 
 
 ## `project_tui_render_invariants`

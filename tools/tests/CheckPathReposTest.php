@@ -64,7 +64,7 @@ final class CheckPathReposTest extends TestCase
      * TWO JOBS RATHER THAN ONE SINCE E589. `tools/tests/` used to be the first
      * step of `path-repo-check`, so a red from a file in this directory arrived
      * under a job called "Path-repo policy" — which for the stacked-doc-comment
-     * copy pin means a `sugar-crush` contributor is told a manifest gate failed
+     * copy pin means a `candy-code` contributor is told a manifest gate failed
      * when nothing about manifests changed. The step became the `tools-guards`
      * job; `path-repo-check` `needs:` it, so a red there still stops the
      * manifest verdicts being read as evidence.
@@ -556,7 +556,7 @@ final class CheckPathReposTest extends TestCase
         $this->assertIsString($workflow, 'ci.yml is unreadable, so this assertion speaks for nothing');
 
         $this->assertSame(
-            'tools/ guards (+ drift pins that read sugar-pty/ and sugar-crush/)',
+            'tools/ guards (+ drift pins that read sugar-pty/ and candy-code/)',
             $this->ciJobName($workflow, 'tools-guards'),
             'the tools-guards job name changed. It states REACH, not an '
             . 'enumeration, because the enumeration rotted in one round (see E589 '

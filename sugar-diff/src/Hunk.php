@@ -15,7 +15,7 @@ namespace SugarCraft\Diff;
  *    the first line) by the producer in {@see Diff::assemble()} and keeps
  *    its `,0` — GNU never drops a zero count.
  *
- * This replaced the ported sugar-crush shape (zero sides anchored at 0, counts
+ * This replaced the ported candy-code shape (zero sides anchored at 0, counts
  * always printed) from `BuildsUnifiedDiff::buildHunks()`; the group-window walk
  * itself still mirrors it.
  */

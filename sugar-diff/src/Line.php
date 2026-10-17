@@ -15,7 +15,7 @@ namespace SugarCraft\Diff;
  *
  * Mirrors the `list<array{0:'eq'|'del'|'ins',1:string}>` ops plus the
  * per-op `[$type, $line, $oldLine, $newLine]` annotation of
- * sugar-crush/src/Tools/Concerns/BuildsUnifiedDiff.php, turned into a value
+ * candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php, turned into a value
  * object.
  */
 final class Line
