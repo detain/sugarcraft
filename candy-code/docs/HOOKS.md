@@ -56,7 +56,9 @@ hooks:
 ```
 
 Those six are the **only** keys an entry may carry. An unrecognised key is
-refused rather than ignored.
+refused rather than ignored. A user-tier file's relative `./hooks/...` command
+resolves against `~/.candy-code/` — the file's own directory — not the repo you
+open; project-tier files keep repo-relative commands (ISS-039).
 
 `name` matters because `HookRegistry` keys hooks by name: without it, two
 entries sharing a command on one event silently collapse into a single
@@ -165,9 +167,9 @@ already run:
 | `PostToolUse` | after a tool ran, in provider order | `Runtime::settle()`, `Chat::applyPostToolUse()` |
 | `Stop` | the agent answered without calling a tool and is about to stop — the one that can keep it going | `EngineBackend::runTurn()` |
 | `SubagentStop` | a sub-agent (a `Task` run, or a workflow stage's agent) is about to stop | `EngineBackend::runTurn()` |
-| `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
+| `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()`, `NonInteractive::fireTurnHooks()`, `BackgroundSessionRunner::fireTurnHooks()` |
 | `SessionEnd` | the process is exiting: the TUI closed, or a `-p` run printed its answer | `NonInteractive::fireSessionEnd()` |
-| `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
+| `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()`, `NonInteractive::fireTurnHooks()`, `BackgroundSessionRunner::fireTurnHooks()` |
 | `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()`, `EngineBackend::runTurn()` |
 | `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()`, `EngineBackend::runTurn()` |
 | `TeammateIdle` | a teammate asked the board for its next task — the `Team` tool's `claim` with no `task` | `TeamManager::handleTeammateIdle()`, `TaskList::dispatchTeammateIdle()` |
@@ -514,7 +516,7 @@ Notes that matter in practice:
   of every hook that returned an ask on the settled ASK (`HookResult::$askedBy`),
   overwriting anything a hook's own result carried, and the gate's name is
   reserved. A question your hook asks is about this call's content, so no
-  earlier approval answers it (audit F-P7, F-P9).
+  earlier approval answers it (audit F-P7, F-P9). Under `bypass-permissions` there is a per-hook opt-in: a hook whose name is rostered via `HeadlessPermissionPrompt::requireUnattendedAnswer()` keeps that promise even in bypass mode — with no terminal it fails closed to a refusal (the row carries the E375 unattended qualifier), at a terminal the real question is put; un-rostered ASKs are answered allow by the operator's standing bypass consent (ISS-040, owner ruling 2026-10-06).
 - **Exit 4 whose stdout is not a JSON object is downgraded to a DENY**, never to
   an allow: a hook that meant to rewrite dangerous arguments and failed must not
   have the *original* arguments run in its place. A JSON list or scalar is
@@ -589,6 +591,11 @@ CRUSH_SESSION_ID       CRUSH_TOOL_NAME   CRUSH_TOOL_INPUT
 CRUSH_TOOL_OUTPUT      CRUSH_MODEL       CRUSH_PROVIDER
 CRUSH_TOOL_INPUT_FILE  CRUSH_TOOL_OUTPUT_FILE
 ```
+
+The child also receives the Claude-Code-shaped JSON payload on **stdin**:
+`{"session_id", "cwd", "hook_event_name", "tool_name", "tool_input",
+"tool_response"}` (ISS-038). The `CRUSH_*` environment stays as above, and a
+child that never reads stdin still verdicts on its exit code.
 
 `CRUSH_TOOL_INPUT` (and the file behind `CRUSH_TOOL_INPUT_FILE`) is the tool's
 arguments as JSON with **slashes and non-ASCII left unescaped** — a Read of

@@ -2802,12 +2802,11 @@ final class DocFigureProseDriftTest extends TestCase
         $arch = self::markdownProse($archRaw);
 
         self::assertStringNotContainsString('called by nothing in', $arch, 'the refuted claim is back — TaskList constructs \\SQLite3; see the corrected sentence this arm pins');
-        $oldSentence = '/`ext-sqlite3` is declared, and `src\/` constructs it in exactly one place: `Agents\\\\TaskList`\'s task database\. The session store reaches SQLite through\s+\*\*PDO\*\*, which is why `doctor` probes `pdo_sqlite` rather than the extension/';
         $newSentence = '/`ext-sqlite3` is declared, and `src\/` constructs it in two places: `Agents\\\\TaskList`\'s task database and `doctor`\'s in-memory extension probe\. The session store reaches SQLite through\s+\*\*PDO\*\*; `doctor` reports `pdo_sqlite` and `ext-sqlite3` separately because the task list does not go through PDO./';
         self::assertSame(
             1,
-            (int) (bool) (preg_match($oldSentence, $arch) || preg_match($newSentence, $arch)),
-            'the corrected sqlite sentence moved a third way — neither the pre-ISS-083 wording nor the ISS-083 wording matches; pin the replacement here rather than deleting the guard',
+            (int) preg_match($newSentence, $arch),
+            'the corrected sqlite sentence moved a third way — the ISS-083 wording is the only shape allowed; pin the replacement here rather than deleting the guard',
         );
 
         $users = [];

@@ -7,7 +7,7 @@ trust this page.
 Start here:
 
 ```sh
-candy-code doctor                       # nine checks; exits 1 if any FAILs
+candy-code doctor                       # fourteen checks; exits 1 if any FAILs
 candy-code doctor --output-format json  # the same, machine-readable
 ```
 
@@ -87,6 +87,8 @@ unusable. Read the stderr line; it names the file and the value.
 |---|---|---|
 | invalid JSON in `config.json` | a stray comma | fix the file; `doctor`'s `config file` check reports the parser's own message |
 | an unrecognised permission mode | a typo in `permissionMode`, `CANDY_CODE_PERMISSION_MODE` or `--permission-mode` | one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions` |
+| key typed in a settings file nobody reads (e.g. `permisionMode`) | a misspelling | fix the file; `doctor`'s `settings keys` check names the file, the key, and the nearest real key |
+| `CANDY_CODE_MAX_COST` refused at launch | not a positive number | `doctor`'s `spend cap` check prints the same refusal |
 | `--permission-mode expects a mode, but the value is empty` (or the same for `--model`) | usually `--permission-mode="$MODE"` with `$MODE` unset or misspelled in the calling script | quote-check the variable. The flag refuses an empty value on purpose — it used to accept one, apply no mode at all and exit 0, so a script could believe a mode was in force when none was. Note the deliberate asymmetry: an **empty** `CANDY_CODE_PERMISSION_MODE` or `"permissionMode": ""` is read as *absent* and falls through to the next source, because an unset variable is a normal state of an environment while typing the flag is an explicit act |
 | `hooks.yaml` … refusing to start | YAML syntax error, unknown event name, uncompilable matcher, or an unrecognised entry key | see [`HOOKS.md`](HOOKS.md) |
 | a hook would displace an already-registered hook | your `hooks.yaml` reuses a built-in's name **on that built-in's own event** — `protect-files` or `confirm-rm` on `PreToolUse`, `audit` on `PostToolUse` | rename the entry; see the name/event table in [`HOOKS.md`](HOOKS.md#a-loaded-hook-may-only-add-to-the-chain) |
@@ -101,9 +103,12 @@ matters. Absence is a no-op; **present but unusable is a refusal**.
 
 ## `--version` reports a commit that is not my checkout's HEAD
 
-Expected. `Help::versionString()` reads Composer's install metadata
-(`InstalledVersions::getReference()`), which is the reference recorded at
-`composer install` time — not the working tree's current HEAD.
+In a git checkout of the repo, `Help::versionString()` prefers a bounded
+`git rev-parse HEAD` of the checkout itself and appends `+dirty` when tracked
+files are modified (vendor paths are refused) — so the line reports your HEAD,
+not a frozen reference. Composer's install metadata
+(`InstalledVersions::getReference()`) is the fallback for non-checkout installs,
+where it remains the reference recorded at `composer install` time (ISS-082).
 
 Measured in this checkout: `git rev-parse --short HEAD` said `7d873a15` while
 `candy-code --version` said `dev-master (a4be826)`, and `a4be8263` is a real but
@@ -305,9 +310,12 @@ without asking. With `autoReview` on, the reviewer can also answer *ask*. See
   (project to the checkout, user to `$HOME`), and the refusal is reported at
   launch, not at `/workflow list`. A `~/.candy-code/workflows -> /opt/shared`
   link is refused now.
-- **A `.php` workflow with a syntax error kills the session.** It is reached by
-  `require`, so the error is a compile fatal — uncatchable, and `Chat`'s
-  `catch (\Throwable)` cannot survive it. YAML errors are one transcript line.
+- **A `.php` workflow with a syntax error.** A first `require` raises a
+  `ParseError` that `Chat`'s `catch (\Throwable)` does survive — one transcript
+  line, like a YAML error. What used to kill the session was the *second*
+  compile of the same path (`Cannot redeclare`), an uncatchable fatal; since
+  ISS-045 `WorkflowRegistry` compiles each user PHP workflow once per process,
+  so it cannot recur (see [`docs/WORKFLOWS.md`](WORKFLOWS.md)).
 - **A stage ran the wrong prompt.** `agent:` is a label, not a preset reference;
   `WorkflowEngine` never reads `AgentPreset`. See
   [`WORKFLOWS.md`](WORKFLOWS.md#three-limits-to-know-before-you-design-around-this).

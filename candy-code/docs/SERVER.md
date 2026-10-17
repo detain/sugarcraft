@@ -40,7 +40,11 @@ candy-code serve: listening on http://127.0.0.1:7420 (pid 4242)
 
 Open the sign-in URL in a browser on the same machine. The code rides in the URL
 **fragment**, so it never reaches a request line, a server log, a proxy or a
-`Referer`; the page posts it to `/api/login` and receives a session cookie.
+`Referer`; the page posts it to `/api/login` and receives a session cookie. The login
+response body also carries `loginSecret`, a 64-hex per-login secret the client
+must echo in the header `X-Candy-Code-Auth` on every ticket mint and every
+cookie-authenticated `/api/*` POST; a request without the matching secret is
+refused `401` and burns a lockout strike (ISS-007).
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -236,15 +240,22 @@ says so.
 1. `serve` prints a sign-in URL with a **one-time login code** (single use,
    valid 120 s) in its fragment.
 2. The page posts `{"code": "…"}` to `POST /api/login` and receives an
-   **`HttpOnly`, `SameSite=Strict`** cookie, `candy_code_session` (7-day sliding
-   lifetime; `Secure` when a trusted proxy reports HTTPS). Posting
-   `{"token": "…"}` works too.
-3. Before each WebSocket connect the page asks `POST /api/ticket` (cookie
-   only) for a **single-use ticket** valid 30 s and bound to its cookie
-   session, and opens `/ws?ticket=…`.
+   **`HttpOnly`, `SameSite=Strict`** cookie plus the `loginSecret` body field.
+   The cookie is port-scoped — `candy_code_session_<port>` — so two `serve`
+   instances on one host never share ambient sign-ins (7-day sliding lifetime;
+   `Secure` when a trusted proxy reports HTTPS; behind an HTTPS front the name
+   would gain the `__Host-` prefix — TLS is out of scope for the dev server).
+   Posting `{"token": "…"}` works too.
+3. Before each WebSocket connect the page asks `POST /api/ticket` (cookie +
+   `X-Candy-Code-Auth` secret) for a **single-use ticket** valid 30 s, bound to
+   its cookie session and to that login secret, and opens `/ws?ticket=…`.
 
 Sessions live in memory: restarting the server signs every browser out, and the
-token file is the only durable credential.
+token file is the only durable credential. A signed-in browser session that goes
+unused for the cookie lifetime (7 d sliding, stamped on each authenticated
+request) has its open sockets swept shut with close code `4001` — "your sign-in
+expired"; logging out revokes instantly and closes every WebSocket bound to the
+session the same way (ISS-009).
 
 **Scripts and tools** authenticate directly:
 
@@ -255,17 +266,33 @@ token file is the only durable credential.
 
 **Rate limiting.** Ten wrong credentials from one address within a minute lock
 that address out for five minutes (`429` with `Retry-After`). Behind a trusted
-proxy the address is the right-most untrusted `X-Forwarded-For` hop.
+proxy the address is the right-most untrusted `X-Forwarded-For` hop. The
+limiter **authenticates before it consults strikes**: a valid bearer token or
+`candy-code.auth.` subprotocol is admitted even while its address is locked
+out, so an attacker flooding the shared loopback bucket cannot lock out the
+owner. A non-upgrade `GET /ws` is answered `426` before auth and never counts.
+Failed ticket presentations count only on a real WebSocket upgrade with a
+matching `Origin` — cross-site probes (`<img src=…/ws?ticket=bogus>`) get
+their `401`/`426` for free; junk cookie attempts always count. The strike that
+trips a lockout is logged once (ISS-008).
+
+**Ingress hardening (ISS-055).** `ClientAddressGuard` (`--allowed-ips` /
+`--require-token`) and the `Host` check run immediately after header parsing,
+before any body is buffered. Every request gets a 10 s header/body read
+deadline — a stalled body is answered `408` with `Connection: close` and the
+socket is torn down (idle pre-first-byte connections are dropped too) — and a
+single address may hold at most 16 simultaneous connections; more are refused
+`429`. These bound HTTP ingress only — never LLM turns.
 
 ### HTTP endpoints
 
 | Endpoint | Auth | Answer |
 |---|---|---|
 | `GET /api/health` | none | `{"ok": true, "protocol": 1}` — nothing else, so a prober learns neither the version nor the root |
-| `POST /api/login` | none (rate limited) | `{"code"}` or `{"token"}` → `{"ok": true}` + the session cookie; wrong → `401` |
-| `POST /api/ticket` | cookie | `{"ticket", "expiresInSeconds": 30}`; a bearer client gets `400` (it needs no ticket) |
-| `POST /api/logout` | any | ends the cookie session and clears the cookie |
-| `GET /ws` | ticket, bearer or token subprotocol — never the cookie alone, which a browser attaches by itself | the WebSocket upgrade |
+| `POST /api/login` | none (rate limited) | `{"code"}` or `{"token"}` → `{"ok": true, "loginSecret": "<64-hex>"}` + the session cookie; wrong → `401` |
+| `POST /api/ticket` | session cookie + `X-Candy-Code-Auth` secret | `{"ticket", "expiresInSeconds": 30}`; a bearer client gets `400` (it needs no ticket) |
+| `POST /api/logout` | any | revokes the session, closes every WebSocket bound to it with close code `4001`, and clears the cookie |
+| `GET /ws` | ticket, bearer or token subprotocol — never the cookie alone, which a browser attaches by itself | the WebSocket upgrade; `Origin` is checked, and a ticket only opens the socket for the login secret that minted it |
 | anything else | none | the web UI's files (`GET`/`HEAD` only) |
 
 Refusals are JSON: `{"error": {"kind": "…", "message": "…"}}`. Clients branch on

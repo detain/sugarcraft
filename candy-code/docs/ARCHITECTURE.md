@@ -1304,9 +1304,7 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `sugar-constraints` (dock geometry), `sugar-focus`, `sugar-cli`, `sugar-pty`
 (the pseudo-terminal interactive tool output is captured through).
 
-`ext-sqlite3` is declared, and `src/` constructs it in exactly one place:
-`Agents\TaskList`'s task database. The session store reaches SQLite through
-**PDO**, which is why `doctor` probes `pdo_sqlite` rather than the extension.
+`ext-sqlite3` is declared, and `src/` constructs it in two places: `Agents\TaskList`'s task database and `doctor`'s in-memory extension probe. The session store reaches SQLite through **PDO**; `doctor` reports `pdo_sqlite` and `ext-sqlite3` separately because the task list does not go through PDO.
 
 ---
 

@@ -26,7 +26,10 @@ Four places, highest first:
    `--config`), or in `~/.candy-code/settings.json`, which `config.json`
    outranks.
 4. The shipped default, which depends on the path: **`default` in the TUI**,
-   **`bypass-permissions` for `-p` and background sessions**.
+   **`bypass-permissions` for `-p` and locally spawned `/bg` sessions**. A daemon
+   spawned by `serve` (`bg.spawn` or the host `/bg`) is the exception: it runs in
+   the server's admitted permission mode, and its asks die at the no-terminal
+   approver — see [`docs/SERVER.md`](SERVER.md).
 
 In the TUI the mode can also be switched **while the session runs**:
 `Alt+M` toggles `plan` — into it from any mode, and back out to the mode it
@@ -80,7 +83,21 @@ policy-self-grant writes (`.candy-code/hooks.yaml`, `config.json`, `agents/`,
 `.git/hooks/`, `.git/info/`) that keep the mode switch itself out of the
 model's reach. What the gate buys is that this is all reachable and
 configurable. `candy-code doctor` names both defaults when
-nothing is configured.
+nothing is configured. (The doctor roster itself reflects this: `-p` and
+background there means the local console paths.)
+
+One hook promise survives the blanket grant: a hook rostered via
+`HeadlessPermissionPrompt::requireUnattendedAnswer()` keeps its exit-3 ASK out
+of bypass — with no terminal it fails closed to a refusal (the refusals row
+carries the E375 unattended qualifier), at a terminal the real question is put
+(ISS-040). PHP-registered hooks can opt in today; a settings-file key for the
+same roster is a pending seam.
+
+Headless runs are also capped: `-p`/`-e` honour `CANDY_CODE_MAX_COST` (settings
+key `maxCostUsd`) — an invalid value exits 2 with `error.type` `usage` before
+any request; a mid-run breach emits one refusals row `{tool: turn, kind:
+budget}` (message `host.spend.mid_turn`) and the turn settles without further
+provider calls; JSON output still exits 0 (ISS-006).
 
 ### A sub-agent's mode
 

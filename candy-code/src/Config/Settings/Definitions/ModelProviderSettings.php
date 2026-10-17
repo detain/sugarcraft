@@ -82,7 +82,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('CANDY_CODE_TITLE_MODEL')
                 ->withLabel(Lang::t('settings.titleModel.label'))
-                ->withHelp('Model that names sessions and writes prompt suggestions; unset uses the provider default.')
+                ->withHelp('Model that names sessions and writes prompt suggestions; unset uses the provider type\'s cheap auxiliary default before the block model.')
                 ->withReaderSymbol(Bootstrap::class . '::titleBackend'),
             SettingDefinition::new('summaryModel', SettingType::String)
                 ->withCategory(SettingCategory::ModelProvider)
