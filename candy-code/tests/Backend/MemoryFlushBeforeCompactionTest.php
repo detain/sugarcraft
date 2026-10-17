@@ -261,8 +261,7 @@ final class MemoryFlushBeforeCompactionTest extends TestCase
      * answer; 100k window, so the fourth request is the first over budget. The
      * flush is answered with a Memory save and a probe call; the summary with
      * $summary, or a failure for null.
-     */
-    /**
+     *
      * ISS-070: the flush answers its caller with the saved rows themselves,
      * not a discarded count — one per Memory call that succeeded, none for
      * the step's other rows or for a refused tool.

@@ -4640,28 +4640,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
-     * The forked child's half of {@see completeAsync()}: run the real
-     * (blocking) engine loop in isolation, streaming each tool event back
-     * over the socket as its own frame as it fires and the outcome as the
-     * final frame, then exit. Never returns.
-     *
-     * 1.C-1: on an INTERACTIVE turn the socket also carries questions. The
-     * turn runs on a copy of this backend whose approver is a
-     * {@see ChildChannel}: each ASK goes up as an `ask` frame and the child
-     * blocks for the parent's `ask_reply`. Built here, in the child, so the
-     * channel's owner pid is the turn child's own — a parallel Task
-     * grandchild that inherits the approver is refused rather than allowed
-     * to interleave frames on this stream (see {@see ChildChannel}).
-     *
-     * 1.C-4: EVERY forked turn carries the channel, interactive or not. The
-     * turn loop's `$onStep` writes a `step` frame before each provider call
-     * and a `usage` frame after each response, and the loop asks the channel
-     * at each step boundary whether the parent sent `cancel_soft`. Only the
-     * approver stays interactive-only.
-     *
-     * @param array<int, Message> $history
-     */
-    /**
      * Rank this turn's memory recall in the process that assembles the
      * request (ISS-072). Before this the embedding request ran in the parent
      * before the fork, so one opt-in embedding HTTP call sat on the event
@@ -4716,6 +4694,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
     }
 
+    /**
+     * The forked child's half of {@see completeAsync()}: run the real
+     * (blocking) engine loop in isolation, streaming each tool event back
+     * over the socket as its own frame as it fires and the outcome as the
+     * final frame, then exit. Never returns.
+     *
+     * 1.C-1: on an INTERACTIVE turn the socket also carries questions. The
+     * turn runs on a copy of this backend whose approver is a
+     * {@see ChildChannel}: each ASK goes up as an `ask` frame and the child
+     * blocks for the parent's `ask_reply`. Built here, in the child, so the
+     * channel's owner pid is the turn child's own — a parallel Task
+     * grandchild that inherits the approver is refused rather than allowed
+     * to interleave frames on this stream (see {@see ChildChannel}).
+     *
+     * 1.C-4: EVERY forked turn carries the channel, interactive or not. The
+     * turn loop's `$onStep` writes a `step` frame before each provider call
+     * and a `usage` frame after each response, and the loop asks the channel
+     * at each step boundary whether the parent sent `cancel_soft`. Only the
+     * approver stays interactive-only.
+     *
+     * @param array<int, Message> $history
+     */
     private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {

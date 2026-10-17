@@ -3700,13 +3700,6 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The scroll ceiling {@see Chat::withKeyHelp()} clamps against belongs to
-     * the LAST painted reference, so it has to be cleared by any frame that
-     * does not paint one — including a frame where a different overlay has the
-     * slot. Reaching `renderKeyHelp()` first in the chain is what guarantees
-     * that; this is the property, not the ordering.
-     */
-    /**
      * ISS-099: a truncated key-help row ends its clipped field with an
      * explicit ellipsis. Raw {@see Width::truncate} silently dropped the tail,
      * so "Move the cursor one character left" painted as a cut-off phrase
@@ -3742,6 +3735,13 @@ final class KeyHelpTest extends TestCase
         $this->assertGreaterThan(0, $clippedDescriptions, 'the longest live description must be drawn clipped at 49 columns');
     }
 
+    /**
+     * The scroll ceiling {@see Chat::withKeyHelp()} clamps against belongs to
+     * the LAST painted reference, so it has to be cleared by any frame that
+     * does not paint one — including a frame where a different overlay has the
+     * slot. Reaching `renderKeyHelp()` first in the chain is what guarantees
+     * that; this is the property, not the ordering.
+     */
     public function testTheScrollCeilingDoesNotSurviveAFrameWithoutTheReference(): void
     {
         [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));

@@ -73,7 +73,6 @@ final class UnifiedDiffEquivalenceTest extends TestCase
         );
     }
 
-    /** Equal-after-line-splitting inputs (incl. a pure trailing-newline flip) render no diff. */
     /**
      * ISS-100: absolute paths inside the working directory become root-
      * relative and keep the a//b/ pair; absolute paths outside it are shown
@@ -99,6 +98,7 @@ final class UnifiedDiffEquivalenceTest extends TestCase
         );
     }
 
+    /** Equal-after-line-splitting inputs (incl. a pure trailing-newline flip) render no diff. */
     public function testNoChangeYieldsEmptyDiff(): void
     {
         $this->assertSame('', self::diff(Edit::class, 'f.txt', "a\nb", "a\nb\n"));
