@@ -476,6 +476,75 @@ final class ReadmeRosterDriftTest extends TestCase
         );
     }
 
+    // ── roster 6b: what the Keys table promises the chords do ────────────
+
+    /**
+     * ISS-122: the Keys table claimed `Ctrl+L` "types the letter `l`" and
+     * that "the box has no cursor movement". Both were false against the one
+     * generator the in-app `?` overlay is built from: `chat.repaint` had
+     * claimed `Ctrl+L` since rv-a11y (2026-10-14), and the draft editor has
+     * char, line-end and word motion rows of its own. A cheat sheet is worth
+     * less than nothing the moment it contradicts the registry, which is the
+     * exact argument {@see \SugarCraft\Code\Tests\Commands\KeyBindingDriftTest}
+     * makes about the OVERLAY — the README's copy of that map had no such pin.
+     *
+     * The pin is the four ids the corrected rows cite: each must still be
+     * DECLARED by `KeyBindingRegistry::all()` under the exact key spelling the
+     * table names, and must still be CITED by the Keys section. Re-binding
+     * `Ctrl+L` or renaming a motion row reddens here so the sentence gets
+     * re-read instead of drifting back into fiction; so does deleting a
+     * citation, which is how the false sentence would return. The two retired
+     * false claims are additionally pinned ABSENT by phrase, the direction a
+     * future well-meaning skimmer is most likely to break.
+     */
+    public function testTheKeysTableCreditsTheChordsTheRegistryDeclares(): void
+    {
+        $keys = $this->section('Keys');
+        $declared = [];
+        foreach (KeyBindingRegistry::all() as $binding) {
+            $declared[$binding->id] = $binding->keys;
+        }
+
+        $expected = [
+            'chat.repaint' => 'Ctrl+L',
+            'chat.cursor' => '← / →',
+            'chat.line-ends' => 'Home / End',
+            'chat.word-motion' => 'Alt+← / Alt+→',
+        ];
+        foreach ($expected as $id => $spelling) {
+            $this->assertArrayHasKey(
+                $id,
+                $declared,
+                'KeyBindingRegistry no longer declares ' . $id . ' — the Keys table cites it and must be re-read',
+            );
+            $this->assertSame(
+                $spelling,
+                $declared[$id],
+                $id . ' moved off "' . $spelling . '" to "' . $declared[$id] . '" — the Keys table names the old chord',
+            );
+            $this->assertStringContainsString(
+                $id,
+                $keys,
+                'the Keys table no longer cites registry row ' . $id . ' — the sentence pinning it lost its ground',
+            );
+        }
+
+        // The repaint row itself, not just its id somewhere in the section.
+        $this->assertSame(
+            1,
+            preg_match('/^\| `Ctrl\+L` \|.*chat\.repaint.*\|$/m', $keys),
+            'the Ctrl+L row of the Keys table no longer credits chat.repaint',
+        );
+
+        foreach (['has no cursor movement', 'types the letter `l`'] as $retired) {
+            $this->assertSame(
+                0,
+                substr_count($keys, $retired),
+                'the Keys table re-admits the retired false claim "' . $retired . '"',
+            );
+        }
+    }
+
     // ── roster 7: the launch-report sample ───────────────────────────────
 
     /**
