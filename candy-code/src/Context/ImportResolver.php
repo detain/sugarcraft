@@ -84,8 +84,21 @@ final class ImportResolver
      *   as {@see HomeDirectory::owned()} answers it; with no owned home the
      *   reference is left as written. A $boundaryCheck still judges the result,
      *   which is why the loader's repo-root gate blocks these (audit 15d-11).
+     * - Paths starting with "/" are resolved as given, like any absolute path
+     *   on the filesystem (ISS-066 — they used to be glued onto $baseDir,
+     *   producing a doubled path that could never exist, and so were silently
+     *   left as text). Resolution is only a NAME; the $boundaryCheck gate
+     *   judges the result exactly as it judges a `~/` import, so through the
+     *   loader an out-of-checkout absolute is answered with the same
+     *   <import-blocked> note, never a read.
      * - Paths starting with "./" or "../" are resolved relative to $baseDir.
      * - Bare paths (no prefix) are resolved relative to $baseDir.
+     *
+     * An `@` directly preceded by a word character is never a reference:
+     * `security@team.md` is an email address, and expanding its `.md` tail
+     * mangled it (ISS-066). Inline code spans are masked before matching, as
+     * fenced blocks have always been, so documenting the syntax inside a span
+     * does not trigger it however the span is arranged around the reference.
      *
      * Depth is capped at MAX_DEPTH (4) to prevent unbounded recursion.
      * When the cap is reached, no further expansion occurs and the
@@ -116,9 +129,10 @@ final class ImportResolver
         }
 
         // Split off ```-fenced blocks first so an @reference sitting alone
-        // on its own line inside a fence is never touched -- the inline
-        // (?<!`)/(?!`) lookaround below only catches backtick-adjacent
-        // spans on a single line, not fence state spanning multiple lines.
+        // on its own line inside a fence is never touched -- fence state
+        // spans multiple lines and no single-line lookaround can see it.
+        // Inline single-backtick spans are split off the same way one level
+        // down, in expandOutsideFences().
         $segments = preg_split('/(```.*?```)/s', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
         if ($segments === false) {
             $segments = [$content];
@@ -143,10 +157,48 @@ final class ImportResolver
      */
     private function expandOutsideFences(string $content, string $baseDir, int $depth, ?callable $boundaryCheck): string
     {
-        // Negative lookbehind (?<!`) ensures @ preceded by a backtick is skipped.
-        // Negative lookahead (?!`) ensures @ followed by a backtick is skipped.
+        // Inline spans are split out the same way expand() splits fences
+        // (ISS-066). The single-backtick lookaround this method used to rely
+        // on only skipped an @ DIRECTLY touching a delimiter, so a span like
+        // `see @other.md for details` — the ordinary way to document an
+        // import — expanded while claiming to document it. Odd indices are the
+        // captured spans themselves and are re-emitted untouched; a span
+        // delimiter must close on the same line it opened, which is what the
+        // [^`\r\n] body enforces (an unclosed backtick in prose stays live for
+        // matching, exactly as a stray ``` today stays non-matching).
+        $spans = preg_split('/(`[^`\r\n]+`)/', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($spans === false) {
+            $spans = [$content];
+        }
+
+        $result = '';
+        foreach ($spans as $i => $span) {
+            $result .= ($i % 2 === 1)
+                ? $span
+                : $this->expandReferences($span, $baseDir, $depth, $boundaryCheck);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Run the reference matcher over text known to sit outside any fence and
+     * outside any inline span.
+     *
+     * @param ?callable(string, string, string): ?string $boundaryCheck
+     */
+    private function expandReferences(string $content, string $baseDir, int $depth, ?callable $boundaryCheck): string
+    {
+        // (?<!`) keeps the inline-span adjacency skip the class has always
+        // stated (and that DocFigure pins as a pattern literal — the span MASK
+        // above is what now catches spans with prose around the @, the
+        // literal here is the belt); (?<!\w) refuses an @ glued to a word
+        // character — an email address, `security@team.md`, whose `.md` tail
+        // the old class happily expanded into the middle of the address
+        // (ISS-066). Together the two lookbehinds answer exactly the one
+        // class `(?<![\w`])` would. (?!`) is kept for the same belt reason.
         $result = preg_replace_callback(
-            '/(?<!`)@(\.?\/?[\w\-\.\/~]+\.md)(?!`)/',
+            '/(?<!`)(?<!\w)@(\.?\/?[\w\-\.\/~]+\.md)(?!`)/',
             function (array $m) use ($baseDir, $depth, $boundaryCheck): string {
                 $pathFragment = $m[1];
 
@@ -164,6 +216,18 @@ final class ImportResolver
                         return $m[0];
                     }
                     $resolved = rtrim($home, '/') . substr($pathFragment, 1);
+                } elseif (str_starts_with($pathFragment, '/')) {
+                    // An absolute reference is the path (ISS-066): the old
+                    // fall-through below glued it onto $baseDir, so
+                    // `@/etc/notes.md` resolved to `<base>//etc/notes.md`,
+                    // was never a file, and was silently left as text. It now
+                    // resolves like any absolute on the filesystem — which is
+                    // a NAME, not a permission: the $boundaryCheck gate judges
+                    // it exactly as it judges a `~/` import, so through the
+                    // loader anything outside the checkout still lands as
+                    // <import-blocked>, and a gateless caller still gets this
+                    // class's documented boundary-free behaviour.
+                    $resolved = $pathFragment;
                 } else {
                     // Strip only a leading "./" so "../" sequences survive
                     // intact and are resolved by the OS relative to $baseDir.

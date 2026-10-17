@@ -227,6 +227,72 @@ final class ImportResolverTest extends TestCase
         $this->assertSame("Before IMPORTED\n```\nno import here\n```\nAfter", $output);
     }
 
+    // ─── ISS-066: spans with prose, emails, absolute references ─────
+
+    public function testExpandSkipsReferenceEmbeddedInsideAnInlineCodeSpan(): void
+    {
+        $this->write('other.md', 'IMPORTED');
+
+        // Documenting an import is an inline span naming it with prose
+        // around it; the old lookaround only skipped an @ glued directly to
+        // a delimiter, so the sentence explaining the syntax triggered it.
+        $output = (new ImportResolver())->expand(
+            'Use `see @other.md for details` to import.',
+            $this->tempDir,
+        );
+
+        $this->assertSame('Use `see @other.md for details` to import.', $output);
+    }
+
+    public function testExpandSkipsEmailAddressWhoseDomainTailLooksLikeMd(): void
+    {
+        $this->write('team.md', 'IMPORTED');
+
+        $output = (new ImportResolver())->expand(
+            'Contact security@team.md for access.',
+            $this->tempDir,
+        );
+
+        $this->assertSame('Contact security@team.md for access.', $output);
+    }
+
+    public function testExpandResolvesAbsoluteReferenceAsGiven(): void
+    {
+        $target = $this->write('abs/target.md', 'ABSOLUTE IMPORTED');
+
+        // Absolute references used to be glued onto $baseDir, so they could
+        // never exist and were silently left as text.
+        $output = (new ImportResolver())->expand(
+            'See @' . $target . ' for the rule.',
+            $this->tempDir,
+        );
+
+        $this->assertStringContainsString('ABSOLUTE IMPORTED', $output);
+        $this->assertStringNotContainsString('@' . $target, $output);
+    }
+
+    public function testAbsoluteReferenceIsStillJudgedByTheBoundaryCheck(): void
+    {
+        $target = $this->write('abs/target.md', 'ABSOLUTE IMPORTED');
+        $base = $this->tempDir . '/base';
+        mkdir($base, 0777, true);
+
+        // Resolution is a name, not a permission: the gate the caller hands
+        // (the loader hands the checkout boundary) judges the resolved
+        // absolute exactly as it judges a `~/` import.
+        $output = (new ImportResolver())->expand(
+            'See @' . $target . ' now.',
+            $base,
+            0,
+            static fn (string $realPath): string => str_starts_with($realPath, $base . '/')
+                ? null
+                : '<import-blocked reason="outside-base"/>',
+        );
+
+        $this->assertStringContainsString('<import-blocked reason="outside-base"/>', $output);
+        $this->assertStringNotContainsString('ABSOLUTE IMPORTED', $output);
+    }
+
     // ─── recursion ───────────────────────────────────────────────────
 
     public function testExpandRecursesIntoImportedFilesUsingTheirOwnDirectory(): void
