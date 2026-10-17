@@ -4852,6 +4852,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // ledger as it stood before the turn, blind to the reads it made and
         // to its own last write.
         $payload['readLedger'] = \SugarCraft\Code\Tools\ReadLedger::in($this->tools)?->toArray();
+        // ISS-018: the announce-once marks — nested instruction documents,
+        // refusals already announced, skill and rule nudges — are the same
+        // class of state as the ledger: they mutate the tools' collaborators
+        // in here and, unlike a tool-level child's payload, nothing carried
+        // them home, so every later turn forked a child that re-announced
+        // what an earlier one had already shown. A plain array on the frame
+        // rule; the read ledger keeps its own key above.
+        $payload['sessionState'] = self::sessionStateFromTools($this->tools);
 
         self::writeFrame($childSocket, $payload);
         fclose($childSocket);
@@ -5007,6 +5015,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // per path; a frame without the key (an older child) merges nothing.
         \SugarCraft\Code\Tools\ReadLedger::in($this->tools)?->merge($data['readLedger'] ?? null);
 
+        // ISS-018: the child's announce-once marks, before the verdict for the
+        // same reason as the ledger above — a failed turn's announcements still
+        // happened. Guarded per tool on Runtime::collectChildResult's precedent:
+        // a merge is bookkeeping, and the worst it may ever cost is one later
+        // duplicate, never this turn.
+        $sessionState = $data['sessionState'] ?? null;
+        if (is_array($sessionState)) {
+            foreach ($this->tools as $tool) {
+                if (!$tool instanceof \SugarCraft\Code\Tools\CarriesSessionState) {
+                    continue;
+                }
+                try {
+                    $tool->mergeSessionState($sessionState);
+                } catch (\Throwable) {
+                    // Same rule as the guard above: one tool's bad merge costs
+                    // that tool's marks, not the settle.
+                }
+            }
+        }
+
         if (($data['ok'] ?? false) !== true) {
             $deferred->reject(new \RuntimeException((string) ($data['error'] ?? 'Provider worker process failed')));
 
@@ -5061,6 +5089,53 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     ? \SugarCraft\Code\Context\Pruning\ContextLedger::fromArray($data['contextLedger'])
                     : null)
         );
+    }
+
+    /**
+     * The announce-once marks of every session-state-carrying tool in $tools,
+     * as one payload for the result frame (ISS-018).
+     *
+     * Today's carriers are all wired to the SAME collaborators (see
+     * {@see \SugarCraft\Code\Cli\Bootstrap::tools()}), so unioning their
+     * exports only deduplicates identical views; it is a union because that
+     * stays correct the day a carrier holds a view of its own. The read ledger
+     * is deliberately excluded — the frame carries it under its own key, and
+     * merging it twice would only be noise.
+     *
+     * @param iterable<\SugarCraft\Code\Tools\Tool> $tools
+     *
+     * @return array<string, list<string>>
+     */
+    private static function sessionStateFromTools(iterable $tools): array
+    {
+        $union = [];
+        foreach ($tools as $tool) {
+            if (!$tool instanceof \SugarCraft\Code\Tools\CarriesSessionState) {
+                continue;
+            }
+            try {
+                $export = $tool->exportSessionState();
+            } catch (\Throwable) {
+                // A mark that cannot be collected is a re-announcement later,
+                // not a lost turn — the child must still write its result.
+                continue;
+            }
+            foreach ($export as $key => $values) {
+                if (!is_string($key) || !is_array($values)
+                    || $key === \SugarCraft\Code\Tools\ReadLedger::SESSION_STATE_KEY) {
+                    continue;
+                }
+                $merged = $union[$key] ?? [];
+                foreach ($values as $value) {
+                    if (is_string($value) && $value !== '' && !in_array($value, $merged, true)) {
+                        $merged[] = $value;
+                    }
+                }
+                $union[$key] = $merged;
+            }
+        }
+
+        return $union;
     }
 
     /**
