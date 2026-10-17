@@ -128,7 +128,31 @@ final class SessionPickerGoldenTest extends TestCase
     {
         $footer = array_reverse(explode("\n", self::plain($this->picker()->render(80, 24, Theme::byName('dark')))))[0];
 
-        $this->assertSame('  /work/app · main · "make the login controller use the new guard"', $footer);
+        // rtrim: the footer is padded to the box's full outer width (ISS-094);
+        // the pin is about WHICH prompt it names, not the trailing blanks.
+        $this->assertSame('  /work/app · main · "make the login controller use the new guard"', rtrim($footer));
+    }
+
+    /**
+     * ISS-094: the header title, both rules, the hints row and every footer
+     * row span the box's full outer width (border + side padding), so the
+     * veil dims the backdrop behind them edge to edge instead of leaving the
+     * transcript readable to the right of a short line.
+     */
+    #[DataProvider('widths')]
+    public function testTheHeaderAndFooterSpanTheFullOuterWidth(int $width): void {
+        $outer = $width + 4;
+        foreach (['plain' => $this->picker(), 'notice' => $this->picker()->withNotice('nope'), 'preview' => $this->picker()->withPreview('a1', ['one line'])] as $state => $picker) {
+            $lines = explode("\n", self::plain($picker->render($width, 24, Theme::byName('dark'))));
+            // Header: title, rule, hints (rows 0-2).
+            foreach ([0, 1, 2] as $i) {
+                $this->assertSame($outer, Width::string($lines[$i]), "{$state}: header line {$i}");
+            }
+
+            // Footer: rule plus one or more detail lines, all full width.
+            $this->assertSame($outer, Width::string($lines[\count($lines) - 1]), "{$state}: last line");
+            $this->assertSame($outer, Width::string($lines[\count($lines) - 2]), "{$state}: footer rule");
+        }
     }
 
     private static function plain(string $rendered): string

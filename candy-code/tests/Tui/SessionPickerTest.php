@@ -477,8 +477,12 @@ final class SessionPickerTest extends TestCase
         ]]);
         foreach ([40, 60, 80] as $width) {
             $lines = explode("\n", $this->plain($wide->render($width, 24, Theme::byName('dark'))));
-            $footer = $lines[count($lines) - 1];
-            $this->assertLessThanOrEqual($width, \SugarCraft\Core\Util\Width::string($footer), "footer at {$width}");
+            // ISS-094: the footer spans the box's full OUTER width (border +
+            // side padding = $width + 4) so the veil dims behind it edge to
+            // edge; the clip itself still lands inside, hence rtrim before
+            // checking the ellipsis.
+            $footer = rtrim($lines[count($lines) - 1]);
+            $this->assertLessThanOrEqual($width + 4, \SugarCraft\Core\Util\Width::string($footer), "footer at {$width}");
             $this->assertTrue(mb_check_encoding($footer, 'UTF-8'));
             $this->assertStringEndsWith('…', $footer);
         }

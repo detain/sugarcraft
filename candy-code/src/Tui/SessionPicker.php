@@ -1173,13 +1173,17 @@ final class SessionPicker
 
         // Themed, like its twin in renderFooter(): an unstyled rule would be
         // the terminal's default colour, which this shell does not choose.
+        // Header and footer span $width + 4 — the box's full outer width
+        // (border + the 1-cell side padding) — so the backdrop behind them is
+        // dimmed edge to edge; a shorter line leaves the transcript readable
+        // to its right (ISS-094, mirroring DirectoryPicker).
         $separator = Style::new()
             ->foreground($theme->border)
-            ->render(str_repeat('─', max(0, $width - 2)));
+            ->render(str_repeat('─', max(0, $width + 4)));
 
-        return Style::new()->foreground($theme->shellPrimary)->bold()->render(self::clip($title, $width))
+        return Style::new()->foreground($theme->shellPrimary)->bold()->render(self::fit($title, $width + 4))
             . "\n" . $separator . "\n"
-            . Style::new()->foreground($theme->shellMuted)->render(self::clip($hints, $width));
+            . Style::new()->foreground($theme->shellMuted)->render(self::fit($hints, $width + 4));
     }
 
     /**
@@ -1346,16 +1350,16 @@ final class SessionPicker
         $maxWidth = max(1, $width - 10);
         $footer = "\n" . Style::new()
             ->foreground($theme->border)
-            ->render('─' . str_repeat('─', max(0, $width - 2)));
+            ->render(str_repeat('─', max(0, $width + 4)));
 
         if ($this->preview !== null) {
             foreach ($this->preview['lines'] as $line) {
-                $footer .= "\n" . Style::new()->foreground($theme->shellMuted)->render('  ' . self::clip($line, $maxWidth));
+                $footer .= "\n" . Style::new()->foreground($theme->shellMuted)->render(self::fit('  ' . self::clip($line, $maxWidth), $width + 4));
             }
         }
 
         if ($this->notice !== null) {
-            return $footer . "\n" . Style::new()->foreground($theme->shellWarning)->render('  ' . self::clip($this->notice, $maxWidth));
+            return $footer . "\n" . Style::new()->foreground($theme->shellWarning)->render(self::fit('  ' . self::clip($this->notice, $maxWidth), $width + 4));
         }
 
         $parts = [];
@@ -1378,7 +1382,7 @@ final class SessionPicker
 
         return $footer . "\n" . Style::new()
             ->foreground($theme->shellForeground)
-            ->render('  ' . self::clip(implode(' · ', $parts), $maxWidth));
+            ->render(self::fit('  ' . self::clip(implode(' · ', $parts), $maxWidth), $width + 4));
     }
 
     /** $text cut to $width cells with a trailing ellipsis when it does not fit. */

@@ -1,6 +1,6 @@
- session picker · 7 shown
-──────────────────────────────────────────────────────────
- ↑↓ browse · ↵ open · esc close · / filter · r rename · d d…
+ session picker · 7 shown                                       
+────────────────────────────────────────────────────────────────
+ ↑↓ browse · ↵ open · esc close · / filter · r rename · d delet…
 ╭ sessions ────────────────────────────────────────────────────╮
 │ Pinned                                                       │
 │ ▶ ★ Auth refactor                  2m  41 turns ⠋ live ✎ ★ ✕ │
@@ -14,5 +14,5 @@
 │ 1 Dec 2025                                                   │
 │     Old thing                  Dec'25   2 turns              │
 ╰──────────────────────────────────────────────────────────────╯
-───────────────────────────────────────────────────────────
-  /work/app · main · "make the login controller use…
+────────────────────────────────────────────────────────────────
+  /work/app · main · "make the login controller use…            

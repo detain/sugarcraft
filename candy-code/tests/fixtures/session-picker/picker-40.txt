@@ -1,6 +1,6 @@
- session picker · 7 shown
-──────────────────────────────────────
- ↑↓ browse · ↵ open · esc close · / fil…
+ session picker · 7 shown                   
+────────────────────────────────────────────
+ ↑↓ browse · ↵ open · esc close · / filter …
 ╭ sessions ────────────────────────────────╮
 │ Pinned                                   │
 │ ▶ ★ Auth refactor                        │
@@ -14,5 +14,5 @@
 │ 1 Dec 2025                               │
 │     Old thing                            │
 ╰──────────────────────────────────────────╯
-───────────────────────────────────────
-  /work/app · main · "make the …
+────────────────────────────────────────────
+  /work/app · main · "make the …            
