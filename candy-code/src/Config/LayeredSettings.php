@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config;
 
+use SugarCraft\Code\Config\Settings\SettingType;
+use SugarCraft\Code\Config\Settings\SettingsSchema;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 
 /**
@@ -1151,6 +1154,158 @@ final class LayeredSettings
     public static function decodedFile(string $path): array
     {
         return self::readFile($path);
+    }
+
+    /**
+     * ISS-029: sentences about what this decoded settings file holds that NO
+     * reader consumes from its slot, and about known keys whose value their
+     * own definition rejects.
+     *
+     * The tolerant reader makes both mistakes silent: `only()` drops a key it
+     * does not name without a word, and a value the validator refuses falls
+     * back to its default at the resolver. A `permisionMode` in `config.json`
+     * therefore ran the session in a different mode than the user believes
+     * they chose. The sentences say what will happen, at launch and from
+     * `doctor`, instead of leaving the discovery to the incident.
+     *
+     * @param list<string> $allowed the keys this file IS read for
+     * @param array<string, mixed> $decoded the file as written
+     * @return list<string>
+     */
+    public static function auditTopLevelKeys(string $label, array $decoded, array $allowed): array
+    {
+        $schema = SettingsSchema::keys();
+        $rows = [];
+
+        foreach ($decoded as $key => $value) {
+            $key = (string) $key;
+
+            if (in_array($key, $allowed, true)) {
+                $definition = SettingsSchema::byKey($key);
+                if ($definition !== null && $value !== '' && $value !== null) {
+                    // The FILE reader is more lenient than the schema validator
+                    // in exactly the two ways that matter (ISS-029 review): a
+                    // set-but-empty `''` and a `null` read as unset through the
+                    // whole cascade, and numbers arrive in numeric-string and
+                    // integral-float spelling because hand-typed JSON keeps
+                    // producing them — `maxToolSteps: "16"` is a documented,
+                    // honoured setting. The audit mirrors the reader's leniency
+                    // and claims the DEFAULT-FALLBACK sentence only for values
+                    // both the resolver and the validator refuse.
+                    $error = $definition->validate(self::lenientProbe($value, $definition->type), $decoded);
+                    if ($error !== null) {
+                        $rows[] = Lang::t('cli.settings.rejected_value', [
+                            'key' => $key,
+                            'file' => $label,
+                            'error' => $error,
+                        ]);
+                    }
+                }
+
+                continue;
+            }
+
+            if (in_array($key, $schema, true)) {
+                $rows[] = Lang::t('cli.settings.wrong_tier', ['key' => $key, 'file' => $label]);
+
+                continue;
+            }
+
+            $guess = self::suggestKey($allowed, $key) ?? self::suggestKey($schema, $key);
+            $rows[] = Lang::t('cli.settings.unknown_key', [
+                'key' => $key,
+                'file' => $label,
+                'hint' => $guess === null ? '' : Lang::t('cli.settings.did_you_mean', ['key' => $guess]),
+            ]);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The audit sentences for the files a launch's settings cascade can see:
+     * the user tier's `config.json` and `settings.json`, and — when `$root`
+     * is given — the two project-tier files too.
+     *
+     * The project files ARE read for the diagnosis even when their root is
+     * untrusted. Reading is not applying: whether those files contribute
+     * settings stays the decision of the trust grant
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::projectSettingsTrusted()}), and a
+     * health report that pretends a cloned repo's typos are invisible is
+     * worse than one that names them.
+     *
+     * @return list<string>
+     */
+    public static function keyAuditRows(string $configDir, ?string $root = null): array
+    {
+        $configPath = $configDir . '/config.json';
+        $settingsPath = $configDir . '/' . self::USER_FILE;
+
+        $rows = self::auditTopLevelKeys($configPath, self::decodedFile($configPath), SettingsSchema::keys());
+        $rows = [...$rows, ...self::auditTopLevelKeys($settingsPath, self::decodedFile($settingsPath), self::LAYERED_KEYS)];
+
+        if ($root !== null && trim($root) !== '') {
+            foreach (self::projectFiles($root, true) as $path => $decoded) {
+                $rows = [...$rows, ...self::auditTopLevelKeys((string) $path, $decoded, self::PROJECT_TIER_KEYS)];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The nearest key an audit can guess was meant, or null when nothing is
+     * near. {@see \SugarCraft\Code\Support\FrontmatterKeyAudit::suggestion()}'s
+     * walk — case, `-` and `_` folded away, Levenshtein within two (one for
+     * four-character keys or shorter, so `os` does not approach everything) —
+     * over a roster passed in rather than over the four frontmatter formats'
+     * fixed KNOWN table.
+     *
+     * @param list<string> $roster
+     */
+    /**
+     * The value as the tolerant readers will hand it to the validator: a
+     * numeric STRING arrives as its number (`"16"` behaves as 16 through the
+     * cap resolvers), and an integral float satisfies an Int definition the
+     * same way `resolvedMaxToolSteps()` lets 20.0 through. 1.5 stays 1.5 —
+     * the resolvers refuse it too, and a row is exactly what ISS-029 asks
+     * for there.
+     */
+    private static function lenientProbe(mixed $value, SettingType $type): mixed
+    {
+        if (is_string($value) && is_numeric($value)) {
+            $value = $value + 0;
+        }
+
+        if ($type === SettingType::Int && is_float($value) && is_finite($value) && $value === floor($value)) {
+            return (int) $value;
+        }
+
+        return $value;
+    }
+
+    private static function suggestKey(array $roster, string $key): ?string
+    {
+        $fold = static fn (string $s): string => strtolower(str_replace(['-', '_'], '', $s));
+        $folded = $fold($key);
+
+        $best = null;
+        $bestDistance = PHP_INT_MAX;
+        foreach ($roster as $known) {
+            $candidate = $fold($known);
+            if ($candidate === $folded) {
+                return $known;
+            }
+
+            $limit = strlen($candidate) <= 4 ? 1 : 2;
+            $distance = levenshtein($folded, $candidate);
+            if ($distance <= $limit && $distance < $bestDistance) {
+                $best = $known;
+                $bestDistance = $distance;
+            }
+        }
+
+        return $best;
     }
 
     /**

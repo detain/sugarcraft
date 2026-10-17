@@ -5641,7 +5641,15 @@ final class Bootstrap
             }
         }
 
-        self::warnLaunchRows($rows);
+        // ISS-029: the top-level key audit rides the same rows — a misspelled
+        // or refused setting is named at launch instead of left to the
+        // tolerant reader's silence. User files only here: this notice fires
+        // before any project root is in scope, and `doctor` covers the
+        // project tier.
+        self::warnLaunchRows([
+            ...$rows,
+            ...LayeredSettings::keyAuditRows(self::configDir()),
+        ]);
     }
 
     /**

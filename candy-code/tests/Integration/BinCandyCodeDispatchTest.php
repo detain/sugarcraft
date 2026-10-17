@@ -2029,6 +2029,63 @@ final class BinCandyCodeDispatchTest extends TestCase
         $this->assertMatchesRegularExpression('/^OK\s+provider\s+anthropic/m', $doctor['stdout']);
     }
 
+    /**
+     * ISS-029: a misspelled top-level key used to vanish in `only()` without
+     * a word, and `doctor` — which parsed config.json for JSON SYNTAX only —
+     * called that health. The probe now walks each settings file's top-level
+     * keys against the schema and names the typo, with the FrontmatterKeyAudit
+     * style did-you-mean beside it. A WARN, not a FAIL: the keys it reports
+     * are inert, so nothing the user is running is actually broken.
+     */
+    public function testDoctorWarnsAboutKeysNoReaderConsumes(): void
+    {
+        $home = $this->privateHome();
+        \mkdir($home . '/.candy-code', 0700, true);
+        \file_put_contents($home . '/.candy-code/config.json', '{"permisionMode":"plan"}');
+
+        $doctor = $this->runBin(['doctor'], ['HOME' => $home]);
+
+        $this->assertSame(0, $doctor['status'], 'stdout: ' . $doctor['stdout'] . "\nstderr: " . $doctor['stderr']);
+        $this->assertStringContainsString('WARN settings keys', $doctor['stdout']);
+        $this->assertStringContainsString('did you mean `permissionMode`', $doctor['stdout']);
+    }
+
+    /**
+     * The other half of ISS-029: doctor used to never call the spend-cap
+     * resolver at all, so `CANDY_CODE_MAX_COST=lots` — the one nonsense
+     * setting the headless path refuses to launch over (exit 2) — looked
+     * healthy here. Calling `Bootstrap::maxCostUsd()` puts the very refusal
+     * sentence on the report as a FAIL.
+     */
+    public function testDoctorFailsOnAnUnusableSpendCap(): void
+    {
+        $home = $this->privateHome();
+
+        $doctor = $this->runBin(['doctor'], ['HOME' => $home, 'CANDY_CODE_MAX_COST' => 'lots']);
+
+        $this->assertSame(1, $doctor['status'], 'stdout: ' . $doctor['stdout']);
+        $this->assertStringContainsString('FAIL spend cap', $doctor['stdout']);
+        $this->assertStringContainsString("'lots'", $doctor['stdout']);
+    }
+
+    /**
+     * ISS-029 polarity check: a well-formed user tier passes the new probes
+     * with OK lines — the WARN and FAIL above fire on the settings, not on
+     * the probes existing.
+     */
+    public function testDoctorPassesAWellFormedSettingsTier(): void
+    {
+        $home = $this->privateHome();
+        \mkdir($home . '/.candy-code', 0700, true);
+        \file_put_contents($home . '/.candy-code/config.json', '{"maxToolSteps":25}');
+
+        $doctor = $this->runBin(['doctor'], ['HOME' => $home]);
+
+        $this->assertSame(0, $doctor['status'], 'stdout: ' . $doctor['stdout'] . "\nstderr: " . $doctor['stderr']);
+        $this->assertMatchesRegularExpression('/^OK\s+settings keys/m', $doctor['stdout']);
+        $this->assertMatchesRegularExpression('/^OK\s+spend cap\s+no spend cap set/m', $doctor['stdout']);
+    }
+
     /** A throwaway project root, for the `.mcp.json` fixtures. */
     private function privateProject(): string
     {
@@ -2414,7 +2471,10 @@ final class BinCandyCodeDispatchTest extends TestCase
      * `doctor` is the observable: it prints `provider <name> (model <model>)`
      * from `Bootstrap::selectedProviderLabel()`, the same resolver
      * `backendFor()` builds the real backend from. A sentinel value that no
-     * provider default could produce makes the assertion unambiguous.
+     * provider default could produce makes the assertion unambiguous. Since
+     * ISS-028 the line requires the provider to CONSTRUCT, so a test-only
+     * `OPENAI_API_KEY` is armed — the sentinel key never opens a socket
+     * because nothing here sends a request.
      *
      * The env var is set to a DIFFERENT sentinel so this pins precedence in the
      * same breath: the flag must win. Without that, an implementation that
@@ -2430,6 +2490,7 @@ final class BinCandyCodeDispatchTest extends TestCase
         $result = $this->runBin(['--model', 'ZZ-FLAG-MODEL-ZZ', 'doctor'], [
             'CANDY_CODE_PROVIDER' => 'openai',
             'CANDY_CODE_MODEL' => 'ZZ-ENV-MODEL-ZZ',
+            'OPENAI_API_KEY' => 'sk-test-not-a-real-key',
         ]);
 
         $this->assertStringContainsString(
@@ -2454,6 +2515,7 @@ final class BinCandyCodeDispatchTest extends TestCase
         $result = $this->runBin(['doctor'], [
             'CANDY_CODE_PROVIDER' => 'openai',
             'CANDY_CODE_MODEL' => 'ZZ-ENV-MODEL-ZZ',
+            'OPENAI_API_KEY' => 'sk-test-not-a-real-key',
         ]);
 
         $this->assertStringContainsString('ZZ-ENV-MODEL-ZZ', $result['stdout']);

@@ -391,6 +391,13 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
                 'maxToolSteps is 1.5, which is not a positive whole number; the shipped per-turn step ceiling applies',
                 'maxOutputTokens is "lots", which is not a positive token count; '
                     . "no output ceiling is sent, so the provider's own default applies",
+                // ISS-029: the schema audit now walks the same file and names
+                // the same two refusals in its own words. Redundant by design —
+                // the rows above speak as the RESOLVER, these as the schema —
+                // and the pairing is what tells a future edit that both gates
+                // must keep agreeing on what "usable" means.
+                'maxToolSteps in ' . $this->configDir . '/config.json will fall back to its default: must be a whole number',
+                'maxOutputTokens in ' . $this->configDir . '/config.json will fall back to its default: must be a whole number',
             ],
             $notices,
         );

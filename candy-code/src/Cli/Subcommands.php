@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Cli;
 
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -434,6 +435,38 @@ final class Subcommands
                 }
 
                 return ['status' => 'OK', 'detail' => $path];
+            },
+
+            'settings keys' => static function () use ($args): array {
+                // ISS-029: the tolerant reader dropped a misspelled key
+                // without a word, so a config full of `permisionMode` used to
+                // read OK here. The audit names every top-level key no reader
+                // consumes from its file, guesses near-miss spellings, and
+                // flags known keys whose value falls back to its default.
+                $rows = LayeredSettings::keyAuditRows(\dirname(Bootstrap::userConfigPath()), $args->root);
+
+                return $rows === []
+                    ? ['status' => 'OK', 'detail' => Lang::t('cli.doctor.settings_clean')]
+                    : ['status' => 'WARN', 'detail' => implode('; ', $rows)];
+            },
+
+            'spend cap' => static function (): array {
+                // ISS-029: doctor used to never call the cap resolver. A
+                // `CANDY_CODE_MAX_COST=lots` throws right here — `-p` refuses
+                // the launch with exit 2 over it — while the old report said
+                // not one word about spend caps.
+                try {
+                    $cap = Bootstrap::maxCostUsd();
+                } catch (PermissionConfigException $e) {
+                    return ['status' => 'FAIL', 'detail' => $e->getMessage()];
+                }
+
+                return [
+                    'status' => 'OK',
+                    'detail' => $cap === null
+                        ? Lang::t('cli.doctor.cap_none')
+                        : Lang::t('cli.doctor.cap', ['amount' => sprintf('%.2f', $cap)]),
+                ];
             },
 
             'permission policy' => static function (): array {

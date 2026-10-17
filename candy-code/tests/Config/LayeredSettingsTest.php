@@ -559,6 +559,91 @@ final class LayeredSettingsTest extends TestCase
     }
 
     /**
+     * ISS-029: the audit's three verdicts from one fixture — a key the schema
+     * does not know at all (with the did-you-mean), a known key whose value its
+     * definition rejects, a schema key sitting in a file whose reader does not
+     * pick it up, and a project file holding user-tier keys.
+     */
+    public function testTheAuditNamesUnknownRefusedAndWrongFileKeys(): void
+    {
+        $this->writeUserFile('config.json', ['permisionMode' => 'plan', 'maxToolSteps' => 'lots', 'provider' => 'echo']);
+        $this->writeUserFile(LayeredSettings::USER_FILE, ['permissionMode' => 'plan', 'zzQ' => true]);
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['maxCostUsd' => 5]);
+
+        $rows = LayeredSettings::keyAuditRows($this->userDir, $this->projectRoot);
+        $joined = implode("\n", $rows);
+
+        self::assertCount(5, $rows, $joined);
+        self::assertStringContainsString(
+            'permisionMode in ' . $this->userDir . '/config.json is not a setting candy-code reads — did you mean `permissionMode`?',
+            $joined,
+        );
+        self::assertStringContainsString('maxToolSteps in ' . $this->userDir . '/config.json will fall back to its default', $joined);
+        self::assertStringContainsString(
+            'permissionMode in ' . $this->userDir . '/settings.json is a candy-code setting this file is not read for',
+            $joined,
+        );
+        self::assertStringContainsString(
+            'maxCostUsd in ' . $this->projectRoot . '/' . LayeredSettings::SHARED_PATH . ' is a candy-code setting this file is not read for',
+            $joined,
+        );
+        self::assertStringNotContainsString('provider in', $joined);
+
+        $far = array_values(array_filter($rows, static fn (string $r): bool => str_contains($r, 'zzQ')));
+        self::assertCount(1, $far);
+        self::assertStringNotContainsString('did you mean', $far[0]);
+    }
+
+    /** Nothing to name in a well-formed cascade: the audit returns no rows. */
+    public function testTheAuditIsSilentAboutKeysTheFileIsReadFor(): void
+    {
+        $this->writeUserFile('config.json', ['maxToolSteps' => 25]);
+        $this->writeUserFile(LayeredSettings::USER_FILE, ['maxToolSteps' => 30]);
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['parallelToolCalls' => true]);
+
+        self::assertSame([], LayeredSettings::keyAuditRows($this->userDir, $this->projectRoot));
+    }
+
+    /**
+     * Without a root — the launch notice's call — the audit stops at the user
+     * tier; the project files are only walked when a root is handed in.
+     */
+    public function testTheAuditStopsAtTheUserTierWithoutARoot(): void
+    {
+        $this->writeUserFile('config.json', ['bogusKeyNoMatchQz' => 1]);
+        $this->writeProject(LayeredSettings::SHARED_PATH, ['bogusKeyNoMatchQz' => 1]);
+
+        $userOnly = LayeredSettings::keyAuditRows($this->userDir);
+
+        self::assertCount(1, $userOnly);
+        self::assertStringContainsString($this->userDir . '/config.json', $userOnly[0]);
+    }
+
+    /**
+     * ISS-029's notice wiring: launch must merge the audit rows into the
+     * nonsense-limits call. A source pin — the emitter censuses own routing
+     * semantics — is the cheap guard that stops a later tidy-up from quietly
+     * restoring the maxToolSteps-only verdict.
+     */
+    public function testTheLaunchNoticeFeedsTheAuditRows(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Cli/Bootstrap.php');
+        $start = strpos($source, 'public static function reportNonsenseLimits(): void');
+        self::assertIsInt($start);
+        $body = substr($source, $start, (int) strpos(substr($source, $start), 'public static function', 10));
+
+        self::assertStringContainsString('LayeredSettings::keyAuditRows(self::configDir())', $body);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function writeUserFile(string $name, array $data): void
+    {
+        file_put_contents($this->userDir . '/' . $name, (string) json_encode($data));
+    }
+
+    /**
      * @param string $relative a path relative to the PROJECT ROOT — the shape
      *        {@see LayeredSettings::SHARED_PATH} and its sibling are spelled in,
      *        so a fixture cannot join the directory on a second time.
