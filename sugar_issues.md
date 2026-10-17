@@ -1139,9 +1139,9 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Location:**
   - `sugar-crush/src/App/App.php:2041` (`AUTO_ENABLE_PANES`), `:2061-2087` (`autoEnablePane`, no width check), `:1850-1866` (`seedSharesFromFrame`: a quarter, first mutation only)
   - `sugar-crush/src/App/PaneAutoShow.php:9-24` (process-lifetime memory)
-  - `candy-layout/src/Dock/DockLayout.php:49-50` (1/3 default share), `:123` (`centerMinCols: 24`)
+  - `candy-layout/src/Dock/DockLayout.php:49-50` (1/3 default share), `:123` (`centerMinCols: 24`) <!-- @rename-keep historical provenance -->
 - **Problem:**
-  - Auto-dock fires on first activity with no width threshold. The only floor is candy-layout's 24-column `centerMinCols`.
+  - Auto-dock fires on first activity with no width threshold. The only floor is candy-layout's 24-column `centerMinCols`. <!-- @rename-keep historical provenance -->
   - The first dock mutation seeds a quarter share (`max(20, cols/4)`). A side docked by a later mutation keeps the 1/3 default.
   - The dock is persisted (`persistDock()`), but `PaneAutoShow::userToggled` lives only for the process, so an undock is forgotten on restart.
 - **Failure scenario:** After Tools docks left and Todo right at 140 cols, the chat box was 50 columns wide; at 80×24 it was 25. Undock Todo and relaunch, and the next Todo write re-docks it.
@@ -1789,7 +1789,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Suggested fix:**
   - (a) Use `clipWithEllipsis()` wherever text is fitted.
   - (b) Render nothing for a side whose first pane has no region in `resolve()`, and fall back to the legacy width only for the transient-focus case.
-- **Verification notes:** The auditor's `candy-layout/src/Dock/DockLayout.php:463-478` path is intentional and yields 9–20-column sides, not 1.
+- **Verification notes:** The auditor's `candy-layout/src/Dock/DockLayout.php:463-478` path is intentional and yields 9–20-column sides, not 1. <!-- @rename-keep historical provenance -->
 
 <a id="iss-100"></a>
 ### ISS-100 · [P3] Tool cards and the Tools pane show double-escaped JSON arguments; diff headers show `a//abs/path`
@@ -2114,7 +2114,7 @@ Recorded so nobody re-reports them. "Whole" means a complete audit issue was rej
 - **A4 PtyRun docs "literally false"**: the protect-files table and Sandbox section are correctly scoped. The problem is the "floor" framing that implies completeness.
 - **A5 `/` popup "Enter runs the invisible highlighted command"**: Enter completes the name into the draft; nothing runs without a second Enter.
 - **A5 `/context` "CJK previews misalign"**: the preview is the last column, so nothing after it can misalign.
-- **A5 side sliver "caused by `candy-layout/src/Dock/DockLayout.php:463-478`"**: that path is intentional and yields 9–20 columns. The cause is `sugar-crush/src/Tui/Renderer.php` `sideWidth()`.
+- **A5 side sliver "caused by `candy-layout/src/Dock/DockLayout.php:463-478`"**: that path is intentional and yields 9–20 columns. The cause is `sugar-crush/src/Tui/Renderer.php` `sideWidth()`. <!-- @rename-keep historical provenance -->
 - **A5 auto-dock "every side gets 1/3"**: the first dock mutation seeds a quarter; only later sides keep 1/3.
 - **A5 `/skills` "suggests nothing is installed"**: overstated; the reply says "drafts".
 - **A6 session cookie "or loads one of its resources"**: cross-site subresources do not carry the cookie (SameSite=Strict holds); only same-site loads do.

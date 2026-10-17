@@ -132,7 +132,7 @@ scanned 2166 sugar-crush php files (vendor + caches excluded)
     - SelectionRange  x2
   src entry points: src/Renderer.php, src/App/App.php, src/Chat.php, src/Tui/AgentStrip.php, src/Tui/Renderer.php, src/Tui/TextSelection.php, src/Tui/AgentViewHeader.php, src/Tui/Components/MenuBar.php
 
-=== candy-layout (SugarCraft\Layout) ===
+=== candy-layout (SugarCraft\Layout) === <!-- @rename-keep historical provenance -->
   referencing files: 20  (src=6, tests=14, other=0)
   distinct symbols imported: 3
     - Dock\Side  x14

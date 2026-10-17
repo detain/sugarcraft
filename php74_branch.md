@@ -355,7 +355,7 @@ keystone, so they come first within the phase.
 - **1.3** `candy-buffer` (17 src, medium) — split into **1.3a** root+`Diff/` and **1.3b**
   `Cell/Style/Position/Hyperlink/...`; heavy `readonly`+promotion, 8 nullsafe.
 - **1.4** `candy-fuzzy` (6 src, low). <!-- @rename-keep historical provenance -->
-- **1.5** `candy-layout` (13 src, low) — 1 enum, `readonly class`.
+- **1.5** `candy-layout` (13 src, low) — 1 enum, `readonly class`. <!-- @rename-keep historical provenance -->
 - **1.6** `candy-input` (11 src, high) — union types, `readonly class`, mixed; no deps so safe early.
 
 ### Phase 2 — Keystone: candy‑core (+ candy‑pty, cyclic)
@@ -374,7 +374,7 @@ keystone, so they come first within the phase.
 
 ### Phase 3 — Core‑only & low‑fan‑out foundation
 Ordered so each lib's deps are already done. One step each unless split noted.
-- **3.1** `candy-layout`‑dependent + core‑only singles: `candy-metrics`(13,low),
+- **3.1** `candy-layout`‑dependent + core‑only singles: `candy-metrics`(13,low), <!-- @rename-keep historical provenance -->
   `candy-zone`(14,low), `candy-mouse`(9,med), `candy-mold`(1,low). <!-- @rename-keep historical provenance -->
 - **3.2** `candy-sprinkles` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
   `Table/Border/Tree/Listing` (10), **3.2c** root color/style files (≈10), **3.2d** remainder.
@@ -523,7 +523,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-files | medium | 14 | backed-enum, ctor-promotion, enum-with-methods, match, named-args |
 | candy-ansi | low | 11 | attribute, backed-enum, ctor-promotion, enum-with-methods, fiber*, first-class-callable |
 | candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly | <!-- @rename-keep historical provenance -->
-| candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |
+| candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly | <!-- @rename-keep historical provenance -->
 | candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void |
 | candy-starter | low | 1 | ctor-promotion, match, readonly |
 | candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly | <!-- @rename-keep historical provenance -->
@@ -538,7 +538,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 ## 9. Appendix B — Dependency tiers (topological)
 
 - **Level 0 (no sugarcraft deps):** candy-ansi, candy-async, candy-buffer, candy-fuzzy, <!-- @rename-keep historical provenance -->
-  candy-input, candy-layout.
+  candy-input, candy-layout. <!-- @rename-keep historical provenance -->
 - **Keystone (cyclic):** candy-core ↔ candy-pty (+ candy-sprinkles right after).
 - **Level 1 (everything else):** depends on core/buffer/sprinkles/etc.; backport strictly after
   its listed deps. Full per‑lib dep lists are in the audit (see `plans/PHP74_BACKPORT.md`).
