@@ -422,6 +422,37 @@ final class TaskSpendPropagationTest extends TestCase
         $this->assertEqualsWithDelta(0.33, $result->usage()?->costUsd ?? 0.0, 1e-9);
     }
 
+    public function testTheBoundDelegationEngineRunsOnItsOwnPromptMemo(): void
+    {
+        // ISS-065 (prophylaxis half): the engine bound into every delegating
+        // tool keeps the session id — the run is billed and gated as part of
+        // the session — but never holds the session's memo. Delegated runs go
+        // through completeTranscript(), which does not observe; this pins the
+        // isolation so no future delegation step running complete()/
+        // completeAsync() on the engine it was handed can make its fabricated
+        // conversation the session's baseline. The loader marks the
+        // in-process tools DO share today are the issue's owned seam (REPORT).
+        $engine = EngineBackend::new(new ScriptedProvider([]), 'm')
+            ->withSessionId('S1')
+            ->withTools([self::probeTool(), new TaskTool(self::roster())]);
+
+        $turnTools = new \ReflectionMethod($engine, 'turnTools');
+        $task = null;
+        foreach ($turnTools->invoke($engine, null, null, null) as $tool) {
+            if ($tool instanceof TaskTool) {
+                $task = $tool;
+            }
+        }
+        $this->assertInstanceOf(TaskTool::class, $task);
+
+        $engineProp = new \ReflectionProperty(TaskTool::class, 'engine');
+        $bound = $engineProp->getValue($task);
+        $this->assertInstanceOf(EngineBackend::class, $bound);
+        $this->assertSame('S1', $bound->sessionId(), 'the bound engine does share the session id — the memo is the isolation');
+        $this->assertNotSame($engine->sessionPromptMemo(), $bound->sessionPromptMemo(), 'a delegated run observes a memo of its own');
+        $this->assertSame($bound->sessionPromptMemo(), $bound->withTools([self::probeTool()])->sessionPromptMemo(), 'clones below the bound engine keep its memo');
+    }
+
     // =========================================================================
 
     /**

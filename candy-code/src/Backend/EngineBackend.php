@@ -3109,9 +3109,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // never be read against — or handed back as — the parent's.
             // Nor this run's mailbox (P-D1): a message sent to this run is
             // not one sent to the run it delegates, which binds its own.
+            // Nor the session's prompt memo (ISS-065): a delegated run shares
+            // this session id, and today it runs through
+            // {@see completeTranscript()}, which never observes — the day a
+            // delegation step starts running complete()/completeAsync() on
+            // the engine it was handed, its fabricated conversation would
+            // become the session's baseline and the session's next turn a
+            // false rewrite. The bound engine warms a memo of its own, so
+            // that day costs the session nothing. What the delegation DOES
+            // share today — the instruction loader behind the in-process
+            // Read/Glob/Grep marks — needs per-delegation tool copies, the
+            // seam ISS-065 records against the tool classes.
             $bound ??= $spentSoFarUsd === null
-                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null])
-                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null]);
+                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null, 'sessionPromptMemo' => new SessionPromptMemo()])
+                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null, 'sessionPromptMemo' => new SessionPromptMemo()]);
             // Roadmap 4.7-3: a nested `Task` (one a delegated run handed its
             // sub-agent) arrives already carrying the emitter that reaches
             // the parent — the delegating run's. It keeps it: this turn's
