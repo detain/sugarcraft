@@ -91,6 +91,17 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withHelp('Seconds one read of a streaming reply may wait for bytes before the connection is called dead; per read, never a total.')
                 ->withReaderSymbol(CustomProvider::class . '::streamReadIdleTimeoutSeconds')
                 ->withReadBy('`HttpClientDefaults::streamReadIdleTimeoutSeconds()`, per streaming request'),
+            SettingDefinition::new('streamHeaderTimeoutSeconds', SettingType::Float, 120.0)
+                ->withCategory(SettingCategory::Advanced)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(10.0)
+                // ISS-024: the head-wait budget, decoupled from the connect
+                // bound that used to double as it at 15s.
+                ->withLabel(Lang::t('settings.streamHeaderTimeoutSeconds.label'))
+                ->withHelp('Seconds a connected streaming server may take to send its response headers; never a total request timeout.')
+                ->withReaderSymbol(CustomProvider::class . '::streamHeaderTimeoutSeconds')
+                ->withReadBy('`HttpClientDefaults::streamHeaderTimeoutSeconds()`, per streaming request; `BedrockProvider::create()`, into the SDK http bounds'),
             SettingDefinition::new('providerRetryAttempts', SettingType::Int, TransientFailure::MAX_ATTEMPTS)
                 ->withCategory(SettingCategory::Advanced)
                 ->withRiskClass(RiskClass::Tuning)

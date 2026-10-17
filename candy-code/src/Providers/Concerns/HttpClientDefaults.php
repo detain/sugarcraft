@@ -76,6 +76,14 @@ use Psr\Http\Message\RequestInterface;
  * both set, the identical request streamed its tokens at t=6.01s, 9.01s and
  * 12.01s, each delivered as it arrived.
  *
+ * ISS-024: `timeout` on the stream path bounds DNS + TCP + TLS + the
+ * response-HEADER read, so reusing the connect budget for it made a 15s
+ * "connect" setting silently cap how long a server may think before it sends
+ * its head. The two bounds are now decoupled: the connect budget is enforced
+ * by an explicit pre-flight TCP probe (which `timeout` alone cannot isolate —
+ * PHP applies it to the whole head-wait), and the head-wait gets its own
+ * generous {@see STREAM_HEADER_TIMEOUT_SECONDS} bound.
+ *
  * `read_timeout` is per-read, not cumulative, so it is an *idle* bound and
  * never a deadline on the completion. It is also strictly more permissive
  * than what shipped before it: with nothing set, PHP was already applying
@@ -86,21 +94,26 @@ use Psr\Http\Message\RequestInterface;
  *
  * WHAT IS STILL NOT BOUNDED, PRECISELY
  * ------------------------------------
- * The streaming bound ends when the response headers land, so a server that
- * accepts the connection and then withholds its response *head* past the
- * configured value is treated as dead. Every OpenAI-compatible server in play
+ * The header bound ({@see STREAM_HEADER_TIMEOUT_SECONDS}) lands where the old
+ * connect-bound value used to: DNS + TCP + TLS + the response-head read. A
+ * server that accepts the connection and then withholds its head past THAT
+ * value is treated as dead, and every OpenAI-compatible server in play
  * (SGLang, vLLM, anything on Starlette) emits `http.response.start` before it
- * begins generating, so the head is not gated on model work - but a
- * deployment that queues at the HTTP layer for longer than this wants
- * `CANDY_CODE_CONNECT_TIMEOUT` (or the `connectTimeoutSeconds` setting)
- * raised. Nothing here bounds token gaps, total
+ * begins generating, so 120s is an order of magnitude past real head waits -
+ * a deployment that queues at the HTTP layer longer still wants
+ * `streamHeaderTimeoutSeconds` raised. The connect phase itself is bounded by
+ * the pre-flight probe below, which is also what makes the connect-timeout
+ * refusal message honest ("timed out establishing" instead of StreamHandler's
+ * catch-all "Connection refused"). Nothing here bounds token gaps, total
  * completion length, or a curl-path request's body.
  *
- * Bedrock is not routed through this middleware: the AWS SDK never passes
- * `stream => true` (`ConverseStream` reassembles its event stream from a
- * buffered body, as {@see \SugarCraft\Code\Providers\BedrockProvider}'s own
- * note says), so its requests stay on curl where the plain `connect_timeout`
- * it is handed already works.
+ * Bedrock does not ride this middleware: the AWS SDK builds its own handler
+ * stack, so nothing pushed by {@see guzzleClient()} sees its requests. Its
+ * ConverseStream calls nevertheless DO carry `@http.stream` (measured,
+ * ISS-075), so the SDK hands them to StreamHandler, where a bare
+ * `http.connect_timeout` is discarded exactly as above - which is why
+ * {@see \SugarCraft\Code\Providers\BedrockProvider} mirrors this trait's
+ * bounds into its own `http` array instead of routing through here.
  */
 trait HttpClientDefaults
 {
@@ -172,6 +185,47 @@ trait HttpClientDefaults
     private const STREAM_READ_IDLE_CONFIG_KEY = 'streamIdleTimeoutSeconds';
 
     private const MIN_STREAM_READ_IDLE_TIMEOUT_SECONDS = 30.0;
+
+    /**
+     * How long a streaming request may wait for the response HEAD (status +
+     * headers) once the connection itself is alive — ISS-024.
+     *
+     * This is the value the stream transport's `timeout` option carries. It
+     * used to be the connect bound (15s), which conflated two failures: a
+     * black-holed route and a healthy server that queues HTTP-layer work
+     * behind a model. 120s matches the engine's own idle ceiling's order of
+     * magnitude and is far past any real head-wait, while still cutting the
+     * `default_socket_timeout`-at-(-1) unbounded hang the pair with
+     * `read_timeout` exists to prevent. Deliberately NOT re-derived from
+     * `CANDY_CODE_CONNECT_TIMEOUT`: raising the connect bound for a satellite
+     * link must not silently raise the head budget too, and vice versa.
+     */
+    private const STREAM_HEADER_TIMEOUT_SECONDS = 120.0;
+
+    /**
+     * Floor for {@see STREAM_HEADER_TIMEOUT_SECONDS}: under ~10s the value
+     * stops being a head budget and starts being the 15s bug again wearing a
+     * different config key; nonsense falls back to the default (honourable
+     * law, same as every other bound here).
+     */
+    private const MIN_STREAM_HEADER_TIMEOUT_SECONDS = 10.0;
+
+    /**
+     * The settings key for the header bound. Read per streaming REQUEST by
+     * {@see streamTransportBounds()}, mirroring
+     * {@see STREAM_READ_IDLE_CONFIG_KEY}: a save applies from the next turn,
+     * no client rebuild, no restart.
+     */
+    private const STREAM_HEADER_TIMEOUT_CONFIG_KEY = 'streamHeaderTimeoutSeconds';
+
+    /**
+     * Request option that skips the ISS-024 connect pre-flight for one
+     * request. Production never sets it; capture-style tests that swap the
+     * terminal handler (so no real dial ever happens) use it to keep the
+     * pre-flight from rejecting on the deliberately-unresolvable `.invalid`
+     * host before the capture is reached.
+     */
+    private const CONNECT_PREFLIGHT_OPT_OUT = 'candy_connect_preflight';
 
     /**
      * Named so a second pass through {@see guzzleClient()} on a shared stack
@@ -283,6 +337,11 @@ trait HttpClientDefaults
      * options and what each one does and does not bound.
      *
      * Both are set with `??=` so an explicit per-request value still wins.
+     *
+     * ISS-024 decoupling: the connect budget is enforced here by an explicit
+     * TCP pre-flight (the transport's `timeout` cannot isolate the connect
+     * phase from the head-wait), and `timeout` itself carries the dedicated,
+     * generous header bound.
      */
     private static function streamTransportBounds(): callable
     {
@@ -292,14 +351,131 @@ trait HttpClientDefaults
                     return $handler($request, $options);
                 }
 
-                // The client's own connect bound when it has one, so the two
-                // transports agree on the value the client was built with.
-                $options['timeout'] ??= $options['connect_timeout'] ?? self::connectTimeoutSeconds();
+                $preflighted = self::connectPreflight($request, $options);
+                if ($preflighted instanceof PromiseInterface) {
+                    // The probe already answered "dead host" (or "name does
+                    // not resolve") with honest prose - the request never
+                    // reaches the transport, which could only garble it.
+                    return $preflighted;
+                }
+
+                $options['timeout'] ??= self::streamHeaderTimeoutSeconds();
                 $options['read_timeout'] ??= self::streamReadIdleTimeoutSeconds();
 
-                return $handler($request, $options);
+                if ($preflighted !== true) {
+                    return $handler($request, $options);
+                }
+
+                // The probe connected, so StreamHandler's catch-all
+                // `Connection refused for URI` is now a KNOWN lie: TCP was
+                // fine moments ago, and the only failure it can still be
+                // describing at this point is the head arriving later than
+                // the bound above (or a server that died between probe and
+                // dial). Replace the message; keep the class and the chain
+                // so `TransientFailure::isTransient()`, which walks
+                // `getPrevious()`, classifies identically.
+                return $handler($request, $options)->then(null, static function (\Throwable $failure) use ($request): \Throwable {
+                    if ($failure instanceof \GuzzleHttp\Exception\ConnectException
+                        && str_starts_with($failure->getMessage(), 'Connection refused for URI')
+                        && $failure->getPrevious() === null
+                    ) {
+                        throw new \GuzzleHttp\Exception\ConnectException(
+                            'Response headers did not arrive for ' . (string) $request->getUri()
+                                . ' within ' . self::streamHeaderTimeoutSeconds() . 's of the connection being established; '
+                                . 'the TCP connect itself succeeded. If this server queues work behind the HTTP layer, raise '
+                                . 'the `streamHeaderTimeoutSeconds` setting - `connectTimeoutSeconds` is no longer what caps this wait (ISS-024).',
+                            $request,
+                            previous: $failure,
+                        );
+                    }
+
+                    throw $failure;
+                });
             };
         };
+    }
+
+    /**
+     * ISS-024: dial the target's TCP socket under the CONNECT budget alone,
+     * before handing a stream-routed request to a transport that must fold
+     * connect and head-wait into one number.
+     *
+     * Returns `true` when the probe connected (caller attaches the honest
+     * reject-rewriter), `null` when the probe was skipped or the failure is
+     * one StreamHandler will itself report accurately (real ECONNREFUSED),
+     * and a `RejectedPromise` carrying the final failure when the probe
+     * settled the question the transport could not answer honestly.
+     */
+    private static function connectPreflight(RequestInterface $request, array $options): bool|null|PromiseInterface
+    {
+        if (($options[self::CONNECT_PREFLIGHT_OPT_OUT] ?? null) === false) {
+            return null;
+        }
+
+        $proxy = $options['proxy'] ?? null;
+        if (\is_array($proxy) && $proxy !== []) {
+            // With a proxy the socket that matters opens to the PROXY, whose
+            // endpoint Guzzle rewrites into the request - probing the origin
+            // here would measure the wrong host entirely. Skip.
+            return null;
+        }
+
+        $uri = $request->getUri();
+        $scheme = strtolower($uri->getScheme());
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            return null;
+        }
+
+        $host = $uri->getHost();
+        if ($host === '') {
+            return null;
+        }
+        $port = $uri->getPort() ?? ($scheme === 'https' ? 443 : 80);
+        $target = 'tcp://' . (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $host . ']' : $host) . ':' . $port;
+
+        $budget = self::honourableSeconds($options['connect_timeout'] ?? null, self::MIN_CONNECT_TIMEOUT_SECONDS)
+            ?? self::connectTimeoutSeconds();
+
+        $errno = 0;
+        $errstr = '';
+        $started = \microtime(true);
+        $socket = @\stream_socket_client($target, $errno, $errstr, $budget, STREAM_CLIENT_CONNECT);
+
+        if (\is_resource($socket)) {
+            \fclose($socket);
+
+            return true;
+        }
+
+        $elapsed = \microtime(true) - $started;
+
+        if (str_contains($errstr, 'php_network_getaddresses') || str_contains($errstr, 'Name or service not known') || str_contains($errstr, 'nodename nor servname')) {
+            // StreamHandler blames this on "Connection refused" too - the one
+            // failure class whose honest prose costs nothing extra to emit.
+            return new \GuzzleHttp\Promise\RejectedPromise(new \GuzzleHttp\Exception\ConnectException(
+                'Could not resolve host `' . $host . '` for ' . (string) $uri . ': ' . $errstr,
+                $request,
+            ));
+        }
+
+        if (str_contains($errstr, 'Connection refused')) {
+            // A real refusal: the transport's own message is accurate here,
+            // and re-dialing costs microseconds. Pass through untouched.
+            return null;
+        }
+
+        if ($elapsed >= $budget * 0.9) {
+            return new \GuzzleHttp\Promise\RejectedPromise(new \GuzzleHttp\Exception\ConnectException(
+                'Timed out after ' . round($elapsed, 1) . 's establishing the connection to ' . $target
+                    . '; raise `connectTimeoutSeconds` (or ' . self::CONNECT_TIMEOUT_ENV . ') if this route needs longer - this bound covers the TCP connect only, not the response (ISS-024).',
+                $request,
+            ));
+        }
+
+        // Any other probe failure (unreachable-network, permission, transient
+        // kernel answer): let the transport try, it will produce its own
+        // classification and the header bound still stands behind it.
+        return null;
     }
 
     /**
@@ -355,6 +531,22 @@ trait HttpClientDefaults
             self::settingsConfig()[self::STREAM_READ_IDLE_CONFIG_KEY] ?? null,
             self::MIN_STREAM_READ_IDLE_TIMEOUT_SECONDS,
         ) ?? self::STREAM_READ_IDLE_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * The response-head budget for a stream-routed request (ISS-024): the
+     * `streamHeaderTimeoutSeconds` setting, else
+     * {@see STREAM_HEADER_TIMEOUT_SECONDS}. It replaces the connect bound in
+     * the transport's `timeout` slot, so it is the answer to "how long may a
+     * live server take to start answering" — never a total request deadline
+     * (reads re-arm under `read_timeout`, see the trait docblock).
+     */
+    private static function streamHeaderTimeoutSeconds(): float
+    {
+        return self::honourableSeconds(
+            self::settingsConfig()[self::STREAM_HEADER_TIMEOUT_CONFIG_KEY] ?? null,
+            self::MIN_STREAM_HEADER_TIMEOUT_SECONDS,
+        ) ?? self::STREAM_HEADER_TIMEOUT_SECONDS;
     }
 
     /**

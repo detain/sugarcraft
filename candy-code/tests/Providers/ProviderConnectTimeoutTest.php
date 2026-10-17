@@ -171,20 +171,23 @@ final class ProviderConnectTimeoutTest extends TestCase
     /**
      * Guzzle routes any request carrying `stream => true` to `StreamHandler`,
      * which has no `add_connect_timeout()` and therefore discards
-     * `connect_timeout` outright. Assert the two options it DOES honour reach
-     * the transport, and that they are the safe pair rather than the unsafe
-     * half of it: a `timeout` on its own bounds body reads too and kills a
-     * completion the moment the model pauses.
+     * `connect_timeout` outright. ISS-024: what reaches the transport now is
+     * the DECOUPLED pair - the dedicated header bound in `timeout`, and the
+     * generous per-read `read_timeout` — while the connect budget itself is
+     * enforced by the pre-flight probe (pinned separately below). Asserting
+     * `timeout` still equalled `connect_timeout` here was the pin that ENCODED
+     * the bug: a 15s "connect" setting capping the response-header wait.
      *
      * @dataProvider streamingClients
      */
-    public function testAStreamingRequestReachesTheTransportWithABoundedConnectAndAnUnboundedBody(callable $factory): void
+    public function testAStreamingRequestReachesTheTransportWithADecoupledHeaderBoundAndAnUnboundedBody(callable $factory): void
     {
         $client = $factory();
         $options = self::captureHandlerOptions($client, ['stream' => true]);
 
-        $this->assertArrayHasKey('timeout', $options, 'StreamHandler ignores connect_timeout; without this the connect is unbounded');
-        $this->assertSame($client->getConfig('connect_timeout'), $options['timeout']);
+        $this->assertArrayHasKey('timeout', $options, 'StreamHandler has no connect option at all; timeout is what bounds the head-wait once the pre-flight has bounded the connect');
+        $this->assertSame(120.0, $options['timeout'], 'the header bound is its own generous default, not the 15s connect budget wearing two hats');
+        $this->assertNotSame($client->getConfig('connect_timeout'), $options['timeout'], 'ISS-024: the connect bound must NOT be what caps the header wait');
 
         $this->assertArrayHasKey('read_timeout', $options, 'a timeout without a read_timeout bounds body reads - it aborts a thinking model');
         $this->assertGreaterThan(
@@ -268,9 +271,95 @@ final class ProviderConnectTimeoutTest extends TestCase
 
         // No http_errors middleware was bolted on, so a 404 comes back as a
         // response instead of throwing.
-        $response = $client->request('POST', 'chat/completions', ['stream' => true, 'json' => []]);
+        $response = $client->request('POST', 'chat/completions', ['stream' => true, 'json' => [], 'candy_connect_preflight' => false]);
         $this->assertSame(404, $response->getStatusCode());
-        $this->assertSame($client->getConfig('connect_timeout'), $captured['timeout']);
+        $this->assertSame(120.0, $captured['timeout'], 'the wrapped bare handler still receives the decoupled header bound (ISS-024)');
+    }
+
+    /**
+     * ISS-024: the pre-flight probe settles DNS honestly. StreamHandler maps
+     * EVERY fopen() failure — including a name that never resolved — to
+     * "Connection refused for URI", which is the lie the connect-timeout
+     * error text was reported to bury.
+     */
+    public function testTheConnectPreflightRejectsAnUnresolvableHostWithHonestProse(): void
+    {
+        $reached = false;
+        $inner = static function (RequestInterface $request, array $options) use (&$reached): PromiseInterface {
+            $reached = true;
+
+            return new FulfilledPromise(new Response(200, [], 'ok'));
+        };
+
+        $client = self::buildSeamClient(['handler' => $inner, 'base_uri' => 'https://candy-preflight.invalid/']);
+
+        try {
+            $client->request('POST', 'chat/completions', ['stream' => true, 'json' => []]);
+            $this->fail('the probe should have settled the unresolvable host before the transport ran');
+        } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            $this->assertStringContainsString('Could not resolve host', $e->getMessage());
+            $this->assertStringContainsString('candy-preflight.invalid', $e->getMessage());
+        }
+
+        $this->assertFalse($reached, 'the transport must not be dialed after the probe answered DNS');
+    }
+
+    /**
+     * ISS-024: once the probe HAS connected, StreamHandler's catch-all
+     * "Connection refused" is a known lie — the remaining failure it can be
+     * describing is the head-wait. The rewriter names the setting that owns
+     * that bound and keeps the chain (`TransientFailure::isTransient()` walks
+     * `getPrevious()`).
+     */
+    public function testAPassedPreflightRewritesTheStreamsCatchAllRefusalToNameTheHeaderBound(): void
+    {
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, 'a local listener is the whole fixture: ' . $errstr);
+        $address = (string) \stream_socket_get_name($server, false);
+
+        try {
+            $client = self::buildSeamClient([
+                'handler' => static fn (RequestInterface $request, array $options): PromiseInterface => new \GuzzleHttp\Promise\RejectedPromise(
+                    new \GuzzleHttp\Exception\ConnectException('Connection refused for URI ' . (string) $request->getUri(), $request),
+                ),
+                'base_uri' => 'http://' . $address . '/',
+            ]);
+
+            try {
+                $client->request('POST', 'chat/completions', ['stream' => true, 'json' => []]);
+                $this->fail('the lying handler must still surface a rejection');
+            } catch (\GuzzleHttp\Exception\ConnectException $e) {
+                $this->assertStringContainsString('streamHeaderTimeoutSeconds', $e->getMessage());
+                $this->assertStringContainsString('TCP connect itself succeeded', $e->getMessage());
+                $this->assertStringNotContainsString('Connection refused for URI', $e->getMessage());
+                $this->assertInstanceOf(\GuzzleHttp\Exception\ConnectException::class, $e->getPrevious(), 'the original chain rides through');
+            }
+        } finally {
+            \fclose($server);
+        }
+    }
+
+    /**
+     * The opt-out key is total: with it, no probe, no rewriter — the handler
+     * promise is returned untouched so capture-style tests see exactly what
+     * they would have seen before this seam existed.
+     */
+    public function testAPreflightOptOutLeavesEvenTheCatchAllRefusalUntouched(): void
+    {
+        $client = self::buildSeamClient([
+            'handler' => static fn (RequestInterface $request, array $options): PromiseInterface => new \GuzzleHttp\Promise\RejectedPromise(
+                new \GuzzleHttp\Exception\ConnectException('Connection refused for URI ' . (string) $request->getUri(), $request),
+            ),
+            'base_uri' => 'http://127.0.0.1:1/',
+        ]);
+
+        try {
+            $client->request('POST', 'chat/completions', ['stream' => true, 'json' => [], 'candy_connect_preflight' => false]);
+            $this->fail('the handler was built to reject');
+        } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            $this->assertStringStartsWith('Connection refused for URI', $e->getMessage(), 'opt-out must skip the rewriter as well as the probe');
+            $this->assertNull($e->getPrevious());
+        }
     }
 
     public function testReusingAHandlerStackDoesNotStackDuplicateMiddleware(): void
@@ -571,7 +660,7 @@ final class ProviderConnectTimeoutTest extends TestCase
             return new FulfilledPromise(new Response(200, [], 'ok'));
         });
 
-        $client->request('POST', 'chat/completions', $requestOptions + ['json' => ['probe' => true]]);
+        $client->request('POST', 'chat/completions', $requestOptions + ['json' => ['probe' => true], 'candy_connect_preflight' => false]);
 
         return $captured;
     }

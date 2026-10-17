@@ -430,7 +430,10 @@ Environment variables:
                           Connect-phase bound, in seconds (fractional
                           allowed; default 15.0), for provider HTTP
                           transports. It bounds establishing the connection
-                          only — it is not a total request timeout.
+                          only — it is not a total request timeout. How long
+                          a connected streaming server may take to send its
+                          response headers is the separate
+                          streamHeaderTimeoutSeconds setting.
    CANDY_CODE_SEARCH_ENDPOINT
                           Search API the built-in WebSearch tool queries.
    CANDY_CODE_SESSION_RETENTION_DAYS
@@ -1405,6 +1408,7 @@ TXT,
     'settings.skills.pathNudges.label' => 'Skill path nudges',
     'settings.statusLine.label' => 'Status line command',
     'settings.streamIdleTimeoutSeconds.label' => 'Stream read idle (s)',
+    'settings.streamHeaderTimeoutSeconds.label' => 'Stream header wait (s)',
     'settings.subagentMaxActive.label' => 'Sub-agents running at once',
     'settings.subagentMaxConcurrent.label' => 'Sub-agent fan-out',
     'settings.subagentMaxDepth.label' => 'Delegation depth',
