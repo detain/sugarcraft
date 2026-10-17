@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ago, money, tokens } from '../../lib/format'
-import type { BackgroundSession } from '../../protocol/generated'
+import type { BackgroundSession, PermissionMode } from '../../protocol/generated'
 import { isSettled, useBackgroundStore } from '../../stores/agents/background'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
@@ -10,8 +10,26 @@ import { describe } from '../../stores/session'
  * The workspace's background (`/bg`) sessions (roadmap O-4b / O-6c): each
  * with its status, live from the `bg.*` events; its output on demand; stop
  * one that runs; send a settled one's answer into the session on screen.
+ *
+ * Each row also shows the spawn session's permission mode (ISS-004 threads
+ * `permissionMode` through the bg rows), and a loud warning for the
+ * bypass-class modes that answer permission asks without a human: a /bg run
+ * nobody is watching should not be one that nobody can stop.
  */
 defineProps<{ sessionId: string | null }>()
+
+/** Modes that never put a question in front of a human. */
+const BYPASS_CLASS: PermissionMode[] = ['bypass-permissions', 'auto', 'dont-ask']
+
+function permissionMode(session: BackgroundSession): PermissionMode | null {
+  const mode = (session as BackgroundSession & { permissionMode?: unknown }).permissionMode
+  return typeof mode === 'string' && mode !== '' ? (mode as PermissionMode) : null
+}
+
+function isBypassClass(session: BackgroundSession): boolean {
+  const mode = permissionMode(session)
+  return mode !== null && BYPASS_CLASS.includes(mode)
+}
 
 const background = useBackgroundStore()
 const connection = useConnectionStore()
@@ -60,8 +78,12 @@ function toggle(session: BackgroundSession): void {
         <button type="button" class="head" :aria-expanded="expanded === session.bgId" @click="toggle(session)">
           <span class="status" :class="session.status">{{ session.status.replace('_', ' ') }}</span>
           <span class="name">{{ session.name || session.task }}</span>
+          <span v-if="permissionMode(session)" class="mode" :class="{ bypass: isBypassClass(session) }" data-testid="bg-mode">{{ permissionMode(session) }}</span>
           <span class="meta">{{ ago(session.createdAt) }}<template v-if="session.tokensUsed"> · {{ tokens(session.tokensUsed) }} tok</template><template v-if="session.costUsd"> · {{ money(session.costUsd) }}</template></span>
         </button>
+        <p v-if="isBypassClass(session)" class="bypass-warning" role="alert" data-testid="bg-bypass-warning">
+          Permission mode {{ permissionMode(session) }}: nothing will ask a human before this run acts.
+        </p>
         <div v-if="expanded === session.bgId" class="body">
           <p class="task">{{ session.task }}</p>
           <p v-if="session.error" class="error">{{ session.error }}</p>
@@ -116,7 +138,7 @@ input {
 }
 .head {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 0.1rem 0.5rem;
   width: 100%;
   text-align: left;
@@ -141,8 +163,31 @@ input {
   white-space: nowrap;
   min-width: 0;
 }
+.mode {
+  align-self: center;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mode.bypass {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.bypass-warning {
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-radius: 4px;
+}
 .meta {
-  grid-column: 1 / 3;
+  grid-column: 1 / 4;
   font-size: 0.8125rem;
   color: var(--muted);
 }
