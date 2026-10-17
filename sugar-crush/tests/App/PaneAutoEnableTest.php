@@ -24,7 +24,7 @@ use SugarCraft\Crush\Todo\TodoStatus;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Todo;
 use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as ShellRenderer;
 
@@ -181,7 +181,7 @@ final class PaneAutoEnableTest extends TestCase
     /** @return list<string> the pane ids stacked on one side, in order */
     private function slotIds(App $app, Side $side): array
     {
-        return array_map(static fn(\SugarCraft\Layout\Dock\DockSlot $slot): string => $slot->paneId, $app->dock()->slots($side));
+        return array_map(static fn(\SugarCraft\Constraints\Dock\DockSlot $slot): string => $slot->paneId, $app->dock()->slots($side));
     }
 
     /**

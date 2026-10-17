@@ -2700,7 +2700,7 @@ Layer orientation:
 ```
 candy-core      Program/Model/Cmd/Msg runtime (keys, mouse, ImageOverlay)
  ├─ candy-sprinkles   Style/Border/Canvas (chrome)
- ├─ candy-layout      Cassowary constraint solver (Form::withConstraints)
+ ├─ sugar-constraints      Cassowary constraint solver (Form::withConstraints)
  ├─ sugar-forms   ★ canonical widgets + Field/Form engine  ← write against this
  │    └─ sugar-forms  (pure class_alias façade — do NOT target)
  ├─ sugar-widgets    Tabs/Help+Key/Progress/AnimatedProgress/Paginator/Timer/Tree/Table (canonical);

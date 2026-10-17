@@ -281,7 +281,7 @@ sugar-forms is built on five shared packages:
 - **[sugar-cellbuffer](/sugarcraft/sugar-cellbuffer)** — Cell-grid model + `Buffer::toAnsi()` for
   rendering glyphs and styles to ANSI bytes. TextInput / TextArea use the buffer
   path internally; their snapshot tests pin byte-for-byte output.
-- **[candy-layout](/sugarcraft/candy-layout)** — `LayoutSolver` + constraint types
+- **[sugar-constraints](/sugarcraft/sugar-constraints)** — `LayoutSolver` + constraint types
   (`Constraint::length`, `Constraint::fill`, etc.). `Form::withConstraints()` routes
   through the solver when an explicit constraint set is provided.
 - **[sugar-testing](/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and

@@ -14,8 +14,8 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The dock's persistence loop, closed at both ends.

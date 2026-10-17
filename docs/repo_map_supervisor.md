@@ -72,9 +72,9 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 1 — New shared foundation packages (8)
 - [x] [Step 01 — Create sugar-ansi-parser](repo_map_step_01.md) — branch: `ai/sugar-ansi-parser-new`
-- [x] [Step 02 — Create sugar-cellbuffer](repo_map_step_02.md) — branch: `ai/sugar-cellbuffer-new`
-- [x] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
-- [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/sugar-testing-new`
+- [x] [Step 02 — Create sugar-cellbuffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
+- [x] [Step 03 — Create sugar-constraints](repo_map_step_03.md) — branch: `ai/sugar-constraints-new`
+- [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
 - [x] [Step 05 — Create sugar-mouse](repo_map_step_05.md) — branch: `ai/sugar-mouse-new`
 - [x] [Step 06 — Create sugar-input](repo_map_step_06.md) — branch: `ai/sugar-input-new`
 - [x] [Step 07 — Create sugar-fuzzy](repo_map_step_07.md) — branch: `ai/sugar-fuzzy-new`
@@ -82,7 +82,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 2 — Enhance existing foundation packages (5)
 - [x] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
-- [x] [Step 10 — candy-sprinkles uses candy-layout](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
+- [x] [Step 10 — candy-sprinkles uses sugar-constraints](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
 - [x] [Step 11 — sugar-markdown StyleSheet + BlockStack](repo_map_step_11.md) — branch: `ai/sugar-markdown-blockstack`
 - [x] [Step 12 — sugar-vterm delegates to sugar-ansi-parser](repo_map_step_12.md) — branch: `ai/sugar-vterm-uses-ansi`
 - [x] [Step 13 — sugar-image + sugar-colorprofile TerminalProbe](repo_map_step_13.md) — branch: `ai/probe-consolidation`

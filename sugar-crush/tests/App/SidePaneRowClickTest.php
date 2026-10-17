@@ -27,8 +27,8 @@ use SugarCraft\Crush\Tests\Support\RosterAgent;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tui\Components\AgentsPane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Mouse\Zone;
 
 /**

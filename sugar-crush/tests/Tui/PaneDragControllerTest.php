@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Tui\PaneDragController;
 

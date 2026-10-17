@@ -86,7 +86,7 @@ _All items in this section have been resolved by the completion of steps 20–40
 - [RESOLVED | 2026-06-01 | step-40 | shipper] ci: codecov + vhs.yml audit for 8 new libs — MERGED PR #920:
   - Empty commit (all criteria already met); Commit SHA: 854062c9
 
-- [RESOLVED | step-03 | tester | 2026-05-28] candy-layout coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
+- [RESOLVED | step-03 | tester | 2026-05-28] sugar-constraints coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
 
 - [2026-05-28 | step-01 | fixer] CsiHandlerImpl.php created as self-contained no-op stub — terminal delegation deferred to step-12. (was: BLOCKING entry about missing CsiHandlerImpl.php)
 

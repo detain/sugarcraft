@@ -8,10 +8,10 @@ use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Layout\Constraint\Constraint;
-use SugarCraft\Layout\Direction;
-use SugarCraft\Layout\GreedySolver;
-use SugarCraft\Layout\Region as LayoutRegion;
+use SugarCraft\Constraints\Constraint\Constraint;
+use SugarCraft\Constraints\Direction;
+use SugarCraft\Constraints\GreedySolver;
+use SugarCraft\Constraints\Region as ConstraintsRegion;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -61,9 +61,9 @@ final class SugarPanels
     private ?int $prevHeight = null;
 
     /**
-     * candy-layout's constraint solver in sugar-panels parity mode. The flex
+     * sugar-constraints's constraint solver in sugar-panels parity mode. The flex
      * distribution (fixed siblings take their natural size, flex children share
-     * the leftover by weight) is exactly what candy-layout's GreedySolver models;
+     * the leftover by weight) is exactly what sugar-constraints's GreedySolver models;
      * {@see GreedySolver::compat()} flips its three divergent axes (round-split,
      * remainder-to-last, non-truncating overflow) so it reproduces
      * {@see distributeFlex()} byte-for-byte. Immutable + stateless → shared.
@@ -898,8 +898,8 @@ final class SugarPanels
      * Distribute available space across children by weight (the non-flex
      * fallback: children weighted by minWidth/minHeight, defaulting to 1).
      *
-     * Delegates the size computation to candy-layout's
-     * {@see GreedySolver::withMinShare()} (plan_missing.md W12 / candy-layout
+     * Delegates the size computation to sugar-constraints's
+     * {@see GreedySolver::withMinShare()} (plan_missing.md W12 / sugar-constraints
      * #1386), completing the fork-b dedup begun in {@see distributeFlex()}.
      * Each child maps to a {@see Constraint::fill()} weighted by its
      * minWidth/minHeight; the min-share floor reproduces distribute()'s bespoke
@@ -943,7 +943,7 @@ final class SugarPanels
         $regions = GreedySolver::new()
             ->withMinShare(1, $spacing, $borderPad)
             ->solve(
-                new LayoutRegion(0, 0, \max(0, $contentSpan), 1),
+                new ConstraintsRegion(0, 0, \max(0, $contentSpan), 1),
                 Direction::Horizontal,
                 $constraints,
             );
@@ -982,10 +982,10 @@ final class SugarPanels
      * shape as {@see distribute()} (the caller derives the final child's size as
      * the remainder, which equals its computed size because the sizes sum exact).
      *
-     * Delegates the actual size computation to candy-layout's
-     * {@see GreedySolver::compat()} (plan_missing.md W12 / candy-layout #1372): a
+     * Delegates the actual size computation to sugar-constraints's
+     * {@see GreedySolver::compat()} (plan_missing.md W12 / sugar-constraints #1372): a
      * fixed child maps to a Length reserving its natural size, a flex child to a
-     * Fill weighted by its flex weight. compat() mode makes candy-layout's greedy
+     * Fill weighted by its flex weight. compat() mode makes sugar-constraints's greedy
      * solver reproduce this hand-rolled distribution byte-for-byte — the three
      * axes it flips (round-split, remainder-to-the-last Fill, and NON-truncating
      * overflow so fixed children keep their full base and the layout runs off-grid
@@ -1013,7 +1013,7 @@ final class SugarPanels
         }
 
         $regions = $this->flexSolver->solve(
-            new LayoutRegion(0, 0, $content, 1),
+            new ConstraintsRegion(0, 0, $content, 1),
             Direction::Horizontal,
             $constraints,
         );

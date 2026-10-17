@@ -30,7 +30,7 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
  * here with a number instead of surfacing as a golden diff.
  *
  * The complementary half (a mutated dock takes its width from
- * {@see \SugarCraft\Layout\Dock\DockLayout::resolve()}) is pinned in
+ * {@see \SugarCraft\Constraints\Dock\DockLayout::resolve()}) is pinned in
  * {@see DockSeedTest}.
  */
 final class DockDefaultIdentityTest extends TestCase

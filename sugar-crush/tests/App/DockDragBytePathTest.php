@@ -15,7 +15,7 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\PaneDragController;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The docking gestures driven through the REAL byte path: raw SGR mouse
@@ -605,7 +605,7 @@ final class DockDragBytePathTest extends TestCase
     {
         $slots = $app->dock()->slots($side);
         self::assertNotSame([], $slots);
-        $region = $app->dock()->resolve(new \SugarCraft\Layout\Region(0, 0, self::BARE_COLS, self::BARE_ROWS - 4))
+        $region = $app->dock()->resolve(new \SugarCraft\Constraints\Region(0, 0, self::BARE_COLS, self::BARE_ROWS - 4))
             ->regionFor($slots[0]->paneId);
         self::assertNotNull($region);
 

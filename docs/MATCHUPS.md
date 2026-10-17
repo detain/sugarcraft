@@ -57,7 +57,7 @@ called out in the table below.
 | **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
 | **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **SugarFuzzy** (`sugar-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from sugar-forms. |
-| **CandyLayout** (`candy-layout/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
+| **SugarConstraints** (`sugar-constraints/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
 | **SugarTesting** (`sugar-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | **SugarInput** (`sugar-input/`) | 🟢 ready | Terminal escape sequence decoder — legacy keys, Kitty keyboard protocol (CSI ?u), SGR 1006 mouse, focus events, bracketed paste. Unblocks sugar-readline production use. |
 | **SugarLister** (`sugar-treelist/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
@@ -162,7 +162,7 @@ reference projects supplied the ideas, not the code.
 | SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
 | SugarInput (sugar-input/) | none — first-party |
 | SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) |
-| CandyLayout (candy-layout/) | [ratatui](https://github.com/ratatui/ratatui) |
+| SugarConstraints (sugar-constraints/) | [ratatui](https://github.com/ratatui/ratatui) |
 | SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
 | SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
 | SugarMetrics (sugar-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |

@@ -15,7 +15,7 @@
 - W8: AtomicJsonFile
 - W9: Highlighter interface
 - W11: candy-mdview dead code
-- W12: candy-layout solver
+- W12: candy-layout solver <!-- @rename-keep historical provenance -->
 - W14.1: blob/main→master
 - W14.2: Package count
 - W17: Façade tests

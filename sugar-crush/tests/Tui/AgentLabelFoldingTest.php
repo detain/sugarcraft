@@ -37,7 +37,7 @@ final class AgentLabelFoldingTest extends TestCase
     public function testASingleWordPrefixStaysByteIdentical(): void
     {
         // The shape pinned live: 'Audit candy-core' / 'Audit sugar-ansi-parser'.
-        $labels = ['Audit candy-core', 'Audit sugar-ansi-parser', 'Audit candy-layout'];
+        $labels = ['Audit candy-core', 'Audit sugar-ansi-parser', 'Audit sugar-constraints'];
 
         $this->assertSame($labels, AgentLabelFolding::fold($labels));
     }

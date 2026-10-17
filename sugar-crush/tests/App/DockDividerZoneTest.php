@@ -12,8 +12,8 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The divider click targets the docked sides stamp into the chrome scanner.

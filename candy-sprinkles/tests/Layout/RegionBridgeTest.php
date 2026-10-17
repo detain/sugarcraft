@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Sprinkles\Tests\Layout;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\CellBuffer\Position;
-use SugarCraft\CellBuffer\Region as BufferRegion;
-use SugarCraft\Layout\Region as LayoutRegion;
+use SugarCraft\Buffer\Position;
+use SugarCraft\Buffer\Region as BufferRegion;
+use SugarCraft\Constraints\Region as ConstraintsRegion;
 use SugarCraft\Sprinkles\Layout\RegionBridge;
 
 final class RegionBridgeTest extends TestCase
@@ -32,7 +32,7 @@ final class RegionBridgeTest extends TestCase
      */
     public function testToBufferMapsFieldsOneToOne(int $x, int $y, int $w, int $h): void
     {
-        $layout = new LayoutRegion($x, $y, $w, $h);
+        $layout = new ConstraintsRegion($x, $y, $w, $h);
         $buffer = RegionBridge::toBuffer($layout);
 
         $this->assertInstanceOf(BufferRegion::class, $buffer);
@@ -45,12 +45,12 @@ final class RegionBridgeTest extends TestCase
     /**
      * @dataProvider regions
      */
-    public function testToLayoutMapsFieldsOneToOne(int $x, int $y, int $w, int $h): void
+    public function testToConstraintsMapsFieldsOneToOne(int $x, int $y, int $w, int $h): void
     {
         $buffer = new BufferRegion(new Position($x, $y), $w, $h);
-        $layout = RegionBridge::toLayout($buffer);
+        $layout = RegionBridge::toConstraints($buffer);
 
-        $this->assertInstanceOf(LayoutRegion::class, $layout);
+        $this->assertInstanceOf(ConstraintsRegion::class, $layout);
         $this->assertSame($x, $layout->x, 'col → x');
         $this->assertSame($y, $layout->y, 'row → y');
         $this->assertSame($w, $layout->width, 'width');
@@ -60,10 +60,10 @@ final class RegionBridgeTest extends TestCase
     /**
      * @dataProvider regions
      */
-    public function testRoundTripLayoutToBufferToLayout(int $x, int $y, int $w, int $h): void
+    public function testRoundTripConstraintsToBufferToConstraints(int $x, int $y, int $w, int $h): void
     {
-        $original = new LayoutRegion($x, $y, $w, $h);
-        $roundTrip = RegionBridge::toLayout(RegionBridge::toBuffer($original));
+        $original = new ConstraintsRegion($x, $y, $w, $h);
+        $roundTrip = RegionBridge::toConstraints(RegionBridge::toBuffer($original));
 
         $this->assertSame($original->x, $roundTrip->x);
         $this->assertSame($original->y, $roundTrip->y);
@@ -74,10 +74,10 @@ final class RegionBridgeTest extends TestCase
     /**
      * @dataProvider regions
      */
-    public function testRoundTripBufferToLayoutToBuffer(int $x, int $y, int $w, int $h): void
+    public function testRoundTripBufferToConstraintsToBuffer(int $x, int $y, int $w, int $h): void
     {
         $original = new BufferRegion(new Position($x, $y), $w, $h);
-        $roundTrip = RegionBridge::toBuffer(RegionBridge::toLayout($original));
+        $roundTrip = RegionBridge::toBuffer(RegionBridge::toConstraints($original));
 
         $this->assertSame($original->origin()->col(), $roundTrip->origin()->col());
         $this->assertSame($original->origin()->row(), $roundTrip->origin()->row());
@@ -87,15 +87,15 @@ final class RegionBridgeTest extends TestCase
 
     /**
      * A buffer Region with a negative origin cannot be represented as a
-     * candy-layout Region; the target constructor's own guard must reject it
+     * sugar-constraints Region; the target constructor's own guard must reject it
      * rather than the bridge silently clamping or accepting it.
      */
-    public function testToLayoutRejectsNegativeOrigin(): void
+    public function testToConstraintsRejectsNegativeOrigin(): void
     {
         $buffer = new BufferRegion(new Position(-1, -1), 4, 4);
 
         $this->expectException(\InvalidArgumentException::class);
-        RegionBridge::toLayout($buffer);
+        RegionBridge::toConstraints($buffer);
     }
 
     /**

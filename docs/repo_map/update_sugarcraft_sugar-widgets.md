@@ -207,7 +207,7 @@ The `p-gen/smenu` C library uses a Ternary Search Tree for indexing words, enabl
 
 ## Architecture Improvements
 
-1. **Extract FlexBox to separate lib** (`sugar-layout` or `candy-layout`)
+1. **Extract FlexBox to separate lib** (`sugar-layout` or `sugar-constraints`)
    - Ratio-based responsive grid is complex enough to warrant its own lib
    - Would enable complex dashboard compositions
 

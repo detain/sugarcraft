@@ -30,9 +30,9 @@ use SugarCraft\Crush\Tui\Components\TodoPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Chat;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
-use SugarCraft\Layout\Region;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
+use SugarCraft\Constraints\Region;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Zone;
 

@@ -22,7 +22,7 @@ This document audits every SugarCraft lib **not** migrated in steps 9-29 (those 
 The 8 shared packages:
 - **sugar-ansi-parser** — byte-loop ANSI parsing (Parser, OscHandler, CsiHandler, SgrState)
 - **sugar-cellbuffer** — cell-grid rendering & string composition (Buffer, Cell, DiffOp, Style, Hyperlink)
-- **candy-layout** — constraint-based sizing (LayoutSolver, Region, Direction, Constraint*)
+- **sugar-constraints** — constraint-based sizing (LayoutSolver, Region, Direction, Constraint*)
 - **sugar-mouse** — mouse hit-testing & decode (MouseMsg, Zone, Manager)
 - **sugar-input** — input decode & KeyEvent (InputDriver, KeyEvent, SymbolicKey)
 - **sugar-fuzzy** — filter/search via Smith-Waterman (Matcher, MatchResult)
@@ -38,7 +38,7 @@ The 8 shared packages:
 | Step 31 | candy-pty | candy-async, candy-input | <!-- @rename-keep historical provenance -->
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async | <!-- @rename-keep historical provenance -->
 | Step 33 | candy-kv, candy-ssh-launcher, candy-git | sugar-cellbuffer, sugar-fuzzy, sugar-mouse, sugar-testing |
-| Step 34 | sugar-datepicker, sugar-toast | sugar-cellbuffer, candy-layout, sugar-testing |
+| Step 34 | sugar-datepicker, sugar-toast | sugar-cellbuffer, sugar-constraints, sugar-testing |
 | Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing | <!-- @rename-keep historical provenance -->
 | Step 36 | sugar-animation, sugar-cli, sugar-spring, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing | <!-- @rename-keep historical provenance -->
 | Step 37 | candy-metrics, candy-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing | <!-- @rename-keep historical provenance -->
@@ -98,7 +98,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | sugar-cellbuffer | Banner.php/Logo.php/Section.php render via string concat — Buffer would give uniform ANSI composition | S |
-| candy-layout | Stage.php + Section.php use manual width calc — LayoutSolver would handle constraint-based sizing | S |
+| sugar-constraints | Stage.php + Section.php use manual width calc — LayoutSolver would handle constraint-based sizing | S |
 
 **Notes:** sugar-cli is a TUI component library (banners, help text, status lines). All rendering is string-based. Buffer adoption would make output diff-friendly; LayoutSolver adoption would replace ad-hoc width arithmetic.
 
@@ -157,7 +157,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | sugar-cellbuffer | DatePicker.php renders calendar grid via string — Buffer would give per-cell styling (today, selected, event) + diff | M |
-| candy-layout | DatePicker.php/Navigation.php use manual grid sizing — LayoutSolver would handle week-row layout constraints | M |
+| sugar-constraints | DatePicker.php/Navigation.php use manual grid sizing — LayoutSolver would handle week-row layout constraints | M |
 | sugar-testing | DatePicker.php lacks golden render tests — assertGoldenAnsi would pin calendar ANSI output | S |
 
 **Notes:** Calendar rendering is a classic grid layout problem. Buffer would allow per-day cell styling (weekend color, event indicator, selected state). LayoutSolver would handle variable-width month displays.
@@ -169,7 +169,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | sugar-cellbuffer | Toast.php renders notification via string concat — Buffer would give per-cell positioning + diff | S |
-| candy-layout | Toast.php uses manual x/y positioning — LayoutSolver would handle multi-toast stacking constraints | M |
+| sugar-constraints | Toast.php uses manual x/y positioning — LayoutSolver would handle multi-toast stacking constraints | M |
 | sugar-testing | Toast.php lacks golden render tests — assertGoldenAnsi would pin toast ANSI output | S |
 
 **Notes:** Toast notifications are positioned views with variable content width. Buffer would enable precise cell-level control; LayoutSolver would replace ad-hoc stacking logic.
@@ -227,7 +227,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | sugar-cellbuffer | Banner/Logo/Section/StatusLine render via string — Buffer would standardize ANSI composition | S |
-| candy-layout | Stage.php constrains section widths manually — LayoutSolver would replace ad-hoc sizing | S |
+| sugar-constraints | Stage.php constrains section widths manually — LayoutSolver would replace ad-hoc sizing | S |
 
 **Notes:** Already listed above under step 36. Note: sugar-cli ships components that other libs (sugar-datepicker, sugar-toast) will build on — buffer/layout adoption here propagates downstream benefit.
 

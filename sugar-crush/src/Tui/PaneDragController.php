@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The mouse gesture state behind pane docking: one drag in flight, or idle.

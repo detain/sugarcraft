@@ -10,10 +10,10 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Layout\Constraint\Constraint;
-use SugarCraft\Layout\Direction;
-use SugarCraft\Layout\LayoutSolver;
-use SugarCraft\Layout\Region;
+use SugarCraft\Constraints\Constraint\Constraint;
+use SugarCraft\Constraints\Direction;
+use SugarCraft\Constraints\LayoutSolver;
+use SugarCraft\Constraints\Region;
 
 /**
  * Top-level form container.
@@ -243,7 +243,7 @@ final class Form implements Model
     }
 
     /**
-     * Apply an explicit constraint set from candy-layout to govern how
+     * Apply an explicit constraint set from sugar-constraints to govern how
      * the form's fields are sized and positioned. When set, the form's
      * {@see view()} uses {@see LayoutSolver} to compute a region per
      * field before rendering. Pass null (or leave unset) to keep the

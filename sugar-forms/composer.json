@@ -30,7 +30,7 @@
         "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
-        "sugarcraft/candy-layout": "dev-master",
+        "sugarcraft/sugar-constraints": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     },
     "require-dev": {

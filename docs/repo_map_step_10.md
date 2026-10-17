@@ -1,12 +1,12 @@
-# Step 10 — candy-sprinkles uses candy-layout
+# Step 10 — candy-sprinkles uses sugar-constraints
 
 **Branch:** `ai/candy-sprinkles-layout`
-**Depends on:** step-03 (candy-layout exists)
+**Depends on:** step-03 (sugar-constraints exists)
 **Blocks:** Phase 3 layout-consuming migrations (step-14, step-15)
 
 ## Goal
 
-Wire `candy-sprinkles` to consume `candy-layout`'s `LayoutSolver` interface. Default solver: `CassowarySolver`. Fallback: `GreedySolver` (which IS the existing `candy-sprinkles/src/Layout/Solver.php` ported verbatim in step-03 — so GreedySolver output is bit-equivalent to today). Public `candy-sprinkles\Layout\Solver` API is preserved as an internal facade that delegates to `LayoutSolver`.
+Wire `candy-sprinkles` to consume `sugar-constraints`'s `LayoutSolver` interface. Default solver: `CassowarySolver`. Fallback: `GreedySolver` (which IS the existing `candy-sprinkles/src/Layout/Solver.php` ported verbatim in step-03 — so GreedySolver output is bit-equivalent to today). Public `candy-sprinkles\Layout\Solver` API is preserved as an internal facade that delegates to `LayoutSolver`.
 
 Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-based layout reinvention).
 
@@ -16,9 +16,9 @@ Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-ba
 
 ## Files expected to be modified
 
-- `candy-sprinkles/composer.json` — add `sugarcraft/candy-layout: @dev` + path-repo via `path-repo-closure`.
+- `candy-sprinkles/composer.json` — add `sugarcraft/sugar-constraints: @dev` + path-repo via `path-repo-closure`.
 - `candy-sprinkles/src/Layout/Solver.php` — keep class, refactor to delegate to a `LayoutSolver`. All existing public methods unchanged in signature + output.
-- `candy-sprinkles/src/Layout/Constraint.php` — keep as facade aliasing `SugarCraft\Layout\Constraint\*` types.
+- `candy-sprinkles/src/Layout/Constraint.php` — keep as facade aliasing `SugarCraft\Constraints\Constraint\*` types.
 - `candy-sprinkles/src/Layout/Layout.php` — internal refactor as needed; public API unchanged.
 - Existing `candy-sprinkles/tests/Layout/*Test.php` must still pass.
 
@@ -34,9 +34,9 @@ Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-ba
 
 ## Coder brief
 
-1. **Use `path-repo-closure`** to add `sugarcraft/candy-layout: @dev` to candy-sprinkles' composer.json (and to any lib that transitively requires candy-sprinkles).
+1. **Use `path-repo-closure`** to add `sugarcraft/sugar-constraints: @dev` to candy-sprinkles' composer.json (and to any lib that transitively requires candy-sprinkles).
 2. **Refactor `candy-sprinkles/src/Layout/Solver.php`**: convert from monolithic impl to a thin facade. Its `solve()` method delegates to a `LayoutSolver` instance obtained via `SolverFactory::default()`. Preserve every public method signature.
-3. **Refactor `candy-sprinkles/src/Layout/Constraint.php`**: if it was a single class with type discriminator, refactor so each constraint case wraps the corresponding `SugarCraft\Layout\Constraint\*` value object. Public API surface unchanged.
+3. **Refactor `candy-sprinkles/src/Layout/Constraint.php`**: if it was a single class with type discriminator, refactor so each constraint case wraps the corresponding `SugarCraft\Constraints\Constraint\*` value object. Public API surface unchanged.
 4. **SolverFactory** reads `getenv('SUGARCRAFT_LAYOUT_SOLVER')`: `greedy` → `GreedySolver`, anything else (or empty) → `CassowarySolver`.
 5. **Verify** by running `cd candy-sprinkles && composer update --quiet && vendor/bin/phpunit`. Then with `SUGARCRAFT_LAYOUT_SOLVER=greedy vendor/bin/phpunit`. Both should pass.
 6. **Run all libs that depend on candy-sprinkles** (use `php scripts/affected-libs.php`) to confirm no transitive breakage.
@@ -50,17 +50,17 @@ Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-ba
 
 ## Scribe brief
 
-- `candy-sprinkles/README.md`: a paragraph under `## Shared foundations` noting layout now delegates to candy-layout. Env-var escape hatch documented.
+- `candy-sprinkles/README.md`: a paragraph under `## Shared foundations` noting layout now delegates to sugar-constraints. Env-var escape hatch documented.
 - `candy-sprinkles/CALIBER_LEARNINGS.md`: any Cassowary-vs-Greedy divergence noted with worked example.
-- MATCHUPS: update candy-sprinkles row note "constraint solver delegated to candy-layout".
+- MATCHUPS: update candy-sprinkles row note "constraint solver delegated to sugar-constraints".
 
 ## Ship brief
 
-- **PR title**: `candy-sprinkles: delegate layout solving to candy-layout`
+- **PR title**: `candy-sprinkles: delegate layout solving to sugar-constraints`
 - **PR body**:
   ```
   ## Summary
-  - candy-sprinkles\Layout\Solver now delegates to candy-layout's LayoutSolver interface.
+  - candy-sprinkles\Layout\Solver now delegates to sugar-constraints's LayoutSolver interface.
   - Default solver: CassowarySolver. Fallback via SUGARCRAFT_LAYOUT_SOLVER=greedy env var.
   - GreedySolver is bit-equivalent to the previous candy-sprinkles impl; CassowarySolver may improve edge cases.
   - Fully back-compatible: every existing candy-sprinkles test passes unchanged.
@@ -73,4 +73,4 @@ Reference: `docs/repo_map_update.md` §369.3 (consolidation), §387.3 (string-ba
 
   Refs: docs/repo_map_step_10.md, docs/repo_map_update.md §369.3, §387.3
   ```
-- Commit subject: `candy-sprinkles: delegate Solver to candy-layout`.
+- Commit subject: `candy-sprinkles: delegate Solver to sugar-constraints`.

@@ -11,15 +11,15 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The docking layer's geometry plumbing, pinned below the frame.
  *
  * Phase 2 of pane-docking hands {@see TuiRenderer::renderSide()} a LIST of
  * panes per side — dock slots first, then the transiently-focused pane — and
- * stacks them at heights the candy-layout solver resolves. This file pins the
+ * stacks them at heights the sugar-constraints solver resolves. This file pins the
  * two private-static decisions that shape every stacked frame: which panes a
  * side paints, in what order, and how tall each stack slot is — including the
  * even-split fallback that runs when the degradation ladder has dropped the

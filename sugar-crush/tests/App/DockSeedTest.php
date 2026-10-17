@@ -11,8 +11,8 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The seed hand-off: from the legacy quarter-measure to real, resizable shares.

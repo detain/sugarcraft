@@ -11616,7 +11616,7 @@ prose sat above an unrelated declaration.
 | lane | lib | tip → pick | shipped | gate |
 |---|---|---|---|---|
 | v1 `ea16cf74a` | candy-scriptui | → `c887c1458` | 12/12 plan rows verified-stamped + 4.1 mis-file test relocation | **334T/694A** (rv-corrected +3T/+7A) |
-| v2 `30beda267` | candy-layout | → `86dd9807c` | Phase-5/6 `SolverEdgeCaseTest` 10T + MAX_FLOOR_RECLAIM const + docblocks; zero behavior bug | **157T/882A** |
+| v2 `30beda267` | candy-layout | → `86dd9807c` | Phase-5/6 `SolverEdgeCaseTest` 10T + MAX_FLOOR_RECLAIM const + docblocks; zero behavior bug | **157T/882A** | <!-- @rename-keep historical provenance -->
 | v3 `2cfd90bba` | sugar-bits | → `2d11ab830` | Table shrink-through-mutate + visibleRows memo (E736/3.3) + Tree twin + multisort/7.1 stamps + LEARNINGS | **509T/1066A** | <!-- @rename-keep historical provenance -->
 | v4 `926585f2b` | sugar-charts | → `7dfa8de45` | P2–P4 perf builds (Heatmap/BufferHelper/Legend/Sixel) + `Phase2PerfPinsTest`; render-dump md5-identical proof | **576T/1445A** (+6T) |
 | v5 `018739046` | candy-vt docs | → `3696b7bf7` | plan RE-DERIVATION: 22/31 non-actionable, 9-row surviving tail | docs-only | <!-- @rename-keep historical provenance -->

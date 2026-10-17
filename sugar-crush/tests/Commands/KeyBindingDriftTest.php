@@ -2221,8 +2221,8 @@ final class KeyBindingDriftTest extends TestCase
                 \SugarCraft\Crush\Tui\Renderer::chromeScanner()->clear();
                 (new \ReflectionProperty(App::class, 'chromeClickTracker'))->setValue(null, null);
                 $call = Message::assistant('done')->withToolResults([ToolResult::ok('Bash', 'output', 'call-1')]);
-                $dock = \SugarCraft\Layout\Dock\DockLayout::new('chat')
-                    ->withSlotAdded(\SugarCraft\Layout\Dock\Side::Right, 'tools');
+                $dock = \SugarCraft\Constraints\Dock\DockLayout::new('chat')
+                    ->withSlotAdded(\SugarCraft\Constraints\Dock\Side::Right, 'tools');
                 [$app] = $this->app()->withDock($dock)->withChat($this->chat([$call]))
                     ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(160, 40));
 

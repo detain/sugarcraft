@@ -367,7 +367,7 @@ Extract the common truncation-and-remeasure pattern from `padRight()` (lines 134
 
 **What is expected:**
 Remove unused path repositories:
-- `../candy-layout` — no usage in sugar-cli
+- `../sugar-constraints` — no usage in sugar-cli
 - `../sugar-async` — no async patterns
 - `../sugar-cellbuffer` — no buffer usage
 - `../sugar-input` — no input handling
@@ -387,7 +387,7 @@ Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (
 **Related code:** `sugar-cli/composer.json:50-107`
 
 **Investigation notes:**
-The `require` section only lists `candy-core` and `candy-sprinkles` as actual dependencies. The other path repos (`candy-layout`, `sugar-async`, `sugar-ansi-parser`, `sugar-input`, `sugar-cellbuffer`) are listed in `repositories[]` but not in `require[]`. These could be: (a) transitive deps of `candy-sprinkles` that need path repos for the closure, OR (b) scaffolding artifacts. The finding says "Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed." — need to verify whether any of these are transitive deps.
+The `require` section only lists `candy-core` and `candy-sprinkles` as actual dependencies. The other path repos (`sugar-constraints`, `sugar-async`, `sugar-ansi-parser`, `sugar-input`, `sugar-cellbuffer`) are listed in `repositories[]` but not in `require[]`. These could be: (a) transitive deps of `candy-sprinkles` that need path repos for the closure, OR (b) scaffolding artifacts. The finding says "Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed." — need to verify whether any of these are transitive deps.
 
 ---
 

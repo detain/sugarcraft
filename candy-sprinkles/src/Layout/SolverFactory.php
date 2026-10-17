@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sprinkles\Layout;
 
-use SugarCraft\Layout\CassowarySolver;
-use SugarCraft\Layout\GreedySolver;
-use SugarCraft\Layout\LayoutSolver;
+use SugarCraft\Constraints\CassowarySolver;
+use SugarCraft\Constraints\GreedySolver;
+use SugarCraft\Constraints\LayoutSolver;
 
 /**
  * Factory for creating a {@see LayoutSolver} instance.
@@ -29,7 +29,7 @@ final class SolverFactory
      *  - "cassowary" → CassowarySolver
      *  - otherwise   → GreedySolver (default)
      *
-     * candy-layout's CassowarySolver is deprecated: its simplex never
+     * sugar-constraints's CassowarySolver is deprecated: its simplex never
      * converged, so its `solve()` delegates wholly to GreedySolver (results
      * are identical — every constraint type, Ratio included, solves
      * correctly) and raises E_USER_DEPRECATED on every call.

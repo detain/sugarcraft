@@ -77,7 +77,7 @@ use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowRegistry;
-use SugarCraft\Layout\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\DockLayout;
 
 /**
  * Wires up the CLI's shared, side-effecting collaborators: backend
