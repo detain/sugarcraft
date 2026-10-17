@@ -362,18 +362,22 @@ nobody infers them from the shape of the code:
 - **`context:` is not consulted at the splice** — see
   [The `context:` field today](#the-context-field-today).
 
-### The TUI picker is not the canonical path
+### The TUI picker is a session-scoped body carry
 
 The skill picker (opened from the TUI via `SourceSkillCmd` →
 `OpenSkillPickerMsg` → `App::handleSelectSkill()`) enables the chosen skill **in
 memory for the running session only** — it writes no config key, so it does not
-survive a restart — and what it appends to `App::$enabledSkills` is the
-**registry** object, not a body-loaded one. Because registry entries are
-stage-1 manifests with empty content, the section that splice produces is a
-`## Skill:` heading with no body under it; the skill's description leaves the
-listing line, and the model's access to the actual text remains the `Skill` tool.
-Enabling through the picker today is a session-scoped change to what the
-interface shows, not a delivery of instructions.
+survive a restart. What it appends to `App::$enabledSkills` is still the
+**registry** object — a stage-1 manifest row with empty content — but that is
+no longer the end of the story: at every prompt build, `Skill::withBodyResolved()`
+grafts the body from the row's own `sourcePath`, so the spliced section carries
+the picked instructions rather than a bare `## Skill:` heading (ISS-035; the
+first picker fix shipped the empty row and the model saw nothing). A row whose
+source file has vanished also stays in the `<available-skills>` listing — an
+enabled skill is never invisible through both channels. Resolution happens at
+build time, not carry time, so a mid-session edit of the SKILL.md is reflected
+on the next turn. The `Skill` tool remains the model-invoked channel; the
+picker is the user-invoked one.
 
 ### Auto-matching a skill into the prompt is deliberately dormant
 

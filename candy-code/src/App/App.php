@@ -2230,7 +2230,10 @@ final class App implements Model
                 continue;
             }
 
-            $result .= $skill->systemPromptContribution();
+            // ISS-035: the picker enables stage-1 manifest rows whose content
+            // is empty by construction; graft the body from disk so this
+            // channel splices instructions, not a bare heading.
+            $result .= $skill->withBodyResolved()->systemPromptContribution();
         }
 
         return $result;

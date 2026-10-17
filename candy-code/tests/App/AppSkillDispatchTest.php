@@ -16,7 +16,9 @@ use SugarCraft\Code\App\OpenSkillPickerMsg;
 use SugarCraft\Code\App\SelectSkillMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
@@ -43,6 +45,12 @@ final class AppSkillDispatchTest extends TestCase
 
     private function skillFromYaml(string $frontmatter, string $name): Skill
     {
+        // ISS-035 review: this helper builds body-LOADED rows. That is the
+        // right shape for launch-config skills, but it MASKED the picker
+        // defect — the registry hands the picker stage-1 manifest rows whose
+        // content is ''. The picker regressions below therefore use
+        // manifestSkillOnDisk(), the production shape; this helper stays for
+        // the filter/dispatch pins that only care about frontmatter.
         return Skill::parse(
             "---\n{$frontmatter}\n---\n\nContent for {$name}.",
             $name
@@ -230,6 +238,157 @@ final class AppSkillDispatchTest extends TestCase
 
         // Assert
         $this->assertCount(1, $next->enabledSkills);
+    }
+
+    // -------------------------------------------------------------------------
+    // ISS-035 review fix — the picker's REAL fixture shape.
+    //
+    // skillFromYaml() builds body-loaded rows; the native tier registers
+    // stage-1 manifests with `content: ''` (SkillRegistry::
+    // registerFromManifest). The shipped carry spliced that empty row into
+    // the prompt as a bare `## Skill:` heading AND the P7.S3 exclusion
+    // dropped it from <available-skills> — invisible through both channels.
+    // These pins use the production registration path, so the masking
+    // fixture is now itself covered by its regression proof.
+    // -------------------------------------------------------------------------
+
+    /** @var list<string> */
+    private array $skillTempDirs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->skillTempDirs as $dir) {
+            if (is_file($dir . '/demo/SKILL.md')) {
+                unlink($dir . '/demo/SKILL.md');
+            }
+            if (is_dir($dir . '/demo')) {
+                rmdir($dir . '/demo');
+            }
+            if (is_dir($dir)) {
+                rmdir($dir);
+            }
+        }
+        $this->skillTempDirs = [];
+
+        parent::tearDown();
+    }
+
+    /**
+     * Registers a native-tier-shaped skill the way SkillManager's manifest
+     * walker does — frontmatter only, `content: ''` — with the real SKILL.md
+     * left on disk behind it.
+     *
+     * @return array{0: SkillRegistry, 1: string} the registry and the source path
+     */
+    private function manifestSkillOnDisk(): array
+    {
+        $dir = sys_get_temp_dir() . '/iss035-' . bin2hex(random_bytes(6));
+        mkdir($dir . '/demo', 0o700, true);
+        $this->skillTempDirs[] = $dir;
+        $path = $dir . '/demo/SKILL.md';
+        file_put_contents(
+            $path,
+            "---\ndescription: Demo skill\nuser-invocable: true\n---\n\nTHE-BODY-MARKER do the demo thing.\n"
+        );
+
+        $registry = new SkillRegistry();
+        $registry->registerFromManifest([
+            'name' => 'demo',
+            'description' => 'Demo skill',
+            'disableModelInvocation' => false,
+            'userInvocable' => true,
+            'context' => 'thread',
+            'paths' => [],
+            'sourcePath' => $path,
+        ]);
+
+        return [$registry, $path];
+    }
+
+    public function testThePickerEnablesTheContentlessManifestRowItself(): void
+    {
+        // Negative control for the masking fixture: the carry deliberately
+        // keeps the stage-1 identity — the body is resolved when the prompt
+        // is built, so a mid-session edit of the SKILL.md is never shadowed
+        // by a stale snapshot.
+        [$registry] = $this->manifestSkillOnDisk();
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withSkillPickerOptions(iterator_to_array($registry->getUserInvocable()));
+
+        [$next] = $app->update(new SelectSkillMsg('demo'));
+
+        $this->assertSame('demo', $next->enabledSkills[0]->name);
+        $this->assertSame('', $next->enabledSkills[0]->content);
+    }
+
+    public function testAContentlessPickerSkillStillRendersItsBodyFromDisk(): void
+    {
+        [$registry] = $this->manifestSkillOnDisk();
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withSkillPickerOptions(iterator_to_array($registry->getUserInvocable()));
+
+        [$next] = $app->update(new SelectSkillMsg('demo'));
+        $prompt = $next->applySkillsToSystemPrompt('Base prompt.');
+
+        $this->assertStringContainsString('## Skill:', $prompt);
+        $this->assertStringContainsString(
+            'THE-BODY-MARKER',
+            $prompt,
+            'the splice carries the picked instructions, not a bare heading'
+        );
+    }
+
+    public function testAContentlessPickerSkillStaysInTheListingAndRendersItsBody(): void
+    {
+        // End-to-end through the engine path — the exact shape of the RV3
+        // probe. Post-fix the model gets BOTH channels it used to lose:
+        // the grafted body in the enabled section and the level-1 line in
+        // <available-skills> (the P7.S3 exclusion fires only for rows that
+        // were enabled body-loaded, as the launch path always is).
+        [$registry] = $this->manifestSkillOnDisk();
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'ok')]);
+        $app = App::new($provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withSkillPickerOptions(iterator_to_array($registry->getUserInvocable()))
+            ->withChat(new Chat(
+                backend: EngineBackend::new($provider, 'test-model')->withSkillRegistry($registry)
+            ));
+
+        [$next] = $app->update(new SelectSkillMsg('demo'));
+        $next->chat->backend()->complete([Message::user('hello')]);
+        $prompt = (string) ($provider->requests[0]->systemPrompt ?? '');
+
+        $this->assertStringContainsString('THE-BODY-MARKER', $prompt);
+        $this->assertMatchesRegularExpression(
+            '/<available-skills>.*demo.*<\/available-skills>/s',
+            $prompt,
+            'an enabled skill is never invisible through both channels'
+        );
+    }
+
+    public function testABodylessSkillWithAVanishedSourceKeepsItsListingLine(): void
+    {
+        // Fail-soft pair: with no readable body there is no body to excuse
+        // the listing drop — the row stays advertised and the bare heading
+        // is the only thing spliced.
+        [$registry, $path] = $this->manifestSkillOnDisk();
+        unlink($path);
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'ok')]);
+        $app = App::new($provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withSkillPickerOptions(iterator_to_array($registry->getUserInvocable()))
+            ->withChat(new Chat(
+                backend: EngineBackend::new($provider, 'test-model')->withSkillRegistry($registry)
+            ));
+
+        [$next] = $app->update(new SelectSkillMsg('demo'));
+        $next->chat->backend()->complete([Message::user('hello')]);
+        $prompt = (string) ($provider->requests[0]->systemPrompt ?? '');
+
+        $this->assertStringNotContainsString('THE-BODY-MARKER', $prompt);
+        $this->assertMatchesRegularExpression('/<available-skills>.*demo.*<\/available-skills>/s', $prompt);
     }
 
     // -------------------------------------------------------------------------

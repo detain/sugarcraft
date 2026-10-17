@@ -1417,9 +1417,9 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
   [`docs/MEMORY.md`](docs/MEMORY.md).
 - **Skills** — `SKILL.md` files whose name and description ride the prompt and
   whose body the model loads with the `Skill` tool; `$name` in a prompt
-  attaches one for that turn, `Ctrl+S` picks one for the session and
-  `enabledSkills` makes one standing. See
-  [`docs/SKILLS.md`](docs/SKILLS.md).
+  attaches one for that turn, `Ctrl+S` picks one for the session — its body
+  splices into every following prompt — and `enabledSkills` makes one standing.
+  See [`docs/SKILLS.md`](docs/SKILLS.md).
 - **MCP** — the servers a trusted project's `.mcp.json` declares become `mcp__<server>__<tool>` tools; `/mcp` lists the servers and manages
   their auth, and `candy-code mcp list|trust|import` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
 - **Workflows** — staged multi-agent pipelines in YAML or PHP, run with

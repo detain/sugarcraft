@@ -4682,7 +4682,28 @@ final class Runtime
         // carried none, so a configured budget could never reach this splice).
         $enabledSkillNames = [];
         $deferrals = [];
-        foreach (self::planEnabledSkills($app->enabledSkills, $app->compactorConfig ?? \SugarCraft\Code\Context\CompactorConfig::new()) as $planned) {
+        // ISS-035: a stage-1 manifest row (the native tier, and everything the
+        // Ctrl+S picker enables) carries `content: ''`. Resolve the body from
+        // its own sourcePath BEFORE planning, so the spliced section carries
+        // the instructions — with their real token cost — instead of a bare
+        // `## Skill:` heading. Unresolvable rows stay bodyless and fail soft.
+        $plannedSkills = [];
+        foreach ($app->enabledSkills as $enabledSkill) {
+            if ($enabledSkill instanceof \SugarCraft\Code\Skills\Skill && $enabledSkill->content !== '') {
+                // P7.S3 exclusion, narrowed by ISS-035: a name leaves the
+                // level-1 listing only when it was enabled WITH its body
+                // attached (the launch path eager-loads bodies, so canonical
+                // rows land here). A bodyless row whose graft also failed
+                // contributes only a heading; dropping its listing line too
+                // would make the skill invisible through BOTH channels — the
+                // exact regression the picker shipped. It stays advertised.
+                $enabledSkillNames[] = $enabledSkill->name;
+            }
+            $plannedSkills[] = $enabledSkill instanceof \SugarCraft\Code\Skills\Skill
+                ? $enabledSkill->withBodyResolved()
+                : $enabledSkill;
+        }
+        foreach (self::planEnabledSkills($plannedSkills, $app->compactorConfig ?? \SugarCraft\Code\Context\CompactorConfig::new()) as $planned) {
             $skill = $planned['skill'];
 
             // RECORDED, not only rendered (audit R1): a deferred body used to
@@ -4702,7 +4723,6 @@ final class Runtime
                 Stability::PerTurn,
                 "\n\n" . $planned['contribution'],
             );
-            $enabledSkillNames[] = $skill->name;
         }
         $this->skillDeferrals = $deferrals;
 

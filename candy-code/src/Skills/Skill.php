@@ -260,4 +260,64 @@ final readonly class Skill
             requires: $this->requires,
         );
     }
+
+    /**
+     * The same skill with its body replaced. Kept narrow on purpose: ISS-035
+     * only ever grafts a body read from the skill's own `sourcePath` onto the
+     * registry-verified identity (name, tier badge, `paths:`, `requires:`) —
+     * re-resolving the whole object through {@see fromFile()} would silently
+     * re-trust frontmatter fields the stage-1 reader already refused.
+     */
+    public function withContent(string $content): self
+    {
+        return new self(
+            name: $this->name,
+            description: $this->description,
+            userInvocable: $this->userInvocable,
+            disableModelInvocation: $this->disableModelInvocation,
+            allowedTools: $this->allowedTools,
+            disallowedTools: $this->disallowedTools,
+            model: $this->model,
+            effort: $this->effort,
+            context: $this->context,
+            paths: $this->paths,
+            content: $content,
+            sourcePath: $this->sourcePath,
+            source: $this->source,
+            origin: $this->origin,
+            requires: $this->requires,
+        );
+    }
+
+    /**
+     * Resolve the body of a stage-1 manifest skill from its own on-disk
+     * source (ISS-035).
+     *
+     * `SkillRegistry::registerFromManifest()` builds rows with `content: ''`
+     * — the manifest pass carries only the cheap frontmatter. When such a row
+     * reaches the prompt (the `Ctrl+S` picker enables exactly this object), a
+     * bare `## Skill:` heading would splice in place of instructions. The
+     * body is grafted from `sourcePath` here so every channel that renders a
+     * contribution sees the text the user picked.
+     *
+     * Fail-soft by contract: a skill that already has a body, names no source
+     * file, or whose source cannot be read returns `$this` unchanged — the
+     * prompt build must never throw over a vanished SKILL.md, and callers
+     * keep the listing-visible fallback for a bodyless row (see the exclusion
+     * note in `Runtime::systemPromptSections()`).
+     */
+    public function withBodyResolved(): self
+    {
+        if ($this->content !== '' || $this->sourcePath === '' || !is_file($this->sourcePath)) {
+            return $this;
+        }
+
+        try {
+            $resolved = self::fromFile($this->sourcePath);
+        } catch (\Throwable) {
+            return $this;
+        }
+
+        return $resolved->content === '' ? $this : $this->withContent($resolved->content);
+    }
 }
