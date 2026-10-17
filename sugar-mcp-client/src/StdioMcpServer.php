@@ -1498,16 +1498,6 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * Extract tool definitions from a tools/list response through the
-     * well-typedness gate. Three nested guards, each load-bearing: the
-     * container (`result.tools` may be any JSON type), the entries (mixed
-     * arrays arrive in the wild), and the per-definition type check inside
-     * McpTool::tryFromArray.
-     *
-     * @param array<string,mixed> $response inspection-view array
-     * @return list<McpTool>
-     */
-    /**
      * Gate a `tools/list` reply and FOLLOW ITS CURSOR until the roster is
      * whole (ISS-093(b); the same walk candy-code's HttpMcpServer does — the
      * spec says `tools/list` MAY paginate, and caching the FIRST page as the
@@ -1581,6 +1571,16 @@ final class StdioMcpServer implements McpServer
         return $this->parseTools($data ?? []);
     }
 
+    /**
+     * Extract tool definitions from a tools/list response through the
+     * well-typedness gate. Three nested guards, each load-bearing: the
+     * container (`result.tools` may be any JSON type), the entries (mixed
+     * arrays arrive in the wild), and the per-definition type check inside
+     * McpTool::tryFromArray.
+     *
+     * @param array<string,mixed> $response inspection-view array
+     * @return list<McpTool>
+     */
     private function parseTools(array $response): array
     {
         $tools = [];
