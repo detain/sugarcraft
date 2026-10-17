@@ -9,7 +9,7 @@ Verdict: campaign done. Master pushed at `d8845b67a` (`rename: complete`), origi
 - **C (13 renames)** — components; pre-F chain.
 - **D (7 renames)** — media/rendering; pre-F chain.
 - **E (13 renames)** — foundation; pre-F chain.
-- **F (2 renames)** — sugar-crush → candy-code (+ web); weld `aab9eacc9`, R8/R9-F `156688b84`, review-fixes `9d0fd549b`.
+- **F (2 renames)** — sugar-crush → candy-code (+ web); weld `aab9eacc9`, R8/R9-F `156688b84`, review-fixes `9d0fd549b`. <!-- @rename-keep historical provenance -->
 - **9 docs/website/rulebook/agent-configs** — `a54e105b4` · `f82d19557` · `15bd64e2e` · `51f4249cf`.
 - **10 finalization** — automatable CLOSED `67564524c` (archives, metadata, checklist, Packagist probe loop; disposition in plan_rename.md).
 - **11 externals** — webhooks `5f1eb46` · php-dup-finder `24841ff` (stayed VCS per owner gate) · phlix `f2f85e0` + `5ba0c6b10` (lock regen + phar rebuild, pushed) · provirted OWNER-GATED.

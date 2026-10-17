@@ -53,10 +53,11 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 - **Batches A–F:** all landed, welded, R8/R9 fired — A 3 · B 12 · C 13 · D 7 · E 13 · F 2 (chain review-clean at 9d0fd549b).
 - **Packagist:** 51/51 new packages registered + indexed (visit-3 sweep 16/16 landed, zero re-fires; deferred-406 CLOSED). Old packages ride the 52-row human abandon checklist.
 - **CI:** all 3 workflows green at 8d13ebc49 (root-closure self-healed post-index; split repos carry no workflows — structural, monorepo-CI only).
-- **Battery:** 60 libs clean vs baseline — minesweeper 1F+4W and dashboard 2F standing pre-existing, candy-vcr 4,213A = +4A tracked rename-lane additions, candy-top 2,108T = base 2,107 + 1 static method (no regression; the 2,110 "baseline" was a `wc -l` phantom, corrected in 501384aab).
+- **Battery:** 60 libs clean vs baseline — minesweeper 1F+4W and dashboard 2F standing pre-existing, candy-vcr 4,213A = +4A tracked rename-lane additions, candy-top 2,108T = base 2,107 + 1 added test (the literal-colon-BDF driver-slot pin from 143b615bd; no regression; the 2,110 "baseline" was a `wc -l` phantom, corrected in 501384aab).
 - **Floors:** candy-code K=8 22,571T/424,942A (+16 assertion wobble by design) · tools/tests 435T/2147A (PrefixPolicyTest included) · residue 52 entries / 0 findings.
 - **Guards at closeout tip:** `check-rename-residue --all-done`, `gen-docs --check`, `gen-ansi-readme --check`, `check-path-repos --no-lib-path-repos`, `check-child-lifetimes` — all rc0.
 - **Owner-pending:** 52 Packagist abandons (web UI) · provirted 4 decisions · teams-chat-bot deployed `.env` slug-list check · oc.7z re-supply. Full list: `prompt_kit/briefs/rename-5-P12-closeout/REPORT.md`.
+- **Follow-up 2026-10-17:** provirted 11.4 closed (e2829a3 @995c35276); residue guard re-green — closeout REPORT.md:12 historical mention tagged @rename-keep; owner-pending now 3 items (Packagist abandons · teams-chat-bot .env · oc.7z).
 
 Per-lib progress inside Batches 3–8 is tracked in the `status` field of `tools/renames.json`
 (`pending` → `renamed` → `remote-done` → `packagist-done`).
