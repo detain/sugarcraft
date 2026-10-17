@@ -315,12 +315,29 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         //
         // The AWS SDK talks to Bedrock over Guzzle too, it just takes its
         // transport options as `http` rather than accepting a client. Same
-        // policy, same reason - see HttpClientDefaults. Still no total
-        // `timeout`: a Bedrock completion is as long-running as any other.
+        // policy, same reason - see HttpClientDefaults. ISS-075 corrected two
+        // stale claims here: ConverseStream DOES set `@http.stream` (the SDK
+        // reassembles the event stream through StreamHandler), so a bare
+        // `connect_timeout` was being discarded by that transport and
+        // `default_socket_timeout` (60s, unbounded at -1) governed connect,
+        // head and every body read; and the SDK's own legacy retry default
+        // (3 attempts) STACKED on the engine's 3, making nine HTTP attempts
+        // out of one failing turn. `retries => 0` hands the retry policy to
+        // TransientFailure alone, where the backoff, the 429 handling and the
+        // transcript notice live. NO client-level `timeout`: unlike the
+        // streaming path, the batch `converse()` call is curl, where
+        // `timeout` is a TOTAL deadline - exactly the abort-a-long-completion
+        // bug this file's whole docblock exists to prevent. The header bound
+        // rides per-operation on `converseStream()` instead (its @http merge
+        // lands only on requests the SDK flags stream=true).
         $client = new BedrockRuntimeClient([
             'region' => $region,
             'version' => 'latest',
-            'http' => ['connect_timeout' => self::connectTimeoutSeconds()],
+            'retries' => 0,
+            'http' => [
+                'connect_timeout' => self::connectTimeoutSeconds(),
+                'read_timeout' => self::streamReadIdleTimeoutSeconds(),
+            ],
         ]);
 
         return new self($client, $region, $model ?? self::DEFAULT_MODEL, $modelPrices, $promptCache);
@@ -638,7 +655,14 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
             // token arrives as a contentBlockDelta event (not the legacy
             // `completion` field). The SDK's EventParsingIterator hands each
             // one over already shaped as [<eventName> => <payload>].
-            $result = $this->client->converseStream($params);
+            // ISS-075: the SDK sets `@http.stream = true` for this operation,
+            // so StreamHandler serves it - which discards connect_timeout and
+            // needs the explicit header bound. The `@http` key merges over
+            // the client defaults (AwsClient::getCommand) and touches THIS
+            // operation only, never a batch converse().
+            $result = $this->client->converseStream($params + [
+                '@http' => ['timeout' => self::streamHeaderTimeoutSeconds()],
+            ]);
             $stream = $result->get('stream');
 
             foreach ($stream as $event) {

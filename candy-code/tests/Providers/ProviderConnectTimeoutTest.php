@@ -11,7 +11,9 @@ use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
+use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\BedrockProvider;
+use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\ProviderFactory;
@@ -144,10 +146,12 @@ final class ProviderConnectTimeoutTest extends TestCase
      * The AWS SDK takes transport options as an `http` array rather than a
      * client instance; it resolves them into `AwsClient::$defaultRequestOptions`.
      *
-     * Bedrock needs nothing beyond the plain `connect_timeout`: the SDK never
-     * sets Guzzle's `stream` option (`ConverseStream` reassembles its event
-     * stream from a buffered body), so its requests stay on the curl handler,
-     * which honours `connect_timeout` directly.
+     * ISS-075: `retries => 0` hands the ladder to TransientFailure (3 SDK ×
+     * 3 engine attempts made nine per failing turn), and `read_timeout`
+     * replaces `default_socket_timeout` for SSE gaps. NO `timeout` here:
+     * these defaults reach the BATCH converse() too, where curl would read it
+     * as a total deadline - the header bound rides the stream operation only
+     * (pinned by testBedrockStreamOperationCarriesTheHeaderBoundAndBatchDoesNot).
      */
     public function testBedrockPassesTheConnectTimeoutIntoTheAwsSdksHttpOptions(): void
     {
@@ -160,7 +164,69 @@ final class ProviderConnectTimeoutTest extends TestCase
 
         $this->assertArrayHasKey('connect_timeout', $options);
         $this->assertGreaterThan(0.0, $options['connect_timeout']);
-        $this->assertArrayNotHasKey('timeout', $options);
+        $this->assertFalse(
+            $awsClient->getHandlerList()->hasMiddleware('retry'),
+            'the SDK ladder must be off; TransientFailure owns retries (ISS-075)'
+        );
+        // Non-vacuity control on the SAME SDK version: without the zero, the
+        // legacy default wires the retry middleware right back in.
+        $control = new \Aws\BedrockRuntime\BedrockRuntimeClient(['region' => 'us-east-1', 'version' => 'latest']);
+        $this->assertTrue(
+            $control->getHandlerList()->hasMiddleware('retry'),
+            'the SDK default no longer installs a retry middleware - this probe stopped discriminating (ISS-075)'
+        );
+        $this->assertGreaterThan(600.0, $options['read_timeout'] ?? 0.0, 'the idle body-read bound mirrors streamTransportBounds; default_socket_timeout must not govern SSE gaps');
+        $this->assertArrayNotHasKey('timeout', $options, 'a client-level timeout would be a TOTAL deadline on the curl batch path (ISS-075)');
+    }
+
+    /**
+     * ISS-075, second half: the header bound lands on ConverseStream (whose
+     * requests the SDK flags `@http.stream = true`, so StreamHandler serves
+     * them and discards connect_timeout outright) and NOT on the batch
+     * converse().
+     */
+    public function testBedrockStreamOperationCarriesTheHeaderBoundAndBatchDoesNot(): void
+    {
+        $client = new class (['service' => 'bedrock-runtime', 'region' => 'us-east-1', 'version' => 'latest']) extends \Aws\BedrockRuntime\BedrockRuntimeClient {
+            /** @var array<string, array<string, mixed>> */
+            public array $capturedOps = [];
+
+            public function __call($name, $args)
+            {
+                $this->capturedOps[(string) $name] = $args[0] ?? [];
+
+                return new \Aws\Result(['stream' => new \ArrayIterator([])]);
+            }
+        };
+
+        $provider = new BedrockProvider($client, 'us-east-1');
+
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            messages: [new UserMessage('Hello')],
+        )));
+        $this->assertSame(
+            120.0,
+            $client->capturedOps['converseStream']['@http']['timeout'] ?? null,
+            'the streaming operation must carry the decoupled header bound (ISS-075)',
+        );
+
+        try {
+            $provider->complete(new CompleteRequest(
+                model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+                messages: [new UserMessage('Hello')],
+            ));
+        } catch (\Throwable) {
+            // The canned Result is not a full converse() payload; the pin is
+            // about what reached the client, captured before parsing died.
+        }
+
+        $this->assertArrayHasKey('converse', $client->capturedOps, 'batch complete() must have reached the client');
+        $this->assertArrayNotHasKey(
+            '@http',
+            $client->capturedOps['converse'],
+            'the batch converse() ride must not inherit the stream header bound - on curl that key is a TOTAL deadline (ISS-075)',
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -463,6 +529,30 @@ final class ProviderConnectTimeoutTest extends TestCase
             // The exemption is for a SHORT bound: pin that the file names its
             // own discovery budget rather than an arbitrary figure.
             $this->assertStringContainsString('DISCOVERY_TIMEOUT_SECONDS', $source, $name . ' lost its named discovery budget');
+
+            return;
+        }
+
+        if ($name === 'BedrockProvider.php') {
+            // ISS-075 carve-in: the ONE legal timeout spelling on this file is
+            // the per-operation header bound on converseStream (which the SDK
+            // routes to StreamHandler, where it is a head-wait bound, never a
+            // total). A client-level `http['timeout']` would reach the curl
+            // batch converse() as a total deadline, and an arbitrary figure
+            // would drift from the shared accessor - both must redden here.
+            $this->assertSame(
+                1,
+                substr_count($source, "'timeout' => self::streamHeaderTimeoutSeconds()"),
+                'Bedrock must carry exactly the one named streamHeaderTimeoutSeconds() bound ISS-075 added',
+            );
+
+            foreach (self::TOTAL_TIMEOUT_SPELLINGS as $pattern) {
+                $this->assertDoesNotMatchRegularExpression(
+                    $pattern,
+                    str_replace("'timeout' => self::streamHeaderTimeoutSeconds()", '', $source),
+                    $name . ' sets a timeout other than the named stream header bound',
+                );
+            }
 
             return;
         }

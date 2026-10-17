@@ -101,7 +101,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.streamHeaderTimeoutSeconds.label'))
                 ->withHelp('Seconds a connected streaming server may take to send its response headers; never a total request timeout.')
                 ->withReaderSymbol(CustomProvider::class . '::streamHeaderTimeoutSeconds')
-                ->withReadBy('`HttpClientDefaults::streamHeaderTimeoutSeconds()`, per streaming request; `BedrockProvider::create()`, into the SDK http bounds'),
+                ->withReadBy('`HttpClientDefaults::streamHeaderTimeoutSeconds()`, per streaming request; `BedrockProvider::completeStream()`, per-operation on ConverseStream'),
             SettingDefinition::new('providerRetryAttempts', SettingType::Int, TransientFailure::MAX_ATTEMPTS)
                 ->withCategory(SettingCategory::Advanced)
                 ->withRiskClass(RiskClass::Tuning)
