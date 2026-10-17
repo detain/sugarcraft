@@ -355,6 +355,10 @@ final class UsageWiringTest extends TestCase
             'withToolResults' => $base->withToolResults([new \SugarCraft\Code\ToolResult('i', 'r')]),
             'withReasoning' => $base->withReasoning('because'),
             'withImage' => $base->withImage('bytes', 'kitty'),
+            // ISS-097 (round W2): the error-flag row that paints a turn as a
+            // failure is still the turn that was billed — the flag and the
+            // usage ride the same clone.
+            'withError' => $base->withError(),
             // E707 (round 81): the seventh self-returning copy — the ceiling
             // verdict and the bill travel together or both vanish.
             'withLengthStopped' => $base->withLengthStopped(true),

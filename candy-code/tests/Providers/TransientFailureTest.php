@@ -616,6 +616,7 @@ final class TransientFailureTest extends TestCase
         );
 
         $slept = [];
+        $startedAt = microtime(true);
         TransientFailure::backoff(1, static function (int $microseconds) use (&$slept): void {
             $slept[] = $microseconds;
             // The sleeper must PAY its slice in real time: the loop's deadline
@@ -623,9 +624,15 @@ final class TransientFailureTest extends TestCase
             // across the two seconds (measured: OOM before the first assert).
             usleep($microseconds);
         }, null, $failure);
+        $elapsed = microtime(true) - $startedAt;
 
         $this->assertNotEmpty($slept);
-        $this->assertGreaterThanOrEqual(2_000_000, array_sum($slept), 'the whole Retry-After wait was not honoured');
+        // The deadline law re-arms each slice from the CLOCK, so a loaded box
+        // can shave loop overhead off the LAST slice's argument (measured:
+        // 1,999,999 under K=8) — the sum is a floor up to a millisecond of
+        // scheduling, never exact. The wall wait is the load-bearing claim.
+        $this->assertGreaterThanOrEqual(1_999_000, array_sum($slept), 'the whole Retry-After wait was not honoured');
+        $this->assertGreaterThanOrEqual(1.999, $elapsed, 'the two-second wait did not actually elapse');
         $this->assertLessThanOrEqual(2_100_000, array_sum($slept), 'the wait ran past the server instruction plus slice rounding');
     }
 

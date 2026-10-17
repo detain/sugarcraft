@@ -849,7 +849,7 @@ final class RuleLoaderTest extends TestCase
     /** @return string repo root whose single project tier holds the fixture set */
     private function scopedRulesRepo(): string
     {
-        $root = $this->sandbox . '/repo-models-' . uniqid();
+        $root = $this->sandbox . '/repo-models-' . uniqid('', true);
         $rules = $root . '/.candy-code/rules';
         mkdir($rules, 0o755, true);
         $this->emitRule($rules . '/1-unscoped.md', "---\nname: unscoped\n---\nU\n");
