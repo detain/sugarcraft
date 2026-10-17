@@ -157,7 +157,9 @@ final class GrepInstructionWiringTest extends TestCase
         $content = $this->grep(new Grep($this->dir, 400, new InstructionFileLoader($this->dir)));
 
         self::assertStringContainsString('/sub/a.php:1:', $content, 'the hit must survive an oversize CLAUDE.md');
-        self::assertStringContainsString('BIG-RULE', $content);
+        // ISS-017: at this cap the framed body clips to its open line, which names
+        // the governing file exactly — the label the heading proxy stood for.
+        self::assertStringContainsString('/sub/CLAUDE.md">', $content);
     }
 
     /**
@@ -250,7 +252,10 @@ final class GrepInstructionWiringTest extends TestCase
             if (str_contains($content, '/' . $d . '/' . self::hitFileName($d) . ':')) {
                 $visible[] = $d;
             }
-            if (str_contains($content, 'RULE-' . strtoupper($d))) {
+            // ISS-017: a clipped framed body keeps its open line, so a rule counts
+            // as ANNOUNCED when its governing file is named in the section — the
+            // heading form appears only when the whole frame fits.
+            if (str_contains($content, 'RULE-' . strtoupper($d)) || str_contains($content, '/' . $d . '/CLAUDE.md">')) {
                 $announced[] = $d;
             }
         }
@@ -281,7 +286,11 @@ final class GrepInstructionWiringTest extends TestCase
                 ->execute(['id' => 'r', 'file_path' => $this->dir . '/' . $d . '/' . self::hitFileName($d)])
                 ->content();
 
-            self::assertStringContainsString('RULE-' . strtoupper($d), $read, "{$d}'s rule was retired unseen");
+            self::assertStringContainsString(
+                '/' . $d . '/CLAUDE.md">',
+                $read,
+                "{$d}'s rule was retired unseen (ISS-017: the open line is the floor guarantee; the heading needs room)",
+            );
         }
     }
 

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\InstructionFileLoader;
+use SugarCraft\Code\Tests\Support\FramedOnTouchTrait;
 
 /**
  * Roadmap 5.14j: other agents' instruction-file spellings — Gemini CLI's
@@ -14,6 +15,8 @@ use SugarCraft\Code\Context\InstructionFileLoader;
  */
 final class InstructionAliasTest extends TestCase
 {
+    use FramedOnTouchTrait;
+
     private string $tempDir;
 
     private string $repoRoot;
@@ -110,7 +113,7 @@ final class InstructionAliasTest extends TestCase
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
-        self::assertSame('NESTEDGEMINI', $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
+        self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/GEMINI.md', 'NESTEDGEMINI'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
         self::assertNull($loader->loadForPath($this->repoRoot . '/pkg/src/a.php'), 'injected at most once');
     }
 
@@ -122,8 +125,8 @@ final class InstructionAliasTest extends TestCase
 
         $loader = new InstructionFileLoader($this->repoRoot);
 
-        self::assertSame('NESTEDCLAUDE', $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
-        self::assertSame('NESTEDCURSOR', $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
+        self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/CLAUDE.md', 'NESTEDCLAUDE'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
+        self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/.cursorrules', 'NESTEDCURSOR'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
     }
 
     public function testAnAncestorAliasIsReadFromTheEnclosingCheckout(): void

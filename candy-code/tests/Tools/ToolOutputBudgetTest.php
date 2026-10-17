@@ -249,15 +249,23 @@ final class ToolOutputBudgetTest extends TestCase
 
     /**
      * A marker naming no subject tells the model that rules exist and not
-     * which. The heading survives even when nothing else does.
+     * which. ISS-017 moved the label that carries this guarantee: the surviving
+     * first line is now the framing's open fence, whose path attribute names the
+     * EXACT governing file — strictly better than the heading's claim to be it.
+     * What survives in every case is a balanced block that names its subject;
+     * the heading itself only reaches the transcript once the open line and the
+     * authority line fit under the room.
      */
-    public function testTheHeadingOfAClippedRuleSurvives(): void
+    public function testTheGoverningFileOfAClippedRuleSurvives(): void
     {
         $this->seedOversizeInstructions();
         $this->seedMatches(5);
 
-        self::assertStringContainsString('BIG-RULE', $this->grep(800));
-        self::assertStringContainsString('BIG-RULE', $this->glob(800));
+        foreach ([$this->grep(800), $this->glob(800)] as $content) {
+            self::assertStringContainsString('/sub/CLAUDE.md">', $content, 'the clipped entry must name the file that governs the shown path');
+            self::assertStringContainsString("</project-instructions>", $content, 'and the provenance block stays closed');
+            self::assertStringNotContainsString('BIG-RULE', $content, 'the recorded cost of the framing at this cap: the open line consumes the kept head, so the heading no longer fits');
+        }
     }
 
     /**
@@ -433,14 +441,14 @@ final class ToolOutputBudgetTest extends TestCase
      * reaches: the marker inside it is sized at `PHP_INT_MAX` in both slots,
      * 120 bytes, where the marker for a 9,611-byte `CLAUDE.md` is 90. What the
      * floor prices is an entry clipped all the way down to its bounded head,
-     * and on every fixture in this file that costs 212 bytes — head 120, the
+     * and on every fixture in this file that costs 237 bytes — head 120, the
      * newline after it, a 90-byte marker, the newline before the next entry —
      * against a 242-byte reservation.
      *
      * THAT SLACK IS EXACTLY WHY NO OUTPUT ASSERTION REACHES IT. Dropping the
      * two `+ 1` the derivation below spells out — the newline after the kept
-     * head, and the newline `implode()` puts between entries — leaves 240,
-     * and 240 still covers every entry a real file can produce, so both bounds
+     * head, and the newline `implode()` puts between entries — leaves 265,
+     * and 265 still covers every entry a real file can produce, so both bounds
      * asserted in {@see testTheSectionAccountingHoldsOverAnAdversarialTree()}
      * stay green. MEASURED: that mutation changed the output at 175 of 29,025
      * (fixture, cap) pairs swept one cap at a time and violated NEITHER bound
@@ -480,10 +488,11 @@ final class ToolOutputBudgetTest extends TestCase
             + 2 * strlen((string) PHP_INT_MAX);
 
         $head = (new \ReflectionClassConstant(Glob::class, 'INSTRUCTION_HEAD_BYTES'))->getValue();
+        $close = "\n" . (new \ReflectionClassConstant(Glob::class, 'INSTRUCTION_FENCE_CLOSE'))->getValue();
         $floor = (new \ReflectionMethod(Glob::class, 'instructionBodyFloor'))->invoke(new Glob());
 
         self::assertSame(
-            $head + 1 + $widest + 1,
+            $head + 1 + $widest + 1 + strlen($close),
             $floor,
             'the entry floor must cover a maximally clipped body: its head, the newline after it, '
             . 'its marker at the marker\'s longest, and the newline implode() puts before the next entry',
@@ -794,11 +803,13 @@ final class ToolOutputBudgetTest extends TestCase
      * better than none. Worse, it made a smaller budget produce a BETTER
      * answer, because only an empty window took the head path at all.
      *
-     * MEASURED over the fixture below at a $maxBytes of 400: the room left
-     * after the marker is 9 bytes, so the fragment is 9 'H's, where the head
-     * carries 120 and reaches the marker 60 bytes in.
+     * MEASURED over the fixture below at a $maxBytes of 400 before ISS-017: the
+     * room left after the marker is 9 bytes, so the fragment is 9 'H's, where
+     * the head carries 120 and reaches the marker 60 bytes in. The fixture keeps
+     * that geometry — the document heading still buries a marker 60 bytes deep —
+     * and the assertion moved from the heading to the open line it now protects.
      */
-    public function testAHeadingLongerThanTheRoomIsKeptToTheHeadNotToTheRoom(): void
+    public function testTheClippedHeadCarriesTheWholeOpenLineNotAFragment(): void
     {
         file_put_contents(
             $this->dir . '/sub/CLAUDE.md',
@@ -812,8 +823,14 @@ final class ToolOutputBudgetTest extends TestCase
                 ->execute(['file_path' => $this->dir . '/sub/target.php'])
                 ->content();
 
-            self::assertStringContainsString('HEADING-TAIL', $content, "at maxBytes $cap");
+            // ISS-017 moved the head the fallback protects: it is the framing's
+            // open line now, and the guarantee is that it arrives WHOLE (closed
+            // by its `">`) rather than as a bytes-deep fragment of markup — a
+            // half-attribute opener is worse than a heading fragment was, and
+            // the marker below still says how much of the document fell off.
+            self::assertStringContainsString('/sub/CLAUDE.md">', $content, "at maxBytes $cap: the open line must survive to its close quote, not as a fragment");
             self::assertStringContainsString('instructions truncated:', $content, "at maxBytes $cap");
+            self::assertStringEndsWith("</project-instructions>\n1: <?php", $content, "at maxBytes $cap: the provenance block closes before the file resumes");
         }
     }
 
@@ -1279,7 +1296,8 @@ final class ToolOutputBudgetTest extends TestCase
             'the page at its FULL cap, then its footer, then the skill channel, then the rule '
                 . 'channel, byte for byte, with nothing cut from the file to pay for either',
         );
-        self::assertStringStartsWith("# BIG-RULE\n", $content, 'the instruction body leads, as on every other disposition');
+        self::assertStringStartsWith('<project-instructions path="' . $this->dir . '/sub/CLAUDE.md">', $content, 'the framing fence leads, as on every other disposition (ISS-017)');
+        self::assertStringContainsString("# BIG-RULE\n", $content, 'and the document body rides inside it');
 
         // The instruction section's own share of the accounting, read off the total
         // rather than written down: one byte of separator separates it from the tail.

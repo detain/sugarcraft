@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\InstructionFileLoader;
+use SugarCraft\Code\Tests\Support\FramedOnTouchTrait;
 
 /**
  * The checkout boundary on {@see InstructionFileLoader}'s reads.
@@ -54,6 +55,8 @@ use SugarCraft\Code\Context\InstructionFileLoader;
  */
 final class InstructionFileLoaderContainmentTest extends TestCase
 {
+    use FramedOnTouchTrait;
+
     /** The stand-in for "everything", holding both the fake checkout and the fake secrets. */
     private string $sandbox;
 
@@ -233,7 +236,10 @@ final class InstructionFileLoaderContainmentTest extends TestCase
 
         // A refusal skips the ENTRY, not the walk — the legitimate ancestor
         // instruction file one level up is still delivered.
-        $this->assertSame('# src conventions', $result);
+        $this->assertSame(
+            self::framedOnTouch($this->repoRoot . '/src/CLAUDE.md', '# src conventions'),
+            $result,
+        );
     }
 
     public function testLoadForPathStillFindsALegitimateNestedFile(): void
@@ -241,7 +247,7 @@ final class InstructionFileLoaderContainmentTest extends TestCase
         file_put_contents($this->repoRoot . '/src/CLAUDE.md', '# src conventions');
 
         $this->assertSame(
-            '# src conventions',
+            self::framedOnTouch($this->repoRoot . '/src/CLAUDE.md', '# src conventions'),
             (new InstructionFileLoader($this->repoRoot))->loadForPath($this->repoRoot . '/src/Component.php'),
         );
     }
@@ -386,7 +392,7 @@ final class InstructionFileLoaderContainmentTest extends TestCase
         symlink($this->repoRoot . '/a/b/nested', $this->repoRoot . '/spelled');
 
         $this->assertSame(
-            '# A-GOVERNS',
+            self::framedOnTouch($this->repoRoot . '/a/CLAUDE.md', '# A-GOVERNS'),
             (new InstructionFileLoader($this->repoRoot))
                 ->loadForPath($this->repoRoot . '/spelled/Component.php'),
         );

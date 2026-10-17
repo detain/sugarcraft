@@ -600,6 +600,17 @@ trait TruncatesOutput
     private const INSTRUCTION_HEAD_BYTES = 120;
 
     /**
+     * The closing fence every on-touch instruction body ends with, as built by
+     * {@see \SugarCraft\Code\Context\InstructionFileLoader::frameOnTouch()}
+     * (ISS-017). The clip keeps it paired with its opener: a body clipped
+     * mid-way still CLOSES its own provenance block, so the truncation marker
+     * lands inside the fence (where it belongs — it is about that document)
+     * rather than loose in the transcript, and the fence open/close counts a
+     * reader model uses to find section bounds survive the clip.
+     */
+    private const INSTRUCTION_FENCE_CLOSE = '</project-instructions>';
+
+    /**
      * Bound one instruction-file body to $budget, announcing what was cut.
      *
      * $budget <= 0 disables the bound, matching {@see truncateOutput()}. NO
@@ -639,11 +650,29 @@ trait TruncatesOutput
         }
 
         $total = strlen($text);
+        // ISS-017 frame-awareness: when the body carries its provenance close,
+        // the close is structural rather than content — reserve its 25 bytes
+        // off the budget BEFORE computing the clip, size the marker against the
+        // INTERIOR total (the model is told how much of the document was
+        // dropped, not how much markup survives), and re-append the close
+        // behind the marker so it always lands inside the fence it closes.
+        // The clipped interior can never come back empty of an opener: the
+        // first line of a framed body is the open fence itself, and the head
+        // fallback below keeps a bounded piece of exactly that line, so the
+        // close never stands alone.
+        $close = "\n" . self::INSTRUCTION_FENCE_CLOSE;
+        $framed = str_ends_with($text, $close);
+        if ($framed) {
+            $total -= strlen($close);
+            $text = substr($text, 0, -strlen($close));
+        }
+
         // Sized with $total in both slots for the reason truncateMerged() does
         // it: the marker is part of what the model receives, so a budget that
         // excludes it is not the bound it claims to be, and the dropped count
         // can never exceed the total.
-        $room = $budget - (strlen($this->instructionTruncationMarker($total, $total)) + 1);
+        $room = ($framed ? $budget - strlen($close) : $budget)
+            - (strlen($this->instructionTruncationMarker($total, $total)) + 1);
         $clip = self::clipToLine($text, max(0, $room), false);
 
         // No `dropped <= 0` short-circuit here, and its absence is the point.
@@ -682,9 +711,11 @@ trait TruncatesOutput
             );
         }
 
-        return $kept === ''
+        $clipped = $kept === ''
             ? $this->instructionTruncationMarker($total, $total)
             : $kept . "\n" . $this->instructionTruncationMarker($total - strlen($kept), $total);
+
+        return $framed ? $clipped . $close : $clipped;
     }
 
     /**
@@ -692,7 +723,10 @@ trait TruncatesOutput
      *
      * A body clipped to nothing still emits its first line and its own marker
      * — {@see clipInstructions()} guarantees that so a withheld rule names its
-     * subject — plus the newline `implode()` puts between entries. Nothing
+     * subject — plus, since ISS-017, the closing fence of its provenance block
+     * (the clip re-appends it behind the marker, so a clipped document never
+     * strands its fence open), plus the newline `implode()` puts between
+     * entries. Nothing
      * charges that floor against the reserve, so it is what makes the section
      * grow linearly in the NUMBER of governing files however the byte shares
      * are divided. MEASURED with the share arithmetic guarded and the count
@@ -714,12 +748,14 @@ trait TruncatesOutput
      * NUMBER, and why one test pins it directly instead. A PHP_INT_MAX marker
      * is 120 bytes where the marker for a 9,611-byte `CLAUDE.md` is 90, so the
      * floor carries about thirty bytes of slack over any entry a real file can
-     * produce: dropping the two `+ 1` below leaves 240, which still covers
+     * produce: dropping the two `+ 1` below leaves 265, which still covers
      * every real entry, so the section stays inside its ceiling and the result
      * inside its cap. MEASURED — that mutation changed the output at 175 of
      * 29,025 (fixture, cap) pairs swept one cap at a time and violated neither
-     * bound at any of them. Sizing the marker at (0, 0) instead leaves 206,
+     * bound at any of them. Sizing the marker at (0, 0) instead leaves 231,
      * which DOES overrun: 111 of the same pairs returned more than their cap.
+     * (The 240 and 206 of the pre-ISS-017 sweep are each 25 bytes lighter —
+     * the closing fence was not yet one of the guaranteed costs.)
      * `ToolOutputBudgetTest::testTheEntryFloorIsTheWorstCaseCostOfOneClippedRule()`
      * asserts this sum against a marker the run actually emitted, which is the
      * only thing that catches the first of those two.
@@ -729,7 +765,8 @@ trait TruncatesOutput
         return self::INSTRUCTION_HEAD_BYTES
             + 1
             + strlen($this->instructionTruncationMarker(PHP_INT_MAX, PHP_INT_MAX))
-            + 1;
+            + 1
+            + strlen("\n" . self::INSTRUCTION_FENCE_CLOSE);
     }
 
     /**
@@ -888,10 +925,10 @@ trait TruncatesOutput
             //
             // THE max() IS UNREACHABLE, AND BY ARITHMETIC RATHER THAN BY
             // INSTRUMENTATION. $room is at least instructionBodyFloor(), which
-            // is 242; $noteCost is at most 90 even at count($paths) ===
+            // is 267 since ISS-017 charges the closing fence; $noteCost is at most 90 even at count($paths) ===
             // PHP_INT_MAX; and the guard above leaves every body after the
             // first a whole floor. So the smallest value this expression can
-            // take is 242 - 0 - 90 - 1 = 151, and it is never non-positive for
+            // take is 267 - 0 - 90 - 1 = 176, and it is never non-positive for
             // any input, not merely for any input a test supplies. It stays
             // because this exact arithmetic has silently disabled this exact
             // bound twice: once by passing intdiv() into clipInstructions(),

@@ -960,8 +960,13 @@ final class BaseSystemPromptTest extends TestCase
         // Static base-prompt copy and in MemoryBlock's repository label); every
         // other byte is identical, and the per-slot manifest moved by exactly
         // the same two rows (tests/fixtures/prompt-snapshots/system-sections.txt).
+        // MEASURED 2026-10-17 at ISS-017: 11,375 -> 11,696, one pure insertion
+        // of 321 B at offset 5,408 - the exception clause appended inside the
+        // "Tool results and fetched pages" maxim (golden line 93); every byte
+        // before and after it is identical, and slot 02 of the per-slot
+        // manifest moved by the same 321 B (1965 -> 2286).
         self::assertSame(
-            11375,
+            11696,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',
