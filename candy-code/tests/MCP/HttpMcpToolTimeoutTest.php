@@ -217,6 +217,54 @@ final class HttpMcpToolTimeoutTest extends TestCase
     }
 
     // =========================================================================
+    // ISS-093(c): the server's own error text survives
+    // =========================================================================
+
+    public function testAJsonRpcErrorReplyKeepsTheServersMessageInsteadOfToolCallFailed(): void
+    {
+        $server = $this->serverWith([
+            $this->ok('initialize'), $this->ack(), $this->ok('tools/list'),
+            new Response(200, [], '{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"repo not found"}}'),
+        ]);
+
+        $server->start();
+        $result = $server->callTool('x', []);
+
+        self::assertStringContainsString('repo not found', (string) $result['error']);
+        self::assertStringContainsString('-32603', (string) $result['error']);
+        self::assertStringNotContainsString('Tool call failed', (string) $result['error']);
+    }
+
+    /**
+     * The placeholder keeps its job where it is HONEST: a reply that is valid
+     * JSON-RPC but carries neither `result` nor `error` says nothing, and
+     * "Tool call failed" is the truthful summary of a nothing.
+     */
+    public function testAReplyWithNeitherResultNorErrorStillGetsThePlaceholder(): void
+    {
+        $server = $this->serverWith([
+            $this->ok('initialize'), $this->ack(), $this->ok('tools/list'),
+            new Response(200, [], '{"jsonrpc":"2.0","id":3}'),
+        ]);
+
+        $server->start();
+
+        self::assertSame(['error' => 'Tool call failed'], $server->callTool('x', []));
+    }
+
+    public function testASuccessResultStillRendersUnchanged(): void
+    {
+        $server = $this->serverWith([
+            $this->ok('initialize'), $this->ack(), $this->ok('tools/list'),
+            new Response(200, [], '{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"hi"}]}}'),
+        ]);
+
+        $server->start();
+
+        self::assertSame(['content' => [['type' => 'text', 'text' => 'hi']]], $server->callTool('x', []));
+    }
+
+    // =========================================================================
     // Fixtures
     // =========================================================================
 

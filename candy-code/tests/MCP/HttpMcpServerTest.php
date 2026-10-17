@@ -367,7 +367,15 @@ final class HttpMcpServerTest extends TestCase
         $this->assertSame(['error' => 'Invalid response'], $result);
     }
 
-    public function testCallToolReturnsErrorOnMissingResult(): void
+    /**
+     * ISS-093(c): this row once pinned `['error' => 'Tool call failed']` —
+     * the bare placeholder that REPLACED whatever the server had actually
+     * said. A reply whose only member is a JSON-RPC `error` is the server's
+     * own diagnosis; it now rides through verbatim (a string error passes as
+     * written, an object error through describeError). A result-less reply
+     * with NO error member still gets the placeholder.
+     */
+    public function testCallToolKeepsTheServersOwnErrorMessage(): void
     {
         $server = new HttpMcpServer(
             name: 'missing-result',
@@ -391,7 +399,7 @@ final class HttpMcpServerTest extends TestCase
 
         $result = $server->callTool('test_tool', []);
 
-        $this->assertSame(['error' => 'Tool call failed'], $result);
+        $this->assertSame(['error' => 'method not found'], $result);
     }
 
     // =========================================================================

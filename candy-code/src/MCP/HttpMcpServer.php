@@ -283,7 +283,31 @@ final class HttpMcpServer implements McpServer
                 'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
             ], $this->toolOptions());
 
-            return $data !== null ? ($data['result'] ?? ['error' => 'Tool call failed']) : ['error' => 'Invalid response'];
+            if ($data === null) {
+                return ['error' => 'Invalid response'];
+            }
+
+            // ISS-093(c): a JSON-RPC ERROR reply is an answer, and its own
+            // code and message were being replaced by the bare string
+            // "Tool call failed" — the `??` below once swallowed `$data`
+            // whole without ever looking at `error`. That threw away the
+            // server's diagnosis (which tool refused, why, with what detail)
+            // on the one path where the server had actually replied, leaving
+            // the operator to guess. The bridge reads `['error' => …]` as a
+            // failure either way ({@see \SugarCraft\Code\Tools\McpToolBridge::isError()});
+            // only the TEXT changes, and it changes from a guess to the
+            // server's own words. `describeError` is the same formatter
+            // start() already uses for its refusals. NO DEADLINE was added on
+            // the claude-mcp side of the report: that no-bound is deliberate
+            // policy (sugar_issues.md appendix, claude-mcp entry), and only
+            // the dropped error text stands.
+            if (array_key_exists('error', $data)) {
+                $error = $data['error'];
+
+                return ['error' => is_string($error) ? $error : 'JSON-RPC error' . self::describeError($error)];
+            }
+
+            return $data['result'] ?? ['error' => 'Tool call failed'];
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
         }
