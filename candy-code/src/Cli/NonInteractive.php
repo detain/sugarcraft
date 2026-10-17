@@ -8,6 +8,7 @@ use SugarCraft\Code\Attachments\ContextMentions;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookManager;
@@ -193,6 +194,24 @@ final class NonInteractive
     private const STDIN_FIRST_BYTE_GRACE_SECONDS = 2;
 
     /**
+     * The `kind` token a breached spend cap carries on its refusal row
+     * (ISS-006), and the `tool` slot it names.
+     *
+     * Deliberately NOT a fourth {@see \SugarCraft\Code\Permissions\DenialKind}
+     * case: the enum's three cases classify WHO refused a TOOL CALL, its
+     * prefixes are a published wire vocabulary, and a cap breach refuses no
+     * call — it declines to make the next one, which is the distinction the
+     * event's own docblock demands renderings keep apart. A machine consumer
+     * that has to tell the two apart gets one new token, `budget`, on a row
+     * whose shape is otherwise the established three keys; the `turn` tool
+     * slot says what the breach stopped — the turn's next provider call, not
+     * any named tool — and stays stable whatever the model asked for when the
+     * loop broke.
+     */
+    public const SPEND_CAP_ROW_KIND = 'budget';
+    public const SPEND_CAP_ROW_TOOL = 'turn';
+
+    /**
      * Run one prompt to completion and print the result.
      *
      * $backend can be supplied directly — used by tests to avoid depending on
@@ -216,6 +235,23 @@ final class NonInteractive
                 'candy-code: ' . Lang::t('cli.noninteractive.no_prompt'),
                 $outputFormat,
             );
+        }
+
+        // ISS-006: `$CANDY_CODE_MAX_COST` and the user-tier `maxCostUsd`
+        // setting are read and VALIDATED here, before a backend is built or a
+        // provider is contacted. Until this line the whole cap mechanism was
+        // TUI-only — `Bootstrap::maxCostUsd()` had exactly two callers, and
+        // the one install site, `TurnRunner`, is the host turn path `-p`
+        // skips — so the documented exit-2 refusal of `CANDY_CODE_MAX_COST=5USD`
+        // fired at a TUI launch and quietly meant "no cap" on the unattended
+        // CI path that most needs the ceiling. Validation on an injected
+        // backend too is deliberate: the value is about the launch, and a
+        // caller that supplies its own engine has not opted out of the
+        // operator's money.
+        try {
+            $spendCapUsd = Bootstrap::maxCostUsd();
+        } catch (PermissionConfigException $e) {
+            return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
         }
 
         // Step 3.D-2: only a run that built its own backend owns the session
@@ -269,6 +305,7 @@ final class NonInteractive
         }
 
         $backend = self::withoutInteractiveUser($backend);
+        $backend = self::withHeadlessSpendCap($backend, $spendCapUsd);
 
         // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
         // against the same root the TUI's Chat uses (`--root`, else the cwd)
@@ -340,6 +377,17 @@ final class NonInteractive
         /** @var list<array{tool: string, kind: string, reason: string, unattended?: bool}> $refusals */
         $refusals = [];
         $observeRefusals = static function (object $event) use (&$refusals): void {
+            if ($event instanceof SpendCapBreached) {
+                // ISS-006's reporting half: the loop stopped itself on the cap,
+                // and an operator whose entire view of the run is stdout plus
+                // an exit code must be able to tell "capped" from "answered".
+                $row = self::spendCapRow($event);
+                $refusals[] = $row;
+                self::noticeRefusal($row['tool'], $row['kind'], $row['reason']);
+
+                return;
+            }
+
             $refusal = self::refusalFrom($event);
             if ($refusal !== null) {
                 $refusals[] = $refusal;
@@ -429,6 +477,30 @@ final class NonInteractive
         }
 
         return $closed ? $backend->withTools($tools) : $backend;
+    }
+
+    /**
+     * $backend with the mid-turn spend cap installed (ISS-006).
+     *
+     * The same {@see \SugarCraft\Code\Backend\EngineBackend::withSpendCap()}
+     * the host `TurnRunner` installs, with `0.0` for the session spend at
+     * start: a one-shot run begins its ledger at zero, so the cap is measured
+     * against this process's own calls and nothing inherited. Null cap and
+     * non-engine backends pass through untouched — a cap can only bind a loop
+     * that bills. The breach is reported, never silent: the settled
+     * {@see SpendCapBreached} frame lands in the refusal observer installed
+     * by {@see self::run()} and reaches both channels like any other refusal
+     * row, under the distinct `budget` kind ({@see self::SPEND_CAP_ROW_KIND}).
+     * {@see \SugarCraft\Code\Backend\EngineBackend::complete()} is the only
+     * `-p` loop that bills at all.
+     */
+    public static function withHeadlessSpendCap(Backend $backend, ?float $capUsd): Backend
+    {
+        if ($capUsd === null || !$backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+            return $backend;
+        }
+
+        return $backend->withSpendCap($capUsd, 0.0);
     }
 
     /**
@@ -1373,7 +1445,9 @@ final class NonInteractive
      *
      * @param string $tool The runtime tool name, as the model called it.
      * @param string $kind {@see DenialKind::token()} — `hook`, `refused` or
-     *   `unanswered`. The stable machine key, deliberately not the prefix.
+     *   `unanswered` — or {@see self::SPEND_CAP_ROW_KIND}, the one non-DenialKind
+     *   row this class writes (ISS-006). The stable machine key, deliberately
+     *   not the prefix.
      * @param string $reason The finished result text, which opens with one of
      *   {@see DenialKind}'s three prefixes — so the line says WHICH of the
      *   three twice over, once for a person and once for a script.
@@ -1535,6 +1609,32 @@ final class NonInteractive
         }
 
         return $row;
+    }
+
+    /**
+     * The refusal row {@see self::run()}'s observer files for a breached
+     * spend cap (ISS-006).
+     *
+     * The reason reuses the host ledger's own mid-turn sentence —
+     * {@see \SugarCraft\Code\Host\SpendLedger::midTurnNotice()} — under the
+     * same key and the same `%.4f` money shape, because "refused to start"
+     * and "aborted mid-turn" are different promises about money and the
+     * wording that keeps them apart exists once. A re-spelling here would be
+     * the drift this method's whole `host.spend.mid_turn` choice refuses.
+     *
+     * @return array{tool: string, kind: string, reason: string}
+     */
+    private static function spendCapRow(SpendCapBreached $event): array
+    {
+        return [
+            'tool' => self::SPEND_CAP_ROW_TOOL,
+            'kind' => self::SPEND_CAP_ROW_KIND,
+            'reason' => Lang::t('host.spend.mid_turn', [
+                'calls' => $event->completedCalls,
+                'spent' => \sprintf('%.4f', $event->spentUsd),
+                'cap' => \sprintf('%.4f', $event->capUsd),
+            ]),
+        ];
     }
 
     /**
