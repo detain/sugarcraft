@@ -636,9 +636,10 @@ final class CommandLoader
         // ISS-036's report half, AFTER the refusal loop so a name it took back
         // is never announced as an override: every built-in a surviving file
         // row actually replaced. Promotion without notice is how a trusted
-        // root accumulates silent edits to its own command set; one line per
-        // replacement, on the seam Bootstrap drains at launch and on stderr
-        // with {@see DEBUG_REFUSALS_ENV}.
+        // root accumulates silent edits to its own command set; one sentence
+        // per replacement lands on stderr with {@see DEBUG_REFUSALS_ENV} and,
+        // whatever that gate says, on the launch seam as ONE aggregate count
+        // row ({@see \SugarCraft\Code\Cli\Bootstrap::reportCommandOverrides()}).
         foreach ($merged as $name => $spec) {
             if (!isset($builtIn[$name]) || !$spec->isFileBased()) {
                 continue;
