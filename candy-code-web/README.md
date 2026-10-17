@@ -52,8 +52,8 @@ broken install, never something the server should paper over.
 
 `candy-code serve` prints a sign-in URL; open it. The page trades the one-time
 code for an HttpOnly session cookie, then holds one WebSocket speaking
-`candy-code.v1` (candy-code's
-[`docs/SERVER.md`](https://github.com/sugarcraft/candy-code/blob/master/docs/SERVER.md)
+`candy-code.v1` (the
+[`../candy-code/docs/SERVER.md`](https://github.com/sugarcraft/candy-code/blob/master/docs/SERVER.md)
 documents the protocol and the UI).
 
 - **Sessions sidebar**: newest first, filter, status, and a badge for every
@@ -158,8 +158,8 @@ file names, no timestamps), so a clean rebuild of unchanged source is
 byte-identical.
 
 **`src-web/protocol/generated.ts` is generated too**, by
-`scripts/gen-protocol.mjs` from candy-code's
-`docs/protocol/candy-code.v1.schema.json` (itself generated from the PHP
+`scripts/gen-protocol.mjs` from
+`../candy-code/docs/protocol/candy-code.v1.schema.json` (itself generated from the PHP
 protocol classes). `web.yml` regenerates it and fails on a diff, so a server
 protocol change the client was not updated for is caught in CI.
 

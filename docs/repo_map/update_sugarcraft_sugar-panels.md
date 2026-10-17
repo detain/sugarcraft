@@ -596,7 +596,7 @@ $node->withTitle('My Panel')
 
 **Lesson for sugar-panels**: sugar-panels correctly chose a simpler approach — raw string content — given PHP's lack of a Bubbletea runtime. Don't over-engineer for a use case that doesn't exist.
 
-**Source**: `sugarcraft_sugar-boxer.md` §1.1
+**Source**: `sugarcraft_sugar-boxer.md` §1.1 <!-- @rename-keep historical provenance -->
 
 ### SizeFunc for Custom Sizing
 
@@ -604,7 +604,7 @@ $node->withTitle('My Panel')
 
 **Lesson**: This could be ported as `withSizeFunc()` on Node, but it's a lower priority than the constraint-based layout approach since Cassowary already solves the general case.
 
-**Source**: `sugarcraft_sugar-boxer.md` §2.1
+**Source**: `sugarcraft_sugar-boxer.md` §2.1 <!-- @rename-keep historical provenance -->
 
 ## From External Repos
 

@@ -6,7 +6,7 @@
 
 ## Goal
 
-Replace the three known byte-loop ANSI parsers in `candy-ansi-inspect/src/Inspector.php` (551 lines), `sugar-quickpick/src/Hermit.php::highlightMatches()` (byte indexing on UTF-8), and `candy-codeshot/src/AnsiParser.php` with calls into `sugar-ansi-parser`'s state machine. The 551-line Inspector shrinks dramatically; UTF-8 / grapheme bugs in sugar-quickpick go away.
+Replace the three known byte-loop ANSI parsers in `candy-ansi-inspect/src/Inspector.php` (551 lines), `sugar-quickpick/src/QuickPick.php::highlightMatches()` (byte indexing on UTF-8), and `candy-codeshot/src/AnsiParser.php` with calls into `sugar-ansi-parser`'s state machine. The 551-line Inspector shrinks dramatically; UTF-8 / grapheme bugs in sugar-quickpick go away.
 
 Reference: §387.2 (reinvention), §15.2 (UTF-8 / grapheme breakage).
 
@@ -14,7 +14,7 @@ Reference: §387.2 (reinvention), §15.2 (UTF-8 / grapheme breakage).
 
 - `candy-ansi-inspect/composer.json`, `sugar-quickpick/composer.json`, `candy-codeshot/composer.json` — add `sugarcraft/sugar-ansi-parser` via `path-repo-closure`.
 - `candy-ansi-inspect/src/Inspector.php` — replace byte loop with a custom `Handler` registered against `\SugarCraft\AnsiParser\Parser\Parser`.
-- `sugar-quickpick/src/Hermit.php` — `highlightMatches()` uses sugar-ansi-parser to walk the SGR-aware content (don't index bytes; use the parser's character events).
+- `sugar-quickpick/src/QuickPick.php` — `highlightMatches()` uses sugar-ansi-parser to walk the SGR-aware content (don't index bytes; use the parser's character events).
 - `candy-codeshot/src/AnsiParser.php` — refactor to delegate to sugar-ansi-parser's parser; if AnsiParser was specifically a custom domain extension, keep the domain logic and only replace the byte loop.
 
 ## Acceptance criteria

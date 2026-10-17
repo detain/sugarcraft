@@ -324,7 +324,7 @@ for ($i = 0; $i < 42; $i++) {
 **Current:** Uses `time()` (second precision)
 **Better:** Should use `microtime(true)` for sub-second accuracy in event sourcing
 
-Source: `sugarcraft_sugar-calendar.md` — Known gap #2
+Source: `sugarcraft_sugar-calendar.md` — Known gap #2 <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -516,7 +516,7 @@ When no date selected, show placeholder or prompt in the header area.
 
 ## 1. Fix EventStore time() Precision
 
-Source: `sugarcraft_sugar-calendar.md` Known Gap #2
+Source: `sugarcraft_sugar-calendar.md` Known Gap #2 <!-- @rename-keep historical provenance -->
 
 ```php
 // Current:
@@ -528,7 +528,7 @@ Source: `sugarcraft_sugar-calendar.md` Known Gap #2
 
 ## 2. Create CALIBER_LEARNINGS.md
 
-Missing file was noted in `sugarcraft_sugar-calendar.md` Known Gap #1.
+Missing file was noted in `sugarcraft_sugar-calendar.md` Known Gap #1. <!-- @rename-keep historical provenance -->
 
 ## 3. Add Snapshot Tests for View() Output
 

@@ -625,4 +625,4 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — SugarCraft runtime foundation
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-widgets.md` — Component library used by the TUI
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-style.md` — Styling system
-- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-skate.md` — SQLite-backed KV store (shares backend technology)
+- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-kv.md` — SQLite-backed KV store (shares backend technology)

@@ -165,7 +165,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-charts.md` — Phase 1 (ChartExtras trait extraction)
 - `findings/plan_sugar-async.md` — Phase 1 (AsyncOps duplication)
 - `findings/plan_sugar-cellbuffer.md` — Phase 1 (AsyncOps duplication)
-- `findings/plan_candy-sprinkles.md` — Phase 1 (Style immutable value object)
+- `findings/plan_sugar-style.md` — Phase 1 (Style immutable value object)
 - `findings/plan_candy-mdview.md` — Phase 1 (animation timing)
 
 ### Group D Source Plans
@@ -196,7 +196,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-table.md` — Phase 1 (table layout overflow)
 - `findings/plan_candy-ansi-inspect.md` — Phase 1 (empty data set guard)
 - `findings/plan_sugar-toast.md` — Phase 1 (viewport overflow, non-cancellable timer)
-- `findings/plan_sugar-skate.md` — Phase 1 (YAML fallback newline round-trip corruption; README Quick Start data-corrupting example; P2/P3 lists carried — E719 first-ever audit, 2026-09-15)
+- `findings/plan_candy-kv.md` — Phase 1 (YAML fallback newline round-trip corruption; README Quick Start data-corrupting example; P2/P3 lists carried — E719 first-ever audit, 2026-09-15)
 - `findings/plan_repeated_logic.md` — Phase 1 (extract Clamp.php + validateNonNeg() to sugar-core; deduplicate mutate() across 35+ libs)
 
 ## Phase 1 Implementation Steps
