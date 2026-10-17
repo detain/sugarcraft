@@ -1978,6 +1978,45 @@ final class BinCandyCodeDispatchTest extends TestCase
         return $home;
     }
 
+    /**
+     * ISS-028: `doctor` reported "OK provider anthropic" while `candy-code -p`
+     * exited 2 with "requires 'apiKey'", because the probe only checked that
+     * the NAME was selectable. Construction does no I/O (the factory builders
+     * only assemble clients — see NonInteractive::EXIT_CONFIG), so the probe
+     * can and must run it: a selected provider that cannot be constructed is
+     * a FAIL that names the exact refusal.
+     */
+    public function testDoctorFailsWhenTheSelectedProviderCannotBeConstructed(): void
+    {
+        $home = $this->privateHome();
+
+        $doctor = $this->runBin(['doctor'], ['HOME' => $home, 'CANDY_CODE_PROVIDER' => 'anthropic']);
+
+        $this->assertSame(1, $doctor['status'], 'stderr: ' . $doctor['stderr']);
+        $this->assertStringContainsString('FAIL provider', $doctor['stdout']);
+        $this->assertStringContainsString('cannot be constructed', $doctor['stdout']);
+        $this->assertStringContainsString("requires 'apiKey'", $doctor['stdout']);
+    }
+
+    /**
+     * The other polarity of ISS-028: with the key present the same selection
+     * constructs cleanly and the probe says OK — the FAIL above is about the
+     * missing config, not about the probe refusing every anthropic run.
+     */
+    public function testDoctorApprovesASelectedProviderThatConstructs(): void
+    {
+        $home = $this->privateHome();
+
+        $doctor = $this->runBin(['doctor'], [
+            'HOME' => $home,
+            'CANDY_CODE_PROVIDER' => 'anthropic',
+            'ANTHROPIC_API_KEY' => 'sk-test-not-a-real-key',
+        ]);
+
+        $this->assertSame(0, $doctor['status'], 'stdout: ' . $doctor['stdout'] . "\nstderr: " . $doctor['stderr']);
+        $this->assertMatchesRegularExpression('/^OK\s+provider\s+anthropic/m', $doctor['stdout']);
+    }
+
     /** A throwaway project root, for the `.mcp.json` fixtures. */
     private function privateProject(): string
     {

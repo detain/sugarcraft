@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Cli;
 
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
@@ -439,18 +440,42 @@ final class Subcommands
                     ];
                 }
 
-                // NOT CONSTRUCTED, deliberately. Bootstrap::backendFor() builds
-                // the tool array, which reaches mcpClient(), which proc_open()s
-                // every configured MCP server — a health check must not launch
-                // programs. So this reports the SELECTION and whether a config
-                // for it exists, which is what a misconfiguration looks like.
+                // ISS-028: CONSTRUCTED, deliberately — but only via the
+                // factory. Bootstrap::backendFor() builds the tool array,
+                // which reaches mcpClient(), which proc_open()s every
+                // configured MCP server, so a health check must not call it.
+                // ProviderFactory::create() does no I/O (see
+                // NonInteractive::EXIT_CONFIG: every constructor only builds
+                // a client object or stores strings), so a throw here is
+                // always a configuration error — the missing apiKey, the
+                // absent projectId — exactly what `candy-code -p` will die
+                // on with exit 2 while the old name-only probe said OK.
                 $known = \array_key_exists($name, Bootstrap::availableProviders());
+                if (!$known) {
+                    return [
+                        'status' => 'FAIL',
+                        'detail' => Lang::t('cli.doctor.provider_unknown', ['provider' => $name]),
+                    ];
+                }
+
+                try {
+                    $factory = new ProviderFactory();
+                    $config = Bootstrap::providerConfigFor($name, $factory);
+                    $config['model'] = $model;
+                    $factory->create($config);
+                } catch (\Throwable $e) {
+                    return [
+                        'status' => 'FAIL',
+                        'detail' => Lang::t('cli.doctor.provider_unconstructable', [
+                            'provider' => $name,
+                            'error' => $e->getMessage(),
+                        ]),
+                    ];
+                }
 
                 return [
-                    'status' => $known ? 'OK' : 'FAIL',
-                    'detail' => $known
-                        ? Lang::t('cli.doctor.provider', ['provider' => $name, 'model' => $model])
-                        : Lang::t('cli.doctor.provider_unknown', ['provider' => $name]),
+                    'status' => 'OK',
+                    'detail' => Lang::t('cli.doctor.provider', ['provider' => $name, 'model' => $model]),
                 ];
             },
 

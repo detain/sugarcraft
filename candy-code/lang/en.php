@@ -161,6 +161,7 @@ return [
     'cli.doctor.provider' => '{provider} (model {model})',
     'cli.doctor.provider_none' => 'none selected — the offline echo backend will answer (set CANDY_CODE_PROVIDER)',
     'cli.doctor.provider_shell' => 'shell-out backend ($CANDY_CODE_BACKEND_CMD tier)',
+    'cli.doctor.provider_unconstructable' => '{provider} is selected but cannot be constructed: {error}',
     'cli.doctor.provider_unknown' => '{provider} is selected but is not a known provider — see `candy-code models`',
     'cli.doctor.server_ready' => 'pcntl, posix and ffi available — `serve` can start',
     'cli.doctor.server_refuses' => '`serve` will refuse to start: {problems}',
