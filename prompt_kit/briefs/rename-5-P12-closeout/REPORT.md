@@ -1,6 +1,6 @@
 # P12 closeout — SugarCraft rename campaign COMPLETE (2026-10-17)
 
-Verdict: campaign done. Master pushed at `d8845b67a` (`rename: complete`), origin in-sync 0/0, all guards rc0 at the tip, tools/tests at floor 435T/2147A. Remaining work is human-side only (list below).
+Verdict: campaign done. Master pushed at `d8845b67a` (`rename: complete`), origin in-sync 0/0, all guards rc0 at the tip, tools/tests at floor 446T/2222A (435T/2147A at the closeout tip; `CheckLibLicensesTest` +11T/+70A landed `dc425a896`). Remaining work is human-side only (list below).
 
 ## Batches (all landed, welded, R8/R9 fired)
 
@@ -19,7 +19,7 @@ Verdict: campaign done. Master pushed at `d8845b67a` (`rename: complete`), origi
 | Surface | Figure |
 |---|---|
 | candy-code K=8 shard gate | 22,571T / 424,942A (+16 assertion wobble by design) |
-| tools/tests suite | 435T / 2147A (incl. PrefixPolicyTest `8d13ebc49`) |
+| tools/tests suite | 446T / 2222A live (`dc425a896`+; incl. PrefixPolicyTest `8d13ebc49` + CheckLibLicensesTest `dc425a896`) — 435T / 2147A at closeout tip |
 | check-rename-residue --all-done | 52 entries / 0 findings |
 | gen-docs --check / gen-ansi-readme --check / check-path-repos / check-child-lifetimes | all rc0 |
 | battery | 60 libs clean vs baseline (minesweeper 1F+4W + dashboard 2F standing pre-existing; candy-vcr 4,213A = +4A tracked; candy-top 2,108T = base 2,107 + 1 static, no regression — `501384aab` corrected the phantom 2,110) |
