@@ -10,6 +10,7 @@ use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use OpenAI\Exceptions\TransporterException;
 use Psr\Http\Client\NetworkExceptionInterface;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 
 /**
  * Decides whether a failed provider call is worth trying again, and how long
@@ -236,6 +237,13 @@ final class TransientFailure
      * following attempt draws its own fresh answer from the server anyway.
      */
     public const RETRY_AFTER_MAX_SECONDS = 25.0;
+
+    /**
+     * The notice a server-directed wait announces before it sleeps — see
+     * {@see announceRateLimit()}. Public because the pin asserts against the
+     * same string the sink receives.
+     */
+    public const RATE_LIMIT_NOTICE_FORMAT = 'Provider rate-limited this request, retrying in %d second%s.';
 
     /**
      * How finely {@see backoff()} slices the wait when a beat consumer is
@@ -598,6 +606,31 @@ final class TransientFailure
         $response = $failure->getResponse();
 
         return $response instanceof \Psr\Http\Message\ResponseInterface ? $response : null;
+    }
+
+    /**
+     * Announce a server-directed wait to the runtime notice sink BEFORE
+     * {@see backoff()} pays for it (ISS-074 review fix).
+     *
+     * Honouring `Retry-After` silently was the defect: a capped 25-second
+     * sleep is indistinguishable from a hung turn from the operator's chair,
+     * and the doc-law promise ("rate-limited, retrying in Ns") had no
+     * producer. This publishes exactly the number the sleep will obey — same
+     * chain walk, same cap — through {@see RuntimeNoticeSink::warn()}, the
+     * sanctioned stderr-plus-inbox channel, so the wait is legible while it
+     * runs. A ladder wait stays unannounced by design: those are the ordinary
+     * shape of a busy API, and a notice per attempt would drown the inbox.
+     */
+    public static function announceRateLimit(\Throwable $failure): void
+    {
+        $serverSeconds = self::retryAfterSeconds($failure);
+
+        if ($serverSeconds === null) {
+            return;
+        }
+
+        $whole = (int) round($serverSeconds);
+        RuntimeNoticeSink::warn(sprintf(self::RATE_LIMIT_NOTICE_FORMAT, $whole, $whole === 1 ? '' : 's'));
     }
 
     /**

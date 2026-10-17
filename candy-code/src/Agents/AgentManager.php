@@ -1168,7 +1168,17 @@ final class AgentManager
                     $subAgent->tokensUsed = $tokensBefore;
                     $subAgent->costUsd = $costBefore;
                     $streamedToolCalls = [];
-                    TransientFailure::backoff($attempt);
+                    // ISS-074 review fix: the sub-agent wait obeys the same
+                    // server clock as the main chat loops. $thrown is null on
+                    // the error-CHUNK leg — a flattened response has no
+                    // Retry-After to read and nothing to announce — and the
+                    // beat rides the request's own heartbeat seam when a
+                    // caller armed one (this generator has no progress
+                    // callback of its own to slice into).
+                    if ($thrown !== null) {
+                        TransientFailure::announceRateLimit($thrown);
+                    }
+                    TransientFailure::backoff($attempt, failure: $thrown, onBeat: $request->onHeartbeat);
                 }
 
                 // Audit 15e AG-4 (the sub-agent twin of 15a A1): the loop only
@@ -1209,7 +1219,9 @@ final class AgentManager
                         if ($lastAttempt || !TransientFailure::isTransient($e)) {
                             throw $e;
                         }
-                        TransientFailure::backoff($attempt);
+                        // ISS-074 review fix: see the streaming twin above.
+                        TransientFailure::announceRateLimit($e);
+                        TransientFailure::backoff($attempt, failure: $e, onBeat: $request->onHeartbeat);
 
                         continue;
                     }
@@ -1218,7 +1230,10 @@ final class AgentManager
                         break;
                     }
 
-                    TransientFailure::backoff($attempt);
+                    // ISS-074: flattened error response, no throwable to read
+                    // a server instruction from; the beat still applies if a
+                    // caller armed one.
+                    TransientFailure::backoff($attempt, onBeat: $request->onHeartbeat);
                 }
 
                 // Audit 15e AG-4: see the matching throw in the streaming

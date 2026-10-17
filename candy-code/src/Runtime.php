@@ -1691,7 +1691,13 @@ final class Runtime
                 ) {
                     throw $thrown;
                 }
-                TransientFailure::backoff($attempt);
+                // ISS-074 review fix: the throwable is in hand, so the
+                // server's Retry-After outranks the ladder, the wait is
+                // announced to the notice sink, and it is sliced into
+                // one-second beats down the turn's existing liveness channel
+                // (toolWaitHeartbeat) instead of going dark for up to 25s.
+                TransientFailure::announceRateLimit($thrown);
+                TransientFailure::backoff($attempt, failure: $thrown, onBeat: self::toolWaitHeartbeat($request, $onProgress));
 
                 continue;
             }
@@ -1708,7 +1714,11 @@ final class Runtime
                 break;
             }
 
-            TransientFailure::backoff($attempt);
+            // ISS-074: an error CHUNK carries no throwable - the provider
+            // flattened it into errorMessage text, so there is no response to
+            // read Retry-After from and nothing to announce. The wait still
+            // heartbeats: silence is what makes a bounded wait look hung.
+            TransientFailure::backoff($attempt, onBeat: self::toolWaitHeartbeat($request, $onProgress));
         }
 
         // Audit 15a A1: the loop above only breaks with an error chunk in hand
@@ -1792,7 +1802,13 @@ final class Runtime
                 if ($lastAttempt || !TransientFailure::isTransient($e)) {
                     throw $e;
                 }
-                TransientFailure::backoff($attempt);
+                // ISS-074 review fix: see the matching thread in
+                // runStreaming() - Retry-After outranks the ladder, the wait
+                // is announced, and it beats down the turn's liveness
+                // channel. Nothing has been emitted yet in runBatch(), so
+                // toolWaitHeartbeat is safe to attach here too.
+                TransientFailure::announceRateLimit($e);
+                TransientFailure::backoff($attempt, failure: $e, onBeat: self::toolWaitHeartbeat($request, $onProgress));
 
                 continue;
             }
@@ -1801,7 +1817,9 @@ final class Runtime
                 break;
             }
 
-            TransientFailure::backoff($attempt);
+            // ISS-074: the flattened error response has no throwable behind
+            // it to read Retry-After from; the beat keeps the wait legible.
+            TransientFailure::backoff($attempt, onBeat: self::toolWaitHeartbeat($request, $onProgress));
         }
 
         // Audit 15a A1: see the matching throw in runStreaming(). Checked
