@@ -8,7 +8,9 @@
   --panel: #24283b;
   --line: #3b4261;
   --text: #c0caf5;
-  --muted: #7982a9;
+  /* ISS-107: #8b93bb clears 4.5:1 on both surfaces (4.85 on panel, 5.69 on
+     bg); the TokyoNight original reached only 3.87 on panel. */
+  --muted: #8b93bb;
   --accent: #7aa2f7;
   --ok: #9ece6a;
   --warn: #e0af68;
@@ -26,8 +28,11 @@
     --panel: #e9ebf3;
     --line: #c8ccdb;
     --text: #343b58;
-    --muted: #6b7089;
-    --accent: #2e7de9;
+    /* ISS-107: light-theme muted and accent darkened so both clear 4.5:1 on
+       the panel and the background. #5f6480 → 4.87 on panel / 5.42 on bg;
+       #1d5fbf (accent, so button text --bg on it too) → 5.13 / 5.70. */
+    --muted: #5f6480;
+    --accent: #1d5fbf;
     --ok: #387068;
     --warn: #8c6c3e;
     --error: #c64343;
@@ -42,8 +47,8 @@
   --panel: #e9ebf3;
   --line: #c8ccdb;
   --text: #343b58;
-  --muted: #6b7089;
-  --accent: #2e7de9;
+  --muted: #5f6480;
+  --accent: #1d5fbf;
   --ok: #387068;
   --warn: #8c6c3e;
   --error: #c64343;
