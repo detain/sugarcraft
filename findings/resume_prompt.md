@@ -71,7 +71,7 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 0-D | 0.10–0.12 | candy-scriptui (shell injection env-var), sugar-reel (SIGCONT), candy-flappy (score wrong x) | 1 coder | <!-- @rename-keep -->
 | 0-E | 0.13–0.15 | sugar-forms (undefined $status), sugar-toast (unclamped maxWidth), candy-metrics (hard-coupled wish, missing flush(), re-emit all) | 1 coder |
 | 0-F | 0.16–0.18 | candy-sql (SQLite str_replace), candy-mouse (OSC bounds), candy-flip (fixed interval), candy-async (markCancelled visibility) | 1 coder | <!-- @rename-keep historical provenance -->
-| 0-G | 0.19–0.20 | candy-log (Phive directory, PSR-3 context array type) | 1 coder |
+| 0-G | 0.19–0.20 | candy-log (Phive directory, PSR-3 context array type) | 1 coder | <!-- @rename-keep historical provenance -->
 
 ### Phase 1: High Priority Functional Fixes
 

@@ -76,14 +76,14 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 |---------|-------|--------|---------|------|--------|-----|
 | sugar-colorprofile | 85 ✓ | APPROVE | 0 | 0 | 1 | 0 |
 | candy-mosaic | FAIL | BLOCKED | 1 | 1 | 2 | 0 | <!-- @rename-keep historical provenance -->
-| candy-log | 96 ✓ | APPROVE | 0 | 0 | 0 | 0 |
+| candy-log | 96 ✓ | APPROVE | 0 | 0 | 0 | 0 | <!-- @rename-keep historical provenance -->
 | candy-metrics | 61 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 
 **candy-mosaic** — **BLOCKED**: `SugarCraft\Core\I18n\Lang` base class missing in path-repo symlink. 2 tests fail with `Error: Class not found`. This cascades from the same symlink issue affecting candy-mail. Run `composer reinstall` in affected packages. <!-- @rename-keep historical provenance -->
 
 **candy-palette** — Color detection/ICC profiles. Clean, 85 tests. Minor: `ColorProfile::default()` constructor takes no args but is private — static factory is only entry point. <!-- @rename-keep historical provenance -->
 
-**candy-log** — Logging. 96 tests, clean.
+**candy-log** — Logging. 96 tests, clean. <!-- @rename-keep historical provenance -->
 
 **candy-metrics** — Telemetry. 61 tests. Minor: missing metric type validation; no explicit type constants.
 
