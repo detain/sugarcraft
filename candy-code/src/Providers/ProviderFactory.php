@@ -86,6 +86,33 @@ final readonly class ProviderFactory
     private const CONFIG_PATH = '.candy-code/config.dev.json';
 
     /** @var array<string, array{required: string[], optional: string[]}> */
+    /**
+     * Cheap per-type defaults for auxiliary calls (ISS-077): session
+     * titling, `/btw`, goal judgements and prompt suggestions are a handful
+     * of output tokens, so when the user names no `titleModel` the tool-less
+     * backend picks one of these instead of billing the provider block's
+     * conversation-class default. A type absent from the map (sglang, custom,
+     * claude-code) keeps the block model - there is no sibling id we can
+     * promise a local/subscription endpoint serves.
+     *
+     * @var array<string, string>
+     */
+    public const AUXILIARY_MODEL_BY_TYPE = [
+        'anthropic' => 'claude-haiku-4-5',
+        'vertex' => 'claude-haiku-4-5',
+        'bedrock' => 'us.anthropic.claude-haiku-4-5',
+        'openai' => 'gpt-4o-mini',
+    ];
+
+    /**
+     * The auxiliary-cheap model id for a provider type, or null when the
+     * type has none (see {@see AUXILIARY_MODEL_BY_TYPE}).
+     */
+    public static function auxiliaryModelFor(string $type): ?string
+    {
+        return self::AUXILIARY_MODEL_BY_TYPE[$type] ?? null;
+    }
+
     private const TYPE_SCHEMAS = [
         'openai' => [
             'required' => ['apiKey'],

@@ -10097,7 +10097,10 @@ final class Bootstrap
      * only the title prompt and the transcript.
      *
      * The model is `$CANDY_CODE_TITLE_MODEL`, else a `titleModel` key in
-     * ~/.candy-code/config.json, else the provider's own default — and
+     * ~/.candy-code/config.json, else — ISS-077 — the provider type's cheap
+     * auxiliary default ({@see ProviderFactory::AUXILIARY_MODEL_BY_TYPE}:
+     * Haiku-class on the Anthropic family, a mini on openai), else the
+     * provider's own default — and
      * deliberately NOT `$CANDY_CODE_MODEL`, which names the big
      * conversation model. Null on any construction failure: an unnamed
      * session is a non-event (same silent-failure stance {@see
@@ -10179,7 +10182,9 @@ final class Bootstrap
      * no skill registry, no instruction loader — under whichever model
      * $modelEnvVar, then the $modelConfigKey key of ~/.candy-code/config.json,
      * then $defaultModel (the summary backend passes the conversation's model),
-     * then the provider's own default names.
+     * then the type's cheap auxiliary default (ISS-077 — the titler's whole
+     * point is a handful of words, so it must not bill the conversation-class
+     * model), then the provider's own default names.
      *
      * One builder rather than two near-copies, because the tool-less part is
      * the load-bearing part: a second copy is a second place for a `withTools()`
@@ -10213,7 +10218,14 @@ final class Bootstrap
                 $configured = self::readUserConfig()[$modelConfigKey] ?? null;
                 $model = is_string($configured) && $configured !== ''
                     ? $configured
-                    : ($defaultModel ?? (string) ($config['model'] ?? ''));
+                    // ISS-077: with no explicit choice, an auxiliary call
+                    // takes the type's cheap default (Haiku-class/mini)
+                    // before the block's conversation-class model - but only
+                    // when the caller named no default of its own. The
+                    // summary backend passes the conversation's model as
+                    // $defaultModel ON PURPOSE: cache reuse requires it.
+                    : ($defaultModel ?? (ProviderFactory::auxiliaryModelFor((string) ($config['type'] ?? ''))
+                        ?? (string) ($config['model'] ?? '')));
             }
             if ($model === '') {
                 return null;
