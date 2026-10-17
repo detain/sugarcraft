@@ -342,10 +342,11 @@ final class SafetyClassifier
             // `PtyRun` shares `Bash`'s arm: it hands the same `command` string to
             // `/bin/sh -c`, so an unjudged PtyRun would let Auto mode allow — and
             // reset its circuit-breaker counters on — exactly the calls the
-            // classifier exists to catch. classifyBash() reads `command`, the
-            // identical key both tools carry. The literals repeat {@see
-            // ShellSubjectTools::NAMES} because match patterns cannot interpolate
-            // a constant — ShellSubjectToolsCompletenessTest pins them equal.
+            // classifier exists to catch. classifyBash() judges every text of the
+            // call: the shared `command` key, and for PtyRun the decoded steps
+            // too (ISS-001). The literals repeat {@see ShellSubjectTools::NAMES}
+            // because match patterns cannot interpolate a constant —
+            // ShellSubjectToolsCompletenessTest pins them equal.
             'Bash', 'PtyRun' => $this->classifyBash($call),
             'Edit', 'Write' => $this->classifyWrite($call, $projectRoot),
             'ApplyPatch' => self::scopeCategory(self::patchScope($call, $projectRoot)),
@@ -408,20 +409,24 @@ final class SafetyClassifier
         return null;
     }
 
+    /**
+     * Judges every shell text the call would put through a shell: `Bash` carries
+     * its one `command`, `PtyRun` carries its `command` PLUS each decoded
+     * `steps[].send` — keystrokes typed into a live editor or REPL can open a
+     * shell (`:!/bin/sh` in vim, `\!` in mysql), so pattern-matching only the
+     * spawned command would let the typed half of the call classify as safe.
+     * Verdict order keeps `command` first; the first category hit anywhere wins.
+     */
     private function classifyBash(ToolCall $call): ?string
     {
-        $args = $call->arguments;
-
-        if (!isset($args['command']) || !is_string($args['command'])) {
-            return null;
-        }
-
-        $cmd = $args['command'];
+        $texts = ShellSubjectTools::judgedShellTexts($call->name, $call->arguments);
 
         foreach (self::PATTERNS as $category => $patterns) {
             foreach ($patterns as $pattern) {
-                if ($this->matches($pattern, $cmd)) {
-                    return $category;
+                foreach ($texts as $cmd) {
+                    if ($this->matches($pattern, $cmd)) {
+                        return $category;
+                    }
                 }
             }
         }

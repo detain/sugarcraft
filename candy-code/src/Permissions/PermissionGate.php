@@ -606,6 +606,19 @@ final class PermissionGate
             return PermissionDecision::Deny;
         }
 
+        // A call that types keystrokes into a live terminal (PtyRun steps) is a
+        // question every time in every non-bypass mode: typed input can open a
+        // shell the spawned `command` never mentions, so no session answer —
+        // minted from the command alone — can cover it. Mark it forced so the
+        // session fallback below is skipped and the modal badge lights up; an
+        // explicit rule that covers command AND every step still answers first
+        // (rules run before the mode below, and Allow rules are exact-text).
+        $typesKeystrokes = ShellSubjectTools::stepTexts($call->name, $call->arguments) !== [];
+        if ($typesKeystrokes) {
+            $this->forcedAsk = true;
+            $this->lastAutoReason = 'types keystrokes into a live terminal, which always asks';
+        }
+
         // 1. Check explicit rules first (highest priority), then 2. the
         // mode-specific logic; 3. a session "always" can only answer an Ask.
         $fromRules = $this->evaluateRules($call, $argumentsKnown, $projectRoot);
@@ -626,7 +639,8 @@ final class PermissionGate
 
         // A security finding's question is put every time (SECURITY_CATEGORIES):
         // "always allow Bash(curl *)" answered an earlier, different call.
-        $forced = $commitAutoStrikes && $this->forcedAsk;
+        // Keystroke-typing (above) earns the same respect in every mode.
+        $forced = ($commitAutoStrikes && $this->forcedAsk) || $typesKeystrokes;
 
         return $decision === PermissionDecision::Ask && !$forced && $this->sessionAllows($call, $argumentsKnown, $projectRoot)
             ? PermissionDecision::Allow
@@ -864,6 +878,14 @@ final class PermissionGate
             // thing that says what an MCP tool does; like the Ask below it is
             // not a classification, so it leaves the breaker untouched.
             return $this->isReadOnlyTool($call) ? PermissionDecision::Allow : PermissionDecision::Ask;
+        }
+
+        // PtyRun-with-steps is a question, not a classification: keystrokes
+        // typed into a live terminal can open a shell no pattern has judged
+        // (vim `:!`, mysql `\!`), so Auto never Allows it and never resets its
+        // counters on it. decide() has already set the forced-ask mark.
+        if (ShellSubjectTools::stepTexts($call->name, $call->arguments) !== []) {
+            return PermissionDecision::Ask;
         }
 
         $category = $this->classifier->classify($call, $projectRoot);
@@ -1178,24 +1200,24 @@ final class PermissionGate
             return false;
         }
 
-        $args = $call->arguments;
-        if (!isset($args['command']) || !is_string($args['command'])) {
-            return false;
-        }
-
-        foreach (ShellWords::parse($args['command'])->commands as $words) {
-            if ($this->wordsAreRmRfRootOrHome($words)) {
-                return true;
+        // Every text the call would put through the shell is judged — for
+        // `PtyRun` that includes the decoded keystrokes, so `rm -rf /` typed at
+        // a rescue shell trips the same floor as `Bash` running it directly.
+        foreach (ShellSubjectTools::judgedShellTexts($call->name, $call->arguments) as $command) {
+            foreach (ShellWords::parse($command)->commands as $words) {
+                if ($this->wordsAreRmRfRootOrHome($words)) {
+                    return true;
+                }
             }
-        }
 
-        foreach (preg_split('/[;&|()\r\n]+/', $args['command']) ?: [] as $segment) {
-            $tokens = array_map(
-                $this->stripMatchingQuotes(...),
-                preg_split('/\s+/', trim($segment), -1, PREG_SPLIT_NO_EMPTY) ?: [],
-            );
-            if ($this->wordsAreRmRfRootOrHome($tokens)) {
-                return true;
+            foreach (preg_split('/[;&|()\r\n]+/', $command) ?: [] as $segment) {
+                $tokens = array_map(
+                    $this->stripMatchingQuotes(...),
+                    preg_split('/\s+/', trim($segment), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+                );
+                if ($this->wordsAreRmRfRootOrHome($tokens)) {
+                    return true;
+                }
             }
         }
 

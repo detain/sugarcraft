@@ -32,6 +32,7 @@ use SugarCraft\Overlay\Veil;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
+use SugarCraft\Code\Permissions\ShellSubjectTools;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Tui\AgentStatusBar;
 use SugarCraft\Code\Tui\AgentViewPane;
@@ -6602,11 +6603,14 @@ final class Renderer
      * The modal's "what will run" rows for $call: for the shell tools
      * (`Bash`, `PtyRun` — both carry their command under `command`), the
      * question and the COMMAND itself ({@see permissionCommandBlock()}); for
-     * any other tool, the call with its arguments. The model's `description`
-     * is a caption it wrote about its own call, so it is never shown
-     * INSTEAD of the call — {@see Message::describeToolCall()} prefers it,
-     * which is right for a transcript row and wrong for a gate — only
-     * beneath it, faint, as the agent's note.
+     * any other tool, the call with its arguments. A `PtyRun` that also TYPES
+     * keystrokes shows them below the command, one visible-control block per
+     * step (ISS-001): approving only the launched program would be approving
+     * half of the call — `vim` says nothing, `:!/bin/sh` is the point. The
+     * model's `description` is a caption it wrote about its own call, so it
+     * is never shown INSTEAD of the call — {@see Message::describeToolCall()}
+     * prefers it, which is right for a transcript row and wrong for a gate —
+     * only beneath it, faint, as the agent's note.
      *
      * @return list<string>
      */
@@ -6635,6 +6639,18 @@ final class Renderer
             ));
         }
 
+        // Typed keystrokes, decoded exactly as the driver will send them, each
+        // behind a `> ` gutter. Control bytes ride through permissionVisible(),
+        // so an ESC-sequence step reads as `<Esc>` rather than vanishing.
+        foreach (ShellSubjectTools::stepTexts($call->name, $arguments) as $index => $step) {
+            if ($index === 0) {
+                $lines[] = Style::new()->foreground($theme->userLabel)->bold()
+                    ->render(self::wrapPermissionText(Lang::t('tui.permission.type_steps'), $inner));
+            }
+            $lines[] = Style::new()->foreground($theme->assistantLabel)
+                ->render(self::permissionCommandBlock($step, $inner, '> '));
+        }
+
         $caption = \is_string($caption) ? trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($caption))) : '';
         if ($caption !== '') {
             $rows = explode("\n", Width::wrap(Lang::t('tui.permission.agent_note', ['note' => $caption]), max(2, $inner)));
@@ -6648,24 +6664,26 @@ final class Renderer
     }
 
     /**
-     * A `Bash` command as the gate sees it, every byte visible
-     * ({@see permissionVisible()}): `$ ` before the first line, its
-     * continuation rows and further lines indented under it, wrapped to
-     * $inner cells. A command taller than {@see PERMISSION_COMMAND_MAX_ROWS}
-     * loses rows from its MIDDLE, with a row saying how many: the head says
-     * what starts, and the tail is where `| sh` or `&& rm …` would be.
+     * A `Bash` command (or one decoded PtyRun step) as the gate sees it, every
+     * byte visible ({@see permissionVisible()}): $marker before the first line
+     * (`$ ` for a command, `> ` for a typed step), its continuation rows and
+     * further lines indented under it, wrapped to $inner cells. A command
+     * taller than {@see PERMISSION_COMMAND_MAX_ROWS} loses rows from its
+     * MIDDLE, with a row saying how many: the head says what starts, and the
+     * tail is where `| sh` or `&& rm …` would be.
      */
-    private static function permissionCommandBlock(string $command, int $inner): string
+    private static function permissionCommandBlock(string $command, int $inner, string $marker = '$ '): string
     {
         $text = trim(self::permissionVisible(str_replace(["\r\n", "\r"], "\n", $command)), "\n");
-        // The `$ ` gutter only where it leaves room for the command itself.
+        // The gutter only where it leaves room for the command itself.
         $gutter = $inner >= 6;
         $room = $gutter ? $inner - 2 : max(1, $inner);
+        $pad = $gutter ? str_repeat(' ', Width::of($marker)) : '';
 
         $rows = [];
         foreach (explode("\n", $text) as $index => $line) {
             foreach (explode("\n", Width::wrap($line, $room)) as $part => $row) {
-                $rows[] = ($gutter ? ($index === 0 && $part === 0 ? '$ ' : '  ') : '') . $row;
+                $rows[] = ($gutter ? ($index === 0 && $part === 0 ? $marker : $pad) : '') . $row;
             }
         }
 

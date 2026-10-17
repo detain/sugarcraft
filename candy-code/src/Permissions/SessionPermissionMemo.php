@@ -952,6 +952,16 @@ final class SessionPermissionMemo
             return $target === null ? [] : [$name . '(domain:' . self::escape($target->host) . ')'];
         }
 
+        // A PtyRun that types keystrokes gets NO general pattern: the generic
+        // `PtyRun(<command>)` fallback below would let one "always" answer
+        // every future call sharing the launched program, whatever the model
+        // then types into it. Exact-call identity still memorises the steps
+        // (they ride the argument list; `steps` is not an annotation), so a
+        // literal repeat of the same call stays answered.
+        if ($tool === 'PtyRun' && ShellSubjectTools::stepTexts($tool, $arguments) !== []) {
+            return [];
+        }
+
         $pattern = $name . '(' . self::escape(trim($subject)) . ')';
 
         return PermissionRule::isWellFormedPattern($pattern) ? [$pattern] : [];

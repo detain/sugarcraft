@@ -464,6 +464,7 @@ final class PermissionRule
             $argumentPattern,
             $call->name,
             $projectRoot === '' ? null : $projectRoot,
+            $call->arguments,
         );
     }
 
@@ -623,9 +624,38 @@ final class PermissionRule
         string $argumentPattern,
         string $toolName,
         ?string $projectRoot,
+        array $arguments = [],
     ): bool {
         if (in_array($toolName, self::SHELL_SUBJECT_TOOLS, true)) {
-            return $this->matchesShellSubject($subject, $argumentPattern);
+            // ISS-001 (crush-review-1014): a `PtyRun` step is a keystroke typed
+            // INTO the terminal this rule's subject just started — `vim` under
+            // `Allow Bash(vim *)` driven to `:!/bin/sh` was the hole. When step
+            // texts exist they join the judgement: a RESTRICTIVE rule fires if
+            // ANY judged text matches (over-blocking is the safe direction for
+            // Deny/Ask, exactly like matchesShellSubject()'s union readings);
+            // an ALLOW rule must cover EVERY judged text, because a grant for
+            // the command alone never spoke for the keystrokes. Bash has no
+            // steps, so its path stays byte-identical.
+            $steps = ShellSubjectTools::stepTexts($toolName, $arguments);
+            if ($steps === []) {
+                return $this->matchesShellSubject($subject, $argumentPattern);
+            }
+            if ($this->action !== PermissionAction::Allow) {
+                foreach (array_merge([$subject], $steps) as $text) {
+                    if ($this->matchesShellSubject($text, $argumentPattern)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            foreach (array_merge([$subject], $steps) as $text) {
+                if (!$this->matchesShellSubject($text, $argumentPattern)) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         if (in_array($toolName, self::PATH_SUBJECT_TOOLS, true)) {
