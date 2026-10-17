@@ -314,4 +314,4 @@ Each step is a self-contained PR ending with the local gate (phpunit + phpstan +
 - CI / workflow changes beyond what consolidations require.
 - Library renames (handled by a separate flow per CLAUDE.md).
 - `CHANGELOG.md` / `UPGRADE_GUIDE` — pre-1.0, deferred by project policy.
-- candy-vcr / candy-vt work — covered separately in `vcr_use.md`.
+- candy-vcr / candy-vt work — covered separately in `vcr_use.md`. <!-- @rename-keep historical provenance -->
