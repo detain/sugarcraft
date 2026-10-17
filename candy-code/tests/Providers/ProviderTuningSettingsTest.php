@@ -30,6 +30,11 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * Neither bound may become a total deadline — {@see ProviderConnectTimeoutTest}
  * pins that for every provider; this file pins only that each setting
  * reaches the option it replaces, and that nonsense falls back.
+ *
+ * `streamHeaderTimeoutSeconds` joined the family at ISS-024, when the header
+ * wait was decoupled from the connect bound: the streaming arm below pins
+ * that the client's connect budget still rides the request untouched, while
+ * the header wait comes from its own key.
  */
 final class ProviderTuningSettingsTest extends TestCase
 {
@@ -119,16 +124,26 @@ final class ProviderTuningSettingsTest extends TestCase
         ];
     }
 
-    /** The streaming path takes the CLIENT's bound, so both transports agree. */
-    public function testTheStreamingPathUsesTheClientsConnectBound(): void
+    /**
+     * ISS-024: the connect budget is enforced by the pre-flight probe and the
+     * client-level `connect_timeout`; the request's `timeout` is now the
+     * header wait, a decoupled bound read from its own key. Both facts in one
+     * arm: the value the client was built with (4.5, not the later 9.0) keeps
+     * riding, and `timeout` no longer mirrors it.
+     */
+    public function testTheStreamingPathKeepsTheClientsConnectBoundAndDecouplesTheHeaderBound(): void
     {
         Bootstrap::writeUserConfig(['connectTimeoutSeconds' => 4.5]);
         $client = self::clientOf(SglangProvider::openAiCompatible('https://sglang.invalid/v1'));
 
         Bootstrap::writeUserConfig(['connectTimeoutSeconds' => 9.0]);
-        $options = self::captureHandlerOptions($client, ['stream' => true]);
+        $options = self::captureHandlerOptions($client, [
+            'stream' => true,
+            'candy_connect_preflight' => false,
+        ]);
 
-        self::assertSame(4.5, $options['timeout'], 'the stream path must not disagree with the client it rides on');
+        self::assertSame(4.5, $options['connect_timeout'], 'the bound the client was built with must still ride the request');
+        self::assertSame(120.0, $options['timeout'], 'the header wait rides its own key, not the connect bound');
     }
 
     // -------------------------------------------------------------------------
@@ -139,17 +154,18 @@ final class ProviderTuningSettingsTest extends TestCase
     {
         $client = self::clientOf(SglangProvider::openAiCompatible('https://sglang.invalid/v1'));
         $default = (new \ReflectionClassConstant(SglangProvider::class, 'STREAM_READ_IDLE_TIMEOUT_SECONDS'))->getValue();
+        $noPreflight = ['stream' => true, 'candy_connect_preflight' => false];
 
-        self::assertSame($default, self::captureHandlerOptions($client, ['stream' => true])['read_timeout']);
+        self::assertSame($default, self::captureHandlerOptions($client, $noPreflight)['read_timeout']);
         self::assertSame((float) $default, (float) SettingsSchema::byKey('streamIdleTimeoutSeconds')?->default);
 
         // Saved AFTER the client was built: the next request sees it.
         Bootstrap::writeUserConfig(['streamIdleTimeoutSeconds' => 900]);
-        self::assertSame(900.0, self::captureHandlerOptions($client, ['stream' => true])['read_timeout']);
+        self::assertSame(900.0, self::captureHandlerOptions($client, $noPreflight)['read_timeout']);
 
         // Under the floor a read bound would abort a thinking model.
         Bootstrap::writeUserConfig(['streamIdleTimeoutSeconds' => 5]);
-        self::assertSame($default, self::captureHandlerOptions($client, ['stream' => true])['read_timeout']);
+        self::assertSame($default, self::captureHandlerOptions($client, $noPreflight)['read_timeout']);
 
         // And it never reaches a non-streaming request, where `timeout` /
         // `read_timeout` would be a total deadline on curl.
