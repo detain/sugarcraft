@@ -1217,6 +1217,9 @@ final class Subcommands
 
         if ($inventory['servers'] === []) {
             echo Lang::t('cli.mcp.list.empty', ['path' => $inventory['path']]) . "\n";
+            // N-2: 'declares no servers' is only the whole truth when the
+            // skipped rows are said too — an all-typo file must not read clean.
+            self::warnSkippedMcpEntries($inventory['skipped']);
 
             return NonInteractive::EXIT_OK;
         }
@@ -1245,7 +1248,23 @@ final class Subcommands
             echo Lang::t('cli.mcp.list.wire_name', ['server' => $server['name'], 'prefix' => $wirePrefix]) . "\n";
         }
 
+        self::warnSkippedMcpEntries($inventory['skipped']);
+
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * N-2: name, one STDERR line each, the entries
+     * {@see Bootstrap::mcpServerInventory()} could not treat as servers. The
+     * entry rows carry the launch's own ISS-091 sentence, so list and launch
+     * read identically; the table above stays the answer to "what is declared"
+     * while a typo finally costs a line instead of vanishing.
+     */
+    private static function warnSkippedMcpEntries(array $skipped): void
+    {
+        foreach ($skipped as $entry) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.mcp.list.skipped', ['entry' => $entry]) . "\n");
+        }
     }
 
     /**

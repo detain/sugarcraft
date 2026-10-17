@@ -637,6 +637,7 @@ TXT,
     'cli.mcp.list.disabled' => 'MCP is switched off for this launch (looked at {path}); nothing to list.',
     'cli.mcp.list.empty' => '{path} declares no servers.',
     'cli.mcp.list.outside' => '{path} resolves outside the project tree and is ignored.',
+    'cli.mcp.list.skipped' => 'skipped {entry} — it names no server, so the launch would refuse it too',
     'cli.mcp.list.untrusted' => <<<'TXT'
 {path} is present but this project root is not trusted,
 so its servers are not started and are not listed. Add the root to

@@ -375,6 +375,32 @@ final class McpToolWiringTest extends TestCase
     }
 
     /**
+     * N-2: an entry that is not a named server object is no longer swallowed
+     * silently by `mcp list`. The launch loop has named this shape with the
+     * ISS-091 sentence since round 69; a listing quieter than the launch hides
+     * the operator typo exactly when the operator is hunting for it.
+     */
+    public function testTheInventoryNamesEntriesThatAreNotNamedServerObjects(): void
+    {
+        file_put_contents($this->repo . '/.mcp.json', (string) json_encode(['mcpServers' => [
+            'fake' => ['type' => 'stdio', 'command' => PHP_BINARY, 'args' => [$this->tempDir . '/server.php', $this->callLog, $this->handshakeLog], 'startTimeout' => 5],
+            'broken' => 'not-an-object',
+            '1' => ['type' => 'stdio'],
+        ]]));
+        $this->trustTheRepo();
+
+        $inventory = Bootstrap::mcpServerInventory($this->repo);
+
+        $this->assertSame(['fake'], array_column($inventory['servers'], 'name'), 'the good row survives');
+        $this->assertContains('broken (entry is string, not a named server object)', $inventory['skipped']);
+        // json_decode casts the numeric-string key to an int, so the row names
+        // it through the same json_encode the launch uses — list and launch
+        // print the identical sentence for the identical bytes.
+        $this->assertContains('1 (entry is array, not a named server object)', $inventory['skipped']);
+        $this->assertSame(0, $this->handshakeCount(), 'the inventory still started nothing');
+    }
+
+    /**
      * THE CONTROL, and the pair only means something with it: the SAME file, the
      * same mode, plus the user-side grant, and the server starts and its tool is
      * advertised. Otherwise the test above would be satisfied by an MCP feature

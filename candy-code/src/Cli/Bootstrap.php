@@ -8358,14 +8358,19 @@ final class Bootstrap
      * `enabled` reflects the CONFIG, not liveness. Nothing here can tell you a
      * declared server would fail to start — finding that out means starting it.
      *
-     * @return array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null}
+     * @return array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, skipped: list<string>, error: string|null}
      *   `servers` is empty for every non-{@see self::MCP_TRUSTED} status and
      *   for a file that is not decodable, in which case `error` says why.
+     *   `skipped` (N-2) names every ENTRY that is not a named server object —
+     *   the launch loop refuses those same entries with the same sentence
+     *   (ISS-091), so `mcp list` must not swallow them silently: a skipped
+     *   entry is an operator typo that would otherwise only surface as a
+     *   missing tool.
      */
     public static function mcpServerInventory(?string $root = null): array
     {
         $decision = self::mcpConfigDecision($root);
-        $base = ['status' => $decision['status'], 'path' => $decision['path'], 'servers' => [], 'error' => null];
+        $base = ['status' => $decision['status'], 'path' => $decision['path'], 'servers' => [], 'skipped' => [], 'error' => null];
 
         if ($decision['status'] !== self::MCP_TRUSTED) {
             return $base;
@@ -8387,8 +8392,18 @@ final class Bootstrap
         }
 
         $servers = [];
+        $skipped = [];
         foreach ($data['mcpServers'] as $name => $config) {
             if (!is_string($name) || !is_array($config)) {
+                // N-2: the SAME sentence {@see \SugarCraft\Code\MCP\McpClient::startServers()}
+                // records for this shape (ISS-091), so `mcp list` and the
+                // launch can never disagree about why an entry is missing.
+                $skipped[] = sprintf(
+                    '%s (entry is %s, not a named server object)',
+                    is_string($name) && $name !== '' ? $name : json_encode($name, JSON_PARTIAL_OUTPUT_ON_ERROR),
+                    get_debug_type($config),
+                );
+
                 continue;
             }
 
@@ -8419,7 +8434,7 @@ final class Bootstrap
             $servers[] = ['name' => $name, 'type' => $type, 'detail' => $detail];
         }
 
-        return ['servers' => $servers] + $base;
+        return ['servers' => $servers, 'skipped' => $skipped] + $base;
     }
 
     /**

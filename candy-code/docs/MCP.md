@@ -15,8 +15,11 @@ happens at launch, before any tool call and in every permission mode.
 
 `Bootstrap::mcpConfigDecision()` is the one discovery path — `mcpClient()`,
 `mcpServerInventory()` and `candy-code mcp list` all come through it, so the
-listing can never report a verdict the launch does not act on. It returns one of
-five statuses:
+listing can never report a verdict the launch does not act on. The same rule
+holds entry by entry: an entry that is not a named server object is listed with
+the launch's own refusal sentence (ISS-091) — the text arm says so on stderr and
+the JSON arm carries it under `skipped`, so a typo costs a line instead of
+vanishing (N-2). It returns one of five statuses:
 
 | Status | Meaning | What happens |
 |---|---|---|
