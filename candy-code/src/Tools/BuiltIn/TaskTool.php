@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentWorkerPool;
@@ -25,6 +26,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Support\ParentProcessGuard;
 use SugarCraft\Code\Support\SiblingSpendLedger;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Skills\SkillPromptLine;
 use SugarCraft\Code\Tools\DelegatesToEngine;
 use SugarCraft\Code\Tools\ActivitySink;
 use SugarCraft\Code\Tools\ExemptFromParallelDeadline;
@@ -269,6 +271,44 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * this shipped at.
      */
     public const MAX_CONCURRENT_AGENTS = null;
+
+    /**
+     * Opens the fenced agent roster the spawn guidance carries (ISS-032).
+     *
+     * The shape mirrors `SkillListingSection`: a fenced block whose every line
+     * is harness-assembled from repository-authored text, so the model reads
+     * agent names and descriptions as inert metadata, not as harness voice.
+     */
+    public const AGENTS_OPEN = '<available-agents>';
+
+    /** Closes the fenced agent roster. */
+    public const AGENTS_CLOSE = '</available-agents>';
+
+    /** The one caption line rendered directly under the opener. */
+    public const AGENTS_CAPTION = 'Available agents (pass the exact name as "agent" to this tool):';
+
+    /**
+     * The most bytes ONE roster line may occupy, clip marker included.
+     *
+     * Mirrors {@see \SugarCraft\Code\Skills\SkillPromptLine::LISTING_MAX_BYTES}:
+     * an agent description is frontmatter from a file a cloned checkout may
+     * ship with no trust gate, so a multi-kilobyte description must not enter
+     * every request.
+     */
+    public const AGENT_LINE_MAX_BYTES = 1024;
+
+    /**
+     * The budget for all roster lines together; agents past it are omitted
+     * with a counted tail row rather than silently dropped.
+     *
+     * The roster repeats on every Task-bearing request, so its cost scales
+     * with session length; the per-agent clip bounds one line, this bounds the
+     * whole section a large `agents/` directory could mint.
+     */
+    public const AGENTS_LISTING_MAX_BYTES = 4096;
+
+    /** Tail row naming how many agents the byte budget could not carry. */
+    public const AGENTS_OMITTED_FORMAT = '- (%d more agents omitted)';
 
     /**
      * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
@@ -679,7 +719,103 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             return $doctrine;
         }
 
-        return $doctrine . "\n\n" . 'Current agent roster: ' . $this->rosterNames() . '.';
+        $listing = $this->agentListing();
+        if ($listing === '') {
+            return $doctrine . "\n\n" . 'Current agent roster: ' . $this->rosterNames() . '.';
+        }
+
+        return $doctrine . "\n\n" . $listing;
+    }
+
+    /**
+     * The fenced `<available-agents>` roster for the spawn guidance, or ''
+     * when there is nothing to list.
+     *
+     * ISS-032: the guidance used to interpolate bare, unescaped names — and
+     * nothing else — while the per-agent descriptions the model actually
+     * selects by lived only behind `/agents`. A roster is repository-authored
+     * text (native, claude, and opencode files all reach it from a cloned
+     * checkout with no trust gate), so it gets the same fence, per-line
+     * clipping, and self-neutralisation the skill listing earned in audit
+     * 15d-02. An empty listing renders as '' rather than an empty fence, and
+     * the caller falls back to the sentence form — a session with no agents
+     * pays no fence bytes for the affordance it cannot use.
+     */
+    private function agentListing(): string
+    {
+        /** @var list<Agent> $agents */
+        $agents = array_values($this->agentManager?->all() ?? []);
+        if ($agents === []) {
+            return '';
+        }
+
+        usort($agents, static fn(Agent $a, Agent $b): int => strcmp($a->name, $b->name));
+
+        $lines = [];
+        $used = 0;
+        foreach ($agents as $agent) {
+            $line = $this->agentPromptLine($agent);
+            if ($used + strlen($line) + 1 > self::AGENTS_LISTING_MAX_BYTES) {
+                $omitted = count($agents) - count($lines);
+                $lines[] = sprintf(self::AGENTS_OMITTED_FORMAT, $omitted);
+                break;
+            }
+
+            $used += strlen($line) + 1;
+            $lines[] = $line;
+        }
+
+        return self::AGENTS_OPEN . "\n" . self::AGENTS_CAPTION . "\n\n"
+            . implode("\n", $lines) . "\n" . self::AGENTS_CLOSE;
+    }
+
+    /**
+     * One `- [badge] name: description` roster line, single-line, escaped,
+     * fence-neutralised, and never longer than {@see AGENT_LINE_MAX_BYTES}.
+     */
+    private function agentPromptLine(Agent $agent): string
+    {
+        $badge = $agent->source->badge();
+        $prefix = '- ' . ($badge === '' ? '' : $badge . ' ') . SkillPromptLine::field($agent->name);
+        $description = SkillPromptLine::field($agent->description);
+        $line = $description === '' ? $prefix : $prefix . ': ' . $description;
+        $line = self::neutraliseAgentsFence($line);
+
+        if (strlen($line) <= self::AGENT_LINE_MAX_BYTES) {
+            return $line;
+        }
+
+        // mb_strcut for the reason SkillPromptLine::render() gives: a plain
+        // byte cut lands inside a UTF-8 sequence and puts invalid bytes in
+        // front of the model. Clipping AFTER the neutralisation cannot revive
+        // a tag: a cut can shorten `&lt;/available-agents` but never turn it
+        // back into `<`.
+        return mb_strcut($line, 0, self::AGENT_LINE_MAX_BYTES - strlen(SkillPromptLine::CLIP_MARKER), 'UTF-8')
+            . SkillPromptLine::CLIP_MARKER;
+    }
+
+    /**
+     * Defang any spelling of this block's own fence inside a payload line.
+     *
+     * WHY HERE AND NOT IN THE GLOBAL ROSTER: `PromptFence::TAGS` does not
+     * (yet) carry `available-agents`, and widening that roster is a
+     * whole-suite census event pinned by two whole-roster tests and a long
+     * prose history. The house precedent for a fence outside the roster is
+     * `TurnContextBlock::escapeOwnFence` — the emitting class neutralises its
+     * own name in every payload it assembles — so the roster follows it. The
+     * seam to fold this into `PromptFence::escape()` proper is recorded for
+     * closeout.
+     */
+    private static function neutraliseAgentsFence(string $payload): string
+    {
+        $escaped = preg_replace('~<(?=/?available-agents(?:[\s/>]|\z))~i', '&lt;', $payload);
+        if ($escaped === null) {
+            throw new \RuntimeException(
+                'TaskTool: PCRE failure (' . preg_last_error_msg() . ') while escaping an agent roster line',
+            );
+        }
+
+        return $escaped;
     }
 
     // @region schema
