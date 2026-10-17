@@ -4361,9 +4361,10 @@ final class Bootstrap
      *
      *  - new: a fresh row. Empty rows older than an hour that earlier launches
      *    left behind are swept first ({@see EnhancedSessionStore::pruneEmptySessions()}).
-     *  - continue: the most recently used session that holds a conversation
-     *    ({@see EnhancedSessionStore::latestResumableSession()}), else
-     *    {@see seedSession()}.
+     *  - continue: the most recently used session that holds a conversation,
+     *    scoped to this launch's cwd first and falling back to the global
+     *    latest ({@see EnhancedSessionStore::latestResumableSessionFromCwd()}),
+     *    else {@see seedSession()}.
      *  - resume: the named session; with no target, a fresh row plus the
      *    session picker open over it, so Esc still leaves a working chat.
      *
