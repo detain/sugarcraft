@@ -100,6 +100,36 @@ final class InstructionFileLoader
     public const MAX_DOCUMENT_BYTES = 61_440;
 
     /**
+     * The byte budget one {@see loadForPath()} result assembles to (ISS-069).
+     *
+     * A touch now returns EVERY governing instruction file not yet emitted,
+     * outermost first, instead of only the innermost — which makes the tool
+     * result a multi-document surface for the first time, and a surface with
+     * no ceiling on how many documents can pile onto it: a deep tree with a
+     * directory-level `CLAUDE.md` at every level had until now been retired
+     * one file per touch, never at once. The budget is one document's worth —
+     * the same figure {@see MAX_DOCUMENT_BYTES} puts on a single file, the
+     * worst case a touch could already deliver — so the fix changes WHICH
+     * documents arrive, never how many bytes a single touch costs. The
+     * exception is stated in the walk: the first accepted document of a call
+     * joins unconditionally whatever its framed size, so the assembly can
+     * overshoot by at most one frame — readBounded() keeps that document's
+     * body itself under {@see MAX_DOCUMENT_BYTES}.
+     */
+    public const MAX_ON_TOUCH_RESULT_BYTES = self::MAX_DOCUMENT_BYTES;
+
+    /**
+     * The room {@see loadForPath()}'s budget pre-check charges a candidate
+     * beyond its raw file size: the framing {@see frameOnTouch()} adds
+     * (attribute line, preamble, fences) plus the headroom {@see
+     * PromptFence::escape()} and the UTF-8 note may take. Judged on a stat
+     * BEFORE the read — see the walk for why an estimate before bytes is the
+     * load-bearing order; a loose constant is the safe direction, it defers
+     * a file to a later touch, never retires one unread.
+     */
+    private const FRAME_OVERHEAD_BYTES = 1024;
+
+    /**
      * The most bytes {@see pointer()} returns, by construction — the same 1 KiB
      * line ceiling {@see RulePathNudge::pointer()} holds a deferred rule to, for
      * the same reason: the splice reserves room for its pointer lines up front,
@@ -1007,9 +1037,18 @@ final class InstructionFileLoader
      * each level for CLAUDE.md, AGENTS.md or an alias ({@see FILENAMES}).
      * CLAUDE.md is preferred over AGENTS.md, and both over the aliases, at the
      * same level. Each nested file is injected at most once
-     * per session — subsequent calls for the same path return null if already
+     * per session — a later call returns null when it holds nothing not yet
      * injected, and a file the root documents already carried (directly or via
      * an `@import`) counts as injected too.
+     *
+     * ALL OF THEM ARRIVE AT ONCE (ISS-069). The walk runs to the root and
+     * returns EVERY governing file not yet emitted, outermost first, as one
+     * assembled result — the old shape returned only the innermost new file
+     * and retired it, leaving the directories above it un-narrated until some
+     * unrelated touch climbed to them. The assembled result is budgeted at
+     * {@see MAX_ON_TOUCH_RESULT_BYTES}, a stat-before-read ceiling whose
+     * accounting law is written at the assembly; a file over {@see
+     * MAX_DOCUMENT_BYTES} itself still joins as its {@see pointer()} line.
      *
      * CONTAINED, and it was not: both the walk's starting directory and every
      * candidate file are checked against repoRoot through
@@ -1032,10 +1071,11 @@ final class InstructionFileLoader
      * protected against at the splice.
      *
      * @param string $touchedPath Absolute path to the file that was touched
-     * @return string|null The nested instruction file framed as a governed
-     *                     document, or null if none found, if the touched path
-     *                     is outside repoRoot, or if the only candidate
-     *                     resolves outside it
+     * @return string|null The not-yet-emitted nested instruction files, each
+     *                     framed as a governed document, outermost first and
+     *                     separated by blank lines — or null if none is found,
+     *                     if the touched path is outside repoRoot, or if every
+     *                     candidate resolves outside it or was already emitted
      */
     public function loadForPath(string $touchedPath): ?string
     {
@@ -1121,10 +1161,19 @@ final class InstructionFileLoader
                 return null;
             }
 
-            // Walk up the directory tree toward repoRoot
+            // COLLECT one candidate per level, walking inner to outer toward
+            // repoRoot, then assemble them outermost first below (ISS-069).
+            // The old walk RETURNED at the first not-yet-emitted file it
+            // found, so a deep touch retired the deepest instruction while the
+            // files governing its wider directories stayed invisible until
+            // some other path happened to walk past them — "at most once per
+            // session" had quietly become "at most one file per session".
+            $candidates = [];
             while ($dir !== $repoRoot) {
                 // CLAUDE.md first (preferred), then AGENTS.md, then the
-                // other agents' aliases — FILENAMES' precedence order.
+                // other agents' aliases — FILENAMES' precedence order, which
+                // picks among this level's not-yet-emitted files, exactly as
+                // the single-file walk picked among them.
                 foreach (self::FILENAMES as $filename) {
                     $fullPath = $dir . '/' . $filename;
                     if (!is_file($fullPath)) {
@@ -1136,7 +1185,11 @@ final class InstructionFileLoader
                     // committed line and `is_file()` follows it. within() records
                     // the entry question, as in loadRoot(); a file cannot resolve
                     // onto a directory boundary, so the predicate choice is not
-                    // observable here either.
+                    // observable here either. The full walk does RECORD one now
+                    // that the early return never reached — a refusal above the
+                    // first hit was a refusal that never existed; it is announced
+                    // mid-session like any other, which is the point of ISS-069's
+                    // "put in front of the model".
                     if (!ContainedPath::within($fullPath, $repoRoot)) {
                         $this->refusedPaths[$fullPath] = 'resolves outside the checkout (' . $repoRoot . ')';
 
@@ -1144,32 +1197,17 @@ final class InstructionFileLoader
                     }
 
                     $realPath = realpath($fullPath) ?: $fullPath;
-                    if (!isset($this->emittedPaths[$realPath])) {
-                        // A file that was refused earlier and passes both gates now
-                        // is no longer refused — same reason as the `unset()` above,
-                        // for the entry rather than the touched path.
-                        unset($this->refusedPaths[$fullPath]);
-
-                        $this->emittedPaths[$realPath] = true;
-                        // Resolved, for the reason loadRoot() reads resolved; the
-                        // import base stays spelled, for the reason it stays spelled.
-                        // Bounded like the session documents: a nested file this
-                        // size would otherwise ride whole into a tool result.
-                        $raw = $this->readBounded($realPath, $fullPath, $bytes);
-                        if ($raw === null) {
-                            return self::pointer($fullPath, (int) $bytes);
-                        }
-                        if ($raw === false) {
-                            return null;
-                        }
-
-                        [$doc, $note] = $this->utf8Document($raw, $fullPath);
-
-                        return $this->frameOnTouch(
-                            $fullPath,
-                            $this->expandImports($doc, dirname($fullPath), $repoRoot),
-                        ) . $note;
+                    if (isset($this->emittedPaths[$realPath])) {
+                        continue;
                     }
+
+                    // A file that was refused earlier and passes both gates now
+                    // is no longer refused — same reason as the `unset()` above,
+                    // for the entry rather than the touched path.
+                    unset($this->refusedPaths[$fullPath]);
+                    $candidates[] = ['spelled' => $fullPath, 'real' => $realPath];
+
+                    break; // one candidate per level
                 }
 
                 // Move to parent directory
@@ -1180,7 +1218,72 @@ final class InstructionFileLoader
                 $dir = $parent;
             }
 
-            return null;
+            // ASSEMBLE, outermost first — the broad convention frames the
+            // narrow one, the reading order a human applies to a directory
+            // tree, and the order that lets a truncated budget cut the
+            // LEAST-expected file: the innermost, since by the tree's own
+            // logic it governs the narrowest surface.
+            //
+            // THE BUDGET IS JUDGED ON A STAT BEFORE ANY READ OR EXPANSION.
+            // Reading marks the file retired — emittedPaths ticks at the read,
+            // and expandImports() marks every import it inlines at expansion
+            // time — so a body loaded and then dropped is an instruction
+            // document (and its whole import tree) retired without ever being
+            // shown, the law TruncatesOutput::instructionSection() already
+            // states for the tool-result splice. A file skipped for budget is
+            // NOT marked emitted: it arrives on the next touch, exactly as a
+            // never-examined file does. The first accepted block joins
+            // whatever its size — see MAX_ON_TOUCH_RESULT_BYTES for the
+            // bounded overshoot that buys.
+            $blocks = [];
+            $used = 0;
+            foreach (array_reverse($candidates) as $candidate) {
+                $spelled = $candidate['spelled'];
+                $real = $candidate['real'];
+
+                $size = filesize($real);
+                // An over-ceiling file costs a pointer, not a document —
+                // readBounded() will defer it — so the estimate is the pointer
+                // bound, and a huge inner file never crowds its outer
+                // governors out of an assembly that has 1 KiB to spare.
+                $estimate = $size !== false && $size > self::MAX_DOCUMENT_BYTES
+                    ? self::MAX_POINTER_BYTES
+                    : self::FRAME_OVERHEAD_BYTES + (int) $size;
+                if ($blocks !== [] && $used + $estimate > self::MAX_ON_TOUCH_RESULT_BYTES) {
+                    continue;
+                }
+
+                $this->emittedPaths[$real] = true;
+                // Resolved, for the reason loadRoot() reads resolved; the
+                // import base stays spelled, for the reason it stays spelled.
+                // Bounded like the session documents: a nested file this
+                // size would otherwise ride whole into a tool result.
+                $raw = $this->readBounded($real, $spelled, $bytes);
+                if ($raw === null) {
+                    // Over the document ceiling: defer() recorded the refusal
+                    // and marked it emitted; the pointer line IS the
+                    // disclosure the model receives, so it joins the assembly
+                    // and the walk goes on — a huge inner file must not hide
+                    // its outer governors.
+                    $block = self::pointer($spelled, (int) $bytes);
+                } elseif ($raw === false) {
+                    // Read failure retires (the emitted mark is already set,
+                    // as it was in the single-file walk); only refresh() gives
+                    // a transient error another turn.
+                    continue;
+                } else {
+                    [$doc, $note] = $this->utf8Document($raw, $spelled);
+                    $block = $this->frameOnTouch(
+                        $spelled,
+                        $this->expandImports($doc, dirname($spelled), $repoRoot),
+                    ) . $note;
+                }
+
+                $blocks[] = $block;
+                $used += strlen($block);
+            }
+
+            return $blocks === [] ? null : implode("\n\n", $blocks);
         } finally {
             $this->announceMidSessionRefusals($before, $touchedPath);
         }

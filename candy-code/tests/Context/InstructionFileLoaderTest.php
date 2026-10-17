@@ -448,6 +448,112 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertNull($result);
     }
 
+    // ─── loadForPath() multi-file assembly (ISS-069) ───────────────
+
+    public function testLoadForPathReturnsEveryGoverningFileOutermostFirst(): void
+    {
+        mkdir($this->repoRoot . '/a/b/c', 0777, true);
+        $this->touch($this->repoRoot . '/a/CLAUDE.md', '# GOVERN-A');
+        $this->touch($this->repoRoot . '/a/b/AGENTS.md', '# GOVERN-B');
+        $this->touch($this->repoRoot . '/a/b/c/CLAUDE.md', '# GOVERN-C');
+        $this->touch($this->repoRoot . '/a/b/c/deep.php', '<?php // deep');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $result = $loader->loadForPath($this->repoRoot . '/a/b/c/deep.php');
+
+        $this->assertNotNull($result);
+        $this->assertStringContainsString('GOVERN-A', $result);
+        $this->assertStringContainsString('GOVERN-B', $result);
+        $this->assertStringContainsString('GOVERN-C', $result, 'the old shape retired only this one and hid the other two');
+        $this->assertLessThan(
+            strpos($result, 'GOVERN-B'),
+            strpos($result, 'GOVERN-A'),
+            'outermost first',
+        );
+        $this->assertLessThan(strpos($result, 'GOVERN-C'), strpos($result, 'GOVERN-B'));
+
+        // A later touch under the same tree adds nothing: all three emitted.
+        $this->touch($this->repoRoot . '/a/b/c/deeper.php', '<?php // deeper');
+        $this->assertNull($loader->loadForPath($this->repoRoot . '/a/b/c/deeper.php'));
+    }
+
+    public function testTheTouchAssemblyIsBudgetedAndABudgetSkipDoesNotRetireTheFile(): void
+    {
+        mkdir($this->repoRoot . '/a/b', 0777, true);
+        // Outer document fills the result budget alone (framed overshoot of
+        // the first block is allowed by design); the inner one cannot fit.
+        $this->touch($this->repoRoot . '/a/CLAUDE.md', str_repeat('O', 50_000));
+        $this->touch($this->repoRoot . '/a/b/CLAUDE.md', '# INNER FIVE-TEEN-K');
+        $this->writeInnerPadding($this->repoRoot . '/a/b/CLAUDE.md', 15_000);
+        $this->touch($this->repoRoot . '/a/b/deep.php', '<?php // deep');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $result = $loader->loadForPath($this->repoRoot . '/a/b/deep.php');
+
+        $this->assertStringNotContainsString('INNER FIVE-TEEN-K', (string) $result, 'over-budget, so it was not shipped');
+        $this->assertLessThanOrEqual(
+            InstructionFileLoader::MAX_ON_TOUCH_RESULT_BYTES + 1024,
+            strlen((string) $result),
+            'the assembled result respects the touch budget plus at most one frame',
+        );
+        $this->assertNotContains($this->repoRoot . '/a/b/CLAUDE.md', $loader->emittedPaths(), 'a budget skip is not a retirement');
+
+        // And it does arrive: the outer document is now emitted, so the inner
+        // one leads the next touch's assembly as its first block.
+        $again = $loader->loadForPath($this->repoRoot . '/a/b/deep.php');
+        $this->assertNotNull($again);
+        $this->assertStringContainsString('INNER FIVE-TEEN-K', $again, 'the skipped document arrived on the next touch');
+    }
+
+    public function testTheFirstBlockOfATouchResultJoinsEvenWhenTheBudgetIsSpent(): void
+    {
+        mkdir($this->repoRoot . '/a/b', 0777, true);
+        mkdir($this->repoRoot . '/q', 0777, true);
+        $this->touch($this->repoRoot . '/a/CLAUDE.md', '# OUTER TINY');
+        $bigBody = '# INNER BIG ' . str_repeat('I', 61_400);
+        $this->touch($this->repoRoot . '/a/b/CLAUDE.md', $bigBody);
+        $this->touch($this->repoRoot . '/a/b/deep.php', '<?php // deep');
+        // Same big document, alone on its walk — no governor above it.
+        $this->touch($this->repoRoot . '/q/CLAUDE.md', $bigBody);
+        $this->touch($this->repoRoot . '/q/deep.php', '<?php // deep');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $result = (string) $loader->loadForPath($this->repoRoot . '/a/b/deep.php');
+        $this->assertStringContainsString('OUTER TINY', $result);
+        $this->assertStringNotContainsString('INNER BIG', $result, 'framed size would overrun the budget behind the first block');
+
+        $result2 = (string) $loader->loadForPath($this->repoRoot . '/q/deep.php');
+        $this->assertStringContainsString('INNER BIG', $result2, 'the first accepted block is unconditional whatever its size');
+        $this->assertGreaterThan(
+            InstructionFileLoader::MAX_ON_TOUCH_RESULT_BYTES,
+            strlen($result2),
+            'the bounded overshoot the constant documents, made visible',
+        );
+    }
+
+    public function testAnOversizedInnerFileShipsItsPointerAndTheOuterGovernorStillArrives(): void
+    {
+        mkdir($this->repoRoot . '/a/b', 0777, true);
+        $this->touch($this->repoRoot . '/a/CLAUDE.md', '# OUTER READS YOU');
+        $this->touch(
+            $this->repoRoot . '/a/b/CLAUDE.md',
+            str_repeat('X', InstructionFileLoader::MAX_DOCUMENT_BYTES + 1),
+        );
+        $this->touch($this->repoRoot . '/a/b/deep.php', '<?php // deep');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $result = (string) $loader->loadForPath($this->repoRoot . '/a/b/deep.php');
+
+        $this->assertStringContainsString('OUTER READS YOU', $result);
+        $this->assertStringContainsString('a/b/CLAUDE.md', $result, 'the pointer line names the deferred file');
+    }
+
+    private function writeInnerPadding(string $path, int $totalBytes): void
+    {
+        $existing = (string) file_get_contents($path);
+        file_put_contents($path, $existing . str_repeat('p', max(0, $totalBytes - strlen($existing))));
+    }
+
     // ─── @-import wiring (ImportResolver) ──────────────────────────
 
     public function testLoadRootExpandsAtImportReference(): void
