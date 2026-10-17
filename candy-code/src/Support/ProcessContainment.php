@@ -451,6 +451,12 @@ final class ProcessContainment
      * than tracked from the wrapper: a stale bookkeeping flag is how a
      * containment mechanism grows into a self-kill.
      *
+     * ISS-014: the answer is only reliable WHILE THE CHILD IS ALIVE —
+     * proc_get_status() here reaps a dead leader, after which
+     * posix_getpgid() fails on the gone pid and the group reads as absent
+     * even though its members live. Callers that will signal later must
+     * record the id at spawn time and signal -pgid directly.
+     *
      * @param resource|mixed $process the value a proc_open() call returned
      */
     public static function groupId(mixed $process): ?int

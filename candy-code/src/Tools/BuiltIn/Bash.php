@@ -486,9 +486,17 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat)
             : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat);
         if (($run['timedOut'] ?? false) === true) {
+            // ISS-014: the group-kill claim rides the CONFIRMATION, never
+            // the timeout flag. An unconfirmed stop (no recorded group, or
+            // a group that kept answering kill(0) past both rungs) says so
+            // instead of narrating a kill that may not have landed.
+            $killing = ($run['groupKilled'] ?? false) === true
+                ? 'the command and its process group were killed'
+                : 'the command was signalled but its death was not confirmed — anything it backgrounded may still be running';
             $run['stderr'] = ltrim($run['stderr'] . "\n" . sprintf(
-                '[timed out after %d s: the command and its process group were killed; pass a larger `timeout` (max %d) if it needs longer]',
+                '[timed out after %d s: %s; pass a larger `timeout` (max %d) if it needs longer]',
                 $timeout,
+                $killing,
                 $this->maxTimeoutSeconds,
             ), "\n");
         }

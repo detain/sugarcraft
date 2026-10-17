@@ -85,6 +85,41 @@ final class CapturedProcessDeadlineTest extends TestCase
         self::assertTrue(self::gone($pid), "grandchild {$pid} survived the deadline kill — it was orphaned, not killed");
     }
 
+    /**
+     * ISS-014: the installer shape. `cmd &` backgrounds part of the command
+     * and lets the wrapper exit immediately, so by the time the deadline
+     * fires the process-group LEADER is dead — and the group id derived at
+     * kill time is derived from a pid proc_get_status() has just reaped:
+     * posix_getpgid() fails, the group signal is skipped, the backgrounded
+     * part lives, and the old result still claimed the group was killed.
+     * The id recorded at spawn (while the leader was certainly alive) is
+     * what makes both the kill and the claim honest here.
+     */
+    public function testAGroupKillLandsEvenWhenTheLeaderDiedFirst(): void
+    {
+        $pidFile = $this->dir . '/leader-first.pid';
+        $run = self::host()->capture(
+            'sleep 30 & echo $! > ' . escapeshellarg($pidFile) . '; exit 0',
+            0.5,
+        );
+
+        self::assertTrue($run['timedOut'], var_export($run, true));
+        $pid = (int) trim((string) @file_get_contents($pidFile));
+        self::assertGreaterThan(0, $pid, 'the fixture never started its backgrounded part');
+
+        if (ProcessContainment::detachedSpawnBinary() === '') {
+            // No setsid means no group was ever ours to record — and the
+            // claim must not assert one either way.
+            self::assertFalse($run['groupKilled']);
+            @posix_kill($pid, 9);
+
+            return;
+        }
+
+        self::assertTrue($run['groupKilled'], 'the recorded group was signalled but never confirmed gone');
+        self::assertTrue(self::gone($pid), "the backgrounded part {$pid} survived a confirmed group kill");
+    }
+
     public function testAChildThatClosedItsPipesIsStillBoundedByTheDeadline(): void
     {
         // EOF arrives at once, so only the post-drain exit wait can bound this.

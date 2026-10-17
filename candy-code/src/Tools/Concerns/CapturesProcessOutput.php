@@ -130,7 +130,14 @@ trait CapturesProcessOutput
      * closed and the child reaped; the result is exit 124 (timeout(1)'s
      * number) with `timedOut` true and whatever output arrived before the
      * deadline. `timedOut` is the discriminator to read — an exit code of
-     * 124 can also be a command's own answer.
+     * 124 can also be a command's own answer. The group id the ladder
+     * signals is RECORDED AT SPAWN, while the leader is certainly alive
+     * (ISS-014): a command that backgrounds a child and lets the wrapper
+     * exit first loses its group to `proc_get_status()`'s own reaping, and
+     * re-deriving the id at kill time would then signal a dead pid while
+     * the group lived. `groupKilled` carries the honest claim — true only
+     * when the recorded group was confirmed empty afterwards; a kill that
+     * could not be confirmed must never be narrated as one.
      *
      * $envOverrides is handed to {@see ProcessContainment::scrubbedEnv()} and
      * wins over the inherited environment — and over the credential scrub,
@@ -156,6 +163,7 @@ trait CapturesProcessOutput
      *     stdoutMidLine: bool,
      *     stderrMidLine: bool,
      *     timedOut: bool,
+     *     groupKilled: bool,
      * }
      */
     private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null): array
@@ -203,8 +211,17 @@ trait CapturesProcessOutput
                 'stdoutMidLine' => false,
                 'stderrMidLine' => false,
                 'timedOut' => false,
+                'groupKilled' => false,
             ];
         }
+
+        // ISS-014: take the process-group id NOW, while the leader is
+        // certainly alive. proc_get_status() reaps a dead child, so an id
+        // re-derived at kill time can race the wrapper out of the process
+        // table (a backgrounded `cmd &` exits the shell immediately and
+        // keeps the pipes open). A plain int stays signalable as -pgid
+        // after the leader's death for as long as any member lives.
+        $groupId = self::recordedGroupId($process);
 
         // Close stdin immediately: a command that reads from it (and nothing
         // supplies input) would otherwise block the agent forever.
@@ -269,10 +286,16 @@ trait CapturesProcessOutput
             $timedOut = $observedExit === null;
         }
 
+        $groupKilled = false;
         if ($timedOut) {
             // Kill BEFORE closing the pipes — StatusLineCommand's order: a
             // stuck child is not writing, so EPIPE would never reach it.
-            self::terminateGroup($process);
+            // The claim needs BOTH a recorded group id (an unwrapped child
+            // shares this process's group and only IT can be signalled —
+            // see the deadline tests' detachedSpawnBinary()==='' arm) and
+            // the ladder's confirmation that the group answered nothing.
+            $ladderConfirmed = self::terminateGroup($process, $groupId);
+            $groupKilled = $groupId !== null && $ladderConfirmed;
         }
 
         fclose($pipes[1]);
@@ -296,6 +319,7 @@ trait CapturesProcessOutput
             'stdoutMidLine' => $stdoutMidLine,
             'stderrMidLine' => $stderrMidLine,
             'timedOut' => $timedOut,
+            'groupKilled' => $groupKilled,
         ];
     }
 
@@ -336,29 +360,75 @@ trait CapturesProcessOutput
     }
 
     /**
+     * The process-group id a deadline kill should target, recorded while
+     * the child is certainly alive (ISS-014).
+     *
+     * {@see ProcessContainment::groupId()} cannot serve HERE, at spawn
+     * time: the tracked pid is the `setsid(1)` process BEFORE it calls
+     * setsid(2), so a measured `posix_getpgid(child) === child` read this
+     * early still sees the inherited group and answers null exactly when
+     * asked the one question it can answer. The wrapper gives the same
+     * fact by construction instead: setsid(2) in place (the forked child
+     * is never already a group leader, so setsid(1) execs rather than
+     * forks) makes the spawned pid its own group leader, and a pid is
+     * stable from birth. Without the wrapper the child shares THIS
+     * process's group and there is no group of ours to record — answering
+     * null keeps both the kill and the claim honest.
+     *
+     * @param resource $process
+     */
+    private static function recordedGroupId($process): ?int
+    {
+        if (!\function_exists('posix_kill') || ProcessContainment::detachedSpawnBinary() === '') {
+            return null;
+        }
+
+        $pid = (int) (proc_get_status($process)['pid'] ?? 0);
+
+        return $pid > 0 ? $pid : null;
+    }
+
+    /**
      * The shared 15→9 ladder over the child's process GROUP, so git's own
      * helpers (an fsmonitor hook, a credential helper) die with it rather
      * than being orphaned holding the repository.
      *
-     * The group id is read ONCE, while the child is still alive: if SIGTERM
-     * kills the wrapper first, a re-derivation would find no group and the
-     * signal-9 rung would reach only the dead wrapper, missing a descendant
-     * that trapped TERM.
+     * The group id is RECORDED AT SPAWN and handed in (ISS-014): if SIGTERM
+     * — or the command's own exit — removes the wrapper first, a
+     * re-derivation would find no group (proc_get_status() reaps the corpse,
+     * and posix_getpgid() fails on a gone pid), the signal-9 rung would
+     * reach only the dead wrapper, and the caller would narrate a group kill
+     * that never happened. The recorded id is signalled whatever the
+     * leader's state.
+     *
+     * The return value is a CONFIRMATION, not a hope: with a recorded group
+     * the ladder only reports gone once the leader's corpse has been reaped
+     * AND kill(-pgid, 0) answers ESRCH — a zombie leader still holds its
+     * group "alive" for signalling purposes, which is why the poll reads
+     * proc_get_status() first. Without a group id the verdict covers only
+     * the child this process spawned, and callers must not claim more.
      *
      * @param resource $process
      */
-    private static function terminateGroup($process): void
+    private static function terminateGroup($process, ?int $groupId): bool
     {
-        $groupId = ProcessContainment::groupId($process);
-
-        ProcessReaper::escalate(
+        return ProcessReaper::escalate(
             static function (int $signal) use ($process, $groupId): void {
                 if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
                     return;
                 }
                 ProcessContainment::terminate($process, $signal);
             },
-            static fn(): bool => (proc_get_status($process)['running'] ?? false) !== true,
+            static function () use ($process, $groupId): bool {
+                // The status read doubles as the leader's reaper.
+                if ((proc_get_status($process)['running'] ?? false) === true) {
+                    return false;
+                }
+
+                return $groupId === null
+                    || !\function_exists('posix_kill')
+                    || @\posix_kill(-$groupId, 0) === false;
+            },
             self::DEADLINE_TERMINATE_GRACE_SECONDS,
             self::DEADLINE_KILL_GRACE_SECONDS,
         );
@@ -423,6 +493,7 @@ trait CapturesProcessOutput
      *     stdoutMidLine: bool,
      *     stderrMidLine: bool,
      *     timedOut: bool,
+     *     groupKilled: bool,
      * }
      */
     private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null, ?\Closure $onWait = null): array
@@ -457,6 +528,7 @@ trait CapturesProcessOutput
         $transcript = '';
         $dropped = 0;
         $stuck = false;
+        $ladderConfirmed = false;
         $wallExpired = false;
         $lastProgressAt = \microtime(true);
         $wall = $timeoutSeconds !== null && $timeoutSeconds > 0.0 ? $timeoutSeconds : 3.0 * $idle;
@@ -499,7 +571,7 @@ trait CapturesProcessOutput
                     // of the reaper's own rung helper — the pty child leads
                     // its session, and killing only the shell would orphan
                     // the program behind it.
-                    $gone = ProcessReaper::escalate(
+                    $ladderConfirmed = ProcessReaper::escalate(
                         static fn(int $signal): bool => ProcessContainment::terminatePid($child->pid(), $signal),
                         static fn(): bool => $child->exited(),
                     );
@@ -510,7 +582,7 @@ trait CapturesProcessOutput
                     // (an uninterruptible kernel wait), not waiting is the
                     // point: the answer still leaves at 124 on the clock and
                     // the handle's non-blocking destructor reaps late.
-                    if ($gone) {
+                    if ($ladderConfirmed) {
                         $child->wait();
                     }
 
@@ -551,6 +623,11 @@ trait CapturesProcessOutput
             'stdoutMidLine' => $dropped > 0 && !\str_ends_with($transcript, "\n"),
             'stderrMidLine' => false,
             'timedOut' => $stuck,
+            // The pty child LEADS its session and terminatePid() signals
+            // the group first, so the ladder's confirmation of the child's
+            // exit is as much group-kill proof as this path can honestly
+            // produce (ISS-014's claim rule).
+            'groupKilled' => $stuck && $ladderConfirmed,
         ];
     }
 
@@ -582,7 +659,7 @@ trait CapturesProcessOutput
      * shell's own number for this exact complaint), empty stdout, reason on
      * stderr so mergeCapturedOutput() surfaces it on the non-zero branch.
      *
-     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool}
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool,timedOut:bool,groupKilled:bool}
      */
     private static function interactiveRefusal(string $reason): array
     {
@@ -596,6 +673,7 @@ trait CapturesProcessOutput
             'stdoutMidLine' => false,
             'stderrMidLine' => false,
             'timedOut' => false,
+            'groupKilled' => false,
         ];
     }
 
