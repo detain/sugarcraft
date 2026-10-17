@@ -129,16 +129,18 @@ final class EscWordMotionTest extends TestCase
     }
 
     /**
-     * The arm is exactly the two runes. Ctrl+B/Ctrl+F keep typing their
-     * letter through the ctrl-Char arm (the `!$msg->ctrl` guard), and any
-     * other alt-flagged letter keeps reaching the widget unharmed — E2 bound
-     * readline's two motions, it did not open an alt-letter regime.
+     * The arm is exactly the two runes. Ctrl+B/Ctrl+F fall past the
+     * `!$msg->ctrl` guard to the ctrl-Char arm, where since ISS-047 they are
+     * DROPPED rather than typed (they typed their letter before that round,
+     * and the drop is the point, not the guard), and any other alt-flagged
+     * letter keeps reaching the widget unharmed — E2 bound readline's two
+     * motions, it did not open an alt-letter regime.
      */
     public function testOnlyBAndFAreRoutedAndNothingElseChanges(): void
     {
         $ctrlB = $this->drive(new Chat(inputBuf: 'ab'), new KeyMsg(KeyType::Char, 'b', ctrl: true));
-        $this->assertSame('abb', $ctrlB->inputBuf, 'Ctrl+b still types the letter');
-        $this->assertSame(3, $ctrlB->inputCursorOffset());
+        $this->assertSame('ab', $ctrlB->inputBuf, 'Ctrl+b types nothing (ISS-047)');
+        $this->assertSame(2, $ctrlB->inputCursorOffset());
 
         $altX = $this->drive(new Chat(inputBuf: 'ab'), $this->esc('x'));
         $this->assertSame('abx', $altX->inputBuf, 'another alt-flagged rune still types, as before');

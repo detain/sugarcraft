@@ -443,8 +443,9 @@ final class KeyHelpTest extends TestCase
         // Every byte `trim()` strips, put through the decoder and then through
         // Chat, because the README's "?" row rests on exactly this list and used to
         // recite it. Typeable means the byte ends up in the box; measured, only two
-        // of the six are, and one of the four that are not (vertical tab) does not
-        // even land silently — Ctrl+K types the letter.
+        // of the six are, and since ISS-047 the vertical tab is silent on its way
+        // out too: it decodes to Ctrl+K, now the draft's delete-to-line-end chord,
+        // which types nothing on an empty box.
         $landed = [];
         foreach ([' ', "\t", "\n", "\r", "\0", "\x0B"] as $byte) {
             $chat = $this->chat();
@@ -456,11 +457,11 @@ final class KeyHelpTest extends TestCase
             $landed[bin2hex($byte)] = $chat->inputBuf;
         }
         $this->assertSame(
-            ['20' => ' ', '09' => '', '0a' => '', '0d' => '', '00' => "\0", '0b' => 'k'],
+            ['20' => ' ', '09' => '', '0a' => '', '0d' => '', '00' => "\0", '0b' => ''],
             $landed,
             'of the six bytes trim() strips, only space and NUL are TYPEABLE: Tab puts nothing in the box, '
-            . 'CR and LF submit, and Ctrl+K types a letter. The other four reach a draft only through the '
-            . 'Up arm, which is what the README row now says',
+            . 'CR and LF submit, and Ctrl+K drives a chord instead of typing its letter (ISS-047). The '
+            . 'other four reach a draft only through the Up arm, which is what the README row now says',
         );
 
         // The paste route in, asserted at both ends rather than left to a

@@ -556,31 +556,75 @@ final class ChatInputCursorTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * `TextArea::update()` reserves ctrl+a/e/u/k/o for its own line edits, and
-     * `Chat` binds ctrl+a/l/o/p/r/w to commands of its own. Handing a
-     * ctrl-flagged Char to the widget's `update()` would therefore swallow
-     * Ctrl+K, which `Renderer\KeyHelpTest`'s byte map asserts types the
-     * LETTER. So they go to `insertRune()` instead. (Ctrl+L belonged to that
-     * typed set until rv-a11y (2026-10-14) claimed it as the repaint chord —
-     * it now sits in the chord roster below.)
+     * ISS-047 replaced the type-the-letter fallback: a ctrl-flagged Char is
+     * now either one of the draft widget's own line edits (Ctrl+E/U/K/X,
+     * delegated) or dropped. The failure scenario drove this directly — `abc`
+     * plus Ctrl+U used to type `abcu`, and a readline user meant the line
+     * clear. The claimed chords (a/c/o claimed by Chat, K/X additionally
+     * shadowed by the shell's palette binding in the live TUI) never reach
+     * this, which is what the intersection const pins below keeps honest.
      */
-    public function testAnUnclaimedCtrlCharStillTypesItsLetterAtTheCursor(): void
+    public function testTheReadlineChordsEditTheDraftAndUnclaimedChordsTypeNothing(): void
     {
-        foreach (['k', 'e', 'u'] as $rune) {
-            $this->assertSame(
-                'why' . $rune,
-                $this->drive(new Chat(inputBuf: 'why'), new KeyMsg(KeyType::Char, $rune, ctrl: true))->inputBuf,
-                "Ctrl+" . strtoupper($rune),
-            );
-        }
+        $cleared = $this->drive(new Chat(inputBuf: 'why'), new KeyMsg(KeyType::Char, 'u', ctrl: true));
+        $this->assertSame('', $cleared->inputBuf, 'Ctrl+U deletes to the line start');
+        $this->assertSame(0, $cleared->inputCursorOffset());
 
-        // At the cursor, not at the end — the one thing that DID change.
-        $mid = $this->drive(
-            new Chat(inputBuf: 'why'),
+        $killed = $this->drive(
+            new Chat(inputBuf: 'why not'),
+            new KeyMsg(KeyType::Char, 'h', ctrl: true), // unclaimed: dropped, NOT typed
             new KeyMsg(KeyType::Home),
             new KeyMsg(KeyType::Char, 'k', ctrl: true),
         );
-        $this->assertSame('kwhy', $mid->inputBuf);
+        $this->assertSame('', $killed->inputBuf, 'Ctrl+K deletes to the line end');
+
+        $end = $this->drive(
+            new Chat(inputBuf: 'why'),
+            new KeyMsg(KeyType::Home),
+            new KeyMsg(KeyType::Char, 'e', ctrl: true),
+        );
+        $this->assertSame('why', $end->inputBuf, 'Ctrl+E moves; it edits nothing');
+        $this->assertSame(3, $end->inputCursorOffset(), 'to the end of the line');
+
+        foreach (['b', 'f', 'y', 't', 's', 'z'] as $rune) {
+            $this->assertSame(
+                'why',
+                $this->drive(new Chat(inputBuf: 'why'), new KeyMsg(KeyType::Char, $rune, ctrl: true))->inputBuf,
+                'Ctrl+' . strtoupper($rune) . ' is no one\'s chord and types nothing',
+            );
+        }
+
+        // The intersection claim, derived rather than recited: every rune in
+        // the delegation const must still be a key of TextArea's ctrl table,
+        // and the three table members Chat claims for itself must be listed
+        // nowhere in it. If the widget renames or drops a binding, this names
+        // the rune instead of the chord silently dying.
+        $widget = (string) file_get_contents(
+            (new \ReflectionClass(\SugarCraft\Forms\TextArea\TextArea::class))->getFileName(),
+        );
+        self::assertSame(
+            1,
+            \preg_match('/if \(\$msg->ctrl\) \{\s*return match \(\$msg->rune\) \{(.*?)\};/s', $widget, $table),
+            'fixture: TextArea still opens update() with its ctrl rune table',
+        );
+        $reflection = new \ReflectionClass(Chat::class);
+        /** @var list<string> $delegated */
+        $delegated = $reflection->getConstant('CTRL_DRAFT_RUNES');
+        foreach ($delegated as $rune) {
+            $this->assertSame(
+                1,
+                \preg_match("/'{$rune}'\s*=>/", $table[1]),
+                "Chat delegates ctrl-{$rune} but the widget no longer binds it",
+            );
+        }
+        foreach (['a', 'c', 'o'] as $rune) {
+            $this->assertSame(
+                1,
+                \preg_match("/'{$rune}'\s*=>/", $table[1]),
+                "fixture: the widget still binds ctrl-{$rune}; Chat claiming it upstream is load-bearing",
+            );
+            $this->assertNotContains($rune, $delegated, "ctrl-{$rune} must stay out of the delegation list while Chat claims it");
+        }
     }
 
     /**

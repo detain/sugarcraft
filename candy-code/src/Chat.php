@@ -146,6 +146,22 @@ final class Chat implements Model
     ];
 
     /**
+     * The ctrl-flagged CHORDS this file hands to the draft widget (ISS-047).
+     *
+     * The intersection of {@see \SugarCraft\Forms\TextArea\TextArea::update()}'s
+     * own ctrl rune table with the runes NO earlier arm of this file claims:
+     * Ctrl+E/Ctrl+U/Ctrl+K are readline's move-to-line-end, delete-to-line-start
+     * and delete-to-line-end, and Ctrl+X is the widget's cut. The table's three
+     * other members — a, c and o — are claimed earlier here (the agents list,
+     * copy-or-quit, expanding tool output), so they never reach the ctrl-Char
+     * arm this const feeds, and the paired pin in `ChatInputCursorTest` reads
+     * the widget's source to keep this intersection from rotting on either
+     * side. Everything the table does NOT bind is dropped by that arm rather
+     * than typed: a chord meant as editing must not corrupt the draft.
+     */
+    private const CTRL_DRAFT_RUNES = ['e', 'u', 'k', 'x'];
+
+    /**
      * The user's in-progress draft of the next turn, as a plain string.
      *
      * DERIVED, not stored: it is `$this->input->value()`, re-read in the
@@ -3394,8 +3410,8 @@ final class Chat implements Model
             // test: a revived tool row plus one Up puts "\t/keys" (or "\t", or
             // " \t ") in the box. These are drafts a user can hold; they are just
             // not drafts a user can type. Same for "\u{000C}", which is in the
-            // NON-blank set: parse("\x0C") is Ctrl+L and types the letter, so a
-            // form feed is recalled-only too.
+            // NON-blank set: parse("\x0C") decodes to Ctrl+L, the repaint
+            // chord, which types nothing, so a form feed is recalled-only too.
             // And since E704 there is a paste route in too: bracketed paste
             // decodes to one PasteMsg and update() inserts its payload at the
             // caret VERBATIM, so "\t" (sanitize keeps tabs) reaches the box by
@@ -3515,9 +3531,10 @@ final class Chat implements Model
             ($msg->type === KeyType::Right && ($msg->alt || $msg->ctrl))
                 => [$this->withInputCursor($this->wordRightOffset()), null],
             // The ESC-prefix spelling of the two arms above (E2). Checked with
-            // `!$msg->ctrl` so a ctrl-flagged rune keeps falling through to the
-            // ctrl-Char arm below, which TYPES the letter - `ctrl: true,
-            // rune: 'b'` behaves exactly as it did before this arm existed.
+            // `!$msg->ctrl` so a ctrl-flagged rune keeps falling through to
+            // the ctrl-Char arm below — since ISS-047 that arm DROPS `ctrl:
+            // true, rune: 'b'` instead of typing it, but either way the
+            // word-motion pair stays the alt form's alone.
             $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'b'
                 => [$this->withInputCursor($this->wordLeftOffset()), null],
             $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'f'
@@ -3532,26 +3549,31 @@ final class Chat implements Model
             // real keypress takes and how this relates to Tui\SessionTabs.
             $msg->type === KeyType::Tab && $msg->ctrl
                 => $this->cycleSessionTab($msg->shift ? -1 : 1),
-            // A ctrl-flagged Char no arm above claimed types the LETTER, and
-            // that is pinned rather than tidy: KeyHelpTest's byte map asserts
-            // Ctrl+K puts "k" in the box (Ctrl+L joined the claimed set as the
-            // repaint chord in rv-a11y, 2026-10-14 — the arm above this one),
-            // which is the measurement behind its "a form feed is not
-            // typeable" claim.
-            // So it goes to insertRune() and NOT to update(), because
-            // TextArea::update() reserves ctrl+a/e/u/k/o for its own line
-            // edits and would swallow those two instead of typing them.
-            // Re-binding them is a keymap decision, not part of moving the
-            // buffer into the widget.
+            // ISS-047: a ctrl-flagged Char is either one of the draft widget's
+            // own line edits or it is DROPPED — it never types its letter.
+            // Before this, every unclaimed chord inserted the bare rune, so a
+            // readline user's `abc` plus Ctrl+U typed `abcu` where it should
+            // have cleared the line (the failure scenario, reproduced byte for
+            // byte by the issue's verification round). Ctrl+K and Ctrl+X
+            // normally never come down this path in the live TUI — the shell's
+            // keymap binds Ctrl+K as the palette's second spelling — so what
+            // this arm really owns is Ctrl+E and Ctrl+U plus every direct
+            // driver of Chat (test harnesses, embedders) for all four runes.
+            $msg->type === KeyType::Char && $msg->ctrl && \in_array($msg->rune, self::CTRL_DRAFT_RUNES, true)
+                => $this->delegateToInput($msg),
             $msg->type === KeyType::Char && $msg->ctrl
-                => [$this->withInput($this->input->insertRune($msg->rune)), null],
+                => [$this, null],
             // Ctrl+Space types a space, which is exactly what HEAD did with
             // it: `CSI 32;5u` decodes to KeyMsg(Space, ctrl), and HEAD's
             // Space arm did not inspect modifiers. It needs its own arm here
             // because TextArea::update() answers a ctrl-flagged key from its
-            // OWN ctrl table (rune a/e/u/k/o) and drops everything else, so a
-            // ctrl-flagged Space handed to the widget is swallowed. Same
-            // reasoning, same route, as the ctrl-flagged Char above.
+            // OWN ctrl table and drops everything else, so a ctrl-flagged
+            // Space handed to the widget would be swallowed. Different route
+            // from the ctrl-flagged Char above by decision, not accident: the
+            // space's ctrl form has never meant anything but typing a space
+            // (HEAD did not inspect modifiers on Space at all), while a
+            // letter's ctrl form means editing or nothing — ISS-047 chose
+            // nothing.
             $msg->type === KeyType::Space && $msg->ctrl
                 => [$this->withInput($this->input->insertRune(' ')), null],
             // Vertical motion, but only on a draft that HAS a second line.
@@ -3576,8 +3598,8 @@ final class Chat implements Model
             // ── the `!$msg->ctrl` guard is load-bearing ──────────────────
             //
             // TextArea::update() opens with `if ($msg->ctrl)` and answers from
-            // its own five-entry rune table, dropping every other ctrl-flagged
-            // key REGARDLESS of type. So a ctrl-flagged member of the list
+            // its own seven-entry rune table, dropping every other
+            // ctrl-flagged key REGARDLESS of type. So a ctrl-flagged member of the list
             // below reaches the widget and dies there. That is how Ctrl+Space
             // and Ctrl+Backspace became dead keys when this delegation
             // replaced HEAD's hand-rolled Space/Backspace arms; both now have
