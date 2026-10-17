@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\GreedySolver;
-use SugarCraft\Constraints\Region as LayoutRegion;
+use SugarCraft\Constraints\Region as ConstraintsRegion;
 use SugarCraft\Style\Align;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
