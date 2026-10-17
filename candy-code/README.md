@@ -681,13 +681,18 @@ Review $1 for correctness bugs. Focus on: $ARGUMENTS
   left alone, so shell snippets inside a template survive.
 - Substitution is one pass over the whole body, so text that came *from* an
   argument is never re-expanded.
-- A project file overrides a built-in of the same name, in both the popup and
-  dispatch — and in both spellings, `/compact` and `/compact:arg`.
-- **Except the control plane.** `budget`, `clear`, `exit`, `help`, `model`,
-  `permissions` and `quit` are reserved: a file with one of those names is
-  ignored, the built-in keeps running, and the refusal is printed at launch with
-  the path of the file. These are how you drive and leave the app, so a clone
-  cannot redefine them.
+- A file-based command may override a built-in by name: a user-tier file always
+  may, and a project-tier file only when its root is listed under
+  `trustedProjectCommands` — an untrusted project shadow is refused at load and
+  reported at launch exactly like a control-plane grab, and the built-in keeps
+  its behaviour. An allowed override holds in both the popup and dispatch, in
+  both spellings, `/compact` and `/compact:arg`.
+- **Except the control plane.** All nine names in `CommandRegistry::CONTROL_PLANE`
+  — `budget`, `clear`, `config`, `exit`, `help`, `model`, `permissions`, `quit`
+  and `settings` — are reserved: a file with one of those names is ignored, the
+  built-in keeps running, and the refusal is printed at launch with the path of
+  the file. These are how you drive and leave the app, so a clone cannot
+  redefine them.
 - A command whose template expands to nothing — a body of just `$ARGUMENTS`,
   invoked with no arguments — is refused with a note rather than sent as an empty
   prompt.
