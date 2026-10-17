@@ -371,12 +371,11 @@ final class HeadlessPermissionPrompt
      * that keeps it from swallowing a user's own exit-3 question, which
      * HOOKS.md still promises is "asked every time".
      *
-     * THE CONFIG PLUMBING IS A REPORTED SEAM: the entry key `unattendedAsk`
-     * must join HookConfig::ENTRY_KEYS and be registered from here during
-     * chain construction (src/Hooks/ is outside this lane, and ENTRY_KEYS is
-     * pinned by HOOKS.md's own drift arm). Until that lands this is the
-     * public API a PHP-API-registered hook calls directly, and the shape the
-     * YAML wiring will call. A name, not a closure: the roster survives
+     * THE CONFIG PLUMBING IS LANDED (ISS-040, seam S1): the entry key
+     * `unattendedAsk` is one of `HookConfig::ENTRY_KEYS`, and
+     * `Bootstrap::hooks()` calls this roster for every enabled opted-in entry
+     * as it registers each hook file — YAML wiring and the PHP-API path
+     * converge here. A name, not a closure: the roster survives
      * chain rebuilds, and a hook renames itself at worst by editing its file.
      *
      * @var array<string, true>

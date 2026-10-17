@@ -6152,6 +6152,24 @@ final class Bootstrap
                 );
 
                 $hooks->loadEntries($entries, $path);
+
+                // ISS-040 (seam S1): a file entry may demand the unattended
+                // answer the headless prompt would otherwise auto-allow under
+                // bypass-permissions. Rostered here, beside the registration,
+                // because the roster is the CLI prompt's contract and the
+                // Hooks package must not reach into src/Cli. Disabled entries
+                // never join the chain, so their opt-in is not honoured;
+                // quarantined project entries were already filtered out of
+                // $entries above, so an unseen-by-this-launch hook cannot
+                // roster itself before the operator ever saw it.
+                foreach ($entries as $entry) {
+                    if (
+                        ($entry['unattendedAsk'] ?? false) === true
+                        && ($entry['disabled'] ?? false) !== true
+                    ) {
+                        HeadlessPermissionPrompt::requireUnattendedAnswer($entry['name']);
+                    }
+                }
             } catch (\InvalidArgumentException | \RuntimeException $e) {
                 // Same refusal {@see permissionConfig()} makes, for the same
                 // reason: this file is part of the launch's gating policy, so

@@ -544,6 +544,24 @@ YAML;
         HookConfig::parse("hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      disabled: 'no'\n");
     }
 
+    /** ISS-040: `unattendedAsk` rides the entry with the same strictness. */
+    public function testParseCarriesUnattendedAskThroughAndDefaultsToFalse(): void
+    {
+        $opted = HookConfig::parse("hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      unattendedAsk: true\n");
+        $plain = HookConfig::parse("hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n");
+
+        $this->assertTrue($opted[0]['unattendedAsk']);
+        $this->assertFalse($plain[0]['unattendedAsk']);
+    }
+
+    public function testParseRefusesANonBooleanUnattendedAsk(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches("/'unattendedAsk' that is not true or false/");
+
+        HookConfig::parse("hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n      unattendedAsk: 'yes'\n");
+    }
+
     // =========================================================================
     // The matcher delimiter
     // =========================================================================

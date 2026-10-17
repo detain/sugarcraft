@@ -2419,7 +2419,7 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-7 (AE, closing E353's decision by FOLD): the file-format and
-     * exit-code sections of HOOKS.md. The six entry keys against
+     * exit-code sections of HOOKS.md. The seven entry keys against
      * HookConfig::ENTRY_KEYS, the delimiter alphabet against DELIMITERS, and the
      * four worked matcher results against REAL HookConfig::pattern() calls; the
      * four-arm match, its digits, and the exit table against the ScriptHook
@@ -2430,7 +2430,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $hooks = self::markdownProse($hooksRaw);
-        $words = ['four' => 4, 'five' => 5, 'six' => 6];
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7];
 
         self::assertSame(1, preg_match('/Those (\w+) are the \*\*only\*\* keys an entry may carry/', $hooks, $six), 'the entry-key sentence lost its spelled count');
         $entryKeys = (new \ReflectionClassConstant(HookConfig::class, 'ENTRY_KEYS'))->getValue();

@@ -126,7 +126,7 @@ final class HookManager
      * cannot install shell into a chain the launch already vetted. Embedders
      * that just want "load my file" keep calling loadFromFile().
      *
-     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float}> $configs
+     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}> $configs
      *
      * @throws \InvalidArgumentException when an entry would displace an
      *         already-registered hook

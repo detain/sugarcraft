@@ -50,12 +50,13 @@ hooks:
       description: Ask before anything touches production
       disabled: false                 # optional; true keeps it out of the chain
       timeout: 30                     # optional seconds; default 60 (hooksDefaultTimeoutSeconds)
+      unattendedAsk: false            # optional; true keeps this ASK live under bypass-permissions
   PostToolUse:
     - matcher: 'Read|Write/Edit'
       command: ./hooks/log-touch.sh
 ```
 
-Those six are the **only** keys an entry may carry. An unrecognised key is
+Those seven are the **only** keys an entry may carry. An unrecognised key is
 refused rather than ignored. A user-tier file's relative `./hooks/...` command
 resolves against `~/.candy-code/` — the file's own directory — not the repo you
 open; project-tier files keep repo-relative commands (ISS-039).
@@ -63,6 +64,13 @@ open; project-tier files keep repo-relative commands (ISS-039).
 `name` matters because `HookRegistry` keys hooks by name: without it, two
 entries sharing a command on one event silently collapse into a single
 registration.
+
+`unattendedAsk: true` is the entry's opt-in to the exit-3 promise below:
+`bypass-permissions` will not auto-answer this hook's ASK — a headless run
+fails closed to a refusal (the refusals row carries the E375 unattended
+qualifier) and a run at a terminal is put the real question. A non-bool value
+is refused like `disabled`'s, and the key is inert on a `disabled: true`
+entry: an entry that never joins the chain never asks (ISS-040).
 
 ### Absence is silent; everything else is loud
 

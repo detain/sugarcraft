@@ -66,7 +66,7 @@ final class HookConfig
      * Every key a single hook entry may carry. Exact, not advisory — see the
      * check in {@see parse()} for why an unrecognised one is refused.
      */
-    private const ENTRY_KEYS = ['name', 'matcher', 'command', 'description', 'disabled', 'timeout'];
+    private const ENTRY_KEYS = ['name', 'matcher', 'command', 'description', 'disabled', 'timeout', 'unattendedAsk'];
 
     /**
      * The candidate PCRE delimiters, tried in order, for wrapping a
@@ -112,7 +112,7 @@ final class HookConfig
     /**
      * Load hooks from a YAML file, or nothing at all when there is no file.
      *
-     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float}>
+     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}>
      *
      * @throws \RuntimeException when the file exists and cannot be read
      * @throws \InvalidArgumentException when the file exists and cannot be used
@@ -153,7 +153,7 @@ final class HookConfig
      *        a path when there is one, so the report names the file the user
      *        has to go and fix
      *
-     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float}>
+     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}>
      *
      * @throws \InvalidArgumentException when the content is not a usable hook file
      */
@@ -273,7 +273,7 @@ final class HookConfig
                 // has a first-class disable()/isDisabled() pair, so `disabled`
                 // is the natural thing for a user to reach for and it did
                 // exactly nothing. Same exact-key check as the top level: this
-                // format defines the six keys in self::ENTRY_KEYS and no more.
+                // format defines the seven keys in self::ENTRY_KEYS and no more.
                 $unknownKeys = array_diff(array_keys($config), self::ENTRY_KEYS);
                 if ($unknownKeys !== []) {
                     $hint = match (true) {
@@ -396,6 +396,20 @@ final class HookConfig
                     );
                 }
 
+                // Same no-coercion rule as `disabled`: this key NARROWS what
+                // bypass-permissions may auto-answer (ISS-040), so a truthy
+                // string silently reading as `true` — or as `false` — would
+                // move a security bound by a typo. `unattendedAsk: true` on a
+                // `disabled: true` entry is inert by construction: the roster
+                // walk in `Bootstrap::hooks()` skips disabled entries, because
+                // an entry that never joins the chain never asks.
+                $unattendedAsk = $config['unattendedAsk'] ?? false;
+                if (!is_bool($unattendedAsk)) {
+                    throw new \InvalidArgumentException(
+                        "{$source}: hook '{$name}' has an 'unattendedAsk' that is not true or false.",
+                    );
+                }
+
                 // {@see HookRegistry} keys by event+name, so a repeat is one
                 // hook quietly overwriting another — the exact collapse `name`
                 // was added to prevent, and a way for a later entry to disarm
@@ -417,6 +431,7 @@ final class HookConfig
                     'description' => $description,
                     'disabled' => $disabled,
                     'timeout' => (float) $timeout,
+                    'unattendedAsk' => $unattendedAsk,
                 ];
             }
         }
