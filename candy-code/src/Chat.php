@@ -16434,7 +16434,7 @@ final class Chat implements Model
             $changes['slashMenuIndex'] = 0;
         }
 
-        return $this->mutate($changes);
+        return $this->snapScrolledFrameToDraft($changes);
     }
 
     /**
@@ -16525,6 +16525,28 @@ final class Chat implements Model
         $changes = ['input' => $input];
         if ($input->value() !== $this->inputBuf) {
             $changes['slashMenuIndex'] = 0;
+        }
+
+        return $this->snapScrolledFrameToDraft($changes);
+    }
+
+    /**
+     * ISS-050: the scroll window slides over transcript, input box and "/"
+     * popup as ONE block, so a frame parked above the bottom hides the very
+     * box a keystroke is editing — the user types into an invisible draft.
+     * Any write to the draft (text or caret — both are edited blind) that
+     * lands while scrolled up therefore drags the frame back to the bottom,
+     * where the edit is visible. This is the shared tail of the draft
+     * funnels ({@see withInputBuf()} / {@see withInput()}), so every key,
+     * paste, completion and mouse edit routes through the one rule; keys
+     * that only scroll, cycle the popup selection or submit never take it.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function snapScrolledFrameToDraft(array $changes): self
+    {
+        if ($this->scrollOffset !== 0) {
+            $changes['scrollOffset'] = 0;
         }
 
         return $this->mutate($changes);

@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
@@ -276,5 +279,67 @@ final class ChatScrollTest extends TestCase
         Renderer::render(new Chat(history: [new Message(Role::User, 'hi', 0)], rows: 40, cols: 60));
 
         self::assertSame(0, Renderer::maxScrollOffset());
+    }
+
+    // =========================================================================
+    // ISS-050: a draft edit pulls a scrolled-up frame back to the bottom,
+    // because the scroll window slides over transcript, input box and "/"
+    // popup as ONE block — typing while scrolled up edits an invisible draft.
+    // =========================================================================
+
+    public function testTypingWhileScrolledUpSnapsTheFrameBackToTheBottom(): void
+    {
+        $chat = $this->tallChat()->withScrollOffset(9);
+
+        [$typed, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'z'));
+
+        self::assertNull($cmd);
+        self::assertSame(0, $typed->scrollOffset(), 'the keystroke that edits the box also reveals it');
+        self::assertStringContainsString('z', $typed->inputBuf, 'and the character landed where it always did');
+        self::assertSame(9, $chat->scrollOffset(), 'the receiver is untouched');
+    }
+
+    public function testOpeningTheSlashPopupWhileScrolledUpSnapsToo(): void
+    {
+        $chat = $this->tallChat()->withScrollOffset(4);
+
+        [$slash] = $chat->update(new KeyMsg(KeyType::Char, '/'));
+
+        self::assertSame(0, $slash->scrollOffset());
+        self::assertNotSame([], $slash->slashMenuMatches(), 'the popup this snap exists to make visible is open');
+    }
+
+    public function testAPasteWhileScrolledUpSnapsTheFrameToTheDraft(): void
+    {
+        $chat = $this->tallChat()->withScrollOffset(11);
+
+        [$pasted] = $chat->update(new PasteMsg("one\ntwo"));
+
+        self::assertSame(0, $pasted->scrollOffset());
+        self::assertStringContainsString('one', $pasted->inputBuf);
+    }
+
+    public function testScrollingWithoutTouchingTheDraftKeepsTheOffset(): void
+    {
+        Renderer::render($this->tallChat());
+        $chat = $this->tallChat();
+        [$scrolled] = $chat->update($this->wheel(MouseButton::WheelUp));
+
+        [$stillScrolled] = $scrolled->update($this->wheel(MouseButton::WheelUp));
+
+        self::assertGreaterThan(0, $stillScrolled->scrollOffset(), 'the wheel must not be dragged by the rule');
+    }
+
+    public function testTheSnapLeavesOffsetZeroFramesByteIdentical(): void
+    {
+        // The guard is `scrollOffset !== 0`, so at the bottom — every ordinary
+        // keystroke of every other test and of ordinary use — the mutate()
+        // argument gains no key and the frame is exactly what it was.
+        $chat = $this->tallChat();
+
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+
+        self::assertSame('a', $typed->inputBuf);
+        self::assertSame(0, $typed->scrollOffset());
     }
 }
