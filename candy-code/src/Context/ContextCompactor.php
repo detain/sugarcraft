@@ -44,11 +44,16 @@ use SugarCraft\Code\Util\TokenEstimate;
  * capped tier fires at whichever of the two is lower, so on a 1M-token window a
  * cap is what keeps the tiers inside the size a model still works well at.
  *
- * Token counting is {@see TokenEstimate}'s script-weighted estimate plus 10
- * per message - the same figure {@see \SugarCraft\Code\Chat}'s own estimate
- * uses, so the two agree on CJK and emoji text, where one token per four
- * characters read 3-6x low (audit 15b-13). ASCII still counts four characters
- * per token.
+ * Token counting here ({@see countTokens()}) is {@see TokenEstimate}'s
+ * script-weighted estimate plus 10 per message - ASCII still counts four
+ * characters per token. Since ISS-015 the between-prompt TIERS do not stop at
+ * that tally when a caller can do better: each accepts an optional
+ * $calibratedTokens numerator - the session's calibrated
+ * {@see \SugarCraft\Code\Host\ContextMeter::estimate()} plus the tool-argument
+ * bytes ({@see \SugarCraft\Code\Host\CompactionService::tierTokenCount()}) —
+ * the same figure the status bar shows, so the two can no longer disagree about
+ * how full the window is. The bare countTokens() path remains for callers that
+ * measure a wire with no Message list behind it.
  */
 final class ContextCompactor
 {
@@ -167,22 +172,26 @@ final class ContextCompactor
      * Returns true when context usage reaches or exceeds the background
      * compaction threshold (85% by default, or its absolute cap when that is
      * lower — {@see CompactorConfig::backgroundCompactionTokenThreshold()}), on
-     * {@see countTokens()}'s script-weighted estimate.
+     * $calibratedTokens when the caller supplies one (ISS-015 — the session's
+     * calibrated estimate plus tool-argument bytes) and on
+     * {@see countTokens()}'s script-weighted estimate otherwise.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @param int $tokenLimit Maximum tokens allowed in context window.
+     * @param int|null $calibratedTokens ISS-015: wider-unit numerator over the
+     *        same rows; {@see \SugarCraft\Code\Host\CompactionService::tierTokenCount()}.
      */
-    public function shouldCompact(array $messages, int $tokenLimit): bool
+    public function shouldCompact(array $messages, int $tokenLimit, ?int $calibratedTokens = null): bool
     {
         if ($tokenLimit <= 0) {
             return false;
         }
 
-        $tokenCount = $this->countTokens($messages);
+        $tokenCount = $calibratedTokens ?? $this->countTokens($messages);
         $threshold = $this->config->backgroundCompactionTokenThreshold($tokenLimit);
 
         return $tokenCount >= $threshold
-            && !$this->absoluteTierIsFutile($messages, $tokenCount, $tokenLimit, $this->config->backgroundCompactionThreshold, $threshold);
+            && !$this->absoluteTierIsFutile($messages, $tokenCount, $tokenLimit, $this->config->backgroundCompactionThreshold, $threshold, $calibratedTokens);
     }
 
     /**
@@ -203,8 +212,20 @@ final class ContextCompactor
      * exactly.
      *
      * @param array<array{role:string,content:string}> $messages
+     * @param int $tokenCount The count the tier just compared against the
+     *        threshold — the same unit {@see $calibratedTokens} answers in.
+     * @param int $tokenLimit
+     * @param int $percent The tier's percentage half, for the "the window is
+     *        filling up, never stand down" test.
+     * @param int $threshold The tier's effective threshold in the same unit.
+     * @param int|null $calibratedTokens ISS-015: when the caller counted in a
+     *        wider unit than {@see countTokens()} (the session's calibrated
+     *        estimate plus tool-argument bytes), the preserved-tail floor is
+     *        scaled into that same unit — a raw-tally floor compared against a
+     *        calibrated threshold would stand the tier down on histories that
+     *        compacting genuinely can rescue.
      */
-    private function absoluteTierIsFutile(array $messages, int $tokenCount, int $tokenLimit, int $percent, int $threshold): bool
+    private function absoluteTierIsFutile(array $messages, int $tokenCount, int $tokenLimit, int $percent, int $threshold, ?int $calibratedTokens = null): bool
     {
         if ($tokenCount >= (int) ($tokenLimit * $percent / 100)) {
             return false;
@@ -212,6 +233,16 @@ final class ContextCompactor
 
         // A copy, because compact() records its savings figure on the instance.
         $floor = $this->countTokens((clone $this)->compact($messages));
+
+        // Same-unit law (ISS-015): the whole-history ratio is the best available
+        // reading of what the wider unit adds to a message tally, and the floor
+        // is a tail of the same history the ratio was taken over.
+        if ($calibratedTokens !== null) {
+            $raw = $this->countTokens($messages);
+            if ($raw > 0 && $calibratedTokens !== $raw) {
+                $floor = (int) ceil($floor * $calibratedTokens / $raw);
+            }
+        }
 
         return $floor >= $threshold;
     }
@@ -228,14 +259,17 @@ final class ContextCompactor
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @param int $tokenLimit Maximum tokens allowed in context window.
+     * @param int|null $calibratedTokens ISS-015: the session's calibrated
+     *        estimate over the same rows the wire carries (attachments and the
+     *        provider's own correction included), when the caller has one.
      */
-    public function shouldCompactForeground(array $messages, int $tokenLimit): bool
+    public function shouldCompactForeground(array $messages, int $tokenLimit, ?int $calibratedTokens = null): bool
     {
         if ($tokenLimit <= 0) {
             return false;
         }
 
-        $tokenCount = $this->countTokens($messages);
+        $tokenCount = $calibratedTokens ?? $this->countTokens($messages);
         $threshold = $this->config->foregroundBlockingTokenThreshold($tokenLimit);
 
         return $tokenCount >= $threshold;
@@ -518,37 +552,40 @@ final class ContextCompactor
      * twenty turns past the threshold accumulated twenty copies. Any new caller
      * inherits the same obligation.
      *
-     * $tokenCount is an ESTIMATE — {@see countTokens()}'s script-weighted
-     * {@see TokenEstimate} + 10 per message. $tokenLimit is the provider's real window only on the one path
+     * $tokenCount is {@see countTokens()}'s script-weighted {@see TokenEstimate}
+     * + 10 per message UNLESS the caller hands in its $calibratedTokens — since
+     * ISS-015 the live callers do, so what is counted against the threshold is
+     * the session's calibrated {@see \SugarCraft\Code\Host\ContextMeter::estimate()}
+     * plus the tool-argument bytes, the figure the status bar shows, not the
+     * content-only tally. $tokenLimit is the provider's real window only on the one path
      * where there is one to have: callers reach it through
      * {@see \SugarCraft\Code\Context\ContextWindow::ofBackend()}, which
      * returns the hardcoded
      * {@see \SugarCraft\Code\Context\ContextWindow::FALLBACK_TOKENS}
      * (100,000 ESTIMATED tokens) on the other two — a backend that does not
      * implement {@see \SugarCraft\Code\Backend\ReportsContextWindow}, and
-     * one that reports a non-positive window. So on the reported path the
-     * comparison deliberately mixes two units, and on the fallback path both
-     * sides are the same estimate; it is a heuristic tier either way, never a
-     * measured one.
+     * one that reports a non-positive window.
      *
      * Mirrors charmbracelet/bubbletea ContextCompactor.shouldSendReminder.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @param int $tokenLimit Maximum tokens allowed in context window.
+     * @param int|null $calibratedTokens ISS-015: the wider-unit numerator the
+     *        caller measured over the same rows ({@see shouldCompact()}).
      */
-    public function shouldSendReminder(array $messages, int $tokenLimit): bool
+    public function shouldSendReminder(array $messages, int $tokenLimit, ?int $calibratedTokens = null): bool
     {
         if ($tokenLimit <= 0) {
             return false;
         }
 
-        $tokenCount = $this->countTokens($messages);
+        $tokenCount = $calibratedTokens ?? $this->countTokens($messages);
         $threshold = $this->config->reminderTokenThreshold($tokenLimit);
 
         // The same stand-down as the automatic tier (N-P4b): a reminder to
         // compact that compacting could not satisfy is noise on every turn.
         return $tokenCount >= $threshold
-            && !$this->absoluteTierIsFutile($messages, $tokenCount, $tokenLimit, $this->config->reminderThreshold, $threshold);
+            && !$this->absoluteTierIsFutile($messages, $tokenCount, $tokenLimit, $this->config->reminderThreshold, $threshold, $calibratedTokens);
     }
 
     /**

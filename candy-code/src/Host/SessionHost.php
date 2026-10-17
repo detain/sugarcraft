@@ -779,12 +779,15 @@ final class SessionHost
         // `llm` need no arm here — a server session's tier always writes the
         // heuristic lines.
         $config = $this->compactor->config();
-        if (!$config->autoCompacts() && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit)) {
+        // ISS-015: the tiers read the calibrated estimate plus tool-argument
+        // bytes (the status bar's figure), not the content-only wire tally.
+        $tierTokenCount = CompactionService::tierTokenCount($tokenCount, $this->history);
+        if (!$config->autoCompacts() && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit, $tierTokenCount)) {
             $rows = $this->compaction()->foregroundBlockedRows('', $this->history, $tokenCount, $tokenLimit);
 
             return TurnTicket::refused(array_pop($rows)->content);
         }
-        if ($config->autoCompacts() && $this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
+        if ($config->autoCompacts() && $this->compactor->shouldCompact($wireHistory, $tokenLimit, $tierTokenCount)) {
             $compaction = $this->compaction();
             if (IdleCompactionPolicy::thrashTripped($this->consecutiveRefills, $config->refillLimit)) {
                 return TurnTicket::refused($compaction->thrashBreakerNotice($config->refillLimit));
@@ -1222,7 +1225,13 @@ final class SessionHost
         // The 70% reminder: dropped from the base unconditionally, appended
         // only when due, so the history holds at most one, current, copy.
         $tokenLimit = $this->meter()->limit($this->backend());
-        $dueForReminder = $this->compactor->shouldSendReminder(CompactionService::compactionWire($baseHistory), $tokenLimit);
+        // ISS-015: the reminder tier reads the same wider numerator the submit
+        // path's tiers do — calibrated estimate plus tool-argument bytes.
+        $dueForReminder = $this->compactor->shouldSendReminder(
+            CompactionService::compactionWire($baseHistory),
+            $tokenLimit,
+            CompactionService::tierTokenCount($this->estimate($baseHistory), $baseHistory),
+        );
         $preStrip = $baseHistory;
         $baseHistory = CompactionService::withoutContextReminders($baseHistory);
         if ($dueForReminder) {

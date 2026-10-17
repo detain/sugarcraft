@@ -52,7 +52,12 @@ Token counts are script-weighted estimates (`Util\TokenEstimate::ofText()`):
 about four characters a token for English and code, about two for other
 alphabets, one for CJK, and two for an emoji, plus a small overhead per
 message. Once the provider has reported a real count, the estimate is
-calibrated against it.
+calibrated against it. The three tiers below judge against that calibrated
+figure **plus the tool-call arguments** riding beside the message text
+(`Host\CompactionService::tierTokenCount()`) — an attachment, an inlined
+`@file`, or a fat Write payload counts toward the tier exactly as it counts
+toward the status bar, which is what lets the bar and the tiers agree
+(sugar_issues.md ISS-015).
 
 ## Compaction tiers (between prompts)
 

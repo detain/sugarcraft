@@ -11279,11 +11279,16 @@ final class Chat implements Model
         // points at `/compact` and `/clear`. Without that arm, `off` would send
         // a request the provider rejects.
         $autoCompacts = $this->compactor->config()->autoCompacts();
-        if (!$autoCompacts && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit)) {
+        // ISS-015: every between-prompt tier on this route reads the calibrated
+        // estimate plus tool-argument bytes — the status bar's figure — not the
+        // content-only wire tally, so a session heavy in Write/Edit payloads
+        // cannot show 85% on the bar while the tier sits silent.
+        $tierTokenCount = \SugarCraft\Code\Host\CompactionService::tierTokenCount($tokenCount, $this->history);
+        if (!$autoCompacts && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit, $tierTokenCount)) {
             return $this->foregroundBlockedResponse($text, $this->history, $tokenCount, $tokenLimit);
         }
 
-        if ($autoCompacts && $this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
+        if ($autoCompacts && $this->compactor->shouldCompact($wireHistory, $tokenLimit, $tierTokenCount)) {
             // THE CIRCUIT BREAKER FIRST, ahead of both routes it can stop, because
             // spending nothing is the entire point (prompt_expand.md §4.23): a test
             // after the parked call would still have paid for the summarization,
@@ -12388,7 +12393,14 @@ final class Chat implements Model
         // alongside it so the user sees context is filling up well before
         // the hard 85%/95% compaction tiers would kick in.
         $baseWire = self::compactionWire($baseHistory);
-        $dueForReminder = $this->compactor->shouldSendReminder($baseWire, $tokenLimit);
+        // ISS-015: same wider numerator as submit()'s tiers — calibrated
+        // estimate plus tool-argument bytes — so the 70% nudge, the 85% tier
+        // and the status bar all read one figure.
+        $dueForReminder = $this->compactor->shouldSendReminder(
+            $baseWire,
+            $tokenLimit,
+            \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($baseHistory), $baseHistory),
+        );
 
         // Order is load-bearing, twice over.
         //

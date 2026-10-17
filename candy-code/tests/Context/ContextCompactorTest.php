@@ -23,6 +23,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
+use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Code\Usage;
 
 final class ContextCompactorTest extends TestCase
@@ -2743,6 +2744,102 @@ final class ContextCompactorTest extends TestCase
             $bytesBUnbounded / $bytesA,
             0.2,
             'the fixtures discriminate: unbounded, B really is ~10x A, so the bounded result above is the bound biting',
+        );
+    }
+
+    // ─── ISS-015: the tiers read the calibrated, tool-aware numerator ──
+
+    /**
+     * A wire whose CONTENT-only tally sits under the 85% cap but whose
+     * calibrated, tool-argument-aware count does not must fire the automatic
+     * tier — the exact disagreement between status bar and tier that
+     * sugar_issues.md ISS-015 reports, pinned at the predicate level.
+     */
+    public function testACalibratedNumeratorFiresTheBackgroundTierTheWireTallyMisses(): void
+    {
+        $compactor = new ContextCompactor(CompactorConfig::new());
+        $wire = [$this->msg('user', str_repeat('x', 1_000))];
+        // Fixture: the raw tally lands a quarter of the way to the 8,500-token
+        // threshold of a 10,000-token window.
+        $this->assertFalse($compactor->shouldCompact($wire, 10_000), 'without a numerator the content-only tally decides');
+        $this->assertTrue($compactor->shouldCompact($wire, 10_000, 9_000), 'the calibrated figure the caller measured crosses the tier');
+    }
+
+    public function testACalibratedNumeratorFiresTheBlockingTierAndTheReminder(): void
+    {
+        $compactor = new ContextCompactor(CompactorConfig::new());
+        $wire = [$this->msg('user', str_repeat('x', 1_000))];
+
+        $this->assertFalse($compactor->shouldCompactForeground($wire, 10_000));
+        $this->assertTrue($compactor->shouldCompactForeground($wire, 10_000, 9_500));
+
+        $this->assertFalse($compactor->shouldSendReminder($wire, 10_000));
+        $this->assertTrue($compactor->shouldSendReminder($wire, 10_000, 7_000));
+    }
+
+    /**
+     * The stand-down's floor is scaled into the numerator's unit
+     * (`absoluteTierIsFutile`): with a calibrated count in play, comparing a
+     * content-only floor against the calibrated threshold lets the tier fire
+     * forever on a preserved tail that, measured in the tier's OWN unit, is
+     * already at or over the cap — the state N-P4b exists to refuse.
+     */
+    public function testTheFutilityStandDownComparesFloorAndThresholdInTheSameUnit(): void
+    {
+        $config = CompactorConfig::new()->withBackgroundCompactionTokens(5_000);
+        $compactor = new ContextCompactor($config);
+        $count = fn(array $messages): int => (new \ReflectionMethod(ContextCompactor::class, 'countTokens'))->invoke($compactor, $messages);
+
+        // An exchange set BELOW the preserve count: compact() returns it
+        // unchanged, so the floor equals the raw count — the tail can never get
+        // under the cap no matter what the wire says.
+        $stuck = [];
+        foreach (range(1, 4) as $i) {
+            $stuck[] = $this->msg('user', str_repeat('s', 400));
+        }
+        $this->assertSame(4 * (intdiv(400, 4) + 10), $count($stuck), 'fixture: 440 tokens, under the 5,000 cap in the wire unit');
+        $this->assertFalse($compactor->shouldCompact($stuck, 100_000), 'uncalibrated: below the cap, the tier simply does not fire');
+        $this->assertFalse(
+            $compactor->shouldCompact($stuck, 100_000, 5_000),
+            'calibrated over the cap: the floor in the SAME unit is at the cap — compacting buys nothing, stand down (pre-ISS-015 this fired every prompt)',
+        );
+
+        // A history that really does shrink: scale the floor, don't gag on it.
+        $wire = [];
+        foreach (range(1, 12) as $i) {
+            $wire[] = $this->msg('user', "question {$i} " . str_repeat('u', 2_000));
+            $wire[] = $this->msg('assistant', "answer {$i} " . str_repeat('a', 4_000));
+        }
+        $raw = $count($wire);
+        $floor = $count((clone $compactor)->compact($wire));
+        $this->assertLessThan($raw, $floor, 'fixture: compaction genuinely shrinks this history');
+
+        // The smallest calibrated count whose SCALED floor reaches the cap.
+        $standDownAt = $floor === 0 ? 0 : ($raw * 5_000 + $floor - 1) / $floor;
+        $this->assertGreaterThan(5_000, $standDownAt, 'fixture: the crossing sits above the cap, so it is the scaling that decides');
+        $this->assertLessThan(85_000, (int) $standDownAt, 'fixture: still in the cap case, not the percentage one');
+        $this->assertTrue(
+            $compactor->shouldCompact($wire, 100_000, 5_000),
+            'a tail that scales under the cap fires: unit conversion, not a second stand-down rule',
+        );
+        $this->assertFalse($compactor->shouldCompact($wire, 100_000, (int) ceil($standDownAt)));
+    }
+
+    public function testTierTokenCountAddsToolCallArgumentsAndSkipsHiddenRows(): void
+    {
+        $arguments = ['content' => str_repeat('x', 4_000)];
+        $history = [
+            Message::user('hi'),
+            new Message(Role::Assistant, 'done', time(), toolCalls: [new ToolCall('Write', $arguments)]),
+            Message::assistant(str_repeat('y', 40_000))->withUiOnly(true),
+        ];
+
+        $count = CompactionService::tierTokenCount(100, $history);
+
+        $this->assertSame(
+            100 + TokenEstimate::ofText((string) json_encode($arguments)),
+            $count,
+            'the base estimate plus the argument JSON at script weight, the hidden giant contributing nothing',
         );
     }
 

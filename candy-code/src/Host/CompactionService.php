@@ -20,7 +20,9 @@ use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
+use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
+use SugarCraft\Code\Util\TokenEstimate;
 
 /**
  * Context compaction — the LLM-parked route, the heuristic route and the
@@ -464,6 +466,46 @@ final class CompactionService
             },
             Message::agentVisible($history),
         );
+    }
+
+    /**
+     * The numerator every between-prompt tier reads (ISS-015).
+     *
+     * The wire the compactor inspects is `{@see compactionWire()}`'s
+     * role/content pairs, and {@see ContextCompactor::countTokens()} can only
+     * tally what is on it — an assistant row's tool-call ARGUMENTS (a Write
+     * payload, an Edit's old/new strings) ride beside the content, on
+     * {@see Message::$toolCalls}, invisible to that count. Nor does the raw
+     * tally carry the provider's own correction or attached images, both of
+     * which {@see ContextMeter::estimate()} does. A session whose pressure
+     * lives in tool payloads therefore showed ≥85% on the status bar while the
+     * 85% tier never fired (sugar_issues.md ISS-015).
+     *
+     * So the callers pass this composition: the session's calibrated estimate
+     * (computed over the same agent-visible rows the wire mirrors) plus a
+     * script-weighted tally of every tool-call argument's JSON — the units
+     * deliberately overlap in nothing: attachments are in the estimate, tool
+     * arguments are not, and the content the estimate counts is the same
+     * content countTokens would have. The result errs HIGH by design — a tier
+     * that fires a little early compacts a little early; one that fires late
+     * is the bug being fixed.
+     *
+     * @param int $calibratedEstimate the session's
+     *        {@see ContextMeter::estimate()} over $history
+     * @param list<Message> $history
+     */
+    public static function tierTokenCount(int $calibratedEstimate, array $history): int
+    {
+        $toolArguments = 0;
+        foreach (Message::agentVisible($history) as $message) {
+            foreach ($message->toolCalls as $call) {
+                if ($call instanceof ToolCall && $call->arguments !== []) {
+                    $toolArguments += TokenEstimate::ofText((string) json_encode($call->arguments));
+                }
+            }
+        }
+
+        return $calibratedEstimate + $toolArguments;
     }
 
     /**
