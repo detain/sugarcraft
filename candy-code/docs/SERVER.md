@@ -339,7 +339,7 @@ only.
 |---|---|
 | `maxClientFrameBytes` | 1 MiB |
 | `maxServerFrameBytes` | 4 MiB — a larger answer is refused `too_large`; a tool output past 256 KiB arrives truncated, and `tool.output` reads the rest |
-| `maxInflight` | 64 |
+| `maxInflight` | 64 — advisory: announced in `server.hello` for clients to pace by; the dispatcher enforces no in-flight ceiling of its own |
 | `tickIntervalMs` | 15000 — a `server.tick` event this often |
 | `softBufferedBytes` / `maxBufferedBytes` | 1 MiB / 16 MiB (see [Backpressure](#backpressure)) |
 | `maxSubscribersPerSession` | 50 |
@@ -1044,9 +1044,11 @@ Open the sign-in URL and the page signs in, connects and shows:
   reads, and — on a question the agent asked itself (`AskUser`, `PlanExit`) —
   with *Allow once* too, as your answer in your own words. Every tab and client following the session shows the same question; the
   first answer wins and closes it everywhere.
-- **The composer**: Enter sends, Shift+Enter is a new line. While a turn runs a
-  prompt is queued by default — or steers the turn, or interrupts it — and the
-  queue is listed above the box, each entry removable. *Stop* (or Esc Esc)
+- **The composer**: Enter sends, Shift+Enter is a new line. While a turn runs,
+  the option offered first is the server's own `queueMode` — announced as
+  `server.hello`'s `defaults.delivery`, `steer` unless configured otherwise,
+  exactly as the terminal UI's Enter behaves mid-turn; queuing the prompt or
+  interrupting the turn stay one choice away. The queue is listed above the box, each entry removable. *Stop* (or Esc Esc)
   cancels the turn. `/` completes the slash commands that run here: a built-in
   the server runs goes through `command.exec`, a command file is sent as a
   prompt, and a screen-only built-in says it runs only in the terminal UI.
