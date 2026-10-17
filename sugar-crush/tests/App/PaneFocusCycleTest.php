@@ -15,8 +15,8 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * Docking L2 feature 3 — Tab moves focus across Chat plus the DOCKED panes,

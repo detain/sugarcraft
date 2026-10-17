@@ -8,7 +8,7 @@ namespace SugarCraft\Crush\App;
  * Message carrying a `/pane` verb to the shell — the command twin of the
  * {@see \SugarCraft\Crush\Tui\PaneDragController} drop and of the keyboard
  * dock/undock arm. The verb travels as the `left`/`right`/`toggle` word the
- * user typed because `Chat` has no reason to know candy-layout's enum;
+ * user typed because `Chat` has no reason to know sugar-constraints's enum;
  * {@see App::applyDockCommand()} parses it at the boundary and refuses
  * anything else.
  *

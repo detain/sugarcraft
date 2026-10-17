@@ -2,7 +2,7 @@
 
 **Library:** `sugarcraft/sugar-cli`  
 **Review scope:** `src/` (8 classes) + `tests/` (9 test files)  
-**Dependencies:** `candy-core`, `candy-sprinkles`, `candy-async`, `candy-layout`, `candy-ansi`, `candy-input`, `candy-buffer`
+**Dependencies:** `candy-core`, `candy-sprinkles`, `candy-async`, `sugar-constraints`, `candy-ansi`, `candy-input`, `candy-buffer`
 
 ---
 
@@ -214,7 +214,7 @@ The test exists and covers this. However, `testSugarcraftPresetIsMultiLine` at l
 **File:** `composer.json:51-107`
 
 The `repositories` array includes:
-- `../candy-layout` — no class in sugar-cli uses any `candy-layout` types
+- `../sugar-constraints` — no class in sugar-cli uses any `sugar-constraints` types
 - `../candy-async` — no async patterns exist in the library
 - `../candy-buffer` — no buffer usage
 - `../candy-input` — no input handling

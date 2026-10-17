@@ -42,8 +42,8 @@ use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Layout\Dock\DockLayout;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
@@ -1822,7 +1822,7 @@ final class App implements Model
      * a quarter or a third. A side being stripped keeps its snapshot because
      * a later re-add scales it (DockSeedTest pins that toggle-off behaviour),
      * and the carried share is render-inert meanwhile: resolve activates only
-     * sides that have slots (candy-layout DockLayout.php:370-375).
+     * sides that have slots (sugar-constraints DockLayout.php:370-375).
      * A dock that is already non-default returns unchanged: seeding is a
      * one-time hand-off from the legacy measure, never a re-snapshot on
      * top of sizes the user has chosen.
@@ -3086,7 +3086,7 @@ final class App implements Model
         // design.
         $origin = self::$paneDragOrigin ?? $dock;
         $usable = max(1, $frame['bandCols'] - $active * $dock->dividerCols);
-        $geometry = $origin->resolve(new \SugarCraft\Layout\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $geometry = $origin->resolve(new \SugarCraft\Constraints\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
         $sideSlots = $origin->slots($side);
         $current = $sideSlots === []
             ? $dock->sideMinCols
@@ -3165,7 +3165,7 @@ final class App implements Model
         // somehow absent (clicks were on to press the divider, so they
         // should be on for headers; the fallback keeps the drop total).
         $dock = $this->dock();
-        $geometry = $dock->resolve(new \SugarCraft\Layout\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $geometry = $dock->resolve(new \SugarCraft\Constraints\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
         $paintedRows = [];
 
         foreach (TuiRenderer::chromeScanner()->prefixed(Renderer::PANE_ZONE_PREFIX) as $id => $zone) {

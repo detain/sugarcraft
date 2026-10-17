@@ -7,16 +7,16 @@ namespace SugarCraft\Panels\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Panels\Node;
 use SugarCraft\Panels\SugarPanels;
-use SugarCraft\Layout\Constraint\Constraint;
-use SugarCraft\Layout\Direction;
-use SugarCraft\Layout\GreedySolver;
-use SugarCraft\Layout\Region;
+use SugarCraft\Constraints\Constraint\Constraint;
+use SugarCraft\Constraints\Direction;
+use SugarCraft\Constraints\GreedySolver;
+use SugarCraft\Constraints\Region;
 
 /**
- * Load-bearing pins for the distribute()/distributeFlex() → candy-layout
- * delegation (plan_missing.md W12 / candy-layout #1372 + #1386).
+ * Load-bearing pins for the distribute()/distributeFlex() → sugar-constraints
+ * delegation (plan_missing.md W12 / sugar-constraints #1372 + #1386).
  *
- * BOTH sugar-panels distribution paths now delegate to candy-layout (fork-b dedup
+ * BOTH sugar-panels distribution paths now delegate to sugar-constraints (fork-b dedup
  * complete): distributeFlex() maps each child to a Constraint (fixed → Length,
  * flex → Fill) solved with {@see GreedySolver::compat()}; the NON-flex
  * distribute() maps each child to a Fill weighted by minWidth/minHeight solved
@@ -76,7 +76,7 @@ final class SolverDelegationTest extends TestCase
     }
 
     /**
-     * The flex path is backed by candy-layout's solver in sugar-panels parity
+     * The flex path is backed by sugar-constraints's solver in sugar-panels parity
      * mode — the exact three-axis configuration that reproduces the old
      * hand-rolled distribution byte-for-byte.
      */
@@ -87,7 +87,7 @@ final class SolverDelegationTest extends TestCase
         $p->setAccessible(true);
         $solver = $p->getValue($boxer);
 
-        $this->assertInstanceOf(GreedySolver::class, $solver, 'flex distribution delegates to candy-layout GreedySolver');
+        $this->assertInstanceOf(GreedySolver::class, $solver, 'flex distribution delegates to sugar-constraints GreedySolver');
         $this->assertTrue($solver->roundSplit, 'compat: round-split ON');
         $this->assertTrue($solver->remainderToLast, 'compat: remainder-to-last ON');
         $this->assertFalse($solver->truncateOverflow, 'compat: overflow truncation OFF (fixed children keep full base)');
@@ -157,7 +157,7 @@ final class SolverDelegationTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // NON-flex distribute() → GreedySolver::withMinShare() (candy-layout #1386)
+    // NON-flex distribute() → GreedySolver::withMinShare() (sugar-constraints #1386)
     // -------------------------------------------------------------------------
 
     /**
@@ -181,7 +181,7 @@ final class SolverDelegationTest extends TestCase
     /**
      * The min-share floor is load-bearing: in a viewport too tight for a naive
      * proportional split, distribute() still reserves >= 1 column for EVERY child
-     * so the trailing children never collapse to 0. A plain candy-layout solve
+     * so the trailing children never collapse to 0. A plain sugar-constraints solve
      * (no withMinShare floor) starves them — asserted here as the contrast, which
      * pins that distribute() routes through withMinShare(1, spacing, borderPad)
      * with the correct reservation frame and not a bare Fill split.
@@ -203,7 +203,7 @@ final class SolverDelegationTest extends TestCase
             $this->assertGreaterThanOrEqual(1, $w, 'every child keeps >= 1 column under the min-share floor');
         }
 
-        // Contrast: a floor-LESS candy-layout solve collapses the tail. This is
+        // Contrast: a floor-LESS sugar-constraints solve collapses the tail. This is
         // exactly what the migration must NOT regress to.
         $naive = GreedySolver::new()->solve(
             Region::fromSize(6, 1),
@@ -216,13 +216,13 @@ final class SolverDelegationTest extends TestCase
 
     /**
      * Structural delegation pin: distribute()'s offsets are exactly what
-     * candy-layout's {@see GreedySolver::withMinShare()} produces for the same
+     * sugar-constraints's {@see GreedySolver::withMinShare()} produces for the same
      * Fill mapping and reservation frame (minShare 1, reserveGap = spacing,
      * reserveLead = borderPad). Reconstructs the expected offsets by driving the
      * solver directly across a matrix, so it fails if distribute() stops
      * delegating or passes the wrong floor parameters.
      */
-    public function testDistributeMatchesCandyLayoutWithMinShare(): void
+    public function testDistributeMatchesSugarConstraintsWithMinShare(): void
     {
         $cases = [
             [20, [1, 1, 1], 0, 0],
@@ -250,7 +250,7 @@ final class SolverDelegationTest extends TestCase
             $this->assertSame(
                 $expected,
                 $this->distribute($available, $weights, $spacing, $borderPad),
-                "distribute() must match candy-layout withMinShare for [{$available}, ("
+                "distribute() must match sugar-constraints withMinShare for [{$available}, ("
                     . \implode(',', $weights) . "), sp={$spacing}, pad={$borderPad}]",
             );
         }

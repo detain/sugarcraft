@@ -3989,9 +3989,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-1-16-l-1.ansi": {
-        "name": "candy-layout-1-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-16-l-1.ansi": {
+        "name": "sugar-constraints-1-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -4001,9 +4001,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-layout/candy-layout-1-16-l-2.ansi": {
-        "name": "candy-layout-1-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-16-l-2.ansi": {
+        "name": "sugar-constraints-1-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "144x30",
         "width": 144,
         "height": 30,
@@ -4013,9 +4013,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-1-16-m-1.ansi": {
-        "name": "candy-layout-1-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-16-m-1.ansi": {
+        "name": "sugar-constraints-1-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -4025,9 +4025,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-1-16-m-2.ansi": {
-        "name": "candy-layout-1-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-16-m-2.ansi": {
+        "name": "sugar-constraints-1-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -4037,9 +4037,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-1-16-s-1.ansi": {
-        "name": "candy-layout-1-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-16-s-1.ansi": {
+        "name": "sugar-constraints-1-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x11",
         "width": 64,
         "height": 11,
@@ -4049,9 +4049,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-1-16-s-2.ansi": {
-        "name": "candy-layout-1-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-16-s-2.ansi": {
+        "name": "sugar-constraints-1-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -4061,21 +4061,21 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-1-256-l-1.ansi": {
-        "name": "candy-layout-1-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-256-l-1.ansi": {
+        "name": "sugar-constraints-1-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
         "depth": "256",
         "colors": 28,
-        "description": "dusk skyline where every building is a solved vbox (fill/min/pct/ratio) with lit windows and a CandyLayout marquee",
+        "description": "dusk skyline where every building is a solved vbox (fill/min/pct/ratio) with lit windows and a SugarConstraints marquee",
         "rating": 5,
         "tags": []
     },
-    "candy-layout/candy-layout-1-256-l-2.ansi": {
-        "name": "candy-layout-1-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-256-l-2.ansi": {
+        "name": "sugar-constraints-1-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -4085,21 +4085,21 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-1-256-m-1.ansi": {
-        "name": "candy-layout-1-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-256-m-1.ansi": {
+        "name": "sugar-constraints-1-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
         "depth": "256",
         "colors": 13,
-        "description": "site crane hoisting a CandyLayout banner box onto a scaffold of stacked vbox regions",
+        "description": "site crane hoisting a SugarConstraints banner box onto a scaffold of stacked vbox regions",
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-1-256-m-2.ansi": {
-        "name": "candy-layout-1-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-256-m-2.ansi": {
+        "name": "sugar-constraints-1-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "82x22",
         "width": 82,
         "height": 22,
@@ -4109,9 +4109,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-1-256-s-1.ansi": {
-        "name": "candy-layout-1-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-256-s-1.ansi": {
+        "name": "sugar-constraints-1-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -4121,9 +4121,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-1-256-s-2.ansi": {
-        "name": "candy-layout-1-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-256-s-2.ansi": {
+        "name": "sugar-constraints-1-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -4133,9 +4133,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-1-tc-l-1.ansi": {
-        "name": "candy-layout-1-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-tc-l-1.ansi": {
+        "name": "sugar-constraints-1-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "192x40",
         "width": 192,
         "height": 40,
@@ -4145,9 +4145,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-1-tc-l-2.ansi": {
-        "name": "candy-layout-1-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-tc-l-2.ansi": {
+        "name": "sugar-constraints-1-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "200x44",
         "width": 200,
         "height": 44,
@@ -4157,9 +4157,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-1-tc-m-1.ansi": {
-        "name": "candy-layout-1-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-tc-m-1.ansi": {
+        "name": "sugar-constraints-1-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "90x25",
         "width": 90,
         "height": 25,
@@ -4169,9 +4169,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-1-tc-m-2.ansi": {
-        "name": "candy-layout-1-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-tc-m-2.ansi": {
+        "name": "sugar-constraints-1-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -4181,9 +4181,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-1-tc-s-1.ansi": {
-        "name": "candy-layout-1-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-tc-s-1.ansi": {
+        "name": "sugar-constraints-1-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "68x16",
         "width": 68,
         "height": 16,
@@ -4193,21 +4193,21 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-1-tc-s-2.ansi": {
-        "name": "candy-layout-1-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-1-tc-s-2.ansi": {
+        "name": "sugar-constraints-1-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
         "depth": "truecolor",
         "colors": 17,
-        "description": "quarter-block candy-foil mosaic with a gold-framed CandyLayout plaque at center",
+        "description": "quarter-block candy-foil mosaic with a gold-framed SugarConstraints plaque at center",
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-16-l-1.ansi": {
-        "name": "candy-layout-2-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-l-1.ansi": {
+        "name": "sugar-constraints-2-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "148x30",
         "width": 148,
         "height": 30,
@@ -4217,9 +4217,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-16-l-2.ansi": {
-        "name": "candy-layout-2-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-l-2.ansi": {
+        "name": "sugar-constraints-2-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -4229,9 +4229,9 @@
         "rating": 5,
         "tags": []
     },
-    "candy-layout/candy-layout-2-16-m-1.ansi": {
-        "name": "candy-layout-2-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-m-1.ansi": {
+        "name": "sugar-constraints-2-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -4241,9 +4241,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-16-m-2.ansi": {
-        "name": "candy-layout-2-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-m-2.ansi": {
+        "name": "sugar-constraints-2-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -4253,9 +4253,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-16-m-3.ansi": {
-        "name": "candy-layout-2-16-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-m-3.ansi": {
+        "name": "sugar-constraints-2-16-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "76x20",
         "width": 76,
         "height": 20,
@@ -4265,9 +4265,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-16-s-1.ansi": {
-        "name": "candy-layout-2-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-s-1.ansi": {
+        "name": "sugar-constraints-2-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -4279,9 +4279,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-2-16-s-2.ansi": {
-        "name": "candy-layout-2-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-16-s-2.ansi": {
+        "name": "sugar-constraints-2-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -4291,9 +4291,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-2-256-l-1.ansi": {
-        "name": "candy-layout-2-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-256-l-1.ansi": {
+        "name": "sugar-constraints-2-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "170x34",
         "width": 170,
         "height": 34,
@@ -4303,9 +4303,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-256-l-2.ansi": {
-        "name": "candy-layout-2-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-256-l-2.ansi": {
+        "name": "sugar-constraints-2-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "160x30",
         "width": 160,
         "height": 30,
@@ -4315,9 +4315,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-256-m-1.ansi": {
-        "name": "candy-layout-2-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-256-m-1.ansi": {
+        "name": "sugar-constraints-2-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4327,9 +4327,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-256-m-2.ansi": {
-        "name": "candy-layout-2-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-256-m-2.ansi": {
+        "name": "sugar-constraints-2-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4339,9 +4339,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-256-s-1.ansi": {
-        "name": "candy-layout-2-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-256-s-1.ansi": {
+        "name": "sugar-constraints-2-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "52x14",
         "width": 52,
         "height": 14,
@@ -4351,9 +4351,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-2-256-s-2.ansi": {
-        "name": "candy-layout-2-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-256-s-2.ansi": {
+        "name": "sugar-constraints-2-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -4363,9 +4363,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-l-1.ansi": {
-        "name": "candy-layout-2-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-l-1.ansi": {
+        "name": "sugar-constraints-2-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "178x36",
         "width": 178,
         "height": 36,
@@ -4375,9 +4375,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-l-2.ansi": {
-        "name": "candy-layout-2-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-l-2.ansi": {
+        "name": "sugar-constraints-2-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -4387,9 +4387,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-m-1.ansi": {
-        "name": "candy-layout-2-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-m-1.ansi": {
+        "name": "sugar-constraints-2-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -4399,9 +4399,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-m-2.ansi": {
-        "name": "candy-layout-2-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-m-2.ansi": {
+        "name": "sugar-constraints-2-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4411,9 +4411,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-m-3.ansi": {
-        "name": "candy-layout-2-tc-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-m-3.ansi": {
+        "name": "sugar-constraints-2-tc-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -4423,9 +4423,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-s-1.ansi": {
-        "name": "candy-layout-2-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-s-1.ansi": {
+        "name": "sugar-constraints-2-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
@@ -4435,9 +4435,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-2-tc-s-2.ansi": {
-        "name": "candy-layout-2-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-2-tc-s-2.ansi": {
+        "name": "sugar-constraints-2-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -4447,9 +4447,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-l-1.ansi": {
-        "name": "candy-layout-3-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-l-1.ansi": {
+        "name": "sugar-constraints-3-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -4459,9 +4459,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-l-2.ansi": {
-        "name": "candy-layout-3-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-l-2.ansi": {
+        "name": "sugar-constraints-3-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -4471,9 +4471,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-m-1.ansi": {
-        "name": "candy-layout-3-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-m-1.ansi": {
+        "name": "sugar-constraints-3-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -4483,9 +4483,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-m-2.ansi": {
-        "name": "candy-layout-3-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-m-2.ansi": {
+        "name": "sugar-constraints-3-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4495,9 +4495,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-m-3.ansi": {
-        "name": "candy-layout-3-16-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-m-3.ansi": {
+        "name": "sugar-constraints-3-16-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -4507,9 +4507,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-s-1.ansi": {
-        "name": "candy-layout-3-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-s-1.ansi": {
+        "name": "sugar-constraints-3-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -4519,9 +4519,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-3-16-s-2.ansi": {
-        "name": "candy-layout-3-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-16-s-2.ansi": {
+        "name": "sugar-constraints-3-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -4531,9 +4531,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-256-l-1.ansi": {
-        "name": "candy-layout-3-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-256-l-1.ansi": {
+        "name": "sugar-constraints-3-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "192x38",
         "width": 192,
         "height": 38,
@@ -4543,9 +4543,9 @@
         "rating": 4,
         "tags": []
     },
-    "candy-layout/candy-layout-3-256-l-2.ansi": {
-        "name": "candy-layout-3-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-256-l-2.ansi": {
+        "name": "sugar-constraints-3-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "178x40",
         "width": 178,
         "height": 40,
@@ -4555,9 +4555,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-256-m-1.ansi": {
-        "name": "candy-layout-3-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-256-m-1.ansi": {
+        "name": "sugar-constraints-3-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4567,9 +4567,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-256-m-2.ansi": {
-        "name": "candy-layout-3-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-256-m-2.ansi": {
+        "name": "sugar-constraints-3-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "90x24",
         "width": 90,
         "height": 24,
@@ -4579,9 +4579,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-256-s-1.ansi": {
-        "name": "candy-layout-3-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-256-s-1.ansi": {
+        "name": "sugar-constraints-3-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -4591,9 +4591,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-256-s-2.ansi": {
-        "name": "candy-layout-3-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-256-s-2.ansi": {
+        "name": "sugar-constraints-3-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -4603,9 +4603,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-l-1.ansi": {
-        "name": "candy-layout-3-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-l-1.ansi": {
+        "name": "sugar-constraints-3-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "208x46",
         "width": 208,
         "height": 46,
@@ -4615,9 +4615,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-l-2.ansi": {
-        "name": "candy-layout-3-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-l-2.ansi": {
+        "name": "sugar-constraints-3-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "198x40",
         "width": 198,
         "height": 40,
@@ -4627,9 +4627,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-m-1.ansi": {
-        "name": "candy-layout-3-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-m-1.ansi": {
+        "name": "sugar-constraints-3-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4639,9 +4639,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-m-2.ansi": {
-        "name": "candy-layout-3-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-m-2.ansi": {
+        "name": "sugar-constraints-3-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -4651,9 +4651,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-m-3.ansi": {
-        "name": "candy-layout-3-tc-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-m-3.ansi": {
+        "name": "sugar-constraints-3-tc-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -4663,9 +4663,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-s-1.ansi": {
-        "name": "candy-layout-3-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-s-1.ansi": {
+        "name": "sugar-constraints-3-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
@@ -4675,9 +4675,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-3-tc-s-2.ansi": {
-        "name": "candy-layout-3-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-3-tc-s-2.ansi": {
+        "name": "sugar-constraints-3-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -4687,9 +4687,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-16-l-1.ansi": {
-        "name": "candy-layout-4-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-16-l-1.ansi": {
+        "name": "sugar-constraints-4-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "190x36",
         "width": 190,
         "height": 36,
@@ -4699,9 +4699,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-4-16-l-2.ansi": {
-        "name": "candy-layout-4-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-16-l-2.ansi": {
+        "name": "sugar-constraints-4-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x44",
         "width": 150,
         "height": 44,
@@ -4711,9 +4711,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-4-16-m-1.ansi": {
-        "name": "candy-layout-4-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-16-m-1.ansi": {
+        "name": "sugar-constraints-4-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -4723,9 +4723,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-4-16-m-2.ansi": {
-        "name": "candy-layout-4-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-16-m-2.ansi": {
+        "name": "sugar-constraints-4-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -4735,9 +4735,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-4-16-s-1.ansi": {
-        "name": "candy-layout-4-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-16-s-1.ansi": {
+        "name": "sugar-constraints-4-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x16",
         "width": 64,
         "height": 16,
@@ -4747,9 +4747,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-4-16-s-2.ansi": {
-        "name": "candy-layout-4-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-16-s-2.ansi": {
+        "name": "sugar-constraints-4-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x16",
         "width": 58,
         "height": 16,
@@ -4759,9 +4759,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-4-256-l-1.ansi": {
-        "name": "candy-layout-4-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-256-l-1.ansi": {
+        "name": "sugar-constraints-4-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "192x37",
         "width": 192,
         "height": 37,
@@ -4771,9 +4771,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-4-256-l-2.ansi": {
-        "name": "candy-layout-4-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-256-l-2.ansi": {
+        "name": "sugar-constraints-4-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "152x44",
         "width": 152,
         "height": 44,
@@ -4783,9 +4783,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-4-256-m-2.ansi": {
-        "name": "candy-layout-4-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-256-m-2.ansi": {
+        "name": "sugar-constraints-4-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -4795,9 +4795,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-256-s-2.ansi": {
-        "name": "candy-layout-4-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-256-s-2.ansi": {
+        "name": "sugar-constraints-4-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x16",
         "width": 62,
         "height": 16,
@@ -4807,9 +4807,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-tc-l-1.ansi": {
-        "name": "candy-layout-4-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-tc-l-1.ansi": {
+        "name": "sugar-constraints-4-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "200x38",
         "width": 200,
         "height": 38,
@@ -4819,9 +4819,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-tc-l-2.ansi": {
-        "name": "candy-layout-4-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-tc-l-2.ansi": {
+        "name": "sugar-constraints-4-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "156x46",
         "width": 156,
         "height": 46,
@@ -4831,9 +4831,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-tc-m-1.ansi": {
-        "name": "candy-layout-4-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-tc-m-1.ansi": {
+        "name": "sugar-constraints-4-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -4843,9 +4843,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-tc-m-2.ansi": {
-        "name": "candy-layout-4-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-tc-m-2.ansi": {
+        "name": "sugar-constraints-4-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -4855,9 +4855,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-tc-s-1.ansi": {
-        "name": "candy-layout-4-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-tc-s-1.ansi": {
+        "name": "sugar-constraints-4-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "66x16",
         "width": 66,
         "height": 16,
@@ -4867,9 +4867,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-4-tc-s-2.ansi": {
-        "name": "candy-layout-4-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-4-tc-s-2.ansi": {
+        "name": "sugar-constraints-4-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -4879,9 +4879,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-16-l-1.ansi": {
-        "name": "candy-layout-5-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-16-l-1.ansi": {
+        "name": "sugar-constraints-5-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -4891,9 +4891,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-5-16-l-2.ansi": {
-        "name": "candy-layout-5-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-16-l-2.ansi": {
+        "name": "sugar-constraints-5-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "156x32",
         "width": 156,
         "height": 32,
@@ -4903,9 +4903,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-5-16-m-2.ansi": {
-        "name": "candy-layout-5-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-16-m-2.ansi": {
+        "name": "sugar-constraints-5-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -4915,9 +4915,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-5-16-s-2.ansi": {
-        "name": "candy-layout-5-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-16-s-2.ansi": {
+        "name": "sugar-constraints-5-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "52x10",
         "width": 52,
         "height": 10,
@@ -4929,9 +4929,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-5-256-l-1.ansi": {
-        "name": "candy-layout-5-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-256-l-1.ansi": {
+        "name": "sugar-constraints-5-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -4941,9 +4941,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-256-l-2.ansi": {
-        "name": "candy-layout-5-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-256-l-2.ansi": {
+        "name": "sugar-constraints-5-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "172x30",
         "width": 172,
         "height": 30,
@@ -4953,9 +4953,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-256-m-1.ansi": {
-        "name": "candy-layout-5-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-256-m-1.ansi": {
+        "name": "sugar-constraints-5-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -4965,9 +4965,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-256-m-2.ansi": {
-        "name": "candy-layout-5-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-256-m-2.ansi": {
+        "name": "sugar-constraints-5-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -4977,9 +4977,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-256-s-1.ansi": {
-        "name": "candy-layout-5-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-256-s-1.ansi": {
+        "name": "sugar-constraints-5-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -4989,9 +4989,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-256-s-2.ansi": {
-        "name": "candy-layout-5-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-256-s-2.ansi": {
+        "name": "sugar-constraints-5-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -5001,9 +5001,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-tc-l-1.ansi": {
-        "name": "candy-layout-5-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-tc-l-1.ansi": {
+        "name": "sugar-constraints-5-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "190x32",
         "width": 190,
         "height": 32,
@@ -5013,9 +5013,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-tc-l-2.ansi": {
-        "name": "candy-layout-5-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-tc-l-2.ansi": {
+        "name": "sugar-constraints-5-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "186x38",
         "width": 186,
         "height": 38,
@@ -5025,9 +5025,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-tc-m-1.ansi": {
-        "name": "candy-layout-5-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-tc-m-1.ansi": {
+        "name": "sugar-constraints-5-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -5037,9 +5037,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-tc-m-2.ansi": {
-        "name": "candy-layout-5-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-tc-m-2.ansi": {
+        "name": "sugar-constraints-5-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -5049,9 +5049,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-tc-s-1.ansi": {
-        "name": "candy-layout-5-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-tc-s-1.ansi": {
+        "name": "sugar-constraints-5-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "48x13",
         "width": 48,
         "height": 13,
@@ -5061,9 +5061,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-5-tc-s-2.ansi": {
-        "name": "candy-layout-5-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-5-tc-s-2.ansi": {
+        "name": "sugar-constraints-5-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "52x13",
         "width": 52,
         "height": 13,
@@ -5073,9 +5073,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-16-l-1.ansi": {
-        "name": "candy-layout-6-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-16-l-1.ansi": {
+        "name": "sugar-constraints-6-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -5087,9 +5087,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-6-16-l-2.ansi": {
-        "name": "candy-layout-6-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-16-l-2.ansi": {
+        "name": "sugar-constraints-6-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -5101,9 +5101,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-6-16-m-1.ansi": {
-        "name": "candy-layout-6-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-16-m-1.ansi": {
+        "name": "sugar-constraints-6-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -5113,9 +5113,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-6-16-m-2.ansi": {
-        "name": "candy-layout-6-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-16-m-2.ansi": {
+        "name": "sugar-constraints-6-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -5127,9 +5127,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-6-16-s-1.ansi": {
-        "name": "candy-layout-6-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-16-s-1.ansi": {
+        "name": "sugar-constraints-6-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -5139,9 +5139,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-6-16-s-2.ansi": {
-        "name": "candy-layout-6-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-16-s-2.ansi": {
+        "name": "sugar-constraints-6-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -5153,9 +5153,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-6-256-l-1.ansi": {
-        "name": "candy-layout-6-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-l-1.ansi": {
+        "name": "sugar-constraints-6-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "140x40",
         "width": 140,
         "height": 40,
@@ -5165,9 +5165,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-256-l-2.ansi": {
-        "name": "candy-layout-6-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-l-2.ansi": {
+        "name": "sugar-constraints-6-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "170x36",
         "width": 170,
         "height": 36,
@@ -5177,9 +5177,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-256-m-1.ansi": {
-        "name": "candy-layout-6-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-m-1.ansi": {
+        "name": "sugar-constraints-6-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "76x25",
         "width": 76,
         "height": 25,
@@ -5189,9 +5189,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-256-m-2.ansi": {
-        "name": "candy-layout-6-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-m-2.ansi": {
+        "name": "sugar-constraints-6-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -5201,9 +5201,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-256-m-3.ansi": {
-        "name": "candy-layout-6-256-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-m-3.ansi": {
+        "name": "sugar-constraints-6-256-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -5213,9 +5213,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-256-s-1.ansi": {
-        "name": "candy-layout-6-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-s-1.ansi": {
+        "name": "sugar-constraints-6-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x15",
         "width": 64,
         "height": 15,
@@ -5225,9 +5225,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-256-s-2.ansi": {
-        "name": "candy-layout-6-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-256-s-2.ansi": {
+        "name": "sugar-constraints-6-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -5237,9 +5237,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-l-1.ansi": {
-        "name": "candy-layout-6-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-l-1.ansi": {
+        "name": "sugar-constraints-6-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "180x38",
         "width": 180,
         "height": 38,
@@ -5249,9 +5249,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-l-2.ansi": {
-        "name": "candy-layout-6-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-l-2.ansi": {
+        "name": "sugar-constraints-6-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "190x34",
         "width": 190,
         "height": 34,
@@ -5261,9 +5261,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-m-1.ansi": {
-        "name": "candy-layout-6-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-m-1.ansi": {
+        "name": "sugar-constraints-6-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -5273,9 +5273,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-m-2.ansi": {
-        "name": "candy-layout-6-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-m-2.ansi": {
+        "name": "sugar-constraints-6-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x25",
         "width": 84,
         "height": 25,
@@ -5285,9 +5285,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-s-1.ansi": {
-        "name": "candy-layout-6-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-s-1.ansi": {
+        "name": "sugar-constraints-6-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "66x10",
         "width": 66,
         "height": 10,
@@ -5297,9 +5297,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-s-2.ansi": {
-        "name": "candy-layout-6-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-s-2.ansi": {
+        "name": "sugar-constraints-6-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -5309,9 +5309,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-6-tc-s-3.ansi": {
-        "name": "candy-layout-6-tc-s-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-6-tc-s-3.ansi": {
+        "name": "sugar-constraints-6-tc-s-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -5321,9 +5321,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-16-l-1.ansi": {
-        "name": "candy-layout-7-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-16-l-1.ansi": {
+        "name": "sugar-constraints-7-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "156x36",
         "width": 156,
         "height": 36,
@@ -5333,9 +5333,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-7-16-l-2.ansi": {
-        "name": "candy-layout-7-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-16-l-2.ansi": {
+        "name": "sugar-constraints-7-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -5347,9 +5347,9 @@
             "alignment-fix"
         ]
     },
-    "candy-layout/candy-layout-7-256-l-1.ansi": {
-        "name": "candy-layout-7-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-l-1.ansi": {
+        "name": "sugar-constraints-7-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "152x38",
         "width": 152,
         "height": 38,
@@ -5359,9 +5359,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-256-l-2.ansi": {
-        "name": "candy-layout-7-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-l-2.ansi": {
+        "name": "sugar-constraints-7-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
@@ -5371,9 +5371,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-256-m-1.ansi": {
-        "name": "candy-layout-7-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-m-1.ansi": {
+        "name": "sugar-constraints-7-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -5383,9 +5383,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-256-m-2.ansi": {
-        "name": "candy-layout-7-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-m-2.ansi": {
+        "name": "sugar-constraints-7-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x22",
         "width": 86,
         "height": 22,
@@ -5395,9 +5395,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-256-m-3.ansi": {
-        "name": "candy-layout-7-256-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-m-3.ansi": {
+        "name": "sugar-constraints-7-256-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "78x20",
         "width": 78,
         "height": 20,
@@ -5407,9 +5407,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-256-s-1.ansi": {
-        "name": "candy-layout-7-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-s-1.ansi": {
+        "name": "sugar-constraints-7-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -5419,9 +5419,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-256-s-2.ansi": {
-        "name": "candy-layout-7-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-256-s-2.ansi": {
+        "name": "sugar-constraints-7-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x15",
         "width": 64,
         "height": 15,
@@ -5431,9 +5431,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-tc-l-1.ansi": {
-        "name": "candy-layout-7-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-tc-l-1.ansi": {
+        "name": "sugar-constraints-7-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "180x40",
         "width": 180,
         "height": 40,
@@ -5443,9 +5443,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-tc-l-2.ansi": {
-        "name": "candy-layout-7-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-tc-l-2.ansi": {
+        "name": "sugar-constraints-7-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "192x36",
         "width": 192,
         "height": 36,
@@ -5455,9 +5455,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-tc-m-1.ansi": {
-        "name": "candy-layout-7-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-tc-m-1.ansi": {
+        "name": "sugar-constraints-7-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -5467,9 +5467,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-tc-m-2.ansi": {
-        "name": "candy-layout-7-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-tc-m-2.ansi": {
+        "name": "sugar-constraints-7-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x25",
         "width": 84,
         "height": 25,
@@ -5479,9 +5479,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-tc-s-1.ansi": {
-        "name": "candy-layout-7-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-tc-s-1.ansi": {
+        "name": "sugar-constraints-7-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -5491,9 +5491,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-7-tc-s-2.ansi": {
-        "name": "candy-layout-7-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-7-tc-s-2.ansi": {
+        "name": "sugar-constraints-7-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
@@ -5503,9 +5503,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-16-l-1.ansi": {
-        "name": "candy-layout-8-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-16-l-1.ansi": {
+        "name": "sugar-constraints-8-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -5515,9 +5515,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-8-16-l-2.ansi": {
-        "name": "candy-layout-8-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-16-l-2.ansi": {
+        "name": "sugar-constraints-8-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "176x32",
         "width": 176,
         "height": 32,
@@ -5527,9 +5527,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-8-16-m-1.ansi": {
-        "name": "candy-layout-8-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-16-m-1.ansi": {
+        "name": "sugar-constraints-8-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -5539,9 +5539,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-8-16-m-2.ansi": {
-        "name": "candy-layout-8-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-16-m-2.ansi": {
+        "name": "sugar-constraints-8-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "82x20",
         "width": 82,
         "height": 20,
@@ -5551,9 +5551,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-8-16-s-2.ansi": {
-        "name": "candy-layout-8-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-16-s-2.ansi": {
+        "name": "sugar-constraints-8-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -5563,9 +5563,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-l-1.ansi": {
-        "name": "candy-layout-8-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-l-1.ansi": {
+        "name": "sugar-constraints-8-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "156x36",
         "width": 156,
         "height": 36,
@@ -5575,9 +5575,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-l-2.ansi": {
-        "name": "candy-layout-8-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-l-2.ansi": {
+        "name": "sugar-constraints-8-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -5587,9 +5587,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-m-1.ansi": {
-        "name": "candy-layout-8-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-m-1.ansi": {
+        "name": "sugar-constraints-8-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -5599,9 +5599,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-m-2.ansi": {
-        "name": "candy-layout-8-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-m-2.ansi": {
+        "name": "sugar-constraints-8-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x22",
         "width": 88,
         "height": 22,
@@ -5611,9 +5611,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-m-3.ansi": {
-        "name": "candy-layout-8-256-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-m-3.ansi": {
+        "name": "sugar-constraints-8-256-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -5623,9 +5623,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-s-1.ansi": {
-        "name": "candy-layout-8-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-s-1.ansi": {
+        "name": "sugar-constraints-8-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -5635,9 +5635,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-256-s-2.ansi": {
-        "name": "candy-layout-8-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-256-s-2.ansi": {
+        "name": "sugar-constraints-8-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -5647,9 +5647,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-tc-l-1.ansi": {
-        "name": "candy-layout-8-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-tc-l-1.ansi": {
+        "name": "sugar-constraints-8-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "180x38",
         "width": 180,
         "height": 38,
@@ -5659,9 +5659,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-tc-l-2.ansi": {
-        "name": "candy-layout-8-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-tc-l-2.ansi": {
+        "name": "sugar-constraints-8-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "184x36",
         "width": 184,
         "height": 36,
@@ -5671,9 +5671,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-tc-m-1.ansi": {
-        "name": "candy-layout-8-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-tc-m-1.ansi": {
+        "name": "sugar-constraints-8-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -5683,9 +5683,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-tc-m-2.ansi": {
-        "name": "candy-layout-8-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-tc-m-2.ansi": {
+        "name": "sugar-constraints-8-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x25",
         "width": 84,
         "height": 25,
@@ -5695,9 +5695,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-tc-s-1.ansi": {
-        "name": "candy-layout-8-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-tc-s-1.ansi": {
+        "name": "sugar-constraints-8-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -5707,9 +5707,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-8-tc-s-2.ansi": {
-        "name": "candy-layout-8-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-8-tc-s-2.ansi": {
+        "name": "sugar-constraints-8-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -5719,9 +5719,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-16-l-1.ansi": {
-        "name": "candy-layout-9-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-16-l-1.ansi": {
+        "name": "sugar-constraints-9-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "170x32",
         "width": 170,
         "height": 32,
@@ -5731,9 +5731,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-9-16-l-2.ansi": {
-        "name": "candy-layout-9-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-16-l-2.ansi": {
+        "name": "sugar-constraints-9-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "147x30",
         "width": 147,
         "height": 30,
@@ -5743,9 +5743,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-9-16-m-1.ansi": {
-        "name": "candy-layout-9-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-16-m-1.ansi": {
+        "name": "sugar-constraints-9-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "84x20",
         "width": 84,
         "height": 20,
@@ -5755,9 +5755,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-9-16-m-2.ansi": {
-        "name": "candy-layout-9-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-16-m-2.ansi": {
+        "name": "sugar-constraints-9-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "78x19",
         "width": 78,
         "height": 19,
@@ -5767,9 +5767,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-9-16-s-1.ansi": {
-        "name": "candy-layout-9-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-16-s-1.ansi": {
+        "name": "sugar-constraints-9-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "64x14",
         "width": 64,
         "height": 14,
@@ -5779,9 +5779,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-9-256-l-1.ansi": {
-        "name": "candy-layout-9-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-256-l-1.ansi": {
+        "name": "sugar-constraints-9-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x32",
         "width": 150,
         "height": 32,
@@ -5791,9 +5791,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-256-l-2.ansi": {
-        "name": "candy-layout-9-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-256-l-2.ansi": {
+        "name": "sugar-constraints-9-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "175x30",
         "width": 175,
         "height": 30,
@@ -5803,9 +5803,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-256-m-1.ansi": {
-        "name": "candy-layout-9-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-256-m-1.ansi": {
+        "name": "sugar-constraints-9-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "85x20",
         "width": 85,
         "height": 20,
@@ -5815,9 +5815,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-256-m-2.ansi": {
-        "name": "candy-layout-9-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-256-m-2.ansi": {
+        "name": "sugar-constraints-9-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "87x21",
         "width": 87,
         "height": 21,
@@ -5827,9 +5827,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-256-s-1.ansi": {
-        "name": "candy-layout-9-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-256-s-1.ansi": {
+        "name": "sugar-constraints-9-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
@@ -5839,9 +5839,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-256-s-2.ansi": {
-        "name": "candy-layout-9-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-256-s-2.ansi": {
+        "name": "sugar-constraints-9-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x10",
         "width": 56,
         "height": 10,
@@ -5851,9 +5851,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-tc-l-1.ansi": {
-        "name": "candy-layout-9-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-tc-l-1.ansi": {
+        "name": "sugar-constraints-9-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "177x36",
         "width": 177,
         "height": 36,
@@ -5863,9 +5863,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-tc-l-2.ansi": {
-        "name": "candy-layout-9-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-tc-l-2.ansi": {
+        "name": "sugar-constraints-9-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "150x42",
         "width": 150,
         "height": 42,
@@ -5875,9 +5875,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-tc-m-1.ansi": {
-        "name": "candy-layout-9-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-tc-m-1.ansi": {
+        "name": "sugar-constraints-9-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -5887,9 +5887,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-tc-m-2.ansi": {
-        "name": "candy-layout-9-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-tc-m-2.ansi": {
+        "name": "sugar-constraints-9-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "79x20",
         "width": 79,
         "height": 20,
@@ -5899,9 +5899,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-tc-s-1.ansi": {
-        "name": "candy-layout-9-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-tc-s-1.ansi": {
+        "name": "sugar-constraints-9-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -5911,9 +5911,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-9-tc-s-2.ansi": {
-        "name": "candy-layout-9-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-9-tc-s-2.ansi": {
+        "name": "sugar-constraints-9-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "52x15",
         "width": 52,
         "height": 15,
@@ -5923,9 +5923,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-16-l-1.ansi": {
-        "name": "candy-layout-10-16-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-16-l-1.ansi": {
+        "name": "sugar-constraints-10-16-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "166x34",
         "width": 166,
         "height": 34,
@@ -5935,9 +5935,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-16-l-2.ansi": {
-        "name": "candy-layout-10-16-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-16-l-2.ansi": {
+        "name": "sugar-constraints-10-16-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "166x32",
         "width": 166,
         "height": 32,
@@ -5947,9 +5947,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-16-m-1.ansi": {
-        "name": "candy-layout-10-16-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-16-m-1.ansi": {
+        "name": "sugar-constraints-10-16-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -5959,9 +5959,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-10-16-m-2.ansi": {
-        "name": "candy-layout-10-16-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-16-m-2.ansi": {
+        "name": "sugar-constraints-10-16-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x20",
         "width": 80,
         "height": 20,
@@ -5971,9 +5971,9 @@
         "rating": 2,
         "tags": []
     },
-    "candy-layout/candy-layout-10-16-s-1.ansi": {
-        "name": "candy-layout-10-16-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-16-s-1.ansi": {
+        "name": "sugar-constraints-10-16-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -5983,9 +5983,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-16-s-2.ansi": {
-        "name": "candy-layout-10-16-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-16-s-2.ansi": {
+        "name": "sugar-constraints-10-16-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -5995,9 +5995,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-256-l-1.ansi": {
-        "name": "candy-layout-10-256-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-256-l-1.ansi": {
+        "name": "sugar-constraints-10-256-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "132x36",
         "width": 132,
         "height": 36,
@@ -6007,9 +6007,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-256-l-2.ansi": {
-        "name": "candy-layout-10-256-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-256-l-2.ansi": {
+        "name": "sugar-constraints-10-256-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "159x32",
         "width": 159,
         "height": 32,
@@ -6019,9 +6019,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-256-m-1.ansi": {
-        "name": "candy-layout-10-256-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-256-m-1.ansi": {
+        "name": "sugar-constraints-10-256-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -6031,9 +6031,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-256-m-2.ansi": {
-        "name": "candy-layout-10-256-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-256-m-2.ansi": {
+        "name": "sugar-constraints-10-256-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "72x22",
         "width": 72,
         "height": 22,
@@ -6043,9 +6043,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-256-s-1.ansi": {
-        "name": "candy-layout-10-256-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-256-s-1.ansi": {
+        "name": "sugar-constraints-10-256-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "63x16",
         "width": 63,
         "height": 16,
@@ -6055,9 +6055,9 @@
         "rating": 3,
         "tags": []
     },
-    "candy-layout/candy-layout-10-256-s-2.ansi": {
-        "name": "candy-layout-10-256-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-256-s-2.ansi": {
+        "name": "sugar-constraints-10-256-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "54x12",
         "width": 54,
         "height": 12,
@@ -6067,9 +6067,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-l-1.ansi": {
-        "name": "candy-layout-10-tc-l-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-l-1.ansi": {
+        "name": "sugar-constraints-10-tc-l-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "188x40",
         "width": 188,
         "height": 40,
@@ -6079,9 +6079,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-l-2.ansi": {
-        "name": "candy-layout-10-tc-l-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-l-2.ansi": {
+        "name": "sugar-constraints-10-tc-l-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "136x40",
         "width": 136,
         "height": 40,
@@ -6091,9 +6091,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-m-1.ansi": {
-        "name": "candy-layout-10-tc-m-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-m-1.ansi": {
+        "name": "sugar-constraints-10-tc-m-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -6103,9 +6103,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-m-2.ansi": {
-        "name": "candy-layout-10-tc-m-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-m-2.ansi": {
+        "name": "sugar-constraints-10-tc-m-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "80x23",
         "width": 80,
         "height": 23,
@@ -6115,9 +6115,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-m-3.ansi": {
-        "name": "candy-layout-10-tc-m-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-m-3.ansi": {
+        "name": "sugar-constraints-10-tc-m-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "76x21",
         "width": 76,
         "height": 21,
@@ -6127,9 +6127,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-s-1.ansi": {
-        "name": "candy-layout-10-tc-s-1.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-s-1.ansi": {
+        "name": "sugar-constraints-10-tc-s-1.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -6139,9 +6139,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-s-2.ansi": {
-        "name": "candy-layout-10-tc-s-2.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-s-2.ansi": {
+        "name": "sugar-constraints-10-tc-s-2.ansi",
+        "category": "sugar-constraints",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -6151,9 +6151,9 @@
         "rating": null,
         "tags": []
     },
-    "candy-layout/candy-layout-10-tc-s-3.ansi": {
-        "name": "candy-layout-10-tc-s-3.ansi",
-        "category": "candy-layout",
+    "sugar-constraints/sugar-constraints-10-tc-s-3.ansi": {
+        "name": "sugar-constraints-10-tc-s-3.ansi",
+        "category": "sugar-constraints",
         "resolution": "56x12",
         "width": 56,
         "height": 12,

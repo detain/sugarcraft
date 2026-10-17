@@ -17,7 +17,7 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Mouse\Zone;
 
 /**

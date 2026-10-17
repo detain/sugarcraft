@@ -32,7 +32,7 @@ declare(strict_types=1);
  *      it fit). A class the sample declares must implement
  *      every method of the SugarCraft interfaces it names. Unimported short
  *      names that match a SugarCraft type are reported as missing imports.
- *   5. The candy-layout quickstart is run from source, and the widths its
+ *   5. The sugar-constraints quickstart is run from source, and the widths its
  *      comments promise must match what the solver returns.
  *
  * The first full run found, beyond the four parse errors: invented classes
@@ -236,28 +236,28 @@ final class DocsQuickstartTest extends TestCase
     }
 
     // -----------------------------------------------------------------
-    // The candy-layout quickstart is RUN, not just read
+    // The sugar-constraints quickstart is RUN, not just read
     // -----------------------------------------------------------------
 
     /**
-     * Its comments promise exact widths. candy-layout has no runtime deps, so it
+     * Its comments promise exact widths. sugar-constraints has no runtime deps, so it
      * can run straight from source with no vendor/. The comments used to describe
      * intent ("fills remaining space", "greedy but clamped"), while the solver gave
      * fill(1) one cell and max(50) six. Each `Constraint::…` line has to carry the
      * width it really gets as a leading `// N` comment, and the sample is executed
      * to compare them.
      */
-    public function testTheCandyLayoutQuickstartWidthsAreWhatTheSolverProduces(): void
+    public function testTheSugarConstraintsQuickstartWidthsAreWhatTheSolverProduces(): void
     {
         $php = \array_values(\array_filter(
-            self::blocks((string) \file_get_contents(self::root() . '/docs/_data/candy-layout.body.html')),
+            self::blocks((string) \file_get_contents(self::root() . '/docs/_data/sugar-constraints.body.html')),
             static fn (array $b): bool => $b['lang'] === 'php',
         ));
-        self::assertNotSame([], $php, 'candy-layout has no PHP quickstart');
+        self::assertNotSame([], $php, 'sugar-constraints has no PHP quickstart');
         $code = $php[0]['code'];
 
         \preg_match_all('#^\s*Constraint::\w+\([^)]*\),?[ \t]*(//[^\n]*)?$#m', $code, $m);
-        self::assertNotSame([], $m[0], 'no Constraint:: lines found in the candy-layout quickstart');
+        self::assertNotSame([], $m[0], 'no Constraint:: lines found in the sugar-constraints quickstart');
         $promised = [];
         foreach ($m[1] as $j => $comment) {
             self::assertMatchesRegularExpression('#^//\s*\d+\b#', $comment, 'every Constraint line must state its width as "// N": ' . \trim($m[0][$j]));
@@ -265,22 +265,22 @@ final class DocsQuickstartTest extends TestCase
             $promised[] = (int) $n[1];
         }
 
-        $src = \var_export(self::root() . '/candy-layout/src/', true);
+        $src = \var_export(self::root() . '/sugar-constraints/src/', true);
         $script = "<?php\ndeclare(strict_types=1);\n"
             . "spl_autoload_register(static function (string \$c): void {\n"
-            . "    if (str_starts_with(\$c, 'SugarCraft\\\\Layout\\\\') && is_file(\$f = {$src} . str_replace('\\\\', '/', substr(\$c, 18)) . '.php')) { require \$f; }\n"
+            . "    if (str_starts_with(\$c, 'SugarCraft\\\\Constraints\\\\') && is_file(\$f = {$src} . str_replace('\\\\', '/', substr(\$c, 18)) . '.php')) { require \$f; }\n"
             . "});\n"
             . "?>" . self::asFile($code)
             . "\n\$__widths = [];\n"
-            . "foreach (get_defined_vars() as \$__v) { if (is_array(\$__v) && \$__v !== [] && array_is_list(\$__v) && \$__v[0] instanceof SugarCraft\\Layout\\Region) { foreach (\$__v as \$__r) { \$__widths[] = \$__r->width; } } }\n"
+            . "foreach (get_defined_vars() as \$__v) { if (is_array(\$__v) && \$__v !== [] && array_is_list(\$__v) && \$__v[0] instanceof SugarCraft\\Constraints\\Region) { foreach (\$__v as \$__r) { \$__widths[] = \$__r->width; } } }\n"
             . "echo json_encode(\$__widths);\n";
         $path = $this->tmpDir . '/layout_quickstart.php';
         \file_put_contents($path, $script);
         $out = \shell_exec(\escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($path) . ' 2>&1');
         $actual = \json_decode((string) $out, true);
-        self::assertIsArray($actual, 'the candy-layout quickstart did not run: ' . $out);
+        self::assertIsArray($actual, 'the sugar-constraints quickstart did not run: ' . $out);
 
-        self::assertSame($promised, $actual, 'the widths in the candy-layout quickstart comments are not what GreedySolver returns');
+        self::assertSame($promised, $actual, 'the widths in the sugar-constraints quickstart comments are not what GreedySolver returns');
     }
 
     // -----------------------------------------------------------------

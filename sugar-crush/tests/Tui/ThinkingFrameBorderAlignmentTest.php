@@ -14,7 +14,7 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * A frame row must never occupy more TERMINAL columns than the frame has.

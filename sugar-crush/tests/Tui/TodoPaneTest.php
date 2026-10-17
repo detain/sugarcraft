@@ -85,7 +85,7 @@ final class TodoPaneTest extends TestCase
 
     public function testThePaneDocksOnTheRightAndRendersInTheFrame(): void
     {
-        $this->assertSame(\SugarCraft\Layout\Dock\Side::Right, Pane::Todo->dockSide());
+        $this->assertSame(\SugarCraft\Constraints\Dock\Side::Right, Pane::Todo->dockSide());
 
         $app = self::app(self::historyWith(self::list()))->togglePaneDocking(Pane::Todo);
         $this->assertTrue($app->isDocked(Pane::Todo));

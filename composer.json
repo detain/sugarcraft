@@ -195,7 +195,7 @@
         },
         {
             "type": "path",
-            "url": "candy-layout",
+            "url": "sugar-constraints",
             "options": {
                 "symlink": true
             }

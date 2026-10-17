@@ -21,7 +21,7 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\PaneDragController;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * The gesture phase driven end-to-end: scripted MouseMsg sequences through
@@ -211,7 +211,7 @@ final class PaneDragIntegrationTest extends TestCase
 
         // And the impossible-request path stays paintable: both sides claim
         // near half, resolve() degrades instead of throwing.
-        $geometry = $app->dock()->resolve(new \SugarCraft\Layout\Region(0, 0, self::CAST_COLS, self::CAST_ROWS - 4));
+        $geometry = $app->dock()->resolve(new \SugarCraft\Constraints\Region(0, 0, self::CAST_COLS, self::CAST_ROWS - 4));
         self::assertNotNull($geometry->regionFor('chat'));
     }
 
@@ -735,7 +735,7 @@ final class PaneDragIntegrationTest extends TestCase
     {
         $slots = $app->dock()->slots($side);
         self::assertNotSame([], $slots);
-        $region = $app->dock()->resolve(new \SugarCraft\Layout\Region(0, 0, self::CAST_COLS, self::CAST_ROWS - 4))
+        $region = $app->dock()->resolve(new \SugarCraft\Constraints\Region(0, 0, self::CAST_COLS, self::CAST_ROWS - 4))
             ->regionFor($slots[0]->paneId);
         self::assertNotNull($region);
 
@@ -749,7 +749,7 @@ final class PaneDragIntegrationTest extends TestCase
      */
     private static function slotIds(App $app, Side $side): array
     {
-        return array_map(static fn(\SugarCraft\Layout\Dock\DockSlot $slot): string => $slot->paneId, $app->dock()->slots($side));
+        return array_map(static fn(\SugarCraft\Constraints\Dock\DockSlot $slot): string => $slot->paneId, $app->dock()->slots($side));
     }
 
     private function assertContainsSlot(App $app, Side $side, string $paneId): void

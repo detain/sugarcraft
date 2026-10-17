@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `sugar-forms` `candy-files` `sugar-animation` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
+**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `sugar-constraints` `candy-sprinkles` `sugar-forms` `candy-files` `sugar-animation` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
 
 ## Commands
 

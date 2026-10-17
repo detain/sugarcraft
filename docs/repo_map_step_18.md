@@ -1,7 +1,7 @@
 # Step 18 — sugar-table onto candy-buffer
 
 **Branch:** `ai/sugar-table-shared`
-**Depends on:** step-02 (candy-buffer), step-03 (candy-layout) optional for column sizing
+**Depends on:** step-02 (candy-buffer), step-03 (sugar-constraints) optional for column sizing
 **Blocks:** —
 
 ## Goal
@@ -12,7 +12,7 @@ Reference: §369.5 (consolidate buffer rendering).
 
 ## Files expected to be modified
 
-- `sugar-table/composer.json` — add `sugarcraft/candy-buffer` and optionally `sugarcraft/candy-layout` via `path-repo-closure`.
+- `sugar-table/composer.json` — add `sugarcraft/candy-buffer` and optionally `sugarcraft/sugar-constraints` via `path-repo-closure`.
 - `sugar-table/src/Table.php` (or main renderer) — build cells through candy-buffer.
 - Tests get byte-snapshot pinning.
 
@@ -21,13 +21,13 @@ Reference: §369.5 (consolidate buffer rendering).
 - [ ] All existing sugar-table tests pass; byte snapshots confirm no diff.
 - [ ] Per-cell styleFunc still works — it now sets styles on Buffer Cells rather than building styled strings.
 - [ ] Wide-char (CJK) column content lays out correctly.
-- [ ] If candy-layout was added: column constraints `[Min, Fill, Fixed]` work.
+- [ ] If sugar-constraints was added: column constraints `[Min, Fill, Fixed]` work.
 - [ ] ≥95 % coverage maintained.
 - [ ] `git status` clean on master.
 
 ## Coder brief
 
-1. **path-repo closure**: candy-buffer (+ optionally candy-layout).
+1. **path-repo closure**: candy-buffer (+ optionally sugar-constraints).
 2. **Refactor renderer** to build a Buffer; populate per-cell with rune + style + width.
 3. **styleFunc**: changes from `(int $row, int $col, string $value): string` (returning styled string) to `(int $row, int $col, string $value): Style` (returning Style applied to the cell). Provide a back-compat wrapper if any consumer uses the old signature.
 4. Run phpunit + check-path-repos.

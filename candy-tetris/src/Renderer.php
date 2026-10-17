@@ -40,7 +40,7 @@ use SugarCraft\Sprinkles\Style as SprinklesStyle;
  *
  * Mirrors Broderick-Westrope/tetrigo board/sidebar layout intent —
  * playfield through candy-buffer, chrome through candy-sprinkles and
- * candy-layout joins.
+ * sugar-constraints joins.
  */
 final class Renderer
 {

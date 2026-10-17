@@ -86,7 +86,7 @@ _All items in this section have been resolved by the completion of steps 20–40
 - [RESOLVED | 2026-06-01 | step-40 | shipper] ci: codecov + vhs.yml audit for 8 new libs — MERGED PR #920:
   - Empty commit (all criteria already met); Commit SHA: 854062c9
 
-- [RESOLVED | step-03 | tester | 2026-05-28] candy-layout coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
+- [RESOLVED | step-03 | tester | 2026-05-28] sugar-constraints coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
 
 - [2026-05-28 | step-01 | fixer] CsiHandlerImpl.php created as self-contained no-op stub — terminal delegation deferred to step-12. (was: BLOCKING entry about missing CsiHandlerImpl.php)
 
@@ -136,7 +136,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - **IMPORTANT FINDING**: Neither candy-mdview nor candy-wish actually has env-var/terminfo parsing code for terminal capability probing. The step file's premise (§387.9) that "both libs do their own probing" is inaccurate based on current source. candy-mdview only uses `TtyDetect::isAtty(STDIN)` for TTY presence detection (not capability), and candy-wish uses `getenv()` only for SSH session metadata (TERM, SSH_CONNECTION, etc.) — which is distinct from color/capability probing.
   - candy-mdview: already had `sugar-colorprofile` path-repo. Added defensive `TerminalProbe::run()` via new `terminalSupportsColor()` private method in RenderCommand — wraps the probe call with `\Throwable` catch and falls back to `true` (assume color available) per step's graceful-failure requirement. No env-var/terminfo code was removed because none existed for capability detection.
   - candy-wish: added `sugarcraft/sugar-colorprofile` require + path-repo to composer.json (was missing). Added CALIBER_LEARNINGS entry clarifying that Session::fromEnvironment() reads SSH env vars for session metadata (TERM, SSH_CONNECTION, etc.) — this is NOT terminal capability probing and does not route through TerminalProbe.
-  - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of sugar-colorprofile). Clean (55 libs scanned).
+  - Path-repo closure: candy-wish received candy-async + sugar-constraints path-repos via check-path-repos.php --fix (transitive deps of sugar-colorprofile). Clean (55 libs scanned).
   - Branch: ai/probe-consumers
   - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
   - TerminalProbe already in candy-mdview dependency tree (via sugar-markdown -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
@@ -177,7 +177,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch ai/docs-site merged to master
   - 17 files changed, 47 insertions(+)
   - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
-  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
+  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, sugar-constraints, sugar-mouse, candy-testing)
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
 

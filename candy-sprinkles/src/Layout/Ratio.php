@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sprinkles\Layout;
 
-use SugarCraft\Layout\Constraint as LayoutConstraint;
+use SugarCraft\Constraints\Constraint as ConstraintsConstraint;
 
 /**
  * Proportional size based on a ratio (numerator / denominator).
  *
  * Mirrors ratatui `Constraint::Ratio(n, d)`.
  *
- * Wraps {@see \SugarCraft\Layout\Constraint\Ratio}.
+ * Wraps {@see \SugarCraft\Constraints\Constraint\Ratio}.
  */
 final class Ratio extends Constraint
 {
-    private LayoutConstraint\Ratio $inner;
+    private ConstraintsConstraint\Ratio $inner;
 
     public function __construct(int $numerator, int $denominator)
     {
@@ -25,7 +25,7 @@ final class Ratio extends Constraint
         if ($denominator <= 0) {
             throw new \InvalidArgumentException('Ratio denominator must be positive');
         }
-        $this->inner = LayoutConstraint\Ratio::ratio($numerator, $denominator);
+        $this->inner = ConstraintsConstraint\Ratio::ratio($numerator, $denominator);
     }
 
     public function __get(string $name): mixed

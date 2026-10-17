@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Crush\Lang;
 use SugarCraft\Focus\FocusRing;
-use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Constraints\Dock\Side;
 
 /**
  * Pane types for the SugarCrush TUI layout.

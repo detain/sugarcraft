@@ -543,7 +543,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 ### Medium-Term (High Impact, Higher Effort)
 
-7. **Flexbox/Grid Layout System** — Create `candy-layout` or extend `candy-sprinkles` with proportional sizing (`30%`, `70%`), flex direction, gap, and responsive `SetSize()`.
+7. **Flexbox/Grid Layout System** — Create `sugar-constraints` or extend `candy-sprinkles` with proportional sizing (`30%`, `70%`), flex direction, gap, and responsive `SetSize()`.
 8. **Unified Theming** — Create a `Theme` class that defines semantic colors once and derives `SugarCraft\Sprinkles\Style` objects for each library.
 9. **Performance Optimization** — Short-circuit width calculation for ASCII-only strings; cache width for static strings.
 

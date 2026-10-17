@@ -254,7 +254,7 @@ final class LayeredSettings
      *                 shell command the hook RUNS after an edit, so a
      *                 project-tier one would be code execution on
      *                 clone-and-launch.
-     *  - `layout`   {@see \SugarCraft\Layout\Dock\DockLayout::fromArray()},
+     *  - `layout`   {@see \SugarCraft\Constraints\Dock\DockLayout::fromArray()},
      *                 loaded by {@see \SugarCraft\Crush\Cli\Bootstrap::app()}
      *                 onto {@see \SugarCraft\Crush\App\App::$dock} and saved
      *                 back by the App's `onLayoutChange` hook through
@@ -382,7 +382,7 @@ final class LayeredSettings
      * — every field of the manifest belongs to the SAME tier and is meaningless
      * spread across two, so there is no key-wise merge for it to lose. Unlike
      * `statusLine` it carries no executable string at all: the value is the
-     * versioned {@see \SugarCraft\Layout\Dock\DockLayout::toArray()} manifest
+     * versioned {@see \SugarCraft\Constraints\Dock\DockLayout::toArray()} manifest
      * (slot ids, weights, column shares, minimums), a reader that interprets and
      * never runs.
      *

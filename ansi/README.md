@@ -944,192 +944,192 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-forms-9-256-s-2.ansi` | 68x12 | 256 | 18 | salt pans: form brine evaporated into value crystals, graded beds, tide-gauge slider |
 <!-- END sugar-forms SLOTS -->
 
-<!-- BEGIN candy-layout SLOTS -->
-### candy-layout — slot series
+<!-- BEGIN sugar-constraints SLOTS -->
+### sugar-constraints — slot series
 
 | File | Size | Depth | Colors | Description |
 |---|---|---|---|---|
-| `candy-layout-1-16-l-1.ansi` | 160x34 | 16 | 12 | grand blueprint: giant double-scale CANDY LAYOUT over a labeled nav/main/inspector frame with constraint checklist |
-| `candy-layout-1-16-l-2.ansi` | 144x30 | 16 | 10 | tessellated candy-tile mosaic wall studded with bright quarter-blocks, black plaque with two-line block logo |
-| `candy-layout-1-16-m-1.ansi` | 84x22 | 16 | 9 | constraint web: five region nodes joined by dashed edges labeled a.w ≥ 2b under a block title |
-| `candy-layout-1-16-m-2.ansi` | 80x24 | 16 | 9 | blueprint floor plan of an 80x24 layout: rulers, header/sidebar/content/footer boxes with constraint callouts |
-| `candy-layout-1-16-s-1.ansi` | 64x11 | 16 | 9 | snap grid: nested hbox/panel boxes clicking onto a shared edge with ◆ snap markers |
-| `candy-layout-1-16-s-2.ansi` | 56x13 | 16 | 12 | candy-wrapper foil: striped pastel wrap folded around a black CANDY LAYOUT plaque |
-| `candy-layout-1-256-l-1.ansi` | 176x36 | 256 | 28 | dusk skyline where every building is a solved vbox (fill/min/pct/ratio) with lit windows and a CandyLayout marquee |
-| `candy-layout-1-256-l-2.ansi` | 150x32 | 256 | 26 | constraint atlas: labeled region map-grid joined by edge annotations, with percentage/ratio/min-max gauge rails |
-| `candy-layout-1-256-m-1.ansi` | 88x24 | 256 | 13 | site crane hoisting a CandyLayout banner box onto a scaffold of stacked vbox regions |
-| `candy-layout-1-256-m-2.ansi` | 82x22 | 256 | 11 | TUI solve-trace window: GreedySolver pass log, deprecation warning, region rendered as a 256-color bar |
-| `candy-layout-1-256-s-1.ansi` | 66x14 | 256 | 11 | greedy fill bars: one colored bar per constraint type (length/min/fill/pct/ratio/max) with slack shading |
-| `candy-layout-1-256-s-2.ansi` | 58x12 | 256 | 14 | a Region quartered by ┼ splits, each shaded pane labeled with its constraint call |
-| `candy-layout-1-tc-l-1.ansi` | 192x40 | truecolor | 96 | memorial crypt: gradient cassowary silhouette and tombstone for the deprecated CassowarySolver beside a glowing GreedySolver cube |
-| `candy-layout-1-tc-l-2.ansi` | 200x44 | truecolor | 183 | solver dawn: gradient sun over half-block mountain layers with layout frames snapping into the sky and a rainbow CANDY LAYOUT |
-| `candy-layout-1-tc-m-1.ansi` | 90x25 | truecolor | 229 | a white region beam refracts through a prism into six constraint-colored bands with a rainbow block logotype |
-| `candy-layout-1-tc-m-2.ansi` | 86x24 | truecolor | 21 | seven concentric Region rings fading teal→violet snapping flush around a SOLVED ✓ core |
-| `candy-layout-1-tc-s-1.ansi` | 68x16 | truecolor | 27 | golden-ratio squares snapping to a baseline beneath a warm block-font CANDY |
-| `candy-layout-1-tc-s-2.ansi` | 62x13 | truecolor | 17 | quarter-block candy-foil mosaic with a gold-framed CandyLayout plaque at center |
-| `candy-layout-10-16-l-1.ansi` | 166x34 | 16 | 7 | shipyard panorama: gantry lowering block B7 onto a seamed hull with station rail and fit log |
-| `candy-layout-10-16-l-2.ansi` | 166x32 | 16 | 6 | tram city map: one-way loop, two spurs, depot and bridged river over a street grid with segment table |
-| `candy-layout-10-16-m-1.ansi` | 88x24 | 16 | 7 | dry-dock elevation: hull on eleven keel blocks over the 500 mm datum grid, WL ladder |
-| `candy-layout-10-16-m-2.ansi` | 80x20 | 16 | 7 | lumber cut-list: nine parts segmented on three stocks beside a demand-fit ledger |
-| `candy-layout-10-16-s-1.ansi` | 62x12 | 16 | 7 | terraced hill farm: five crop bands stepping wider as grade climbs to the 15% budget |
-| `candy-layout-10-16-s-2.ansi` | 58x13 | 16 | 7 | labyrinth sigil: five concentric ring walls with staggered gaps around a rose, stats rail |
-| `candy-layout-10-256-l-1.ansi` | 132x36 | 256 | 20 | labyrinth estate: seven staggered hedge rings, four gates, pavilion centre, ring radius table |
-| `candy-layout-10-256-l-2.ansi` | 159x32 | 256 | 29 | lumber yard: board racks A-D, four-board cut plan with kerfs, demand ledger, yield gauge ramp |
-| `candy-layout-10-256-m-1.ansi` | 86x24 | 256 | 11 | hill farm plan: contour bands as crop-colored rings, irrigation main with drop ticks, band table |
-| `candy-layout-10-256-m-2.ansi` | 72x22 | 256 | 8 | gear bench: three meshing wheels on a plate datum rail beside a teeth/diameter table |
-| `candy-layout-10-256-s-1.ansi` | 63x16 | 256 | 8 | gear train: 12T-36T-18T wheels with cardinal teeth and ratio readout, flush mesh |
-| `candy-layout-10-256-s-2.ansi` | 54x12 | 256 | 10 | tram loop card: double-rail oval, inline car, one-way chevrons, stop and Rmin checks |
-| `candy-layout-10-tc-l-1.ansi` | 188x40 | truecolor | 521 | terraced valley at dusk: gradient sky, layered ridges, seven crop terraces with gutters, slope-budget panel |
-| `candy-layout-10-tc-l-2.ansi` | 136x40 | truecolor | 72 | fountain plaza plan: six-hue tessera rings, twelve radial walks, gradient basin, beds, benches, gates |
-| `candy-layout-10-tc-m-1.ansi` | 80x24 | truecolor | 178 | tram network map: hue-graded loop, teal and violet spurs, gradient river with bridge, checks rail |
-| `candy-layout-10-tc-m-2.ansi` | 80x23 | truecolor | 11 | labyrinth garden plan: five hedge rings in green gradient over sand court, rose centre, gap notes |
-| `candy-layout-10-tc-m-3.ansi` | 76x21 | truecolor | 15 | planetary gear set: sun, three planets on carrier arms, toothed ring, 4:1 ratio panel |
-| `candy-layout-10-tc-s-1.ansi` | 60x13 | truecolor | 46 | mosaic fountain: gradient jets over a two-tier basin ringed by five-hue tesserae |
-| `candy-layout-10-tc-s-2.ansi` | 60x11 | truecolor | 16 | single-board cut list: wood-tone segments with kerf marks and dimension arrows under a pine frame |
-| `candy-layout-10-tc-s-3.ansi` | 56x12 | truecolor | 57 | low-floor tram car: orange-to-magenta body gradient, lit windows, pantograph to catenary |
-| `candy-layout-2-16-l-1.ansi` | 148x30 | 16 | 7 | layout inspector pane with region table and constraint stack |
-| `candy-layout-2-16-l-2.ansi` | 150x32 | 16 | 6 | snap-grid workbench with guide rails and magnet markers |
-| `candy-layout-2-16-m-1.ansi` | 82x19 | 16 | 6 | split tree beside its solved region geometry |
-| `candy-layout-2-16-m-2.ansi` | 84x21 | 16 | 7 | six-tile mosaic of header, sidebar, main and footer bands |
-| `candy-layout-2-16-m-3.ansi` | 76x20 | 16 | 8 | satisfiability ledger matrix of constraint kinds per region |
-| `candy-layout-2-16-s-1.ansi` | 56x10 | 16 | 10 | constraint chip card with weight strip and satisfied checkmark |
-| `candy-layout-2-16-s-2.ansi` | 62x15 | 16 | 6 | matryoshka of four nested layout frames around the wordmark |
-| `candy-layout-2-256-l-1.ansi` | 170x34 | 256 | 31 | squarified treemap heat mosaic of solved weights |
-| `candy-layout-2-256-l-2.ansi` | 160x30 | 256 | 19 | five-pass solver waterfall table with width evolution |
-| `candy-layout-2-256-m-1.ansi` | 88x24 | 256 | 15 | blueprint frame with dimension arrows and corner crosses |
-| `candy-layout-2-256-m-2.ansi` | 88x24 | 256 | 15 | constraint web graph, six regions claim on a greedy hub |
-| `candy-layout-2-256-s-1.ansi` | 52x14 | 256 | 7 | golden-ratio rectangle subdivision in warm shades |
-| `candy-layout-2-256-s-2.ansi` | 58x10 | 256 | 12 | flex weight distribution bars with percentage readout |
-| `candy-layout-2-tc-l-1.ansi` | 178x36 | truecolor | 2556 | bilinear gradient mesh under a six-region layout lattice |
-| `candy-layout-2-tc-l-2.ansi` | 150x32 | truecolor | 64 | golden-angle phyllotaxis field beside φ subdivision pane |
-| `candy-layout-2-tc-m-1.ansi` | 88x22 | truecolor | 445 | aurora gradient scene with nested glass panels |
-| `candy-layout-2-tc-m-2.ansi` | 88x24 | truecolor | 26 | isometric slab stack, one pass per stratum |
-| `candy-layout-2-tc-m-3.ansi` | 86x23 | truecolor | 24 | filmstrip of four frames as constraints crystallise geometry |
-| `candy-layout-2-tc-s-1.ansi` | 58x12 | truecolor | 174 | twin gradient flex panels in a 2:1 ratio |
-| `candy-layout-2-tc-s-2.ansi` | 64x12 | truecolor | 30 | half-cell truecolor legend tiles for six constraint kinds |
-| `candy-layout-3-16-l-1.ansi` | 168x34 | 16 | 6 | Reflow storyboard: phone/tablet/desktop panels from one spec |
-| `candy-layout-3-16-l-2.ansi` | 176x32 | 16 | 7 | Snap grid: drifting dashed boxes before, welded guides after |
-| `candy-layout-3-16-m-1.ansi` | 84x22 | 16 | 8 | Box anatomy: margin/border/padding layers with budget equation |
-| `candy-layout-3-16-m-2.ansi` | 88x24 | 16 | 6 | Z-order stack: four stair-stepped cards, modal traps keys |
-| `candy-layout-3-16-m-3.ansi` | 84x20 | 16 | 8 | Exact-cover packing: tetromino candies poured into a solved box |
-| `candy-layout-3-16-s-1.ansi` | 58x13 | 16 | 11 | Confection box: 18 gradient-shaded bonbons in an exact-cover grid |
-| `candy-layout-3-16-s-2.ansi` | 64x12 | 16 | 10 | Conflict drama: two boxes overlap, CLASH cell flares, solver shift note |
-| `candy-layout-3-256-l-1.ansi` | 192x38 | 256 | 33 | Bin packing tray: 16 named sweets fill a 94.7% manifest |
-| `candy-layout-3-256-l-2.ansi` | 178x40 | 256 | 8 | Solve tree: Window to Card nodes with leaf rect table |
-| `candy-layout-3-256-m-1.ansi` | 88x24 | 256 | 9 | Split panes: three handle drags with ratio chips |
-| `candy-layout-3-256-m-2.ansi` | 90x24 | 256 | 7 | Constraint graph: total/sidebar/content/gap node diagram |
-| `candy-layout-3-256-s-1.ansi` | 66x15 | 256 | 9 | Golden split: φ-paned rectangles in warm 256 tints |
-| `candy-layout-3-256-s-2.ansi` | 62x14 | 256 | 6 | Magnetic guides: ghost panel snaps to center line |
-| `candy-layout-3-tc-l-1.ansi` | 208x46 | truecolor | 332 | Candy store hero: gradient shelves, wordmark, solver ledger |
-| `candy-layout-3-tc-l-2.ansi` | 198x40 | truecolor | 401 | Breakpoint morph: four frames reflow with hue-shifted borders |
-| `candy-layout-3-tc-m-1.ansi` | 88x24 | truecolor | 163 | Flex-grow bars poured 1:2:3 with smooth candy gradients |
-| `candy-layout-3-tc-m-2.ansi` | 86x22 | truecolor | 199 | Solver cooling: four heat panels fade red-hot to calm blue |
-| `candy-layout-3-tc-m-3.ansi` | 88x23 | truecolor | 293 | Conflict dialogue: sidebar argues with main, solver settles |
-| `candy-layout-3-tc-s-1.ansi` | 58x14 | truecolor | 187 | Gloss frame: gradient border, candy wordmark, sheen floor |
-| `candy-layout-3-tc-s-2.ansi` | 56x13 | truecolor | 78 | Melting caramel padding bar drips down the gap |
-| `candy-layout-4-16-l-1.ansi` | 190x36 | 16 | 9 | architectural section of a screen: slabs, walls, zones, dimension strings |
-| `candy-layout-4-16-l-2.ansi` | 150x44 | 16 | 14 | stained-glass lancet window as solved layout: eight bays and a rose |
-| `candy-layout-4-16-m-1.ansi` | 88x22 | 16 | 7 | isometric candy-city zoning plan: 60/40 districts, candy tower, legend rail |
-| `candy-layout-4-16-m-2.ansi` | 84x20 | 16 | 6 | origami viewport: open hbox folding through quarter into a pocket pane |
-| `candy-layout-4-16-s-1.ansi` | 64x16 | 16 | 9 | tangram fox head: diamond face + ear/snout region chips with constraint labels |
-| `candy-layout-4-16-s-2.ansi` | 58x16 | 16 | 6 | jigsaw assembly table: 2x2 interlocking shaded pieces with keyed seams |
-| `candy-layout-4-256-l-1.ansi` | 192x37 | 256 | 9 | color-coded structural section: header/footer slabs over glowing content floors |
-| `candy-layout-4-256-l-2.ansi` | 152x44 | 256 | 16 | jewel-tone rose window: leaded bays solved edge-to-edge in GreedySolver |
-| `candy-layout-4-256-m-2.ansi` | 86x21 | 256 | 6 | origami fold sequence: four pastel panels collapse a viewport by halves |
-| `candy-layout-4-256-s-2.ansi` | 62x16 | 256 | 7 | jigsaw solver board: candy pastel pieces seating with 4 tabs, 0 slack |
-| `candy-layout-4-tc-l-1.ansi` | 200x38 | truecolor | 9 | truecolor section drawing: warm dimension lines over deep pane glows |
-| `candy-layout-4-tc-l-2.ansi` | 156x46 | truecolor | 27 | full-spectrum stained glass: hue-cycled lancets and a prismatic rose |
-| `candy-layout-4-tc-m-1.ansi` | 88x24 | truecolor | 109 | candy city at dusk: gradient sky over four lit iso towers on the grid |
-| `candy-layout-4-tc-m-2.ansi` | 84x20 | truecolor | 22 | paper folds in violet daylight: three viewport crease stages |
-| `candy-layout-4-tc-s-1.ansi` | 66x16 | truecolor | 10 | gradient-shaded tangram fox regions beside a warm-lit constraint legend |
-| `candy-layout-4-tc-s-2.ansi` | 60x13 | truecolor | 7 | assembly bench: five-step snap procedure annotated beside glowing pieces |
-| `candy-layout-5-16-l-1.ansi` | 150x30 | 16 | 11 | full mise-en-place station: three zones of pans plus live solver tape |
-| `candy-layout-5-16-l-2.ansi` | 156x32 | 16 | 8 | six-lift braced scaffold with inspection log and safety stamp |
-| `candy-layout-5-16-m-2.ansi` | 86x20 | 16 | 9 | three-zone kitchen plan with pans on a percentage-divided counter |
-| `candy-layout-5-16-s-2.ansi` | 52x10 | 16 | 8 | leaning book spines packed greedily onto a two-rail shelf pane |
-| `candy-layout-5-256-l-1.ansi` | 168x34 | 256 | 29 | large five-by-seven patchwork quilt with stitched seams and motifs |
-| `candy-layout-5-256-l-2.ansi` | 172x30 | 256 | 23 | city grid of three lanes with circulating roundabouts and cars |
-| `candy-layout-5-256-m-1.ansi` | 84x24 | 256 | 23 | four-by-four pastel patchwork sewn with dashed stitch seams |
-| `candy-layout-5-256-m-2.ansi` | 86x22 | 256 | 18 | crossroads with corner roundabouts and colored cars yielding |
-| `candy-layout-5-256-s-1.ansi` | 54x12 | 256 | 12 | single roundabout island with tangent flow arrows and lane dashes |
-| `candy-layout-5-256-s-2.ansi` | 58x10 | 256 | 15 | gradient glass plank holding candy weight stacks with sag note |
-| `candy-layout-5-tc-l-1.ansi` | 190x32 | truecolor | 118 | atrium mosaic in brick bond with voids, fresh gold tiles and rainbow border |
-| `candy-layout-5-tc-l-2.ansi` | 186x38 | truecolor | 164 | four gradient glass spans with candy towers, meters and one hairline crack |
-| `candy-layout-5-tc-m-1.ansi` | 84x24 | truecolor | 105 | cabinet of gradient glass shelves sagging under candy weight stacks |
-| `candy-layout-5-tc-m-2.ansi` | 86x21 | truecolor | 196 | rainbow-gradient book spines packed and leaning on wooden rails |
-| `candy-layout-5-tc-s-1.ansi` | 48x13 | truecolor | 148 | six stitched quilt patches with woven truecolor gradients |
-| `candy-layout-5-tc-s-2.ansi` | 52x13 | truecolor | 22 | mosaic floor fragment with voids and two bright replacement tiles |
-| `candy-layout-6-16-l-1.ansi` | 150x32 | 16 | 7 | Crag panorama: six interleaved routes on one wall with crux histogram inset |
-| `candy-layout-6-16-l-2.ansi` | 160x34 | 16 | 7 | Four-act fly system: battens at varied heights, region permutations per bay |
-| `candy-layout-6-16-m-1.ansi` | 80x24 | 16 | 7 | Route-setter's wall: four graded dashed routes, crux-spread box, hold scatter |
-| `candy-layout-6-16-m-2.ansi` | 84x22 | 16 | 7 | Theatre fly plan: proscenium, side tabs, two sets mid-swap, stall seat rows |
-| `candy-layout-6-16-s-1.ansi` | 56x13 | 16 | 7 | Bouldering wall plate: solver-placed holds with route lines and grade legend |
-| `candy-layout-6-16-s-2.ansi` | 60x11 | 16 | 6 | Stage-change cue strip: red valance and tabs framing ACT I to ACT II region swap |
-| `candy-layout-6-256-l-1.ansi` | 140x40 | 256 | 20 | Great west window: three lancets under tracery band, stone sill, gold name rail |
-| `candy-layout-6-256-l-2.ansi` | 170x36 | 256 | 21 | Traverse survey: elevation gridlines, four named passes, constraint sidebar |
-| `candy-layout-6-256-m-1.ansi` | 76x25 | 256 | 17 | Gothic lancet glazing: pointed arch, flex columns 1:2:1, jewel panes, gold plaque |
-| `candy-layout-6-256-m-2.ansi` | 88x24 | 256 | 22 | Alpine ridge sheet: dusk crest, three saddle passes, spacing ruler, notes rail |
-| `candy-layout-6-256-m-3.ansi` | 82x20 | 256 | 17 | Glasshouse flex roof: parabolic ribs, light streaks, planted soil bed, paving |
-| `candy-layout-6-256-s-1.ansi` | 64x15 | 256 | 17 | Ridge survey strip: block-gradient crest, two flagged passes, delta ruler |
-| `candy-layout-6-256-s-2.ansi` | 58x13 | 256 | 14 | Container bay stamp: two mass-coded decks, lash rods, turnbuckles, hull band |
-| `candy-layout-6-tc-l-1.ansi` | 180x38 | truecolor | 157 | Bridge panorama at dawn: cloud banks, plated towers, reflected pier lines |
-| `candy-layout-6-tc-l-2.ansi` | 190x34 | truecolor | 180 | Lashing master plan: sixteen bays mass-ramped, rod bridge rows, quay water |
-| `candy-layout-6-tc-m-1.ansi` | 88x23 | truecolor | 75 | Suspension span: twin towers, warm gradient cables, trussed deck over sea |
-| `candy-layout-6-tc-m-2.ansi` | 84x25 | truecolor | 82 | Lash cross-section: four mass-graded tiers, cell guides, turnbuckle rods |
-| `candy-layout-6-tc-s-1.ansi` | 66x10 | truecolor | 45 | Bridge segment card: sagging main cable, hangers to deck, pier in water |
-| `candy-layout-6-tc-s-2.ansi` | 60x14 | truecolor | 21 | Spider tension card: radial spokes, log spiral, dew beads, anchor loads |
-| `candy-layout-6-tc-s-3.ansi` | 62x15 | truecolor | 23 | Canal lock chamber: mitre gates mid-solve, upstream/downstream level lines |
-| `candy-layout-7-16-l-1.ansi` | 156x36 | 16 | 8 | Zoning envelope board: four districts, stepped permitted volumes against a height ladder and cap plane |
-| `candy-layout-7-16-l-2.ansi` | 168x34 | 16 | 8 | Breakbulk hold stow plan: bays and tiers of crates, drums and bales under hatch cranes at the waterline |
-| `candy-layout-7-256-l-1.ansi` | 152x38 | 256 | 19 | Print shop wall elevation: type case lattice, galley proofs, letterpress poster, stick rack and reams |
-| `candy-layout-7-256-l-2.ansi` | 176x36 | 256 | 16 | Cathedral facade scaffolding: tube lattice over pediment, columns and rose window, plank decks and warning flags |
-| `candy-layout-7-256-m-1.ansi` | 80x24 | 256 | 13 | Rock strata survey: logged borehole column, unconformity break, fossil markers and formation leaders |
-| `candy-layout-7-256-m-2.ansi` | 86x22 | 256 | 18 | Bookbinding press stationing: sewing frame with taut tapes, signature stack, spools, nipping press |
-| `candy-layout-7-256-m-3.ansi` | 78x20 | 256 | 21 | Aquascape bench layout: stone triangles on the golden section, driftwood span, zoned plant heights |
-| `candy-layout-7-256-s-1.ansi` | 60x14 | 256 | 12 | Ballet rehearsal floor: centre X, corner brackets, spot marks and downstage edge taped to counts |
-| `candy-layout-7-256-s-2.ansi` | 64x15 | 256 | 16 | Quilt-bee sampler trio: flying geese sawtooth, four-colour pinwheel, log cabin, stitched sashing |
-| `candy-layout-7-tc-l-1.ansi` | 180x40 | truecolor | 56 | Cathedral scaffold at dusk: gradient sky, lit windows through the tube lattice, lamp pools and site hoarding |
-| `candy-layout-7-tc-l-2.ansi` | 192x36 | truecolor | 71 | Zoning panorama at sunset: six parcels stepped to their envelopes under the 60m cap and 45-degree sun plane |
-| `candy-layout-7-tc-m-1.ansi` | 88x24 | truecolor | 36 | Midship section at sunset: graded sea and sky, hull curve, tween deck cargo tiers, deck crane |
-| `candy-layout-7-tc-m-2.ansi` | 84x25 | truecolor | 17 | Quilt-bee frame circle: concentric stitched medallion, chair ring, corner patch blocks, plan rail |
-| `candy-layout-7-tc-s-1.ansi` | 62x12 | truecolor | 13 | Chocolate mold tray: domed cavities with glossy sheen gradients in a bronze frame |
-| `candy-layout-7-tc-s-2.ansi` | 58x14 | truecolor | 127 | Pointe light card: raked pool gradient with taped centre X, scuff arcs, rosin box |
-| `candy-layout-8-16-l-1.ansi` | 168x34 | 16 | 9 | Parking structure section: six stacked levels, hatched stalls, drive aisle and helical ramp |
-| `candy-layout-8-16-l-2.ansi` | 176x32 | 16 | 9 | Container stowage bay plan: weight-banded cells on a tier/bay grid, lashing rods over waterline |
-| `candy-layout-8-16-m-1.ansi` | 84x22 | 16 | 12 | Box-model layers: nested margin/border/padding/content with dimension ticks |
-| `candy-layout-8-16-m-2.ansi` | 82x20 | 16 | 9 | Chain packing: a spread chain with equal gaps set over a flush packed chain |
-| `candy-layout-8-16-s-2.ansi` | 56x13 | 16 | 7 | Bias tracks: identical boxes set at 0.30 and 0.70 bias with a measured gap split |
-| `candy-layout-8-256-l-1.ansi` | 156x36 | 256 | 14 | King and pawn endgame: rule-of-the-square box, direct opposition and shrinking-box study |
-| `candy-layout-8-256-l-2.ansi` | 176x34 | 256 | 13 | Regatta course: start/finish line, windward and leeward marks, laylines and bearing table |
-| `candy-layout-8-256-m-1.ansi` | 86x24 | 256 | 12 | Seat-plan solver: raked rows of free/held/blocked seats with sightlines and aisle limits |
-| `candy-layout-8-256-m-2.ansi` | 88x22 | 256 | 15 | Greenhouse bench zoning: sun arc over four light-graded benches with plant glyphs |
-| `candy-layout-8-256-m-3.ansi` | 80x24 | 256 | 10 | Constraint graph: variable nodes on solver edges, one violated, plus a value table |
-| `candy-layout-8-256-s-1.ansi` | 60x13 | 256 | 8 | Guideline rulers: numbered top and left rules with pins and chained guide lines |
-| `candy-layout-8-256-s-2.ansi` | 62x15 | 256 | 8 | Shape-outside wrap: reflowed text lines bending around a floated box |
-| `candy-layout-8-tc-l-1.ansi` | 180x38 | truecolor | 22 | Solver trace: per-constraint residual bars shrinking over nine iterations to a SOLVED stamp |
-| `candy-layout-8-tc-l-2.ansi` | 184x36 | truecolor | 101 | U-galley work triangle: appliance anchors, measured legs and a rule-check panel |
-| `candy-layout-8-tc-m-1.ansi` | 86x24 | truecolor | 309 | Grid track sizing: 1fr 2fr 1fr 1fr columns drawn as gradient bars with a content bracket |
-| `candy-layout-8-tc-m-2.ansi` | 84x25 | truecolor | 109 | Flex wrap flow: basis-sized gradient items across three lines with free space hatched |
-| `candy-layout-8-tc-s-1.ansi` | 62x14 | truecolor | 83 | Stained-glass rose: leaded jewel panes radiating in a stone rim with lancet lights |
-| `candy-layout-8-tc-s-2.ansi` | 60x14 | truecolor | 11 | Flat-pack instruction sheet: side panels, exploded shelves, cam locks and dowel callouts |
-| `candy-layout-9-16-l-1.ansi` | 170x32 | 16 | 7 | Sail-maker's cutting loft: battened mainsail and jib on the numbered board with cloth bolt, try-square and chalk crosses |
-| `candy-layout-9-16-l-2.ansi` | 147x30 | 16 | 8 | Slater's roof: gauged slate courses with lead valley, brick chimney, ridge, gutter brackets and a side lap ruler |
-| `candy-layout-9-16-m-1.ansi` | 84x20 | 16 | 9 | Stage carpenter's flat rack: six painted flats of varied height stowed in numbered slots with access ladder |
-| `candy-layout-9-16-m-2.ansi` | 78x19 | 16 | 7 | Sign-writer's spacing stick: gilt sign board with cap rule, pinstripes and letter-position ticks over an inverted scale bar |
-| `candy-layout-9-16-s-1.ansi` | 64x14 | 16 | 6 | Gardener's crop-rotation plot: nine raised beds on pebble paths with water butt and rotation legend |
-| `candy-layout-9-256-l-1.ansi` | 150x32 | 256 | 21 | Marble yard: two A-frame racks of six chalk-numbered stone slabs in veined colours, bench saw centred on gravel |
-| `candy-layout-9-256-l-2.ansi` | 175x30 | 256 | 19 | Pianoforte action rail: serial plate over 52 hammers with graded felts, wippens, capstans and the full keyboard A0-C8 |
-| `candy-layout-9-256-m-1.ansi` | 85x20 | 256 | 14 | Ropewalk lay table: three wound strands converge from the hook bank through closing tongs into a locked hawser, yard ruler below |
-| `candy-layout-9-256-m-2.ansi` | 87x21 | 256 | 10 | Lock-keeper's hour-by-hour gate schedule: open/closed/maint/passage cells, day totals and a pond level trace |
-| `candy-layout-9-256-s-1.ansi` | 58x14 | 256 | 10 | Bobbin-lace pillow: pinned velvet, open diamond mesh, nine hanging bobbins under even tension |
-| `candy-layout-9-256-s-2.ansi` | 56x10 | 256 | 8 | Apothecary's beam balance: tipped pans with sample powder and a stepped brass counterweight series |
-| `candy-layout-9-tc-l-1.ansi` | 177x36 | truecolor | 342 | Glassblower's lehr: five annealing zones graded 573 degrees to cold with vessel silhouettes, pyrometer bank and floor glow |
-| `candy-layout-9-tc-l-2.ansi` | 150x42 | truecolor | 135 | Perfumer's organ: five stepped tiers of glass bottles holding tinted essences, top to base, marble counter, brass nameplate |
-| `candy-layout-9-tc-m-1.ansi` | 86x24 | truecolor | 52 | Fiddle-maker's arching: spruce plate with graduation ramp, f-holes and bridge against template curves, thickness and camber gauges |
-| `candy-layout-9-tc-m-2.ansi` | 79x20 | truecolor | 53 | Lepidopterist's setting board: monarch spread to symmetry on the grooved board with paper strips, pins and label |
-| `candy-layout-9-tc-s-1.ansi` | 62x12 | truecolor | 12 | Gold-beater's stall: four cutch frames, one open on a shimmering gold-leaf square, set hammer at right |
-| `candy-layout-9-tc-s-2.ansi` | 52x15 | truecolor | 106 | Mason's datum tools: brass plumb bob on its line with deviation mark beside a spirit level, bubble off-centre on granite |
-<!-- END candy-layout SLOTS -->
+| `sugar-constraints-1-16-l-1.ansi` | 160x34 | 16 | 12 | grand blueprint: giant double-scale CANDY LAYOUT over a labeled nav/main/inspector frame with constraint checklist |
+| `sugar-constraints-1-16-l-2.ansi` | 144x30 | 16 | 10 | tessellated candy-tile mosaic wall studded with bright quarter-blocks, black plaque with two-line block logo |
+| `sugar-constraints-1-16-m-1.ansi` | 84x22 | 16 | 9 | constraint web: five region nodes joined by dashed edges labeled a.w ≥ 2b under a block title |
+| `sugar-constraints-1-16-m-2.ansi` | 80x24 | 16 | 9 | blueprint floor plan of an 80x24 layout: rulers, header/sidebar/content/footer boxes with constraint callouts |
+| `sugar-constraints-1-16-s-1.ansi` | 64x11 | 16 | 9 | snap grid: nested hbox/panel boxes clicking onto a shared edge with ◆ snap markers |
+| `sugar-constraints-1-16-s-2.ansi` | 56x13 | 16 | 12 | candy-wrapper foil: striped pastel wrap folded around a black CANDY LAYOUT plaque |
+| `sugar-constraints-1-256-l-1.ansi` | 176x36 | 256 | 28 | dusk skyline where every building is a solved vbox (fill/min/pct/ratio) with lit windows and a SugarConstraints marquee |
+| `sugar-constraints-1-256-l-2.ansi` | 150x32 | 256 | 26 | constraint atlas: labeled region map-grid joined by edge annotations, with percentage/ratio/min-max gauge rails |
+| `sugar-constraints-1-256-m-1.ansi` | 88x24 | 256 | 13 | site crane hoisting a SugarConstraints banner box onto a scaffold of stacked vbox regions |
+| `sugar-constraints-1-256-m-2.ansi` | 82x22 | 256 | 11 | TUI solve-trace window: GreedySolver pass log, deprecation warning, region rendered as a 256-color bar |
+| `sugar-constraints-1-256-s-1.ansi` | 66x14 | 256 | 11 | greedy fill bars: one colored bar per constraint type (length/min/fill/pct/ratio/max) with slack shading |
+| `sugar-constraints-1-256-s-2.ansi` | 58x12 | 256 | 14 | a Region quartered by ┼ splits, each shaded pane labeled with its constraint call |
+| `sugar-constraints-1-tc-l-1.ansi` | 192x40 | truecolor | 96 | memorial crypt: gradient cassowary silhouette and tombstone for the deprecated CassowarySolver beside a glowing GreedySolver cube |
+| `sugar-constraints-1-tc-l-2.ansi` | 200x44 | truecolor | 183 | solver dawn: gradient sun over half-block mountain layers with layout frames snapping into the sky and a rainbow CANDY LAYOUT |
+| `sugar-constraints-1-tc-m-1.ansi` | 90x25 | truecolor | 229 | a white region beam refracts through a prism into six constraint-colored bands with a rainbow block logotype |
+| `sugar-constraints-1-tc-m-2.ansi` | 86x24 | truecolor | 21 | seven concentric Region rings fading teal→violet snapping flush around a SOLVED ✓ core |
+| `sugar-constraints-1-tc-s-1.ansi` | 68x16 | truecolor | 27 | golden-ratio squares snapping to a baseline beneath a warm block-font CANDY |
+| `sugar-constraints-1-tc-s-2.ansi` | 62x13 | truecolor | 17 | quarter-block candy-foil mosaic with a gold-framed SugarConstraints plaque at center |
+| `sugar-constraints-10-16-l-1.ansi` | 166x34 | 16 | 7 | shipyard panorama: gantry lowering block B7 onto a seamed hull with station rail and fit log |
+| `sugar-constraints-10-16-l-2.ansi` | 166x32 | 16 | 6 | tram city map: one-way loop, two spurs, depot and bridged river over a street grid with segment table |
+| `sugar-constraints-10-16-m-1.ansi` | 88x24 | 16 | 7 | dry-dock elevation: hull on eleven keel blocks over the 500 mm datum grid, WL ladder |
+| `sugar-constraints-10-16-m-2.ansi` | 80x20 | 16 | 7 | lumber cut-list: nine parts segmented on three stocks beside a demand-fit ledger |
+| `sugar-constraints-10-16-s-1.ansi` | 62x12 | 16 | 7 | terraced hill farm: five crop bands stepping wider as grade climbs to the 15% budget |
+| `sugar-constraints-10-16-s-2.ansi` | 58x13 | 16 | 7 | labyrinth sigil: five concentric ring walls with staggered gaps around a rose, stats rail |
+| `sugar-constraints-10-256-l-1.ansi` | 132x36 | 256 | 20 | labyrinth estate: seven staggered hedge rings, four gates, pavilion centre, ring radius table |
+| `sugar-constraints-10-256-l-2.ansi` | 159x32 | 256 | 29 | lumber yard: board racks A-D, four-board cut plan with kerfs, demand ledger, yield gauge ramp |
+| `sugar-constraints-10-256-m-1.ansi` | 86x24 | 256 | 11 | hill farm plan: contour bands as crop-colored rings, irrigation main with drop ticks, band table |
+| `sugar-constraints-10-256-m-2.ansi` | 72x22 | 256 | 8 | gear bench: three meshing wheels on a plate datum rail beside a teeth/diameter table |
+| `sugar-constraints-10-256-s-1.ansi` | 63x16 | 256 | 8 | gear train: 12T-36T-18T wheels with cardinal teeth and ratio readout, flush mesh |
+| `sugar-constraints-10-256-s-2.ansi` | 54x12 | 256 | 10 | tram loop card: double-rail oval, inline car, one-way chevrons, stop and Rmin checks |
+| `sugar-constraints-10-tc-l-1.ansi` | 188x40 | truecolor | 521 | terraced valley at dusk: gradient sky, layered ridges, seven crop terraces with gutters, slope-budget panel |
+| `sugar-constraints-10-tc-l-2.ansi` | 136x40 | truecolor | 72 | fountain plaza plan: six-hue tessera rings, twelve radial walks, gradient basin, beds, benches, gates |
+| `sugar-constraints-10-tc-m-1.ansi` | 80x24 | truecolor | 178 | tram network map: hue-graded loop, teal and violet spurs, gradient river with bridge, checks rail |
+| `sugar-constraints-10-tc-m-2.ansi` | 80x23 | truecolor | 11 | labyrinth garden plan: five hedge rings in green gradient over sand court, rose centre, gap notes |
+| `sugar-constraints-10-tc-m-3.ansi` | 76x21 | truecolor | 15 | planetary gear set: sun, three planets on carrier arms, toothed ring, 4:1 ratio panel |
+| `sugar-constraints-10-tc-s-1.ansi` | 60x13 | truecolor | 46 | mosaic fountain: gradient jets over a two-tier basin ringed by five-hue tesserae |
+| `sugar-constraints-10-tc-s-2.ansi` | 60x11 | truecolor | 16 | single-board cut list: wood-tone segments with kerf marks and dimension arrows under a pine frame |
+| `sugar-constraints-10-tc-s-3.ansi` | 56x12 | truecolor | 57 | low-floor tram car: orange-to-magenta body gradient, lit windows, pantograph to catenary |
+| `sugar-constraints-2-16-l-1.ansi` | 148x30 | 16 | 7 | layout inspector pane with region table and constraint stack |
+| `sugar-constraints-2-16-l-2.ansi` | 150x32 | 16 | 6 | snap-grid workbench with guide rails and magnet markers |
+| `sugar-constraints-2-16-m-1.ansi` | 82x19 | 16 | 6 | split tree beside its solved region geometry |
+| `sugar-constraints-2-16-m-2.ansi` | 84x21 | 16 | 7 | six-tile mosaic of header, sidebar, main and footer bands |
+| `sugar-constraints-2-16-m-3.ansi` | 76x20 | 16 | 8 | satisfiability ledger matrix of constraint kinds per region |
+| `sugar-constraints-2-16-s-1.ansi` | 56x10 | 16 | 10 | constraint chip card with weight strip and satisfied checkmark |
+| `sugar-constraints-2-16-s-2.ansi` | 62x15 | 16 | 6 | matryoshka of four nested layout frames around the wordmark |
+| `sugar-constraints-2-256-l-1.ansi` | 170x34 | 256 | 31 | squarified treemap heat mosaic of solved weights |
+| `sugar-constraints-2-256-l-2.ansi` | 160x30 | 256 | 19 | five-pass solver waterfall table with width evolution |
+| `sugar-constraints-2-256-m-1.ansi` | 88x24 | 256 | 15 | blueprint frame with dimension arrows and corner crosses |
+| `sugar-constraints-2-256-m-2.ansi` | 88x24 | 256 | 15 | constraint web graph, six regions claim on a greedy hub |
+| `sugar-constraints-2-256-s-1.ansi` | 52x14 | 256 | 7 | golden-ratio rectangle subdivision in warm shades |
+| `sugar-constraints-2-256-s-2.ansi` | 58x10 | 256 | 12 | flex weight distribution bars with percentage readout |
+| `sugar-constraints-2-tc-l-1.ansi` | 178x36 | truecolor | 2556 | bilinear gradient mesh under a six-region layout lattice |
+| `sugar-constraints-2-tc-l-2.ansi` | 150x32 | truecolor | 64 | golden-angle phyllotaxis field beside φ subdivision pane |
+| `sugar-constraints-2-tc-m-1.ansi` | 88x22 | truecolor | 445 | aurora gradient scene with nested glass panels |
+| `sugar-constraints-2-tc-m-2.ansi` | 88x24 | truecolor | 26 | isometric slab stack, one pass per stratum |
+| `sugar-constraints-2-tc-m-3.ansi` | 86x23 | truecolor | 24 | filmstrip of four frames as constraints crystallise geometry |
+| `sugar-constraints-2-tc-s-1.ansi` | 58x12 | truecolor | 174 | twin gradient flex panels in a 2:1 ratio |
+| `sugar-constraints-2-tc-s-2.ansi` | 64x12 | truecolor | 30 | half-cell truecolor legend tiles for six constraint kinds |
+| `sugar-constraints-3-16-l-1.ansi` | 168x34 | 16 | 6 | Reflow storyboard: phone/tablet/desktop panels from one spec |
+| `sugar-constraints-3-16-l-2.ansi` | 176x32 | 16 | 7 | Snap grid: drifting dashed boxes before, welded guides after |
+| `sugar-constraints-3-16-m-1.ansi` | 84x22 | 16 | 8 | Box anatomy: margin/border/padding layers with budget equation |
+| `sugar-constraints-3-16-m-2.ansi` | 88x24 | 16 | 6 | Z-order stack: four stair-stepped cards, modal traps keys |
+| `sugar-constraints-3-16-m-3.ansi` | 84x20 | 16 | 8 | Exact-cover packing: tetromino candies poured into a solved box |
+| `sugar-constraints-3-16-s-1.ansi` | 58x13 | 16 | 11 | Confection box: 18 gradient-shaded bonbons in an exact-cover grid |
+| `sugar-constraints-3-16-s-2.ansi` | 64x12 | 16 | 10 | Conflict drama: two boxes overlap, CLASH cell flares, solver shift note |
+| `sugar-constraints-3-256-l-1.ansi` | 192x38 | 256 | 33 | Bin packing tray: 16 named sweets fill a 94.7% manifest |
+| `sugar-constraints-3-256-l-2.ansi` | 178x40 | 256 | 8 | Solve tree: Window to Card nodes with leaf rect table |
+| `sugar-constraints-3-256-m-1.ansi` | 88x24 | 256 | 9 | Split panes: three handle drags with ratio chips |
+| `sugar-constraints-3-256-m-2.ansi` | 90x24 | 256 | 7 | Constraint graph: total/sidebar/content/gap node diagram |
+| `sugar-constraints-3-256-s-1.ansi` | 66x15 | 256 | 9 | Golden split: φ-paned rectangles in warm 256 tints |
+| `sugar-constraints-3-256-s-2.ansi` | 62x14 | 256 | 6 | Magnetic guides: ghost panel snaps to center line |
+| `sugar-constraints-3-tc-l-1.ansi` | 208x46 | truecolor | 332 | Candy store hero: gradient shelves, wordmark, solver ledger |
+| `sugar-constraints-3-tc-l-2.ansi` | 198x40 | truecolor | 401 | Breakpoint morph: four frames reflow with hue-shifted borders |
+| `sugar-constraints-3-tc-m-1.ansi` | 88x24 | truecolor | 163 | Flex-grow bars poured 1:2:3 with smooth candy gradients |
+| `sugar-constraints-3-tc-m-2.ansi` | 86x22 | truecolor | 199 | Solver cooling: four heat panels fade red-hot to calm blue |
+| `sugar-constraints-3-tc-m-3.ansi` | 88x23 | truecolor | 293 | Conflict dialogue: sidebar argues with main, solver settles |
+| `sugar-constraints-3-tc-s-1.ansi` | 58x14 | truecolor | 187 | Gloss frame: gradient border, candy wordmark, sheen floor |
+| `sugar-constraints-3-tc-s-2.ansi` | 56x13 | truecolor | 78 | Melting caramel padding bar drips down the gap |
+| `sugar-constraints-4-16-l-1.ansi` | 190x36 | 16 | 9 | architectural section of a screen: slabs, walls, zones, dimension strings |
+| `sugar-constraints-4-16-l-2.ansi` | 150x44 | 16 | 14 | stained-glass lancet window as solved layout: eight bays and a rose |
+| `sugar-constraints-4-16-m-1.ansi` | 88x22 | 16 | 7 | isometric candy-city zoning plan: 60/40 districts, candy tower, legend rail |
+| `sugar-constraints-4-16-m-2.ansi` | 84x20 | 16 | 6 | origami viewport: open hbox folding through quarter into a pocket pane |
+| `sugar-constraints-4-16-s-1.ansi` | 64x16 | 16 | 9 | tangram fox head: diamond face + ear/snout region chips with constraint labels |
+| `sugar-constraints-4-16-s-2.ansi` | 58x16 | 16 | 6 | jigsaw assembly table: 2x2 interlocking shaded pieces with keyed seams |
+| `sugar-constraints-4-256-l-1.ansi` | 192x37 | 256 | 9 | color-coded structural section: header/footer slabs over glowing content floors |
+| `sugar-constraints-4-256-l-2.ansi` | 152x44 | 256 | 16 | jewel-tone rose window: leaded bays solved edge-to-edge in GreedySolver |
+| `sugar-constraints-4-256-m-2.ansi` | 86x21 | 256 | 6 | origami fold sequence: four pastel panels collapse a viewport by halves |
+| `sugar-constraints-4-256-s-2.ansi` | 62x16 | 256 | 7 | jigsaw solver board: candy pastel pieces seating with 4 tabs, 0 slack |
+| `sugar-constraints-4-tc-l-1.ansi` | 200x38 | truecolor | 9 | truecolor section drawing: warm dimension lines over deep pane glows |
+| `sugar-constraints-4-tc-l-2.ansi` | 156x46 | truecolor | 27 | full-spectrum stained glass: hue-cycled lancets and a prismatic rose |
+| `sugar-constraints-4-tc-m-1.ansi` | 88x24 | truecolor | 109 | candy city at dusk: gradient sky over four lit iso towers on the grid |
+| `sugar-constraints-4-tc-m-2.ansi` | 84x20 | truecolor | 22 | paper folds in violet daylight: three viewport crease stages |
+| `sugar-constraints-4-tc-s-1.ansi` | 66x16 | truecolor | 10 | gradient-shaded tangram fox regions beside a warm-lit constraint legend |
+| `sugar-constraints-4-tc-s-2.ansi` | 60x13 | truecolor | 7 | assembly bench: five-step snap procedure annotated beside glowing pieces |
+| `sugar-constraints-5-16-l-1.ansi` | 150x30 | 16 | 11 | full mise-en-place station: three zones of pans plus live solver tape |
+| `sugar-constraints-5-16-l-2.ansi` | 156x32 | 16 | 8 | six-lift braced scaffold with inspection log and safety stamp |
+| `sugar-constraints-5-16-m-2.ansi` | 86x20 | 16 | 9 | three-zone kitchen plan with pans on a percentage-divided counter |
+| `sugar-constraints-5-16-s-2.ansi` | 52x10 | 16 | 8 | leaning book spines packed greedily onto a two-rail shelf pane |
+| `sugar-constraints-5-256-l-1.ansi` | 168x34 | 256 | 29 | large five-by-seven patchwork quilt with stitched seams and motifs |
+| `sugar-constraints-5-256-l-2.ansi` | 172x30 | 256 | 23 | city grid of three lanes with circulating roundabouts and cars |
+| `sugar-constraints-5-256-m-1.ansi` | 84x24 | 256 | 23 | four-by-four pastel patchwork sewn with dashed stitch seams |
+| `sugar-constraints-5-256-m-2.ansi` | 86x22 | 256 | 18 | crossroads with corner roundabouts and colored cars yielding |
+| `sugar-constraints-5-256-s-1.ansi` | 54x12 | 256 | 12 | single roundabout island with tangent flow arrows and lane dashes |
+| `sugar-constraints-5-256-s-2.ansi` | 58x10 | 256 | 15 | gradient glass plank holding candy weight stacks with sag note |
+| `sugar-constraints-5-tc-l-1.ansi` | 190x32 | truecolor | 118 | atrium mosaic in brick bond with voids, fresh gold tiles and rainbow border |
+| `sugar-constraints-5-tc-l-2.ansi` | 186x38 | truecolor | 164 | four gradient glass spans with candy towers, meters and one hairline crack |
+| `sugar-constraints-5-tc-m-1.ansi` | 84x24 | truecolor | 105 | cabinet of gradient glass shelves sagging under candy weight stacks |
+| `sugar-constraints-5-tc-m-2.ansi` | 86x21 | truecolor | 196 | rainbow-gradient book spines packed and leaning on wooden rails |
+| `sugar-constraints-5-tc-s-1.ansi` | 48x13 | truecolor | 148 | six stitched quilt patches with woven truecolor gradients |
+| `sugar-constraints-5-tc-s-2.ansi` | 52x13 | truecolor | 22 | mosaic floor fragment with voids and two bright replacement tiles |
+| `sugar-constraints-6-16-l-1.ansi` | 150x32 | 16 | 7 | Crag panorama: six interleaved routes on one wall with crux histogram inset |
+| `sugar-constraints-6-16-l-2.ansi` | 160x34 | 16 | 7 | Four-act fly system: battens at varied heights, region permutations per bay |
+| `sugar-constraints-6-16-m-1.ansi` | 80x24 | 16 | 7 | Route-setter's wall: four graded dashed routes, crux-spread box, hold scatter |
+| `sugar-constraints-6-16-m-2.ansi` | 84x22 | 16 | 7 | Theatre fly plan: proscenium, side tabs, two sets mid-swap, stall seat rows |
+| `sugar-constraints-6-16-s-1.ansi` | 56x13 | 16 | 7 | Bouldering wall plate: solver-placed holds with route lines and grade legend |
+| `sugar-constraints-6-16-s-2.ansi` | 60x11 | 16 | 6 | Stage-change cue strip: red valance and tabs framing ACT I to ACT II region swap |
+| `sugar-constraints-6-256-l-1.ansi` | 140x40 | 256 | 20 | Great west window: three lancets under tracery band, stone sill, gold name rail |
+| `sugar-constraints-6-256-l-2.ansi` | 170x36 | 256 | 21 | Traverse survey: elevation gridlines, four named passes, constraint sidebar |
+| `sugar-constraints-6-256-m-1.ansi` | 76x25 | 256 | 17 | Gothic lancet glazing: pointed arch, flex columns 1:2:1, jewel panes, gold plaque |
+| `sugar-constraints-6-256-m-2.ansi` | 88x24 | 256 | 22 | Alpine ridge sheet: dusk crest, three saddle passes, spacing ruler, notes rail |
+| `sugar-constraints-6-256-m-3.ansi` | 82x20 | 256 | 17 | Glasshouse flex roof: parabolic ribs, light streaks, planted soil bed, paving |
+| `sugar-constraints-6-256-s-1.ansi` | 64x15 | 256 | 17 | Ridge survey strip: block-gradient crest, two flagged passes, delta ruler |
+| `sugar-constraints-6-256-s-2.ansi` | 58x13 | 256 | 14 | Container bay stamp: two mass-coded decks, lash rods, turnbuckles, hull band |
+| `sugar-constraints-6-tc-l-1.ansi` | 180x38 | truecolor | 157 | Bridge panorama at dawn: cloud banks, plated towers, reflected pier lines |
+| `sugar-constraints-6-tc-l-2.ansi` | 190x34 | truecolor | 180 | Lashing master plan: sixteen bays mass-ramped, rod bridge rows, quay water |
+| `sugar-constraints-6-tc-m-1.ansi` | 88x23 | truecolor | 75 | Suspension span: twin towers, warm gradient cables, trussed deck over sea |
+| `sugar-constraints-6-tc-m-2.ansi` | 84x25 | truecolor | 82 | Lash cross-section: four mass-graded tiers, cell guides, turnbuckle rods |
+| `sugar-constraints-6-tc-s-1.ansi` | 66x10 | truecolor | 45 | Bridge segment card: sagging main cable, hangers to deck, pier in water |
+| `sugar-constraints-6-tc-s-2.ansi` | 60x14 | truecolor | 21 | Spider tension card: radial spokes, log spiral, dew beads, anchor loads |
+| `sugar-constraints-6-tc-s-3.ansi` | 62x15 | truecolor | 23 | Canal lock chamber: mitre gates mid-solve, upstream/downstream level lines |
+| `sugar-constraints-7-16-l-1.ansi` | 156x36 | 16 | 8 | Zoning envelope board: four districts, stepped permitted volumes against a height ladder and cap plane |
+| `sugar-constraints-7-16-l-2.ansi` | 168x34 | 16 | 8 | Breakbulk hold stow plan: bays and tiers of crates, drums and bales under hatch cranes at the waterline |
+| `sugar-constraints-7-256-l-1.ansi` | 152x38 | 256 | 19 | Print shop wall elevation: type case lattice, galley proofs, letterpress poster, stick rack and reams |
+| `sugar-constraints-7-256-l-2.ansi` | 176x36 | 256 | 16 | Cathedral facade scaffolding: tube lattice over pediment, columns and rose window, plank decks and warning flags |
+| `sugar-constraints-7-256-m-1.ansi` | 80x24 | 256 | 13 | Rock strata survey: logged borehole column, unconformity break, fossil markers and formation leaders |
+| `sugar-constraints-7-256-m-2.ansi` | 86x22 | 256 | 18 | Bookbinding press stationing: sewing frame with taut tapes, signature stack, spools, nipping press |
+| `sugar-constraints-7-256-m-3.ansi` | 78x20 | 256 | 21 | Aquascape bench layout: stone triangles on the golden section, driftwood span, zoned plant heights |
+| `sugar-constraints-7-256-s-1.ansi` | 60x14 | 256 | 12 | Ballet rehearsal floor: centre X, corner brackets, spot marks and downstage edge taped to counts |
+| `sugar-constraints-7-256-s-2.ansi` | 64x15 | 256 | 16 | Quilt-bee sampler trio: flying geese sawtooth, four-colour pinwheel, log cabin, stitched sashing |
+| `sugar-constraints-7-tc-l-1.ansi` | 180x40 | truecolor | 56 | Cathedral scaffold at dusk: gradient sky, lit windows through the tube lattice, lamp pools and site hoarding |
+| `sugar-constraints-7-tc-l-2.ansi` | 192x36 | truecolor | 71 | Zoning panorama at sunset: six parcels stepped to their envelopes under the 60m cap and 45-degree sun plane |
+| `sugar-constraints-7-tc-m-1.ansi` | 88x24 | truecolor | 36 | Midship section at sunset: graded sea and sky, hull curve, tween deck cargo tiers, deck crane |
+| `sugar-constraints-7-tc-m-2.ansi` | 84x25 | truecolor | 17 | Quilt-bee frame circle: concentric stitched medallion, chair ring, corner patch blocks, plan rail |
+| `sugar-constraints-7-tc-s-1.ansi` | 62x12 | truecolor | 13 | Chocolate mold tray: domed cavities with glossy sheen gradients in a bronze frame |
+| `sugar-constraints-7-tc-s-2.ansi` | 58x14 | truecolor | 127 | Pointe light card: raked pool gradient with taped centre X, scuff arcs, rosin box |
+| `sugar-constraints-8-16-l-1.ansi` | 168x34 | 16 | 9 | Parking structure section: six stacked levels, hatched stalls, drive aisle and helical ramp |
+| `sugar-constraints-8-16-l-2.ansi` | 176x32 | 16 | 9 | Container stowage bay plan: weight-banded cells on a tier/bay grid, lashing rods over waterline |
+| `sugar-constraints-8-16-m-1.ansi` | 84x22 | 16 | 12 | Box-model layers: nested margin/border/padding/content with dimension ticks |
+| `sugar-constraints-8-16-m-2.ansi` | 82x20 | 16 | 9 | Chain packing: a spread chain with equal gaps set over a flush packed chain |
+| `sugar-constraints-8-16-s-2.ansi` | 56x13 | 16 | 7 | Bias tracks: identical boxes set at 0.30 and 0.70 bias with a measured gap split |
+| `sugar-constraints-8-256-l-1.ansi` | 156x36 | 256 | 14 | King and pawn endgame: rule-of-the-square box, direct opposition and shrinking-box study |
+| `sugar-constraints-8-256-l-2.ansi` | 176x34 | 256 | 13 | Regatta course: start/finish line, windward and leeward marks, laylines and bearing table |
+| `sugar-constraints-8-256-m-1.ansi` | 86x24 | 256 | 12 | Seat-plan solver: raked rows of free/held/blocked seats with sightlines and aisle limits |
+| `sugar-constraints-8-256-m-2.ansi` | 88x22 | 256 | 15 | Greenhouse bench zoning: sun arc over four light-graded benches with plant glyphs |
+| `sugar-constraints-8-256-m-3.ansi` | 80x24 | 256 | 10 | Constraint graph: variable nodes on solver edges, one violated, plus a value table |
+| `sugar-constraints-8-256-s-1.ansi` | 60x13 | 256 | 8 | Guideline rulers: numbered top and left rules with pins and chained guide lines |
+| `sugar-constraints-8-256-s-2.ansi` | 62x15 | 256 | 8 | Shape-outside wrap: reflowed text lines bending around a floated box |
+| `sugar-constraints-8-tc-l-1.ansi` | 180x38 | truecolor | 22 | Solver trace: per-constraint residual bars shrinking over nine iterations to a SOLVED stamp |
+| `sugar-constraints-8-tc-l-2.ansi` | 184x36 | truecolor | 101 | U-galley work triangle: appliance anchors, measured legs and a rule-check panel |
+| `sugar-constraints-8-tc-m-1.ansi` | 86x24 | truecolor | 309 | Grid track sizing: 1fr 2fr 1fr 1fr columns drawn as gradient bars with a content bracket |
+| `sugar-constraints-8-tc-m-2.ansi` | 84x25 | truecolor | 109 | Flex wrap flow: basis-sized gradient items across three lines with free space hatched |
+| `sugar-constraints-8-tc-s-1.ansi` | 62x14 | truecolor | 83 | Stained-glass rose: leaded jewel panes radiating in a stone rim with lancet lights |
+| `sugar-constraints-8-tc-s-2.ansi` | 60x14 | truecolor | 11 | Flat-pack instruction sheet: side panels, exploded shelves, cam locks and dowel callouts |
+| `sugar-constraints-9-16-l-1.ansi` | 170x32 | 16 | 7 | Sail-maker's cutting loft: battened mainsail and jib on the numbered board with cloth bolt, try-square and chalk crosses |
+| `sugar-constraints-9-16-l-2.ansi` | 147x30 | 16 | 8 | Slater's roof: gauged slate courses with lead valley, brick chimney, ridge, gutter brackets and a side lap ruler |
+| `sugar-constraints-9-16-m-1.ansi` | 84x20 | 16 | 9 | Stage carpenter's flat rack: six painted flats of varied height stowed in numbered slots with access ladder |
+| `sugar-constraints-9-16-m-2.ansi` | 78x19 | 16 | 7 | Sign-writer's spacing stick: gilt sign board with cap rule, pinstripes and letter-position ticks over an inverted scale bar |
+| `sugar-constraints-9-16-s-1.ansi` | 64x14 | 16 | 6 | Gardener's crop-rotation plot: nine raised beds on pebble paths with water butt and rotation legend |
+| `sugar-constraints-9-256-l-1.ansi` | 150x32 | 256 | 21 | Marble yard: two A-frame racks of six chalk-numbered stone slabs in veined colours, bench saw centred on gravel |
+| `sugar-constraints-9-256-l-2.ansi` | 175x30 | 256 | 19 | Pianoforte action rail: serial plate over 52 hammers with graded felts, wippens, capstans and the full keyboard A0-C8 |
+| `sugar-constraints-9-256-m-1.ansi` | 85x20 | 256 | 14 | Ropewalk lay table: three wound strands converge from the hook bank through closing tongs into a locked hawser, yard ruler below |
+| `sugar-constraints-9-256-m-2.ansi` | 87x21 | 256 | 10 | Lock-keeper's hour-by-hour gate schedule: open/closed/maint/passage cells, day totals and a pond level trace |
+| `sugar-constraints-9-256-s-1.ansi` | 58x14 | 256 | 10 | Bobbin-lace pillow: pinned velvet, open diamond mesh, nine hanging bobbins under even tension |
+| `sugar-constraints-9-256-s-2.ansi` | 56x10 | 256 | 8 | Apothecary's beam balance: tipped pans with sample powder and a stepped brass counterweight series |
+| `sugar-constraints-9-tc-l-1.ansi` | 177x36 | truecolor | 342 | Glassblower's lehr: five annealing zones graded 573 degrees to cold with vessel silhouettes, pyrometer bank and floor glow |
+| `sugar-constraints-9-tc-l-2.ansi` | 150x42 | truecolor | 135 | Perfumer's organ: five stepped tiers of glass bottles holding tinted essences, top to base, marble counter, brass nameplate |
+| `sugar-constraints-9-tc-m-1.ansi` | 86x24 | truecolor | 52 | Fiddle-maker's arching: spruce plate with graduation ramp, f-holes and bridge against template curves, thickness and camber gauges |
+| `sugar-constraints-9-tc-m-2.ansi` | 79x20 | truecolor | 53 | Lepidopterist's setting board: monarch spread to symmetry on the grooved board with paper strips, pins and label |
+| `sugar-constraints-9-tc-s-1.ansi` | 62x12 | truecolor | 12 | Gold-beater's stall: four cutch frames, one open on a shimmering gold-leaf square, set hammer at right |
+| `sugar-constraints-9-tc-s-2.ansi` | 52x15 | truecolor | 106 | Mason's datum tools: brass plumb bob on its line with deviation mark beside a spirit level, bubble off-centre on granite |
+<!-- END sugar-constraints SLOTS -->
 
 <!-- BEGIN candy-minesweeper SLOTS -->
 ### candy-minesweeper — slot series

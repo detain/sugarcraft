@@ -73,7 +73,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 ### Phase 1 — New shared foundation packages (8)
 - [x] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
 - [x] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
-- [x] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
+- [x] [Step 03 — Create sugar-constraints](repo_map_step_03.md) — branch: `ai/sugar-constraints-new`
 - [x] [Step 04 — Create candy-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
 - [x] [Step 05 — Create sugar-mouse](repo_map_step_05.md) — branch: `ai/sugar-mouse-new`
 - [x] [Step 06 — Create candy-input](repo_map_step_06.md) — branch: `ai/candy-input-new`
@@ -82,7 +82,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 2 — Enhance existing foundation packages (5)
 - [x] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
-- [x] [Step 10 — candy-sprinkles uses candy-layout](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
+- [x] [Step 10 — candy-sprinkles uses sugar-constraints](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
 - [x] [Step 11 — sugar-markdown StyleSheet + BlockStack](repo_map_step_11.md) — branch: `ai/sugar-markdown-blockstack`
 - [x] [Step 12 — candy-vt delegates to candy-ansi](repo_map_step_12.md) — branch: `ai/candy-vt-uses-ansi`
 - [x] [Step 13 — sugar-image + sugar-colorprofile TerminalProbe](repo_map_step_13.md) — branch: `ai/probe-consolidation`
@@ -136,7 +136,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 The shared-foundation refactor is **complete**. Summary:
 
 - **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 sugar-forms migration which was not completed)
-- **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, sugar-mouse, candy-input, sugar-fuzzy, candy-async
+- **8 new foundation packages created**: candy-ansi, candy-buffer, sugar-constraints, candy-testing, sugar-mouse, candy-input, sugar-fuzzy, candy-async
 - **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy
 - **4 items deferred** to future plan (candy-metrics, candy-log, sugar-mouse, candy-starter — see docs/repo_map_update_followups.md)
 - **1 step not completed** (step-15 sugar-forms — FuzzyMatcher API incompatibility; deferred)

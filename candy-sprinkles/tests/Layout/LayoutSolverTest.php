@@ -156,7 +156,7 @@ final class LayoutSolverTest extends TestCase
     {
         // When no Fill constraints exist, Min absorbs remaining slack proportionally.
         // [min(20), min(30), min(25)] = 75 reserved, slack=25 in 100.
-        // Proportional distribution: 20→26, 30→40, 25→33 = 99; candy-layout's
+        // Proportional distribution: 20→26, 30→40, 25→33 = 99; sugar-constraints's
         // GreedySolver hands the 1-cell floor loss to the first Min so the
         // sizes tile the area (LayoutSolver's sum-to-total contract).
         $rects = Layout::horizontal([
