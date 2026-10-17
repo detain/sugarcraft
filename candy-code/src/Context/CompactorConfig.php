@@ -385,12 +385,19 @@ final readonly class CompactorConfig
         // The three absolute caps form ONE ladder, not three independent figures
         // (ISS-085): every tier fires at min(percent, cap), so as long as the
         // caps ascend — null meaning "no cap", the far end — the effective
-        // thresholds stay ordered whatever the percentages resolved to above.
-        // A descending trio (a blockTokens under the default autoTokens refuses
-        // every prompt auto-compaction would have kept; an autoTokens under the
-        // reminderTokens kills summary prefetch) falls back whole, exactly as
-        // the percentage trio does. A field left out or malformed keeps its
-        // current figure and its not-configured sentinel.
+        // thresholds stay ordered whenever the caps that matter are finite.
+        // MEASURED HOLE (ISS-085 review, recorded not closed): a null at an
+        // EARLY leg makes the pairwise check skip it, so reminder=0 +
+        // auto=50000 validates; on a large-window model the uncapped reminder
+        // percentage can then exceed the capped auto threshold and the tiers
+        // cross. The runtime fallback covers a saved bad trio; extending
+        // ThresholdOrderValidator with the percentage-pair leg is the
+        // disclosed follow-up. A descending trio (a blockTokens under the
+        // default autoTokens refuses every prompt auto-compaction would have
+        // kept; an autoTokens under the reminderTokens kills summary
+        // prefetch) falls back whole, exactly as the percentage trio does. A
+        // field left out or malformed keeps its current figure and its
+        // not-configured sentinel.
         $caps = [];
         foreach ([
             'reminderTokens' => self::SETTING_REMINDER_TOKENS,
@@ -738,12 +745,18 @@ final readonly class CompactorConfig
 
     /**
      * Whether an absolute-cap ladder ascends: each step either side may be
-     * null — "no cap" is the far end of the ladder, never the near one. The
-     * trio must arrive in {@see ABSOLUTE_FIELDS} order (tier order).
+     * null — "no cap" is meant to be the far end of the ladder, but this door
+     * cannot enforce WHERE the nulls sit: a null leg simply skips its pair.
+     * The trio must arrive in {@see ABSOLUTE_FIELDS} order (tier order).
      *
      * Each tier fires at min(percent, cap); with the percentages ordered
      * (the fallback above) and the caps ordered (this door), the effective
-     * thresholds are ordered too — the two ladders cannot cross (ISS-085).
+     * thresholds are ordered too — PROVIDED the caps that skip are far-end
+     * nulls. An early null leaves that tier riding its percentage, so the
+     * two ladders CAN still cross there; that percentage-pair leg is the
+     * ThresholdOrderValidator extension ISS-085's review left as a
+     * disclosed follow-up (see the config-read comment for the measured
+     * reminder=0 + auto=50000 shape).
      *
      * @param array<string, ?int> $ladder
      */
