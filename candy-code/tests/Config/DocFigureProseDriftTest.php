@@ -6063,8 +6063,8 @@ final class DocFigureProseDriftTest extends TestCase
             'the paragraph stopped naming exactly the refused keys',
         );
 
-        self::assertSame(['--mcp'], $reflected->getConstant('DEFAULT_ARGS'), 'the operator default moved — the paragraph carries it');
-        self::assertStringContainsString('(default `--mcp`)', $prose, 'the default-argv claim left the paragraph while the constant still holds');
+        self::assertSame(['mcp', 'serve'], $reflected->getConstant('DEFAULT_ARGS'), 'the operator default moved — the paragraph carries it');
+        self::assertStringContainsString('(default `mcp serve`)', $prose, 'the default-argv claim left the paragraph while the constant still holds');
 
         foreach (['claudeMcpBinary', 'claudeMcpArgs', 'claudeMcpEnv'] as $key) {
             self::assertStringContainsString("'" . $key . "'", $bootstrap, "the grant reader stopped consulting {$key} — the paragraph names it");

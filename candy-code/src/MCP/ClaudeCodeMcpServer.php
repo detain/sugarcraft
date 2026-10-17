@@ -69,8 +69,19 @@ final class ClaudeCodeMcpServer implements McpServer
      * Deliberately operator-settable and never repository-settable: repo
      * args could flip the CLI into a permissionless mode, which is why the
      * entry shape is `type`-only in the first place.
+     *
+     * ISS-043: the default was `['--mcp']` — a flag the Claude CLI has never
+     * accepted. The documented way to serve MCP over stdio is the SUBCOMMAND
+     * `claude mcp serve`; handed `--mcp` the CLI printed usage and exited, so
+     * every stock install's only correct config was the one nobody could
+     * discover: the failure rode the silent runtime skip (a start() that
+     * merely fails is skipped, by McpClient's two-catches law) and the
+     * message named no argv, so an operator staring at the wrong default had
+     * nothing to compare against. The default is fixed, the docs pages that
+     * copied the wrong word are fixed beside it, and every start-path
+     * refusal now says WHICH argv ran.
      */
-    public const DEFAULT_ARGS = ['--mcp'];
+    public const DEFAULT_ARGS = ['mcp', 'serve'];
 
     /**
      * Keys a `.mcp.json` entry is not allowed to carry on this transport —
@@ -183,14 +194,42 @@ final class ClaudeCodeMcpServer implements McpServer
      */
     public function start(): void
     {
-        $this->client->connect();
+        // ISS-043: connect() failures get the argv appended. The old shape —
+        // "Failed to spawn MCP process: claude" for a CLI that printed usage
+        // and exited on the never-existing `--mcp` flag — told an operator
+        // staring at the wrong default nothing about WHAT was run; the args
+        // are the half of a spawn that a wrong default corrupts. The BINARY
+        // PATH stays unnamed by the class law above (basename only inside the
+        // wrapped message), and the wrapped message keeps the original as a
+        // substring so the pins reading for it survive.
+        try {
+            $this->client->connect();
+        } catch (\Throwable $failure) {
+            throw new \RuntimeException(sprintf(
+                'Failed to start MCP server %s — spawned with arguments %s: %s',
+                $this->name,
+                $this->describeSpawnArgs(),
+                $failure->getMessage(),
+            ), 0, $failure);
+        }
 
         try {
             $response = $this->client->listTools();
         } catch (\Throwable $failure) {
             $this->client->disconnect();
 
-            throw $failure;
+            // ISS-043: same argv decoration as connect()'s wrapper — a
+            // tools/list that never answers is most often a CLI that printed
+            // usage on a bogus flag and exited, and the only way an operator
+            // sees the difference is if the failure names the argv. The
+            // original message rides as the tail, so every pin that reads
+            // for it keeps passing.
+            throw new \RuntimeException(sprintf(
+                'Failed to start MCP server %s — spawned with arguments %s: %s',
+                $this->name,
+                $this->describeSpawnArgs(),
+                $failure->getMessage(),
+            ), 0, $failure);
         }
 
         // The same gate as `initialize`: an ERROR answer (session- or
@@ -253,6 +292,21 @@ final class ClaudeCodeMcpServer implements McpServer
     public function stop(): void
     {
         $this->client->disconnect();
+    }
+
+    /**
+     * The spawn arguments for a failure message (ISS-043): quoted piece by
+     * piece, the BINARY PATH deliberately absent — the class law that every
+     * refusal names the config key and never the operator's path holds here
+     * too; the ARGS are what a wrong default corrupts, and they are the
+     * operator's `claudeMcpArgs` setting, not a filesystem location.
+     */
+    private function describeSpawnArgs(): string
+    {
+        return implode(' ', array_map(
+            static fn (string $arg): string => '`' . $arg . '`',
+            $this->spawnArgs,
+        ));
     }
 
     /**

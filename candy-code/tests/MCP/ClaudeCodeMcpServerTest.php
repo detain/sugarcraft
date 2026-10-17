@@ -90,11 +90,36 @@ final class ClaudeCodeMcpServerTest extends TestCase
             'binary' => PHP_BINARY, 'args' => null, 'env' => null,
         ]);
         self::assertSame(ClaudeCodeMcpServer::DEFAULT_ARGS, $defaulted->spawnArgs);
+        // ISS-043 truth pin: the default is the SUBCOMMAND pair the Claude CLI
+        // actually serves MCP under, not the never-existing `--mcp` flag that
+        // made every stock `claudeMcpBinary` grant print usage and exit.
+        self::assertSame(['mcp', 'serve'], ClaudeCodeMcpServer::DEFAULT_ARGS,
+            'the operator default drifted off `claude mcp serve`');
 
         $overridden = ClaudeCodeMcpServer::fromGrant('g2', ['type' => ClaudeCodeMcpServer::TYPE], [
             'binary' => PHP_BINARY, 'args' => ['--mcp', '--tweaked'], 'env' => null,
         ]);
         self::assertSame(['--mcp', '--tweaked'], $overridden->spawnArgs);
+    }
+
+    /**
+     * ISS-043: a claude-mcp start that fails must NAME the argv, so the
+     * operator staring at a wrong override sees what actually ran. The spawned
+     * binary (php here) rejects the bogus args and connect() throws; the
+     * wrapped message must carry the args back.
+     */
+    public function testASpawnFailureNamesTheArgumentsThatRan(): void
+    {
+        $server = ClaudeCodeMcpServer::fromGrant('g', ['type' => ClaudeCodeMcpServer::TYPE], [
+            'binary' => PHP_BINARY, 'args' => ['bogus-serve-args'], 'env' => null,
+        ]);
+
+        try {
+            $server->start();
+            $this->fail('a rejected spawn must throw');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('spawned with arguments `bogus-serve-args`', $e->getMessage());
+        }
     }
 
     /**

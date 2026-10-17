@@ -187,7 +187,7 @@ report, because the repository does not name this binary. The spawn comes from
 three keys in the USER config, the same tier that owns the list above:
 `claudeMcpBinary` (an absolute, existing, executable path — a bare name is
 refused even though it would resolve on `$PATH`, and `$PATH` is not a grant),
-an optional `claudeMcpArgs` (default `--mcp`), and an optional `claudeMcpEnv`
+an optional `claudeMcpArgs` (default `mcp serve`), and an optional `claudeMcpEnv`
 of literal strings — the `${VAR}` interpolation below applies to two keys
 only, and neither is among these three. No entry becomes a claude-mcp spawn
 without all of it, and the operator's path is never echoed anywhere a
