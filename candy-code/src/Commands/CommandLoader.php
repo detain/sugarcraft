@@ -87,9 +87,12 @@ final class CommandLoader
      * thing twice on one channel; two more
      * ({@see loadFromDirectory()}'s containment skip and its parse failure) are
      * per-FILE and are collected on {@see skippedFiles()} instead. The seventh
-     * — {@see $overrides}'s accepted-shadow announcement — is paired with
-     * nothing yet: {@see overrides()} is readable and no launch seam drains it,
-     * so this flag is currently its only reader. Nothing is
+     * — {@see $overrides}'s accepted-shadow announcement — is paired since
+     * ISS-036's closure: {@see \SugarCraft\Code\Cli\Bootstrap::reportCommandOverrides()}
+     * drains it onto the launch seam as part of ONE aggregate row, so the flag
+     * no longer owns that sentence outright; what it still owns exclusively is
+     * the per-name line standing alone, outside the aggregate's count header
+     * and the seam's clip. Nothing is
      * dropped either way — see {@see $refusedDirectories} for the routing
      * argument and {@see \SugarCraft\Code\Skills\SkillLoader::DEBUG_SKIPS_ENV}
      * for the contract this copies. Since E172 (round 70) the skipped-file
@@ -310,7 +313,9 @@ final class CommandLoader
 
     /**
      * Which built-ins this load's surviving file rows replaced, name => report
-     * line — the ISS-036 launch notice's source. Empty until {@see loadAll()}
+     * line — drained at launch by
+     * {@see \SugarCraft\Code\Cli\Bootstrap::reportCommandOverrides()} as ONE
+     * aggregate row (ISS-036), never per-file. Empty until {@see loadAll()}
      * has run, like every other collection on this instance.
      *
      * @return array<string, string>

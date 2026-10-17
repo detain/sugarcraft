@@ -216,6 +216,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'SKILL_SKIP_NOTICE_FORMAT' => ['method' => 'reportSkillSkips', 'conversions' => 5],
         // E172's command twin, byte-for-byte in shape — see the constant's doc-block.
         'COMMAND_SKIP_NOTICE_FORMAT' => ['method' => 'reportCommandSkips', 'conversions' => 5],
+        // ISS-036's override aggregate, read back by
+        // CommandOverrideLaunchNoticeTest. Quoted on no page, so no
+        // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent.
+        'COMMAND_OVERRIDE_NOTICE_FORMAT' => ['method' => 'reportCommandOverrides', 'conversions' => 3],
         // Audit AG-2's skipped-preset row, read back by
         // AgentPresetSkipMalformedFileTest. Quoted on no page, so no
         // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent below.
@@ -484,6 +488,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'reportSkillSkips' => ["''", "'s'", "'was'", "'were'", "'it'", "'them'"],
         // The command twin's identical agreement slots (E172).
         'reportCommandSkips' => ["''", "'s'", "'was'", "'were'", "'it'", "'them'"],
+        // ISS-036's override aggregate: the plural pick and the row joiner.
+        // The loader's sentences arrive pre-rendered, so the body's only
+        // format is the named constant.
+        'reportCommandOverrides' => ["''", "'s'", "'; '"],
         'launchNotices' => ["''", "'s'"],
         // Both halves of the retention report are named, so what is left here
         // is the plural pair and the four `$row` keys the detail line reads.
@@ -830,7 +838,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            29,
+            30,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

@@ -5710,7 +5710,17 @@ final class Renderer
             $description = self::slashMenuText($spec->description);
             $argumentHint = $spec->argumentHint === null ? null : self::slashMenuText($spec->argumentHint);
 
-            $hint = self::fitSlashMenuHint($specName, $description, $argumentHint, $budget);
+            // ISS-036's display half: whose file this row is, right behind
+            // the name — an override the operator cannot SEE is the same
+            // silence the launch report this badge ships beside fixes for the
+            // launch. Built-in rows carry no tier and so no badge, and the
+            // badge is never clipped: the description tail absorbs its width
+            // through both budgets below (audit 15b-16 sanitization already
+            // covers the bytes — tier is loader-set data, but the popup
+            // treats every piece of a row as hostile input).
+            $badge = $spec->tierBadge() === null ? '' : ' ' . self::slashMenuText($spec->tierBadge());
+
+            $hint = self::fitSlashMenuHint($specName . $badge, $description, $argumentHint, $budget);
 
             // The name keeps its columns ahead of everything else, so this clip
             // only bites on a name wider than the whole budget - which the
@@ -5725,7 +5735,7 @@ final class Renderer
             $plainName = self::clipToWidth($specName, max(0, $budget - 1));
             $tail = self::clipToWidth(
                 ' — ' . $description,
-                $budget - Width::string('/' . $plainName . $hint),
+                $budget - Width::string('/' . $plainName . $badge . $hint),
             );
 
             // Highlight the NAME only, and against the plain text: the styled
@@ -5745,7 +5755,7 @@ final class Renderer
                 static fn(string $run): string => $matchStyle->render($run) . $reopen,
             );
 
-            $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $hint . $tail);
+            $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . '/' . $name . $badge . $hint . $tail);
         }
 
         return Style::new()

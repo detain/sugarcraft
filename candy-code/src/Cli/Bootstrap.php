@@ -207,14 +207,14 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 40 is that sum — 39 after this lane's three notice-raising sources — plus
-     * one row of headroom. A launch that does hit
+     * 41 is that sum — 40 after the ISS-036 override aggregate joined the
+     * roster — plus one row of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 40;
+    public const LAUNCH_NOTICE_LIMIT = 41;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -266,6 +266,7 @@ final class Bootstrap
     private const LAUNCH_NOTICE_BOUNDED_SOURCES = [
         'reportSkillSkips' => 1,
         'reportCommandSkips' => 1,
+        'reportCommandOverrides' => 1,
         'hookFiles' => 1,
         'filterToolSet' => 1,
         'reportProjectTierToolRemovals' => 1,
@@ -513,6 +514,24 @@ final class Bootstrap
      */
     public const COMMAND_SKIP_NOTICE_FORMAT =
         '%d command file%s could not be read and %s skipped; set %s=1 to list %s';
+
+    /**
+     * The aggregate row {@see reportCommandOverrides()} raises for built-ins a
+     * surviving command file replaced this launch (ISS-036's drain half).
+     *
+     * THE SKIP ROW'S SIBLING in shape — `%d` the count, `%s` the noun plural,
+     * `%s` the rows — and promoted for the same E164 reason:
+     * {@see \SugarCraft\Code\Tests\Cli\CommandOverrideLaunchNoticeTest}
+     * reproduces the rendered span through this constant. Unlike the skip row
+     * it NAMES its rows (built-in, tier, winning path per entry, already
+     * localized by the loader): an override is not a failure to look behind,
+     * it is a fact about what just launched, and the per-name stderr line
+     * behind {@see \SugarCraft\Code\Commands\CommandLoader::DEBUG_REFUSALS_ENV}
+     * is the same sentence, not more detail. The count/plural pair mirrors the
+     * skip and skill rows so the agreement machinery is one shape.
+     */
+    public const COMMAND_OVERRIDE_NOTICE_FORMAT =
+        '%d built-in command%s replaced by a command file this launch: %s';
 
     /**
      * The one row {@see agentPresets()} raises for preset files
@@ -832,6 +851,7 @@ final class Bootstrap
         self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT => 'cli.launch.tui_error_log_fallback',
         self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT => 'cli.launch.tui_error_log_discarded',
         self::COMMAND_SKIP_NOTICE_FORMAT => 'cli.launch.command_skip',
+        self::COMMAND_OVERRIDE_NOTICE_FORMAT => 'cli.launch.command_overrides',
         self::AGENT_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.agent_preset_skip',
         self::AGENT_PRESET_SHADOW_NOTICE_FORMAT => 'cli.launch.agent_preset_shadow',
         self::FOREIGN_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.foreign_preset_skip',
@@ -1144,6 +1164,29 @@ final class Bootstrap
      * @var array<string, true>
      */
     private static array $reportedCommandSkips = [];
+
+    /**
+     * Which built-ins this process's command walks replaced, keyed by command
+     * name (ISS-036) — the `Bootstrap`-side twin of {@see $commandSkips}, fed
+     * by {@see chat()} from {@see \SugarCraft\Code\Commands\CommandLoader::overrides()}
+     * and surfaced by {@see reportCommandOverrides()} as ONE aggregate row.
+     *
+     * The values are the loader's own per-override sentences — name, tier and
+     * winning path, already localized — so the aggregate carries the facts
+     * without a second render pass.
+     *
+     * @var array<string, string> commandName => announcement sentence
+     */
+    private static array $commandOverrides = [];
+
+    /**
+     * The subset of {@see $commandOverrides} already put in front of the user —
+     * process-scoped noise control, same contract as
+     * {@see $reportedCommandSkips}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedCommandOverrides = [];
 
     /**
      * Frontmatter keys the launch's files declare and nothing acts on, per
@@ -1661,6 +1704,18 @@ final class Bootstrap
             ...$commandLoader->skippedFiles(),
         ];
 
+        // And the accepted-override announcements (ISS-036): which built-ins
+        // this launch's surviving file rows replaced. Hoisted off the loader
+        // beside the skips and for the identical lifecycle reason — the
+        // sentences must outlive the construction that wrote them — and they
+        // surface below as ONE aggregate row, because a root that ships a
+        // dozen shadows should read as "twelve built-ins moved", not as a
+        // dozen transcript rows competing with the capability warnings.
+        self::$commandOverrides = [
+            ...self::$commandOverrides,
+            ...$commandLoader->overrides(),
+        ];
+
         // AFTER the construction above, not beside reportSkillSkips() further
         // up: the workflow registry that decides whether this project's
         // `.candy-code/workflows` is readable is built inside
@@ -1676,6 +1731,14 @@ final class Bootstrap
         // the count (E172 — the drain half of the finding whose feeder half
         // landed in round 46 and stood dormant behind a pin that pointed here).
         self::reportCommandSkips();
+
+        // The accepted-override aggregate, immediately after its skip sibling
+        // and for its identical reasons: construction time, deduplicated
+        // per-name against {@see $reportedCommandOverrides}, ONE row whatever
+        // the count. This is the drain that makes the ISS-036 claim
+        // "every override is reported" true on the transcript as well as on
+        // stderr.
+        self::reportCommandOverrides();
 
         // X-37a: frontmatter keys every format's files declare and nothing
         // acts on, one aggregated row per format. The command rows are read off
@@ -5961,6 +6024,49 @@ final class Bootstrap
             CommandLoader::DEBUG_REFUSALS_ENV,
             $count === 1 ? 'it' : 'them',
         ));
+    }
+
+    /**
+     * Tell the user, at launch, which built-ins this launch's command files
+     * replaced (ISS-036's drain half).
+     *
+     * THE OVERRIDE TWIN OF {@see reportCommandSkips()}, and it exists because
+     * "a file replaced a command you thought you had" is the exact fact the
+     * trust gate was built around — refusing the untrusted shadow loudly while
+     * announcing the allowed one silently was half a story. The loader's
+     * per-name sentences (built-in, tier, winning path) are the rows; ONE
+     * aggregate row whatever the count, per {@see LAUNCH_NOTICE_LIMIT}'s
+     * flood argument, and the seam's clip bound shapes the row the same way
+     * it shapes the skip row's. The debug variable keeps its per-name lines,
+     * which the seam no longer needs to duplicate; the seam gives the
+     * transcript a row that stderr-only was hiding.
+     *
+     * PRIVATE like its skip twin: the loader is built in exactly one place in
+     * `src/`. Construction time only, beside {@see reportCommandSkips()} and
+     * for its reason.
+     */
+    private static function reportCommandOverrides(): void
+    {
+        // Only what has not been announced yet, keyed by command name —
+        // {@see reportCommandSkips()}'s guard shape: a process that builds a
+        // second Chat must not re-print the first's shadows, and a walk that
+        // replaced something NEW still says so.
+        $new = array_diff_key(self::$commandOverrides, self::$reportedCommandOverrides);
+        if ($new === []) {
+            return;
+        }
+
+        foreach (array_keys($new) as $name) {
+            self::$reportedCommandOverrides[$name] = true;
+        }
+
+        $count = \count($new);
+        self::warnLaunchRows([sprintf(
+            self::translated(self::COMMAND_OVERRIDE_NOTICE_FORMAT),
+            $count,
+            $count === 1 ? '' : 's',
+            implode('; ', $new),
+        )]);
     }
 
     /**
