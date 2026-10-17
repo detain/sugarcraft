@@ -106,11 +106,15 @@ final readonly class MemoryFlush implements HookInterface
 
     /**
      * Run the flush step on $runtime — whose hook chain carries this hook —
-     * over $app's conversation. Returns how many Memory calls succeeded. A
-     * flush that fails costs the compaction nothing: it throws only what the
-     * caller chooses to let through, and the engine swallows it.
+     * over $app's conversation. Returns one entry per Memory call that
+     * succeeded: its result row, whole (ISS-070 — the bare count the caller
+     * threw away is why a silent flush could rewrite memory with nothing on
+     * the transcript to show it). count() of the list is the saved number.
+     * A flush that fails costs the compaction nothing: it throws only what
+     * the caller chooses to let through, and the engine swallows it.
      *
      * @param \Closure(AssistantMessage): void $onAssistant bills the step's response
+     * @return list<string> one result row per Memory call that reported success
      */
     public static function run(
         Runtime $runtime,
@@ -118,16 +122,16 @@ final readonly class MemoryFlush implements HookInterface
         \Closure $onAssistant,
         ?callable $onProgress = null,
         ?callable $onHeartbeat = null,
-    ): int {
+    ): array {
         $request = $app->withMessages([...$app->messages, new UserMessage(self::INSTRUCTION)]);
         $refuseAsks = static fn (): bool => false;
 
-        $saved = 0;
+        $saved = [];
         foreach ($runtime->run($request, null, $refuseAsks, null, $onProgress, $onHeartbeat) as $message) {
             if ($message instanceof AssistantMessage) {
                 $onAssistant($message);
             } elseif ($message instanceof ToolResultMessage && !$message->isError()) {
-                $saved++;
+                $saved[] = $message->content();
             }
         }
 

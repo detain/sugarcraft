@@ -7,17 +7,21 @@ namespace SugarCraft\Code\Tests\Backend;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\App;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Context\Compaction\MemoryFlush;
 use SugarCraft\Code\Context\Compaction\StepSummarizer;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
 use SugarCraft\Code\Events\UsageUpdated;
+use SugarCraft\Code\Hooks\HookManager;
+use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\BuiltIn\MemoryTool;
@@ -258,6 +262,34 @@ final class MemoryFlushBeforeCompactionTest extends TestCase
      * flush is answered with a Memory save and a probe call; the summary with
      * $summary, or a failure for null.
      */
+    /**
+     * ISS-070: the flush answers its caller with the saved rows themselves,
+     * not a discarded count — one per Memory call that succeeded, none for
+     * the step's other rows or for a refused tool.
+     */
+    public function testTheFlushReturnsOneSavedRowPerSuccessfulMemoryCall(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [
+                new ToolCall('f1', 'Memory', ['action' => 'save', 'content' => 'the build runs through make ci', 'scope' => 'user', 'type' => 'convention']),
+                new ToolCall('f2', 'probe', ['n' => 99]),
+            ]),
+            new CompleteResponse(content: 'flushed'),
+        ]);
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register(MemoryFlush::new());
+        $app = App::new($provider, 'm')
+            ->withRoot($this->dir . '/repo')
+            ->withTools([$this->memoryTool()])
+            ->withMessages([new UserMessage('map the project')]);
+
+        $saved = MemoryFlush::run(new Runtime($provider, $hooks), $app, static function (AssistantMessage $reply): void {
+        });
+
+        self::assertCount(1, $saved, 'the refused probe costs no row');
+        self::assertMatchesRegularExpression('/^Saved note [0-9a-f]{32} \(scope: user, /', $saved[0], 'the row is what the Memory tool answered');
+    }
+
     private static function provider(?string $summary, int $steps = 3): ScriptedProvider
     {
         $step = 0;
