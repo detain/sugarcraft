@@ -11,28 +11,28 @@ import { describe } from '../../stores/session'
  * with its status, live from the `bg.*` events; its output on demand; stop
  * one that runs; send a settled one's answer into the session on screen.
  *
- * Each row also shows the spawn session's permission mode (ISS-004 threads
- * `permissionMode` through the bg rows), and a loud warning for the
- * bypass-class modes that answer permission asks without a human: a /bg run
- * nobody is watching should not be one that nobody can stop.
+ * Each row also badges the spawn permission mode and carries a loud warning
+ * for the bypass-class modes that answer permission asks without a human: a
+ * /bg run nobody is watching should not be one that nobody can stop. The
+ * server's truth is that `bg.list` rows carry no per-session mode — the mode
+ * every daemon inherits is the hello default `bg.spawn` threads through as
+ * the spawn-config key (ISS-004, bg01 6bad89ebe) — so the chip reads that
+ * server-level mode, matching the mode-note the spawn form prints.
  */
 defineProps<{ sessionId: string | null }>()
 
 /** Modes that never put a question in front of a human. */
 const BYPASS_CLASS: PermissionMode[] = ['bypass-permissions', 'auto', 'dont-ask']
 
-function permissionMode(session: BackgroundSession): PermissionMode | null {
-  const mode = (session as BackgroundSession & { permissionMode?: unknown }).permissionMode
-  return typeof mode === 'string' && mode !== '' ? (mode as PermissionMode) : null
-}
-
-function isBypassClass(session: BackgroundSession): boolean {
-  const mode = permissionMode(session)
-  return mode !== null && BYPASS_CLASS.includes(mode)
-}
-
 const background = useBackgroundStore()
 const connection = useConnectionStore()
+
+/** The mode every bg daemon is born with: the server's hello default. */
+const spawnMode = computed<PermissionMode | null>(() => {
+  const mode = connection.hello?.defaults?.permissionMode
+  return typeof mode === 'string' && mode !== '' ? mode : null
+})
+const isBypassClass = computed(() => spawnMode.value !== null && BYPASS_CLASS.includes(spawnMode.value))
 const task = ref('')
 const expanded = ref<string | null>(null)
 const error = ref<string | null>(null)
@@ -80,11 +80,11 @@ function toggle(session: BackgroundSession): void {
         <button type="button" class="head" :aria-expanded="expanded === session.bgId" @click="toggle(session)">
           <span class="status" :class="session.status">{{ session.status.replace('_', ' ') }}</span>
           <span class="name">{{ session.name || session.task }}</span>
-          <span v-if="permissionMode(session)" class="mode" :class="{ bypass: isBypassClass(session) }" data-testid="bg-mode">mode: {{ permissionMode(session) }}</span>
+          <span v-if="spawnMode" class="mode" :class="{ bypass: isBypassClass }" data-testid="bg-mode">mode: {{ spawnMode }}</span>
           <span class="meta">{{ ago(session.createdAt) }}<template v-if="session.tokensUsed"> · {{ tokens(session.tokensUsed) }} tok</template><template v-if="session.costUsd"> · {{ money(session.costUsd) }}</template></span>
         </button>
-        <p v-if="isBypassClass(session)" class="bypass-warning" role="alert" data-testid="bg-bypass-warning">
-          Permission mode {{ permissionMode(session) }}: nothing will ask a human before this run acts.
+        <p v-if="isBypassClass" class="bypass-warning" role="alert" data-testid="bg-bypass-warning">
+          Permission mode {{ spawnMode }}: nothing will ask a human before this run acts.
         </p>
         <div v-if="expanded === session.bgId" class="body">
           <p class="task">{{ session.task }}</p>

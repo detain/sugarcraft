@@ -46,25 +46,37 @@ describe('TodoPanel', () => {
 })
 
 describe('BackgroundPanel', () => {
-  it('badges the spawn permission mode and warns on a bypass-class one (ISS-004 panel half)', async () => {
+  it('badges every row with the server spawn mode and warns when it is bypass-class (ISS-004 panel half)', async () => {
     await wire.connect(() => useBackgroundStore())
     await wire.answer('bg.list', {
       items: [
-        { bgId: 'b1', name: 'quiet', task: 'read the docs', status: 'running', createdAt: '2026-10-17 00:00:01', outputBytes: 0, adopted: false, permissionMode: 'default' },
-        { bgId: 'b2', name: 'loud', task: 'ship it', status: 'running', createdAt: '2026-10-17 00:00:02', outputBytes: 0, adopted: false, permissionMode: 'bypass-permissions' },
-        { bgId: 'b3', name: 'old', task: 'predates the field', status: 'completed', createdAt: '2026-10-17 00:00:03', outputBytes: 0, adopted: false },
+        { bgId: 'b1', name: 'quiet', task: 'read the docs', status: 'running', createdAt: '2026-10-17 00:00:01', outputBytes: 0, adopted: false },
+        { bgId: 'b2', name: 'loud', task: 'ship it', status: 'completed', createdAt: '2026-10-17 00:00:02', outputBytes: 0, adopted: false },
       ],
     })
     const wrapper = mount(BackgroundPanel, { props: { sessionId: null }, global: { plugins: [pinia] } })
     await flushPromises()
-    // Newest first: b3 (no mode — say nothing), b2 (bypass — badge + warning), b1 (default — badge, no warning).
-    const rows = wrapper.findAll('[data-testid="bg-item"]')
-    expect(rows.map((row) => row.attributes('data-testid'))).toHaveLength(3)
-    expect(wrapper.findAll('[data-testid="bg-mode"]').map((m) => m.text())).toEqual(['mode: bypass-permissions', 'mode: default'])
+    // The server truth: bg.list rows carry no per-session mode key, so the chip
+    // reads the hello default every daemon inherits — both rows badge `default`
+    // and the asking mode warns nobody.
+    expect(wrapper.findAll('[data-testid="bg-mode"]').map((m) => m.text())).toEqual(['mode: default', 'mode: default'])
+    expect(wrapper.findAll('[data-testid="bg-bypass-warning"]')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="bg-mode-note"]').text()).toContain('no terminal to answer them')
+  })
+
+  it('badges and warns from a bypass-class server mode (ISS-004 panel half)', async () => {
+    await wire.connect(() => useBackgroundStore(), { defaults: { permissionMode: 'bypass-permissions', delivery: 'steer' } })
+    await wire.answer('bg.list', {
+      items: [
+        { bgId: 'b1', name: 'loud', task: 'ship it', status: 'running', createdAt: '2026-10-17 00:00:01', outputBytes: 0, adopted: false },
+      ],
+    })
+    const wrapper = mount(BackgroundPanel, { props: { sessionId: null }, global: { plugins: [pinia] } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="bg-mode"]').map((m) => m.text())).toEqual(['mode: bypass-permissions'])
     const warnings = wrapper.findAll('[data-testid="bg-bypass-warning"]')
     expect(warnings).toHaveLength(1)
     expect(warnings[0]?.text()).toContain('bypass-permissions')
-    expect(wrapper.find('[data-testid="bg-mode-note"]').text()).toContain('no terminal to answer them')
   })
 })
 
