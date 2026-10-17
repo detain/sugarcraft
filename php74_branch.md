@@ -374,7 +374,7 @@ keystone, so they come first within the phase.
 
 ### Phase 3 — Core‑only & low‑fan‑out foundation
 Ordered so each lib's deps are already done. One step each unless split noted.
-- **3.1** `candy-layout`‑dependent + core‑only singles: `candy-metrics`(13,low),
+- **3.1** `candy-layout`‑dependent + core‑only singles: `candy-metrics`(13,low), <!-- @rename-keep historical provenance -->
   `candy-zone`(14,low), `candy-mouse`(9,med), `candy-mold`(1,low). <!-- @rename-keep historical provenance -->
 - **3.2** `candy-sprinkles` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
   `Table/Border/Tree/Listing` (10), **3.2c** root color/style files (≈10), **3.2d** remainder.
@@ -524,7 +524,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-ansi | low | 11 | attribute, backed-enum, ctor-promotion, enum-with-methods, fiber*, first-class-callable |
 | candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly | <!-- @rename-keep historical provenance -->
 | candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |
-| candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void |
+| candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void | <!-- @rename-keep historical provenance -->
 | candy-starter | low | 1 | ctor-promotion, match, readonly |
 | candy-zone | low | 14 | ctor-promotion, match, php8-strfn, readonly | <!-- @rename-keep historical provenance -->
 | candy-flappy | low | 6 | ctor-promotion, named-args, readonly |

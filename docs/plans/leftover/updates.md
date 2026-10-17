@@ -493,12 +493,12 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     fix for step 09.12 · PR#734 · resolved 1 finding (remove broken HookRegistry::remove() + 3 CALIBER entries)
     tests-ci for step 09.12 · clean
     docs for step 09.12 · PR#735 · document CallerFormatter/PsrBridge/Hook/PartsOrder in README + end-user HTML + PHPDoc
-    step 09.13 · PR#736 · candy-metrics: histogram buckets (14 classic buckets) + Descriptor DTO + Registry::register() (leftover-rollout step 09.13)
+    step 09.13 · PR#736 · candy-metrics: histogram buckets (14 classic buckets) + Descriptor DTO + Registry::register() (leftover-rollout step 09.13) <!-- @rename-keep historical provenance -->
     review for step 09.13 · clean · PR#736
     tests-ci for step 09.13 · clean
     review for step 09.18 · clean · PR#747
     docs for step 09.18 · PR#748 · document SpringChain + reduced-motion in README/end-user HTML/CALIBER_LEARNINGS.md
-    step 09.14 · PR#738 · candy-metrics: cardinality tracking (DeleteLabelValues cap per metric) + UpDownCounter/AsyncCounter/AsyncGauge instruments (leftover-rollout step 09.14)
+    step 09.14 · PR#738 · candy-metrics: cardinality tracking (DeleteLabelValues cap per metric) + UpDownCounter/AsyncCounter/AsyncGauge instruments (leftover-rollout step 09.14) <!-- @rename-keep historical provenance -->
     review for step 09.14 · clean · PR#738
     tests-ci for step 09.14 · clean
     docs for step 09.14 · PR#739 · document UpDownCounter/AsyncCounter/AsyncGauge in README + end-user HTML + CALIBER entries (cardinality-fifo-eviction, async-instrument-ownership)
