@@ -7,7 +7,7 @@ export const PROTOCOL = 1 as const
 export type Scope = 'read' | 'write' | 'approve' | 'admin'
 
 export interface Admission {
-  admitted: "started" | "queued" | "steered" | "pending"
+  admitted: "started" | "queued" | "steered" | "pending" | "handled"
   turnId?: string
   messageId?: string
   steerId?: string
@@ -125,8 +125,14 @@ export interface SessionSnapshot {
   sessionId: SessionId
   status: "idle" | "busy" | "waiting_permission"
   turnId?: string
-  /** Transcript rows, as they are saved. */
+  /** Transcript rows, as they are saved; a paged snapshot carries only its window. */
   messages: Record<string, unknown>[]
+  /** Paged snapshots (ISS-058): every row the session holds. */
+  totalMessages?: number
+  /** Paged snapshots: index of the first carried row in the full history; appending never shifts it. */
+  oldestIndex?: number
+  /** Paged snapshots: older rows exist; ask session.get with beforeIndex = oldestIndex. */
+  hasMoreOlder?: boolean
   queued?: string[]
   spentUsd?: number
   lastSeq: number
@@ -284,7 +290,7 @@ export interface Methods {
     result: {
       bgId: string
       sessionId: SessionId
-      admitted: "started" | "queued" | "steered" | "pending"
+      admitted: "started" | "queued" | "steered" | "pending" | "handled"
       turnId?: string
       messageId?: string
       steerId?: string
@@ -630,7 +636,7 @@ export interface Methods {
       draining: boolean
     }
   }
-  /** The handshake: protocol version, features, limits; optionally resume subscriptions. */
+  /** The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). */
   "server.hello": {
     params: {
       minProtocol?: number
@@ -643,6 +649,8 @@ export interface Methods {
       caps?: string[]
       /** sessionId => the last seq the client holds */
       resume?: Record<string, number>
+      /** Page a resumed session's reset snapshot to this many newest rows (ISS-058). */
+      snapshotLimit?: number
     }
     result: {
       protocol: number
@@ -797,10 +805,12 @@ export interface Methods {
     }
     result: SessionSummary
   }
-  /** A session's snapshot: rows, status, queue, open questions, usage. */
+  /** A session's snapshot: rows, status, queue, open questions, usage; limit/beforeIndex page the rows. */
   "session.get": {
     params: {
       sessionId: SessionId
+      limit?: number
+      beforeIndex?: number
     }
     result: SessionSnapshot
   }
@@ -860,12 +870,13 @@ export interface Methods {
       permissionMode: PermissionMode
     }
   }
-  /** Follow a session's events from a cursor (replay) or from a snapshot. */
+  /** Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. */
   "session.subscribe": {
     params: {
       sessionId: SessionId
       afterSeq?: number
       mode?: "full" | "narration"
+      snapshotLimit?: number
     }
     result: Subscription
   }
@@ -1510,7 +1521,7 @@ export interface Events {
   }
   /** A turn ended, with its stopReason. */
   "turn.completed": {
-    stopReason: "end_turn" | "max_steps" | "length" | "cancelled" | "spend_cap" | "error"
+    stopReason: "end_turn" | "max_steps" | "length" | "cancelled" | "spend_cap" | "loop_guard" | "error"
     error?: string
     messageId?: string
   }
