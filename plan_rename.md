@@ -41,12 +41,22 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 7 | Batch E — foundation (13 renames) | ✅ landed + R8/R9 fired (pre-F chain, see git log) |
 | 8 | Batch F — sugar-crush → candy-code (+ web) | ✅ weld aab9eacc9 (R8/R9-F 156688b84, review-fixes 9d0fd549b) |
 | 9 | Docs, website, naming rulebook, agent configs | ✅ a54e105b4 · f82d19557 · 15bd64e2e · 51f4249cf + tracker commit |
-| 10 | GitHub + Packagist finalization (archive, abandon, metadata) | ◑ automatable done (see disposition); ☐-OWNER: 52 web-UI abandons |
-| 11.1 | External: webhooks.interserver.net | ☐ |
-| 11.2 | External: php-dup-finder | ☐ |
-| 11.3 | External: phlix-console-client | ☐ |
-| 11.4 | External: provirted (`composer-tui.json` bundle) | ☐ |
-| 12 | Final verification + cleanup | ☐ |
+| 10 | GitHub + Packagist finalization (archive, abandon, metadata) | ✅ automatable CLOSED 67564524c · UNCHECKED-OWNER: 52 web-UI abandons (prompt_kit/briefs/rename-packagist-abandon-checklist.md) |
+| 11.1 | External: webhooks.interserver.net | ✅ 5f1eb46 |
+| 11.2 | External: php-dup-finder | ✅ 24841ff (owner gate: stayed VCS) |
+| 11.3 | External: phlix-console-client | ✅ f2f85e0 + 5ba0c6b10 (lock regen + phar rebuild, pushed) |
+| 11.4 | External: provirted (`composer-tui.json` bundle) | ⏸ OWNER-GATED (4 decisions open, not-applicable-now; flip-mode now viable — patch prepped /tmp/opencode/rename-p11/provirted/REPORT.md) |
+| 12 | Final verification + cleanup | ✅ this commit — guards re-verified at 501384aab (see rename: complete below) |
+
+### rename: complete (2026-10-17)
+
+- **Batches A–F:** all landed, welded, R8/R9 fired — A 3 · B 12 · C 13 · D 7 · E 13 · F 2 (chain review-clean at 9d0fd549b).
+- **Packagist:** 51/51 new packages registered + indexed (visit-3 sweep 16/16 landed, zero re-fires; deferred-406 CLOSED). Old packages ride the 52-row human abandon checklist.
+- **CI:** all 3 workflows green at 8d13ebc49 (root-closure self-healed post-index; split repos carry no workflows — structural, monorepo-CI only).
+- **Battery:** 60 libs clean vs baseline — minesweeper 1F+4W and dashboard 2F standing pre-existing, candy-vcr 4,213A = +4A tracked rename-lane additions, candy-top 2,108T = base 2,107 + 1 static method (no regression; the 2,110 "baseline" was a `wc -l` phantom, corrected in 501384aab).
+- **Floors:** candy-code K=8 22,571T/424,942A (+16 assertion wobble by design) · tools/tests 435T/2147A (PrefixPolicyTest included) · residue 52 entries / 0 findings.
+- **Guards at closeout tip:** `check-rename-residue --all-done`, `gen-docs --check`, `gen-ansi-readme --check`, `check-path-repos --no-lib-path-repos`, `check-child-lifetimes` — all rc0.
+- **Owner-pending:** 52 Packagist abandons (web UI) · provirted 4 decisions · teams-chat-bot deployed `.env` slug-list check · oc.7z re-supply. Full list: `prompt_kit/briefs/rename-5-P12-closeout/REPORT.md`.
 
 Per-lib progress inside Batches 3–8 is tracked in the `status` field of `tools/renames.json`
 (`pending` → `renamed` → `remote-done` → `packagist-done`).
@@ -1422,6 +1432,8 @@ cd /home/sites && find . -maxdepth 4 -name composer.json -not -path '*/vendor/*'
 7. Externals: each one is green, or its blocker is documented.
 8. Remove scratch files listed in briefs if they're not useful. **Keep** `tools/renames.json` (the sync history and redirect stubs depend on it) and both tools.
 9. Update the tracker at the top of this file. Final commit: `rename: complete`.
+
+**Phase 12 disposition (2026-10-17, closeout lane):** (1) residue 52/0 ✅. (2) PrefixPolicyTest shipped 8d13ebc49 (tools/tests floor 435T/2147A). (3) Full battery PASS-2: 57/60 exact, minesweeper 1F+4W + dashboard 2F standing pre-existing, candy-vcr +4A tracked, candy-top resolved 2108T = base+1 (501384aab). (4) All tools guards rc0, re-verified at closeout tip. (5) CI green at 8d13ebc49 (ci + sync + vhs); redirects verified local + live. (6) Packagist 51/51 indexed; abandon checklist (52 lines) is human-side — UNCHECKED-OWNER. (7) Externals: webhooks 5f1eb46 / php-dup-finder 24841ff / phlix f2f85e0+5ba0c6b10 green; provirted blocker documented (4 owner decisions). (8) renames.json + both tools kept; lane worktrees/scratch cleaned. (9) Tracker flipped, `rename: complete` section added — this commit. <!-- @rename-keep -->
 
 ---
 
