@@ -39,15 +39,16 @@ final class Upgrade
     private int $sequence = 0;
 
     /**
-     * @param \Closure(Connection): void $onOpen the server's bookkeeping, before the handler sees it
-     * @param \Closure(Connection): void $onGone the server's bookkeeping, after the handler's onClose
+     * @param \Closure(Connection): void  $onOpen   the server's bookkeeping, before the handler sees it
+     * @param \Closure(Connection): void  $onGone   the server's bookkeeping, after the handler's onClose
+     * @param (\Closure(string): void)|null $log    the server's log sink, threaded to every Connection (ISS-057)
      */
     public function __construct(
         private readonly MessageHandler $handler,
         private readonly \Closure $onOpen,
         private readonly \Closure $onGone,
         private readonly int $maxMessageBytes = ServerConfig::MAX_CLIENT_MESSAGE_BYTES,
-    ) {
+        private readonly ?\Closure $log = null,    ) {
     }
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
@@ -80,6 +81,12 @@ final class Upgrade
         }
         $headers['Sec-WebSocket-Protocol'] = ServerConfig::SUBPROTOCOL;
 
+        // ISS-009: a socket opened through a cookie session REMEMBERS which
+        // one, so signing that session out — logout, expiry, revocation —
+        // can reach the sockets it minted. Token principals have no session;
+        // only a token rotation ends those.
+        $session = $request->getAttribute(AuthMiddleware::ATTR_SESSION);
+
         $connection = new Connection(
             \sprintf('c%d-%s', ++$this->sequence, \bin2hex(\random_bytes(4))),
             (string) $request->getAttribute(AuthMiddleware::ATTR_PRINCIPAL, ''),
@@ -88,6 +95,8 @@ final class Upgrade
             $this->handler,
             $this->maxMessageBytes,
             $this->onGone,
+            \is_string($session) ? $session : null,
+            $this->log,
         );
         ($this->onOpen)($connection);
         // Next tick, not now: the 101 has not been written yet, so anything

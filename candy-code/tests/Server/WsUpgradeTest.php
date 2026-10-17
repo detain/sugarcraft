@@ -127,7 +127,15 @@ final class WsUpgradeTest extends TestCase
 
         self::assertSame(-32700, $this->exchange($socket, 'not json')['error']['code']);
         self::assertSame(-32600, $this->exchange($socket, '[1,2]')['error']['code']);
-        $socket->close();
+
+        // ISS-009: signing out ends the socket the session opened, with a
+        // close code that says why.
+        $closed = new Deferred();
+        $socket->on('close', static fn (int $code): mixed => $closed->resolve($code));
+        $logout = $this->post('/api/logout', [], ['Cookie' => $cookie, AuthMiddleware::SECRET_HEADER => $secret]);
+        self::assertSame(200, $logout->getStatusCode());
+        self::assertSame(Server::CLOSE_SIGNED_OUT, $this->settle($closed->promise()));
+        self::assertSame(0, $this->server->connectionCount(), 'the signed-out socket left the registry');
 
         $refused = $this->connect('/ws?ticket=' . $ticket);
         self::assertInstanceOf(\Throwable::class, $refused, 'the ticket was single use');

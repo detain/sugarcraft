@@ -11,6 +11,7 @@ use Ratchet\RFC6455\Messaging\MessageBuffer;
 use Ratchet\RFC6455\Messaging\MessageInterface;
 use React\Stream\ReadableStreamInterface;
 use React\Stream\WritableStreamInterface;
+use SugarCraft\Code\Server\ErrorLog;
 
 /**
  * One upgraded WebSocket: RFC 6455 framing over the duplex stream react/http
@@ -51,7 +52,9 @@ final class Connection
     private array $drainListeners = [];
 
     /**
-     * @param \Closure(self): void|null $onGone the server's bookkeeping, after the handler's onClose
+     * @param \Closure(self): void|null   $onGone        the server's bookkeeping, after the handler's onClose
+     * @param string|null                 $cookieSession the cookie session that minted this socket's ticket, if any (ISS-009)
+     * @param (\Closure(string): void)|null $log         the server's log sink: what a thrown handler cost (ISS-057), never the wire
      */
     public function __construct(
         private readonly string $id,
@@ -61,6 +64,8 @@ final class Connection
         private readonly MessageHandler $handler,
         int $maxMessageBytes,
         private readonly ?\Closure $onGone = null,
+        private readonly ?string $cookieSession = null,
+        private readonly ?\Closure $log = null,
     ) {
         $this->buffer = new MessageBuffer(
             new CloseFrameChecker(),
@@ -119,6 +124,12 @@ final class Connection
         return $this->principal;
     }
 
+    /** The cookie session behind a ticket upgrade (ISS-009); null for token principals. */
+    public function cookieSession(): ?string
+    {
+        return $this->cookieSession;
+    }
+
     public function isOpen(): bool
     {
         return !$this->closed;
@@ -159,9 +170,20 @@ final class Connection
 
         try {
             $this->handler->onMessage($this, $message->getPayload());
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            // ISS-057: the close code is all the client learns; the cause
+            // belongs in the server's log, where SERVER.md promised it.
+            $this->logFailure($e);
             $this->close(Frame::CLOSE_SRV_ERR, 'internal error');
         }
+    }
+
+    private function logFailure(\Throwable $e): void
+    {
+        if ($this->log === null) {
+            return;
+        }
+        ($this->log)(ErrorLog::line($e, \sprintf('socket %s', $this->id)));
     }
 
     /**
