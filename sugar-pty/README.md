@@ -4,7 +4,7 @@
 
 [![Tests](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-pty)](https://codecov.io/gh/detain/sugarcraft)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 sugar-pty — pseudo-terminal primitives for PHP 8.3+, the building blocks for
 driving child processes inside terminal UIs. Open a master/slave PTY pair, spawn a child with
@@ -522,7 +522,7 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
 
 ## License
 
-MIT — see [LICENSE](../LICENSE).
+MIT — see [LICENSE](LICENSE).
 
 ## Credits & inspiration
 

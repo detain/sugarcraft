@@ -2030,6 +2030,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Failure scenario:** License scanners flag split packages as unlicensed, and the badge 404s on GitHub.
 - **Suggested fix:** Commit a LICENSE in each lib directory, enforced by a `tools/` CI check. Injection at split time is impractical because splitsh-lite splits history verbatim.
 - **Verification notes:** `ls */LICENSE*` matches nothing.
+- **Status:** RESOLVED 2026-10-17 — the root LICENSE is committed verbatim into every split package directory, `sugar-pty/README.md` was the last referrer to the parent-directory LICENSE and now links `](LICENSE)`; `tools/check-lib-licenses.php` (wired into the ci.yml `path-repo-check` job, guarded by `tools/tests/CheckLibLicensesTest.php`) derives the package set with the sync workflow's own enumerator and fails closed on a missing or mutated license, an upward reference, or a broken enumeration.
 
 <a id="iss-121"></a>
 ### ISS-121 · [P3] Stale permission docs (pattern tool list, "opt-in" BashEscapeDenyHook)
