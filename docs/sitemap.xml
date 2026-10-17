@@ -11,67 +11,17 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-core.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-ansi-inspect.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-style.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-code.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-vterm.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-vcr.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-pty.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-spring.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-mouse.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-widgets.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-charts.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-forms.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-scriptui.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-markdown.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-cli.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-code-web.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -81,97 +31,27 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/candy-mdview.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-codetime.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/candy-ansi-inspect.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-files.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-ssh-server.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-flappy.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/candy-ssh-launcher.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-gifview.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-metrics.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-image.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-log.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-colorprofile.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-treelist.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-panels.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-overlay.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-navstack.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-quickpick.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-flexbox.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-toast.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-datepicker.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-readline.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-table.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-starter.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-git.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -191,32 +71,7 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/candy-tetris.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/super-candy.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-code.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-git.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-sql.html</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://sugarcraft.github.io/lib/candy-codetime.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-mdview.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -226,7 +81,27 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/sugar-animation.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-scriptui.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/candy-sql.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/candy-ssh-launcher.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/candy-starter.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/candy-tetris.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -236,7 +111,207 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sugarcraft.github.io/lib/candy-flappy.html</loc>
+    <loc>https://sugarcraft.github.io/lib/candy-vcr.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-animation.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-ansi-parser.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-async.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-cellbuffer.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-charts.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-cli.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-colorprofile.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-constraints.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-core.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-dashboard.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-datepicker.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-diff.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-flexbox.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-focus.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-forms.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-fuzzy.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-gallery.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-image.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-input.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-log.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-markdown.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-mcp-client.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-metrics.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-mouse.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-navstack.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-overlay.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-panels.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-pty.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-quickpick.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-readline.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-spring.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-ssh-server.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-style.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-table.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-testing.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-toast.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-treelist.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-video.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-vterm.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sugarcraft.github.io/lib/sugar-widgets.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>

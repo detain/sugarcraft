@@ -46,7 +46,6 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-fuzzy.png" width="48" alt=""> | **[SugarFuzzy](sugar-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |
 | <img src="media/icons/sugar-widgets.png" width="48" alt=""> | **[SugarWidgets](sugar-widgets/)** | Components: TextInput, TextArea, ItemList, Table, Tabs, Tree, Scrollbar, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. |
 | <img src="media/icons/sugar-vterm.png" width="48" alt=""> | **[SugarVterm](sugar-vterm/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. |
-| <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay sugar-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. |
 | <img src="media/icons/sugar-pty.png" width="48" alt=""> | **[SugarPty](sugar-pty/)** | Pseudo-terminal primitive — `Pty::open()` master/slave round-trip via FFI to libc; spawn/resize/non-blocking I/O. Linux + macOS only. |
 | <img src="media/icons/sugar-forms.png" width="48" alt=""> | **[SugarForms](sugar-forms/)** | Form library (port of charmbracelet/huh) and shared form engine behind SugarWidgets — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, Date, Slider, Color; multi-page Groups; stock themes; validators; fuzzy / async suggestions; ActionSpinner. |
 | <img src="media/icons/sugar-focus.png" width="48" alt=""> | **[SugarFocus](sugar-focus/)** | Focus-ring state machine — ordered focusable regions with Tab/Shift-Tab traversal. |
@@ -59,12 +58,12 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-metrics.png" width="48" alt=""> | **[SugarMetrics](sugar-metrics/)** | Telemetry primitives — counters, gauges, histograms with InMemory / JSON / StatsD / Prometheus textfile / Multi backends, plus a SugarSshServer session middleware. |
 | <img src="media/icons/sugar-log.png" width="48" alt=""> | **[SugarLog](sugar-log/)** | Colorful leveled logger — Debug / Info / Warn / Error / Fatal with structured context, Text / JSON / Logfmt formatters, sub-loggers, and StandardLogAdapter. |
 | <img src="media/icons/sugar-colorprofile.png" width="48" alt=""> | **[SugarColorprofile](sugar-colorprofile/)** | Terminal color profile detection + ANSI / ANSI256 / TrueColor conversion. StandardColors and ProfileWriter. |
-| <img src="media/icons/sugar-treelist.png" width="48" alt=""> | **[SugarLister](sugar-treelist/)** | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
+| <img src="media/icons/sugar-treelist.png" width="48" alt=""> | **[SugarTreelist](sugar-treelist/)** | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
 | <img src="media/icons/sugar-panels.png" width="48" alt=""> | **[SugarPanels](sugar-panels/)** | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | <img src="media/icons/sugar-overlay.png" width="48" alt=""> | **[SugarOverlay](sugar-overlay/)** | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | <img src="media/icons/sugar-navstack.png" width="48" alt=""> | **[SugarNavstack](sugar-navstack/)** | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
 | <img src="media/icons/sugar-dashboard.png" width="48" alt="" onerror="this.style.display='none'"> | **[SugarDashboard](sugar-dashboard/)** | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. |
-| <img src="media/icons/sugar-quickpick.png" width="48" alt=""> | **[SugarHermit](sugar-quickpick/)** | Fuzzy finder overlay — type to filter a list, arrow keys to select, Enter to confirm; wraps any Model. |
+| <img src="media/icons/sugar-quickpick.png" width="48" alt=""> | **[SugarQuickpick](sugar-quickpick/)** | Fuzzy finder overlay — type to filter a list, arrow keys to select, Enter to confirm; wraps any Model. |
 | <img src="media/icons/sugar-flexbox.png" width="48" alt=""> | **[SugarFlexbox](sugar-flexbox/)** | FlexBox layout engine + simple sort/filter table. Ratio-based sizing, gap, justify, align, per-column styling. |
 | <img src="media/icons/sugar-toast.png" width="48" alt=""> | **[SugarToast](sugar-toast/)** | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
 | <img src="media/icons/sugar-datepicker.png" width="48" alt=""> | **[SugarDatepicker](sugar-datepicker/)** | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
@@ -73,6 +72,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-diff.png" width="48" alt=""> | **[SugarDiff](sugar-diff/)** | Unified-diff engine — LCS line diff, `diff -u` hunks, writer + line-number scanner. Extracted from candy-code. |
 | <img src="media/icons/sugar-mcp-client.png" width="48" alt=""> | **[Sugar MCP Client](sugar-mcp-client/)** | Model Context Protocol (MCP) client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing. Extracted from candy-code. |
 | <img src="media/icons/sugar-animation.png" width="48" alt=""> | **[SugarAnimation](sugar-animation/)** | ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, `.ansi` art playback; the viewer CLI lives in candy-gifview. |
+| <img src="media/icons/sugar-video.png" width="48" alt=""> | **[SugarVideo](sugar-video/)** | Terminal video player — pipes mp4 (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty (GIF via ext-gd, no ffmpeg). |
 
 ## Apps built on the stack
 
@@ -91,14 +91,20 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-files.png" width="48" alt=""> | **[CandyFiles](candy-files/)** | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm. |
 | <img src="media/icons/candy-code.png" width="48" alt=""> | **[CandyCode](candy-code/)** | Terminal AI coding agent (TUI) — multi-provider engine (OpenAI / Anthropic / Claude Code / SGLang / Bedrock / Vertex / custom), twenty-eight built-in tools behind permission modes, sub-agents, teams and workflows, MCP client and server, hooks, skills and image/video generation — plus an offline echo backend for demos. |
 | <img src="media/icons/candy-code-web.png" width="48" alt=""> | **[CandyCodeWeb](candy-code-web/)** | Browser UI for CandyCode's server mode — Vite + Vue 3 bundle committed as `dist/`, located by a one-class PHP shim so `candy-code serve` needs no Node. MVP: one session with live tool cards, diffs and approvals. |
+| <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay sugar-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. |
 | <img src="media/icons/candy-git.png" width="48" alt=""> | **[CandyGit](candy-git/)** | Three-pane git TUI — status / branches / log, single-key stage / unstage; shells out to `git` for every mutation. |
 | <img src="media/icons/candy-sql.png" width="48" alt=""> | **[CandySql](candy-sql/)** | Terminal SQL client — SQLite, MySQL and PostgreSQL: schema browsing, row editing, ad-hoc queries, EXPLAIN plans (PDO + `:memory:` test fixtures). |
 | <img src="media/icons/candy-codetime.png" width="48" alt=""> | **[CandyCodetime](candy-codetime/)** | Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard, no cloud. |
 | <img src="media/icons/candy-minesweeper.png" width="48" alt=""> | **[CandyMinesweeper](candy-minesweeper/)** | Minesweeper — first-click safety, recursive flood-fill, flag toggle, win/lose detection, deterministic-RNG injectable. |
 | <img src="media/icons/candy-gifview.png" width="48" alt=""> | **[CandyGifView](candy-gifview/)** | Terminal GIF + .ansi-art viewer — the sugar-animation CLI: sizes to the viewport, plays in the alternate screen (solid 24-bit blocks or a luminance ramp). |
 | <img src="media/icons/candy-top.png" width="48" alt=""> | **[CandyTop](candy-top/)** | Terminal system monitor — per-core CPU with frequencies, temperatures and battery, memory, disks, network, and process boxes with braille graphs and gradient meters; multi-menu navigation, presets, 43 themes with btop-compatible config; Linux `/proc` + `/sys` and FreeBSD collectors, container/VM tags. |
-| <img src="media/icons/sugar-video.png" width="48" alt=""> | **[SugarVideo](sugar-video/)** | Terminal video player — pipes mp4 (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty (GIF via ext-gd, no ffmpeg). |
 | <img src="media/icons/candy-flappy.png" width="48" alt=""> | **[CandyFlappy](candy-flappy/)** | Flappy-Bird-style game — bird motion is a SugarSpring projectile, pipes scroll left at a fixed cell rate. |
+
+**Renamed packages (2026-10):** every package moved to the two-prefix
+scheme above — `candy-` for runnable apps and CLI tools, `sugar-` for
+libraries (the `honey-` family was retired). The full old → new map, with
+redirect notes, lives in
+[`PROJECT_NAMES.md`](./PROJECT_NAMES.md#renamed-in-2026-10).
 
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.
@@ -176,7 +182,7 @@ The umbrella package is a metapackage; each library has its own
 `composer.json` + `vendor/`. To test everything:
 
 ```sh
-for d in candy-* sugar-* honey-*; do
+for d in candy-* sugar-*; do
     [ -f "$d/phpunit.xml" ] || continue
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done

@@ -138,7 +138,7 @@
             <a href="lib/sugar-focus.html"    title="SugarFocus — focus ring"><img src="img/icons/sugar-focus.png" alt="" aria-hidden="true" onerror="this.style.display='none'"></a>
             <a href="lib/sugar-gallery.html"  title="SugarGallery — poster grid/rail"><img src="img/icons/sugar-gallery.png" alt="" aria-hidden="true" onerror="this.style.display='none'"></a>
             <a href="lib/sugar-input.html"    title="SugarInput — terminal input decoder"><img src="img/icons/sugar-input.png" alt="" aria-hidden="true"></a>
-            <a href="lib/sugar-quickpick.html"   title="SugarHermit — fuzzy finder"><img src="img/icons/sugar-quickpick.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-quickpick.html"   title="SugarQuickpick — fuzzy finder"><img src="img/icons/sugar-quickpick.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-flexbox.html" title="SugarFlexbox — flexbox"><img src="img/icons/sugar-flexbox.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-toast.html"    title="SugarToast — notifications"><img src="img/icons/sugar-toast.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-datepicker.html" title="SugarDatepicker — datepicker"><img src="img/icons/sugar-datepicker.png" alt="" aria-hidden="true"></a>
@@ -257,7 +257,7 @@
                     <h3>SugarMouse</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-mouse">GitHub →</span>
                 </div>
-                <p class="summary">Mouse-zone tracker. Wrap rendered chunks, get back bounding boxes — clickable regions without coordinate math.</p>
+                <p class="summary">Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style <code>Zones</code> Manager under <code>SugarCraft\Mouse\Zones</code>.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-widgets.html">
@@ -368,13 +368,28 @@
                 <p class="summary">Image-to-cell renderer — Sixel, Kitty, iTerm2, Unicode half-block; Picker facade; ext-gd.</p>
             </a>
 
-            <a class="lib-card" href="lib/sugar-mouse.html">
-                <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-mouse.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
-                    <h3>SugarMouse</h3>
-                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-mouse">GitHub →</span>
+            <a class="lib-card" href="lib/sugar-animation.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="">
                 </div>
-                <p class="summary">Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication. No external Manager wiring needed.</p>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-animation.png" alt="" aria-hidden="true">
+                    <h3>SugarAnimation</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-animation">GitHub →</span>
+                </div>
+                <p class="summary">ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, .ansi art playback. Viewer CLI: candy-gifview.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-video.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-video/.vhs/play.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-video.png" alt="" aria-hidden="true">
+                    <h3>SugarVideo</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-video">GitHub →</span>
+                </div>
+                <p class="summary">Terminal video player — decodes mp4 (and more) on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-colorprofile.html">
@@ -408,18 +423,6 @@
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-vterm">GitHub →</span>
                 </div>
                 <p class="summary">In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.</p>
-            </a>
-
-            <a class="lib-card" href="lib/candy-vcr.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vcr/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
-                </div>
-                <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-vcr.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
-                    <h3>CandyVcr</h3>
-                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vcr">GitHub →</span>
-                </div>
-                <p class="summary">Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-pty.html">
@@ -810,6 +813,18 @@
                 <p class="summary">Browser UI for CandyCode's server mode — a Vite + Vue 3 bundle committed as <code>dist/</code> and located by a one-class PHP shim, so <code>candy-code serve</code> needs no Node. Scaffold today.</p>
             </a>
 
+            <a class="lib-card" href="lib/candy-vcr.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vcr/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-vcr.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+                    <h3>CandyVcr</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vcr">GitHub →</span>
+                </div>
+                <p class="summary">Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI.</p>
+            </a>
+
             <a class="lib-card" href="lib/candy-git.html">
                 <div class="lib-card-preview">
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-git/.vhs/play.gif" alt="">
@@ -858,18 +873,6 @@
                 <p class="summary">Minesweeper — customisable board, recursive flood-fill, win/lose detection. Pure-state Board; first-click safety; deterministic-RNG injectable for tests.</p>
             </a>
 
-            <a class="lib-card" href="lib/sugar-animation.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="">
-                </div>
-                <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-animation.png" alt="" aria-hidden="true">
-                    <h3>SugarAnimation</h3>
-                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-animation">GitHub →</span>
-                </div>
-                <p class="summary">ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, .ansi art playback. Viewer CLI: candy-gifview.</p>
-            </a>
-
             <a class="lib-card" href="lib/candy-gifview.html">
                 <div class="lib-card-preview">
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="">
@@ -880,18 +883,6 @@
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-gifview">GitHub →</span>
                 </div>
                 <p class="summary">Terminal GIF + .ansi-art viewer CLI — sizes to the viewport, plays in the alternate screen (24-bit blocks or luminance ramp) on top of sugar-animation. Port of gifterm.</p>
-            </a>
-
-            <a class="lib-card" href="lib/sugar-video.html">
-                <div class="lib-card-preview">
-                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-video/.vhs/play.gif" alt="">
-                </div>
-                <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-video.png" alt="" aria-hidden="true">
-                    <h3>SugarVideo</h3>
-                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-video">GitHub →</span>
-                </div>
-                <p class="summary">Terminal video player — decodes mp4 (and more) on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-top.html">

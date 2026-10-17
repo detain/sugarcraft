@@ -1,7 +1,7 @@
 # SugarCraft library & app status
 
 The authoritative index of every package in the SugarCraft project —
-**41 libraries and 21 apps (62 packages total)** — with its status at a
+**40 libraries and 21 apps (61 packages total)** — with its status at a
 glance. The final section,
 [Inspirational reference projects](#inspirational-reference-projects),
 maps each package back to the Go projects that sparked its design.
@@ -21,11 +21,11 @@ maps each package back to the Go projects that sparked its design.
 - 🔴 planning — entry exists but no code yet
 
 Each row shows the package's subdir; the Composer name is always
-`sugarcraft/<subdir>` and the namespace follows the naming rulebook
-(`sugar-style/` → `sugarcraft/sugar-style` → `SugarCraft\Style\`).
-Two namespaces intentionally don't read off their slug — `sugar-core/`
-ships as `SugarCraft\Core\`, and `candy-starter/` ships as `App\` — both are
-called out in the table below.
+`sugarcraft/<subdir>` and the namespace takes the descriptive suffix
+(`sugar-style/` → `sugarcraft/sugar-style` → `SugarCraft\Style\`; the
+runtime's `sugar-core/` → `SugarCraft\Core\` follows the same rule).
+One namespace intentionally doesn't read off its slug — `candy-starter/`
+ships as `App\` — called out in the table below.
 
 ---
 
@@ -34,7 +34,7 @@ called out in the table below.
 | Library | Status | Notes |
 |---|:---:|---|
 | **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
-| **SugarCraft** (`sugar-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
+| **SugarCraft** (`sugar-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace follows the suffix rule (`sugar-core` → `SugarCraft\Core\`). |
 | **SugarStyle** (`sugar-style/`) | 🟢 ready | Declarative styling + layout. |
 | **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
 | **SugarMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
@@ -49,10 +49,10 @@ called out in the table below.
 | **SugarColorprofile** (`sugar-colorprofile/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
 | **SugarAnimation** (`sugar-animation/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
+| **SugarVideo** (`sugar-video/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
 | **SugarVterm** (`sugar-vterm/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
 | **SugarAnsiParser** (`sugar-ansi-parser/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into SugarVterm for cell-grid rendering. |
 | **SugarCellbuffer** (`sugar-cellbuffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
-| **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **SugarPty** (`sugar-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Spawn`, `Child`) remain @deprecated through v1.x. Windows ConPTY planned. |
 | **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
 | **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
@@ -60,7 +60,7 @@ called out in the table below.
 | **SugarConstraints** (`sugar-constraints/`) | 🟡 in progress | Foundation: Cassowary simplex + greedy constraint solvers for terminal layout. |
 | **SugarTesting** (`sugar-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | **SugarInput** (`sugar-input/`) | 🟢 ready | Terminal escape sequence decoder — legacy keys, Kitty keyboard protocol (CSI ?u), SGR 1006 mouse, focus events, bracketed paste. Unblocks sugar-readline production use. |
-| **SugarLister** (`sugar-treelist/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
+| **SugarTreelist** (`sugar-treelist/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
 | **SugarPanels** (`sugar-panels/`) | 🟢 ready | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. |
 | **SugarOverlay** (`sugar-overlay/`) | 🟢 ready | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. |
 | **SugarNavstack** (`sugar-navstack/`) | 🟢 ready | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. |
@@ -89,6 +89,7 @@ called out in the table below.
 | **CandyGitServer** (`candy-git-server/`) | 🟢 ready | Self-hostable Git server over SSH (authorized keys), Git daemon, and HTTP — users, repos, access control, optional LFS. |
 | **CandyCode** (`candy-code/`) | 🟢 ready | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions. |
 | **CandyCodeWeb** (`candy-code-web/`) | 🟡 in progress | Browser UI for candy-code's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. MVP today (one session: transcript, tool cards, diffs, approvals, composer). |
+| **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **CandyTetris** (`candy-tetris/`) | 🟢 ready | Tetris clone — SRS / 7-bag / NES scoring. |
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
 | **CandyGit** (`candy-git/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
@@ -96,7 +97,6 @@ called out in the table below.
 | **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL on disk. |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF + .ansi-art viewer CLI (ext-gd via sugar-animation) — port of gifterm. |
-| **SugarVideo** (`sugar-video/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
 | **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a SugarSpring projectile. |
 
@@ -106,21 +106,21 @@ called out in the table below.
 
 ## Naming conventions (cheat sheet)
 
-The SugarCraft brand has three prefixes — pick one when you add a new
-package. Suffixes are short, technical, and describe the role.
+Two prefixes, chosen by role (2026-10 law) — suffixes are short, technical,
+and describe what the package does.
 
 | Prefix | Meaning | Example uses |
 |---|---|---|
-| **Candy-** | foundation / system / framework | runtime (SugarCraft), shell (CandyScriptui), markdown (SugarMarkdown) |
-| **Sugar-** | components / data / forms / apps | components (SugarWidgets), charts (SugarCharts) |
-| **Honey-** | math / physics / motion | spring physics (SugarSpring), Flappy clone (CandyFlappy) |
+| **Candy-** | runnable apps, CLI tools, games | coding agent (CandyCode), git TUI (CandyGit), file manager (CandyFiles) |
+| **Sugar-** | libraries — components, data, engines, primitives | forms (SugarForms), charts (SugarCharts), runtime (SugarCraft) |
 
-`Candy-` (Files) is the file manager naming. Don't mint new prefixes without a discussion in
+History: the `Honey-` math/physics family was retired with the 2026-10
+rename. <!-- @rename-keep -->
+
+Don't mint new prefixes without a discussion in
+[`PROJECT_NAMES.md`](../PROJECT_NAMES.md). `candy-top` is the law's own
+example — an app carrying `candy-`; its pre-law owner ruling is recorded in
 [`PROJECT_NAMES.md`](../PROJECT_NAMES.md).
-
-`Candy-` (Top) is a recorded naming exception: a system-monitor app would read `Sugar-` by the
-apps heuristic, but the owner chose `candy-top` (a system monitor is "system" in the `Candy-`
-sense). The ruling and both sides of the argument live in [`PROJECT_NAMES.md`](../PROJECT_NAMES.md).
 
 ---
 
@@ -212,7 +212,7 @@ reference projects supplied the ideas, not the code.
 | SugarOverlay (sugar-overlay/) | [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) |
 | CandySshLauncher (candy-ssh-launcher/) | [wishlist](https://github.com/charmbracelet/wishlist) |
 
-The table above lists every package in the two status tables — 41
-libraries and 21 apps, 62 rows total. Several projects outside Charm's
+The table above lists every package in the two status tables — 40
+libraries and 21 apps, 61 rows total. Several projects outside Charm's
 orbit inspired individual packages; each package's README carries its own
 attribution.
