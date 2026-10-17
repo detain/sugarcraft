@@ -518,7 +518,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - The live `Write` tool creates `a$(touch Q).php`, and accept-edits allows it.
   - So a model limited to auto-approved in-project writes gets unprompted shell execution in the post-edit lint hook, which is neither gated nor sandboxed.
 - **Suggested fix:**
-  - Collapse `"{file}"` and `'{file}'` to `{file}` before substituting. Better: pass the path in an env var (e.g. `CRUSH_FILE`, as ScriptHook does) and substitute `"$CRUSH_FILE"`.
+  - Collapse `"{file}"` and `'{file}'` to `{file}` before substituting. Better: pass the path in an env var (e.g. `CRUSH_FILE`; ScriptHook has no such key — its roster hands the file path inside `CRUSH_TOOL_INPUT`, the tool arguments as JSON) and substitute `"$CRUSH_FILE"`.
   - Document that the placeholder must not be quoted.
 - **Verification notes:** Reproduced end to end, apart from wiring PostEditLintHook into a full turn. It needs a user opt-in to a quoted lint command (user tier only), hence P2.
 
