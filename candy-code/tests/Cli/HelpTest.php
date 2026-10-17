@@ -560,6 +560,22 @@ final class HelpTest extends TestCase
     }
 
     /**
+     * ISS-119(a): the share-host row used to warn about keeping transcripts
+     * "off the public default" — a default that does not exist. The truth is
+     * `docs/ENVIRONMENT.md`'s own wording for this variable: opt-in only, no
+     * public host, and the uploader is dormant. The screen must not resurrect
+     * the phantom host, so the lie is pinned OUT and the truth IN.
+     */
+    public function testScreenTellsTheTruthAboutTheShareUploadHost(): void
+    {
+        $screen = Help::screen();
+
+        $this->assertStringNotContainsString('off the public default', $screen);
+        $this->assertStringContainsString('Opt-in upload host for /share', $screen);
+        $this->assertStringContainsString('no public default host', $screen);
+    }
+
+    /**
      * The exit-2 list has to name BOTH sources a provider selection can come
      * from. Listing only `$CANDY_CODE_PROVIDER` sent an operator whose run
      * failed over a persisted Ctrl+P "Switch model" choice looking for a

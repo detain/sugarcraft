@@ -444,8 +444,9 @@ Environment variables:
                           A positive whole number of days: each launch drops
                           sessions untouched for at least that long.
    CANDY_CODE_SHARE_UPLOAD_URL
-                          Base URL /share uploads to; point it at a private
-                          host to keep transcripts off the public default.
+                          Opt-in upload host for /share; unset, /share only
+                          writes a local file, and no public default host
+                          exists (the uploader has no backend yet).
    CANDY_CODE_WORKTREES_DIR
                           Base directory under which per-teammate git
                           worktrees are created.
