@@ -55,8 +55,21 @@ async function create(): Promise<void> {
   }
 }
 
-/** j / k move between sessions, as in a list view. */
+/**
+ * j / k move between sessions, as in a list view — but only for keyboard
+ * navigation (ISS-053): what is typed into the filter box, the composer, or
+ * any other editable target stays a keystroke there, and a modified key is
+ * somebody else's shortcut. The same guard PermissionCard applies to y/a/n.
+ */
 function onKey(event: KeyboardEvent): void {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+  const typedInto = event.target
+  if (
+    typedInto instanceof HTMLElement &&
+    (typedInto.isContentEditable || typedInto.tagName === 'INPUT' || typedInto.tagName === 'TEXTAREA' || typedInto.tagName === 'SELECT')
+  ) {
+    return
+  }
   if (event.key !== 'j' && event.key !== 'k') return
   const list = shown.value
   if (list.length === 0) return
