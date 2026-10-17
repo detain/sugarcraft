@@ -243,7 +243,7 @@ final class AgentManagerWiringTest extends TestCase
         $chat = $this->chat();
         $manager = $this->manager();
         $runs = [];
-        foreach (['candy-core', 'candy-ansi'] as $lib) {
+        foreach (['candy-core', 'sugar-ansi-parser'] as $lib) {
             $run = $manager->createSubAgent('reviewer', 'Audit ' . $lib);
             $run->status = \SugarCraft\Crush\Agents\SubAgent::STATUS_RUNNING;
             $runs[] = $run;
@@ -252,7 +252,7 @@ final class AgentManagerWiringTest extends TestCase
         try {
             $frame = LiveRenderer::render($chat);
             $this->assertStringContainsString('Audit candy-core', $frame);
-            $this->assertStringContainsString('Audit candy-ansi', $frame);
+            $this->assertStringContainsString('Audit sugar-ansi-parser', $frame);
         } finally {
             foreach ($runs as $run) {
                 $manager->removeSubAgent($run->id);

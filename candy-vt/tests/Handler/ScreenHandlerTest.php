@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Handler\ScreenHandler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vt\Sgr\Sgr;
 
 final class ScreenHandlerTest extends TestCase

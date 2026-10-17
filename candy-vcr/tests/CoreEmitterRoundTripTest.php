@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Ansi\Parser\DebugHandler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\DebugHandler;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Charset\Charsets;
@@ -145,7 +145,7 @@ final class CoreEmitterRoundTripTest extends TestCase
         // escape, so the handler receives them as one DEC-family dispatch. The
         // `ESC [ # 8` spelling people reach for is a misquote of xterm's
         // palette-stack substate (`CSI # P/Q/R/S`, where the `8` is a collected
-        // digit awaiting a colour final, not a final of its own): candy-ansi
+        // digit awaiting a colour final, not a final of its own): sugar-ansi-parser
         // closes CsiIntermediate on a 0x30-0x3F byte by returning to Ground, so
         // the CSI form never dispatches DECALN — and because it recovers to
         // Ground rather than stranding mid-sequence, the next graphic still

@@ -9,7 +9,7 @@ All surface facts below were re-measured at lane base `9f731a3d5`.
 ## 1. What actually exists (measured)
 
 candy-vt ships two COMPLETE, independently written emulator stacks sharing the
-candy-ansi VT500 state machine (de-forked onto it by `9952e3f5c`):
+sugar-ansi-parser VT500 state machine (de-forked onto it by `9952e3f5c`):
 
 | | Renderer path (root namespace) | Emulator path (sub-namespaces) |
 |---|---|---|

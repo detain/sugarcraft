@@ -50,7 +50,7 @@ called out in the table below.
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
 | **SugarAnimation** (`sugar-animation/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
 | **CandyVt** (`candy-vt/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
-| **CandyAnsi** (`candy-ansi/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into CandyVt for cell-grid rendering. |
+| **SugarAnsiParser** (`sugar-ansi-parser/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into CandyVt for cell-grid rendering. |
 | **CandyBuffer** (`candy-buffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
 | **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay candy-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **CandyPty** (`candy-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Spawn`, `Child`) remain @deprecated through v1.x. Windows ConPTY planned. |
@@ -151,7 +151,7 @@ reference projects supplied the ideas, not the code.
 
 | SugarCraft package | Ideas sparked by |
 |---|---|
-| CandyAnsi (candy-ansi/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
+| SugarAnsiParser (sugar-ansi-parser/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
 | CandyAsync (candy-async/) | none — first-party |
 | CandyBuffer (candy-buffer/) | [vte](https://github.com/charmbracelet/vte) |
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |

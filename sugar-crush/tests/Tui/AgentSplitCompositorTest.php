@@ -142,7 +142,7 @@ final class AgentSplitCompositorTest extends TestCase
         self::assertStringContainsString('core findings', $column);
         self::assertStringContainsString('ansi findings', $column);
         self::assertStringContainsString('Audit candy-core', $column);
-        self::assertStringContainsString('Audit candy-ansi', $column);
+        self::assertStringContainsString('Audit sugar-ansi-parser', $column);
     }
 
     /**

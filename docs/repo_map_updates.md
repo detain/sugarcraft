@@ -177,7 +177,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch ai/docs-site merged to master
   - 17 files changed, 47 insertions(+)
   - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
-  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
+  - docs/img/icons/: 8 new placeholder PNG icons (sugar-ansi-parser, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
 

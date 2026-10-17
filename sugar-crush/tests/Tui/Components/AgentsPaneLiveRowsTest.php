@@ -111,7 +111,7 @@ final class AgentsPaneLiveRowsTest extends TestCase
     public function testSeveralRunsOfOneAgentAreOneRowEach(): void
     {
         $manager = $this->manager([$this->agent('reviewer', isActive: false)]);
-        foreach (['candy-core', 'candy-ansi', 'candy-layout'] as $i => $lib) {
+        foreach (['candy-core', 'sugar-ansi-parser', 'candy-layout'] as $i => $lib) {
             $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'rid-' . $i, 'reviewer', 'Audit ' . $lib));
         }
         $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_FINISHED, 'rid-2', 'reviewer', '', 2, 'report'));
@@ -121,7 +121,7 @@ final class AgentsPaneLiveRowsTest extends TestCase
 
         $this->assertCount(3, $rows, 'one row per run, the finished one included until the next dispatch');
         $this->assertSame(['reviewer', 'reviewer', 'reviewer'], array_map(static fn ($r): string => $r->name, $rows));
-        $this->assertSame(['Audit candy-core', 'Audit candy-ansi', 'Audit candy-layout'], array_map(static fn ($r): string => $r->operation, $rows));
+        $this->assertSame(['Audit candy-core', 'Audit sugar-ansi-parser', 'Audit candy-layout'], array_map(static fn ($r): string => $r->operation, $rows));
         $this->assertSame(['working', 'working', 'completed'], array_map(static fn ($r): string => $r->status, $rows));
         $this->assertSame(['report'], $rows[2]->outputBuffer, 'a row shows its own run\'s output, not its siblings\'');
 

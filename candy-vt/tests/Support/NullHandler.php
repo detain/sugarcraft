@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Tests\Support;
 
-use SugarCraft\Ansi\Parser\Handler;
+use SugarCraft\AnsiParser\Parser\Handler;
 
 /**
  * Discarding handler for parser-churn tests: counts dispatches instead of

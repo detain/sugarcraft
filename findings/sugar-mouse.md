@@ -221,12 +221,12 @@ Both compute `col - 1` as the last column of the previous content. This is not a
 "repositories": [
     {"type": "path", "url": "../candy-core", ...},
     {"type": "path", "url": "../candy-async", ...},   // not in require
-    {"type": "path", "url": "../candy-ansi", ...},    // not in require
+    {"type": "path", "url": "../sugar-ansi-parser", ...},    // not in require
     {"type": "path", "url": "../candy-input", ...}   // not in require
 ]
 ```
 
-Only `candy-core` is in the `require` section. The other three path repositories (`candy-async`, `candy-ansi`, `candy-input`) are listed but not required.
+Only `candy-core` is in the `require` section. The other three path repositories (`candy-async`, `sugar-ansi-parser`, `candy-input`) are listed but not required.
 
 **Recommendation:** Remove unused repository entries or add a comment explaining why they are present.
 

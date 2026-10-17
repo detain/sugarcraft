@@ -9,7 +9,7 @@ use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Rendition;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * Reset matrix: RIS (ESC c), DECSTR (CSI ! p), DECALN (ESC # 8).

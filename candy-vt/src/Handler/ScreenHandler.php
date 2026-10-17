@@ -16,8 +16,8 @@ use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Mode\MouseEncoding;
 use SugarCraft\Vt\Rendition;
-use SugarCraft\Ansi\Parser\Handler;
-use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
+use SugarCraft\AnsiParser\Parser\Handler;
+use SugarCraft\AnsiParser\Parser\SubparamsAwareHandler;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
@@ -96,7 +96,7 @@ final class ScreenHandler implements SubparamsAwareHandler
      * currently being dispatched, via {@see SubparamsAwareHandler::setSubparams()}
      * immediately before each CSI/DCS dispatch. SGR needs them to tell
      * `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
-     * italic), because candy-ansi flattens both to [4, 3]. Null — nothing
+     * italic), because sugar-ansi-parser flattens both to [4, 3]. Null — nothing
      * ever pushed, e.g. direct construction with a manual dispatch loop —
      * keeps SGR's historical next-slot peek.
      *
@@ -649,13 +649,13 @@ final class ScreenHandler implements SubparamsAwareHandler
         // substate (csi_hash_table[] = the XT{PUSH,POP,REPORT}-COLORS family
         // `CSI # P/Q/R/S`) where '8' is a collected digit, not a final; no
         // surveyed emulator dispatches DECALN from a CSI form and the
-        // candy-ansi transition table we mirror agrees. Do not "fix" the
+        // sugar-ansi-parser transition table we mirror agrees. Do not "fix" the
         // parser for it. The DEC line-rendition family `ESC # 3`/`# 4` (DECDHL
         // double-height top/bottom), `ESC # 5` (DECSWL single) and `ESC # 6`
         // (DECDWL double-width) are implemented via {@see setLineRendition()};
         // any OTHER `#` final still falls through to designate(), preserving
         // its historical silent-ignore exactly.
-        // (The candy-ansi parser keeps a SINGLE intermediate byte, last-wins,
+        // (The sugar-ansi-parser parser keeps a SINGLE intermediate byte, last-wins,
         // so the malformed double-intermediate stream `ESC ( # 8` arrives as
         // ('8', '#') and now runs DECALN where it used to be ignored — an
         // accepted consequence of mirroring the upstream table; xterm ignores

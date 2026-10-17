@@ -43,7 +43,7 @@
 
 ### ✅ DONE (15+)
 
-- candy-ansi: OSC-8/hyperlink routing, CR/LF dispatch, CSI final methods
+- sugar-ansi-parser: OSC-8/hyperlink routing, CR/LF dispatch, CSI final methods
 - candy-async: OperationCancelledException, dead $operationPromise, retry() loop param, disposeAll throw-guard, retry bounded wall-clock
 - candy-buffer: Region validation
 - candy-core: AtomicJsonFile/Json::decodeArray/Sanitize SSOT
@@ -53,7 +53,7 @@
 
 ### ⚠️ PARTIAL (2)
 
-- candy-ansi: CsiHandlerImpl stubs not deleted (W1.3 in progress)
+- sugar-ansi-parser: CsiHandlerImpl stubs not deleted (W1.3 in progress)
 - candy-files: trash dir path construction without mkdir
 
 ### ❌ NOT DONE (2)

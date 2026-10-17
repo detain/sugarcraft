@@ -6,8 +6,8 @@ namespace SugarCraft\Vt\Tests\Parser;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Parser\DebugHandler;
-use SugarCraft\Ansi\Parser\Parser;
-use SugarCraft\Ansi\Parser\State;
+use SugarCraft\AnsiParser\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\State;
 
 final class ParserTest extends TestCase
 {
@@ -366,7 +366,7 @@ final class ParserTest extends TestCase
      * transitions, 0x98→SosString / 0x9E→PmString / 0x9F→ApcString fire Action::Start
      * while a SOS/PM/APC string is in flight; start() previously cleared
      * $stringBuffer, silently dropping the leading bytes before dispatch() could
-     * deliver them. Mirrors candy-ansi's fix (CALIBER 2026-05-30 step-20).
+     * deliver them. Mirrors sugar-ansi-parser's fix (CALIBER 2026-05-30 step-20).
      */
     public function testStringInterruptedByC1IntroducerStillDispatchesPayload(): void
     {

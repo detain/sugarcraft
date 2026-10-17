@@ -17,7 +17,7 @@ Address findings in candy-sprinkles library, mapping each issue to actual file l
 
 ## Phase 1: Security Issues [CLOSED — all misreferenced]
 
-- [x] 1.1 ANSI Parser SGR State Machine — ⏭️ N/A (misreferenced; candy-codeshot/src/AnsiParser.php already delegates to candy-ansi's Parser/SgrState — verified 2026-07-04, no fix outstanding)
+- [x] 1.1 ANSI Parser SGR State Machine — ⏭️ N/A (misreferenced; candy-codeshot/src/AnsiParser.php already delegates to sugar-ansi-parser's Parser/SgrState — verified 2026-07-04, no fix outstanding)
 
 ## Phase 2: Bugs [CLOSED — all misreferenced]
 

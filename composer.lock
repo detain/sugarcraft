@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "584aaa2a1d4ea16aa38622d2014e4645",
+    "content-hash": "47ed202424cbac73d42585a030dca859",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3376,74 +3376,17 @@
             "time": "2025-10-27T20:55:39+00:00"
         },
         {
-            "name": "sugarcraft/candy-ansi",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-ansi",
-                "reference": "a6279580eb9abdfecfe3c64c629ee37ec16a3f98"
-            },
-            "require": {
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Ansi\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Ansi\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
-            "homepage": "https://github.com/sugarcraft/candy-ansi",
-            "keywords": [
-                "ansi",
-                "charmbracelet",
-                "ecma-48",
-                "parser",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "vt500"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-ansi/issues",
-                "source": "https://github.com/sugarcraft/candy-ansi",
-                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-ansi-inspect",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-ansi-inspect",
-                "reference": "e311d971c13fbdaa9fcef4b341513a5436fd5f08"
+                "reference": "b11b6f4a95c45a7715cde93572082c8df1ccfad4"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3614,12 +3557,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-codeshot",
-                "reference": "c8ac257ecc88b7af2dcee9821a85ee3428971848"
+                "reference": "a3c6dbebd6951dc9048d0848ef8d516bb2676b0d"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -4625,16 +4568,16 @@
             "dist": {
                 "type": "path",
                 "url": "candy-pty",
-                "reference": "ed5e917369394c011252c15fcf81dbe802e3a990"
+                "reference": "7f9744cf825698670f4d828adfff4c7e18d002e6"
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-input": "dev-master"
+                "sugarcraft/candy-input": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -5228,14 +5171,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "61dde2f1e7efbc8d0225dabe605243f4a2612f91"
+                "reference": "94de7b070a00c208d176dc5a69f08910128ce29b"
             },
             "require": {
                 "ext-mbstring": "*",
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master",
                 "symfony/console": "^6.4 || ^7.0",
                 "symfony/process": "^6.4 || ^7.0"
             },
@@ -5304,15 +5247,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vt",
-                "reference": "5b02e3c64008ef7903f97d69e656ff5ebb9b9378"
+                "reference": "48d17db3e3ead148ceee24290b94f250a9079e57"
             },
             "require": {
                 "php": "^8.3",
                 "react/promise": "^3.3",
                 "react/stream": "^1.2",
-                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master"
             },
             "require-dev": {
                 "friendsofphp/php-cs-fixer": "^3.65",
@@ -5484,6 +5427,63 @@
                 "issues": "https://github.com/sugarcraft/sugar-animation/issues",
                 "source": "https://github.com/sugarcraft/sugar-animation",
                 "docs": "https://sugarcraft.github.io/lib/sugar-animation.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-ansi-parser",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-ansi-parser",
+                "reference": "36c1523540ac6deb74dd22c24b439464d5b5d714"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\AnsiParser\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\AnsiParser\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
+            "homepage": "https://github.com/sugarcraft/sugar-ansi-parser",
+            "keywords": [
+                "ansi",
+                "charmbracelet",
+                "ecma-48",
+                "parser",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt500"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-ansi-parser/issues",
+                "source": "https://github.com/sugarcraft/sugar-ansi-parser",
+                "docs": "https://github.com/sugarcraft/sugar-ansi-parser/blob/master/README.md"
             },
             "transport-options": {
                 "symlink": true,
@@ -6764,14 +6764,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-quickpick",
-                "reference": "b9c781eba1de015ab095d133d5f86ef20f65cf6a"
+                "reference": "381babf7b3258a087427a8573181c3e30fc24dd2"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master"
             },
             "require-dev": {
@@ -8586,7 +8586,6 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "sugarcraft/candy-ansi": 20,
         "sugarcraft/candy-ansi-inspect": 20,
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
@@ -8617,6 +8616,7 @@
         "sugarcraft/candy-vt": 20,
         "sugarcraft/candy-wish": 20,
         "sugarcraft/sugar-animation": 20,
+        "sugarcraft/sugar-ansi-parser": 20,
         "sugarcraft/sugar-charts": 20,
         "sugarcraft/sugar-cli": 20,
         "sugarcraft/sugar-colorprofile": 20,

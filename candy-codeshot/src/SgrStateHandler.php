@@ -5,7 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot;
 
-use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
+use SugarCraft\AnsiParser\Parser\SubparamsAwareHandler;
 
 /**
  * Handler implementation for SGR (Select Graphic Rendition) state parsing.

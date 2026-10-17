@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
-use SugarCraft\Ansi\Parser\Handler;
-use SugarCraft\Ansi\Parser\HandlerAdapter;
-use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
+use SugarCraft\AnsiParser\Parser\Handler;
+use SugarCraft\AnsiParser\Parser\HandlerAdapter;
+use SugarCraft\AnsiParser\Parser\SubparamsAwareHandler;
 
 /**
  * Renderer-path {@see Handler} that finally routes ESC bytes to the grid.
  *
- * candy-ansi's {@see HandlerAdapter} — the shared bridge from the parser to a
+ * sugar-ansi-parser's {@see HandlerAdapter} — the shared bridge from the parser to a
  * {@see CsiHandlerImpl} + OSC handler pair — implements `escDispatch()` as an
- * empty no-op (candy-ansi/src/Parser/HandlerAdapter.php:128-130). Every
+ * empty no-op (sugar-ansi-parser/src/Parser/HandlerAdapter.php:128-130). Every
  * two-byte escape therefore vanished on the vcr renderer path: `ESC 7`/`ESC 8`
  * (DECSC/DECRC), `ESC D`/`E`/`M` (IND/NEL/RI), `ESC H` (HTS), `ESC c` (RIS)
  * and the whole `ESC # …` line-rendition family never reached the cells, even
  * though the emulator handles all of them.
  *
- * Rather than edit candy-ansi (shared with a concurrent workstream), the fix
+ * Rather than edit sugar-ansi-parser (shared with a concurrent workstream), the fix
  * lives entirely in candy-vt: this decorator reuses the adapter for every
  * event it already understands (print/execute/CSI/OSC/DCS/SOS-PM-APC) and
  * takes over only `escDispatch()`, forwarding each recognised escape to a
@@ -40,7 +40,7 @@ final class RendererHandler implements SubparamsAwareHandler
     /**
      * The parser pushes the ECMA-48 colon continuation flags here — this
      * decorator, not the wrapped {@see HandlerAdapter}, is the object handed to
-     * {@see \SugarCraft\Ansi\Parser\Parser::__construct()}, so it is the only
+     * {@see \SugarCraft\AnsiParser\Parser\Parser::__construct()}, so it is the only
      * handler the capability check can see. Forward them down to the concrete
      * {@see CsiHandlerImpl} whose `sgr()` needs them to tell `CSI 4 : 3 m`
      * (curly underline) from `CSI 4 ; 3 m` (underline + italic): the parser

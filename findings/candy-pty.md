@@ -240,7 +240,7 @@ Unlike the Go upstream `expect.AnyPattern()`, the PHP port only supports single-
 
 ### 3. No Built-in ANSI Escape Sequence Parsing
 
-The library depends on external `candy-ansi` for ANSI parsing, but `candy-pty` itself provides no built-in escape sequence handling. This creates a hard dependency chain for common use cases.
+The library depends on external `sugar-ansi-parser` for ANSI parsing, but `candy-pty` itself provides no built-in escape sequence handling. This creates a hard dependency chain for common use cases.
 
 ---
 
@@ -411,5 +411,5 @@ Signal handlers use static callbacks that cannot be unregistered per-instance. T
 | P3 | Low | ioctl called with null | `src/Posix/ControllingTerminal.php:56` | Pass pointer to zeroed struct instead of null |
 | P4 | Enhancement | No ReactPHP stream interfaces | PTY classes | Implement ReadableStreamInterface/WritableStreamInterface |
 | P4 | Enhancement | No expectAnyPattern | `src/Expect/Expect.php` | Add multi-pattern regex matching with per-pattern callbacks |
-| P4 | Enhancement | No ANSI parsing built-in | N/A | Document dependency on `candy-ansi` or add parsing integration |
+| P4 | Enhancement | No ANSI parsing built-in | N/A | Document dependency on `sugar-ansi-parser` or add parsing integration |
 | P4 | Enhancement | PtyPool acquire/release blocks | `src/PtyPool.php` | Add async variants using ReactPHP promises |

@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests\Handler;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Handler\ScreenHandler;
 
 /**
  * ECMA-48 colon forms of the extended-colour SGRs must resolve to exactly
- * what their semicolon spellings do. The candy-ansi parser flattens `:` into
+ * what their semicolon spellings do. The sugar-ansi-parser parser flattens `:` into
  * ordinary slots and marks the continuation in {@see Parser::subparams()};
  * until {@see ScreenHandler} fed those flags to SgrHandler::extended(), a
  * six-slot truecolor group was misread positionally:

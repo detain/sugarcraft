@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\AnsiInspect;
 
-use SugarCraft\Ansi\Parser\Handler;
-use SugarCraft\Ansi\Parser\Parser;
-use SugarCraft\Ansi\Parser\State;
+use SugarCraft\AnsiParser\Parser\Handler;
+use SugarCraft\AnsiParser\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\State;
 
 /**
  * Collects ANSI parse events into a flat list of Segments.
@@ -22,13 +22,13 @@ use SugarCraft\Ansi\Parser\State;
  * byte-level debugging tool. Reported bytes equal input bytes apart from a
  * closed list of deviations that `README.md` enumerates and `ByteFidelityTest`
  * pins one by one: the BEL/ST spelling, the lossy DCS prelude rebuild,
- * candy-ansi's parameter-count, parameter-value and string-size caps, the C0
+ * sugar-ansi-parser's parameter-count, parameter-value and string-size caps, the C0
  * bytes it ignores inside an OSC payload, the sequence it cancels on an illegal
  * parameter byte or on CAN/SUB (so nothing of it reaches this handler), a
  * truncated UTF-8 rune at end of stream, which is not an escape-sequence state
  * for `Parser::flush()` to report, and an invalid UTF-8 byte mid-stream, which
  * the parser's UTF-8 window rejects without ever calling back into a handler
- * (surfacing it needs a candy-ansi callback — deferred, README deviation 10).
+ * (surfacing it needs a sugar-ansi-parser callback — deferred, README deviation 10).
  *
  * Mirrors charmbracelet/x/ansi Handler — accumulates segments rather than
  * rendering to a terminal.
@@ -65,7 +65,7 @@ final class AnsiHandler implements Handler
     /**
      * True immediately after a string-sequence dispatch, while the parser may
      * still deliver that sequence's ST (`ESC \`) terminator to
-     * {@see escDispatch()}. candy-ansi ends DCS/OSC/SOS/PM/APC on the ESC and
+     * {@see escDispatch()}. sugar-ansi-parser ends DCS/OSC/SOS/PM/APC on the ESC and
      * then dispatches the `\` as a two-byte escape; the terminator already
      * lives in the emitted segment, so it must not surface a second time.
      *
@@ -118,7 +118,7 @@ final class AnsiHandler implements Handler
         for ($offset = 0; $offset < $length; $offset++) {
             $byte = $input[$offset];
             // The terminator to swallow must be the *immediate* follower of the
-            // string dispatch: candy-ansi dispatches the sequence on the ESC of
+            // string dispatch: sugar-ansi-parser dispatches the sequence on the ESC of
             // `ESC \` and delivers the backslash next. Any other byte (a BEL
             // that ended an OSC, a C1 ST that ended a DCS, plain text) closes
             // the window, so a later genuine `ESC \` is still reported.
@@ -386,7 +386,7 @@ final class AnsiHandler implements Handler
         $this->flushPendingSs3();
         $this->flushText();
         // OSC terminator normalized to BEL; original ST (\x1b\\) is not
-        // preserved because candy-ansi's Parser strips it before dispatch.
+        // preserved because sugar-ansi-parser's Parser strips it before dispatch.
         $this->segments[] = new SequenceSegment(
             "\x1b]{$data}\x07",
             Inspector::describeOsc($data),

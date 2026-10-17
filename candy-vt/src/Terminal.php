@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt;
 
-use SugarCraft\Ansi\Parser\HandlerAdapter;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\HandlerAdapter;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Parser\OscHandlerImpl;
@@ -14,8 +14,8 @@ use SugarCraft\Vt\Parser\RendererHandler;
 /**
  * Public terminal surface for the vcr renderer path.
  *
- * Holds a Buffer, Cursor, and candy-ansi's Parser with CsiHandlerImpl +
- * OscHandlerImpl wired through candy-ansi's HandlerAdapter. Feed bytes
+ * Holds a Buffer, Cursor, and sugar-ansi-parser's Parser with CsiHandlerImpl +
+ * OscHandlerImpl wired through sugar-ansi-parser's HandlerAdapter. Feed bytes
  * through `feed()`, capture frames via `snapshot()`.
  */
 final class Terminal
@@ -58,7 +58,7 @@ final class Terminal
         $osc = new OscHandlerImpl($csi);
 
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
-        // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
+        // 64 KiB string-buffer cap (sugar-ansi-parser default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         // RendererHandler is the parser's sink and a SubparamsAwareHandler, so
         // the colon continuation flags SGR needs are pushed down to CsiHandlerImpl

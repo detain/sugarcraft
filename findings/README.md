@@ -175,7 +175,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 - `README.md` — this file (collation of all findings)
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
-- `candy-ansi.md` through `sugar-mouse.md` — 34 candy-* project audits
+- `sugar-ansi-parser.md` through `sugar-mouse.md` — 34 candy-* project audits
 - `sugar-spring.md`, `candy-flappy.md` — 2 honey-* project audits
 - `sugar-widgets.md` through `candy-ssh-launcher.md` — 22 sugar-* project audits (incl. `candy-kv.md`, first-ever audit, 2026-09-15, E719)
 - `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08

@@ -36,7 +36,7 @@ declare(strict_types=1);
  *      comments promise must match what the solver returns.
  *
  * The first full run found, beyond the four parse errors: invented classes
- * (candy-ansi `AnsiState`, sugar-dashboard's `Layout\StackedGrid`, candy-kv's
+ * (sugar-ansi-parser `AnsiState`, sugar-dashboard's `Layout\StackedGrid`, candy-kv's
  * `Backend\MemoryStore`), invented methods (candy-git-server `Repo::create()` and
  * `SSHServer::listen()`, sugar-datepicker `withMinDate()`, candy-mail `from()`),
  * wrong arguments (sugar-video `cols:`/`rows:`, candy-log `with('k', 'v')`), a

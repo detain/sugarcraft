@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Input;
 
-use SugarCraft\Ansi\Parser\Handler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Handler;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * Observes recorded program OUTPUT and tracks which DEC private mouse
@@ -21,7 +21,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * a {@see Parser} and remembering the mode state.
  *
  * Multi-mode sequences (`CSI ? 1000 ; 1006 h`) are recorded per mode because
- * the candy-ansi {@see \SugarCraft\Ansi\Parser\HandlerAdapter} dispatches
+ * the sugar-ansi-parser {@see \SugarCraft\AnsiParser\Parser\HandlerAdapter} dispatches
  * every parameter — this class implements the top-level {@see Handler}
  * directly and does the same in its own `csiDispatch`.
  *

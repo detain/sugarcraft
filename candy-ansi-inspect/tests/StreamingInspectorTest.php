@@ -296,7 +296,7 @@ final class StreamingInspectorTest extends TestCase
      * in the VT500 anywhere transition table.
      *
      * NOTE: The total segment count matches one-shot (3 total), but due to
-     * how candy-ansi's incremental Parser delivers C1 bytes to execute(),
+     * how sugar-ansi-parser's incremental Parser delivers C1 bytes to execute(),
      * the C1 segment's raw/describe may be empty in streaming mode. This
      * is a known streaming-vs-one-shot divergence for C1 bytes.
      */

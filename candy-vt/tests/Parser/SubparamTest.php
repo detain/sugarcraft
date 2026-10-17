@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests\Parser;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Parser\DebugHandler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * CSI sub-parameter parsing: ':' is a sub-parameter separator per VT500.

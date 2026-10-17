@@ -799,7 +799,7 @@ final class QuickPick
     {
         $charString = '';
 
-        $handler = new class($charString) implements \SugarCraft\Ansi\Parser\Handler
+        $handler = new class($charString) implements \SugarCraft\AnsiParser\Parser\Handler
         {
             /** @var string */
             private string $string;
@@ -845,7 +845,7 @@ final class QuickPick
             }
         };
 
-        $parser = new \SugarCraft\Ansi\Parser\Parser($handler);
+        $parser = new \SugarCraft\AnsiParser\Parser\Parser($handler);
         $parser->feed($text);
         $parser->flush();
 

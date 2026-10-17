@@ -1275,7 +1275,7 @@ Same verification as previous phases.
 
 | Plan | Items | Summary |
 | ---- | ----- | ------- |
-| `plan_candy-ansi.md` | 3.5, 3.6, 4.1-4.3 | MAX_STRING_BUFFER constant, 65535 magic number, test coverage |
+| `plan_sugar-ansi-parser.md` | 3.5, 3.6, 4.1-4.3 | MAX_STRING_BUFFER constant, 65535 magic number, test coverage |
 | `plan_candy-buffer.md` | 5.1, 6.1-6.3, 7.1-7.5, 8.1 | Serialization, JsonSerializable, Buffer fill/copy, documentation |
 | `plan_candy-codeshot.md` | 2.2-2.3, 3.2, 4.1-4.4, 5.1-5.2, 6.1, 7.1-7.2, 8.1-8.5 | Unicode warning, symlink check, WindowChromeGeometry, output streaming, LanguageDetector, Segment mutate, fclose, test coverage |
 | `plan_sugar-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |

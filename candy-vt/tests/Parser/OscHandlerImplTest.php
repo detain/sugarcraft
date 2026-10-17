@@ -51,7 +51,7 @@ final class OscHandlerImplTest extends TestCase
 
     public function testEmptyUriClosesLink(): void
     {
-        // candy-ansi HandlerAdapter contract: empty URI closes (xterm:
+        // sugar-ansi-parser HandlerAdapter contract: empty URI closes (xterm:
         // "an empty URI … terminates the current hyperlink").
         $this->osc->hyperlink('https://example.com', 'a');
         $this->osc->hyperlink('', '');

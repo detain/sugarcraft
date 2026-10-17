@@ -1,7 +1,7 @@
 # Code Review: candy-vt
 
 > **SUPERSEDED (2026-09-16, on master `aeb34bee4`) — `src/CellGrid.php` no longer exists.** The vcr renderer was unified onto the single `SugarCraft\Vt\Buffer\Buffer` grid: `CellGrid.php` was deleted by commit `40cfe4e3b` ("…collapse CellGrid into Buffer"), which reached master through **PR #1447 (merge `f7fe7c33b`)** (verified: `git ls-tree f7fe7c33b candy-vt/src/CellGrid.php` is empty; the file was still present at #1445 `45921a3db`). `candy-vt/src/Parser/CsiHandlerImpl.php:92` now holds `private Buffer $grid` and zero `CellGrid` references remain in `candy-vt/src/`. So the items below that treat `CellGrid` as a live file are **historical / resolved by the unification**: **#1** (`CellGrid::set()` immutability), **#22** (no `CellGrid::resize()`), **#28** (`CellGrid` vs `Buffer` duplication) — plus #24 and the summary-table rows for 1/22/28. The original wording is left intact so readers see the history in place. All other, still-live findings in this file are unaffected.
-> **RE-DERIVED (2026-09-17, on master `b26b9989f`) — lane r86v5 second banner.** The parser-side rows are moot in this lib: `src/Parser/{Parser,Transitions,HandlerAdapter}.php` no longer exist here (de-fork `9952e3f5c`; the vcr path imports candy-ansi's parser, `candy-vt/src/Terminal.php:7-8`). The w4-vt `61b28175c` + r86u `3514c2d59` waves also overtook several r82 ❗ stamps — corrected per-row below (#1/#22/#28 CellGrid-gone; #2/#5/#18 E725/w4-vt landed; #20 clear() shipped; #24/#25 ruled; #27 unified via `Cell/Cell.php:24` alias; #8 shape moved to `CsiHandlerImpl.php:319`). Still-live after re-derivation: **#6 #10 #11 #13 #14 #19 #21 #30** (+ moved-#8).
+> **RE-DERIVED (2026-09-17, on master `b26b9989f`) — lane r86v5 second banner.** The parser-side rows are moot in this lib: `src/Parser/{Parser,Transitions,HandlerAdapter}.php` no longer exist here (de-fork `9952e3f5c`; the vcr path imports sugar-ansi-parser's parser, `candy-vt/src/Terminal.php:7-8`). The w4-vt `61b28175c` + r86u `3514c2d59` waves also overtook several r82 ❗ stamps — corrected per-row below (#1/#22/#28 CellGrid-gone; #2/#5/#18 E725/w4-vt landed; #20 clear() shipped; #24/#25 ruled; #27 unified via `Cell/Cell.php:24` alias; #8 shape moved to `CsiHandlerImpl.php:319`). Still-live after re-derivation: **#6 #10 #11 #13 #14 #19 #21 #30** (+ moved-#8).
 
 ## Summary
 
@@ -61,7 +61,7 @@ However, `ScreenHandler::enterAltScreen()` and `ScreenHandler::leaveAltScreen()`
 
 ---
 
-### 3. `Transitions::$table` static cache is not thread-safe 🔀 r82: moved — parser de-forked onto candy-ansi (9952e3f5c); lazy ??= table now candy-ansi/src/Parser/Transitions.php:37; r82 q18: ⏭️ obsolete in candy-ansi (no shared-memory userland threads; build() pure) — see candy-ansi.md §10
+### 3. `Transitions::$table` static cache is not thread-safe 🔀 r82: moved — parser de-forked onto sugar-ansi-parser (9952e3f5c); lazy ??= table now sugar-ansi-parser/src/Parser/Transitions.php:37; r82 q18: ⏭️ obsolete in sugar-ansi-parser (no shared-memory userland threads; build() pure) — see sugar-ansi-parser.md §10
 
 **File:** `src/Parser/Transitions.php:27`
 
@@ -127,7 +127,7 @@ The root `SugarCraft\Vt\Terminal` (vcr renderer path) has no alt-screen entry po
 
 ## Medium Severity Issues
 
-### 7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing 🔀 r82: moved — now candy-ansi/src/Parser/Parser.php:138 (re-verify in candy-ansi); r82 q18: ✅ fixed in candy-ansi — reset()=flush()+clear(), flush dispatches OSC/DCS payloads (Parser.php:117-146)
+### 7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing 🔀 r82: moved — now sugar-ansi-parser/src/Parser/Parser.php:138 (re-verify in sugar-ansi-parser); r82 q18: ✅ fixed in sugar-ansi-parser — reset()=flush()+clear(), flush dispatches OSC/DCS payloads (Parser.php:117-146)
 
 **File:** `src/Parser/Parser.php:82-86`
 
@@ -159,7 +159,7 @@ The `$params` passed from `ScreenHandler::csiDispatch()` already contains the pa
 
 ---
 
-### 9. `Transitions::build()` has an unused `$g` variable with static analysis noise 🔀 r82: moved — Transitions now in candy-ansi (9952e3f5c); r82 q18: ⏭️ obsolete — $g used at definition line (Transitions.php:52-53) and no phpstan in lib
+### 9. `Transitions::build()` has an unused `$g` variable with static analysis noise 🔀 r82: moved — Transitions now in sugar-ansi-parser (9952e3f5c); r82 q18: ⏭️ obsolete — $g used at definition line (Transitions.php:52-53) and no phpstan in lib
 
 **File:** `src/Parser/Transitions.php:52-53`
 
@@ -214,7 +214,7 @@ This iterates up to the larger screen's dimensions. For a 100×30 screen diffed 
 
 ---
 
-### 12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) 🔀 r82: moved — HandlerAdapter now candy-ansi/src/Parser/HandlerAdapter.php (re-verify OSC scope there); r82 q18: ✅ fixed for recorded scope — OSC 8 now dispatched w/ id parsing (HandlerAdapter.php:93-102); OSC 4/52 remain by-design (§2.3)
+### 12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) 🔀 r82: moved — HandlerAdapter now sugar-ansi-parser/src/Parser/HandlerAdapter.php (re-verify OSC scope there); r82 q18: ✅ fixed for recorded scope — OSC 8 now dispatched w/ id parsing (HandlerAdapter.php:93-102); OSC 4/52 remain by-design (§2.3)
 
 **File:** `src/Parser/HandlerAdapter.php:79-84`
 
@@ -299,7 +299,7 @@ Unknown SGR parameters are skipped silently. This matches VT spec behavior (igno
 
 ---
 
-### 16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 🔀 r82: moved — printChar now candy-ansi HandlerAdapter; r82 q18: ✅ fixed — pass-through rationale now documented (HandlerAdapter.php:26-27)
+### 16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 🔀 r82: moved — printChar now sugar-ansi-parser HandlerAdapter; r82 q18: ✅ fixed — pass-through rationale now documented (HandlerAdapter.php:26-27)
 
 **File:** `src/Parser/HandlerAdapter.php:23-30`
 
@@ -409,7 +409,7 @@ This correctly creates a new `CellGrid` but then mutates its internal `$grid`. F
 
 ---
 
-### 23. No DCS dispatch implementation in `HandlerAdapter` or `OscHandlerImpl` ✅ r82: fixed by de-fork — DCS dispatch implemented in candy-ansi/src/Parser/HandlerAdapter.php:129
+### 23. No DCS dispatch implementation in `HandlerAdapter` or `OscHandlerImpl` ✅ r82: fixed by de-fork — DCS dispatch implemented in sugar-ansi-parser/src/Parser/HandlerAdapter.php:129
 
 **Files:** `src/Parser/HandlerAdapter.php:86-88`, `src/Parser/OscHandlerImpl.php:21-23`
 
@@ -548,7 +548,7 @@ public function __construct(
 
 ---
 
-### 31. `Transitions::build()` is eager but could be deferred or pre-computed 🔀 r82: moved — Transitions now candy-ansi; lazy first-use build still at Transitions.php:37 there; r82 q18: ⏭️ feature-idea (as recorded); lazy build retained, cost assessed low in candy-ansi.md §6.1
+### 31. `Transitions::build()` is eager but could be deferred or pre-computed 🔀 r82: moved — Transitions now sugar-ansi-parser; lazy first-use build still at Transitions.php:37 there; r82 q18: ⏭️ feature-idea (as recorded); lazy build retained, cost assessed low in sugar-ansi-parser.md §6.1
 
 **File:** `src/Parser/Transitions.php:50-238`
 

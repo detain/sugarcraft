@@ -607,15 +607,15 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ### 5.3 No Built-in ANSI Escape Sequence Parsing [PENDING]
 
-**What is expected:** Either document the dependency on `candy-ansi` more prominently, or add optional ANSI parsing integration directly into candy-pty for common use cases.
+**What is expected:** Either document the dependency on `sugar-ansi-parser` more prominently, or add optional ANSI parsing integration directly into candy-pty for common use cases.
 
-**Why the change should be done:** candy-pty depends on `candy-ansi` for ANSI parsing but doesn't expose this integration. Users need to know about the dependency and wire it manually.
+**Why the change should be done:** candy-pty depends on `sugar-ansi-parser` for ANSI parsing but doesn't expose this integration. Users need to know about the dependency and wire it manually.
 
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
 
-- `composer.json` shows dependency on `sugarcraft/candy-ansi`
+- `composer.json` shows dependency on `sugarcraft/sugar-ansi-parser`
 - See README lines 403-406 for current documentation
 
 ---

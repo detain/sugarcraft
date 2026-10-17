@@ -34,7 +34,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | | Library | Role |
 |---|---|---|
 | <img src="media/icons/candy-core.png" width="48" alt=""> | **[SugarCraft](candy-core/)** | MVC-style Model–Update–View TUI runtime — `Model` / `Msg` / `Cmd` / `Program`, plus a frame-diff renderer with an opt-in cursed cell-diff mode. |
-| <img src="media/icons/candy-ansi.png" width="48" alt=""> | **[CandyAnsi](candy-ansi/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from candy-vt. |
+| <img src="media/icons/sugar-ansi-parser.png" width="48" alt=""> | **[SugarAnsiParser](sugar-ansi-parser/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from candy-vt. |
 | <img src="media/icons/candy-buffer.png" width="48" alt=""> | **[CandyBuffer](candy-buffer/)** | Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (`rune`/style/link/width). Shared foundation for all rendering; `Buffer::diff()` included. |
 | <img src="media/icons/candy-layout.png" width="48" alt=""> | **[CandyLayout](candy-layout/)** | Constraint-based layout solver — `LayoutSolver` interface with a Cassowary engine (`CassowarySolver`) and a `GreedySolver` fallback. |
 | <img src="media/icons/candy-async.png" width="48" alt=""> | **[CandyAsync](candy-async/)** | Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). |

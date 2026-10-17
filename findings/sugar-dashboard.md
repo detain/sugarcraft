@@ -51,7 +51,7 @@ use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Diff\DiffEncoder;
 ```
 
-The imports reference `SugarCraft\Buffer\*` which does not exist as a package in the monorepo. Examining `sugar-dashboard/composer.json` shows the path-repository closure includes `candy-buffer`, `candy-core`, `candy-sprinkles`, `candy-pty`, `candy-vcr`, `candy-layout`, `candy-async`, `candy-ansi`, and `candy-input` — there is **no** `sugarcraft/buffer` package. The `Buffer`, `Cell`, and `DiffEncoder` classes at these namespaces do not exist.
+The imports reference `SugarCraft\Buffer\*` which does not exist as a package in the monorepo. Examining `sugar-dashboard/composer.json` shows the path-repository closure includes `candy-buffer`, `candy-core`, `candy-sprinkles`, `candy-pty`, `candy-vcr`, `candy-layout`, `candy-async`, `sugar-ansi-parser`, and `candy-input` — there is **no** `sugarcraft/buffer` package. The `Buffer`, `Cell`, and `DiffEncoder` classes at these namespaces do not exist.
 
 **Impact:** Any code that instantiates or renders a `Chart` object will fatal with `Class "SugarCraft\Buffer\Buffer" not found` at runtime. This is a blocking issue — `Chart` is unusable.
 

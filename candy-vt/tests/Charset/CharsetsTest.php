@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Charset\Charsets;
 use SugarCraft\Vt\Handler\ScreenHandler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * SCS designations (ESC ( ) * + / G0–G3), locking shifts SI/SO, SS2/SS3

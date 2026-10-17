@@ -11,7 +11,7 @@ use SugarCraft\Async\CancellationToken;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Msg\FocusInMsg;
@@ -57,7 +57,7 @@ final class Terminal
             scrollback: new Scrollback($scrollbackSize),
             onFocusEvent: $onFocusEvent,
         );
-        // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
+        // 64 KiB string-buffer cap (sugar-ansi-parser default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         // The handler is the parser's sink AND a SubparamsAwareHandler, so the
         // colon continuation flags SGR needs arrive by push — no late-bound

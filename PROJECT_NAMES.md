@@ -132,7 +132,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarQuickpick** | sugar + quickpick = fuzzy quick-pick / filter overlay component. "quickpick" says the function plainly, matching the established terminal picker concept (was CandyHermit — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarNavstack** | nav stack = push/pop navigation stack + breadcrumb trail IS the function. delightful. (renamed from SugarCrumbs 2026-10). <!-- @rename-keep --> |
-| **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
+| **SugarAnsiParser** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
 | **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
 | **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
 | **CandyKv** | candy + kv = personal key/value store app. `kv` says the domain plainly (was SugarSkate — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
