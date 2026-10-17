@@ -87,6 +87,23 @@ final class SafetyClassifier
             'curl\s+.*>\s*/dev/(?!null\b|stdout\b|stderr\b|fd/)',
             'curl\s+.*\|.*(?:\b(?:eval|exec)\b|bash\s+-c)',
             'wget\s+.*\|.*(?:\b(?:eval|exec)\b|bash\s+-c)',
+            // ISS-013: the same hazard by every other door. A pipe is only
+            // one way to hand downloaded text to an interpreter — process
+            // substitution runs the fetch's FD as a script, `source`/`.` do
+            // it to that FD or file, `-o …&& sh file` lands the script on
+            // disk first, and python/perl/ruby/node/php each run stdin as
+            // surely as sh does. Each row is command-anchored or
+            // same-command-bounded so health checks stay quiet.
+            self::CMD . '(?:bash|sh|zsh|fish)\s+<\(',
+            self::CMD . '(?:source|\.)\s+<\(',
+            'curl\s+.*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:python[\d.]*|perl|ruby|node|php)\b',
+            'wget\s+.*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:python[\d.]*|perl|ruby|node|php)\b',
+            'curl\s+.*-[A-Za-z]*o\s+\S+.*(?:&&|;)\s*(?:sudo\s+)?(?:\S*/)?(?:sh|bash|zsh|python[\d.]*|perl|ruby|node|php)\b',
+            'wget\s+.*(?:-O\s+\S+|--output-document\s*=?\s*\S+).*?(?:&&|;)\s*(?:sudo\s+)?(?:\S*/)?(?:sh|bash|zsh|python[\d.]*|perl|ruby|node|php)\b',
+            // A fetched URL built by `$(cat …)` or backticks: the substitution
+            // is the payload door and the fetch the carrier. Bounded to the
+            // fetch command's own words (& ; | and quotes cannot be crossed).
+            '(?:curl|wget)\\s+(?:\'[^\']*\'|"[^"]*"|[^\'"|;&`])*(?:\\$\\(|`)',
         ],
         'external-endpoint' => [
             // A mutating method anywhere in the command, not only as its first
@@ -199,6 +216,11 @@ final class SafetyClassifier
             '\brm\s+-?(?:rf|fr)\s+' . self::ARGS . '(?:\./)?vendor(?:/\*?)?(?=$|[\s;&|)])',
             '\brm\s+-?(?:rf|fr)\s+' . self::ARGS . '(?:\./)?node_modules(?:/\*?)?(?=$|[\s;&|)])',
             '\brm\s+-?(?:rf|fr)\s+' . self::ARGS . '(?:\./)?\.git(?:/\*?)?(?=$|[\s;&|)])',
+            // ISS-013: `git clean -fdx` is the same deletion wearing git's
+            // clothes — untracked and ignored files, build outputs, local
+            // `.env` files, everything not committed, gone. The force half is
+            // what makes it execute; dry-run `-n` without it stays quiet.
+            '\bgit\s+clean\b' . self::ARGS . '(?:--force\b|(?-i:-[a-z]*f))',
         ],
         'force-push-reset-hard' => [
             // Anywhere among push's own arguments (`git push origin main -f`),

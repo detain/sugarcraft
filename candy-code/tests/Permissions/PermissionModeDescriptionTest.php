@@ -269,7 +269,7 @@ final class PermissionModeDescriptionTest extends TestCase
                 ['Everything runs unless the safety classifier objects', 'Bash exploring'],
                 ['other flagged calls (outside the project', 'Write outside root'],
                 ['.git and policy files) ask you', 'Write into .git'],
-                ['fetched code piped to a shell', 'Bash into shell'],
+                ['fetched code into a shell or interpreter by any route', 'Bash into shell'],
                 ['WebFetch URLs that carry a query', 'WebFetch with query'],
                 ['MCP tools ask first', 'MCP tool'],
                 ['circuit breaker that escalates to asking', 'Write outside root'],

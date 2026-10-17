@@ -181,7 +181,8 @@ enum PermissionMode: string
             // ran under "unless the classifier objects" with nothing to object.
             self::Auto => 'Everything runs unless the safety classifier objects — it reads shell commands, '
                 . 'Edit, Write and ApplyPatch targets and WebFetch URLs that carry a query. Security findings '
-                . '(fetched code piped to a shell, data sent out, credentials, .git and policy files) ask you; '
+                . '(fetched code into a shell or interpreter by any route, data sent out, credentials, .git and '
+                . 'policy files) ask you; '
                 . 'other flagged calls (outside the project, force pushes, deploys) are blocked, or reviewed by '
                 . 'the title model when autoReview is on. MCP tools ask first. Blocked calls trip a circuit '
                 . 'breaker that escalates to asking.',
