@@ -10,8 +10,13 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Psr7\Utils;
 use OpenAI\Contracts\ClientContract;
+use OpenAI\Contracts\Resources\ChatContract;
+use OpenAI\Responses\Chat\CreateResponse as ChatCreateResponse;
 use OpenAI\Responses\Chat\CreateStreamedResponse as ChatCreateStreamedResponse;
+use OpenAI\Responses\Meta\MetaInformation;
+use OpenAI\Responses\StreamResponse;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
@@ -1328,5 +1333,234 @@ final class ProviderRequestResponseTest extends TestCase
                 return new ToolResult(toolCallId: '', content: '', isError: false);
             }
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // ISS-005: the openai reasoning-family request shapes.
+    // -------------------------------------------------------------------------
+
+    /**
+     * A batch `openai` provider whose wire `create()` arguments land in
+     * `$captured` — the same double shape `OpenAIProviderTest` drives, kept
+     * local to this file (capture, not behavior: this file pins REQUEST
+     * shapes across providers, so a helper named like `vertexCapturing()`
+     * belongs here).
+     *
+     * @param array<string, mixed>|null $captured
+     */
+    private function openAiBatchCapturing(?array &$captured): OpenAIProvider
+    {
+        $captured = null;
+        $client = $this->createMock(ClientContract::class);
+        $chat = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chat);
+        $chat->method('create')->willReturnCallback(static function (array $params) use (&$captured): ChatCreateResponse {
+            $captured = $params;
+
+            return ChatCreateResponse::from([
+                'id' => 'chatcmpl-1',
+                'object' => 'chat.completion',
+                'created' => 1,
+                'model' => $params['model'],
+                'choices' => [[
+                    'index' => 0,
+                    'message' => ['role' => 'assistant', 'content' => 'ok'],
+                    'finish_reason' => 'stop',
+                ]],
+                'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1, 'total_tokens' => 2],
+            ], MetaInformation::from([]));
+        });
+
+        return new OpenAIProvider($client, 'gpt-4o');
+    }
+
+    /**
+     * A streamed `openai` provider whose `createStreamed()` arguments land in
+     * `$captured`; the body answers one content chunk so the generator runs
+     * its real path.
+     *
+     * @param array<string, mixed>|null $captured
+     */
+    private function openAiStreamCapturing(?array &$captured): OpenAIProvider
+    {
+        $captured = null;
+        $client = $this->createMock(ClientContract::class);
+        $chat = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chat);
+        $chat->method('createStreamed')->willReturnCallback(static function (array $params) use (&$captured): StreamResponse {
+            $captured = $params;
+            $body = "data: " . json_encode([
+                'id' => 'chatcmpl-1',
+                'object' => 'chat.completion.chunk',
+                'created' => 1,
+                'model' => $params['model'],
+                'choices' => [['index' => 0, 'delta' => ['content' => 'Hello']]],
+            ]) . "\n\ndata: [DONE]\n\n";
+
+            return new StreamResponse(
+                ChatCreateStreamedResponse::class,
+                new Response(200, [], Utils::streamFor($body)),
+            );
+        });
+
+        return new OpenAIProvider($client, 'gpt-4o');
+    }
+
+    public static function reasoningFamilyModelProvider(): array
+    {
+        return [
+            'gpt-5 head' => ['gpt-5'],
+            'gpt-5.1-codex' => ['gpt-5.1-codex-max'],
+            'gpt-5 dated snapshot' => ['gpt-5-2025-08-07'],
+            'o1' => ['o1'],
+            'o3-mini' => ['o3-mini'],
+            'o4-mini' => ['o4-mini'],
+            'o3 dated' => ['o3-2025-04-16'],
+        ];
+    }
+
+    public static function legacyFamilyModelProvider(): array
+    {
+        return [
+            'gpt-4o' => ['gpt-4o'],
+            'gpt-4o-mini' => ['gpt-4o-mini'],
+            'chatgpt-4o-latest' => ['chatgpt-4o-latest'],
+            'gpt-5-chat compat build' => ['gpt-5-chat-latest'],
+            'omni prefix is not o-series' => ['omni-moderation-latest'],
+            'gpt-4.1' => ['gpt-4.1'],
+        ];
+    }
+
+    /**
+     * @dataProvider reasoningFamilyModelProvider
+     */
+    public function testReasoningFamilyBatchSendsMaxCompletionTokensAndNoSamplingDefaults(string $model): void
+    {
+        $captured = null;
+        $provider = $this->openAiBatchCapturing($captured);
+        $provider->complete(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('Hello')],
+        ));
+
+        self::assertSame(
+            ['max_completion_tokens' => 4096],
+            array_intersect_key($captured, array_flip(['max_completion_tokens', 'temperature', 'max_tokens', 'reasoning_effort'])),
+            "reasoning family {$model} must see max_completion_tokens and nothing else from the sampling knobs",
+        );
+    }
+
+    /**
+     * @dataProvider legacyFamilyModelProvider
+     */
+    public function testLegacyFamilyBatchKeepsTheHistoricalSamplingPair(string $model): void
+    {
+        $captured = null;
+        $provider = $this->openAiBatchCapturing($captured);
+        $provider->complete(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('Hello')],
+        ));
+
+        self::assertSame(
+            ['temperature' => 0.7, 'max_tokens' => 4096],
+            array_intersect_key($captured, array_flip(['temperature', 'max_tokens', 'max_completion_tokens', 'reasoning_effort'])),
+            "legacy family {$model} must stay byte-identical to the pre-ISS-005 body",
+        );
+    }
+
+    public function testReasoningFamilyHonoursExplicitTemperatureAndTokenCeiling(): void
+    {
+        $captured = null;
+        $provider = $this->openAiBatchCapturing($captured);
+        $provider->complete(new CompleteRequest(
+            model: 'gpt-5',
+            messages: [new UserMessage('Hello')],
+            maxTokens: 1024,
+            temperature: 0.3,
+        ));
+
+        self::assertSame(
+            ['max_completion_tokens' => 1024, 'temperature' => 0.3],
+            array_intersect_key($captured, array_flip(['max_completion_tokens', 'temperature', 'max_tokens'])),
+            'an explicit temperature is the operator electing the 400 risk; a set maxTokens lands on the family spelling',
+        );
+    }
+
+    public function testReasoningFamilyMapsEffortLevelsToOpenaiVocabulary(): void
+    {
+        $captured = null;
+        $provider = $this->openAiBatchCapturing($captured);
+        $provider->complete(new CompleteRequest(
+            model: 'o3-mini',
+            messages: [new UserMessage('Hello')],
+            reasoningEffort: 'max',
+        ));
+        self::assertSame('high', $captured['reasoning_effort'], "SGLang's top-tier spelling rounds down to OpenAI's `high`");
+
+        $provider->complete(new CompleteRequest(
+            model: 'o3-mini',
+            messages: [new UserMessage('Hello')],
+            reasoningEffort: 'medium',
+        ));
+        self::assertSame('medium', $captured['reasoning_effort']);
+
+        $provider->complete(new CompleteRequest(
+            model: 'o3-mini',
+            messages: [new UserMessage('Hello')],
+            reasoningEffort: 2,
+        ));
+        self::assertSame('2', $captured['reasoning_effort'], 'an unknown level rides through verbatim; the API owns acceptance');
+    }
+
+    public function testLegacyFamilyNeverSendsReasoningEffort(): void
+    {
+        $captured = null;
+        $provider = $this->openAiBatchCapturing($captured);
+        $provider->complete(new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('Hello')],
+            reasoningEffort: 'high',
+        ));
+
+        self::assertArrayNotHasKey('reasoning_effort', $captured, 'gpt-4o 400s on a field it does not read');
+    }
+
+    public function testReasoningFamilyStreamBodyKeepsSamplingSlotsBeforeStream(): void
+    {
+        $captured = null;
+        $provider = $this->openAiStreamCapturing($captured);
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gpt-5',
+            messages: [new UserMessage('Hello')],
+            reasoningEffort: 'low',
+        )));
+
+        self::assertSame(
+            ['max_completion_tokens' => 4096, 'reasoning_effort' => 'low', 'stream' => true, 'stream_options' => ['include_usage' => true]],
+            array_intersect_key($captured, array_flip(['max_completion_tokens', 'temperature', 'max_tokens', 'reasoning_effort', 'stream', 'stream_options'])),
+        );
+        self::assertSame(
+            ['model', 'messages', 'max_completion_tokens', 'reasoning_effort', 'stream', 'stream_options'],
+            array_keys($captured),
+            'sampling knobs keep the slots the legacy body used',
+        );
+    }
+
+    public function testLegacyFamilyStreamBodyIsByteForByteTheHistoricalShape(): void
+    {
+        $captured = null;
+        $provider = $this->openAiStreamCapturing($captured);
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('Hello')],
+        )));
+
+        self::assertSame(
+            ['model', 'messages', 'temperature', 'max_tokens', 'stream', 'stream_options'],
+            array_keys($captured),
+        );
+        self::assertSame(0.7, $captured['temperature']);
+        self::assertSame(4096, $captured['max_tokens']);
     }
 }

@@ -364,14 +364,82 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
         return self::CACHED_INPUT_TABLE[$model] ?? $inputRate;
     }
 
+    /**
+     * ISS-005: the reasoning families whose chat-completions endpoint speaks
+     * a different sampling dialect — `o1`/`o3`/`o4-mini` and their dated
+     * snapshots (matched as `o` + digit at the start of the id, the same
+     * shape {@see VISION_MODEL_FAMILIES} lists), and the `gpt-5*` family
+     * EXCEPT the `-chat` compat builds (`gpt-5-chat-latest` is the classic
+     * chat model wearing a gpt-5 name and still reads `temperature`).
+     * For these ids the API answers HTTP 400 to `max_tokens` and to any
+     * `temperature` other than the default, and 400 is non-transient, so the
+     * old unconditional `temperature => 0.7` / `max_tokens => 4096` pair made
+     * every turn on such a model exit 1.
+     */
+    private static function isReasoningFamily(string $model): bool
+    {
+        if (preg_match('/\Ao\d/', $model) === 1) {
+            return true;
+        }
+
+        return str_starts_with($model, 'gpt-5') && !str_contains($model, '-chat');
+    }
+
+    /**
+     * Map the transport-neutral effort level onto the names OpenAI accepts
+     * (`minimal`/`low`/`medium`/`high`). `max` and `xhigh` are SGLang/other
+     * servers' spellings of the top tier and have no OpenAI counterpart, so
+     * they round down to `high`. Anything else rides through verbatim: a
+     * level OpenAI adds after this table is the API's to accept or reject,
+     * and its 400 prose is better guidance than a local guess could be.
+     */
+    private static function openAiReasoningEffort(string|float $effort): string
+    {
+        return match (strtolower((string) $effort)) {
+            'max', 'xhigh' => 'high',
+            default => (string) $effort,
+        };
+    }
+
+    /**
+     * ISS-005: the sampling knobs for one request, spelled the way the
+     * target family reads them. Legacy models keep the historical pair
+     * byte-for-byte; reasoning families get `max_completion_tokens` always,
+     * `temperature` only when the operator explicitly set one (the engine
+     * itself never does, which is why the old `?? 0.7` was a silent
+     * 400-machine on these ids), and `reasoning_effort` when the request
+     * carries an effort level. `top_p` is never sent to either family, so
+     * the "omit unless explicitly set" rule holds for it by construction —
+     * {@see CompleteRequest} has no `topP` field.
+     *
+     * @return array<string, mixed>
+     */
+    private function samplingParams(CompleteRequest $request): array
+    {
+        if (!self::isReasoningFamily($request->model)) {
+            return [
+                'temperature' => $request->temperature ?? 0.7,
+                'max_tokens' => $request->maxTokens ?? 4096,
+            ];
+        }
+
+        $params = ['max_completion_tokens' => $request->maxTokens ?? 4096];
+        if ($request->temperature !== null) {
+            $params['temperature'] = $request->temperature;
+        }
+        if ($request->reasoningEffort !== null) {
+            $params['reasoning_effort'] = self::openAiReasoningEffort($request->reasoningEffort);
+        }
+
+        return $params;
+    }
+
     public function complete(CompleteRequest $request): CompleteResponse
     {
-        $params = [
+        $params = array_merge([
             'model' => $request->model,
             'messages' => $this->formatMessages($request->messages),
-            'temperature' => $request->temperature ?? 0.7,
-            'max_tokens' => $request->maxTokens ?? 4096,
-        ];
+        ], $this->samplingParams($request));
 
         if ($request->tools !== null) {
             $params['tools'] = $this->formatTools($request->tools);
@@ -427,17 +495,18 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel
      */
     public function completeStream(CompleteRequest $request): \Generator
     {
-        $params = [
+        $params = array_merge([
             'model' => $request->model,
             'messages' => $this->formatMessages($request->messages),
-            'temperature' => $request->temperature ?? 0.7,
-            'max_tokens' => $request->maxTokens ?? 4096,
-            'stream' => true,
+        ], $this->samplingParams($request), [
             // Set next to `stream`, never in a shared builder: the batch
             // request body must stay byte-identical (Sglang's law, and the
             // openai-php createStreamed() path forwards this array verbatim).
+            // The sampling knobs keep their historical slots ahead of these,
+            // so the legacy-model body is byte-for-byte what it was.
+            'stream' => true,
             'stream_options' => ['include_usage' => true],
-        ];
+        ]);
 
         if ($request->tools !== null) {
             $params['tools'] = $this->formatTools($request->tools);
