@@ -36,8 +36,25 @@ use PHPUnit\Framework\TestCase;
  */
 final class SuiteChildStdinIsolationTest extends TestCase
 {
-    /** Seconds the CONTROL is allowed to hang before it is killed. */
+    /**
+     * Seconds the CONTROL script runs under `timeout -s KILL` before the
+     * harness kills it.
+     *
+     * ISS-080 changed what this bound separates. BEFORE it, the unpinned child
+     * blocked inside `stream_get_contents()` with nothing above it, so the
+     * control had to be KILLED (rc 137) and that kill was the harness's proof
+     * it held a real silent stdin. AFTER it, the same child reaches the
+     * first-byte grace, gives up, and answers — rc 0 at roughly the grace plus
+     * process start. The control is therefore no longer a hang detector; it is
+     * now the end-to-end pin OF the grace itself (a silent fd 0 is consumed,
+     * then survived), and the bound keeps its job from the other side: the
+     * pinned child must finish well inside it while the unpinned one spends
+     * the grace against it.
+     */
     private const CONTROL_BOUND = 6;
+
+    /** Grace floor for the unpinned control: the first-byte watch must actually wait. */
+    private const GRACE_FLOOR_SECONDS = 1.5;
 
     /** Seconds the bootstrapped run gets. Generous: it should take ~0.1s. */
     private const TREATMENT_BOUND = 30;
@@ -74,7 +91,11 @@ final class SuiteChildStdinIsolationTest extends TestCase
      * child finished quickly" is also what a harness reports when it never
      * started the child, mis-spelled the binary, or handed it a stdin that was
      * already at EOF. So the same harness runs the same spawn from a script
-     * that has NOT loaded `tests/bootstrap.php`, and that one must hang.
+     * that has NOT loaded `tests/bootstrap.php`, and that one must SPEND THE
+     * GRACE — since ISS-080 it answers rather than hanging, and the elapsed
+     * floor is what proves the silent stdin is real and was actually watched:
+     * an already-EOF or never-started child finishes instantly and fails the
+     * floor exactly as the old pre-ISS-080 hang failed the old rc-137 arm.
      *
      * Then the treatment: the identical script with the bootstrap required
      * first. Same runner stdin — an open pipe this process holds the write end
@@ -83,12 +104,25 @@ final class SuiteChildStdinIsolationTest extends TestCase
     public function testTheBootstrapKeepsASpawnedBinaryOffTheRunnersHeldOpenStdin(): void
     {
         $control = $this->spawnWithHeldOpenStdin($this->script(false, self::CONTROL_BOUND));
+        // Pre-ISS-080 this asserted rc 137 — the control HANGING was the proof
+        // of a live silent stdin. The fix makes that verdict obsolete in the
+        // safest direction: the child now waits the first-byte grace, treats
+        // the silence as no context, and exits 0. The elapsed floor carries
+        // the proof instead (see the docblock): it can only be met by a child
+        // that really blocked on a really silent fd 0 and then recovered.
         $this->assertSame(
-            137,
+            0,
             $control['rc'],
-            "the control did not hang, so this harness cannot detect one.\nchild said: " . $control['raw'],
+            "the unpinned child did not survive the held-open stdin on the grace path.\nchild said: " . $control['raw'],
         );
-        $this->assertGreaterThan(self::CONTROL_BOUND - 1.0, $control['elapsed']);
+        $this->assertGreaterThan(
+            self::GRACE_FLOOR_SECONDS,
+            $control['elapsed'],
+            'the control answered faster than the first-byte grace can explain, so the harness is '
+                . 'not holding the silent stdin this whole file exists to hold'
+                . "\nchild said: " . $control['raw'],
+        );
+        $this->assertLessThan(self::CONTROL_BOUND, $control['elapsed']);
 
         $treatment = $this->spawnWithHeldOpenStdin($this->script(true, self::TREATMENT_BOUND));
         $this->assertSame(
@@ -97,9 +131,11 @@ final class SuiteChildStdinIsolationTest extends TestCase
             "the spawned binary blocked on the runner's stdin.\nchild said: " . $treatment['raw'],
         );
         $this->assertLessThan(
-            self::CONTROL_BOUND,
+            $control['elapsed'] - 0.5,
             $treatment['elapsed'],
-            'the spawned binary answered, but only after a wait the control shows is the stdin block',
+            'the pinned child did not beat the unpinned one to an answer — the bootstrap repair is '
+                . 'not what carries this case any more, the ISS-080 grace is'
+                . "\nchild said: " . $treatment['raw'],
         );
     }
 

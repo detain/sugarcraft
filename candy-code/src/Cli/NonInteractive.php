@@ -177,6 +177,22 @@ final class NonInteractive
     public const NO_INTERACTIVE_USER = 'this is a non-interactive `-p` run, which asks nobody anything';
 
     /**
+     * How long a piped stdin gets to produce its FIRST byte before the one-shot
+     * treats it as "no piped context" (ISS-080).
+     *
+     * `sleep 30 | candy-code -p hi` used to sit inside `stream_get_contents()`
+     * with no bound above it — the whole process was as dead as the pipe was
+     * silent, which is the ordinary shape when a wrapper spawns the binary with
+     * `stdio: 'pipe'` and forgets to close fd 0. The grace is the middle ground
+     * between that hang and the other failure the issue names (a producer that
+     * IS writing, just slowly): a real pipe reports readiness as soon as bytes
+     * arrive, so only silence costs anything here, and 2 s is the midpoint of
+     * the issue's 1–3 s guidance. Once the first byte lands, the read still runs
+     * to EOF — truncating a mid-stream producer would invent a prompt boundary.
+     */
+    private const STDIN_FIRST_BYTE_GRACE_SECONDS = 2;
+
+    /**
      * Run one prompt to completion and print the result.
      *
      * $backend can be supplied directly — used by tests to avoid depending on
@@ -1063,6 +1079,20 @@ final class NonInteractive
             return null;
         }
 
+        // ISS-080: wait only for the FIRST byte. A silent-but-open pipe is a
+        // caller that has nothing to pipe, and `stream_get_contents()` cannot
+        // tell that from a slow writer on its own — it just blocks. Silence
+        // past the grace returns "no context" with one line on stderr, the
+        // same channel and voice as the truncation notice below.
+        if (self::stdinFirstByteArrived($stream) === false) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t(
+                'cli.noninteractive.stdin_silent',
+                ['seconds' => self::STDIN_FIRST_BYTE_GRACE_SECONDS],
+            ) . "\n");
+
+            return null;
+        }
+
         $data = @\stream_get_contents($stream, self::MAX_STDIN_BYTES + 1);
         if ($data === false || $data === '') {
             return null;
@@ -1074,6 +1104,45 @@ final class NonInteractive
         }
 
         return $data;
+    }
+
+    /**
+     * Whether $stream became readable within {@see STDIN_FIRST_BYTE_GRACE_SECONDS}.
+     *
+     * `true` a first byte arrived (or the stream type cannot participate in
+     * select and the caller should proceed to the ordinary read), `false`
+     * genuine silence past the grace.
+     *
+     * THE THREE ANSWERS COME FROM THE MEASUREMENTS, not from the signature.
+     * `php://memory` — the shape `tests/bootstrap.php` pins the default to, and
+     * any test's in-memory fixture — makes `stream_select()` emit a warning and
+     * then throw `ValueError: No stream arrays were passed` (measured, PHP
+     * 8.3.6): an exception here therefore means "I could not watch this
+     * stream", never "this stream is silent", and the fall-through keeps the
+     * pre-ISS-080 behaviour for exactly the non-selectable shapes that were
+     * never the hanging one. Regular files report ready instantly (measured
+     * `int(1)`), so a redirected stdin costs nothing. Only a real pipe/socket
+     * can answer `int(0)`, and only `int(0)` returns false. The `false` return
+     * (signal-interrupted select) likewise falls through rather than refusing
+     * context nobody proved absent.
+     */
+    private static function stdinFirstByteArrived($stream): bool
+    {
+        $read = [$stream];
+        $write = null;
+        $except = null;
+
+        try {
+            $ready = @\stream_select($read, $write, $except, self::STDIN_FIRST_BYTE_GRACE_SECONDS);
+        } catch (\Throwable) {
+            return true;
+        }
+
+        if ($ready === false) {
+            return true;
+        }
+
+        return $ready > 0;
     }
 
     /**
