@@ -45,7 +45,7 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 11.1 | External: webhooks.interserver.net | ✅ 5f1eb46 |
 | 11.2 | External: php-dup-finder | ✅ 24841ff (owner gate: stayed VCS) |
 | 11.3 | External: phlix-console-client | ✅ f2f85e0 + 5ba0c6b10 (lock regen + phar rebuild, pushed) |
-| 11.4 | External: provirted (`composer-tui.json` bundle) | ⏸ OWNER-GATED (4 decisions open, not-applicable-now; flip-mode now viable — patch prepped /tmp/opencode/rename-p11/provirted/REPORT.md) |
+| 11.4 | External: provirted (`composer-tui.json` bundle) | ✅ flipped @e2829a3 (pushed) — flip executed post-index; desc drift remains cosmetic-pending |
 | 12 | Final verification + cleanup | ✅ this commit — guards re-verified at 501384aab (see rename: complete below) |
 
 ### rename: complete (2026-10-17)
