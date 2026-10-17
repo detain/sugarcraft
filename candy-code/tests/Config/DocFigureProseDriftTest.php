@@ -4551,9 +4551,11 @@ final class DocFigureProseDriftTest extends TestCase
         $onceNumbers = ['once' => 1];
         self::assertSame(
             1,
-            preg_match('/captured (\w+) per `Runtime` — not once per step/u', $doc, $memo),
-            'the once-per-Runtime memo sentence left its shape — the negative half is contrast prose with no live counterpart (the memo census below IS its refutation), so it is pinned as sentence shape only',
+            preg_match('/captured (\w+) per \*\*session\*\* through/u', $doc, $memo),
+            'the once-per-session memo sentence left its shape — ISS-116 healed this page from "per Runtime" to the session granularity SessionPromptMemo actually implements; the two contrast halves below are pinned as sentence shape only',
         );
+        self::assertStringContainsString('not once per step', $doc, 'the step-granularity rejection left its shape');
+        self::assertStringContainsString('not once per `Runtime`', $doc, 'the per-Runtime rejection left its shape — the memo census below IS its refutation');
         self::assertArrayHasKey($memo[1], $onceNumbers, 'the memo count is now a word this arm cannot judge');
         self::assertSame($onceNumbers[$memo[1]], substr_count($runtimeText, '$this->memoryBlock ??='), 'the memo count the page spells no longer matches the memoization sites in src');
 

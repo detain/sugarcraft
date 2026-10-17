@@ -263,7 +263,10 @@ third `MemoryScope::Local`; `MemoryStore::normalizeScope()` maps it onto the
 two prompt tiers: **`user` and `project` reach the prompt; `agent` never does.**
 
 `Runtime::buildSystemPrompt()` folds in a `MemoryBlock`
-(`src/Context/MemoryBlock.php`), captured once per `Runtime` — not once per step —
+(`src/Context/MemoryBlock.php`), captured once per **session** through
+`Context\SessionPromptMemo` — not once per step, and not once per `Runtime`
+either; a bare `Runtime` nobody handed the shared memo to memoises per
+instance, which is the granularity its wiring tests pin —
 from `MemoryStore::list(MemoryScope::Project)` and `MemoryStore::list(MemoryScope::User)`.
 **What reaches the prompt is the index, not the notes** (roadmap 5.1-1): one line
 per note, `- [type] id: opening words (tags: …)` — the fields of the store's own
@@ -320,8 +323,10 @@ entries never reach the prompt**
 (`MemoryPromptWiringTest::testAnAgentScopeNoteDoesNotReachThePrompt`,
 `MemoryPromptWiringTest::testAUserScopeNoteReachesThePrompt`,
 `MemoryPromptWiringTest::testTheMemoryDirectoryIsReadOncePerRuntimeNotOncePerStep`).
-`/memory add` defaults to `project`, so a note typed without a scope is one the
-model sees from the next turn on.
+`/memory add` defaults to `project`, so a note typed without a scope lands in
+the repository's store — and the prompt's index is a session snapshot, not a
+live read: the note reaches the model at the session's next refresh point (see
+below), not necessarily on the next turn.
 
 The block is bounded, because it is part of the system prompt and therefore paid
 for on every step of the agentic loop:
@@ -371,7 +376,14 @@ because half an instruction can read as a whole one, and a visibly marked
 truncation is something the model can see and discount.
 
 Everything is frozen at `capture()`; `render()` reads no filesystem. So a note
-written mid-turn reaches the prompt on the **next** `Runtime`, not the next step.
+written mid-turn never retroactively joins the turn already in flight. In
+production the snapshot is memoised per **session**, not per `Runtime`: the
+note joins the prompt when the session's memo entries are next dropped —
+`SessionPromptMemo::forget()` runs on `/clear`, after a compaction or rewind,
+or when another session id arrives — and no `/memory` mutation calls it, so a
+note can wait out the rest of the session. The same policy governs the other
+standing layers; `docs/PROMPT_ENGINEERING.md` ("Freshness") is the one place
+that states it whole.
 
 **The index is `list()`, not `search()`, and that is deliberate.** It is the
 same for every turn of the session, so it can sit in the cached system prompt.
