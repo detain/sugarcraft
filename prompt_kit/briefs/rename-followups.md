@@ -171,3 +171,9 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   (old-brand artwork moved to the new path). <!-- @rename-keep -->
 - `.vhs/*.gif` recorded frames may show the pre-rename prompt; CI `vhs.yml` re-renders from the <!-- @rename-keep -->
   already-clean `.tape` files on the next tape run. <!-- @rename-keep -->
+
+## e12 candy-pty → sugar-pty (2026-10-16, lane rename/e12) <!-- @rename-keep -->
+- `ansi/sugarcraft/*.ansi` — the composite SugarCraft wordmark art CONTENT embeds the pre-rename <!-- @rename-keep -->
+  `candy-pty` component row (`*.ansi` content is C.3-excluded). Redraw at the ansi tagger pass. <!-- @rename-keep -->
+- `media/icons/sugar-pty.png` + `docs/img/icons/sugar-pty.png` — bytes unchanged (old-brand <!-- @rename-keep -->
+  artwork moved to the new path). <!-- @rename-keep -->
