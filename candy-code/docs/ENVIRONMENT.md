@@ -192,7 +192,7 @@ takes priority; nothing here is consulted in that case.
 | `OPENAI_API_KEY` | `openai` | API key. Defaults to the empty string, which the provider will reject. |
 | `OPENAI_ORG_ID` | `openai` | Optional organization ID. Defaults to `null`. |
 | `ANTHROPIC_API_KEY` | `anthropic`, `claude-code` | API key, sent as `x-api-key`. |
-| `ANTHROPIC_AUTH_TOKEN` | `claude-code` | Alternative bearer credential, forwarded into the `claude` binary's environment. |
+| `ANTHROPIC_AUTH_TOKEN` | `claude-code` | Alternative bearer credential, forwarded into the `claude` binary's environment. It only matters with the provider block's `bare: false` (ISS-078): a default bare spawn reads no OAuth token and no user state, and requires `ANTHROPIC_API_KEY` (or `apiKeyHelper`) instead. |
 | `ANTHROPIC_BASE_URL` | `anthropic`, `claude-code` | API base URL, the root without `/v1`. Defaults to `https://api.anthropic.com`. The `anthropic` type sends to `<base>/v1/messages`; a base that already ends in `/v1` is used as it is. |
 | `SGLANG_API_KEY` | `sglang` | Optional key for a self-hosted OpenAI-compatible endpoint. Defaults to `null`, which is correct for an unauthenticated local server. |
 | `GCP_PROJECT_ID` | `vertex` | Google Cloud project ID. Defaults to the empty string. |

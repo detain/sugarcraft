@@ -1437,7 +1437,7 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; JSON schema    |
 | SGLang          | `sglang`      | OpenAI-compatible self-hosted endpoints (Guzzle)                 |
 | AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
-| GCP Vertex      | `vertex`      | Anthropic-on-Vertex via an injectable predictor seam             |
+| GCP Vertex      | `vertex`      | `claude-*` via `/v1/messages` + `gemini-*` via `generateContent` (native SDK) |
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
 
