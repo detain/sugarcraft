@@ -30,7 +30,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-ansi | 360 | 901 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-async | 117 | 259 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-buffer | 315 | 1712 | 0 | 0 | 0 | 0 |  <!-- @rename-keep historical provenance --> |
-| candy-core | 1383 | 28917 | 0 | 0 | 25 | 0 |  |
+| candy-core | 1383 | 28917 | 0 | 0 | 25 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-files | 193 | 716 | 0 | 0 | 0 | 0 |  |
 | candy-flip | 196 | 903 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-focus | 93 | 412 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
@@ -110,7 +110,7 @@ Mirrors `.github/workflows/ci.yml` step "Run tests (sugar-crush — sharded, E67
 
 | # | command | rc |
 |---|---|---|
-| 1 | `candy-core/vendor/bin/phpunit --no-configuration tools/tests/` | 0 — OK (390 tests, 1065 assertions), 31s |
+| 1 | `candy-core/vendor/bin/phpunit --no-configuration tools/tests/` | 0 — OK (390 tests, 1065 assertions), 31s | <!-- @rename-keep historical provenance -->
 | 2 | `php tools/check-path-repos.php --no-lib-path-repos` | 0 |
 | 3 | `php tools/check-path-repos.php` | 0 |
 | 4 | `php tools/check-path-repos.php --unused` | 0 |

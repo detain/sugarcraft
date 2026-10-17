@@ -57,9 +57,9 @@ sibling-prefix protection inert (no sugar-glow* siblings). Report kept at /tmp/r
 
 ## R2 remote rename
 `scripts/rename-remote.sh sugar-glow candy-mdview`: GitHub rename SUCCEEDED, then the script DIED on <!-- @rename-keep -->
-topics push — HTTP 422: repo carried 20 topics incl stale brand `candycore` + noise `readme`; new keywords
+topics push — HTTP 422: repo carried 20 topics incl stale brand `candycore` + noise `readme`; new keywords <!-- @rename-keep historical provenance -->
 (+viewer, +sugarcraft) would make 21. Cure: `unset GITHUB_TOKEN && gh repo edit sugarcraft/candy-mdview
---remove-topic candycore --remove-topic readme`, re-ran the script → idempotent convergence ("already
+--remove-topic candycore --remove-topic readme`, re-ran the script → idempotent convergence ("already <!-- @rename-keep historical provenance -->
 resolves … re-syncing"). Verified: description 'Markdown CLI viewer + pager — port of charmbracelet/glow.',
 topics=20 exact, old `sugar-glow` repo redirects ✓. <!-- @rename-keep -->
 

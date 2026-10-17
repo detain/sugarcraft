@@ -81,7 +81,7 @@ renames.json (`old_slug_for` matches `new == $lib`), so a B→C hop names `legac
 - Embedded `php -r` snippet extracted → `php -l` clean; `php -l scripts/affected-libs.php` clean.
 - Dry logic test (sourced real `old_slug_for()` from the extracted step, cwd=repo root):
   - `candy-flappy→honey-flap`, `sugar-markdown→candy-shine`, `candy-code→sugar-crush`, <!-- @rename-keep -->
-    `candy-code-web→sugar-crush-web`, `sugar-core→candy-core` (post-rename names answer old slugs).
+    `candy-code-web→sugar-crush-web`, `sugar-core→candy-core` (post-rename names answer old slugs). <!-- @rename-keep historical provenance -->
   - `candy-mouse`, `candy-forms`, `candy-gifview`, `docs`, and every current pending-old dir <!-- @rename-keep historical provenance -->
     answer empty.
   - Name-set semantics vs disk: pending entries' `old` all exist as dirs, their `new` none exist;

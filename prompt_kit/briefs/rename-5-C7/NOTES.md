@@ -39,7 +39,7 @@
 - crush --filter Mcp: 1058T/5271A/1S(canary) exact; --filter Lsp: 287T/1206A exact;
   --filter DocFigureProseDrift|DescriptorInheritance|ProcessReaper: 111T/8436A exact.
 - tools/tests: 426T/1484A (via sugar-crush/vendor/bin/phpunit — fresh worktree lacks
-  candy-core/vendor; equivalent binary, pinned figures hold).
+  candy-core/vendor; equivalent binary, pinned figures hold). <!-- @rename-keep historical provenance -->
 - check-path-repos --no-lib-path-repos rc=0; check-child-lifetimes 60 libs/28 sites/
   8 findings/8 accounted/0 problems (renamed StdioMcpServer key rides tools/ rewrite);
   gen-docs --check + gen-ansi --check rc=0.

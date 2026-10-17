@@ -56,8 +56,8 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 
 ## R2 remote rename
 - `scripts/rename-remote.sh sugar-spark candy-ansi-inspect`: GitHub rename SUCCEEDED, then topics 422 (B5 family) — <!-- @rename-keep -->
-  repo carried 19 topics incl stale brand `candycore` + noise `readable`/`development`; script adds 8 composer
-  keywords (4 new: escape/inspector/debug/sugarcraft) → would exceed 20. Cure: `gh repo edit --remove-topic candycore`,
+  repo carried 19 topics incl stale brand `candycore` + noise `readable`/`development`; script adds 8 composer <!-- @rename-keep historical provenance -->
+  keywords (4 new: escape/inspector/debug/sugarcraft) → would exceed 20. Cure: `gh repo edit --remove-topic candycore`, <!-- @rename-keep historical provenance -->
   then `--remove-topic readable --remove-topic development`, re-ran script → idempotent convergence.
   Verified: name candy-ansi-inspect, description 'ANSI escape-sequence inspector — port of charmbracelet/sequin.',
   topics=20 EXACT at cap, old sugar-spark URL resolves (redirect live). Note: repo already carried well-chosen <!-- @rename-keep -->

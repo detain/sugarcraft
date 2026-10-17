@@ -12,7 +12,7 @@
 
 1. One **architectural** problem: `candy-scriptui` (a foundation lib) `require`s `sugar-bits` + `sugar-forms` (leaf libs). The dep graph points the wrong way. <!-- @rename-keep historical provenance -->
 2. ~700 lines of removable boilerplate from cloned `Lang.php` files (33 libs, ~31 lines each, all the same shape).
-3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it.
+3. `candy-mdview/src/WidthHelper.php` (107 lines) reimplements `candy-core/src/Util/Width.php`; delete it. <!-- @rename-keep historical provenance -->
 4. ANSI-strip regex and hand-built SGR escape sequences are scattered across 6+ leaf libs that should be calling `candy-core/Util/Ansi` and `candy-palette/Color`. <!-- @rename-keep historical provenance -->
 5. Two incompatible Boxer layout engines (`sugar-panels` vs `sugar-dash/src/Layout/Boxer`). <!-- @rename-keep -->
 6. Almost everything else — README quickstarts, examples, type signatures, defaults, error messages, `final` policy — is already in great shape. See §6.
@@ -46,7 +46,7 @@ vendor/bin/php-cs-fixer fix --dry-run --diff 2>/dev/null || true  # if configure
 
 Current state (verified 2026-05-21):
 - **phpunit:** configured per lib (45 libs).
-- **phpstan:** only `candy-core/phpstan.neon` exists today. Phases touching other libs **should set up phpstan as part of the same PR** — bring the lib up to the project's standard while we're in there.
+- **phpstan:** only `candy-core/phpstan.neon` exists today. Phases touching other libs **should set up phpstan as part of the same PR** — bring the lib up to the project's standard while we're in there. <!-- @rename-keep historical provenance -->
 - **php-cs-fixer:** not configured anywhere yet. Add a root `.php-cs-fixer.dist.php` as part of the first phase that ships, then per-lib gates can use it.
 
 The PHPUnit hang gotcha (PTY/FFI tests) still applies — see the `feedback_phpunit_kill_pattern` project memory: backgrounded `pkill -f phpunit` watchdog at 120s if needed.
@@ -236,7 +236,7 @@ The `sugar-forms` extraction (form primitives pulled out of `sugar-bits`/`sugar-
 
 ### 4.3 Stream-write test pattern repeated in ~15 test files
 
-`ftell` → operation → `fseek` → `stream_get_contents` is documented in `candy-core/tests/RendererTest.php` and repeated across many test files. Extract `SugarCraft\Core\Tests\StreamHelper` trait + a base `SugarCraft\Core\Tests\TestCase` that the libs' test suites can inherit. Low-risk consolidation.
+`ftell` → operation → `fseek` → `stream_get_contents` is documented in `candy-core/tests/RendererTest.php` and repeated across many test files. Extract `SugarCraft\Core\Tests\StreamHelper` trait + a base `SugarCraft\Core\Tests\TestCase` that the libs' test suites can inherit. Low-risk consolidation. <!-- @rename-keep historical provenance -->
 
 ### 4.4 sugar-forms validator chaining is verbose
 
@@ -260,7 +260,7 @@ Enables programmatic enumeration (e.g., for a `gum style --list-themes` style co
 
 ### 5.2 Composability cookbook
 
-✅ Resolved (PR #876): `docs/cookbook/` with 3 runnable cross-lib examples — `spinner-in-table.php` (sugar-forms Spinner embedded in a sugar-table StyledCell), `sparkline-in-table.php` (sugar-charts Sparkline + sugar-table + sugar-forms Spinner panel), `program-within-program.php` (candy-core Model nesting a sugar-forms Spinner sub-program). Each builds the model(s), feeds scripted messages, renders one frame, and exits 0 (verified via `php docs/cookbook/<name>.php`). `docs/cookbook/composer.json` path-requires the libs; `docs/cookbook/README.md` indexes them; `docs/index.html` links the cookbook. The Toast+form candidate was dropped: sugar-toast's `View()` overlay truncates its own box borders (reproduces in `sugar-toast/examples/basic.php` too), so it would have shipped visibly broken (fixed in PR #877).
+✅ Resolved (PR #876): `docs/cookbook/` with 3 runnable cross-lib examples — `spinner-in-table.php` (sugar-forms Spinner embedded in a sugar-table StyledCell), `sparkline-in-table.php` (sugar-charts Sparkline + sugar-table + sugar-forms Spinner panel), `program-within-program.php` (candy-core Model nesting a sugar-forms Spinner sub-program). Each builds the model(s), feeds scripted messages, renders one frame, and exits 0 (verified via `php docs/cookbook/<name>.php`). `docs/cookbook/composer.json` path-requires the libs; `docs/cookbook/README.md` indexes them; `docs/index.html` links the cookbook. The Toast+form candidate was dropped: sugar-toast's `View()` overlay truncates its own box borders (reproduces in `sugar-toast/examples/basic.php` too), so it would have shipped visibly broken (fixed in PR #877). <!-- @rename-keep historical provenance -->
 
 `docs/cookbook/` with 3–5 worked examples:
 - Embedding a `sugar-forms` Form inside a `sugar-table` cell

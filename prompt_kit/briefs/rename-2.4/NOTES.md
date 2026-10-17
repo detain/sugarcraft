@@ -58,10 +58,10 @@ registered on Packagist (authoring-only per step 2.4; real actions start at
 - `bash -n`: all three OK. `shellcheck -S warning`: clean on both new
   scripts; only the pre-existing baseline SC2034 (unused TOPICS) in
   bootstrap (verified present at HEAD~ shape via `git show HEAD:… | shellcheck`).
-- Done-when (plan :31-32): `--print-description candy-core` prints a line ✔;
-  `scripts/packagist.sh check candy-core` → `dev-master: present`,
+- Done-when (plan :31-32): `--print-description candy-core` prints a line ✔; <!-- @rename-keep historical provenance -->
+  `scripts/packagist.sh check candy-core` → `dev-master: present`, <!-- @rename-keep historical provenance -->
   `source.reference: 210be8cd25cd472dc29c4fc8addc200fa8eccb8a` ✔ — matches
-  `git ls-remote https://github.com/sugarcraft/candy-core refs/heads/master`.
+  `git ls-remote https://github.com/sugarcraft/candy-core refs/heads/master`. <!-- @rename-keep historical provenance -->
 - Mock gh (stub + registry dir, /tmp/opencode/rename-24): fresh rename rc0
   (rename+desc+homepage+topics), replay rc0 "re-syncing metadata", collision
   rc2, missing-old rc1, bad-slug rc1, stale-topic removal fires exactly one
@@ -75,7 +75,7 @@ registered on Packagist (authoring-only per step 2.4; real actions start at
   check 404 / 200-without-dev-master / 200-with-dev-master polarities exact.
   Real-network negative: `check candy-gifview` → ABSENT 404 rc1 (not yet
   created — step 2.5 pending).
-- `candy-core/vendor/bin/phpunit --no-configuration tools/tests/`:
+- `candy-core/vendor/bin/phpunit --no-configuration tools/tests/`: <!-- @rename-keep historical provenance -->
   OK (422 tests, 1434 assertions) — baseline exact, +0 delta (step 2.4
   prescribes no phpunit tests).
 
@@ -125,12 +125,12 @@ bash -n scripts/packagist.sh scripts/rename-remote.sh scripts/bootstrap-org-repo
 shellcheck -S warning scripts/packagist.sh scripts/rename-remote.sh   # clean
 # mock curl: dump assembled request (masked) — proves CI-shape byte-match
 CURL_LOG=/tmp/opencode/rename-24-fix/curl.log PATH=/tmp/opencode/rename-24-fix/mockbin:$PATH \
-  PACKAGIST_TOKEN=fake-token PACKAGIST_USERNAME=fake-user bash scripts/packagist.sh update candy-core
+  PACKAGIST_TOKEN=fake-token PACKAGIST_USERNAME=fake-user bash scripts/packagist.sh update candy-core <!-- @rename-keep historical provenance -->
 sed -E 's/(apiToken=)[^&"]+/\1REDACTED/g' /tmp/opencode/rename-24-fix/curl.log
 # creds polarity: env -u PACKAGIST_TOKEN ... rc2; env -u PACKAGIST_USERNAME ... rc2
 # 401 polarity: CURL_CODE=401 ... rc1
-# live read-only: bash scripts/packagist.sh check candy-core   # rc0, SHA 210be8cd25cd…
+# live read-only: bash scripts/packagist.sh check candy-core   # rc0, SHA 210be8cd25cd… <!-- @rename-keep historical provenance -->
 # rename-remote polarities under mock gh ($GH_REG registry, incl. MINOR-2 chain
 # scenario + stale-topic removal firing) — see run-gh-mocks.sh in the same dir
-candy-core/vendor/bin/phpunit --no-configuration tools/tests/ </dev/null   # 422T/1434A
+candy-core/vendor/bin/phpunit --no-configuration tools/tests/ </dev/null   # 422T/1434A <!-- @rename-keep historical provenance -->
 ```

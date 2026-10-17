@@ -97,13 +97,13 @@ all present (legacy head 29667bf6 = pre-rename split history preserved before
 the first force-push). Old repo URL 301-redirects to new (R2). VHS demos run
 38814100396 SUCCESS on d985eb232 (renamed tape renders). CI run 38814100284
 (full matrix, force_all) FINAL: candy-flappy Test 8.3 + Test 8.4 + Coverage ALL
-SUCCESS. Red set = pre-existing 2.5-NOTES families {PHPStan 8.3/8.4 candy-core,
+SUCCESS. Red set = pre-existing 2.5-NOTES families {PHPStan 8.3/8.4 candy-core, <!-- @rename-keep historical provenance -->
 Windows 8.3/8.4 candy-forms, candy-mines 8.3/8.4/Cov, candy-top 8.3/8.4/Cov, <!-- @rename-keep -->
 sugar-dash 8.3/8.4/Cov} (sugar-crush greens this round) + ONE extra: <!-- @rename-keep -->
-macOS · 8.3 · candy-core, log-identified as
+macOS · 8.3 · candy-core, log-identified as <!-- @rename-keep historical provenance -->
 ProgramRuntimeTeardownTest::testPendingEscapeFlushDoesNotFireAfterRun — the
 documented intermittent ESC-flush timing flake family (baseline 5254bdbd2 ran
-green on the same job; candy-core sources untouched by the rename). Not chased.
+green on the same job; candy-core sources untouched by the rename). Not chased. <!-- @rename-keep historical provenance -->
 status=remote-done commit d8238ad4f.
 
 ## R9 — DONE 2026-10-15 (owner re-supplied credentials)

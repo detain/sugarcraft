@@ -58,16 +58,16 @@ defects in the 34-commit chain being CI'd for the first time, plus one infra fam
    candy-top/tests/fixtures/gpu/npu/sys/bus/pci/drivers/intel_vpu/0000:00:0b.0/device
    ("invalid path", exit 128 — colon in PCI address). Known family (docs-rework
    pre-existing dirt note). Fix = rename fixture dirs (chr-based) or core.checkout branch.
-2. candy-core Test 8.3/8.4/Coverage — DescriptorSinkArgumentCensusTest::
+2. candy-core Test 8.3/8.4/Coverage — DescriptorSinkArgumentCensusTest:: <!-- @rename-keep historical provenance -->
    testEverySiteThatConsumesADescriptorIsJudgedInTheRoster red: 'candy-gifview/src/
    Cli.php::SizeIoctl::query(1)' [LITERAL_INT] missing from ROSTER — introduced by step
    1.3 split (commit 4d6f81799), REPRODUCED LOCALLY deterministic (1F). candy-flip/ <!-- @rename-keep -->
    Renderer.php keeps its own 2 query(1) sites; its roster rows stay. Fix = add one
-   judged roster row in candy-core/tests. NOT committed here (outside 2.5 path scope).
-3. candy-core macOS — same census red + ProgramRuntimeTeardownTest::
+   judged roster row in candy-core/tests. NOT committed here (outside 2.5 path scope). <!-- @rename-keep historical provenance -->
+3. candy-core macOS — same census red + ProgramRuntimeTeardownTest:: <!-- @rename-keep historical provenance -->
    testPendingEscapeFlushDoesNotFireAfterRun (ESC flush timing; macOS-only => flake-ish,
    watch next run).
-4. PHPStan 8.3/8.4 candy-core — pre-existing src findings surfaced: '<= always true'
+4. PHPStan 8.3/8.4 candy-core — pre-existing src findings surfaced: '<= always true' <!-- @rename-keep historical provenance -->
    (int<1,3> vs 1MiB), 'Cannot unset offset null on array of TimerInterface',
    'ClosedResource invalid type' (AtomicJsonFile::$lockHandle), 4x unused closure `use`
    in sugar-crush-side? (listed in log). Chain never PHPStan'd before.

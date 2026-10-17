@@ -396,5 +396,5 @@ When an external agent writes through `fs/write_text_file`, Zed diffs against th
 ## 11. UX items (→ 5.6, 5.7-2, 5.14a)
 
 - **`/context` contents (→ 5.6).** Zed's token tooltip shows used/max, an input/output split with separate maxima, cost, and **which rules files and whether the personal AGENTS.md are loaded**. R14: make `/context` list loaded instruction files, rules, memory entry count and skill count.
-- **Notifications (→ 5.14a).** `notify_when_agent_waiting: "primary_screen"` and `play_sound_when_agent_done`. For sugar-crush: BEL plus OSC 9 / OSC 777 on turn end or approval wait when the terminal is unfocused (focus reporting is available via candy-core).
+- **Notifications (→ 5.14a).** `notify_when_agent_waiting: "primary_screen"` and `play_sound_when_agent_done`. For sugar-crush: BEL plus OSC 9 / OSC 777 on turn end or approval wait when the terminal is unfocused (focus reporting is available via candy-core). <!-- @rename-keep historical provenance -->
 - **`ask_user` (→ 5.7-2).** Question plus ≥ 2 options and/or free text, rendered as a form via ACP *elicitation*; off in all default profiles. For sugar-crush: over the 1.C approval channel.

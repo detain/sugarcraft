@@ -46,7 +46,7 @@ silent depth cap).
 ## Verification log (all on master @ 6b3a7c618)
 - `php tools/gen-docs.php` → `generated 63 file(s) (libraries: 40, apps: 21)`;
   `php tools/gen-docs.php --check` → rc 0, `ok: all 61 pages + 2 redirect stubs + index.html counts match generated output`.
-- `candy-core/vendor/bin/phpunit --no-configuration tools/tests/` </dev/null → **OK (422 tests, 1434 assertions)**.
+- `candy-core/vendor/bin/phpunit --no-configuration tools/tests/` </dev/null → **OK (422 tests, 1434 assertions)**. <!-- @rename-keep historical provenance -->
   Baseline 418/1398; delta **+4T/+36A = exactly the 4 new GenDocsTest methods**. No docs-derived
   provider drift: DocsPhpVersionTest/DocsQuickstartTest glob `docs/_data/*`, where stubs add nothing.
 - `php tools/check-path-repos.php --no-lib-path-repos` → exit 0.
@@ -59,6 +59,6 @@ silent depth cap).
 ```sh
 cd /home/sites/sugarcraft
 php tools/gen-docs.php && php tools/gen-docs.php --check   # rc 0
-candy-core/vendor/bin/phpunit --no-configuration tools/tests/ </dev/null   # 422/1434
+candy-core/vendor/bin/phpunit --no-configuration tools/tests/ </dev/null   # 422/1434 <!-- @rename-keep historical provenance -->
 php tools/check-path-repos.php --no-lib-path-repos          # rc 0
 ```

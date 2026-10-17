@@ -21,7 +21,7 @@ _Last updated: 2026-10-08 (plan + post-plan round complete; IPMI box `6e5e2f1ad`
 Lib lanes L1 `0153b65e4` · L2 `073913a44` · L3 `37f5c6744` · L4 `1bbbca37f` · L5 `57cd08b9f` · L6 `0859cfa4f` ·
 L7 `07a1e5e6f` · L8 `39c65280c` · integration `03d5ef164` · candy-top Theme `672c64680` · Collect `b2d9207cc` ·
 Config+Lang `7c893a54b` · proc_open census fix `ea1949fd2` · Wave U0+U1 collectors `02f178b91` · Wave U2 block2
-`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dashboard NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7` · U5 FreeBSD collectors `18fd19467` (not wired yet) · candy-core hangup-safe restore `fe9cdecdb` · P-F2 options/presets/persistence `16b9dcdaa`. · census candy-top share `274ab740b` · U5 FreeBSD wiring `70c09bec9` · child-lifetime pin 28 `39235a259` · P-H candy-top docs `4956d682f` · P-G TTY polish `500696d7e` (P-G complete) · U4b #1791c tree-state `41b18d59f` · U4a GPU/NPU collectors `a8f442188` · U4 GPU boxes + #1552 proc GPU columns `7a6a33579` · U4 #1873 container box `82a422cf1`. **All v1 phases P-A…P-H are ✅.**
+`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dashboard NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7` · U5 FreeBSD collectors `18fd19467` (not wired yet) · candy-core hangup-safe restore `fe9cdecdb` · P-F2 options/presets/persistence `16b9dcdaa`. · census candy-top share `274ab740b` · U5 FreeBSD wiring `70c09bec9` · child-lifetime pin 28 `39235a259` · P-H candy-top docs `4956d682f` · P-G TTY polish `500696d7e` (P-G complete) · U4b #1791c tree-state `41b18d59f` · U4a GPU/NPU collectors `a8f442188` · U4 GPU boxes + #1552 proc GPU columns `7a6a33579` · U4 #1873 container box `82a422cf1`. **All v1 phases P-A…P-H are ✅.** <!-- @rename-keep historical provenance -->
 btop-derived byte-exact oracles: `prompt_kit/tools/btop-{graph,netscale,theme}-oracle.cpp`.
 References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-reference,freebsd-reference}.md`.
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
@@ -54,7 +54,7 @@ Follow-ups noted by reviewers: split Panel/Ipmi/IpmiView.php (~1200 lines) by se
 - Never run `refresh-deps.php` with an uncommitted composer.json (it `git checkout`s `*/composer.json`).
 
 ## Known open issues (not campaign-caused)
-- candy-core `DescriptorSinkArgumentCensusTest` has 2 failures from sugar-crush commit `f41b307ae`
+- candy-core `DescriptorSinkArgumentCensusTest` has 2 failures from sugar-crush commit `f41b307ae` <!-- @rename-keep historical provenance -->
   (2026-10-05) — pre-existing red on master; reported to user, not fixed (outside plan) unless asked.
-- `terminal_sync=false` ignored (candy-core always wraps DEC 2026); sampling runs on the loop thread (P-E must
+- `terminal_sync=false` ignored (candy-core always wraps DEC 2026); sampling runs on the loop thread (P-E must <!-- @rename-keep historical provenance -->
   keep ProcList under the R4 50 ms budget).

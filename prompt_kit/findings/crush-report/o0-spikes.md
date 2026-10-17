@@ -9,7 +9,7 @@ Appendix O §9.1 phase 0 and the §10 checks owed. Every figure below was measur
 | (a) react/http + rfc6455 echo server beside a live `completeAsync()` turn | **Works on both loops.** No dropped frames and no stall attributable to the server. | O-3a |
 | (b) Fork cost with 30 loaded hosts | **Acceptable.** `pcntl_fork()` cost grows with parent RSS (page tables). Child COW work does not grow with idle hosts. No turn zygote is needed at these sizes. | O-2*, O-3a |
 | (c) Turn child and inherited server fds | **Real hazard, fixable.** A child holding the listener keeps the port bound after the server closes it, and it accepts connections into a backlog nobody reads. Closing them in the child with libc `close(2)` through FFI fixes both. | O-3a (`ForkedChild::closeInheritedServerFds()`) |
-| (d) candy-core `Program` as a headless model runtime | **Not usable as is, and not adopted in W1.** `run()` owns the loop, and one program's quit stops the shared loop for every session and the server. | Recorded below. No candy-core change this wave. |
+| (d) candy-core `Program` as a headless model runtime | **Not usable as is, and not adopted in W1.** `run()` owns the loop, and one program's quit stops the shared loop for every session and the server. | Recorded below. No candy-core change this wave. | <!-- @rename-keep historical provenance -->
 
 ## Dependency pins (check 1)
 
@@ -107,13 +107,13 @@ Results are identical under StreamSelect and ext-uv.
   - B was killed 290 ms early, and the server stopped.
 
 **Recommendation:**
-- **Do not adopt in W1.** Keep the strangler `src/Host/` extraction (§4.2) as the target. It does not need candy-core.
-- If a later wave wants the event-vocabulary harness, the candy-core addition is `Program::start(): void` + `Program::stop(): void`:
+- **Do not adopt in W1.** Keep the strangler `src/Host/` extraction (§4.2) as the target. It does not need candy-core. <!-- @rename-keep historical provenance -->
+- If a later wave wants the event-vocabulary harness, the candy-core addition is `Program::start(): void` + `Program::stop(): void`: <!-- @rename-keep historical provenance -->
   - `start` runs init, dispatches the initial size/env/profile and reconciles subscriptions, but never calls `$loop->run()`;
   - `stop` cancels this program's timers and streams.
   - Under `start()`, `QuitMsg`/`InterruptMsg` must stop *the program* (cancel its own timers and read stream), never `$loop->stop()`.
   - Terminal setup and teardown must be skipped entirely when `withoutRenderer` is set and no tty is open.
-- That is a cross-lib candy-core PR with its own tests. It is not a sugar-crush-only change.
+- That is a cross-lib candy-core PR with its own tests. It is not a sugar-crush-only change. <!-- @rename-keep historical provenance -->
 
 ## Other checks owed (§10)
 

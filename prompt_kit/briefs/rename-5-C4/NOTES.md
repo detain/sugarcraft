@@ -26,6 +26,6 @@ Lane: C4 (batch-C line 24, ns Veil→Overlay, type=lib, bins {}). Branch `rename
 - sugar-overlay suite: **258T/561A/0F/0E/0S/0W** EXACT vs baseline (timeout 600 plain pipe, cwd=sugar-overlay). <!-- @rename-keep -->
 - residue `check-rename-residue.php --old=sugar-veil`: 0 findings rc=0 (pre-sweep, post-stage, and re-run after the fix commit). <!-- @rename-keep -->
 - sugar-crush sharded K=8 `--against-json` on committed tip: **CONSERVATION PASS** — shards 22564T/423738A/0E/0F/2S vs figure 22564/423652 (+0T; +86A tree-scan wobble, within conservation design). TaskGrantMemoHookOriginTest green post-commit (see finding 4 — the dirty-tree diff section, not the rename, caused its pre-commit red).
-- tools/tests: **426T/1484A OK** (via sugar-crush/vendor/bin/phpunit — candy-core vendor not linked in this worktree, same binary version).
+- tools/tests: **426T/1484A OK** (via sugar-crush/vendor/bin/phpunit — candy-core vendor not linked in this worktree, same binary version). <!-- @rename-keep historical provenance -->
 - check-path-repos `--no-lib-path-repos` rc=0 (61 libs); check-child-lifetimes rc=0; check-one-type-per-file rc=0.
 - gen-docs `--check` rc=0 (61 pages + 17 redirect stubs + index); gen-ansi-readme `--check` rc=0.
