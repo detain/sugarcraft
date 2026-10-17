@@ -12,7 +12,7 @@ Lane: e3 (batch-E line 50, ns Testing→Testing UNCHANGED, type=lib, bins {}). B
 
 ## Self-lock (never tag — path rename targets)
 
-sugar-testing/** (all), findings/candy-testing.md, findings/plan_candy-testing.md, docs/_data/sugar-testing.{json,body.html}, docs/lib/sugar-testing.html, media/icons/sugar-testing.png. Formerly notice added POST-move to sugar-testing/README.md. No .vhs dir, no ansi/sugar-testing, no docs/repo_map/ or research file for this slug (verified).
+sugar-testing/** (all), findings/candy-testing.md, findings/plan_candy-testing.md, docs/_data/sugar-testing.{json,body.html}, docs/lib/sugar-testing.html, media/icons/sugar-testing.png. Formerly notice added POST-move to sugar-testing/README.md. No .vhs dir, no ansi/sugar-testing, no docs/repo_map/ or research file for this slug (verified). <!-- @rename-keep -->
 
 ## Tag-prep set (history → @rename-keep, per-line)
 
@@ -27,10 +27,10 @@ sugar-testing/** (all), findings/candy-testing.md, findings/plan_candy-testing.m
 
 ## Steps
 
-- (pending) tag-prep commit:
-- (pending) R1 dry-run:
-- (pending) R3 tool run:
-- (pending) R4 manual:
-- (pending) R5 wiring:
-- (pending) R6 gates:
-- (pending) R7 commit+push branch:
+- tag-prep commit: 27 lines / 9 files (crush ledgers, php74_branch, baseline, resume_prompt ×3, crush-report impact ×3).
+- R1 dry-run: 104 content files / 7 path renames + dir move; R2=16 R3=322 R6=1 (no-op byte-identical).
+- R2 remote rename: SKIPPED per brief law (no remote ops in lanes).
+- R3 tool run: rc=0; all PHP php -l clean; sugar-testing/ present, candy-testing/ gone. <!-- @rename-keep -->
+- R4 manual: Formerly notice; glued plan_candy-testing.md pointers ×6 rewritten (findings_resume_plan ×5, plan.md ×1 — invisible to tool AND residue); NOTES self-lock line tagged; zero Cap-Hyphen/aliases/.vhs; ansi/sugarcraft art ×3 content-excluded -> followups.
+- R5 wiring: refresh-deps linked 24/24 (23 consumers+sugar-testing), zero dangling candy-testing vendor symlinks; root composer.lock NOT regenerated (weld-domain lock law; excluded from scan anyway). <!-- @rename-keep -->
+- R6 gates @tip: own suite 267T/5416A/3S EXACT vs base (record 267/5417/2S drift disclosed); consumers async 117/259 EXACT, tetris 214/4322 EXACT, charts 654/1551 EXACT, vcr --filter Golden 21/41 OK, forms --filter Golden|Simulator|ScriptedInput 2/5 OK; tools/tests 426/1484 (base pin; 429/1517 = e6 newer pin NOT seen in this worktree); residue 0; path-repos/child-lifetimes/gen-docs --check/gen-ansi --check rc0.
