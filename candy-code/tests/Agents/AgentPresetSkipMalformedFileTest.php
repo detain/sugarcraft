@@ -34,7 +34,7 @@ final class AgentPresetSkipMalformedFileTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_preset_skip_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_preset_skip_' . uniqid('', true);
         mkdir($this->tempDir . '/agents', 0755, true);
         mkdir($this->tempDir . '/home', 0700, true);
 

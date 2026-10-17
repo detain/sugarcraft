@@ -54,7 +54,7 @@ final class WorkflowIdentifierTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_wf_ids_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_wf_ids_' . uniqid('', true);
         mkdir($this->tempDir . '/workflows', 0755, true);
 
         // An explicit user-tier directory rather than a redirected HOME: the

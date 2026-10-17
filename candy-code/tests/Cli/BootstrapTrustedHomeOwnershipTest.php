@@ -68,7 +68,7 @@ final class BootstrapTrustedHomeOwnershipTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_home_ownership_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_home_ownership_' . uniqid('', true);
         $this->home = $this->tempDir . '/home';
         $this->project = $this->tempDir . '/project';
         mkdir($this->home, 0o700, true);

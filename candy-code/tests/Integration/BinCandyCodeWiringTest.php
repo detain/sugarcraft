@@ -57,7 +57,7 @@ final class BinCandyCodeWiringTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_bin_wiring_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_bin_wiring_' . uniqid('', true);
         mkdir($this->tempDir . '/home', 0700, true);
         mkdir($this->tempDir . '/repo', 0755, true);
 

@@ -70,7 +70,7 @@ final class AgentPresetHomeRootTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_home_root_agents_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_home_root_agents_' . uniqid('', true);
         $this->home = $this->tempDir . '/home';
         mkdir($this->home . '/.candy-code', 0o700, true);
 

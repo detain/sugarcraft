@@ -197,7 +197,7 @@ final class WorkspaceContextTest extends TestCase
 
     private function sandbox(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_workspace_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_workspace_' . uniqid('', true);
         mkdir($this->tempDir . '/project', 0700, true);
         $this->useHomeSandbox($this->tempDir . '/home');
         $this->clearBackendSelectionEnv();

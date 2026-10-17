@@ -36,7 +36,7 @@ final class ArgvParserPositionalTest extends TestCase
         parent::setUp();
 
         $this->previousCwd = (string) \getcwd();
-        $this->scratch = \sys_get_temp_dir() . '/sugarcrush_positional_' . \uniqid('', true);
+        $this->scratch = \sys_get_temp_dir() . '/candy_code_positional_' . \uniqid('', true);
         \mkdir($this->scratch . '/src', 0700, true);
         \mkdir($this->scratch . '/lib', 0700, true);
         \chdir($this->scratch);

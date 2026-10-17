@@ -41,7 +41,7 @@ final class StatusLineCommandTest extends TestCase
 
     private function probe(string $tag): string
     {
-        $path = sys_get_temp_dir() . '/sugarcrush_statusline_' . $tag . '_' . bin2hex(random_bytes(8));
+        $path = sys_get_temp_dir() . '/candy_code_statusline_' . $tag . '_' . bin2hex(random_bytes(8));
         $this->probes[] = $path;
 
         return $path;
@@ -103,7 +103,7 @@ final class StatusLineCommandTest extends TestCase
      */
     public function testATrustedProjectStillCannotSetTheStatusLine(): void
     {
-        $root = sys_get_temp_dir() . '/sugarcrush_sl_project_' . bin2hex(random_bytes(8));
+        $root = sys_get_temp_dir() . '/candy_code_sl_project_' . bin2hex(random_bytes(8));
         mkdir($root . '/' . LayeredSettings::dir(), 0o700, true);
 
         $shared = $root . '/' . LayeredSettings::SHARED_PATH;
@@ -144,7 +144,7 @@ final class StatusLineCommandTest extends TestCase
      */
     public function testTheUsersOwnSettingsFileDoesCarryIt(): void
     {
-        $dir = sys_get_temp_dir() . '/sugarcrush_sl_user_' . bin2hex(random_bytes(8));
+        $dir = sys_get_temp_dir() . '/candy_code_sl_user_' . bin2hex(random_bytes(8));
         mkdir($dir, 0o700, true);
         $file = $dir . '/' . LayeredSettings::USER_FILE;
         file_put_contents($file, json_encode(self::settings([
@@ -750,7 +750,7 @@ final class StatusLineCommandTest extends TestCase
      */
     public function testTheConfiguredWorkingDirectoryIsWhereTheCommandRuns(): void
     {
-        $dir = sys_get_temp_dir() . '/sugarcrush_sl_cwd_' . bin2hex(random_bytes(8));
+        $dir = sys_get_temp_dir() . '/candy_code_sl_cwd_' . bin2hex(random_bytes(8));
         mkdir($dir, 0o700, true);
 
         StatusLineCommand::configure(

@@ -24,7 +24,7 @@ final class AtomicFileWriterOrphanSweepTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->dir = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_afw_sweep_' . uniqid((string) getmypid(), true);
+        $this->dir = (string) realpath((string) sys_get_temp_dir()) . '/candy_code_afw_sweep_' . uniqid((string) getmypid(), true);
         mkdir($this->dir, 0o777, true);
     }
 

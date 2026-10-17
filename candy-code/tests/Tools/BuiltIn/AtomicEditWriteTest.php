@@ -37,7 +37,7 @@ final class AtomicEditWriteTest extends TestCase
     protected function setUp(): void
     {
         $this->umask = umask();
-        $this->dir = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_atomic_' . uniqid((string) getmypid(), true);
+        $this->dir = (string) realpath((string) sys_get_temp_dir()) . '/candy_code_atomic_' . uniqid((string) getmypid(), true);
         mkdir($this->dir, 0o777, true);
     }
 

@@ -589,7 +589,7 @@ final class ArgvParserTest extends TestCase
      */
     public function testRootErrorReportsARootThatIsNotADirectory(): void
     {
-        $missing = sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true);
+        $missing = sys_get_temp_dir() . '/candy_code_no_such_root_' . uniqid('', true);
 
         $error = ArgvParser::rootError(ArgvParser::parse(['candy-code', '--root', $missing]));
 
@@ -600,7 +600,7 @@ final class ArgvParserTest extends TestCase
 
     public function testRootErrorReportsAFileGivenWhereADirectoryIsExpected(): void
     {
-        $file = tempnam(sys_get_temp_dir(), 'sugarcrush_root_');
+        $file = tempnam(sys_get_temp_dir(), 'candy_code_root_');
         $this->assertIsString($file);
 
         try {
@@ -631,7 +631,7 @@ final class ArgvParserTest extends TestCase
      */
     public function testParseItselfDoesNotRejectANonExistentRoot(): void
     {
-        $missing = sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true);
+        $missing = sys_get_temp_dir() . '/candy_code_no_such_root_' . uniqid('', true);
 
         $this->assertSame($missing, ArgvParser::parse(['candy-code', '--root', $missing])->root);
     }

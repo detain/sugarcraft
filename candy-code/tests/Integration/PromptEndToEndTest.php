@@ -98,7 +98,7 @@ final class PromptEndToEndTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_e2e_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_e2e_' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
 
         // Both HOME spellings via the shared trait: the user-tier rules read

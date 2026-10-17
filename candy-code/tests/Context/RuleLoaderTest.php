@@ -39,7 +39,7 @@ final class RuleLoaderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->sandbox = sys_get_temp_dir() . '/sugarcrush_ruleload_behav_' . uniqid('', true);
+        $this->sandbox = sys_get_temp_dir() . '/candy_code_ruleload_behav_' . uniqid('', true);
         mkdir($this->sandbox, 0o755, true);
 
         // The user tier is only empty here if $HOME points somewhere we control:

@@ -28,7 +28,7 @@ final class SubagentModelSettingTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_subagent_model_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_subagent_model_' . uniqid('', true);
         $this->repo = $this->tempDir . '/repo';
         mkdir($this->repo . '/.candy-code/agents', 0755, true);
         $this->home = $this->useHomeSandbox($this->tempDir . '/home');

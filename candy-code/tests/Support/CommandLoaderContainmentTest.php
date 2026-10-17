@@ -44,7 +44,7 @@ final class CommandLoaderContainmentTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_cmd_containment_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_cmd_containment_' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
     }
 

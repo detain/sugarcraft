@@ -47,7 +47,7 @@ final class ProviderSwitchKeepsTaskToolTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_provider_switch_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_provider_switch_' . uniqid('', true);
         mkdir($this->tempDir . '/project', 0700, true);
         $this->useHomeSandbox($this->tempDir . '/home');
         $this->clearBackendSelectionEnv();

@@ -180,7 +180,7 @@ final class RulesStateWiringTest extends TestCase
     {
         parent::setUpBeforeClass();
 
-        self::$tempDir = sys_get_temp_dir() . '/sugarcrush_rules_wiring_' . uniqid('', true);
+        self::$tempDir = sys_get_temp_dir() . '/candy_code_rules_wiring_' . uniqid('', true);
         self::$repo = self::$tempDir . '/repo';
         mkdir(self::$tempDir . '/home', 0700, true);
         mkdir(self::$repo, 0755, true);

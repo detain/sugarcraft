@@ -52,7 +52,7 @@ final class NonRegularFileRefusalTest extends TestCase
         // suite runs, and an off-roster skip reddens SuiteSkipRoster anyway.
         self::assertTrue(\function_exists('posix_mkfifo'), 'ext-posix is required to build the FIFO fixture');
 
-        $this->root = (string) realpath((string) sys_get_temp_dir()) . '/sugarcrush_nonregular_' . uniqid((string) getmypid(), true);
+        $this->root = (string) realpath((string) sys_get_temp_dir()) . '/candy_code_nonregular_' . uniqid((string) getmypid(), true);
         mkdir($this->root, 0o777, true);
         self::assertTrue(posix_mkfifo($this->root . '/p', 0o600), 'could not create the FIFO fixture');
     }

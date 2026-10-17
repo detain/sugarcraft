@@ -50,7 +50,7 @@ final class ForeignSkillWiringTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_foreign_skill_wiring_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_foreign_skill_wiring_' . uniqid('', true);
         $this->repo = $this->tempDir . '/repo';
         mkdir($this->repo, 0755, true);
 

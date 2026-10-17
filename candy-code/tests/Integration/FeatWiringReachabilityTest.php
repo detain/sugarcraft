@@ -66,7 +66,7 @@ final class FeatWiringReachabilityTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_feat_reach_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_feat_reach_' . uniqid('', true);
         mkdir($this->tempDir . '/home', 0700, true);
         mkdir($this->tempDir . '/repo', 0755, true);
 

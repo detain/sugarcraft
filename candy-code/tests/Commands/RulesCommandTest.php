@@ -65,7 +65,7 @@ final class RulesCommandTest extends TestCase
     {
         parent::setUp();
 
-        $this->sandbox = sys_get_temp_dir() . '/sugarcrush_rulescmd_' . uniqid('', true);
+        $this->sandbox = sys_get_temp_dir() . '/candy_code_rulescmd_' . uniqid('', true);
         $this->home = $this->sandbox . '/home';
         $this->root = $this->sandbox . '/repo';
         $this->rulesDir = $this->home . '/.candy-code/rules';

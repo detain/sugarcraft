@@ -72,7 +72,7 @@ final class RulePathScopingWiringTest extends TestCase
     {
         parent::setUp();
 
-        $this->sandbox = sys_get_temp_dir() . '/sugarcrush_rulepath_' . uniqid('', true);
+        $this->sandbox = sys_get_temp_dir() . '/candy_code_rulepath_' . uniqid('', true);
         $this->home = $this->sandbox . '/home';
         $this->repo = $this->sandbox . '/repo';
         mkdir($this->home . '/.candy-code/rules', 0o700, true);

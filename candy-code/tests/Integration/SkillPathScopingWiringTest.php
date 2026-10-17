@@ -49,7 +49,7 @@ final class SkillPathScopingWiringTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_skill_paths_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_skill_paths_' . uniqid('', true);
         mkdir($this->tempDir . '/home', 0o700, true);
         mkdir($this->tempDir . '/repo', 0o755, true);
 

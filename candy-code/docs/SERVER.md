@@ -11,7 +11,7 @@ directory or `--root`.
 This page covers the **transport** — binding, authentication, the WebSocket
 endpoint and the security model — and the **`candy-code.v1` protocol** spoken
 over it: sessions, turns, events, permission answers
-([The `candy-code.v1` protocol](#the-sugarcrushv1-protocol)).
+([The `candy-code.v1` protocol](#the-candy-codev1-protocol)).
 [Background mode](#background-mode) and the verbs that manage a running server
 (`serve status|stop|logs|url|token`) are below.
 
@@ -289,7 +289,7 @@ Pings are answered with pongs; a client close is echoed. `permessage-deflate`
 is off: it costs latency and CPU, and compressing secrets beside
 attacker-influenced text is a known oracle.
 
-Messages are JSON-RPC 2.0 — [the `candy-code.v1` protocol](#the-sugarcrushv1-protocol)
+Messages are JSON-RPC 2.0 — [the `candy-code.v1` protocol](#the-candy-codev1-protocol)
 below.
 
 ## The `candy-code.v1` protocol

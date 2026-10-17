@@ -40,7 +40,7 @@ final class MultiTaskStageTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_wf_multitask_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_wf_multitask_' . uniqid('', true);
         mkdir($this->tempDir . '/workflows', 0755, true);
     }
 

@@ -26,7 +26,7 @@ final class BashMissingRootTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->root = sys_get_temp_dir() . '/sugarcrush_bash_gone_' . uniqid((string) getmypid(), true);
+        $this->root = sys_get_temp_dir() . '/candy_code_bash_gone_' . uniqid((string) getmypid(), true);
         mkdir($this->root, 0777, true);
     }
 

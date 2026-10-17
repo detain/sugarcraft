@@ -56,7 +56,7 @@ final class WorkflowPauseResumeTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_wf_pause_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_wf_pause_' . uniqid('', true);
         mkdir($this->tempDir . '/workflows', 0755, true);
         $this->registry = new WorkflowRegistry($this->tempDir . '/workflows');
 

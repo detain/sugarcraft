@@ -1147,7 +1147,7 @@ printf 'ok\n'
     /** A PHP source file for the subprocess probe above to run. */
     private static function writeProbe(string $source): string
     {
-        $probe = sys_get_temp_dir() . '/sugarcrush_loop_probe_' . uniqid('', true) . '.php';
+        $probe = sys_get_temp_dir() . '/candy_code_loop_probe_' . uniqid('', true) . '.php';
         file_put_contents($probe, $source);
 
         return $probe;

@@ -51,7 +51,7 @@ final class WorkflowControlMidRunTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_wf4_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_wf4_' . uniqid('', true);
         mkdir($this->tempDir . '/workflows', 0700, true);
         $registry = new WorkflowRegistry($this->tempDir . '/workflows');
         $registry->register(

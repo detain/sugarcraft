@@ -32,7 +32,7 @@ final class ToolSecurityTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_security_' . uniqid((string) getmypid(), true);
+        $this->tmpDir = sys_get_temp_dir() . '/candy_code_security_' . uniqid((string) getmypid(), true);
         mkdir($this->tmpDir, 0777, true);
         $this->spillDir = $this->tmpDir . '-spill';
         ToolOutputSpill::useDirectoryForTesting($this->spillDir);

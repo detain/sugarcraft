@@ -32,7 +32,7 @@ final class SortedWalkCapTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->sandbox = sys_get_temp_dir() . '/sugarcrush_sortedwalk_' . bin2hex(random_bytes(8));
+        $this->sandbox = sys_get_temp_dir() . '/candy_code_sortedwalk_' . bin2hex(random_bytes(8));
         mkdir($this->sandbox, 0o755, true);
     }
 

@@ -46,7 +46,7 @@ final class AgentPresetAnchorKeyTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_anchor_key_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_anchor_key_' . uniqid('', true);
         mkdir($this->tempDir, 0o755, true);
     }
 

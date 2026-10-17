@@ -52,7 +52,7 @@ final class WorkflowResumeReportingTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_wf_resume_report_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_wf_resume_report_' . uniqid('', true);
         mkdir($this->tempDir . '/workflows', 0755, true);
         $registry = new WorkflowRegistry($this->tempDir . '/workflows');
         $registry->register(

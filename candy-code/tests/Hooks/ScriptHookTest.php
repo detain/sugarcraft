@@ -308,7 +308,7 @@ final class ScriptHookTest extends TestCase
         );
 
         $result = $hook->execute($this->createContext(
-            sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true),
+            sys_get_temp_dir() . '/candy_code_no_such_root_' . uniqid('', true),
         ));
 
         $this->assertTrue($result->isDenied(), 'a bogus --root must not downgrade a deny into an allow');
@@ -341,7 +341,7 @@ final class ScriptHookTest extends TestCase
      */
     public function testAUsableProjectRootIsStillTheScriptsWorkingDirectory(): void
     {
-        $root = sys_get_temp_dir() . '/sugarcrush_root_' . uniqid('', true);
+        $root = sys_get_temp_dir() . '/candy_code_root_' . uniqid('', true);
         mkdir($root, 0755, true);
 
         $hook = new ScriptHook(

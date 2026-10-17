@@ -66,7 +66,7 @@ final class SystemPromptWiringTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_sysprompt_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_sysprompt_' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
 
         // BOTH spellings. registryWithProjectSkill() runs

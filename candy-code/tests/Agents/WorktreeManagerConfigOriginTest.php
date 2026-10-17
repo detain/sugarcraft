@@ -60,7 +60,7 @@ final class WorktreeManagerConfigOriginTest extends TestCase
     {
         parent::setUp();
 
-        $this->tmpRoot = sys_get_temp_dir() . '/sugarcrush_worktree_origin_' . uniqid('', true);
+        $this->tmpRoot = sys_get_temp_dir() . '/candy_code_worktree_origin_' . uniqid('', true);
         $this->repoRoot = $this->tmpRoot . '/repo';
         $this->worktree = $this->tmpRoot . '/trees/agent1';
 

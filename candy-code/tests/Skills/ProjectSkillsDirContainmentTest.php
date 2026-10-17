@@ -44,7 +44,7 @@ final class ProjectSkillsDirContainmentTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDir = sys_get_temp_dir() . '/sugarcrush_skills_containment_' . uniqid('', true);
+        $this->tempDir = sys_get_temp_dir() . '/candy_code_skills_containment_' . uniqid('', true);
         mkdir($this->tempDir . '/home', 0700, true);
 
         // BOTH spellings, for the reason FeatWiringReachabilityTest documents:

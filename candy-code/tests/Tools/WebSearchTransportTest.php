@@ -29,7 +29,7 @@ final class WebSearchTransportTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/sugarcrush_websearch_' . uniqid((string) getmypid(), true);
+        $this->tmpDir = sys_get_temp_dir() . '/candy_code_websearch_' . uniqid((string) getmypid(), true);
         mkdir($this->tmpDir, 0777, true);
     }
 

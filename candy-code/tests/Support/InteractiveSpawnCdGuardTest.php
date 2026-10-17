@@ -20,7 +20,7 @@ final class InteractiveSpawnCdGuardTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->dir = sys_get_temp_dir() . '/sugarcrush_fe5_' . uniqid((string) getmypid(), true);
+        $this->dir = sys_get_temp_dir() . '/candy_code_fe5_' . uniqid((string) getmypid(), true);
         mkdir($this->dir, 0777, true);
     }
 

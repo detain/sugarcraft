@@ -43,7 +43,7 @@ final class PathJailContractParityTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->base = sys_get_temp_dir() . '/sugarcrush_pjparity_' . uniqid('', true);
+        $this->base = sys_get_temp_dir() . '/candy_code_pjparity_' . uniqid('', true);
         $this->root = $this->base . '/root';
         $this->outside = $this->base . '/outside';
         $this->siblingPrefix = $this->root . 'evil';

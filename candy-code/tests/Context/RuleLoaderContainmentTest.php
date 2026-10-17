@@ -37,7 +37,7 @@ final class RuleLoaderContainmentTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->sandbox = sys_get_temp_dir() . '/sugarcrush_rule_contain_' . uniqid('', true);
+        $this->sandbox = sys_get_temp_dir() . '/candy_code_rule_contain_' . uniqid('', true);
         mkdir($this->sandbox, 0o755, true);
     }
 

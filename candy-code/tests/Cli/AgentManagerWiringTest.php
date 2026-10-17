@@ -110,7 +110,7 @@ final class AgentManagerWiringTest extends TestCase
     {
         parent::setUpBeforeClass();
 
-        self::$tempDir = sys_get_temp_dir() . '/sugarcrush_agent_wiring_' . uniqid('', true);
+        self::$tempDir = sys_get_temp_dir() . '/candy_code_agent_wiring_' . uniqid('', true);
         self::$repo = self::$tempDir . '/repo';
         self::$brokenRepo = self::$tempDir . '/broken';
         mkdir(self::$tempDir . '/home', 0700, true);

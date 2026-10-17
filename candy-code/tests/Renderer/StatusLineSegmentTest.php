@@ -504,7 +504,7 @@ final class StatusLineSegmentTest extends TestCase
      */
     public function testRenderingNeverRunsTheCommand(): void
     {
-        $probe = sys_get_temp_dir() . '/sugarcrush_statusline_pure_' . bin2hex(random_bytes(8));
+        $probe = sys_get_temp_dir() . '/candy_code_statusline_pure_' . bin2hex(random_bytes(8));
         StatusLineCommand::configure([StatusLineCommand::KEY => [
             'type' => 'command',
             'command' => 'echo x >> ' . escapeshellarg($probe) . '; echo painted',

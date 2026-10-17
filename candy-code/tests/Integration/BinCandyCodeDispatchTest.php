@@ -1659,7 +1659,7 @@ final class BinCandyCodeDispatchTest extends TestCase
     public function testTheBashCompletionScriptParses(): void
     {
         $script = $this->runBin(['completion', 'bash'], [])['stdout'];
-        $path = \sys_get_temp_dir() . '/sugarcrush_completion_' . \uniqid('', true) . '.bash';
+        $path = \sys_get_temp_dir() . '/candy_code_completion_' . \uniqid('', true) . '.bash';
         \file_put_contents($path, $script);
 
         $output = [];

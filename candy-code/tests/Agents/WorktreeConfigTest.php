@@ -216,7 +216,7 @@ final class WorktreeConfigTest extends TestCase
     /** A directory OUTSIDE the checkout, removed in tearDown. */
     private function makeTempDir(): string
     {
-        $dir = sys_get_temp_dir() . '/sugarcrush_worktree_config_' . uniqid('', true);
+        $dir = sys_get_temp_dir() . '/candy_code_worktree_config_' . uniqid('', true);
         mkdir($dir, 0o700, true);
         $this->tempDirs[] = $dir;
 

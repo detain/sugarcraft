@@ -53,7 +53,7 @@ final class RulebookPromptRenderTest extends TestCase
     {
         parent::setUp();
 
-        $this->sandbox = sys_get_temp_dir() . '/sugarcrush_rulesrender_' . uniqid('', true);
+        $this->sandbox = sys_get_temp_dir() . '/candy_code_rulesrender_' . uniqid('', true);
         $this->home = $this->sandbox . '/home';
         $this->packsDir = $this->home . '/.candy-code/rulebooks';
         mkdir($this->packsDir, 0o700, true);

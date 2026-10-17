@@ -26,7 +26,7 @@ final class SettingsResolverTest extends TestCase
     {
         parent::setUp();
 
-        $this->tmpRoot = sys_get_temp_dir() . '/sugarcrush_resolver_' . uniqid('', true);
+        $this->tmpRoot = sys_get_temp_dir() . '/candy_code_resolver_' . uniqid('', true);
         $this->projectRoot = $this->tmpRoot . '/repo';
         $this->userDir = $this->tmpRoot . '/home/.candy-code';
 

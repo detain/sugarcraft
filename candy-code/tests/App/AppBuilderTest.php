@@ -29,7 +29,7 @@ final class AppBuilderTest extends TestCase
         // since crush_code.md Phase 2 item 6. Point HOME at an empty sandbox
         // so a built App's skill roster is this test's fixtures and nothing
         // the developer running the suite happens to have installed.
-        $this->sandboxHome = sys_get_temp_dir() . '/sugarcrush_appbuilder_home_' . uniqid('', true);
+        $this->sandboxHome = sys_get_temp_dir() . '/candy_code_appbuilder_home_' . uniqid('', true);
         mkdir($this->sandboxHome, 0700, true);
         $this->tempRoots[] = $this->sandboxHome;
         $this->originalServerHome = $_SERVER['HOME'] ?? null;
@@ -654,7 +654,7 @@ final class AppBuilderTest extends TestCase
      */
     private function projectWithSkill(string $name, string $description): string
     {
-        $root = sys_get_temp_dir() . '/sugarcrush_appbuilder_' . uniqid('', true);
+        $root = sys_get_temp_dir() . '/candy_code_appbuilder_' . uniqid('', true);
         $dir = $root . '/.candy-code/skills/' . $name;
         mkdir($dir, 0755, true);
         file_put_contents(

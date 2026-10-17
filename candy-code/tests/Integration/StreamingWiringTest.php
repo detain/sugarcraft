@@ -348,7 +348,7 @@ final class StreamingWiringTest extends TestCase
         // error_log is the reporting channel, so point it at a file both to
         // keep the suite's stderr clean and to assert the failure is not
         // swallowed silently when the debug flag asks for it.
-        $log = \tempnam(\sys_get_temp_dir(), 'sugarcrush_ontoken_');
+        $log = \tempnam(\sys_get_temp_dir(), 'candy_code_ontoken_');
         $this->assertIsString($log);
         $previousLog = \ini_get('error_log');
         \ini_set('error_log', $log);
@@ -401,7 +401,7 @@ final class StreamingWiringTest extends TestCase
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
-        $log = \tempnam(\sys_get_temp_dir(), 'sugarcrush_ontoken_');
+        $log = \tempnam(\sys_get_temp_dir(), 'candy_code_ontoken_');
         $this->assertIsString($log);
         $previousLog = \ini_get('error_log');
         $previousStreamFlag = \getenv(Chat::DEBUG_STREAM_ENV);
@@ -643,7 +643,7 @@ final class StreamingWiringTest extends TestCase
      */
     public function testBootstrapChatEnablesStreaming(): void
     {
-        $home = \sys_get_temp_dir() . '/sugarcrush_streaming_home_' . \uniqid('', true);
+        $home = \sys_get_temp_dir() . '/candy_code_streaming_home_' . \uniqid('', true);
         $repo = $home . '/repo';
         \mkdir($repo, 0755, true);
         $originalHome = \getenv('HOME') ?: '';
