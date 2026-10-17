@@ -1,4 +1,4 @@
-# candy-code & sugar-crush-web — issues found
+# candy-code & candy-code-web — issues found
 
 _Generated 2026-10-16 from six code audits, each followed by an independent adversarial verification pass. Uncommitted working document. Companion: [candy-code/COMPARISON.md](candy-code/COMPARISON.md) (feature comparison + improvement roadmap)._
 
@@ -27,7 +27,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - Locations are repo-relative at master `10f121d49`.
 - **Product** values:
   - `candy-code`: the PHP TUI, CLI and `serve` server.
-  - `sugar-crush-web`: the Vue UI in `sugar-crush-web/src-web`.
+  - `candy-code-web`: the Vue UI in `candy-code-web/src-web`.
   - `both`: the fix touches both.
 - A few entries bundle small related gaps as sub-items (a), (b), … because the audit reported them together.
 - Suggested fixes follow project policy:
@@ -39,7 +39,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 **125 issues after deduplication**: 119 CONFIRMED, 6 PLAUSIBLE. Four cross-audit duplicates were merged. 2 whole claims and 27 sub-claims were rejected or corrected during verification (see the appendix).
 
-| Severity | candy-code | sugar-crush-web | both | Total |
+| Severity | candy-code | candy-code-web | both | Total |
 |---|---:|---:|---:|---:|
 | P0 | 1 | 0 | 0 | **1** |
 | P1 | 4 | 0 | 1 | **5** |
@@ -144,8 +144,8 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 | [ISS-049](#iss-049) | P2 | candy-code | tui | Pane auto-dock has no width guard, persists, and re-docks panes the user closed | CONFIRMED |
 | [ISS-050](#iss-050) | P2 | candy-code | tui | Typing while scrolled up edits an invisible draft | CONFIRMED |
 | [ISS-051](#iss-051) | P2 | candy-code | tui | No paste collapse and no input height cap: a long paste hides the transcript | CONFIRMED |
-| [ISS-052](#iss-052) | P2 | sugar-crush-web | web-ui | The web ignores `server.overflow` (and `server.shutdown`); sessions in a dead workspace host freeze | CONFIRMED |
-| [ISS-053](#iss-053) | P2 | sugar-crush-web | web-ui | Sidebar j/k shortcuts hijack typing in the session filter | CONFIRMED |
+| [ISS-052](#iss-052) | P2 | candy-code-web | web-ui | The web ignores `server.overflow` (and `server.shutdown`); sessions in a dead workspace host freeze | CONFIRMED |
+| [ISS-053](#iss-053) | P2 | candy-code-web | web-ui | Sidebar j/k shortcuts hijack typing in the session filter | CONFIRMED |
 | [ISS-054](#iss-054) | P2 | candy-code | server | `serve` mode shares one prompt memo and one instruction loader across all sessions | CONFIRMED |
 | [ISS-055](#iss-055) | P2 | candy-code | server | Slow request bodies stall the whole HTTP listener indefinitely, ahead of `--allowed-ips` | CONFIRMED |
 | [ISS-056](#iss-056) | P2 | both | server | `session.send` of `!cmd` or a built-in `/command` runs it but answers `-32009 refused` | CONFIRMED |
@@ -197,14 +197,14 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 | [ISS-102](#iss-102) | P3 | candy-code | tui | Each launch creates an empty session; the tab strip shows hex ids | CONFIRMED |
 | [ISS-103](#iss-103) | P3 | candy-code | tui | Main-turn spinner never animates and shows no elapsed time | CONFIRMED |
 | [ISS-104](#iss-104) | P3 | candy-code | tui | F10 menu labels are inconsistent; theme picker ignores the current theme | CONFIRMED |
-| [ISS-105](#iss-105) | P3 | sugar-crush-web | web-ui | Mobile: the top bar overflows at phone width | CONFIRMED |
-| [ISS-106](#iss-106) | P3 | sugar-crush-web | web-ui | Alt+1…9 tab switching never fires on macOS and collides with Linux browser shortcuts | CONFIRMED |
-| [ISS-107](#iss-107) | P3 | sugar-crush-web | web-ui | Theme tokens miss WCAG AA contrast | CONFIRMED |
-| [ISS-108](#iss-108) | P3 | sugar-crush-web | web-ui | Streaming reply re-renders the whole Markdown every frame, re-announced by aria-live | CONFIRMED |
-| [ISS-109](#iss-109) | P3 | sugar-crush-web | web-ui | Raw ANSI escapes appear in tool output | CONFIRMED |
-| [ISS-110](#iss-110) | P3 | sugar-crush-web | web-ui | A permission card stays disabled after a failed answer | CONFIRMED |
-| [ISS-111](#iss-111) | P3 | sugar-crush-web | web-ui | Desktop notifications fail silently outside a secure context | CONFIRMED |
-| [ISS-112](#iss-112) | P3 | sugar-crush-web | web-ui | Per-session stores are never disposed | CONFIRMED |
+| [ISS-105](#iss-105) | P3 | candy-code-web | web-ui | Mobile: the top bar overflows at phone width | CONFIRMED |
+| [ISS-106](#iss-106) | P3 | candy-code-web | web-ui | Alt+1…9 tab switching never fires on macOS and collides with Linux browser shortcuts | CONFIRMED |
+| [ISS-107](#iss-107) | P3 | candy-code-web | web-ui | Theme tokens miss WCAG AA contrast | CONFIRMED |
+| [ISS-108](#iss-108) | P3 | candy-code-web | web-ui | Streaming reply re-renders the whole Markdown every frame, re-announced by aria-live | CONFIRMED |
+| [ISS-109](#iss-109) | P3 | candy-code-web | web-ui | Raw ANSI escapes appear in tool output | CONFIRMED |
+| [ISS-110](#iss-110) | P3 | candy-code-web | web-ui | A permission card stays disabled after a failed answer | CONFIRMED |
+| [ISS-111](#iss-111) | P3 | candy-code-web | web-ui | Desktop notifications fail silently outside a secure context | CONFIRMED |
+| [ISS-112](#iss-112) | P3 | candy-code-web | web-ui | Per-session stores are never disposed | CONFIRMED |
 | [ISS-113](#iss-113) | P3 | both | web-ui | A turn ended by the loop guard shows no harness notice in the browser | PLAUSIBLE |
 | [ISS-114](#iss-114) | P3 | candy-code | server | `candy-code attach` keeps a resume cursor nobody reads; a dropped connection ends the session | PLAUSIBLE |
 | [ISS-115](#iss-115) | P3 | both | server | `watchFiles` appears in the web Settings form, but served sessions never watch files | PLAUSIBLE |
@@ -261,7 +261,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - Gating interpreters alone is not enough: `vim :!`, `less !` and `mysql \!` are shell escapes too.
 - **Verification notes:**
   - V4 traced `PermissionGate::decide()`: the breaker, `evaluateRules`, `evaluateMode` and `sessionAllows` all read `command`. `PermissionGateHook` (matcher `.*`) is the only gate that sees PtyRun.
-  - The web `sugar-crush-web/src-web/components/PermissionCard.vue:20,54-55` and `candy-code/src/Cli/HeadlessPermissionPrompt.php:486-521` do show the full argument JSON. The TUI modal is the blind surface.
+  - The web `candy-code-web/src-web/components/PermissionCard.vue:20,54-55` and `candy-code/src/Cli/HeadlessPermissionPrompt.php:486-521` do show the full argument JSON. The TUI modal is the blind surface.
   - `candy-code/src/Permissions/ShellSubjectTools.php:29` wrongly says PtyRun "runs `/bin/sh -c` on the supplied steps", which plausibly explains how the gap got in.
   - fill-sc notes that served sessions inherit PtyRun, so the P0 applies to `serve` as well.
 
@@ -334,7 +334,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - Middle-elide paths; never head-cut them, and never truncate a WebFetch host or path.
   - Until the diff exists, add a key (e.g. `v`) that shows the full arguments.
 - **Verification notes:**
-  - TUI only. `HeadlessPermissionPrompt` (truncated JSON) and the web `sugar-crush-web/src-web/components/PermissionCard.vue` (full JSON in `<details>`) show the arguments.
+  - TUI only. `HeadlessPermissionPrompt` (truncated JSON) and the web `candy-code-web/src-web/components/PermissionCard.vue` (full JSON in `<details>`) show the arguments.
   - The middle-row elision of long commands is deliberate (`candy-code/src/Renderer.php:6652-6660`). The defect is that it cannot be expanded.
   - See also [ISS-100](#iss-100), which covers double-escaped arguments in the same `describeToolCall()`.
 
@@ -348,7 +348,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - `candy-code/src/Sessions/BackgroundSessionRunner.php:874-911` (`backend()` builds the headless gate), `:254` (`permissionMode` read only from the `delegation` block)
   - `candy-code/src/Cli/Bootstrap.php:178` (`DEFAULT_PERMISSION_MODE = BypassPermissions`)
   - Server policy: `candy-code/src/Server/ServerConfig.php:513-515`, `candy-code/docs/SERVER.md:1115-1119`
-  - UI entry: `sugar-crush-web/src-web/components/panels/BackgroundPanel.vue:33-54`
+  - UI entry: `candy-code-web/src-web/components/panels/BackgroundPanel.vue:33-54`
 - **Problem:**
   - `serve` refuses `bypass-permissions` and `dont-ask` unless `--allow-bypass` is set (`admitsPermissionMode()`).
   - But `bg.spawn` and the server-run `/bg` built-in (`command.exec`) start a daemon whose gate comes from `Bootstrap::backendFor(..., consolePermissionPrompt: true)`. With no env or config mode set, that falls back to `bypass-permissions`.
@@ -444,7 +444,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - `candy-code/src/Server/Http/AuthMiddleware.php:59-62` (lockout checked before any credential), `:88-91,121-123` (an unknown ticket counts as a failure)
   - `candy-code/src/Server/Http/HostAndOriginGuard.php` `isStateChanging()` (a plain `GET /ws` without `Upgrade` skips the Origin check)
   - `candy-code/src/Server/Auth/RateLimiter.php:16-20,56-77`
-  - `sugar-crush-web/src-web/views/LoginView.vue:19-31`
+  - `candy-code-web/src-web/views/LoginView.vue:19-31`
 - **Problem:**
   - The limiter keys on client address and runs before the bearer or subprotocol token is examined. Every loopback client is `127.0.0.1`, and so is every proxied client when `trustedProxies` is unset.
   - A non-upgrade `GET /ws?ticket=<junk>` skips the Origin guard but still records a failure.
@@ -474,7 +474,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Problem:** `logout` revokes the cookie session, but no connection records which cookie session minted its ticket, so no socket is closed. Sliding expiry of the cookie behaves the same way.
 - **Failure scenario:**
   - Reproduced: `POST /api/logout` returned 200 and `/api/ticket` then returned 401, yet `server.health` and `session.list` still answered on the already-open socket.
-  - The web's `signOut()` (`sugar-crush-web/src-web/stores/connection.ts:172-178`) stops only its own tab. Other tabs, and a socket opened with a leaked cookie, stay live until restart or `serve token --rotate`.
+  - The web's `signOut()` (`candy-code-web/src-web/stores/connection.ts:172-178`) stops only its own tab. Other tabs, and a socket opened with a leaked cookie, stay live until restart or `serve token --rotate`.
 - **Suggested fix:**
   - Store `ATTR_SESSION` on `Connection` at upgrade.
   - On logout, on expiry or revocation, and in `revokeAll()`, close the matching connections with code 4001, which the web already treats as signed out.
@@ -702,7 +702,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - `candy-code/src/Cli/Bootstrap.php:1974`, `:10309-10323`, `:5396`
   - `candy-code/src/Host/Commands/MemoryCommand.php:51-79`, `:155-160`
   - `candy-code/src/Context/ProjectMemoryWriter.php:107-140`
-  - `sugar-crush-web/src-web/stores/agents/memory.ts`
+  - `candy-code-web/src-web/stores/agents/memory.ts`
 - **Problem:**
   - The model's Memory `save` and a typed `/memory add` go through MemoryWriter → ProjectMemoryWriter into the repo-local, git-visible `.candy-code/memory/project/`, and those notes reach the prompt.
   - But `memory.list/search/add/edit/delete` work on `WorkspaceContext::$memoryStore` = `Bootstrap::memoryStore($root)`, i.e. `~/.candy-code/memory` with the project scope keyed under `project/<key>/`.
@@ -1173,15 +1173,15 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-052"></a>
 ### ISS-052 · [P2] The web ignores `server.overflow` (and `server.shutdown`), so a session in a dead or recycled workspace host freezes
-- **Product / area:** sugar-crush-web · web-ui (reconnect, multi-root)
+- **Product / area:** candy-code-web · web-ui (reconnect, multi-root)
 - **Verdict:** CONFIRMED (found by A6, who reproduced it live; verified by code trace by V6)
 - **Location:**
   - `candy-code/src/Server/Workspace/Gateway.php:579-601` (`lost()` sends a server-scope envelope with `data.sessionId`, then drops the subscriber)
   - `candy-code/src/Protocol/Dispatcher.php:265-268` (backpressure flavour)
-  - `sugar-crush-web/src-web/stores/connection.ts:98-106` (routes by `envelope.sessionId`, which is null for server-scope events)
-  - `sugar-crush-web/src-web/stores/session.ts:40-52`
+  - `candy-code-web/src-web/stores/connection.ts:98-106` (routes by `envelope.sessionId`, which is null for server-scope events)
+  - `candy-code-web/src-web/stores/session.ts:40-52`
 - **Problem:**
-  - No web code handles `server.overflow`; it appears only in `sugar-crush-web/src-web/protocol/generated.ts`. `server.shutdown` is not handled either.
+  - No web code handles `server.overflow`; it appears only in `candy-code-web/src-web/protocol/generated.ts`. `server.shutdown` is not handled either.
   - The gateway has already dropped the browser from the subscribers, and `server.tick` keeps the socket alive, so neither the watchdog nor cursor-gap resync fires.
 - **Failure scenario:** A picked-directory session's workspace host crashes, is killed, idles out or is closed. The browser stops receiving rows and status until the user navigates away past the release grace or reloads.
 - **Suggested fix:**
@@ -1194,12 +1194,12 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-053"></a>
 ### ISS-053 · [P2] Sidebar j/k shortcuts hijack typing in the session filter
-- **Product / area:** sugar-crush-web · web-ui
+- **Product / area:** candy-code-web · web-ui
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
-- **Location:** `sugar-crush-web/src-web/components/SessionSidebar.vue:59-67` (handler), `:71` (`@keydown` on the `<nav>` containing the filter `<input>`)
+- **Location:** `candy-code-web/src-web/components/SessionSidebar.vue:59-67` (handler), `:71` (`@keydown` on the `<nav>` containing the filter `<input>`)
 - **Problem:** The handler ignores `event.target` and modifiers and does not `preventDefault`, so a `j` or `k` typed in the filter both lands in the box and navigates.
 - **Failure scenario:** In Chromium, typing `jk` in "Filter…" changed the route to another session. Any query containing j or k jumps around, and on mobile it also closes the drawer.
-- **Suggested fix:** Return early for `input`/`textarea`/`select`/contenteditable targets or when a modifier is held, as `sugar-crush-web/src-web/components/PermissionCard.vue:37-38` does, or bind j/k on the `<ul>` only.
+- **Suggested fix:** Return early for `input`/`textarea`/`select`/contenteditable targets or when a modifier is held, as `candy-code-web/src-web/components/PermissionCard.vue:37-38` does, or bind j/k on the `<ul>` only.
 - **Verification notes:** Accurate.
 
 <a id="iss-054"></a>
@@ -1248,7 +1248,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Failure scenario:**
   - `session.send "!echo verify-bang-$((40+2))"` → `-32009 "the prompt was refused"` and no events, yet a fresh snapshot shows `verify-bang-42`.
   - `session.send "/clear"` answered refused and actually cleared the history.
-  - The web sends `!cmd` this way (`sugar-crush-web/src-web/stores/session.ts:139-157`), and also any `/built-in` whenever `command.list` has not loaded.
+  - The web sends `!cmd` this way (`candy-code-web/src-web/stores/session.ts:139-157`), and also any `/built-in` whenever `command.list` has not loaded.
   - A client that believes the refusal and retries runs the shell command again; RpcErrors are not idempotency-cached.
 - **Suggested fix:**
   - Add `handled` to the Admission schema and a `TurnTicket::HANDLED => ['admitted' => 'handled']` arm.
@@ -1275,7 +1275,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - `candy-code/src/Host/SessionSnapshot.php:71-82` (`messages` = every history row)
   - `candy-code/src/Protocol/Methods/SessionMethods.php:139-146` (no paging params)
   - `candy-code/src/Protocol/Dispatcher.php:373-386` (`MAX_SERVER_FRAME_BYTES` 4,194,304 → `too_large`)
-  - `sugar-crush-web/src-web/stores/session.ts:71-91`
+  - `candy-code-web/src-web/stores/session.ts:71-91`
 - **Problem:** A subscribe without a cursor returns the whole history in one JSON-RPC answer. That happens on first open, with a too-old cursor, on a reset after restart, and after every `command.exec` result (which calls `subscribe(true)`). Past 4 MiB the dispatcher substitutes `too_large`.
 - **Failure scenario:** `Message::jsonSerialize()` (`candy-code/src/Message.php:905+`) includes full content, tool calls and results, attachment `dataBase64`, `imageBytesBase64`, and compacted-but-hidden rows. A long agentic session, or one with a couple of pasted screenshots, passes 4 MiB. The web then cannot open it, and every server-run slash command in it fails the same way.
 - **Suggested fix:** Page the snapshot (`limit`/`beforeIndex` plus `throughSeq`, newest first) or stream older rows as replay chunks, rendering the tail first. Replace attachment and image bytes in snapshot rows with fetchable refs.
@@ -1846,9 +1846,9 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-105"></a>
 ### ISS-105 · [P3] Mobile: the top bar overflows at phone width
-- **Product / area:** sugar-crush-web · web-ui (layout)
+- **Product / area:** candy-code-web · web-ui (layout)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
-- **Location:** `sugar-crush-web/src-web/App.vue:76-88` (header), `:180-207` (the ≤760 px query hides only `.root`/`.opt`)
+- **Location:** `candy-code-web/src-web/App.vue:76-88` (header), `:180-207` (the ≤760 px query hides only `.root`/`.opt`)
 - **Problem:** At narrow widths the header neither wraps nor collapses.
 - **Failure scenario:** At 375×740 the document `scrollWidth` is 456 px, "sign out" is off-screen, and the page scrolls horizontally.
 - **Suggested fix:** Below ~480 px, move status, settings and sign-out into an overflow menu, or allow wrapping. Add an e2e `scrollWidth <= innerWidth` assertion.
@@ -1856,34 +1856,34 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-106"></a>
 ### ISS-106 · [P3] Alt+1…9 tab switching never fires on macOS and collides with Linux browser shortcuts
-- **Product / area:** sugar-crush-web · web-ui (keyboard)
+- **Product / area:** candy-code-web · web-ui (keyboard)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
-- **Location:** `sugar-crush-web/src-web/components/grid/SessionTabs.vue:90-98`
+- **Location:** `candy-code-web/src-web/components/grid/SessionTabs.vue:90-98`
 - **Problem:** The handler parses `event.key`. On macOS, Option+digit yields `¡`, `™`, …; on AZERTY it yields `&`, `é`, …. On Linux, browsers bind Alt+digit to tab switching.
-- **Failure scenario:** Option+2 does nothing on a Mac, while `sugar-crush-web/README.md:69` and `candy-code/docs/SERVER.md:1043` promise Alt+1…9.
+- **Failure scenario:** Option+2 does nothing on a Mac, while `candy-code-web/README.md:69` and `candy-code/docs/SERVER.md:1043` promise Alt+1…9.
 - **Suggested fix:** Match `event.code` (`Digit1`–`Digit9`), and offer a non-conflicting or configurable chord.
 - **Verification notes:** Standard `KeyboardEvent.key` semantics.
 
 <a id="iss-107"></a>
 ### ISS-107 · [P3] Theme tokens miss WCAG AA contrast
-- **Product / area:** sugar-crush-web · web-ui (accessibility)
+- **Product / area:** candy-code-web · web-ui (accessibility)
 - **Verdict:** CONFIRMED (found by A6; verified and recomputed by V6)
-- **Location:** `sugar-crush-web/src-web/styles/tokens.css:11-12` (dark), `:29-30` (light) and the duplicate `[data-theme='light']` block; button text `:96`
+- **Location:** `candy-code-web/src-web/styles/tokens.css:11-12` (dark), `:29-30` (light) and the duplicate `[data-theme='light']` block; button text `:96`
 - **Problem:** These pairs fail AA (4.5):
   - dark `--muted` on `--panel`: 3.87
   - light `--accent` on `--bg`: 3.75
   - light `--bg` text on `--accent` (primary button): 3.75
   - light `--muted` on `--panel`: 4.10
   - light `--accent` on `--panel`: 3.38
-- **Failure scenario:** Low-vision users struggle with sidebar meta (`sugar-crush-web/src-web/App.vue:166-168` uses `--panel`), status text, and light-theme links and buttons.
+- **Failure scenario:** Low-vision users struggle with sidebar meta (`candy-code-web/src-web/App.vue:166-168` uses `--panel`), status text, and light-theme links and buttons.
 - **Suggested fix:** `#1d5fbf` on light `--bg` gives 5.70; `#8b93bb` on dark `--panel` gives 4.85. Add a unit test over the token pairs.
 - **Verification notes:** Ratios recomputed with the WCAG formula.
 
 <a id="iss-108"></a>
 ### ISS-108 · [P3] Streaming reply re-renders the whole Markdown every frame (O(n²)), re-announced by aria-live
-- **Product / area:** sugar-crush-web · web-ui (performance, accessibility)
+- **Product / area:** candy-code-web · web-ui (performance, accessibility)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
-- **Location:** `sugar-crush-web/src-web/views/SessionView.vue:30,125-128`; `sugar-crush-web/src-web/components/MessageMarkdown.vue:13,29-30`; `sugar-crush-web/src-web/stores/connection.ts:30-36` (rAF flush)
+- **Location:** `candy-code-web/src-web/views/SessionView.vue:30,125-128`; `candy-code-web/src-web/components/MessageMarkdown.vue:13,29-30`; `candy-code-web/src-web/stores/connection.ts:30-36` (rAF flush)
 - **Problem:** Each rAF flush that changes `live.text` re-runs markdown-it, DOMPurify and the highlighter over the full text and replaces the `v-html` subtree, all inside `aria-live="polite"`.
 - **Failure scenario:** Long replies cost quadratic parse work: phones jank, text cannot be selected mid-stream, and screen readers re-announce.
 - **Suggested fix:** Render the live tail as pre-wrap text (or Markdown of completed blocks only) and throttle. Move `aria-live` to a short "reply finished" status.
@@ -1891,9 +1891,9 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-109"></a>
 ### ISS-109 · [P3] Raw ANSI escapes appear in tool output
-- **Product / area:** sugar-crush-web · web-ui (rendering)
+- **Product / area:** candy-code-web · web-ui (rendering)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6, frequency corrected)
-- **Location:** `sugar-crush-web/src-web/components/ToolCard.vue:66`
+- **Location:** `candy-code-web/src-web/components/ToolCard.vue:66`
 - **Problem:** `tool.finished.content` carries SGR bytes verbatim, and nothing in `src-web` strips or converts them.
 - **Failure scenario:** `printf '\033[31mred\033[0m plain'` shows `\u001b[31mred…`. Bash captures through pipes (`candy-code/src/Tools/BuiltIn/Bash.php:203-225`), so most CLIs disable colour; the junk appears only with forced colour (`--color=always`, `FORCE_COLOR`).
 - **Suggested fix:** Convert SGR to escaped `<span class>` elements (or strip it) client-side for display, and keep the raw text for the model.
@@ -1901,19 +1901,19 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-110"></a>
 ### ISS-110 · [P3] A permission card stays disabled after a failed answer
-- **Product / area:** sugar-crush-web · web-ui
+- **Product / area:** candy-code-web · web-ui
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
-- **Location:** `sugar-crush-web/src-web/components/PermissionCard.vue:28-34`; `sugar-crush-web/src-web/views/SessionView.vue:72-78`
-- **Problem:** `busy` is set before `emit('answer')` and never reset. Only `already_resolved` and `ask_not_found` remove the card (`sugar-crush-web/src-web/stores/session.ts:165-175`).
+- **Location:** `candy-code-web/src-web/components/PermissionCard.vue:28-34`; `candy-code-web/src-web/views/SessionView.vue:72-78`
+- **Problem:** `busy` is set before `emit('answer')` and never reset. Only `already_resolved` and `ask_not_found` remove the card (`candy-code-web/src-web/stores/session.ts:165-175`).
 - **Failure scenario:** Any other failure (e.g. `-32011`, or a transport error after the one resend) leaves an open question with every button disabled until reload. The approvals-drawer copy still works.
 - **Suggested fix:** Pass the outcome back (a promise, a callback or an error prop) and reset `busy` on failure.
 - **Verification notes:** Accurate.
 
 <a id="iss-111"></a>
 ### ISS-111 · [P3] Desktop notifications fail silently outside a secure context
-- **Product / area:** sugar-crush-web · web-ui
+- **Product / area:** candy-code-web · web-ui
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
-- **Location:** `sugar-crush-web/src-web/stores/settings.ts:35-40`; `sugar-crush-web/src-web/App.vue:86`
+- **Location:** `candy-code-web/src-web/stores/settings.ts:35-40`; `candy-code-web/src-web/App.vue:86`
 - **Problem:** `enableNotifications()` returns `false` with no explanation when `Notification` is undefined or permission is not granted.
 - **Failure scenario:** On `http://<lan-ip>:7420` (the documented `--allow-remote` bind), clicking "notify" yields no alerts and no reason. The button is also hidden under 760 px.
 - **Suggested fix:** When `!window.isSecureContext` or permission is `denied`, show "needs HTTPS or localhost / blocked by the browser".
@@ -1921,9 +1921,9 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 
 <a id="iss-112"></a>
 ### ISS-112 · [P3] Per-session stores are never disposed
-- **Product / area:** sugar-crush-web · web-ui (memory)
+- **Product / area:** candy-code-web · web-ui (memory)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
-- **Location:** `sugar-crush-web/src-web/stores/session.ts:233-247` (a `defineStore` per id, never `$dispose`d), `:100-123` (`release()`/`unsubscribe()` keep `state.items`)
+- **Location:** `candy-code-web/src-web/stores/session.ts:233-247` (a `defineStore` per id, never `$dispose`d), `:100-123` (`release()`/`unsubscribe()` keep `state.items`)
 - **Problem:** Every opened session keeps its Pinia store and full transcript for the tab's lifetime.
 - **Failure scenario:** A dashboard tab left open for days while browsing many sessions grows without bound.
 - **Suggested fix:** When a released session's grace timer fires and it is not an open tab, `$dispose()` the store, delete its Pinia state and remove it from `definitions`.
@@ -1933,7 +1933,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 ### ISS-113 · [P3] A turn ended by the loop guard shows no harness notice in the browser
 - **Product / area:** both · web-ui
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md rows CTX-N3/TL-N2 SCW)
-- **Location:** `candy-code/src/Host/TranscriptProjector.php:446-455` (`stopReason()`); `sugar-crush-web/src-web/stores/reducer.ts:507-513`, `:560-565`; TUI comparison `candy-code/src/Chat.php:2427-2429`, `:19721-19727`; `candy-code/src/Backend/EngineBackend.php:2495-2506`
+- **Location:** `candy-code/src/Host/TranscriptProjector.php:446-455` (`stopReason()`); `candy-code-web/src-web/stores/reducer.ts:507-513`, `:560-565`; TUI comparison `candy-code/src/Chat.php:2427-2429`, `:19721-19727`; `candy-code/src/Backend/EngineBackend.php:2495-2506`
 - **Problem:** `TranscriptProjector::stopReason()` maps `stepsTruncated` to `max_steps`, which the reducer shows as "Turn stopped: it reached its step limit.". A turn the repeat-call loop guard ended maps to `end_turn`, so the browser gets no harness notice; only the model's own wrap-up says it stopped. The TUI adds `chat.turn.loop_guard`.
 - **Failure scenario:** The agent loops on an identical call until the guard ends the turn at the 8th repeat. The browser user sees an ordinary finished turn and may not realise the work was cut off.
 - **Suggested fix:** Give a loop-guard stop its own `stopReason` (e.g. `loop_guard`) in the projector and protocol schema, plus a matching reducer notice, mirroring `chat.turn.loop_guard`.
@@ -2069,7 +2069,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Verdict:** CONFIRMED for (a) and (c); (d) folded into [ISS-056](#iss-056); (b) rejected (found by A6; verified by V6)
 - **Location:** `candy-code/docs/SERVER.md:1034-1036` (a); `:342` with `candy-code/src/Protocol/Methods/ServerMethods.php:112` and `candy-code/src/Protocol/Dispatcher.php:75` (c)
 - **Problem:**
-  - (a) The web-UI section says a prompt sent during a turn is queued by default. The composer actually offers the server's `queueMode`, which is `steer` unless set (`sugar-crush-web/src-web/components/Composer.vue:10-20`), as `sugar-crush-web/README.md:87-89` says. The protocol's own `session.send` default is `queue` (`candy-code/src/Protocol/Methods/TurnMethods.php:63`).
+  - (a) The web-UI section says a prompt sent during a turn is queued by default. The composer actually offers the server's `queueMode`, which is `steer` unless set (`candy-code-web/src-web/components/Composer.vue:10-20`), as `candy-code-web/README.md:87-89` says. The protocol's own `session.send` default is `queue` (`candy-code/src/Protocol/Methods/TurnMethods.php:63`).
   - (c) `limits.maxInflight: 64` is advertised and never enforced. This is harmless, since the Dispatcher answers requests serially (`candy-code/src/Protocol/Dispatcher.php:276-316`).
 - **Failure scenario:** Client authors and users act on behaviour that doesn't exist.
 - **Suggested fix:** Fix sentence (a). Drop `maxInflight` from the advertised limits or document it as advisory.

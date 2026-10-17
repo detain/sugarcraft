@@ -12,7 +12,7 @@ use SugarCraft\Code\Support\ContainedPath;
 /**
  * Serves the web UI's built files from one directory (Appendix O §7.3):
  * `--web-root`, `CANDY_CODE_SERVER_WEB_ROOT`, or the installed
- * `sugarcraft/sugar-crush-web` package's `dist/`.
+ * `sugarcraft/candy-code-web` package's `dist/`.
  *
  * THE URL IS THE ATTACKER'S, so the file it names is resolved and then held to
  * the root with {@see ContainedPath::within()} — after symlinks, so a link in
@@ -168,7 +168,7 @@ final class StaticFiles
 <body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
 <h1>candy-code serve</h1>
 <p>The server is running, but no web UI is installed. Install it next to candy-code with</p>
-<pre>composer require sugarcraft/sugar-crush-web</pre>
+<pre>composer require sugarcraft/candy-code-web</pre>
 <p>or point <code>--web-root</code> at a build. The WebSocket endpoint <code>/ws</code> and the HTTP API under <code>/api/</code> work without it.</p>
 </body>
 </html>

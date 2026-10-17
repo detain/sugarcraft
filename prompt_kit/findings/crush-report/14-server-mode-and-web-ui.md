@@ -1,11 +1,11 @@
-# 14 — candy-code server mode (WebSocket) + `sugar-crush-web` multi-session web UI: design report
+# 14 — candy-code server mode (WebSocket) + `candy-code-web` multi-session web UI: design report
 
 Feeds: the open follow-ups on the attached TUI and the missing protocol events, and the open TLS decision (synthesis Part IV).
 
 **What this is.** A design for two features the user asked for:
 
 1. **Server mode.** `candy-code serve` runs in the foreground or as a background daemon and starts a WebSocket server.
-2. **`sugar-crush-web`.** A separate Vite + Vue package in `/home/sites/sugarcraft/sugar-crush-web` that drives that server and controls several sessions at once.
+2. **`candy-code-web`.** A separate Vite + Vue package in `/home/sites/sugarcraft/candy-code-web` that drives that server and controls several sessions at once.
 
 Paths are relative to `/home/sites/sugarcraft/candy-code/` unless they start with `/` or with a lib directory name.
 

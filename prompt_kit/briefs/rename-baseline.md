@@ -69,7 +69,7 @@ candy-code uses the sharded runner mirroring ci.yml "Run tests (candy-code — s
 | sugar-calendar | 149 | 382 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | sugar-charts | 654 | 1551 | 0 | 0 | 0 | 0 |  |
 | sugar-crumbs | 144 | 260 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
-| sugar-crush-web | 5 | 36 | 0 | 0 | 0 | 0 |  |
+| sugar-crush-web | 5 | 36 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep baseline pre-rename -->
 | sugar-dash | 7483 | 14859 | 2 | 0 | 0 | 1 |  | <!-- @rename-keep -->
 | sugar-diff | 70 | 225 | 0 | 0 | 0 | 0 |  |
 | sugar-gallery | 264 | 1162 | 0 | 0 | 0 | 0 |  |

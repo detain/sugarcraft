@@ -1,7 +1,7 @@
 # Server mode (`candy-code serve`)
 
 `candy-code serve` runs an HTTP + WebSocket server that a browser (the
-[`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) UI), a
+[`candy-code-web`](https://github.com/sugarcraft/candy-code-web) UI), a
 terminal ([`candy-code attach`](#attaching-a-terminal-candy-code-attach)) or a
 script drives candy-code through. It runs in the foreground until `Ctrl+C` or
 `SIGTERM` — or in the background with `--detach` — on the same ReactPHP loop
@@ -33,7 +33,7 @@ URL**:
 candy-code serve: listening on http://127.0.0.1:7420 (pid 4242)
   root:            /home/me/src/app
   permission mode: default
-  web UI:          /…/vendor/sugarcraft/sugar-crush-web/dist
+  web UI:          /…/vendor/sugarcraft/candy-code-web/dist
   sign in:         http://127.0.0.1:7420/#code=3f9c…
                    (one-time code, valid 120 s; Ctrl+C stops the server)
 ```
@@ -52,7 +52,7 @@ Open the sign-in URL in a browser on the same machine. The code rides in the URL
 | `--allowed-origin <list>` | none | Comma-separated extra browser origins (`http(s)://host[:port]`) accepted beside the server's own. Repeats accumulate. |
 | `--allow-dir-browse` | off | Let signed-in clients choose the directory a new session starts in: `fs.listDirs` lists directory names (never files) under `--browse-root`, and the web UI's "New session" opens a folder picker ([Choosing a new session's directory](#choosing-a-new-sessions-directory---allow-dir-browse)). |
 | `--browse-root <dir>` | your home directory | The directory `--allow-dir-browse` is confined to. Resolved at start; one that does not exist refuses startup. Has no effect without `--allow-dir-browse`. |
-| `--web-root <dir>` | the installed `sugarcraft/sugar-crush-web` build | Serve the UI from `<dir>`. |
+| `--web-root <dir>` | the installed `sugarcraft/candy-code-web` build | Serve the UI from `<dir>`. |
 | `--no-web` | off | API and WebSocket only. |
 | `--allow-bypass` | off | Let sessions run in `bypass-permissions` or `dont-ask`. |
 | `--allow-root` | off | Permit running as root. |
@@ -993,13 +993,13 @@ and checkpoints), image and audio prompt blocks, and the unstable
 
 ## Web UI
 
-The browser UI is the [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web)
+The browser UI is the [`candy-code-web`](https://github.com/sugarcraft/candy-code-web)
 package: a pre-built Vue bundle that `serve` hands out on the same port as the
 API and the WebSocket, so there is nothing else to run. The server looks for it
 in this order and names what it found on the `web UI:` startup line:
 
 1. `--web-root <dir>` (or `CANDY_CODE_SERVER_WEB_ROOT`);
-2. the installed package (`composer require sugarcraft/sugar-crush-web`; it is
+2. the installed package (`composer require sugarcraft/candy-code-web`; it is
    a `suggest`, not a dependency, so headless installs stay lean);
 3. neither: API and WebSocket only (also what `--no-web` asks for).
 
@@ -1069,7 +1069,7 @@ happened meanwhile is missed or shown twice; a reload is never needed. A
 restarted server signs the browser out (sign-ins live in memory) and the page
 asks again. A server that comes back as a different version offers a reload.
 
-**Developing the UI** (`sugar-crush-web/`, Node 24): `npm run dev` serves it
+**Developing the UI** (`candy-code-web/`, Node 24): `npm run dev` serves it
 from Vite with hot reload and proxies `/ws` and `/api` to `127.0.0.1:7420`;
 start that server with `--allowed-origin http://localhost:5173` so it accepts
 the dev page's origin. The end-to-end suite (`npm run e2e`) drives the built UI
@@ -1276,7 +1276,7 @@ start there. WSL works.
 
 ## See also
 
-- [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) — the
+- [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) — the
   browser UI's own README: its panels, its keyboard, and developing it.
 - [`protocol/candy-code.v1.schema.json`](protocol/candy-code.v1.schema.json) —
   the generated JSON Schema of every method and event.

@@ -81,7 +81,7 @@
         "sugarcraft/sugar-charts": "dev-master",
         "sugarcraft/sugar-navstack": "dev-master",
         "sugarcraft/candy-code": "dev-master",
-        "sugarcraft/sugar-crush-web": "dev-master",
+        "sugarcraft/candy-code-web": "dev-master",
         "sugarcraft/sugar-dashboard": "dev-master",
         "sugarcraft/sugar-diff": "dev-master",
         "sugarcraft/sugar-gallery": "dev-master",
@@ -398,7 +398,7 @@
         },
         {
             "type": "path",
-            "url": "sugar-crush-web",
+            "url": "candy-code-web",
             "options": {
                 "symlink": true
             }

@@ -73,7 +73,7 @@
         "ext-pcntl": "Required by `candy-code serve`: every turn runs in a forked child, and the blocking fallback would stall every session on the server.",
         "ext-posix": "Required by `candy-code serve` (process identity and signals for the forked turn children).",
         "ext-ffi": "Required by `candy-code serve`: a forked turn child closes the server's inherited sockets through libc close(2).",
-        "sugarcraft/sugar-crush-web": "The browser UI `candy-code serve` serves on its own port (Vite + Vue build shipped as a composer package)."
+        "sugarcraft/candy-code-web": "The browser UI `candy-code serve` serves on its own port (Vite + Vue build shipped as a composer package)."
     },
     "config": {
         "allow-plugins": {

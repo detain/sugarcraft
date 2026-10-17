@@ -269,7 +269,7 @@ session; acp runs turns for an editor, until the editor disconnects):
                          The directory --allow-dir-browse is confined to
                          (default your home directory).
       --web-root <dir>   Serve the web UI from <dir> instead of the installed
-                         sugarcraft/sugar-crush-web package.
+                         sugarcraft/candy-code-web package.
       --no-web           Serve the API and WebSocket only, no UI files.
       --allow-bypass     Let sessions run in bypass-permissions or dont-ask
                          (refused by default; the server's sessions start in
@@ -705,7 +705,7 @@ TXT,
     'cli.serve.announce.sign_in' => '  sign in:         {url}',
     'cli.serve.announce.stop' => '  stop:            candy-code serve stop',
     'cli.serve.announce.web' => '  web UI:          {dir}',
-    'cli.serve.announce.web_missing' => '  web UI:          not installed (composer require sugarcraft/sugar-crush-web)',
+    'cli.serve.announce.web_missing' => '  web UI:          not installed (composer require sugarcraft/candy-code-web)',
     'cli.serve.config.allowed_host_invalid' => 'allowed host "{host}" is not a host name or host:port (an IPv6 address in brackets)',
     'cli.serve.draining.many' => 'candy-code serve: draining ({reason}) — waiting up to {seconds} s for {count} running turns; signal again to stop now',
     'cli.serve.draining.one' => 'candy-code serve: draining ({reason}) — waiting up to {seconds} s for {count} running turn; signal again to stop now',
