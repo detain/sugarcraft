@@ -85,7 +85,7 @@ sugar-metrics/
 │   └── showcase.gif
 ├── examples/
 │   ├── showcase.php               — counter/gauge/histogram primitives, InMemoryBackend
-│   └── wish-with-metrics.php        — SugarSshServer + SugarMetrics integration
+│   └── ssh-server-with-metrics.php  — SugarSshServer + SugarMetrics integration
 ├── lang/
 │   ├── en.php (source of truth)
 │   └── [17 other locales]
@@ -319,7 +319,7 @@ public function handle(Context $ctx, Session $session, callable $next)
 
 **SugarSshServer integration:**
 ```php
-// examples/wish-with-metrics.php
+// examples/ssh-server-with-metrics.php
 Server::new()
     ->use(new Logger())
     ->use(new SessionMetrics($registry))
