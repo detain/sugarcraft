@@ -1082,7 +1082,11 @@ Open the sign-in URL and the page signs in, connects and shows:
 - **A status bar**: what the session is doing (and the step), context used,
   spend, the model, and the permission mode — changeable from there.
 - **Tabs and a grid** for watching several sessions at once. Every session
-  opened stays a tab (Alt+1…9), with its status and open questions; the grid
+  opened stays a tab — picked by the configurable tab chord on the physical
+  digit key (`Alt+1`…`9` by default; the `tabs: Alt+1` button in the tab strip
+  cycles the modifier to `Alt+Shift` or `Ctrl+Alt`, and because the match is on
+  the digit `key.code`, macOS Option glyphs and AZERTY layouts no longer
+  matter) — with its status and open questions; the grid
   tiles the open tabs, up to 3×3, each live with its status, step and spend,
   the last few events, its questions and a line to prompt or steer it. The
   focused tile streams; the others are narrated (`client.viewing` with
