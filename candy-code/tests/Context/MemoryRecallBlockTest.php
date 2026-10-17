@@ -73,6 +73,29 @@ final class MemoryRecallBlockTest extends TestCase
         self::assertStringContainsString("{$id} (shipped in this repository): Release tags are signed.", $rendered);
     }
 
+    public function testARepoNoteGitDoesNotTrackIsBadgedAsRecordedHere(): void
+    {
+        $repoRoot = $this->dir . '/tracked-repo';
+        mkdir($repoRoot . '/.candy-code/memory', 0700, true);
+        exec('git -C ' . escapeshellarg($repoRoot) . ' init -q 2>&1', $initOut, $initCode);
+        self::assertSame(0, $initCode, implode("\n", $initOut));
+
+        $repo = MemoryStore::forRepository($repoRoot . '/.candy-code/memory');
+        $shipped = $repo->add('Release tags are signed.', MemoryScope::Project);
+        $identity = '-c user.name=t -c user.email=t@example.invalid -c commit.gpgSign=false';
+        exec("git {$identity} -C " . escapeshellarg($repoRoot) . ' add -A 2>&1', $addOut, $addCode);
+        self::assertSame(0, $addCode, implode("\n", $addOut));
+        exec("git {$identity} -C " . escapeshellarg($repoRoot) . ' commit -q -m base 2>&1', $commitOut, $commitCode);
+        self::assertSame(0, $commitCode, implode("\n", $commitOut));
+        $recorded = $repo->add('Deploy tokens rotate weekly.', MemoryScope::Project);
+
+        $rendered = MemoryRecallBlock::capture($this->store, $repo, 'sign the release tags; rotate deploy tokens')->render();
+
+        self::assertStringContainsString("{$shipped} (shipped in this repository):", $rendered);
+        self::assertStringContainsString("{$recorded} (recorded in this checkout, not committed):", $rendered,
+            'an untracked note was saved by this checkout — the shipped badge misdescribes it (ISS-019)');
+    }
+
     public function testItRendersAFencedBlockWithThePreambleAndOneLinePerNote(): void
     {
         $id = $this->store->add("Deploys go\nthrough   staging.", MemoryScope::Project, ['ops', 'deploy']);

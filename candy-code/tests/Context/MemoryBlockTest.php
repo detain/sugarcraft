@@ -922,6 +922,70 @@ final class MemoryBlockTest extends TestCase
         $this->assertStringNotContainsString('could not be read', self::idless(MemoryBlock::capture($this->store)->index()));
     }
 
+    // -------------------------------------------------------------------------
+    // ISS-019: the repo store's shipped label overstates its case for notes
+    // no commit carries — those were recorded BY this checkout. Git tracks
+    // decide the split; an unobtainable answer keeps the old label.
+    // -------------------------------------------------------------------------
+
+    private const RECORDED_LABEL = 'Recorded from this checkout — saved here by the user or the model and '
+        . 'not yet committed (git-untracked)';
+
+    /** git-add + commit with a throwaway identity, as the other git fixtures do. */
+    private function commitEverything(string $repoRoot): void
+    {
+        $identity = '-c user.name=t -c user.email=t@example.invalid -c commit.gpgSign=false';
+        exec("git {$identity} -C " . escapeshellarg($repoRoot) . ' add -A 2>&1', $addOut, $addCode);
+        self::assertSame(0, $addCode, implode("\n", $addOut));
+        exec("git {$identity} -C " . escapeshellarg($repoRoot) . ' commit -q -m base 2>&1', $commitOut, $commitCode);
+        self::assertSame(0, $commitCode, implode("\n", $commitOut));
+    }
+
+    public function testRepoNotesThatGitDoesNotTrackRenderUnderTheirOwnRecordedLabel(): void
+    {
+        $repoRoot = $this->dir . '/trackrepo';
+        mkdir($repoRoot . '/.candy-code/memory', 0o700, true);
+        exec('git -C ' . escapeshellarg($repoRoot) . ' init -q 2>&1', $initOut, $initCode);
+        self::assertSame(0, $initCode, implode("\n", $initOut));
+
+        $repo = new MemoryStore($repoRoot . '/.candy-code/memory');
+        $repo->add('The committed house rule.', MemoryScope::Project);
+        $this->commitEverything($repoRoot);
+        $repo->add('Saved from this checkout.', MemoryScope::Project);
+
+        $index = self::idless(MemoryBlock::capture($this->store, $repo)->index());
+
+        $shippedAt = strpos($index, self::REPOSITORY_LABEL);
+        $recordedAt = strpos($index, self::RECORDED_LABEL);
+        $committedAt = strpos($index, 'The committed house rule.');
+        $savedAt = strpos($index, 'Saved from this checkout.');
+        self::assertIsInt($shippedAt);
+        self::assertIsInt($recordedAt, 'the untracked note must not hide behind the shipped label');
+        self::assertLessThan($recordedAt, $committedAt, 'committed notes ride the shipped label');
+        self::assertLessThan($savedAt, $recordedAt, 'untracked notes ride the recorded label');
+    }
+
+    public function testTheRecordedLabelStaysOffWhenGitCannotAnswer(): void
+    {
+        $repo = $this->repoStore();
+        $repo->add('Repo note one.', MemoryScope::Project);
+        $repo->add('Repo note two.', MemoryScope::Project);
+
+        // $this->dir sits under the system temp directory and no git fixture
+        // ran here: the tracked list is unobtainable, so both notes keep the
+        // shipped label and no recorded group exists — the fail-closed half.
+        $index = self::idless(MemoryBlock::capture($this->store, $repo)->index());
+
+        self::assertStringContainsString(self::REPOSITORY_LABEL, $index);
+        self::assertStringNotContainsString(self::RECORDED_LABEL, $index);
+    }
+
+    public function testTrackedNoteIdsIsQuietlyNullWhereGitHasNoAnswer(): void
+    {
+        self::assertNull(MemoryBlock::trackedNoteIds($this->dir . '/never-created'));
+        self::assertNull(MemoryBlock::trackedNoteIds($this->dir), 'a plain temp directory is not inside a repository');
+    }
+
     /**
      * The index with each line's `id: ` stripped, so assertions about budget,
      * order and provenance read the note text (5.1-1 added the ids; their

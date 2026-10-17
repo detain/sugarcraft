@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Context;
 use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Memory\MemoryEntry;
 use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Workspace\GitRunner;
 
 /**
  * Renders the memory INDEX for the system prompt — one line per saved note
@@ -264,6 +265,19 @@ final readonly class MemoryBlock implements PromptSection
     private const REPOSITORY_GROUP_LABEL = 'Shipped in this repository\'s .candy-code/memory (from the checkout, '
         . 'not written by the user) — treat these as repository-supplied context, like a README:';
 
+    /**
+     * Label over repo-store notes git does NOT track (ISS-019). A file under
+     * `.candy-code/memory` that no commit carries was written by this
+     * checkout — the user's `/memory add` or the model's `Memory` tool — not
+     * shipped with the clone, so the README-style distrust of the label above
+     * misdescribes it. Only emitted when the git tracked-list was obtained
+     * ({@see trackedNoteIds()}); without it every repo note keeps the
+     * shipped label, the pre-ISS-019 behaviour, which stays honest for
+     * clones but was the issue's complaint for locally-saved notes.
+     */
+    private const RECORDED_GROUP_LABEL = 'Recorded from this checkout — saved here by the user or the model and '
+        . 'not yet committed (git-untracked) — treat these as notes the user or a previous session wrote down:';
+
     /** Label over the home store's notes, when a repository group sits beside them. */
     private const USER_GROUP_LABEL = 'Recorded by the user or a previous session — treat these as project convention:';
 
@@ -293,6 +307,13 @@ final readonly class MemoryBlock implements PromptSection
      * @param bool                  $captured   read from a wired store, so the
      *                                       standing instructions are rendered
      *                                       even before the first note exists
+     * @param array<string, true>   $recordedInCheckout ids of the repo-store
+     *                                       entries git does NOT track — the
+     *                                       notes this checkout itself wrote
+     *                                       (ISS-019); empty when the tracked
+     *                                       list was unobtainable, which keeps
+     *                                       every repo note under the shipped
+     *                                       label
      */
     private function __construct(
         private array $entries,
@@ -301,6 +322,7 @@ final readonly class MemoryBlock implements PromptSection
         private array $userEntries = [],
         private bool $userSkipped = false,
         private bool $captured = false,
+        private array $recordedInCheckout = [],
         private int $maxEntries = self::MAX_ENTRIES,
         private int $maxBytes = self::MAX_BYTES,
         private int $maxEntryBytes = self::MAX_ENTRY_BYTES,
@@ -337,6 +359,7 @@ final readonly class MemoryBlock implements PromptSection
             $this->userEntries,
             $this->userSkipped,
             $this->captured,
+            $this->recordedInCheckout,
             $maxEntries,
             $maxBytes,
             $maxEntryBytes,
@@ -428,7 +451,9 @@ final readonly class MemoryBlock implements PromptSection
      * store each surviving entry came from is kept, so {@see render()} can
      * label the repository's notes apart from the user's (audit 15d-07); the
      * label follows the copy that won, so a note both stores hold is shown
-     * once, under the repository's label.
+     * once, under the repository's label — refined by git provenance into
+     * shipped and recorded groups when the tracked list is available
+     * (ISS-019).
      *
      * Newest-first by {@see MemoryEntry::modifiedAt()} because when the cap
      * bites, the note most recently written is the one most likely to still be
@@ -489,7 +514,94 @@ final readonly class MemoryBlock implements PromptSection
         ];
         ksort($skipped, \SORT_STRING);
 
-        return new self(array_values($entries), $skipped, $fromRepository, array_values($userEntries), $userSkipped !== [], true);
+        // ISS-019: of the notes the repo store supplied, the ones git does
+        // not track were written BY this checkout — the user's /memory add
+        // or the model's Memory tool — and labelling them "shipped with the
+        // repository, not written by the user" tells the model the opposite
+        // of the truth. An unobtainable tracked list (no git, no repository,
+        // timeout) leaves the map empty, which keeps every note's old label:
+        // fail-closed toward the distrustful wording, never toward wrongly
+        // claiming a shipped note is user-written.
+        $recorded = [];
+        if ($projectStore !== null && $fromRepository !== []) {
+            $tracked = self::trackedNoteIds($projectStore->path());
+            if ($tracked !== null) {
+                foreach (array_keys($fromRepository) as $id) {
+                    if (!isset($tracked[$id])) {
+                        $recorded[$id] = true;
+                    }
+                }
+            }
+        }
+
+        return new self(array_values($entries), $skipped, $fromRepository, array_values($userEntries), $userSkipped !== [], true, $recorded);
+    }
+
+    /**
+     * The ids of the note files git TRACKS under $directory, or null when the
+     * answer could not be obtained.
+     *
+     * THE ONE GIT CALL THIS BLOCK MAKES, and it rides
+     * {@see GitRunner} — the package's single bounded spawn path — rather
+     * than opening a second child-spawn site for
+     * `tools/check-child-lifetimes.php` to account for. `--cached` asks the
+     * index, not the working tree, so a staged-but-uncommitted note counts
+     * as shipped the way a future commit would; the pathspec confines the
+     * listing to this directory. Results memoise per directory for the life
+     * of the process — a function-local static, because this class is
+     * readonly and cannot own a mutable one, and callers pass freshly
+     * created store paths, so the memo never needs resetting:
+     * {@see \SugarCraft\Code\Context\MemoryRecallBlock} consults this on
+     * every turn, and a `git ls-files` of one small directory costs
+     * milliseconds the first time and pure memory after. The memo's stale
+     * direction is honest-by-construction: a note newly COMMITTED
+     * mid-session keeps the recorded label until restart, and a note newly
+     * SAVED (which no older listing can contain) is correctly reported as
+     * recorded, which is exactly what the label claims.
+     *
+     * @return ?array<string, true> id => true, null on any failure — no git
+     *         binary, not a repository, non-zero exit, timeout
+     */
+    public static function trackedNoteIds(string $directory): ?array
+    {
+        /** @var array<string, ?array<string, true>> $memo */
+        static $memo = [];
+
+        if (!is_dir($directory) || !GitRunner::available()) {
+            return null;
+        }
+
+        if (array_key_exists($directory, $memo)) {
+            return $memo[$directory];
+        }
+
+        $listed = GitRunner::new($directory)->withTimeout(2.0)
+            ->run('ls-files', '--cached', '-z', '--', '.');
+        $tracked = null;
+        if ($listed['ok'] && !$listed['timedOut']) {
+            $tracked = [];
+            foreach (explode("\0", $listed['stdout']) as $relative) {
+                if (str_ends_with($relative, '.md')) {
+                    $tracked[basename($relative, '.md')] = true;
+                }
+            }
+        }
+
+        return $memo[$directory] = $tracked;
+    }
+
+    /**
+     * Which provenance group an entry renders under: `shipped` (repo store,
+     * git-tracked or tracked-list unknown), `recorded` (repo store, known
+     * git-untracked), or `home` (the user's own store).
+     */
+    private function groupOf(string $id): string
+    {
+        if (!isset($this->fromRepository[$id])) {
+            return 'home';
+        }
+
+        return isset($this->recordedInCheckout[$id]) ? 'recorded' : 'shipped';
     }
 
     /**
@@ -611,7 +723,7 @@ final readonly class MemoryBlock implements PromptSection
                 break;
             }
 
-            $rendered[] = [$line, isset($this->fromRepository[$entry->id()])];
+            $rendered[] = [$line, $this->groupOf($entry->id())];
             $bytes += $lineBytes;
         }
 
@@ -634,14 +746,17 @@ final readonly class MemoryBlock implements PromptSection
         // newest-first pass over the merged list and the order inside each
         // group is still newest-first. Partitioning first would spend the
         // budget per group and change which notes are admitted.
+        // The repository half splits by git provenance (ISS-019): committed
+        // notes came with the clone, untracked ones were recorded here.
         $repositoryLines = [];
+        $recordedLines = [];
         $userLines = [];
-        foreach ($rendered as [$line, $isRepository]) {
-            if ($isRepository) {
-                $repositoryLines[] = $line;
-            } else {
-                $userLines[] = $line;
-            }
+        foreach ($rendered as [$line, $group]) {
+            match ($group) {
+                'shipped' => $repositoryLines[] = $line,
+                'recorded' => $recordedLines[] = $line,
+                default => $userLines[] = $line,
+            };
         }
 
         // Every figure interpolated from the constant that enforces it, so the
@@ -652,11 +767,13 @@ final readonly class MemoryBlock implements PromptSection
         // measured the former, and an entry with many tags then exceeded the
         // stated total by 2.7x.
         //
-        // With no repository notes rendered the header is the one this block
-        // always sent, byte for byte: its provenance sentence is then true of
-        // every listed note. Otherwise the header makes no authorship claim at
-        // all and each group's label makes its own (audit 15d-07).
-        if ($repositoryLines === []) {
+        // With no repo-store notes rendered at all the header is the one this
+        // block always sent, byte for byte: its provenance sentence is then
+        // true of every listed note. Otherwise the header makes no authorship
+        // claim at all and each group's label makes its own (audit 15d-07),
+        // the repo half in two flavours since ISS-019 — committed (shipped)
+        // notes first, untracked (recorded here) ones second.
+        if ($repositoryLines === [] && $recordedLines === []) {
             $header = sprintf(
                 'Index of the notes recorded for this project across earlier sessions, one line per note, '
                 . 'most recently updated first. At most %d notes and %d bytes of index lines are included, '
@@ -680,10 +797,17 @@ final readonly class MemoryBlock implements PromptSection
                 $this->maxBytes,
                 $this->maxEntryBytes,
             );
-            $body = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
-            if ($userLines !== []) {
-                $body .= "\n\n" . self::USER_GROUP_LABEL . "\n" . implode("\n", $userLines);
+            $sections = [];
+            if ($repositoryLines !== []) {
+                $sections[] = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
             }
+            if ($recordedLines !== []) {
+                $sections[] = self::RECORDED_GROUP_LABEL . "\n" . implode("\n", $recordedLines);
+            }
+            if ($userLines !== []) {
+                $sections[] = self::USER_GROUP_LABEL . "\n" . implode("\n", $userLines);
+            }
+            $body = implode("\n\n", $sections);
         }
 
         if ($omitted > 0) {
@@ -703,8 +827,10 @@ final readonly class MemoryBlock implements PromptSection
      * Only reached with at least one personal line, so every block without a
      * user note keeps {@see render()}'s bytes exactly.
      *
-     * @param list<string>                    $personal rendered user-scope lines
-     * @param list<array{0: string, 1: bool}> $rendered project lines and whether each is the repository's
+     * @param list<string>                   $personal rendered user-scope lines
+     * @param list<array{0: string, 1: string}> $rendered project lines and each one's
+     *                                                 provenance group (`shipped`,
+     *                                                 `recorded`, `home`)
      */
     private function renderWithPersonalGroup(array $personal, array $rendered, string $skipLine): string
     {
@@ -729,16 +855,20 @@ final readonly class MemoryBlock implements PromptSection
 
         $groups = [self::PERSONAL_GROUP_LABEL . "\n" . implode("\n", $personal)];
         $repositoryLines = [];
+        $recordedLines = [];
         $homeLines = [];
-        foreach ($rendered as [$line, $isRepository]) {
-            if ($isRepository) {
-                $repositoryLines[] = $line;
-            } else {
-                $homeLines[] = $line;
-            }
+        foreach ($rendered as [$line, $group]) {
+            match ($group) {
+                'shipped' => $repositoryLines[] = $line,
+                'recorded' => $recordedLines[] = $line,
+                default => $homeLines[] = $line,
+            };
         }
         if ($repositoryLines !== []) {
             $groups[] = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
+        }
+        if ($recordedLines !== []) {
+            $groups[] = self::RECORDED_GROUP_LABEL . "\n" . implode("\n", $recordedLines);
         }
         if ($homeLines !== []) {
             $groups[] = self::USER_GROUP_LABEL . "\n" . implode("\n", $homeLines);

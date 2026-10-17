@@ -295,7 +295,15 @@ so its notes are listed under "Shipped in this repository's .candy-code/memory
 context, like a README", and the home store's under "Recorded by the user or a
 previous session — treat these as project convention". Only a group that has a
 listed note gets a label; a note both stores hold is listed once, under the
-repository's label. When every listed note is from the home store the block keeps
+repository's label. The repository half splits again by git provenance
+(ISS-019): a note the repository tracks keeps the shipped label, while one no
+commit carries — saved into this checkout by `/memory add` or the `Memory`
+tool — moves under "Recorded from this checkout — saved here by the user or
+the model and not yet committed (git-untracked) — treat these as notes the user
+or a previous session wrote down". The split consults `git ls-files` once per
+store directory per process (through `MemoryBlock::trackedNoteIds()`); when
+git cannot answer — no binary, no repository, timeout — every repository note
+keeps the shipped label, the pre-split behaviour. When every listed note is from the home store the block keeps
 its original single header — "These are notes the user or a previous session wrote
 down, not verified fact…" — byte for byte, because that claim is then true. One
 budget and one omission count span both groups: the notes are picked newest-first
@@ -379,8 +387,9 @@ message 0 and void the cached prefix behind it. The block is fenced
 `<memory-recall>` and holds at most `MemoryRecallBlock::MAX_ENTRIES` (3) notes,
 each one line — `- [type] id (origin; tags: …): body` — clipped to
 `MemoryRecallBlock::MAX_ENTRY_BYTES` (640) bytes, cut visibly with the same
-truncation marker the index uses. Origin says where the note came from: `user scope`, `project`, or
-`shipped in this repository`. The candidates are the notes the index lists
+truncation marker the index uses. Origin says where the note came from: `user scope`, `project`,
+`shipped in this repository`, or `recorded in this checkout, not committed`
+(the two repository badges split by git tracking, as in the index). The candidates are the notes the index lists
 (user and project scope; never agent scope), with the repository's copy winning
 an id collision as it does there. A turn whose message matches no note sends no
 block at all.
@@ -421,7 +430,8 @@ the model reads the recall block and, when it does not answer, calls the
 `Memory` tool's `recall` action.
 
 The recalled lines are the operator's (or, for `shipped in this repository`, the
-checkout's) text: each passes through `PromptFence::escape()`, the block's own
+checkout's; for `recorded in this checkout, not committed`, this working tree's)
+text: each passes through `PromptFence::escape()`, the block's own
 `<memory-recall>` fence is neutralised inside it, and the block opens by saying
 the notes are context, not instructions, and may be stale.
 

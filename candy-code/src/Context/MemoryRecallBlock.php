@@ -70,7 +70,7 @@ final class MemoryRecallBlock
 
     /**
      * @param list<array{entry: MemoryEntry, origin: string}> $notes ranked best first;
-     *        origin is `user`, `project` or `repository`
+     *        origin is `user`, `project`, `repository` or `recorded`
      */
     private function __construct(
         private readonly array $notes,
@@ -117,6 +117,21 @@ final class MemoryRecallBlock
         foreach ($store->list(MemoryScope::User) as $entry) {
             $entries[$entry->id()] ??= $entry;
             $origins[$entry->id()] ??= 'user';
+        }
+
+        // ISS-019: the same git-provenance reading MemoryBlock::capture()
+        // applies — a repo-store note no commit carries was recorded by this
+        // checkout, not shipped with it. Unknown tracked-set (null) keeps
+        // every note on its old badge.
+        if ($projectStore !== null) {
+            $tracked = MemoryBlock::trackedNoteIds($projectStore->path());
+            if ($tracked !== null) {
+                foreach (array_keys($origins) as $id) {
+                    if ($origins[$id] === 'repository' && !isset($tracked[$id])) {
+                        $origins[$id] = 'recorded';
+                    }
+                }
+            }
         }
 
         if ($entries === []) {
@@ -211,6 +226,7 @@ final class MemoryRecallBlock
             $origin = match ($note['origin']) {
                 'user' => 'user scope',
                 'repository' => 'shipped in this repository',
+                'recorded' => 'recorded in this checkout, not committed',
                 default => 'project',
             };
             $tags = $entry->tags() === [] ? '' : '; tags: ' . implode(', ', $entry->tags());

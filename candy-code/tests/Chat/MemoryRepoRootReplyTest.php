@@ -90,7 +90,18 @@ final class MemoryRepoRootReplyTest extends TestCase
 
         self::assertStringContainsString('Memory created with ID', $reply);
         self::assertStringContainsString('Saved in the home store, not this repository', $reply);
+        self::assertStringContainsString('Saved under: `' . $this->store->path() . '`', $reply,
+            'ISS-019: the fallback reply names the home directory the note actually reached');
         self::assertCount(1, $this->store->list('project'), 'the note was kept, in the home store');
+    }
+
+    public function testTheAddReplyNamesTheDirectoryTheProjectNoteLandedIn(): void
+    {
+        $reply = $this->reply('/memory add --scope project remember the deploy key rotation', $this->repo);
+
+        self::assertStringContainsString('Memory created with ID', $reply);
+        self::assertStringContainsString('Saved under: `' . $this->repo . '/.candy-code/memory`', $reply,
+            'ISS-019: a project save says which directory took the note, not just which scope');
     }
 
     public function testAProjectNoteTheRepositoryHostsSaysNothingExtra(): void

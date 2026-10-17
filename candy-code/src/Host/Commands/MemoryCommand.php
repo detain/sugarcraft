@@ -162,9 +162,16 @@ final class MemoryCommand implements HostCommand
             // `--root ''`, a read-only checkout, or a `.candy-code` planted as a
             // symlink out of the tree should cost the user their note, not their
             // command. The reply SAYS when the note fell back (15d-05 residual).
-            $saved = MemoryWriter::new($home, $root)
-                ->save($content, $scope);
+            $writer = MemoryWriter::new($home, $root);
+            $saved = $writer->save($content, $scope);
             $response = Lang::t('host.memory.created', ['id' => $saved->id, 'scope' => $scope]);
+            // ISS-019: name the directory the note actually landed in, so a
+            // "project" save is not an abstraction when the repository's
+            // store and the home store are a whole `cd` apart.
+            $landed = ($saved->inRepository ? $writer->repository() : $writer->home())?->path();
+            if ($landed !== null && $landed !== '') {
+                $response .= "\n\n" . Lang::t('host.memory.saved_to', ['dir' => $landed]);
+            }
             if ($saved->fellBackToHome) {
                 $response .= "\n\n" . Lang::t('host.memory.fell_back_home');
             }
