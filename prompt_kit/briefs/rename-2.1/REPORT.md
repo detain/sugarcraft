@@ -77,7 +77,7 @@ directory: honey-flap ->  vs candy-flappy -> <!-- @rename-keep -->
 ```
 
 rc=2, nothing runs. The same error appears for two **never-related** dirs
-(`--prefix=candy-async --prefix=candy-core` → `… candy-async ->  vs candy-core -> `), proving the
+(`--prefix=candy-async --prefix=candy-core` → `… candy-async ->  vs candy-core -> `), proving the <!-- @rename-keep historical provenance -->
 guard is "two prefixes with the same target path (empty = split-repo root)", not rename detection:
 **plain `--prefix` can only be used ONCE per invocation in splitsh-lite v1.0.1.** (logs/05, logs/08)
 
@@ -103,7 +103,7 @@ to `legacy/<old-slug>` and tag `<old-slug>-final` in the split repo before the f
 
 ## 6. `from:to` variants (measured, both rejected for 2.2)
 
-- Grammar check: `--prefix=candy-async:candy-async --prefix=candy-core:candy-core` parses and runs
+- Grammar check: `--prefix=candy-async:candy-async --prefix=candy-core:candy-core` parses and runs <!-- @rename-keep historical provenance -->
   (464 split commits, `e27e0412a26ddf713eae7cf67c3b8dfb8678f9f6`) — each source lands under its own
   subdirectory in the split repo. Wrong layout for our per-lib repos (they are root-flattened).
 - Creative continuity attempt: `--prefix=honey-flap:candy-flappy --prefix=candy-flappy` (old dir <!-- @rename-keep -->

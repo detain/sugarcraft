@@ -1,25 +1,25 @@
-# Step 35 — candy-codetime + candy-mail + candy-git-server adopt candy-async
+# Step 35 — candy-codetime + candy-mail + candy-git-server adopt candy-async <!-- @rename-keep historical provenance -->
 
 **Branch:** `ai/async-adopters`
-**Depends on:** step-08 (candy-async), step-30 (audit)
+**Depends on:** step-08 (candy-async), step-30 (audit) <!-- @rename-keep historical provenance -->
 **Blocks:** —
 
 ## Goal
 
-Three I/O-heavy libs adopt candy-async: candy-codetime (JSONL append loop), candy-mail (message posting), candy-git-server (server). Each gains cancellation, retry, and timeout semantics for free.
+Three I/O-heavy libs adopt candy-async: candy-codetime (JSONL append loop), candy-mail (message posting), candy-git-server (server). Each gains cancellation, retry, and timeout semantics for free. <!-- @rename-keep historical provenance -->
 
 Reference: step-30 audit. Note: candy-codetime's `flock()` issue (§157) is OUT of this plan's scope (deferred follow-up); we don't touch it here. We only add async-side improvements.
 
 ## Files expected to be modified
 
-- 3 composer.json — add `sugarcraft/candy-async` via `path-repo-closure`.
+- 3 composer.json — add `sugarcraft/candy-async` via `path-repo-closure`. <!-- @rename-keep historical provenance -->
 - candy-codetime async writer (if any) → CancellationToken + retry.
 - candy-mail send queue → AsyncOps::withTimeout.
 - candy-git-server request handlers → Subscriptions for graceful shutdown.
 
 ## Acceptance criteria
 
-- [ ] Each lib's async ops are cancellable + observable via candy-async primitives.
+- [ ] Each lib's async ops are cancellable + observable via candy-async primitives. <!-- @rename-keep historical provenance -->
 - [ ] Existing tests pass.
 - [ ] ≥95 % coverage maintained.
 - [ ] `git status` clean on master.
@@ -44,11 +44,11 @@ Reference: step-30 audit. Note: candy-codetime's `flock()` issue (§157) is OUT 
 
 ## Ship brief
 
-- **PR title**: `candy-codetime + candy-mail + candy-git-server: adopt candy-async`
+- **PR title**: `candy-codetime + candy-mail + candy-git-server: adopt candy-async` <!-- @rename-keep historical provenance -->
 - **PR body**:
   ```
   ## Summary
-  - Three I/O-heavy libs adopt candy-async.
+  - Three I/O-heavy libs adopt candy-async. <!-- @rename-keep historical provenance -->
   - Cancellation, retry, timeout patterns standardised.
   - candy-codetime's flock() issue NOT addressed in this plan (deferred follow-up).
 
@@ -59,4 +59,4 @@ Reference: step-30 audit. Note: candy-codetime's `flock()` issue (§157) is OUT 
 
   Refs: docs/repo_map_step_35.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `candy-codetime + candy-mail + candy-git-server: adopt candy-async`.
+- Commit subject: `candy-codetime + candy-mail + candy-git-server: adopt candy-async`. <!-- @rename-keep historical provenance -->

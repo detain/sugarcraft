@@ -1,0 +1,35 @@
+# rename-5-e4 NOTES — candy-async → sugar-async <!-- @rename-keep -->
+
+Lane e4 (batch-E line 49, ns unchanged Async→Async, type=lib, bins {}). Branch `rename/e4` off base `6709f44bd`, worktree `/home/sites/sugarcraft-e4`. NEVER push master; push branch only. No R2-remote/R8/R9 (lane law — weld/serial phase owns remotes; brief law "NO remote/packagist"). <!-- @rename-keep -->
+
+## Entry facts (verified)
+
+- tools/renames.json line 49: kind=rename, candy-async → **sugar-async**, lib, ns Async unchanged, bins {}, no extra_literals/protect, status pending → renamed. BRIEF LABEL DEVIATION (pre-resolved at spawn): earlier orchestrator notes called this "sugar-loop" — disk truth (renames.json + plan B.3:164) is `sugar-async`. Derived: pascal CandyAsync→SugarAsync, compact candyasync (ZERO sites), env CANDY_ASYNC_/CANDYASYNC_ (ZERO sites → honest none, no LegacyEnv; libs have no bin). <!-- @rename-keep -->
+- R6 Lang domain: `candy-async/src/Lang.php` NAMESPACE='async' — strtolower(ns unchanged)='async' → no-op (dry-run counts R6:1 as rewrite-to-same; verified byte-identical post-run). LangTest bare-key fallbacks ('async.some.key') unaffected. <!-- @rename-keep -->
+- Class-name precedent (C4/D1 law): bare ns-name symbols NOT renamed — `AsyncCache`, `AsyncOps`, `CacheStore`, `CancellationToken` etc. keep their names under unchanged ns. No SugarAsync*/AsyncAsync* class exists (CandyAsync Pascal hits are all prose/test-name/doc-page — see sweeps). <!-- @rename-keep historical provenance -->
+- Consumers (composer require sugarcraft/candy-async): candy-codetime, candy-git-server, candy-mail, candy-sql, candy-vt, sugar-forms, sugar-treelist (+ root composer.json; require-dev: candy-async itself via candy-testing — unchanged). External `SugarCraft\Async\` php refs confined to those libs' src/tests (grep census) + docblock-only: candy-core/src/Exception/SemaphoreClosedException.php, candy-wish/tests/bootstrap.php, candy-starter/CALIBER_LEARNINGS.md, sugar-treelist Model/FuzzyMatch docblocks. candy-vt is lane e7's rename target (sugar-vterm) — I edit ONLY its candy-async-token lines; weld reconciles same-file overlaps (D-batch precedent). <!-- @rename-keep -->
+- No ansi/candy-async/ art dir, no .vhs tapes, no vhs.yml matrix entry, no ci.yml refs (dynamic discovery), no docs/repo_map/sugarcraft_candy-async.md, no research page. Icons exist: media/icons/candy-async.png + docs/img/icons/candy-async.png (binary-excluded content, C.2 auto git-mv of paths). <!-- @rename-keep historical provenance -->
+- Baselines (rename-baseline.md:31 record 117T/259A — RE-MEASURED at base per brief law, see Steps R0).
+- LoopPin convention: `candy-async/tests/bootstrap.php` carries the full pinStableClock rationale docblock, ZERO old-name tokens → rides the dir move byte-intact (verified post-R3 md5). phpunit.xml `bootstrap="tests/bootstrap.php"` relative — token-free. <!-- @rename-keep historical provenance -->
+
+## Self-lock law (rename-lib.php sentinel skips ENTIRE file path plan)
+
+NEVER tag: candy-async/** (all files incl README/CALIBER/phpunit.xml), findings/candy-async.md, findings/plan_candy-async.md, docs/_data/candy-async.{json,body.html}, docs/lib/candy-async.html, media/icons + docs/img/icons PNGs (binary-excluded anyway). README Formerly notice added POST-move to sugar-async/README.md (harmless — new path matches no segment). <!-- @rename-keep -->
+
+## Tag-prep set (122 lines / 20 files — history → @rename-keep, per-line)
+
+- prompt_kit/CONTEXT.md ×2 untagged (47, 61; 13 later-batch lines already tagged by prior lanes), rename-baseline.md:31, rename-2.1/REPORT.md ×2, rename-4-B8/NOTES.md ×1 (sibling-lane records).
+- docs/plans/crush_code_worklog.md ×4, docs/plans/plans_cleaning.md ×2, docs/adr/001-asyncops-consolidation.md ×8 (ADR per R6.1).
+- php74_branch.md ×3 (:540 pre-tagged by prior lane), steps/J1_COMPOSER_REPOS.md ×2.
+- docs/repo_map_step_{08,23,30,35,38,40,41}.md ×49, repo_map_supervisor.md ×4, repo_map_update.md ×4, repo_map_update_followups.md ×28, repo_map_updates.md ×12 — shared-foundation-refactor campaign ARCHIVES (scratchpad "never delete — Resolved is the archive"; quoted CLI evidence with historical branch names). DEVIATION from D1's repo_map=living judgment: D1's living list meant docs/repo_map/** dir (210 upstream maps, zero async hits); these flat docs/repo_map_*.md work-records are session archives → tagged. Lines shared with other E-lane tokens (candy-buffer/layout/input/testing) get line-level exemption for them too — accepted, consistent w/ php74:540 precedent.
+
+## Steps
+
+- R0 base re-measure at 6709f44bd (vendor linked 6/6): candy-async 117T/259A/0F/0E/0S exit0 — EXACT vs rename-baseline.md:31 record. Post-tag-prep dry-run: R3=310 (was 442; the 122 tagged historical lines now exempt), paths still 7, R2=15, R6=1 (rewrite-to-same no-op). <!-- @rename-keep historical provenance -->
+- R1 dry-run: 100 content files / 7 paths; R2=15 R3=442 R6=1. Sanity: dir move ✓, bins none ✓, ns pair unchanged ✓, counts non-zero ✓. Post-tag-prep re-run planned counts drop by ~120+ line hits (recorded below).
+- R2 remote rename: SKIPPED per brief law.
+- R3 tool run → php -l all changed PHP → (fill)
+- R4 manual sweeps: (a) glued `findings/plan_candy-async.md` ×3 (findings_resume_plan :321/:1227, plan.md :166 — R3 lookbehind `_` blind) → rewritten to plan_sugar-async.md; (b) sugar-treelist AliasResolutionTest::testCandyAsyncCancellationExceptionResolves → testSugarAsyncCancellationExceptionResolves (R2 blind: CamelCase-joined after `test`) + :13/:18/:125/:128 prose rides R3; (c) sugar-async/README.md Formerly notice (R4.1, no ns-change line — ns unchanged); (d) NO env/compact/Cap-Hyphen/glued-underscore hits (all grepped zero); (e) lowercase bare `async` NEVER swept (prose/RPC/ReactPHP vocabulary everywhere — only boundary-anchored candy-async/CandyAsync/candyasync tokens touched); (f) 'as GitDaemonAsyncTest' comment in candy-git-server = their own class name, not a candy-async brand token — untouched. <!-- @rename-keep historical provenance -->
+- R5: gen-docs.php (redirect stub docs/lib/candy-async.html minted after status flip, self-tagged by generator law); NO root composer update/lock (weld-owned, D-lock-refresh precedent 01c87e172); refresh-deps --mode=linked sugar-async + 7 consumers; hand-prune dangling candy-async vendor symlinks. <!-- @rename-keep historical provenance -->
+- R6 gates (committed tip): residue --old=candy-async 0; own suite EXACT vs R0; consumer suites; tools/tests 426/1484 via sugar-async/vendor/bin/phpunit; path-repos/child-lifetimes/gen-docs --check/gen-ansi --check rc0. <!-- @rename-keep historical provenance -->
+- R7 commit + status flip pending→renamed (targeted sed, compact one-line kept).

@@ -44,7 +44,7 @@
 ### ✅ DONE (15+)
 
 - candy-ansi: OSC-8/hyperlink routing, CR/LF dispatch, CSI final methods
-- candy-async: OperationCancelledException, dead $operationPromise, retry() loop param, disposeAll throw-guard, retry bounded wall-clock
+- candy-async: OperationCancelledException, dead $operationPromise, retry() loop param, disposeAll throw-guard, retry bounded wall-clock <!-- @rename-keep historical provenance -->
 - candy-buffer: Region validation
 - candy-core: AtomicJsonFile/Json::decodeArray/Sanitize SSOT
 - sugar-fuzzy: ScoringProfile port, DoS caps
@@ -58,7 +58,7 @@
 
 ### ❌ NOT DONE (2)
 
-- candy-async: debounce/throttle no disposal handle
+- candy-async: debounce/throttle no disposal handle <!-- @rename-keep historical provenance -->
 - candy-buffer: no resize() method
 
 ### ❓ UNCLEAR / NOT VERIFIED (40+)

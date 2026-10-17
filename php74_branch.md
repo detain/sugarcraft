@@ -347,9 +347,9 @@ dependency cycle and is backported as one fused phase.
   candy‑core step because they must be written in candy‑core itself.)*
 
 ### Phase 1 — Leaf foundation (topo level 0, no sugarcraft deps)
-Each is one step unless noted. `candy-ansi`, `candy-async`, `candy-buffer` are deps of the
+Each is one step unless noted. `candy-ansi`, `candy-async`, `candy-buffer` are deps of the <!-- @rename-keep historical provenance -->
 keystone, so they come first within the phase.
-- **1.1** `candy-async` (8 src, medium) — react deps; `readonly class Suspended`, union types.
+- **1.1** `candy-async` (8 src, medium) — react deps; `readonly class Suspended`, union types. <!-- @rename-keep historical provenance -->
 - **1.2** `candy-ansi` (11 src, low) — 2 backed enums (→ polyfill), `match`, `??=`. *(First enum
   conversions — establishes the §4.3 pattern; extra review.)*
 - **1.3** `candy-buffer` (17 src, medium) — split into **1.3a** root+`Diff/` and **1.3b**
@@ -497,7 +497,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-codetime | high | 16 | ctor-promotion, first-class-callable, intdiv, named-args, new-in-init |
 | sugar-toast | high | 9 | backed-enum, enum, enum-with-methods, ctor-promotion, match, readonly |
 | sugar-veil | high | 7 | ctor-promotion, enum, enum-with-methods, match, named-args, readonly | <!-- @rename-keep historical provenance -->
-| candy-async | medium | 8 | ctor-promotion, mixed, named-args, readonly-class, union; react |
+| candy-async | medium | 8 | ctor-promotion, mixed, named-args, readonly-class, union; react | <!-- @rename-keep historical provenance -->
 | candy-buffer | medium | 17 | ctor-promotion, nullsafe, readonly, union |
 | candy-flip | medium | 9 | WeakMap, ctor-promotion, named-args, readonly | <!-- @rename-keep -->
 | sugar-forms | medium | 48 | backed-enum, ctor-promotion, match, non-capturing-catch, nullsafe |

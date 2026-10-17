@@ -7,7 +7,7 @@ Ensure all SugarCraft internal dependencies have path repository entries for loc
 
 Check for missing path repos:
 - `candy-metrics` — used by HistoryRecorder (optional), not in composer.json
-- `candy-async` — in "require" but check if path repo needed
+- `candy-async` — in "require" but check if path repo needed <!-- @rename-keep historical provenance -->
 
 ## Path Repository Convention (from AGENTS.md)
 For each sugarcraft/* package used:
@@ -28,7 +28,7 @@ For each sugarcraft/* package used:
 
 ## Current Repos Already Present
 
-- candy-core, candy-sprinkles, candy-layout, candy-async, candy-ansi, candy-input
+- candy-core, candy-sprinkles, candy-layout, candy-async, candy-ansi, candy-input <!-- @rename-keep historical provenance -->
 - sugar-table, sugar-toast, sugar-charts, sugar-dash, candy-buffer, sugar-forms <!-- @rename-keep historical provenance -->
 - sugar-fuzzy, candy-pty, sugar-widgets, candy-kit <!-- @rename-keep historical provenance -->
 
