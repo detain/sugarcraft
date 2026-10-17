@@ -4,9 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Code\StatusLineResultMsg;
+use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\ToolIpcFiles;
 
 /**
  * The `statusLine` settings key: a user-supplied command whose stdout is
@@ -44,8 +51,11 @@ use SugarCraft\Code\Support\ProcessReaper;
  *
  * The three-way split is deliberate:
  *
- *  - {@see refresh()} is the ONLY side-effecting entry point, driven by
- *    {@see \SugarCraft\Code\Chat::subscriptions()}'s tick;
+ *  - {@see cmd()} is the tick's entry point, driven by
+ *    {@see \SugarCraft\Code\Chat::subscriptions()}'s tick and settled by the
+ *    {@see \SugarCraft\Code\StatusLineResultMsg} its forked child resolves
+ *    (ISS-095); {@see refresh()} is the same run-if-due decision executed
+ *    synchronously for callers that need the value now;
  *  - {@see line()} is a pure read for the renderer;
  *  - {@see run()} is the bounded execution itself, callable on an instance
  *    with no process state involved at all, which is what makes the timeout,
@@ -85,10 +95,16 @@ final class StatusLineCommand
      * not information.
      *
      * This is the interval between the STARTS of two refreshes only when the
-     * command is fast. {@see refresh()} is called from a subscription tick and
-     * runs synchronously, so a command that spends its whole budget stretches
-     * the effective period by the WHOLE cost of a killed run — which is the
-     * budget plus both grace periods, not the budget alone.
+     * command is fast. The tick enters {@see cmd()}, which is synchronous work
+     * only for the TTL comparison: the run itself happens in a forked child
+     * (ISS-095), so a command that spends its whole budget does NOT stretch
+     * the frame — it stretches the AGE of the painted text, and the latch
+     * skips the ticks that arrive while it still runs.
+     *
+     * The previous revision described `refresh()` running synchronously from
+     * the tick, so a killed command stretched the effective period by the
+     * WHOLE cost of the run — which is the budget plus both grace periods,
+     * not the budget alone.
      *
      * The previous revision said `REFRESH_SECONDS + TIMEOUT_SECONDS` (3.0 s).
      * That leaves out {@see TERMINATE_GRACE_SECONDS} and
@@ -117,11 +133,12 @@ final class StatusLineCommand
      * (the largest such budget has no margin left by definition), and neither
      * half is arithmetically true once the two 0.5 s graces below are counted:
      * a killed run can cost `TIMEOUT_SECONDS + 1.0` = 2.0 s by construction,
-     * which is the whole period. WHAT ACTUALLY MAKES OVERLAP IMPOSSIBLE is that
-     * {@see refresh()} is SYNCHRONOUS ON THE TUI THREAD — the event loop is
-     * inside `run()` for the whole of it, so no second tick can be delivered
-     * while a first run is outstanding, at any budget. The derivation bounds
-     * how much of the period one run may eat, not whether two can coexist.
+     * which is the whole period. WHAT MAKES OVERLAP IMPOSSIBLE used to be the
+     * run being synchronous on the TUI thread; since ISS-095 it is the
+     * explicit {@see $inFlight} latch {@see cmd()} arms and {@see settle()}
+     * releases, which holds across the off-thread run the same way the loop
+     * could not re-enter while it held. The derivation bounds how much of the
+     * period one run may eat, not whether two can coexist.
      *
      * NOT OPERATOR-CONFIGURABLE, unlike {@see \SugarCraft\Code\Hooks\ScriptHook::DEFAULT_TIMEOUT_SECONDS},
      * whose entries may raise it with `timeout:`. That key is a per-tool-call
@@ -245,6 +262,9 @@ final class StatusLineCommand
     /** {@see \SugarCraft\Code\Hooks\ScriptHook::KILL_GRACE_SECONDS}. */
     private const KILL_GRACE_SECONDS = 0.5;
 
+    /** How often the parent checks on the forked run (ISS-095), as in {@see \SugarCraft\Code\Commands\BangShell}. */
+    private const POLL_SECONDS = 0.05;
+
     /**
      * The configured command for this process, or null when the merged
      * settings named none. Null is the overwhelmingly common case and is what
@@ -271,6 +291,21 @@ final class StatusLineCommand
      * since the last {@see configure()}/{@see reset()}.
      */
     private static float $refreshedAt = 0.0;
+
+    /**
+     * Whether a forked run from {@see cmd()} is outstanding (ISS-095).
+     *
+     * THIS is what makes overlap impossible now that the tick runs off the
+     * update path: the previous revision got the guarantee from the run being
+     * synchronous on the TUI thread — the loop could not deliver a second
+     * tick while it was inside `run()`. A forked run floats free of the loop,
+     * so the latch is explicit: due AND not-in-flight arms, {@see settle()}
+     * releases, and a tick arriving while a slow command still works costs a
+     * boolean and nothing else. Cleared by {@see configure()} so a
+     * mid-session re-settings save never strands the latch on a child
+     * belonging to the replaced command.
+     */
+    private static bool $inFlight = false;
 
     private function __construct(
         /**
@@ -350,6 +385,7 @@ final class StatusLineCommand
         self::$cwd = $cwd;
         self::$line = '';
         self::$refreshedAt = 0.0;
+        self::$inFlight = false;
     }
 
     /**
@@ -403,11 +439,12 @@ final class StatusLineCommand
      * {@see REFRESH_SECONDS}) have passed since the last run, and cache what
      * it said.
      *
-     * THE ONLY SIDE-EFFECTING ENTRY POINT. Called from
-     * {@see \SugarCraft\Code\Chat::update()} on a
-     * {@see \SugarCraft\Code\StatusLineTickMsg}, i.e. on the update path,
-     * because `Model::view()` may not have side effects and a `proc_open()` per
-     * frame would be one per keystroke besides.
+     * THE SYNCHRONOUS RUN-IF-DUE ENTRY, kept for callers that want the value
+     * now (tests, and any future launcher-side first paint); the TUI tick
+     * goes through {@see cmd()} instead so the frame never freezes on a slow
+     * command (ISS-095). Both land in the same statics under the same TTL
+     * rule, so calling one after the other cannot double-run within a window
+     * — the second sees a fresh {@see $refreshedAt} and costs a comparison.
      *
      * A run that produces nothing usable — no output, a hang, a non-zero exit —
      * BLANKS the segment rather than leaving the previous text up. The
@@ -434,6 +471,106 @@ final class StatusLineCommand
 
         self::$line = $command->run(self::$cwd);
         self::$refreshedAt = microtime(true);
+    }
+
+    /**
+     * The Cmd that runs the configured command off the update path (ISS-095),
+     * or null when there is nothing to run.
+     *
+     * Null is the common answer: no command configured, the TTL has not
+     * expired, or a previous run is still in flight — the tick that finds an
+     * outstanding child costs a boolean, exactly as the TTL tick that finds a
+     * fresh cache did when the run was synchronous. When it does arm, the
+     * shape is {@see \SugarCraft\Code\Commands\BangShell::cmd()}'s: a forked child runs
+     * {@see run()} — which bounds itself to the budget plus graces — writes
+     * the line through {@see ToolIpcFiles}, and leaves by
+     * {@see ForkedChild::exitNow()}; the parent polls `pcntl_waitpid` on the
+     * loop and resolves the {@see StatusLineResultMsg} whose fold calls
+     * {@see settle()}. Without pcntl, or when the fork fails, the promise
+     * resolves synchronously in-process: never wrong, just blocking there.
+     */
+    public static function cmd(): ?\Closure
+    {
+        $command = self::$active;
+        if ($command === null || self::$inFlight) {
+            return null;
+        }
+
+        $now = microtime(true);
+        if (self::$refreshedAt > 0.0 && ($now - self::$refreshedAt) < $command->refreshSeconds) {
+            return null;
+        }
+
+        self::$inFlight = true;
+        $cwd = self::$cwd;
+
+        return Cmd::promise(static function () use ($command, $cwd): PromiseInterface {
+            $deferred = new Deferred();
+
+            if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+                $deferred->resolve(new StatusLineResultMsg($command->run($cwd)));
+
+                return $deferred->promise();
+            }
+
+            $file = ToolIpcFiles::reserve(ToolIpcFiles::CHAT_PREFIX, 'json');
+            $pid = pcntl_fork();
+
+            if ($pid === -1) {
+                ToolIpcFiles::discard($file);
+                $deferred->resolve(new StatusLineResultMsg($command->run($cwd)));
+
+                return $deferred->promise();
+            }
+
+            if ($pid === 0) {
+                ForkedChild::closeInheritedServerFds();
+                ToolIpcFiles::write($file, json_encode(['line' => $command->run($cwd)], JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}');
+                ForkedChild::exitNow(0);
+            }
+
+            $loop = Loop::get();
+            $timer = null;
+            $timer = $loop->addPeriodicTimer(
+                self::POLL_SECONDS,
+                static function () use ($pid, $file, $loop, &$timer, $deferred): void {
+                    $status = 0;
+                    if (pcntl_waitpid($pid, $status, WNOHANG) !== $pid) {
+                        return;
+                    }
+
+                    $loop->cancelTimer($timer);
+                    $deferred->resolve(new StatusLineResultMsg(self::collect($file)));
+                },
+            );
+
+            return $deferred->promise();
+        });
+    }
+
+    /**
+     * Land a finished run: the text, the re-armed TTL, the released latch.
+     *
+     * The TTL re-arms from the moment the run ENDS — the rule
+     * {@see refresh()} already stated, kept identical so an async settle and
+     * a sync refresh pace the command the same way.
+     */
+    public static function settle(string $line): void
+    {
+        self::$line = $line;
+        self::$refreshedAt = microtime(true);
+        self::$inFlight = false;
+    }
+
+    /** The child's serialised line; '' when the file says nothing usable. */
+    private static function collect(string $file): string
+    {
+        $data = is_file($file) ? file_get_contents($file) : false;
+        ToolIpcFiles::discard($file);
+
+        $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
+
+        return \is_array($decoded) && \is_string($decoded['line'] ?? null) ? $decoded['line'] : '';
     }
 
     /**

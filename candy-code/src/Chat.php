@@ -559,8 +559,9 @@ final class Chat implements Model
      * {@see \SugarCraft\Code\Config\StatusLineCommand::REFRESH_SECONDS},
      * read at the declaration site, because the runner DERIVES its own timeout
      * from it — a second copy of the number here could drift into a timeout
-     * longer than the period, which is precisely the overlap that derivation
-     * exists to make impossible.
+     * longer than the period, which the derivation exists to keep
+     * proportionate; the in-flight latch (ISS-095) is what keeps two runs
+     * from overlapping.
      */
     private const STATUS_LINE_SUBSCRIPTION = 'code.status-line';
 
@@ -2669,17 +2670,21 @@ final class Chat implements Model
             return $this->submitInitialPrompt($msg->prompt);
         }
         if ($msg instanceof StatusLineTickMsg) {
-            // The `statusLine` command's ONE side-effecting call site. Runs
-            // here rather than in view() because view() may not have side
-            // effects, and on a TICK rather than on every Msg because a
-            // proc_open() per update is one per keystroke.
+            // The `statusLine` command's launch site. Only the decision runs
+            // here on the update path — a TTL comparison and the in-flight
+            // check — while the command itself runs in a forked child, so a
+            // slow one no longer freezes the frame once per tick (ISS-095).
+            // Its text lands through the StatusLineResultMsg fold below.
             //
-            // Returns $this unchanged and a null Cmd: the runner holds the
-            // text in process state ({@see StatusLineCommand::line()}), not on
-            // the model, so there is nothing to fold into a new Chat. The
-            // repaint comes from Program re-rendering after the update, which
-            // it does for every Msg — this arm does not have to ask for one.
-            StatusLineCommand::refresh();
+            // Returns $this unchanged: the runner holds the text in process
+            // state ({@see StatusLineCommand::line()}), not on the model, so
+            // there is nothing to fold into a new Chat. The repaint comes
+            // from Program re-rendering after the update, which it does for
+            // every Msg — this arm does not have to ask for one.
+            return [$this, StatusLineCommand::cmd()];
+        }
+        if ($msg instanceof StatusLineResultMsg) {
+            StatusLineCommand::settle($msg->line);
 
             return [$this, null];
         }

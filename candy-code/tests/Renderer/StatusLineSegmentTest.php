@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\AssistantMsg;
 use SugarCraft\Code\Backend\EchoBackend;
@@ -12,6 +14,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
+use SugarCraft\Code\StatusLineResultMsg;
 use SugarCraft\Code\StatusLineTickMsg;
 use SugarCraft\Code\Usage;
 
@@ -492,9 +495,75 @@ final class StatusLineSegmentTest extends TestCase
 
         [$next, $cmd] = $this->chat()->update(new StatusLineTickMsg());
 
+        // ISS-095: the tick ARMS the run instead of performing it — the
+        // command executes in a forked child, so the frame never waits on it.
+        self::assertInstanceOf(\Closure::class, $cmd);
+        self::assertSame('', StatusLineCommand::line(), 'arming must not block on the command');
+
+        $result = self::driveToMsg($cmd);
+        self::assertInstanceOf(StatusLineResultMsg::class, $result);
+
+        [$folded, $again] = $next->update($result);
         self::assertSame('ticked', StatusLineCommand::line());
-        self::assertInstanceOf(Chat::class, $next);
-        self::assertNull($cmd);
+        self::assertInstanceOf(Chat::class, $folded);
+        self::assertNull($again, 'the settle fold dispatches nothing further');
+    }
+
+    /**
+     * ISS-095: while a forked run is outstanding the next tick must cost a
+     * boolean, not a second child — the latch is what replaced "synchronous
+     * on the TUI thread" as the overlap guarantee.
+     */
+    public function testAnOutstandingRunLatchesTheNextTickShut(): void
+    {
+        StatusLineCommand::configure(
+            [StatusLineCommand::KEY => ['type' => 'command', 'command' => 'sleep 0.3; echo late']],
+        );
+
+        [$chat, $cmd] = $this->chat()->update(new StatusLineTickMsg());
+        self::assertInstanceOf(\Closure::class, $cmd);
+
+        // Dispatch (the fork) without settling, then tick again.
+        $async = $cmd();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+        [$second, $relaunched] = $chat->update(new StatusLineTickMsg());
+        self::assertNull($relaunched, 'a tick that finds the child running double-ran it');
+
+        $result = self::awaitSettled($async->promise);
+        [$folded] = $second->update($result);
+        self::assertSame('late', StatusLineCommand::line());
+        self::assertInstanceOf(Chat::class, $folded);
+    }
+
+    /** Run the shared loop until the Cmd's promise settles; bounded so a regression fails rather than hangs. */
+    private static function driveToMsg(\Closure $cmd): object
+    {
+        $async = $cmd();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+
+        return self::awaitSettled($async->promise);
+    }
+
+    private static function awaitSettled(\React\Promise\PromiseInterface $promise): object
+    {
+        $loop = Loop::get();
+        $settled = false;
+        $msg = null;
+        $promise->then(static function (object $value) use (&$settled, &$msg, $loop): void {
+            $settled = true;
+            $msg = $value;
+            $loop->stop();
+        });
+
+        if (!$settled) {
+            $leash = $loop->addTimer(15.0, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($leash);
+        }
+
+        self::assertTrue($settled, 'the forked statusLine run never settled');
+
+        return $msg;
     }
 
     /**
