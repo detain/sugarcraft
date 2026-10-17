@@ -1403,10 +1403,13 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
 
 `theme` (`/theme` or **Switch theme** in `Ctrl+P`), `statusLine` (a command
 whose output becomes a custom status line), `layout` (pane docking, saved as
-you change it), `notify` (`bell` or `osc9` desktop notifications when a turn
-ends or an approval waits), `queueMode` (what `Enter` does mid-turn), `mouse`,
+you change it), `queueMode` (what `Enter` does mid-turn), `mouse`,
 `scrollWheelLines`, `doubleEscSeconds` and the preview sizes are all live
 settings — see the *Interface* rows of [`docs/SETTINGS.md`](docs/SETTINGS.md#every-key).
+`notify` (`bell` or `osc9` desktop notifications when a turn ends or an
+approval waits) sits in the same category but is not live: it is read while
+the session is built, so a change applies at the next restart — the settings
+view badges it `restart`.
 `watchFiles` (saved [`AI!` comments](#prompts-from-your-editor-ai-comments)
 become prompts) is user tier only and read at launch.
 
