@@ -77,10 +77,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     answer. Step 3.D-2: `NonInteractive::fireSessionEnd()`'s one line when
  *     a SessionEnd hook refuses, stderr-only because the session is over.)
  *  2. `STDERR` captured into a variable or property and written through later —
- *     ONE site, {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
+ *     TWO sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
- *     `candy-code: ` shapes through it. A grep for `fwrite(STDERR` cannot see
- *     this file at all.
+ *     `candy-code: ` shapes through it, and plan_rename.md 8A's
+ *     `bin/candy-code`, which hands the constant to `LegacyMigration::run()`
+ *     as the launch's notice channel before any sink exists.
+ *     A grep for `fwrite(STDERR` cannot see either file at all.
  *  3. `error_log(…)` — TWENTY-FIVE sites across twelve files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
@@ -335,6 +337,12 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const INDIRECT_SITES = [
+        // plan_rename.md 8A: bin/candy-code passes the STDERR constant into
+        // LegacyMigration::run() as its notice channel. The routing decision:
+        // stderr alone — the fold notices fire BEFORE the TUI, the transcript
+        // seam, or the notice sink exist, and they name startup mechanics,
+        // not something the session can no longer do.
+        'bin/candy-code' => 1,
         'src/Cli/HeadlessPermissionPrompt.php' => 1,
     ];
 
@@ -462,6 +470,10 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/ArgvParser.php' => 24,
         'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
+        // 8A: the three migration notices (env fold, running-server refusal,
+        // per-directory move), all stderr-alone — see INDIRECT_SITES' row for
+        // why none of them can ride the transcript seam or the notice sink.
+        'src/Cli/LegacyMigration.php' => 3,
         // +1 in wave 11: noticeAttachment()'s prefix literal (channel 1's note).
         // +1 in step 3.D-2: fireSessionEnd()'s refusal line (channel 1's note).
         'src/Cli/NonInteractive.php' => 9,
@@ -2840,7 +2852,7 @@ final class StderrEmitterCensusTest extends TestCase
                 'what' => 'channel 1, the fwrite(STDERR, …) total',
             ],
             [
-                'anchor' => '/written through later — ([A-Z]+) site,/',
+                'anchor' => '/written through later — ([A-Z]+) sites?/',
                 'expected' => array_sum(self::INDIRECT_SITES),
                 'what' => 'channel 2, the captured-handle total',
             ],

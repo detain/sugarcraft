@@ -300,6 +300,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'config, created by this process under umask 077 and opened `c` only for the '
                 . 'timed LOCK_EX; no byte of it is read',
         ],
+        'Cli/LegacyMigration.php|fopen' => [
+            'OWNED_HOME — serverRunning(): the pre-rename `server.lock` under a home '
+                . 'HomeDirectory::owned() established as this user\'s, opened `c` only to attempt '
+                . 'the non-blocking flock probe; absent file short-circuits on lstat and no byte is read',
+        ],
         'Cli/Attach.php|file_get_contents' => [
             'SELF_LOCATED — token(): the owner-token file in the `serve` state dir '
                 . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '

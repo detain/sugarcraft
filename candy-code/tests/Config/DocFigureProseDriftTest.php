@@ -2755,7 +2755,7 @@ final class DocFigureProseDriftTest extends TestCase
                 if (!$token->is([T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
                     continue;
                 }
-                if (preg_match('/^SugarCraft\\\\([A-Za-z0-9]+)\\\\/', ltrim($token->text, '\\'), $ns) !== 1 || $ns[1] === 'Crush') {
+                if (preg_match('/^SugarCraft\\\\([A-Za-z0-9]+)\\\\/', ltrim($token->text, '\\'), $ns) !== 1 || $ns[1] === 'Code') {
                     continue;
                 }
                 $prefix = 'SugarCraft\\' . $ns[1];

@@ -7,6 +7,36 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
+## Renamed: sugar-crush → candy-code (2026-10) <!-- @rename-keep -->
+
+Phase 8A of the rename campaign (`plan_rename.md`). The whole product moved
+name in one release; everything below is mechanical, with a compat shim where
+the plan demanded one.
+
+- Binary: `bin/sugarcrush` → `bin/candy-code`. <!-- @rename-keep -->
+- Composer package: `sugarcraft/sugar-crush` → `sugarcraft/candy-code`. <!-- @rename-keep -->
+- Namespace: `SugarCraft\Crush\` → `SugarCraft\Code\`. <!-- @rename-keep -->
+- Environment prefix: `SUGARCRUSH_*` and `SUGAR_CRUSH_*` → `CANDY_CODE_*`. <!-- @rename-keep -->
+  The old spellings are still read at launch through `LegacyMigration::run()`
+  (which folds them via `LegacyEnv::import`), one deprecation line per variable,
+  canonical name winning when both are set.
+- State directories: `~/.sugar-crush` → `~/.candy-code`, `~/.config/sugarcraft-crush` <!-- @rename-keep -->
+  → `~/.config/candy-code`, `~/.local/share/sugar-crush` → `~/.local/share/candy-code`, <!-- @rename-keep -->
+  all moved by `LegacyMigration` on first launch. The move refuses to run while a
+  server holds `~/.sugar-crush/server/server.lock`, and never merges into an <!-- @rename-keep -->
+  existing target. Per-project `.sugar-crush/` directories move at root resolve <!-- @rename-keep -->
+  with a runtime notice to commit the move.
+- Shell completions: bash function `_sugarcrush` → `_candy_code`, zsh drop-in <!-- @rename-keep -->
+  `_sugarcrush` → `_candy-code`; regenerate (`candy-code completion <shell>`). <!-- @rename-keep -->
+- Wire protocol: `sugarcrush.v1` → `candy-code.v1` (schema file and producers; <!-- @rename-keep -->
+  the web client's regeneration rides phase 8B).
+- On-disk identities kept harmless where they are cosmetic: git attribution
+  lines, OSC 9 titles, MCP `clientInfo.name`, the LSP client name and the
+  session-provider label now spell the new brand.
+
+See `docs/TROUBLESHOOTING.md` ("Upgrading from sugar-crush") for user-facing <!-- @rename-keep -->
+symptoms, and `docs/ENVIRONMENT.md` ("Deprecated aliases") for the env fold.
+
 ## Fixed (2026-10-14 review wave)
 
 A broad multi-persona review (covering documentation, code, terminal UX,

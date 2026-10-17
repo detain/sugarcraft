@@ -164,9 +164,9 @@ final class StaticFiles
     private const NOTICE_PAGE = <<<'HTML'
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>sugarcrush serve</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>candy-code serve</title></head>
 <body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
-<h1>sugarcrush serve</h1>
+<h1>candy-code serve</h1>
 <p>The server is running, but no web UI is installed. Install it next to candy-code with</p>
 <pre>composer require sugarcraft/sugar-crush-web</pre>
 <p>or point <code>--web-root</code> at a build. The WebSocket endpoint <code>/ws</code> and the HTTP API under <code>/api/</code> work without it.</p>

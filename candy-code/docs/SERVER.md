@@ -236,7 +236,7 @@ says so.
 1. `serve` prints a sign-in URL with a **one-time login code** (single use,
    valid 120 s) in its fragment.
 2. The page posts `{"code": "…"}` to `POST /api/login` and receives an
-   **`HttpOnly`, `SameSite=Strict`** cookie, `sugarcrush_session` (7-day sliding
+   **`HttpOnly`, `SameSite=Strict`** cookie, `candy_code_session` (7-day sliding
    lifetime; `Secure` when a trusted proxy reports HTTPS). Posting
    `{"token": "…"}` works too.
 3. Before each WebSocket connect the page asks `POST /api/ticket` (cookie

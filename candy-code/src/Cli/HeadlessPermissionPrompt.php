@@ -436,7 +436,7 @@ final class HeadlessPermissionPrompt
 
     private function question(ToolCall $call, HookResult $ask): string
     {
-        return "\nsugarcrush: " . Lang::t('cli.permission.question') . "\n"
+        return "\ncandy-code: " . Lang::t('cli.permission.question') . "\n"
             . '  tool: ' . Sanitize::visibleControls($call->name(), false) . "\n"
             . '  args: ' . $this->renderArguments($call) . "\n"
             . '  why:  ' . $this->oneLine($ask->message) . "\n"

@@ -163,9 +163,9 @@ run. If you are on Windows, pass your command as a list.
 Two app variables originally carried an underscore after `SUGAR`, unlike every
 other variable CandyCode reads.
 
-The whole `CANDY_CODE_*` prefix is itself a deprecated alias <!-- @rename-keep -->
+The whole `SUGARCRUSH_*` prefix is itself a deprecated alias <!-- @rename-keep -->
 of `CANDY_CODE_*` since the 2026-10 rename: `bin/candy-code` folds both
-`CANDY_CODE_*` and `CANDY_CODE_*` <!-- @rename-keep --> onto `CANDY_CODE_*` at
+`SUGARCRUSH_*` and `SUGAR_CRUSH_*` onto `CANDY_CODE_*` at <!-- @rename-keep -->
 startup and prints one deprecation line per old variable it finds. A variable
 set under the newer name always wins — **when both are set the canonical name
 wins** — which is what lets you add the new export to a shared profile before
@@ -173,10 +173,10 @@ removing the old one. The two per-variable readers below additionally accept
 every spelling in their own fallback list, because they can run inside a
 long-lived server process started before any fold happened.
 
-| Deprecated | Deprecated canonical | Current |
-|------------|----------------------|---------|
-| `CANDY_CODE_WORKTREES_DIR` | `CANDY_CODE_WORKTREES_DIR` | `CANDY_CODE_WORKTREES_DIR` | <!-- @rename-keep -->
-| `CANDY_CODE_SHARE_UPLOAD_URL` | `CANDY_CODE_SHARE_UPLOAD_URL` | `CANDY_CODE_SHARE_UPLOAD_URL` | <!-- @rename-keep -->
+| Legacy underscore spelling | Legacy glued spelling | Current |
+|----------------------------|-----------------------|---------|
+| `SUGAR_CRUSH_WORKTREES_DIR` | `SUGARCRUSH_WORKTREES_DIR` | `CANDY_CODE_WORKTREES_DIR` | <!-- @rename-keep -->
+| `SUGAR_CRUSH_SHARE_UPLOAD_URL` | `SUGARCRUSH_SHARE_UPLOAD_URL` | `CANDY_CODE_SHARE_UPLOAD_URL` | <!-- @rename-keep -->
 
 ---
 

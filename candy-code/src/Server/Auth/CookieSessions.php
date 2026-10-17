@@ -16,7 +16,7 @@ namespace SugarCraft\Code\Server\Auth;
  */
 final class CookieSessions
 {
-    public const COOKIE = 'sugarcrush_session';
+    public const COOKIE = 'candy_code_session';
 
     public const LIFETIME_SECONDS = 604_800;
 

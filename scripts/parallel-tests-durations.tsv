@@ -1264,3 +1264,5 @@ candy-code/tests/Chat/WorkflowAttemptsReportTest.php	0.001	2
 candy-code/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.php	0.001	2
 candy-code/tests/Integration/LiveSglangSmokeTest.php	0.001	1
 candy-code/tests/AssistantMsgTest.php	0.001	2
+candy-code/tests/Cli/LegacyMigrationTest.php	0.100	5
+candy-code/tests/Support/ProjectDirMigrationTest.php	0.100	3

@@ -748,9 +748,18 @@ final class EnvRosterDriftTest extends TestCase
      * shape this alphabet cannot spell. Measured empty on PHP 8.3.6,
      * 2026-08-22 (pre-rename alphabet) — the only brand-prefixed literal in `src/` that is not a
      * whole roster name is `BackgroundSessionRunner`'s `'CANDY_CODE_MODEL='`,
-     * which is an export and is checked separately below. The day someone
-     * writes `getenv('CANDY_CODE_' . $x)` this reds, and the right answer then
-     * is to teach the scanner that shape rather than to widen this exclusion.
+     * which is an export and is checked separately below.
+     *
+     * THE ONE LEGAL EXCEPTION SINCE THE RENAME is the fold map:
+     * `LegacyEnv::import()` pairs each deprecated spelling to the truncated new
+     * prefix, and that truncated literal is a pairing target, not an assembled
+     * read. The scanner recognises the fold region and accounts for its
+     * literals separately ({@see EnvReadScanner::foldPrefixes()}). This test
+     * pins BOTH polarities — a genuine assembly outside any fold map must still
+     * land in `fragments()` so the guard is measurably not weakened — plus the
+     * live census of where the exemption fires. The day someone writes
+     * `getenv('CANDY_CODE_' . $x)` this reds, and the right answer then is to
+     * teach the scanner that shape rather than to widen this exclusion.
      */
     public function testNoRosterNameIsAssembledFromPiecesTheScannerCannotFollow(): void
     {
@@ -759,6 +768,34 @@ final class EnvRosterDriftTest extends TestCase
             $this->scanner()->fragments(),
             'a CANDY_CODE-prefixed string literal is not a whole roster name — if it is half of one, '
             . 'the read that assembles it is invisible to every assertion in this file',
+        );
+
+        // Polarity 1: a fold map is recognised, and its prefix literals are
+        // accounted for rather than silently skipped.
+        $fold = new EnvReadScanner([
+            'fold.php' => "<?php LegacyEnv::import(['SUGARCRUSH_X' => 'CANDY_CODE_', 'SUGAR_CRUSH_X' => 'CANDY_CODE_']);", // @rename-keep fixture of the deprecated spelling
+        ]);
+        $this->assertSame([], $fold->fragments(), 'a fold map pairing was accused of assembling a roster name');
+        $this->assertCount(2, $fold->foldPrefixes(), 'the scanner did not see both sides of the fold map');
+
+        // Polarity 2: an assembly OUTSIDE any fold map still reaches the guard.
+        $assembly = new EnvReadScanner([
+            'x.php' => '<?php class A { function f() { return getenv("CANDY_CODE_" . $suffix); } }',
+        ]);
+        $this->assertCount(1, $assembly->fragments(), 'the fold recognition weakened the assembly guard');
+        $this->assertSame([], $assembly->foldPrefixes(), 'a plain concatenation was counted as a fold pairing');
+
+        // Live: the only fold exemptions in src/ today are LegacyMigration's
+        // two pairings — an exemption that spreads is a roster lying quietly.
+        $files = array_map(
+            static fn (string $site): string => substr($site, 0, strrpos($site, ':')),
+            $this->scanner()->foldPrefixes(),
+        );
+        $this->assertSame(
+            ['src/Cli/LegacyMigration.php', 'src/Cli/LegacyMigration.php'],
+            $files,
+            'the fold-map exemption fires somewhere other than the rename shim — every fold map is a '
+            . 'deliberate migration pairing and belongs on the environment page, not silently in this census',
         );
     }
 

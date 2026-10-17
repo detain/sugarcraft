@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Core\Util\LegacyPaths; // @rename-keep
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 
 /**
@@ -88,7 +90,51 @@ final class ProjectRoot
             return $directory;
         }
 
-        return self::$memo[$directory] ??= (new self())->walk($directory);
+        $root = self::$memo[$directory] ??= (new self())->walk($directory);
+        self::migrateLegacyDir($root);
+
+        return $root;
+    }
+
+    /**
+     * One-time move of the pre-rename project state directory, // @rename-keep
+     * `<root>/.sugar-crush` → `<root>/.candy-code`. // @rename-keep
+     *
+     * Hooked here because this method is the single choke point every
+     * `<root>/.candy-code` consumer walks through (settings, skills, rules,
+     * commands, memory, plans, worktrees all resolve their root via it), and
+     * the trust lists key on the ROOT (`trustedProjectHooks` et al. store
+     * root paths) — a moved directory therefore stays trusted without any
+     * re-approval, exactly as the home-level move keeps `policy-snapshot.json`
+     * state-neutral because hook identities name|event|command survive a
+     * rename. Never merges: when both directories exist,
+     * {@see LegacyPaths::migrate()} refuses and the user decides.
+     *
+     * The notice rides {@see RuntimeNoticeSink::record()} rather than stderr:
+     * unlike {@see \SugarCraft\Code\Cli\LegacyMigration::run()} this can fire
+     * mid-session (first lookup of a freshly cloned repo), where the TUI owns
+     * the screen and a raw write would tear the frame. It drops while the
+     * sink is unarmed — the headless paths print no transcript rows.
+     */
+    private static function migrateLegacyDir(string $root): void
+    {
+        $legacy = $root . '/.sugar-crush'; // @rename-keep
+        if (!is_dir($legacy)) {
+            return;
+        }
+
+        $notice = LegacyPaths::migrate($legacy, $root . '/.candy-code');
+        if ($notice === null) {
+            return;
+        }
+
+        // On success, the fixed advice sentence replaces the shim's
+        // full-path line — the docs quote this exact sentence and the
+        // relative spelling is the actionable one. A failed move passes
+        // through verbatim: its reason matters more than the advice.
+        RuntimeNoticeSink::record(str_starts_with($notice, 'moved ')
+            ? 'moved .sugar-crush -> .candy-code (if this project tracks it in git, commit the move)' // @rename-keep
+            : $notice);
     }
 
     /**

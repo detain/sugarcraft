@@ -2,6 +2,9 @@
 
 # CandyCode
 
+> Formerly published as `sugarcraft/sugar-crush` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Crush\` → `SugarCraft\Code\`. <!-- @rename-keep -->
+
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-code)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-code)

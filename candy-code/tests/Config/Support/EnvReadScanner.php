@@ -119,6 +119,13 @@ final class EnvReadScanner
     /** @var list<string> literals that look like a roster name cut in half */
     private array $fragments = [];
 
+    /**
+     * @var list<string> `"label:line"` of a `CANDY_CODE_` prefix literal inside
+     *      a `LegacyEnv::import()` fold map — a prefix of a migration pairing,
+     *      not a roster name the page must tabulate.
+     */
+    private array $foldPrefixes = [];
+
     /** @param array<string, string> $sources label => PHP source text */
     public function __construct(private readonly array $sources)
     {
@@ -186,9 +193,64 @@ final class EnvReadScanner
         return $out;
     }
 
+    /**
+     * Sites of a `CANDY_CODE_` prefix literal that sits inside the map argument
+     * of a `LegacyEnv::import()` call — the rename campaign's fold tables.
+     *
+     * A fold map pairs old spellings to one new prefix; the new side is by
+     * construction the truncated `'CANDY_CODE_'`, and the names the fold READS
+     * are the OLD keys, deliberately outside this era's alphabet. Nothing here
+     * is an assembled roster name, so the fragment guard must not accuse it —
+     * but the sites are collected so the caller can pin WHERE the exemption
+     * fires rather than trusting a silent skip.
+     *
+     * @return list<string> each entry `"label:line"`
+     */
+    public function foldPrefixes(): array
+    {
+        $out = $this->foldPrefixes;
+        sort($out);
+
+        return $out;
+    }
+
     private function scanForWritesAndFragments(string $src, string $label): void
     {
-        foreach (self::significant($src) as $token) {
+        $sig = self::significant($src);
+        $count = \count($sig);
+        $foldDepth = 0;
+
+        for ($i = 0; $i < $count; ++$i) {
+            $token = $sig[$i];
+
+            if (
+                0 === $foldDepth
+                && \T_STRING === $token['id']
+                && 'import' === $token['text']
+                && 1 < $i
+                && \T_DOUBLE_COLON === $sig[$i - 1]['id']
+                && 'LegacyEnv' === $sig[$i - 2]['text']
+                && isset($sig[$i + 1])
+                && 0 === $sig[$i + 1]['id']
+                && '(' === $sig[$i + 1]['text']
+            ) {
+                // Enter the fold map's paren. A `CANDY_CODE_` prefix literal
+                // inside is the NEW side of an old-name -> new-prefix pairing,
+                // structurally not an assembled roster name.
+                $foldDepth = 1;
+                ++$i; // step over the '(' we just consumed as the region opener
+
+                continue;
+            }
+
+            if (0 < $foldDepth && 0 === $token['id']) {
+                if ('(' === $token['text']) {
+                    ++$foldDepth;
+                } elseif (')' === $token['text']) {
+                    --$foldDepth;
+                }
+            }
+
             if ($token['id'] === self::T_COMPOSED) {
                 // Every prefixed piece of a runtime-assembled string is a
                 // fragment, INCLUDING one that matches NAME_PATTERN on its own:
@@ -213,6 +275,11 @@ final class EnvReadScanner
             }
             $value = self::stringValue($token);
             if ($value === null || !str_starts_with($value, 'CANDY')) {
+                continue;
+            }
+            if (0 < $foldDepth && 'CANDY_CODE_' === $value) {
+                $this->foldPrefixes[] = $label . ':' . $token['line'];
+
                 continue;
             }
             if (preg_match(self::NAME_PATTERN, $value) === 1) {

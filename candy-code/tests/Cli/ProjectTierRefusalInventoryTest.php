@@ -311,6 +311,18 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // around it -- and it is never read: nothing in src/ opens it, the
         // string exists only to tell the operator where to redirect stdout.
         'Cli/Subcommands.php|.config/fish' => self::USER,
+        // plan_rename.md 8A: the migration table in Cli/LegacyMigration.php —
+        // every path is HOME-rooted through HomeDirectory::owned() (user-tier
+        // by the same rule as Serve's state dir below), the old spellings are
+        // deliberately the pre-rename names the fold must find, and nothing
+        // here is repository-chosen: a clone cannot place a file in someone's
+        // home, and the project-tier sibling of the move lives in
+        // Support/ProjectRoot.php using only bare dot-names the extractor
+        // does not count (no `.<dir>/<segment>` shape).
+        'Cli/LegacyMigration.php|.sugar-crush/server' => self::USER, // @rename-keep
+        'Cli/LegacyMigration.php|.config/sugarcraft-crush' => self::USER, // @rename-keep
+        'Cli/LegacyMigration.php|.config/candy-code' => self::USER,
+        'Cli/LegacyMigration.php|.local/share' => self::USER,
         // O-3a: `serve`'s state directory (the owner token today), rooted at
         // HomeDirectory::owned() and overridable only by the user's own
         // CANDY_CODE_SERVER_DIR — Serve builds it, Attach (O-8a) reads its
@@ -407,8 +419,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-ONE occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-FOUR distinct paths. TWENTY-ONE of those
+     * APPEARS IN. On this tree that is FIFTY-FIVE occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-SIX distinct paths. TWENTY-ONE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are SIXTEEN distinct paths — which is the figure
@@ -580,7 +592,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(34, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(36, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(16, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -589,7 +601,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('SIXTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY-FOUR distinct', $enumeration);
+        self::assertStringContainsString('THIRTY-SIX distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -606,7 +618,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
-            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE'];
+            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE', 36 => 'THIRTY-SIX'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY', 21 => 'TWENTY-ONE'];
 

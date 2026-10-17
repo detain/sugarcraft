@@ -166,11 +166,11 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-code/1-candy-code-rain.ansi` | 54x16 | 74 | candy code-rain in mint, berry and gold with a fogged candy-code label panel |
 | `candy-code/2-candy-code-cube.ansi` | 60x16 | 42 | Isometric sugar cube fractured by a neon-magenta crack with gold sparks, flanked by green binary rain and a cyan prompt over a glowing wordmark |
 | `candy-code/2-terminal-sweet-tooth.ansi` | 58x12 | 27 | Terminal window splash: traffic-light titlebar, candy-code prompt, candy-cane stripe, magenta-to-gold "100% sweet" progress bar and tiny lollipops |
-| `candy-code/3-crush-agent-terminal.ansi` | 62x20 | 175 | Framed candy-code splash: hovering robot agent with pink earmuffs, feature bullets, code rain, thinking divider, progress bar and prompt cursor |
 | `candy-code/3-candy-code-wordmark.ansi` | 57x10 | 227 | SUGAR-CRUSH block-letter wordmark in green-to-violet terminal gradient with braille flourishes and a live prompt line |
-| `candy-code/4-crush-sugarcubes.ansi` | 49x13 | 23 | falling sugar cubes shattering in a crackle burst into rainbow shards with candy-code tagline |
+| `candy-code/3-crush-agent-terminal.ansi` | 62x20 | 175 | Framed candy-code splash: hovering robot agent with pink earmuffs, feature bullets, code rain, thinking divider, progress bar and prompt cursor |
 | `candy-code/4-candy-code-session.ansi` | 54x11 | 11 | mock terminal window of a candy-code --fix run with progress bar, warning and passing tests |
 | `candy-code/4-candy-code-skull.ansi` | 47x16 | 53 | neon violet-cyan skull with deep glowing sockets over the candy-code wordmark and a $ crush --fix prompt |
+| `candy-code/4-crush-sugarcubes.ansi` | 49x13 | 23 | falling sugar cubes shattering in a crackle burst into rainbow shards with candy-code tagline |
 | `candy-code/5-candy-code-soda.ansi` | 60x16 | 24 | fizzing soda cocktail glass with gradient liquid, striped straw, cherry and lemon wheel |
 | `candy-code/5-candy-code-terminal-splash.ansi` | 62x13 | 33 | CRT boot splash for SugarCraft x candy-code: prompt, loading bar, hearts and cursor |
 | `candy-code/5-candy-code-wordmark.ansi` | 62x15 | 20 | electric cyan-to-magenta SUGAR / CRUSH glow wordmark with scattered sugar crumbs |
@@ -178,24 +178,24 @@ The three measured columns are re-derived from the files themselves rather than 
 | `candy-code/6-skull-terminal.ansi` | 56x12 | 44 | candy-code terminal window: neon candy skull in a truecolor TUI frame with agent log lines |
 | `candy-code/7-candy-code-terminal.ansi` | 68x14 | 155 | rounded terminal window with lavender robot head, glowing cyan eyes, and neon SUGAR/CRUSH block logotype |
 | `candy-code/8-candy-crusher-splash.ansi` | 66x14 | 196 | candy-code splash: candy-striped SUGAR/CRUSH wordmark in pink-to-gold gradient with drop shadows and a crack through the CRUSH |
-| `candy-code/9-lollipop-crush.ansi` | 64x16 | 15 | Truecolor swirl lollipop (magenta-pink-white-orange spiral, glass highlight, grape rim) beside the candy-code mini wordmark with a white dash and a rainbow candy underline, sugar sprinkles scattered right |
 | `candy-code/9-candy-code-combined.ansi` | 48x20 | 106 | Combined SugarCraft x candy-code logo: big SUGAR in a pink-to-gold icing sweep stacked over CRUSH in a cyan-to-magenta sweep, deep-grape drop shadows, twinkling sparkles, rainbow mini caption "SWEET TERMINAL AI" |
+| `candy-code/9-lollipop-crush.ansi` | 64x16 | 15 | Truecolor swirl lollipop (magenta-pink-white-orange spiral, glass highlight, grape rim) beside the candy-code mini wordmark with a white dash and a rainbow candy underline, sugar sprinkles scattered right |
 | `candy-code/9-terminal-agent-splash.ansi` | 58x16 | 55 | candy-code splash as an 8-bit rounded terminal window with pink frame, candy-dot bullets, rainbow SUGAR block wordmark, mini CRUSH, pixel candy-cane, and a multicolor gradient loading bar at 98% |
 | `candy-code/10-candy-code-bot.ansi` | 41x14 | 16 | neon robot-head mascot (pink eyes, gold antenna, green grill) over a cyan-violet-pink spaced sugar·crush wordmark |
 | `candy-code/11-03-candy-code-crystal.ansi` | 68x20 | 93 | faceted violet-cyan sugar crystal being crushed with warm spray shards, settling dust and a $ candy-code prompt |
 | `candy-code/12-neon-crush-sign.ansi` | 60x15 | 220 | Buzzing pink neon SUGAR-CRUSH tube sign in a cyan frame on a brick wall, glow wash, flickering glyph, OPEN 24/7 and a chalked agent prompt below |
 | `candy-code/12-sugar-packet.ansi` | 55x14 | 70 | Torn "100% PURE SUGAR" sachet spilling crystalline grains that pile into a glowing "❯ crush --fix" command with a green cursor block |
-| `candy-code/13-candy-rain-prompt.ansi` | 56x16 | 282 | pastel candy sprinkles raining into a melting rainbow puddle above a glowing candy-code shell prompt and italic tagline |
 | `candy-code/13-candy-code-gem.ansi` | 64x19 | 297 | faceted truecolor sugar crystal with crack and culet glow over a chromatic-glitch SUGAR/CRUSH wordmark, shatter debris, and a magenta agent prompt line |
+| `candy-code/13-candy-rain-prompt.ansi` | 56x16 | 282 | pastel candy sprinkles raining into a melting rainbow puddle above a glowing candy-code shell prompt and italic tagline |
 | `candy-code/14-candy-code-crystal.ansi` | 61x17 | 170 | Faceted cyan-violet sugar crystal with cracks and floating shards above a SUGARCRUSH wordmark |
 | `candy-code/14-candy-code-hammer.ansi` | 60x13 | 58 | Retro 256-color candy mallet smashing a sugar cube into sparks over a gradient tagline banner |
 | `candy-code/15-candy-code-gem.ansi` | 67x16 | 166 | candy-code splash: icy faceted sugar gem with crown/pavilion facets and sparkle crushing into candy-colored grit under a violet wordmark |
 | `candy-code/16-crush-impact.ansi` | 60x11 | 197 | Hot magenta-to-orange CRUSH! block wordmark bursting inside pink-and-cream candy zigzag wrapper with speed bars, sparkles and rainbow divider |
-| `candy-code/17-crush-terminal.ansi` | 68x8 | 58 | Faux terminal window running candy-code: traffic lights, candy-coat prompt, rainbow compile bar, glowing cursor |
 | `candy-code/17-candy-code-crystal.ansi` | 64x12 | 86 | Isometric sugar cube fractured by a lightning crack with cyan glow, flying shards and motion streaks, gradient caption |
 | `candy-code/17-candy-code-wordmark.ansi` | 66x15 | 849 | Block-font SUGAR over CRUSH wordmark, raspberry-to-lemon warmth melting into ice-violet, joined by a luminous X |
-| `candy-code/18-craft-into-crush.ansi` | 56x18 | 82 | confetti factory scene pouring golden SUGAR through a CRUSH CHAMBER into a violet CRUSH wordmark |
+| `candy-code/17-crush-terminal.ansi` | 68x8 | 58 | Faux terminal window running candy-code: traffic lights, candy-coat prompt, rainbow compile bar, glowing cursor |
 | `candy-code/18-candy-code-heart.ansi` | 61x19 | 124 | cracked hot-pink candy heart over a SUGARCRUSH block wordmark with ember gradient rule |
+| `candy-code/18-craft-into-crush.ansi` | 56x18 | 82 | confetti factory scene pouring golden SUGAR through a CRUSH CHAMBER into a violet CRUSH wordmark |
 | `candy-code/18-terminal-crush.ansi` | 62x18 | 58 | candy-code window splash — traffic-light titlebar, gradient boot log, candy progress bars and prompt cursor |
 | `candy-code/19-candy-code-mortar.ansi` | 66x20 | 308 | stone mortar and tilted pestle glowing with crushed sugar crystals, light rays and sparkles, over a candy-code wordmark and live prompt on a grid-dim terminal field |
 | `candy-code/20-candy-code-terminal.ansi` | 60x16 | 36 | candy-code terminal window with green code rain, glowing chevron prompt and rock candy crystals |

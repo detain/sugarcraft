@@ -6,6 +6,7 @@ listed where first-time readers hit them; each entry names where to read more.
 | Term | Meaning |
 |---|---|
 | **ACP** | Agent Client Protocol — a JSON-RPC standard for editors and IDEs to drive an AI coding agent as a subprocess. CandyCode speaks it under `candy-code serve` ([SERVER.md](SERVER.md)). |
+| **CandyCode** | This app; formerly SugarCrush / sugar-crush. <!-- @rename-keep --> The `candy-code` binary, the `SugarCraft\Code\` namespace, and the `~/.candy-code/` state directory. <!-- @rename-keep --> |
 | **ANSI** | The family of escape-sequence conventions (ECMA-48 and its successors) terminals use for cursor movement, colors, and modes like the alternate screen. Everything a TUI "draws" is ANSI text. |
 | **chafa** | A terminal image renderer that converts pictures to character art. As a render mode it is the last-resort rung: works in any terminal, lowest fidelity ([MEDIA.md](MEDIA.md)). |
 | **kitty protocol** | The Kitty terminal's graphics protocol (and its keyboard-extension counterpart): images addressed as numbered, animatable objects at full color; the keyboard side lets Ctrl+Enter arrive as itself. Used when detected, ignored otherwise. |

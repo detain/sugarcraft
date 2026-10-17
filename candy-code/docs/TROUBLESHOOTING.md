@@ -40,6 +40,44 @@ one nothing implements, so the failure renders as text). A *valid*
 
 ---
 
+## Upgrading from sugar-crush <!-- @rename-keep -->
+
+The 2026-10 rename moved the product wholesale: the binary is `candy-code`, the
+package is `sugarcraft/candy-code`, the namespace is `SugarCraft\Code\`, the
+environment prefix is `CANDY_CODE_`, and state lives in `~/.candy-code/`. On the
+first launch after upgrading, the pre-TUI shim prints one line per thing it acts
+on:
+
+```text
+candy-code: env SUGARCRUSH_FOO is deprecated, use the CANDY_CODE_ prefix   <!-- @rename-keep -->
+candy-code: moved /home/you/.sugar-crush -> /home/you/.candy-code          <!-- @rename-keep -->
+```
+
+- **Deprecated environment variables are still read.** A `SUGARCRUSH_*` or <!-- @rename-keep -->
+  `SUGAR_CRUSH_*` name folds onto its `CANDY_CODE_*` equivalent at launch with <!-- @rename-keep -->
+  the warning above; if both are set, the canonical name wins. The fold lives in
+  `LegacyMigration::run()` and costs one line of stderr each.
+- **`~/.candy-code` must not already exist.** The home-directory move is all or
+  nothing: an existing target is never merged or overwritten, and the old tree
+  is left where it is. If you created `~/.candy-code` by hand (or ran a
+  pre-release build), move or delete whatever you put there and relaunch.
+- **A running server blocks the move — on purpose.** While a server daemon holds <!-- @rename-keep -->
+  `~/.sugar-crush/server/server.lock`, nothing is moved, and the notice tells you <!-- @rename-keep -->
+  to quit it and relaunch. <!-- @rename-keep --> The refusal is on proof only: an
+  absent or unlocked lock file never blocks the move.
+- **Per-project `.sugar-crush/` directories move when the project is opened.** <!-- @rename-keep -->
+  The same all-or-nothing rule applies, and the notice says to commit the move
+  if the project tracks the directory in git. One edge: a directory that was a
+  project root *only* because it contained `.sugar-crush` (no `.git`, no <!-- @rename-keep -->
+  `.mcp.json`) stops being detected as a root after the marker flips to
+  `.candy-code` — until the first launch migrates it, or you rename it by hand.
+- **Regenerate your shell completion.** After upgrading from sugar-crush, <!-- @rename-keep -->
+  regenerate your shell completion (`candy-code completion <shell>`), because
+  the old script completes the `sugarcrush` command. <!-- @rename-keep --> The
+  bash function is `_candy_code` now and the zsh drop-in file is `_candy-code`.
+
+---
+
 ## `candy-code` exits 2 immediately and will not start
 
 The launch refuses rather than degrades whenever gating policy is present but

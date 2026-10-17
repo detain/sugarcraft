@@ -213,6 +213,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
+use SugarCraft\Code\Cli\LegacyMigration;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\PermissionConfigException;
 use SugarCraft\Code\Cli\Subcommands;
@@ -220,6 +221,15 @@ use SugarCraft\Code\Diagnostics\TuiErrorLog;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\SessionRelaunch;
+
+// Pre-rename compatibility (plan_rename.md 8A): fold SUGARCRUSH_*/SUGAR_CRUSH_* // @rename-keep
+// env vars into CANDY_CODE_* and move ~/.sugar-crush (and the other legacy   // @rename-keep
+// state dirs) to their new names. It must run HERE — before the locale, the
+// argv parser, or anything else reads env, resolves HOME, or opens the
+// session store — so every downstream reader sees only the new names. The
+// notices are mechanism strings, deliberately not Lang-ised; the app's own
+// display name has no locale.
+LegacyMigration::run(STDERR);
 
 // The locale comes first: everything below — the parser's refusals included —
 // may print user-facing text, and it reads the locale when it does. LC_ALL /
@@ -515,7 +525,7 @@ if ($tuiErrorLog !== null) {
             if (TuiErrorLog::isNullDevice($tuiErrorLog)) {
                 $detail = preg_replace('/[\x00-\x1f\x7f]+/', ' ', "{$error['message']} in {$error['file']}:{$error['line']}");
             }
-            fwrite(STDERR, "\r\nsugarcrush: fatal error — {$detail}\r\n");
+            fwrite(STDERR, "\r\ncandy-code: fatal error — {$detail}\r\n");
         }
     });
 }
@@ -542,7 +552,7 @@ register_shutdown_function(static function () use (&$terminalWasRun): void {
     // \r\n explicitly: a fatal mid-run leaves the terminal raw, where a bare
     // \n does not return the carriage.
     fwrite(STDOUT, Ansi::popKittyKeyboard() . Ansi::mouseCellMotionOff() . Ansi::mouseAllMotionOff() . Ansi::bracketedPasteOff() . Ansi::unicodeOff() . Ansi::cursorShow() . Ansi::altScreenLeave());
-    fwrite(STDERR, "\r\nsugarcrush: exited abnormally — terminal restored\r\n");
+    fwrite(STDERR, "\r\ncandy-code: exited abnormally — terminal restored\r\n");
 });
 
 // Audit CLI-2(b): the words left on the command line ride Bootstrap::app()'s
