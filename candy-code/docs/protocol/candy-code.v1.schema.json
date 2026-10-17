@@ -286,12 +286,20 @@
                 },
                 "modifiedAt": {
                     "type": "string"
+                },
+                "source": {
+                    "enum": [
+                        "home",
+                        "repo"
+                    ],
+                    "description": "Which store holds the note: the repository's .candy-code/memory/ or the home directory (ISS-020)."
                 }
             },
             "required": [
                 "id",
                 "scope",
-                "content"
+                "content",
+                "source"
             ]
         },
         "PendingAsk": {
@@ -1865,7 +1873,7 @@
             }
         },
         "memory.add": {
-            "description": "Add a note.",
+            "description": "Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one.",
             "scope": "write",
             "idempotent": true,
             "params": {
@@ -1904,15 +1912,26 @@
                 "properties": {
                     "id": {
                         "type": "string"
+                    },
+                    "source": {
+                        "enum": [
+                            "home",
+                            "repo"
+                        ]
+                    },
+                    "fellBackToHome": {
+                        "type": "boolean",
+                        "description": "True when a project note could not land in the repository store and went to the home directory instead (never silent)."
                     }
                 },
                 "required": [
-                    "id"
+                    "id",
+                    "source"
                 ]
             }
         },
         "memory.delete": {
-            "description": "Delete a note.",
+            "description": "Delete a note from the store that owns the id.",
             "scope": "write",
             "idempotent": true,
             "params": {
@@ -1945,7 +1964,7 @@
             }
         },
         "memory.edit": {
-            "description": "Replace a note's text.",
+            "description": "Replace a note's text in the store that owns the id.",
             "scope": "write",
             "idempotent": true,
             "params": {
@@ -1983,7 +2002,7 @@
             }
         },
         "memory.list": {
-            "description": "The notes of one memory scope.",
+            "description": "The notes of one memory scope, from both stores, each badged with its source.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -2014,7 +2033,7 @@
             }
         },
         "memory.search": {
-            "description": "Notes matching a query, best first, across every scope.",
+            "description": "Notes matching a query, best first, across every scope and both stores.",
             "scope": "read",
             "idempotent": false,
             "params": {

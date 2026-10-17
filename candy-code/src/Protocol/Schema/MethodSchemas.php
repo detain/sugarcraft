@@ -350,7 +350,11 @@ final class MethodSchemas
             'memory.search' => [Schema::object(['query' => Schema::string(1024), 'limit' => Schema::integer(1, 500)], ['query']), $items(Schema::ref(D::MEMORY_ENTRY))],
             'memory.add' => [
                 Schema::object(['content' => Schema::string(65_536), 'scope' => $memoryScope, 'tags' => Schema::arrayOf(Schema::string(), 32)], ['content']),
-                Schema::object(['id' => Schema::string()], ['id']),
+                Schema::object([
+                    'id' => Schema::string(),
+                    'source' => Schema::enum(['home', 'repo']),
+                    'fellBackToHome' => Schema::boolean()->describe('True when a project note could not land in the repository store and went to the home directory instead (never silent).'),
+                ], ['id', 'source']),
             ],
             'memory.edit' => [
                 Schema::object(['id' => Schema::string(128), 'content' => Schema::string(65_536)], ['id', 'content']),

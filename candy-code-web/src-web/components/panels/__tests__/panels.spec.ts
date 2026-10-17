@@ -112,6 +112,36 @@ describe('MemoryPanel', () => {
     await flushPromises()
     expect(wire.sent('memory.add').pop()?.params).toMatchObject({ content: 'two spaces in yaml', scope: 'user' })
   })
+
+  it('badges each note by source after ISS-020 dual-store listing', async () => {
+    await wire.connect()
+    const wrapper = mount(MemoryPanel, { global: { plugins: [pinia] } })
+    await flushPromises()
+    await wire.answer('memory.list', {
+      items: [
+        { id: 'r1', scope: 'project', content: 'use pnpm in this repo', source: 'repo' },
+        { id: 'h1', scope: 'project', content: 'my private editor theme', source: 'home' },
+      ],
+    })
+    expect(wrapper.find('[data-testid="memory-source-repo"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="memory-source-home"]').exists()).toBe(true)
+  })
+
+  it('says out loud when a project note fell back to the home store', async () => {
+    await wire.connect()
+    const wrapper = mount(MemoryPanel, { global: { plugins: [pinia] } })
+    await flushPromises()
+    await wire.answer('memory.list', { items: [] })
+
+    await wrapper.find('[data-testid="memory-draft"]').setValue('a repo note')
+    await wrapper.find('form.add').trigger('submit')
+    await flushPromises()
+    await wire.answer('memory.add', { id: 'n1', source: 'home', fellBackToHome: true })
+    await wire.answer('memory.list', { items: [{ id: 'n1', scope: 'project', content: 'a repo note', source: 'home' }] })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="memory-notice"]').text()).toContain('teammates will not see it')
+  })
 })
 
 describe('WorkflowPanel', () => {

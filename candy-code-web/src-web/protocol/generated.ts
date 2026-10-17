@@ -87,6 +87,8 @@ export interface MemoryEntry {
   content: string
   createdAt?: string
   modifiedAt?: string
+  /** Which store holds the note: the repository's .candy-code/memory/ or the home directory (ISS-020). */
+  source: "home" | "repo"
 }
 
 export interface PendingAsk {
@@ -515,7 +517,7 @@ export interface Methods {
       mime?: string
     }
   }
-  /** Add a note. */
+  /** Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one. */
   "memory.add": {
     params: {
       content: string
@@ -526,9 +528,12 @@ export interface Methods {
     }
     result: {
       id: string
+      source: "home" | "repo"
+      /** True when a project note could not land in the repository store and went to the home directory instead (never silent). */
+      fellBackToHome?: boolean
     }
   }
-  /** Delete a note. */
+  /** Delete a note from the store that owns the id. */
   "memory.delete": {
     params: {
       id: string
@@ -539,7 +544,7 @@ export interface Methods {
       deleted: boolean
     }
   }
-  /** Replace a note's text. */
+  /** Replace a note's text in the store that owns the id. */
   "memory.edit": {
     params: {
       id: string
@@ -551,7 +556,7 @@ export interface Methods {
       id: string
     }
   }
-  /** The notes of one memory scope. */
+  /** The notes of one memory scope, from both stores, each badged with its source. */
   "memory.list": {
     params: {
       scope?: "user" | "project" | "agent"
@@ -560,7 +565,7 @@ export interface Methods {
       items: MemoryEntry[]
     }
   }
-  /** Notes matching a query, best first, across every scope. */
+  /** Notes matching a query, best first, across every scope and both stores. */
   "memory.search": {
     params: {
       query: string

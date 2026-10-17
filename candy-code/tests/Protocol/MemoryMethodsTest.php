@@ -1,0 +1,216 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Protocol;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\ProjectMemoryWriter;
+use SugarCraft\Code\Memory\MemoryHistory;
+use SugarCraft\Code\Memory\MemoryRevision;
+use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Protocol\ErrorCode;
+use SugarCraft\Code\Protocol\Methods\MemoryMethods;
+use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
+use SugarCraft\Code\Tests\Server\Support\WireClient;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+
+/**
+ * ISS-020: the `memory.*` surface is routed through MemoryWriter, the same
+ * router `/memory` and the `Memory` tool use. A repo-local project note is
+ * visible in list and search with its source badged, an id that `memory.add`
+ * answered with resolves again through `memory.edit`/`memory.delete` against
+ * the OWNING store, a project note the repository could not host is reported
+ * as a home fallback rather than silently private, and each mutation commits
+ * the home history under `memory: panel <verb>`.
+ */
+final class MemoryMethodsTest extends TestCase
+{
+    use HomeSandboxTrait;
+
+    private ProtocolFixture $fixture;
+
+    private MemoryStore $home;
+
+    private string $homeRoot = '';
+
+    protected function setUp(): void
+    {
+        $this->homeRoot = \sys_get_temp_dir() . '/iss020-home-' . \uniqid('', true);
+        $this->useHomeSandbox($this->homeRoot);
+        $storeDir = $this->homeRoot . '/memory';
+        \mkdir($storeDir, 0o700, true);
+        $this->home = new MemoryStore($storeDir);
+
+        $this->fixture = ProtocolFixture::new(memoryStore: $this->home);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->tearDown();
+        $this->restoreHomeSandbox();
+        $this->purgeTree($this->homeRoot);
+    }
+
+    // ── reads span both stores ─────────────────────────────────────────
+
+    public function testProjectListingShowsRepositoryNotesBadgedBySource(): void
+    {
+        $shared = ProjectMemoryWriter::createForRoot($this->fixture->root);
+        self::assertNotNull($shared, 'the fixture root must be able to host the repo store');
+        $shared->write('use pnpm in this repo');
+        $this->home->add('my private editor theme', 'project');
+
+        $items = $this->listItems('project');
+
+        self::assertCount(2, $items);
+        self::assertSame('use pnpm in this repo', $items[0]['content']);
+        self::assertSame(MemoryMethods::SOURCE_REPO, $items[0]['source']);
+        self::assertSame('my private editor theme', $items[1]['content']);
+        self::assertSame(MemoryMethods::SOURCE_HOME, $items[1]['source']);
+    }
+
+    public function testUserScopeListingReadsOnlyTheHomeStore(): void
+    {
+        $shared = ProjectMemoryWriter::createForRoot($this->fixture->root);
+        self::assertNotNull($shared);
+        $shared->write('repo note');
+        $this->home->add('user note', 'user');
+
+        $items = $this->listItems('user');
+
+        self::assertCount(1, $items);
+        self::assertSame('user note', $items[0]['content']);
+        self::assertSame(MemoryMethods::SOURCE_HOME, $items[0]['source']);
+    }
+
+    public function testSearchCoversBothStores(): void
+    {
+        $shared = ProjectMemoryWriter::createForRoot($this->fixture->root);
+        self::assertNotNull($shared);
+        $shared->write('deploy staging with the repo runner');
+        $this->home->add('deploy staging with the home runner');
+
+        $items = $this->client()->call('memory.search', ['query' => 'deploy staging'])['items'];
+
+        $contents = array_column($items, 'content');
+        self::assertContains('deploy staging with the repo runner', $contents);
+        self::assertContains('deploy staging with the home runner', $contents);
+        $sources = array_column($items, 'source');
+        self::assertContains(MemoryMethods::SOURCE_REPO, $sources);
+        self::assertContains(MemoryMethods::SOURCE_HOME, $sources);
+    }
+
+    // ── writes route like /memory add ──────────────────────────────────
+
+    public function testAddingAProjectNoteLandsInTheRepositoryStoreAndResolvesAgain(): void
+    {
+        $client = $this->client();
+
+        $result = $client->call('memory.add', ['content' => 'ship behind a flag', 'scope' => 'project']);
+
+        self::assertSame(MemoryMethods::SOURCE_REPO, $result['source']);
+        self::assertFalse($result['fellBackToHome']);
+        // The pre-fix defect: this id lived only in the repo store, so the
+        // old home-only edit/delete answered "no note".
+        $edited = $client->call('memory.edit', ['id' => $result['id'], 'content' => 'ship behind two flags']);
+        self::assertSame($result['id'], $edited['id']);
+
+        $repo = ProjectMemoryWriter::forRoot($this->fixture->root)?->store();
+        self::assertNotNull($repo);
+        self::assertSame('ship behind two flags', $repo->get($result['id'])?->content());
+        self::assertSame([], $this->home->list('project'), 'the home store must hold no copy of a repo-routed note');
+
+        $deleted = $client->call('memory.delete', ['id' => $result['id']]);
+        self::assertTrue($deleted['deleted']);
+        self::assertNull($repo->get($result['id']));
+    }
+
+    public function testAProjectNoteTheTreeCannotHostReportsTheHomeFallback(): void
+    {
+        // `.candy-code` planted as a symlink out of the tree: the writer's
+        // containment gate refuses it, so the note degrades to home — and
+        // the panel must be able to SEE that, per 15d-05's never-silent rule.
+        $outside = $this->homeRoot . '/escape';
+        \mkdir($outside, 0o700, true);
+        self::assertTrue(symlink($outside, $this->fixture->root . '/.candy-code'));
+
+        $result = $this->client()->call('memory.add', ['content' => 'quiet note', 'scope' => 'project']);
+
+        self::assertSame(MemoryMethods::SOURCE_HOME, $result['source']);
+        self::assertTrue($result['fellBackToHome']);
+        self::assertNotSame([], $this->home->list('project'));
+        self::assertSame(glob($outside . '/*.md') ?: [], [], 'no note file may be written through the planted symlink');
+    }
+
+    // ── history (roadmap 5.4-2 over the wire) ─────────────────────────
+
+    public function testAMutationCommitsTheHomeHistoryUnderItsPanelSubject(): void
+    {
+        if (!MemoryHistory::available()) {
+            $this->markTestSkipped('git is not on PATH; the history is not kept');
+        }
+
+        $this->client()->call('memory.add', ['content' => 'a home note', 'scope' => 'user']);
+
+        $history = MemoryHistory::forStore($this->home);
+        self::assertNotNull($history);
+        $subjects = array_map(static fn (MemoryRevision $revision): string => $revision->subject, $history->log(10));
+
+        self::assertContains('memory: panel add', $subjects, 'the panel change must be its own commit, not a later "outside" credit');
+    }
+
+    // ── the standing contract ──────────────────────────────────────────
+
+    public function testAWorkspaceWithoutAMemoryStoreStillRefusesWithMemoryUnavailable(): void
+    {
+        $bare = ProtocolFixture::new();
+        try {
+            $frame = $bare->client()->request('memory.list', ['scope' => 'project']);
+
+            self::assertSame(ErrorCode::UnsupportedInServer->value, $frame['error']['code']);
+            self::assertSame('memory_unavailable', $frame['error']['data']['kind']);
+        } finally {
+            $bare->tearDown();
+        }
+    }
+
+    public function testEditingAnUnknownIdStillReportsNoteNotFound(): void
+    {
+        $frame = $this->client()->request('memory.edit', ['id' => 'nope', 'content' => 'x']);
+
+        self::assertSame(ErrorCode::NotFound->value, $frame['error']['code']);
+        self::assertSame('note_not_found', $frame['error']['data']['kind']);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function listItems(string $scope): array
+    {
+        $result = $this->client()->call('memory.list', ['scope' => $scope]);
+
+        /** @var list<array<string, mixed>> $items */
+        $items = $result['items'];
+
+        return $items;
+    }
+
+    private function client(): WireClient
+    {
+        return $this->fixture->client();
+    }
+
+    private function purgeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_link($path) || is_file($path) ? unlink($path) : $this->purgeTree($path);
+        }
+        @rmdir($dir);
+    }
+}

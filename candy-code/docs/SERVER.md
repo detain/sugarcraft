@@ -436,11 +436,11 @@ it and the two tables below are generated from the code
 | `generate.status` | read |  | `sessionId`, `jobId` | A generation job's state, progress and artifact refs, from its ledger. |
 | `generate.submit` | write | yes | `sessionId`, `prompt` | Start an image generation; answers with its job id. |
 | `media.fetch` | read |  | `sessionId` | A stored media artifact's bytes, in base64 slices. |
-| `memory.add` | write | yes | `content` | Add a note. |
-| `memory.delete` | write | yes | `id` | Delete a note. |
-| `memory.edit` | write | yes | `id`, `content` | Replace a note's text. |
-| `memory.list` | read |  | — | The notes of one memory scope. |
-| `memory.search` | read |  | `query` | Notes matching a query, best first, across every scope. |
+| `memory.add` | write | yes | `content` | Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one. |
+| `memory.delete` | write | yes | `id` | Delete a note from the store that owns the id. |
+| `memory.edit` | write | yes | `id`, `content` | Replace a note's text in the store that owns the id. |
+| `memory.list` | read |  | — | The notes of one memory scope, from both stores, each badged with its source. |
+| `memory.search` | read |  | `query` | Notes matching a query, best first, across every scope and both stores. |
 | `permission.pending` | read |  | — | The questions still open, for one session or all open sessions. |
 | `permission.respond` | approve | yes | `sessionId`, `askId`, `reply` | Answer an open permission question; the first answer wins. |
 | `permission.rules` | read |  | — | The effective permission mode and rules, read-only. |

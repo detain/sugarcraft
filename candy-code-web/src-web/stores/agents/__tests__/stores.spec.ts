@@ -170,15 +170,16 @@ describe('memory store', () => {
     const adding = memory.add('spaces', ['style'])
     await flush()
     expect(wire.sent('memory.add').pop()?.params).toMatchObject({ content: 'spaces', scope: 'user', tags: ['style'] })
-    await wire.answer('memory.add', { id: 'n2' })
-    await wire.answer('memory.list', { items: [{ id: 'n1', scope: 'user', content: 'tabs' }, { id: 'n2', scope: 'user', content: 'spaces' }] })
-    await adding
+    await wire.answer('memory.add', { id: 'n2', source: 'home', fellBackToHome: false })
+    await wire.answer('memory.list', { items: [{ id: 'n1', scope: 'user', content: 'tabs', source: 'home' }, { id: 'n2', scope: 'user', content: 'spaces', source: 'home' }] })
+    const receipt = await adding
+    expect(receipt).toMatchObject({ id: 'n2', source: 'home' })
     expect(memory.entries).toHaveLength(2)
 
     const searching = memory.search('tab')
     await flush()
     expect(wire.sent('memory.search').pop()?.params).toEqual({ query: 'tab', limit: 100 })
-    await wire.answer('memory.search', { items: [{ id: 'n1', scope: 'user', content: 'tabs' }] })
+    await wire.answer('memory.search', { items: [{ id: 'n1', scope: 'user', content: 'tabs', source: 'home' }] })
     await searching
 
     const removing = memory.remove('n1')

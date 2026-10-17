@@ -13,6 +13,7 @@ use SugarCraft\Code\Host\TranscriptStore;
 use SugarCraft\Code\Host\TurnController;
 use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Host\WorkspaceContext;
+use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\ServerConfig;
@@ -45,7 +46,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -54,7 +55,7 @@ final class ProtocolFixture
         $this->backend = new ScriptedTurnBackend();
 
         $transcripts = TranscriptStore::new($this->store, null, EventLog::new($this->store, $retain));
-        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, workflowEngine: $workflows, backgroundSupervisor: $supervisor)
+        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, workflowEngine: $workflows, backgroundSupervisor: $supervisor, memoryStore: $memoryStore)
             ->withService(TurnRunner::class, TurnRunner::new())
             ->withService(TurnController::class, TurnController::new())
             ->withService(TranscriptStore::class, $transcripts)
@@ -79,10 +80,12 @@ final class ProtocolFixture
      * @param int $retain events kept per session (EventLog retention)
      * @param BackgroundSupervisor|null $supervisor the workspace's `/bg` supervisor; none by default
      * @param WorkflowEngineInterface|null $workflows the workspace's `/workflow` engine; none by default
+     * @param MemoryStore|null $memoryStore the workspace's HOME memory store; none by default,
+     *        which makes `memory.*` answer `memory_unavailable` (ISS-020 lanes inject one)
      */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null): self
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null): self
     {
-        return new self($config, $retain, $supervisor, $workflows);
+        return new self($config, $retain, $supervisor, $workflows, $memoryStore);
     }
 
     /** A client that has said hello. */

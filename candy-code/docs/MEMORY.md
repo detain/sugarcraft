@@ -228,6 +228,19 @@ created or is not writable, which is a real reason for `/memory` to report a
 failure and *not* a reason to refuse to launch. A broken optional input costs
 the feature, never the turn.
 
+The server surface the web app's Memory panel rides (`memory.list`,
+`memory.search`, `memory.add`, `memory.edit`, `memory.delete`) is routed
+through the same `Memory\MemoryWriter` as this command (ISS-020). A `project`
+listing therefore carries both stores — the repository's notes first, then the
+home ones — and every row is badged with the `source` store it came from,
+because an id alone does not say which tree holds the file. An add reports the
+store its note landed in, and says so out loud when a project note fell back
+to the home directory. Edits and deletes resolve the id through the writer, so
+they mutate the owning store's file. And each mutation commits the home
+history under its own subject, `memory: panel <verb>`, exactly like the
+command's `memory: /memory <verb>` commits; a note saved into the repository
+is versioned by the user's own checkout, not by the memory history, as ever.
+
 ### The `Memory` tool
 
 The model reads and writes the same notes through the `Memory` tool

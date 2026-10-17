@@ -122,7 +122,8 @@ final class Definitions
                 'content' => Schema::string(),
                 'createdAt' => Schema::string(),
                 'modifiedAt' => Schema::string(),
-            ], ['id', 'scope', 'content']),
+                'source' => Schema::enum(['home', 'repo'])->describe('Which store holds the note: the repository\'s .candy-code/memory/ or the home directory (ISS-020).'),
+            ], ['id', 'scope', 'content', 'source']),
             self::ENVELOPE => Schema::object([
                 'sessionId' => Schema::ref(self::SESSION_ID)->nullable(),
                 'seq' => Schema::integer(1)->describe('Durable session events only; gap-free per session.'),
