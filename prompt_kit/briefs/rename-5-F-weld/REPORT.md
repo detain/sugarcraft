@@ -14,14 +14,14 @@ COMPLETE. master `8f266dd28` → f1 `627400de5` → f2 `cb0afcf96` → heal `75a
 - 75ab66f98: @rename-keep on 4 f1 historical MEASURED comments (BaseSystemPromptTest:959, SessionStartHookWireTest:527, BootstrapLaunchFormatConstantsTest:319, PromptStabilityTest:844) — old-slug spellings quoting the byte-change history, added after f1's own residue run. f1 NOTES' "residue 0" was true at its run; stale by its last commits.
 
 ## Gates @ tip
-1. bin: `candy-code/bin/candy-code` executable, mode preserved; needed linked vendor → `refresh-deps --mode=linked --libs=candy-code` (f1-era vendor lived under sugar-crush/); `php candy-code/bin/candy-code --help` rc0, prints CandyCode help.
-2. residue: `--all-done` 52 entries 0 findings; `--old=sugar-crush` 0; `--old=sugar-crush-web` 0. `SugarCraft\Crush` live-zero (candy-code src/tests/bin + candy-code-web/src); remaining hits = docs/old/* archive, RenameLibTest fixture heredoc, plan_rename ledger, .opencode memory (all recognized-historical). Glued `sugarcru` sweep: same classes only.
+1. bin: `candy-code/bin/candy-code` executable, mode preserved; needed linked vendor → `refresh-deps --mode=linked --libs=candy-code` (f1-era vendor lived under sugar-crush/); `php candy-code/bin/candy-code --help` rc0, prints CandyCode help. <!-- @rename-keep -->
+2. residue: `--all-done` 52 entries 0 findings; `--old=sugar-crush` 0; `--old=sugar-crush-web` 0. `SugarCraft\Crush` live-zero (candy-code src/tests/bin + candy-code-web/src); remaining hits = docs/old/* archive, RenameLibTest fixture heredoc, plan_rename ledger, .opencode memory (all recognized-historical). Glued `sugarcru` sweep: same classes only. <!-- @rename-keep -->
 3. K=8: shard-sum 1834+2832+2396+3466+3383+2971+2563+3126 = **22,571T EXACT** vs f1 floor; 2S (canaries shards 3+7); 0F/0E; rc_marker=ok ×8; A=424,974 (+48 vs serial 424,926 — accepted provider-wobble class); conservation rc0 (fail-closed script).
 4. npm: `npm --prefix candy-code-web ci` (0 vulns) → build 725ms rc0, lint rc0, typecheck rc0, vitest **211/211** (24 files). dist parity: post-build `git diff --exit-code` on dist EMPTY.
 5. tools/tests 429T/1517A EXACT 0F (first run 1F — RenamesJsonTest one-side-on-disk law accused the two husk dirs; see 6). policy ×4: path-repos --no-lib-path-repos, child-lifetimes, gen-docs --check, gen-ansi-readme --check all rc0. php -l sweep: 2,467 changed PHP files, zero errors.
-6. LegacyMigration dual-read (env -i throwaway HOME): `SUGARCRUSH_DATA` → exactly ONE `candy-code: env SUGARCRUSH_DATA is deprecated, use the CANDY_CODE_ prefix` line, rc0; `CANDY_CODE_DATA` → silent, rc0.
-7. husks: sugar-crush/ (131M) + sugar-crush-web/ (180M) held only composer.lock/.phpunit caches/vendor/node_modules/test-results/docs-cache, 0 tracked each → removed (gate-enforced). Root `.sugar-crush/` (memory/ + worktrees/ runtime data, 0 tracked) left untouched — not policed, user data.
-8. tracked `^sugar-crush` paths: 0. Chain over base at heal time: 18 commits (12 f1 + 3 f2 + 2 merges + heal); +tracker +this report = 20 at push.
+6. LegacyMigration dual-read (env -i throwaway HOME): `SUGARCRUSH_DATA` → exactly ONE `candy-code: env SUGARCRUSH_DATA is deprecated, use the CANDY_CODE_ prefix` line, rc0; `CANDY_CODE_DATA` → silent, rc0. <!-- @rename-keep -->
+7. husks: sugar-crush/ (131M) + sugar-crush-web/ (180M) held only composer.lock/.phpunit caches/vendor/node_modules/test-results/docs-cache, 0 tracked each → removed (gate-enforced). Root `.sugar-crush/` (memory/ + worktrees/ runtime data, 0 tracked) left untouched — not policed, user data. <!-- @rename-keep -->
+8. tracked `^sugar-crush` paths: 0. Chain over base at heal time: 18 commits (12 f1 + 3 f2 + 2 merges + heal); +tracker +this report = 20 at push. <!-- @rename-keep -->
 
 ## Union audit
 - prompt_kit/briefs/rename-followups.md: tip md5 == rename/f1 == rename/f2 version — f1's +19 lines (bdf812b78, 11ba5edf5) survived; f2 added nothing (its records ride NOTES).
