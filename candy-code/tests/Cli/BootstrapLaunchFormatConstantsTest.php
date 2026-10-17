@@ -851,11 +851,16 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            31,
+            32,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
-        self::assertSame(3, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        // +1 in N-2 (ISS-090 review fix): mcpServerInventory()'s skipped-entry
+        // row. Inline on purpose — the sentence is deliberately byte-identical
+        // to the McpClient::startServers() original (ISS-091), and pinning one
+        // shared name across the two files would let a rename silently split
+        // the very sameness the N-2 pins assert.
+        self::assertSame(4, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
         // E189: the message used to name ONE cause for a figure that has two.
         // The equality holds only while every promoted format is `sprintf()`ed
         // at EXACTLY one call site; a second site — the same line rendered in
