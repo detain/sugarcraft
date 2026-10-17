@@ -244,6 +244,22 @@ final class ImportResolverTest extends TestCase
         $this->assertSame('Use `see @other.md for details` to import.', $output);
     }
 
+    public function testExpandSkipsReferenceInsideADoubleBacktickSpan(): void
+    {
+        $this->write('secret.md', 'SPILLED');
+
+        // rv3 review (ISS-066 family): the span mask pairs delimiters from
+        // the left, so ``@x.md`` leaves two lone backticks as ordinary text
+        // and keeps the reference inside a masked span. Pinned because a
+        // looser mask regex would let this documentation shape expand.
+        $output = (new ImportResolver())->expand(
+            'Document ``@secret.md`` and `@secret.md` syntax verbatim.',
+            $this->tempDir,
+        );
+
+        $this->assertSame('Document ``@secret.md`` and `@secret.md` syntax verbatim.', $output);
+    }
+
     public function testExpandSkipsEmailAddressWhoseDomainTailLooksLikeMd(): void
     {
         $this->write('team.md', 'IMPORTED');
