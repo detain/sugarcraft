@@ -17,7 +17,7 @@ The first-stage analysis established these mappings:
 | Soft Serve Component | SugarCraft Library | Relevance |
 |--------------------|--------------------|-----------|
 | TUI/BubbleTea | `candy-bubbletea` | Would need Bubbletea port for TUI apps |
-| SSH Server | `candy-pty`, `candy-ssh` | SSH handling via charmbracelet/ssh wrapper |
+| SSH Server | `sugar-pty`, `candy-ssh` | SSH handling via charmbracelet/ssh wrapper |
 | Git operations | `sugar-git` | Git repository operations via go-git |
 | LFS support | N/A | No SugarCraft equivalent |
 | Lipgloss styling | `candy-lipgloss` | Terminal styling - perfect match |

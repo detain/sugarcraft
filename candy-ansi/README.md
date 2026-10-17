@@ -6,7 +6,7 @@ ECMA-48 VT500 ANSI parser state machine — the shared byte-stream interpreter e
 
 ## Status
 
-🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`candy-vt`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `candy-pty`). `CsiHandler` now covers the full emulator CSI-final set (cursor, erase, scroll, insert/delete line & char, repeat, SCO save/restore, CR/LF) so `candy-vt` can implement this interface directly instead of forking its own parser.
+🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`candy-vt`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `sugar-pty`). `CsiHandler` now covers the full emulator CSI-final set (cursor, erase, scroll, insert/delete line & char, repeat, SCO save/restore, CR/LF) so `candy-vt` can implement this interface directly instead of forking its own parser.
 
 ## Quickstart
 

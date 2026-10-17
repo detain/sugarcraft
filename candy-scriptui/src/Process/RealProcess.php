@@ -12,7 +12,7 @@ use SugarCraft\Pty\Posix\PosixProcess;
  *             exists to preserve the in-package `Process` shape
  *             (`exitCode()` / `terminate()` / `close()` / `stdout()` /
  *             `stderr()`) used by SpinModel + SpinCommand, while moving
- *             the proc_open polling lifecycle into candy-pty's
+ *             the proc_open polling lifecycle into sugar-pty's
  *             {@see \SugarCraft\Pty\Posix\ChildPollTrait}.
  *
  * @see PosixProcess for the canonical non-PTY spawn handle.

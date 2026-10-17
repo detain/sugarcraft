@@ -351,7 +351,7 @@ func enableVirtualTerminalProcessing(w io.Writer) {
 
 SugarCli does **not** include platform-specific Windows VT processing because:
 1. It depends on `candy-core` for terminal utilities, which handles this at a lower level
-2. The PHP port of the TTY raw mode handling is in `candy-core` and `candy-pty`
+2. The PHP port of the TTY raw mode handling is in `candy-core` and `sugar-pty`
 3. As a pure presentation library (output only, no input handling), sugar-cli doesn't directly interact with the terminal device
 
 **Implication:** Applications using sugar-cli should ensure Windows VT processing is enabled at the application level (typically via `candy-core`'s terminal initialization) before producing styled output.

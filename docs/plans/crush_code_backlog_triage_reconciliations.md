@@ -91,7 +91,7 @@ residual". If cross-lane flake recurs, re-derive rather than reinstate.
 
 ## Two backlog figures re-measured during triage and found stale
 
-- **E630** — recorded `candy-pty/composer.lock` at 113 KB / 2026-08-22. MEASURED 2026-09-10:
+- **E630** — recorded `sugar-pty/composer.lock` at 113 KB / 2026-08-22. MEASURED 2026-09-10:
   **115,257 B, dated 2026-09-10 02:08** (this session's refresh). Still gitignored. Recorded in
   RESUME section 3 item 4.
 - **E632** — reasons about **297** files under `sugar-crush/src`. MEASURED: **317**. All four `278`
@@ -109,7 +109,7 @@ noticed. MEASURED: the diff is **root `composer.lock` only** (11+/11-), nothing 
 
 - **E488 == E515** — the same fix (`IDLE_DEFERRAL` in `tools/check-path-repos.php:602-670`). Merge the ids.
 - **E490 -> track at E623**, not here. Ownership moved to E550/E593/E623, which ran the campaign;
-  E623 explicitly DECLINES to retire E490. STEP 3 landed as `candy-pty/tests/Support/HangWatchdog.php`.
+  E623 explicitly DECLINES to retire E490. STEP 3 landed as `sugar-pty/tests/Support/HangWatchdog.php`.
 - **E496** — an entry whose explicit instruction was OVERRIDDEN: it said deleting the source-text
   guard was "not a licence" (rule 6) and the scan WAS deleted. The replacement doc-block gives a
   measured reason, so it reads deliberate — but it is on the record as an override, not a close.

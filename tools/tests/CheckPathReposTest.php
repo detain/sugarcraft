@@ -556,7 +556,7 @@ final class CheckPathReposTest extends TestCase
         $this->assertIsString($workflow, 'ci.yml is unreadable, so this assertion speaks for nothing');
 
         $this->assertSame(
-            'tools/ guards (+ drift pins that read candy-pty/ and sugar-crush/)',
+            'tools/ guards (+ drift pins that read sugar-pty/ and sugar-crush/)',
             $this->ciJobName($workflow, 'tools-guards'),
             'the tools-guards job name changed. It states REACH, not an '
             . 'enumeration, because the enumeration rotted in one round (see E589 '

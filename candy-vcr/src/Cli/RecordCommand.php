@@ -24,7 +24,7 @@ use SugarCraft\Vcr\Recorder;
  * (`record … | replay`), and the existing API-mode capture via
  * `\SugarCraft\Core\Program::withRecorder()` for in-program recording.
  *
- * Wired in plan step P6.5.1; depends on candy-pty's P6.1 recorder tap.
+ * Wired in plan step P6.5.1; depends on sugar-pty's P6.1 recorder tap.
  */
 final class RecordCommand implements Command
 {

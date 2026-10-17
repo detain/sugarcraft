@@ -91,7 +91,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Source repo:** `charmbracelet/bubbletea.md` — `charmbracelet/bubbletea` handles full key decoding including Kitty keyboard protocol
 - **Implementation ideas:**
   1. Create `candy-readline` input driver package that wraps `candy-vt` for escape sequence parsing
-  2. Use `candy-pty` PTY support for raw mode input
+  2. Use `sugar-pty` PTY support for raw mode input
   3. Adapt `charmbracelet/bubbletea`'s key decoding logic (KeyPressMsg, modifier support, Kitty protocol)
 - **Expected impact:** Enables real-world usage; unlocks all other missing features (mouse, cursor blink depend on input loop)
 - **Estimated complexity:** High — requires understanding of terminal escape sequences, PTY/raw mode, and async I/O

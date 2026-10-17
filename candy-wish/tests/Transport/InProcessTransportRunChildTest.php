@@ -30,7 +30,7 @@ final class InProcessTransportRunChildTest extends TestCase
     private function requirePtySyscalls(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
         if (!\extension_loaded('ffi')) {
             $this->markTestSkipped('ext-ffi is required.');

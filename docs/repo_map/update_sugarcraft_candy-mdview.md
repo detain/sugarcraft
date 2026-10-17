@@ -205,7 +205,7 @@ Renderer::render($markdown)
 - **Why it matters:** Allows quick edits while reading documentation
 - **Source:** `charmbracelet_glow.md` — `ui/editor.go` with `openEditor(path, lineno)`
 - **Implementation ideas:**
-  - Use `candy-pty` to spawn `$EDITOR` with filename and line number
+  - Use `sugar-pty` to spawn `$EDITOR` with filename and line number
   - Add 'e' keybinding in pager mode to open editor
 - **Estimated complexity:** Low — process spawning with args
 - **Expected impact:** Low — niche but valued feature
@@ -354,7 +354,7 @@ OS-native watchers register with the kernel and receive push notifications. mtim
 
 ### Applicability to SugarCraft
 
-- SugarCraft's `candy-pty` could provide native watching wrappers
+- SugarCraft's `sugar-pty` could provide native watching wrappers
 - Should maintain `FileWatcher` API compatibility for fallback
 - Consider a `WatchingStrategy` interface for pluggable backends
 

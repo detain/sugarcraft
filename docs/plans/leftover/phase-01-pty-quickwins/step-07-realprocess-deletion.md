@@ -9,8 +9,8 @@
 1. Determine whether `candy-scriptui/src/Process/RealProcess.php` has any
    external callers. If zero, delete it; if any, keep the alias.
 2. Align `candy-scriptui/src/Process/Process.php` interface with
-   `candy-pty/src/Contract/Process.php`. They should not be parallel
-   contracts — `candy-scriptui` re-exports / `use`s the candy-pty
+   `sugar-pty/src/Contract/Process.php`. They should not be parallel
+   contracts — `candy-scriptui` re-exports / `use`s the sugar-pty
    contract.
 
 ## Pre-step grep
@@ -41,7 +41,7 @@ If zero hits outside `candy-scriptui/` itself → safe to delete.
 - Keep `RealProcess.php` as `final class RealProcess extends PosixProcess {}`
   with `@deprecated`. Document in `candy-scriptui/CALIBER_LEARNINGS.md`.
 
-- `candy-scriptui/composer.json` — confirm `sugarcraft/candy-pty` is in
+- `candy-scriptui/composer.json` — confirm `sugarcraft/sugar-pty` is in
   `require` (likely transitive via candy-core; verify with
   `tools/check-path-repos.php`).
 
@@ -50,7 +50,7 @@ If zero hits outside `candy-scriptui/` itself → safe to delete.
 - `cd candy-scriptui && vendor/bin/phpunit` green.
 - `php tools/check-path-repos.php` green.
 - `grep -rn "class Process\b\|interface Process\b" candy-scriptui/src` returns
-  at most one file, and it implements/extends candy-pty's contract.
+  at most one file, and it implements/extends sugar-pty's contract.
 
 ## Notes
 
@@ -59,7 +59,7 @@ If zero hits outside `candy-scriptui/` itself → safe to delete.
   the monorepo (including `examples/`, `tests/`, and sister libs)
   before the merge.
 - The CALIBER entry for this should mention "Process interface
-  consolidated under candy-pty/Contract" so future maintainers don't
+  consolidated under sugar-pty/Contract" so future maintainers don't
   re-add a parallel contract.
 
 ---

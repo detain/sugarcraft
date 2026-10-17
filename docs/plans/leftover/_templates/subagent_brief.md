@@ -119,7 +119,7 @@ example: `candy-core/tests/RendererTest.php`.
 ## PHPUnit kill pattern (saved memory)
 
 `timeout` does **not** kill PHP processes that hang inside FFI or PTY
-syscalls. When running PHPUnit on candy-pty / candy-wish / candy-vcr
+syscalls. When running PHPUnit on sugar-pty / candy-wish / candy-vcr
 suites, wrap with a backgrounded pkill watchdog:
 
 ```bash

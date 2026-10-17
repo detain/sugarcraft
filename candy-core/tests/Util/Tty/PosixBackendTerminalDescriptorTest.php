@@ -109,11 +109,11 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
         // only Darwin allocates. WHAT THAT REASONING ALSO USED TO CLAIM, AND
         // WHAT WAS MEASURED SINCE (macos-15-arm64, PHP 8.3.33, run
         // 33796495350, job 100785492531): that the GET works on macOS against
-        // the slave, on candy-pty's strength -- it does not, not through that
+        // the slave, on sugar-pty's strength -- it does not, not through that
         // binding: TIOCGWINSZ on a libc-opened, posix_isatty-accepted slave
         // descriptor returned rc=-1, the same arm64 variadic-ioctl ABI
-        // breakage candy-pty's SizeIoctl::setSizeViaLibc documents for the
-        // SET direction. The descriptor was fine; candy-pty's fixed-arg FFI
+        // breakage sugar-pty's SizeIoctl::setSizeViaLibc documents for the
+        // SET direction. The descriptor was fine; sugar-pty's fixed-arg FFI
         // cdef is the gap -- and it is since closed upstream, with a
         // Darwin stty(1) read fallback inside SizeIoctl's query path, so the
         // size consequence below asks the slave through query() on every
@@ -163,14 +163,14 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
                 // the positive component — an assertion that the helper "does not
                 // return a resource id" would also pass against a helper that
                 // returned null forever. WHY THIS ONCE SPLIT BY OS, AND WHY IT
-                // NO LONGER DOES: candy-pty's FFI could not carry a winsize
+                // NO LONGER DOES: sugar-pty's FFI could not carry a winsize
                 // pointer through the arm64 variadic ioctl ABI even reading
                 // -- MEASURED on CI (macos-15-arm64, PHP 8.3.33, run
                 // 33796495350, job 100785492531), "TIOCGWINSZ ioctl failed on
                 // fd 8 with rc=-1" on exactly such a descriptor -- so on
                 // Darwin the claim was made through BSD's own stty(1) while
                 // the ioctl remained the sink elsewhere. That gap was
-                // candy-pty's (its fixed-arg cdef), not evidence about THIS
+                // sugar-pty's (its fixed-arg cdef), not evidence about THIS
                 // number; upstream has since fixed the read path with a
                 // Darwin stty(1) fallback inside SizeIoctl::getSizeViaLibc,
                 // so query() answers on arm64 too and the sink is asserted

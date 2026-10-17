@@ -98,7 +98,7 @@ freeze png.go:L59 → resvg-go.NewPixmap() → TinySkiaPixmapNew() → wazero.Ru
 **Implications for candy-codeshot**:
 
 - **Direct risk**: MEDIUM — candy-codeshot has no PTY execution at all (`--execute` is a gap). If added, must handle shell parsing carefully.
-- **Strategic opportunity**: A proper PHP PTY wrapper via `candy-pty` could provide better cross-platform shell execution than Go's approach.
+- **Strategic opportunity**: A proper PHP PTY wrapper via `sugar-pty` could provide better cross-platform shell execution than Go's approach.
 
 ### Issue #181: Set specific font style for font family
 
@@ -750,7 +750,7 @@ In PR #40, maintainer noted: "we could use testscripts for these integration tes
 
 **Why it matters for SugarCraft**: PHP's PTY support is limited. `proc_open()` with `pty` type is Unix-only.
 
-**Recommendation**: Document Windows limitations clearly. Could use `candy-pty` (which wraps `php-pty` extension or uses pseudo-TTY via `proc_open()`).
+**Recommendation**: Document Windows limitations clearly. Could use `sugar-pty` (which wraps `php-pty` extension or uses pseudo-TTY via `proc_open()`).
 
 ### Problem: Rasterization Quality vs Simplicity
 
@@ -848,7 +848,7 @@ Freeze has spent significant engineering time on PNG/WebP rasterization problems
 
 The `--execute` flag's complexity (10+ issues) is not in rendering or styling — it's in reliably capturing terminal output across platforms and shell configurations.
 
-**For SugarCraft**: PTY capture is a distinct concern from image rendering. If implementing `--execute`, isolate it in `candy-pty` and thoroughly test on Windows, macOS, and Linux.
+**For SugarCraft**: PTY capture is a distinct concern from image rendering. If implementing `--execute`, isolate it in `sugar-pty` and thoroughly test on Windows, macOS, and Linux.
 
 ### Lesson 3: Font Handling is Split-Brain
 
@@ -952,7 +952,7 @@ Both freeze and candy-codeshot embed JetBrains Mono in some form. This ensures c
 
 **Upstream gap**: `--execute` is problematic on Windows and with shell operators.
 
-**Opportunity**: PHP's `proc_open()` with `bash -c` is more portable than Go's direct exec. Could provide reliable PTY capture via `candy-pty`.
+**Opportunity**: PHP's `proc_open()` with `bash -c` is more portable than Go's direct exec. Could provide reliable PTY capture via `sugar-pty`.
 
 ### Opportunity 3: Interactive TUI Configuration
 

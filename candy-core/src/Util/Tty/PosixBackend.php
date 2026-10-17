@@ -10,7 +10,7 @@ use SugarCraft\Pty\SizeIoctl;
 use SugarCraft\Pty\TermiosFactory;
 
 /**
- * POSIX TTY backend delegating to candy-pty for termios and size queries.
+ * POSIX TTY backend delegating to sugar-pty for termios and size queries.
  *
  * Uses TermiosFactory (FFI primary, stty fallback) for raw mode and
  * SizeIoctl for terminal dimensions.
@@ -228,7 +228,7 @@ final class PosixBackend implements Backend
     private const CONTROLLING_TERMINAL = '/dev/tty';
 
     /**
-     * `O_RDONLY`. Zero on both platforms candy-pty's libc cdef supports
+     * `O_RDONLY`. Zero on both platforms sugar-pty's libc cdef supports
      * (Linux and Darwin); it is the one open flag whose value is fixed by
      * POSIX rather than by the platform's <fcntl.h>.
      */

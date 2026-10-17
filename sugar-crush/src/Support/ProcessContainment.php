@@ -492,14 +492,14 @@ final class ProcessContainment
      * the layer-C opt-in consults before promising anything.
      *
      * An `interactive: true` request on a host that cannot honour it (no
-     * ext-ffi, /dev/ptmx sealed, Windows, or candy-pty simply absent) is
+     * ext-ffi, /dev/ptmx sealed, Windows, or sugar-pty simply absent) is
      * refused, not deferred: a mode that silently degrades to a pipe would
      * hand the model a tty-shaped lie. Every check is a STAT, never a
      * spawn — same discipline as {@see locateOnPath()} answering "might the
      * binary be missing", because a probe that opened a pty to prove pty
      * availability would leak descriptors on exactly the failure paths this
      * method exists to survive. The class_exists check is the vendor-closure
-     * half: sugar-crush requires candy-pty, but a trimmed install or a
+     * half: sugar-crush requires sugar-pty, but a trimmed install or a
      * mislinked vendor must answer "unavailable", not fatal mid-tool.
      * Memoized per process like the setsid probe — the honest question is
      * "can this host", and that answer does not change within a process.
@@ -572,7 +572,7 @@ final class ProcessContainment
      * Signal a child by PID, reaching its group when it leads one and
      * itself otherwise — the proc_open-free twin of {@see terminate()}.
      *
-     * The pty path holds a candy-pty handle, not a proc_open resource, so
+     * The pty path holds a sugar-pty handle, not a proc_open resource, so
      * there is nothing for terminate()'s is_resource gate to accept. The
      * group-first order still matters: the shell is not the program, and
      * killing only the shell would leave the actual child painting on a

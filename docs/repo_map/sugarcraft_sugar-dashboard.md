@@ -20,7 +20,7 @@
 
 - **PHP**: ^8.3
 
-- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-pty`
+- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-pty`
 
 - **Dev Dependencies**: `sugarcraft/candy-vcr`, `phpunit/phpunit` ^10.5
 
@@ -675,7 +675,7 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 |---|---|
 | `sugarcraft/candy-core` | Elm-arch `Model`, ANSI utilities, Width, Color |
 | `sugarcraft/candy-sprinkles` | `Border`, `Style`, `Layout`, `Position`, `VAlign` |
-| `sugarcraft/candy-pty` | PTY primitives for any terminal interactions |
+| `sugarcraft/sugar-pty` | PTY primitives for any terminal interactions |
 
 ### 10.2 Dependency Graph (transitive closure)
 
@@ -685,7 +685,7 @@ sugar-dashboard
 ├── candy-core (path repo)
 ├── candy-sprinkles (path repo)
 │   └── candy-core (implicit)
-└── candy-pty (path repo)
+└── sugar-pty (path repo)
     └── candy-core (implicit)
 ```
 

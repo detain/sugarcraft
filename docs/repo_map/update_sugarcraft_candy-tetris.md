@@ -449,11 +449,11 @@ Render a sparkline chart of score progression over time using `sugar-charts`. Co
 
 **Reference:** `docs/repo_map/sugarcraft_sugar-charts.md` (not read, but in ecosystem).
 
-## 2. candy-pty for Sound Effects
+## 2. sugar-pty for Sound Effects
 
 **Priority:** Low | **Complexity:** Medium
 
-Use `candy-pty` to spawn aplay/aplay for audio playback on Linux/macOS.
+Use `sugar-pty` to spawn aplay/aplay for audio playback on Linux/macOS.
 
 ## 3. Replay System via Session Recording
 

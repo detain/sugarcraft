@@ -1,12 +1,12 @@
 # sugarcraft-pty — session handoff
 
-Continuation guide for the candy-pty rollout. PTY plan P0–P5 are **done**; P6 (stretch) is the next phase. This doc gives a fresh session everything needed to pick up and run.
+Continuation guide for the sugar-pty rollout. PTY plan P0–P5 are **done**; P6 (stretch) is the next phase. This doc gives a fresh session everything needed to pick up and run.
 
 ## TL;DR
 
 - **Plan**: `plans/sugarcraft-is-a-mono-logical-twilight.md` is the source of truth. P0–P5 are complete; P6.1–P6.5 are open.
 - **CI status**: ✅ **GREEN on master** as of run `25982131082` (PR #475 Darwin `stty` fallback merged 2026-05-17). All P0–P5 acceptance criteria met. First fully green master run of the rollout.
-- **Working tree**: on `master`, clean. Pre-existing `candy-pty/CALIBER_LEARNINGS.md` modification is harmless (Caliber auto-generated, untracked from this session).
+- **Working tree**: on `master`, clean. Pre-existing `sugar-pty/CALIBER_LEARNINGS.md` modification is harmless (Caliber auto-generated, untracked from this session).
 - **Next step**: Start **P6.1** — `PosixPump` Recorder tap.
 
 ## Plan reference
@@ -17,10 +17,10 @@ P6 step shape (per the plan):
 
 | Step | Branch | Scope |
 |---|---|---|
-| **P6.1** | `ai/candy-pty-pump-recorder-tap` | `PosixPump` Recorder tee for candy-vcr (precondition for P6.5) |
-| **P6.2** | `ai/candy-pty-pool` | Optional `PtyPool` — profile-gated; only proceed if FFI open cost > 5ms |
-| **P6.3** | `ai/candy-pty-multipump` | Optional `MultiPump` for split-pane / tmux supervision |
-| **P6.4** | `ai/candy-pty-expect` | Optional `Expect`-style fluent API (Python `pexpect` analogue) |
+| **P6.1** | `ai/sugar-pty-pump-recorder-tap` | `PosixPump` Recorder tee for candy-vcr (precondition for P6.5) |
+| **P6.2** | `ai/sugar-pty-pool` | Optional `PtyPool` — profile-gated; only proceed if FFI open cost > 5ms |
+| **P6.3** | `ai/sugar-pty-multipump` | Optional `MultiPump` for split-pane / tmux supervision |
+| **P6.4** | `ai/sugar-pty-expect` | Optional `Expect`-style fluent API (Python `pexpect` analogue) |
 | **P6.5.1** | `ai/candy-vcr-record-command-skeleton` | Shirley-style `candy-vcr record -- <cmd>` CLI |
 | **P6.5.2** | `ai/candy-vcr-record-shell-env` | `--shell` / `--env` flags with secret regex filter |
 | **P6.5.3** | `ai/candy-vcr-record-idle-trim` | `--idle-trim N` with dual timestamps (t / tRaw) |
@@ -39,7 +39,7 @@ Ship-as-you-go cadence (per CLAUDE.md / saved memory):
 3. **Local verify**: Always run with a backgrounded pkill watchdog — `timeout` doesn't work on PTY/FFI hangs (`feedback_phpunit_kill_pattern` memory):
    ```bash
    ( sleep 90 && pkill -9 -f 'vendor/bin/phpunit'; pkill -9 -f 'pty-shim'; pkill -9 -f 'runchild' ) > /tmp/wd.log 2>&1 &
-   cd /home/sites/sugarcraft/candy-pty && vendor/bin/phpunit > /tmp/out.out 2>&1
+   cd /home/sites/sugarcraft/sugar-pty && vendor/bin/phpunit > /tmp/out.out 2>&1
    ```
 4. **Commit**: Author `Joe Huss <detain@interserver.net>`. Caliber pre-commit hook is active — no need to run `caliber refresh` manually.
 5. **Push & PR**:
@@ -59,7 +59,7 @@ Ship-as-you-go cadence (per CLAUDE.md / saved memory):
 ```bash
 # Per-lib (most common):
 
-cd /home/sites/sugarcraft/candy-pty && composer install && vendor/bin/phpunit
+cd /home/sites/sugarcraft/sugar-pty && composer install && vendor/bin/phpunit
 
 # Without watchdog (only for non-PTY work):
 
@@ -73,7 +73,7 @@ php /home/sites/sugarcraft/tools/check-path-repos.php
 Suites + counts (current):
 | Lib | Tests | Notes |
 |---|---|---|
-| candy-pty | 261 | 2 deprecations, 2 skipped — both expected |
+| sugar-pty | 261 | 2 deprecations, 2 skipped — both expected |
 | candy-core | 545 | 24 skipped (FFI / Windows guards) |
 | candy-wish | 70 | All real PTY end-to-end |
 | candy-scriptui | 180 | Spin / RealProcess adapter |
@@ -83,8 +83,8 @@ Suites + counts (current):
 | Workflow | Trigger | What |
 |---|---|---|
 | `ci.yml` | push to master, all PRs | Affected-libs matrix per `scripts/affected-libs.php`. Linux × {8.3, 8.4}, Windows pool, macOS pool, coverage, PHPStan, **`path-repo-check`** job (P4.5). |
-| `pty-matrix.yml` | push touching `candy-pty/**` | Dedicated macOS arm64 + Linux × FFI/stty matrix for the PTY integration suite (P5.6). |
-| `macos-debug.yml` (debug branch only) | push to `debug/**` | 30-job split of candy-pty suite for narrowing down macOS hangs. Lives on `debug/macos-candy-pty` branch. |
+| `pty-matrix.yml` | push touching `sugar-pty/**` | Dedicated macOS arm64 + Linux × FFI/stty matrix for the PTY integration suite (P5.6). |
+| `macos-debug.yml` (debug branch only) | push to `debug/**` | 30-job split of sugar-pty suite for narrowing down macOS hangs. Lives on `debug/macos-sugar-pty` branch. |
 
 ## Known limitations (carry-overs into P6)
 
@@ -101,9 +101,9 @@ Failed mitigations (kept as historical record):
 
 ### Path-repo lock-version mismatch on PR branches
 
-`candy-core/composer.lock` (and any other consumer's lock) pins `sugarcraft/candy-pty` to `"version": "dev-master"`. When CI checks out a PR branch where candy-pty's HEAD is at `ai/<branch>`, composer reads the symlink's branch as `dev-ai/<branch>` and rejects the lock as incompatible.
+`candy-core/composer.lock` (and any other consumer's lock) pins `sugarcraft/sugar-pty` to `"version": "dev-master"`. When CI checks out a PR branch where sugar-pty's HEAD is at `ai/<branch>`, composer reads the symlink's branch as `dev-ai/<branch>` and rejects the lock as incompatible.
 
-**Pattern**: candy-core jobs fail on PR branches that ALSO touch candy-pty; they pass on master after merge. This is expected. **Don't try to "fix" the lock** by regenerating it on a PR branch — that just shifts the failure to the post-merge master push. The 7-cell failure pattern (Test/PHPStan/macOS/Windows × candy-core) on a PR is normal for any candy-pty change.
+**Pattern**: candy-core jobs fail on PR branches that ALSO touch sugar-pty; they pass on master after merge. This is expected. **Don't try to "fix" the lock** by regenerating it on a PR branch — that just shifts the failure to the post-merge master push. The 7-cell failure pattern (Test/PHPStan/macOS/Windows × candy-core) on a PR is normal for any sugar-pty change.
 
 The macOS candy-wish cell **is** the canary that proves the underlying fix works on Darwin.
 
@@ -114,30 +114,30 @@ The macOS candy-wish cell **is** the canary that proves the underlying fix works
 ## Recent PRs (this rollout, most-recent first)
 
 ```
-#475  ai/candy-pty-stty-fallback     candy-pty stty -f Darwin resize fallback (final macOS fix)
+#475  ai/sugar-pty-stty-fallback     sugar-pty stty -f Darwin resize fallback (final macOS fix)
 #474  ai/macos-tcsetwinsize          (failed) — tcsetwinsize attempt
-#473  ai/hold-macos-pty-final        Hold candy-pty out of MACOS_LIBS
+#473  ai/hold-macos-pty-final        Hold sugar-pty out of MACOS_LIBS
 #472  ai/macos-slave-anchor-hold     Hold slave anchor for master lifetime
 #471  ai/macos-arm64-image           macos-26-intel → macos-15
-#470  ai/hold-candy-pty-from-macos   First MACOS_LIBS hold
+#470  ai/hold-sugar-pty-from-macos   First MACOS_LIBS hold
 #469  ai/macos-resize-after-spawn    Resize after proc_open opens slave
 #468  ai/ci-cache-bust-darwin-anchor Cache busts + Darwin slave anchor
 #467  ai/monorepo-test-sweep         candy-core lock fix + initial macOS attempt
-#466  ai/candy-pty-docs-parity       P5.7 — README parity + CONCEPTS.md
-#465  ai/candy-pty-ci-matrix         P5.6 — pty-matrix.yml workflow
-#464  ai/candy-pty-test-eof-sigint-reap  P5.5 — EOF/SIGINT/orphan-reap
-#463  ai/candy-pty-vim-resize-buffer-tests  P5.3+P5.4 — vim/resize/1MB
-#462  ai/candy-pty-shell-repl-tests  P5.1+P5.2 — bash/dash/zsh/fish/python
-#461  ai/candy-pty-spawn-bash-example  P4.6 — DI quickstart example
-#460  ai/candy-pty-deprecation-markers  P4.5 — path-repo audit + check-path-repos.php
+#466  ai/sugar-pty-docs-parity       P5.7 — README parity + CONCEPTS.md
+#465  ai/sugar-pty-ci-matrix         P5.6 — pty-matrix.yml workflow
+#464  ai/sugar-pty-test-eof-sigint-reap  P5.5 — EOF/SIGINT/orphan-reap
+#463  ai/sugar-pty-vim-resize-buffer-tests  P5.3+P5.4 — vim/resize/1MB
+#462  ai/sugar-pty-shell-repl-tests  P5.1+P5.2 — bash/dash/zsh/fish/python
+#461  ai/sugar-pty-spawn-bash-example  P4.6 — DI quickstart example
+#460  ai/sugar-pty-deprecation-markers  P4.5 — path-repo audit + check-path-repos.php
 #459  ai/candy-core-program-termios-di  P4.4 — Program optional Termios DI
 #458  ai/candy-wish-spawn-pty-system  P4.3 — Spawn middleware DI integration test
 #457  ai/candy-wish-pty-system-di    P4.2 — InProcessTransport optional PtySystem DI
-#456  ai/candy-pty-system-factory    P4.1 — PtySystemFactory + UnsupportedPlatformException
+#456  ai/sugar-pty-system-factory    P4.1 — PtySystemFactory + UnsupportedPlatformException
 #455  ai/candy-scriptui-uses-posix-process  P3.3 — candy-scriptui RealProcess adapter
-#454  ai/candy-pty-posix-process     P3.2 — PosixProcess (non-PTY spawn)
-#453  ai/candy-pty-child-poll-trait  P3.1 — ChildPollTrait extraction
-#452  ai/candy-pty-p25-redo          P2.5 redo — pump migration freeze fix
+#454  ai/sugar-pty-posix-process     P3.2 — PosixProcess (non-PTY spawn)
+#453  ai/sugar-pty-child-poll-trait  P3.1 — ChildPollTrait extraction
+#452  ai/sugar-pty-p25-redo          P2.5 redo — pump migration freeze fix
 ```
 
 (Earlier P0–P2.4 PRs: #440 → #451 — see `git log --oneline` on master.)
@@ -145,7 +145,7 @@ The macOS candy-wish cell **is** the canary that proves the underlying fix works
 ## Architecture (current state — what to import from)
 
 ```
-candy-pty/src/
+sugar-pty/src/
 ├── Contract/                    # interface layer (P0)
 │   ├── Child.php                #   Child::{pid, exited, wait, exitCode, kill}
 │   ├── MasterPty.php            #   read/write/resize/size/stream/close/isClosed
@@ -179,7 +179,7 @@ candy-pty/src/
 └── Spawn.php                    # @deprecated, delegates to PosixSlavePty
 ```
 
-**Canonical usage (the v1 API)** — example in `candy-pty/examples/spawn-bash.php`:
+**Canonical usage (the v1 API)** — example in `sugar-pty/examples/spawn-bash.php`:
 
 ```php
 use SugarCraft\Pty\PtySystemFactory;
@@ -209,7 +209,7 @@ $exitCode = (new PosixPump())->run($master, $stdin, $stdout, $child, $opts);
 
 ## Debug artifacts (preserved on disk)
 
-- **`debug/macos-candy-pty` branch** — `.github/workflows/macos-debug.yml` splits candy-pty's suite into ~30 small per-file jobs, each with a 4-5 min timeout. Triggered on `workflow_dispatch` + push to `debug/**`. Run on this branch if a new macOS hang surfaces.
+- **`debug/macos-sugar-pty` branch** — `.github/workflows/macos-debug.yml` splits sugar-pty's suite into ~30 small per-file jobs, each with a 4-5 min timeout. Triggered on `workflow_dispatch` + push to `debug/**`. Run on this branch if a new macOS hang surfaces.
 - **`SUGARCRAFT_PTY_DEBUG=1` env-gate** — `PosixPtySystem::open()` and `PosixSlavePty::spawn()` catch blocks write to STDERR when set. Already wired in `macos-debug.yml`; not in `ci.yml` (intentional — keeps noise out of normal runs).
 - **`tools/check-path-repos.php`** — verifies every `sugarcraft/* @dev` dep has a path-repo entry. Run before committing if adding new transitive deps.
 
@@ -237,12 +237,12 @@ These are real things this rollout learned and embedded in your auto-memory:
    If a fresher run is failing, diagnose first before proceeding to P6.
 
 2. **Start P6.1** — `PosixPump` Recorder tap. The plan step (lines 581–586 of `sugarcraft-is-a-mono-logical-twilight.md`):
-   - Branch: `ai/candy-pty-pump-recorder-tap`
-   - Modify `candy-pty/src/PumpOptions.php` — add `?Recorder $recorder = null`
-   - Modify `candy-pty/src/Posix/PosixPump.php` — tee stdin into `$recorder->recordInputBytes()`, master-read into `$recorder->recordOutput()`, SIGWINCH callback also → `$recorder->recordResize(int, int)`
+   - Branch: `ai/sugar-pty-pump-recorder-tap`
+   - Modify `sugar-pty/src/PumpOptions.php` — add `?Recorder $recorder = null`
+   - Modify `sugar-pty/src/Posix/PosixPump.php` — tee stdin into `$recorder->recordInputBytes()`, master-read into `$recorder->recordOutput()`, SIGWINCH callback also → `$recorder->recordResize(int, int)`
    - Cross-check `candy-vcr/src/Recorder.php` signatures
-   - Add `candy-pty/tests/Posix/PumpRecorderTapTest.php` — record a bash session, play back via `Player`, assert reproduction
-   - Add candy-vcr to candy-pty's `require-dev` path-repo if not there
+   - Add `sugar-pty/tests/Posix/PumpRecorderTapTest.php` — record a bash session, play back via `Player`, assert reproduction
+   - Add candy-vcr to sugar-pty's `require-dev` path-repo if not there
    - Review focus: zero overhead when `$recorder` is null; tee writes on the same loop iteration as the read (no buffering drift)
 
 3. **Continue with P6.5.x** — the Shirley CLI. Plan steps 616–668. Each is ~1 PR, ~1 subagent invocation. Total: 6 PRs for P6.5.
@@ -251,7 +251,7 @@ These are real things this rollout learned and embedded in your auto-memory:
 
 ## CONTACT POINTS / ESCAPE HATCHES
 
-- **macOS PTY resize regresses**: rerun `debug/macos-candy-pty` workflow with `SUGARCRAFT_PTY_DEBUG=1` to see catch traces.
+- **macOS PTY resize regresses**: rerun `debug/macos-sugar-pty` workflow with `SUGARCRAFT_PTY_DEBUG=1` to see catch traces.
 - **candy-core lock CI failures on a PR**: expected. Verify the failures are ONLY `Test/PHPStan/macOS/Windows · candy-core` — don't try to fix them. Once merged to master, they resolve.
 - **A new lib added needs MACOS_LIBS / WINDOWS_LIBS**: edit `scripts/affected-libs.php` manually — these pools are hand-maintained, not auto-discovered.
 - **Path-repo closure broken**: `tools/check-path-repos.php` will flag it in CI; fix by copying the path-repo entry from `sugar-charts/composer.json`.

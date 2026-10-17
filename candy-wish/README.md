@@ -21,7 +21,7 @@ composer require sugarcraft/candy-wish
 
 - **PHP 8.3+** — declared in `composer.json`.
 - A **POSIX host** (Linux or macOS) — candy-wish's default transport builds on
-  candy-pty's POSIX PTY layer.
+  sugar-pty's POSIX PTY layer.
 - **OpenSSH `sshd` fronts the wire.** candy-wish does not implement the SSH
   transport protocol; each connection runs the middleware stack in a fresh PHP
   process spawned by `sshd` via `ForceCommand` (or a `command="..."` line in
@@ -29,7 +29,7 @@ composer require sugarcraft/candy-wish
   keyboard-interactive over the network) is sshd's job; the bundled auth
   middlewares prompt on the session's own stdio.
 - The **default `InProcessTransport`** (PTY supervisor) additionally requires:
-  - **`ext-ffi`** — candy-pty binds libc through FFI to allocate the PTY;
+  - **`ext-ffi`** — sugar-pty binds libc through FFI to allocate the PTY;
     without it the transport cannot run (and Windows is not a target).
   - **`ext-pcntl`** — forking and reaping the session child. `runChild()`
     raises a `PtyException` when pcntl is missing; SIGWINCH size forwarding
@@ -47,7 +47,7 @@ simply not covered).
 
 ## Shared foundations
 
-CandyWish builds on **candy-pty** (the PTY supervisor `InProcessTransport`
+CandyWish builds on **sugar-pty** (the PTY supervisor `InProcessTransport`
 spawns children through) and **candy-core** (`Lang` i18n wrapper,
 `AtomicJsonFile` persistence). It performs no terminal-capability probing of
 its own — `Session::fromEnvironment()` reads SSH environment variables
@@ -67,11 +67,11 @@ CandyWish leans on the host's OpenSSH daemon rather than implementing the SSH wi
                                               └─pump bytes──┐      └─Spawn middleware
                                                             │              │
                                                             ▼              ▼
-                                           [candy-pty master ◀──── slave / inner cmd]
+                                           [sugar-pty master ◀──── slave / inner cmd]
                                                             (bash, vim, custom binary)
 ```
 
-The supervisor allocates a `candy-pty` master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), and pumps bytes between the supervisor's STDIN/STDOUT (= sshd's PTY slave) and the candy-pty master. The terminal middleware is `Spawn`, which produces the cmd from the Session.
+The supervisor allocates a `sugar-pty` master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), and pumps bytes between the supervisor's STDIN/STDOUT (= sshd's PTY slave) and the sugar-pty master. The terminal middleware is `Spawn`, which produces the cmd from the Session.
 
 ### `HostSshdTransport` (legacy, opt-in)
 
@@ -179,7 +179,7 @@ ssh wishuser@your-host
 | `KeyboardInteractive`| both            | Challenge-response — writes prompts to STDOUT, reads responses from STDIN (RFC 4256).                |
 | `RateLimit`          | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.                            |
 | `Keepalive`          | InProcess only  | Writes an idle `\0` byte to the PTY master at a configurable interval (reaches the wire only where the tty echoes); under HostSshd it is a no-op — rely on sshd `ClientAliveInterval`. |
-| `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.                          |
+| `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a sugar-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 | `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
 | `AsyncMiddleware`    | both            | Abstract base for middleware that needs async I/O (LDAP, OAuth, database auth) — return a `PromiseInterface` from `handleAsync()`. The transport waits for the promise to settle before continuing the chain. |

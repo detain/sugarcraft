@@ -30,7 +30,7 @@ Pattern: Use CancellationToken for best-effort I/O cancellation; true preemption
 Source: step-35 ai/async-adopters
 
 ### 2026-07-04 — Dual-mode transports: sync default, React opt-in
-Pattern: `GitDaemon::serve()` keeps the blocking `socket_select()` loop as the default; `serveAsync(?LoopInterface)` is the opt-in React path (mirrors candy-pty ReactPump / candy-wish dual-mode). Sync clients are ext-sockets `\Socket` objects, async clients are stream resources from `stream_socket_server()`/`stream_socket_accept()` — protocol code stays single-copy by writing through a transport-agnostic `writeRaw()`. Async read callbacks must capture the client STREAM (not the array index): `closeClient()` splices + reindexes `$clients`.
+Pattern: `GitDaemon::serve()` keeps the blocking `socket_select()` loop as the default; `serveAsync(?LoopInterface)` is the opt-in React path (mirrors sugar-pty ReactPump / candy-wish dual-mode). Sync clients are ext-sockets `\Socket` objects, async clients are stream resources from `stream_socket_server()`/`stream_socket_accept()` — protocol code stays single-copy by writing through a transport-agnostic `writeRaw()`. Async read callbacks must capture the client STREAM (not the array index): `closeClient()` splices + reindexes `$clients`.
 Anti-pattern: don't `socket_export_stream()` a `\Socket` just to register it with the loop — mixing socket_* reads with a stream wrapper over the same fd risks buffered-data loss; bind a separate stream server for async mode instead.
 
 ### 2026-07-04 — Bounded-concurrency LFS batches (honesty note)

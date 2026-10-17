@@ -53,7 +53,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - God class construction → builder patterns (PR #904 step-25)
 
 ### Ecosystem-wide adoption sweep (Phase 6, steps 31–37)
-- step-31 candy-pty: adopted candy-input + candy-ansi (PR #910)
+- step-31 sugar-pty: adopted candy-input + candy-ansi (PR #910)
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + sugar-mouse + candy-testing (PR #911)
 - step-33 candy-kv + candy-ssh-launcher + candy-git: adopted sugar-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + candy-testing (PR #914)
@@ -61,7 +61,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-36 sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopted candy-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 
-**15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy).
+**15 consumer libs migrated** in Phase 6 (sugar-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy).
 
 ### Deferred to future plan
 See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
@@ -189,7 +189,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 3. **Consistent mouse hit-testing infrastructure** — Mouse support relies on external sugar-mouse Manager wiring rather than bubblezone's self-contained Mark/Scan/Get pattern. No consistent coordinate translation or zone tracking.
 
-4. **Async concurrency model consistency** — sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation. candy-pty has no async concurrency model. candy-scriptui's `subscriptions()` returns null. The Elm Architecture's `Cmd` pattern is fragmented.
+4. **Async concurrency model consistency** — sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation. sugar-pty has no async concurrency model. candy-scriptui's `subscriptions()` returns null. The Elm Architecture's `Cmd` pattern is fragmented.
 
 5. **Shared ANSI state machine** — `charmbracelet/x/ansi` Parser is already in candy-vt but not shared. candy-ansi-inspect, sugar-quickpick, candy-codeshot re-implement byte-level parsing instead.
 

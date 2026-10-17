@@ -28,8 +28,8 @@ From the first analysis, the following mappings were identified:
 | `input/key` | `candy-core` | Key event definitions |
 | `teatest` | `candy-core` tests | Bubble Tea testing patterns |
 | `golden` | `candy-core` tests | Snapshot/golden file testing |
-| `xpty` | `candy-pty` (existing) | PTY interface |
-| `termios` | `candy-pty` | Termios wrapper |
+| `xpty` | `sugar-pty` (existing) | PTY interface |
+| `termios` | `sugar-pty` | Termios wrapper |
 
 ## Previously Identified Gaps
 
@@ -157,7 +157,7 @@ The first analysis identified these gaps:
 
 **Maintainer Guidance**: "use v0.4.5" as workaround; "ansi is good for a release while input needs some work"
 
-**SugarCraft Direct Risk**: **HIGH** — The same pattern occurs in any monorepo with interdependent experimental packages. SugarCraft's `candy-core`, `candy-vt`, and `candy-pty` have similar interdependencies.
+**SugarCraft Direct Risk**: **HIGH** — The same pattern occurs in any monorepo with interdependent experimental packages. SugarCraft's `candy-core`, `candy-vt`, and `sugar-pty` have similar interdependencies.
 
 ---
 

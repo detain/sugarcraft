@@ -39,7 +39,7 @@ without re-arming the census family. ERA-CORRECTION stamped at this close: five-
 (the 125T/7,362A cited through the RESUME tables was stale era); DocFigure-alone 83T/2,685A; crush windows
 re-derived by junit classname grep at the weld: `Form|Input|Select|Cursor` 712/4,516 (633/3,943 pre-y5),
 `Vt|Terminal|Buffer` 305/21,034, `Shine|Glamour|Style` 24/813. Config-md5 at-rest truth
-**`d96e124ee7967eb34ef479ef824231ad`** (start==end at the weld). **LINK CENSUS: sugar-crush 19/19 + candy-pty 8/8.**
+**`d96e124ee7967eb34ef479ef824231ad`** (start==end at the weld). **LINK CENSUS: sugar-crush 19/19 + sugar-pty 8/8.**
 
 Tier/lane analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain`
 column below is a file-cluster bucket.

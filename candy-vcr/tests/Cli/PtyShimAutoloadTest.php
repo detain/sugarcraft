@@ -13,12 +13,12 @@ use Symfony\Component\Process\Process;
  *
  * Bug fixed in d070e742: the shim used to assume autoload at
  * `dirname(__DIR__) . '/vendor/autoload.php'` only — which works when
- * candy-pty is checked out top-level but fails when installed as
- * `vendor/sugarcraft/candy-pty/bin/pty-shim.php` inside a parent
+ * sugar-pty is checked out top-level but fails when installed as
+ * `vendor/sugarcraft/sugar-pty/bin/pty-shim.php` inside a parent
  * project. The fix walks 3 candidate paths.
  *
  * This test mirrors the nested install: copies pty-shim.php into a
- * fake `vendor/sugarcraft/candy-pty/bin/` layout, stubs an autoload at
+ * fake `vendor/sugarcraft/sugar-pty/bin/` layout, stubs an autoload at
  * the parent's `vendor/autoload.php`, then invokes the shim with no
  * args. We expect exit code 2 (the shim's "usage" exit code, hit AFTER
  * autoload is found) — NOT exit code 3 (autoload not found).
@@ -27,11 +27,11 @@ final class PtyShimAutoloadTest extends TestCase
 {
     public function testShimFindsAutoloadInParentVendorLayout(): void
     {
-        $shimSrc = realpath(__DIR__ . '/../../../candy-pty/bin/pty-shim.php');
+        $shimSrc = realpath(__DIR__ . '/../../../sugar-pty/bin/pty-shim.php');
         $this->assertNotFalse($shimSrc, 'pty-shim.php must exist in the repo');
 
         $root = sys_get_temp_dir() . '/candy-vcr-shim-' . bin2hex(random_bytes(4));
-        $shimDir = $root . '/vendor/sugarcraft/candy-pty/bin';
+        $shimDir = $root . '/vendor/sugarcraft/sugar-pty/bin';
         if (!mkdir($shimDir, 0700, true) && !is_dir($shimDir)) {
             $this->fail("Failed to create nested vendor layout: {$shimDir}");
         }

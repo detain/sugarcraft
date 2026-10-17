@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
  * the population nobody was applying it to at all.
  *
  * THE POPULATION IS THE FINDING (rule 48). Every `.php` file under `tools/` and
- * under `candy-pty/` was outside every citation guard in the repo, for the
+ * under `sugar-pty/` was outside every citation guard in the repo, for the
  * plainest possible reason: the only such guard is `sugar-crush`'s
  * `SymbolCitationDriftTest`, and neither tree is inside `sugar-crush`.
  *
@@ -75,8 +75,8 @@ use PHPUnit\Framework\TestCase;
  * before matching, and {@see citationFixtures()} pins that with a wrapped
  * fixture whose answer is known.
  *
- * WHY THE GUARD IS HERE AND NOT IN `candy-pty`, WHICH IS PUBLISHED. A guard
- * under `tools/` does not ship with `sugarcraft/candy-pty` and does not run for
+ * WHY THE GUARD IS HERE AND NOT IN `sugar-pty`, WHICH IS PUBLISHED. A guard
+ * under `tools/` does not ship with `sugarcraft/sugar-pty` and does not run for
  * anyone who clones the split repo. That is the accepted trade rather than an
  * oversight: the reverse direction is the dependency inversion
  * `StackedDocCommentTest`'s doc-block measures and refuses — a published
@@ -96,7 +96,7 @@ final class BareCitationDriftTest extends TestCase
      *
      * @var list<string>
      */
-    private const ROOTS = ['/tools', '/candy-pty'];
+    private const ROOTS = ['/tools', '/sugar-pty'];
 
     // ── the scanner, against answers already known (first) ───────────────
 
@@ -275,15 +275,15 @@ final class BareCitationDriftTest extends TestCase
         // adds a file (rule 18).
         $this->assertContains(__FILE__, $files, 'the walk cannot see its own file');
         $this->assertContains(
-            $root . '/candy-pty/tests/Support/SharedLoopResidueTest.php',
+            $root . '/sugar-pty/tests/Support/SharedLoopResidueTest.php',
             $files,
-            'the walk no longer reaches candy-pty/tests/, which is where both of the offenders '
+            'the walk no longer reaches sugar-pty/tests/, which is where both of the offenders '
             . 'this guard was written for lived',
         );
         $this->assertContains(
-            $root . '/candy-pty/src/PtyPool.php',
+            $root . '/sugar-pty/src/PtyPool.php',
             $files,
-            'the walk no longer reaches candy-pty/src/, so the published half of the package is '
+            'the walk no longer reaches sugar-pty/src/, so the published half of the package is '
             . 'covered by no citation guard at all',
         );
 

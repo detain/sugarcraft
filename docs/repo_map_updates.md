@@ -37,7 +37,7 @@ Files using ReactPHP (excluding vendor/):
 - `super-candy/src/AsyncOps.php`: Not read yet — may already have similar helpers
 
 Existing ReactPHP versions pinned:
-- `react/event-loop: ^1.6` (candy-core, candy-pty, candy-wish)
+- `react/event-loop: ^1.6` (candy-core, sugar-pty, candy-wish)
 - `react/promise: ^3.3` (candy-core, sugar-image, sugar-crush, super-candy)
 - `react/promise-timer: ^1.9` (candy-wish)
 
@@ -163,7 +163,7 @@ _All items in this section have been resolved by the completion of steps 20–40
 - [2026-06-01 | step-37 | shipper] NO-OP — step-37 catch-all: deferral sweep complete, no remaining actionable libs — MERGED PR #917:
   - Branch ai/sweep-catchall merged to master
   - 1 file changed, 8 insertions(+) in docs/repo_map_update_followups.md (DEFERRED notes only, no source code changes)
-  - All 4 remaining libs from step-30 audit have DEFERRED status in followups (candy-pty, sugar-mouse, candy-metrics, candy-log, candy-starter)
+  - All 4 remaining libs from step-30 audit have DEFERRED status in followups (sugar-pty, sugar-mouse, candy-metrics, candy-log, candy-starter)
   - No source code changes; PR is documentation-only marker for end of actionable migration work
   - Commit SHA: 237fad86
 

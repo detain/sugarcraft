@@ -1,7 +1,7 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
 Sources: candy-core, candy-scriptui, sugar-forms, candy-sprinkles, sugar-widgets,
-sugar-forms, sugar-spring, sugar-colorprofile, sugar-markdown, candy-pty
+sugar-forms, sugar-spring, sugar-colorprofile, sugar-markdown, sugar-pty
 
 ---
 
@@ -47,7 +47,7 @@ candy-sprinkles, candy-core, sugar-forms, and sugar-widgets all independently wo
 
 ### B. Async Concurrency Is Inconsistent Across the Ecosystem
 
-candy-core has ReactPHP integration but `exec()` blocks during external command execution. sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation mechanism. candy-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
+candy-core has ReactPHP integration but `exec()` blocks during external command execution. sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation mechanism. sugar-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
 
 ### C. No Consistent Buffer/Cell Abstraction for Rendering
 

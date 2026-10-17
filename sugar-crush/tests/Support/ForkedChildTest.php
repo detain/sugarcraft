@@ -33,8 +33,8 @@ use PHPUnit\Framework\TestCase;
  * defense-in-depth: it protects against ANY inherited object's destructor
  * with a real side effect, not just this one.
  *
- * Uses `Tty`'s injected-Termios test seam (a real fd obtained via candy-pty's
- * own FFI `open()`, mirroring `candy-pty/tests/Posix/PosixTermiosTest.php`)
+ * Uses `Tty`'s injected-Termios test seam (a real fd obtained via sugar-pty's
+ * own FFI `open()`, mirroring `sugar-pty/tests/Posix/PosixTermiosTest.php`)
  * rather than `fopen()` + `(int)` cast. WHY THE CAST WAS NOT USABLE WHEN THIS
  * WAS WRITTEN: `PosixBackend::enableRawMode()` then resolved a stream to an
  * fd via `(int) $this->stream` - PHP's internal resource ID, not the OS fd -
@@ -75,7 +75,7 @@ final class ForkedChildTest extends TestCase
     private function requirePtySyscalls(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
         if (!\extension_loaded('ffi')) {
             $this->markTestSkipped('ext-ffi is required for termios FFI.');

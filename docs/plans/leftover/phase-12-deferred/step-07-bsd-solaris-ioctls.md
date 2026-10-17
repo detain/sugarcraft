@@ -13,7 +13,7 @@ per-platform `ioctl.rs` files.
 
 ## Files
 
-**Modify:** `candy-pty/src/SizeIoctl.php` + `PosixTermios.php` to
+**Modify:** `sugar-pty/src/SizeIoctl.php` + `PosixTermios.php` to
 branch on `PHP_OS_FAMILY` for the additional platforms.
 
 ## Acceptance

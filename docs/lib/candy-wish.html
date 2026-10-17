@@ -58,7 +58,7 @@
     <h3 style="margin-top: 32px;">Two transports</h3>
     <p>What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction:</p>
     <ul>
-      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="candy-pty.html">candy-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the candy-pty master. Terminal middleware: <code>Spawn</code>.</li>
+      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="sugar-pty.html">sugar-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the sugar-pty master. Terminal middleware: <code>Spawn</code>.</li>
       <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
     </ul>
 
@@ -95,7 +95,7 @@ Server::new()
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>InProcessTransport (default)</strong><span>candy-pty supervisor — allocates a PTY, spawns child with controllingTerminal:true, pumps bytes, forwards SIGWINCH. Lets you mount any cmd / shell / editor.</span></div>
+      <div class="feature"><strong>InProcessTransport (default)</strong><span>sugar-pty supervisor — allocates a PTY, spawns child with controllingTerminal:true, pumps bytes, forwards SIGWINCH. Lets you mount any cmd / shell / editor.</span></div>
       <div class="feature"><strong>HostSshdTransport (legacy)</strong><span>Pre-PTY-upgrade behaviour. Middleware run inline against sshd's PTY directly. Zero subprocess overhead.</span></div>
       <div class="feature"><strong>Spawn middleware (InProcess only)</strong><span>Terminal — produces cmd[] from Session via factory. Drives runChild() on the active transport.</span></div>
       <div class="feature"><strong>BubbleTea middleware (HostSshd only)</strong><span>Terminal — mounts a SugarCraft Program inline reading STDIN/STDOUT. Transport-aware: throws clearly under InProcess.</span></div>
@@ -148,7 +148,7 @@ Server::new()
 <tr><td>RateLimit</td><td>new(string $statePath, int $burst, float $ratePerSec)</td><td>Per-IP token-bucket rate limiter</td></tr>
 <tr><td>Logger</td><td>new(string|resource|null)</td><td>JSON one-line logger to file or stderr</td></tr>
 <tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>
-<tr><td>InProcessTransport</td><td>new(?PtySystem, ?ChannelHandler)</td><td>Default transport — PTY supervisor + candy-pty; optional custom ChannelHandler</td></tr>
+<tr><td>InProcessTransport</td><td>new(?PtySystem, ?ChannelHandler)</td><td>Default transport — PTY supervisor + sugar-pty; optional custom ChannelHandler</td></tr>
 <tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>
 <tr><td>ChannelHandler</td><td>handlePtyReq / handleWindowChange / handleShell / handleExec / handleSignal / handleEnv / handleBreak</td><td>Interface for custom channel-level message handling (InProcessTransport only)</td></tr>
 <tr><td>ChannelMsg</td><td>abstract base</td><td>Base for all SSH channel messages (RFC 4254)</td></tr>
@@ -180,7 +180,7 @@ Server::new()
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-wish/.vhs/spawn-bash.gif" alt="Spawn bash">
                 <h3>Spawn bash (in-process)</h3>
-                <span class="demo-caption">InProcessTransport spawning <code>/bin/bash -l</code> via candy-pty. Inner shell runs <code>echo</code> / <code>uname</code> / <code>stty size</code> / <code>exit</code>.</span>
+                <span class="demo-caption">InProcessTransport spawning <code>/bin/bash -l</code> via sugar-pty. Inner shell runs <code>echo</code> / <code>uname</code> / <code>stty size</code> / <code>exit</code>.</span>
             </div>
         </div>
     </div>

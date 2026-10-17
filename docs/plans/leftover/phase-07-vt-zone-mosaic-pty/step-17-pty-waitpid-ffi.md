@@ -1,6 +1,6 @@
-# Step 07.17 — candy-pty waitpid() FFI binding
+# Step 07.17 — sugar-pty waitpid() FFI binding
 
-**Source:** `leftover_updates_later.md` candy-pty research §4.1.2
+**Source:** `leftover_updates_later.md` sugar-pty research §4.1.2
 **Branch:** `ai/pty-waitpid-ffi`
 
 ## Deliverable
@@ -13,18 +13,18 @@ process-exit detection for ChildLifecycle.
 
 **Modify:**
 
-- `candy-pty/src/Libc.php` — extend cdef with `waitpid`.
-- `candy-pty/src/Posix/ChildPollTrait.php` — use `waitpid(pid, &status,
+- `sugar-pty/src/Libc.php` — extend cdef with `waitpid`.
+- `sugar-pty/src/Posix/ChildPollTrait.php` — use `waitpid(pid, &status,
   WNOHANG)` first; fall back to `proc_get_status` if FFI unavailable.
 
 ## Tests
 
-- `candy-pty/tests/Posix/ChildPollWaitpidTest.php` — assert <2ms
+- `sugar-pty/tests/Posix/ChildPollWaitpidTest.php` — assert <2ms
   detection vs the 10ms poll baseline.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter Waitpid` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter Waitpid` green.
 
 ---
 

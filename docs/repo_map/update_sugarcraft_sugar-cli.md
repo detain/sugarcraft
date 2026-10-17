@@ -744,7 +744,7 @@ PHP-based completion generation with ZshGenerator/BashGenerator emitting `compde
 
 ## Experimental Ideas (future)
 
-12. **Interactive prompts** — Confirm, Select, Multi-select (requires candy-pty integration)
+12. **Interactive prompts** — Confirm, Select, Multi-select (requires sugar-pty integration)
 13. **Manpage generation** — Integrate roff rendering
 14. **Auto-version wiring** — CLI framework integration point
 

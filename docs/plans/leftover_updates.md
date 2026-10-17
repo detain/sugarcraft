@@ -92,7 +92,7 @@ promised, full SSH end-to-end suite green.
 🟢 **P2-LO-01 — `PumpOptions::$flushDeadlineSec` and `$stdinEofGraceSec`
 constants are duplicated as Pump defaults AND in
 `candy-wish/src/Transport/InProcessTransport.php` comments.**
-*Where:* `candy-pty/src/PumpOptions.php` defaults vs.
+*Where:* `sugar-pty/src/PumpOptions.php` defaults vs.
 `candy-wish/src/Transport/InProcessTransport.php` historical comments.
 *Why it matters:* If the SSH protocol assumptions ever shift, future
 maintainers will look at the candy-wish constants first. They have
@@ -104,7 +104,7 @@ with a `PumpOptions::sshDefault(): self` named-constructor on
 
 🟢 **P2-LO-02 — `PosixPump::pump()` short-circuits SIGWINCH detection
 inside the pump.**
-*Where:* `candy-pty/src/Posix/PosixPump.php:117-125` — when
+*Where:* `sugar-pty/src/Posix/PosixPump.php:117-125` — when
 `stream_select` returns `0` (idle), pump unconditionally fires
 `onSigwinch(0, 0)`. The 220-237 TODO block calls this out as
 "intentional", but the callsite still passes synthetic `(0, 0)` to
@@ -145,7 +145,7 @@ and one CALIBER entry's worth of "why does this exist" reading.
 runs.
 
 🟢 **P4-LO-01 — `Pty.php`, `Spawn.php`, `Child.php`, `Master.php`
-remain in `candy-pty/src/` as deprecated facades.**
+remain in `sugar-pty/src/` as deprecated facades.**
 *Why it matters:* The Goals list said they ship through v1.x and get
 removed at v2.0. There is no current "v1.x is starting" tag, so the
 facades are forever-living. Two of them (`Pty.php` and `Master.php`)
@@ -176,7 +176,7 @@ backend (see deferred items below for the rough contents).
 `MATCHUPS.md` Windows row points at it.
 
 🟡 **P5-LO-02 — macOS arm64 PTY resize fallback is shell-out, not FFI.**
-*Where:* `candy-pty/src/SizeIoctl.php` Darwin branch (added in PR #475).
+*Where:* `sugar-pty/src/SizeIoctl.php` Darwin branch (added in PR #475).
 The Darwin path calls `stty -f /dev/fd/<fd> rows N cols N` because
 `ioctl(TIOCSWINSZ)` returns -1 through PHP FFI's fixed-arg cdef (the
 real libc `ioctl` is variadic, and arm64 puts varargs on the stack
@@ -189,7 +189,7 @@ better fix.
 *Fix options (any one):*
 1. Wait for a PHP FFI release that supports `FFI\CData` arrays as variadic
    params (tracked upstream).
-2. Build a tiny Darwin-only C shim (`candy-pty/bin/macos-ioctl-resize`)
+2. Build a tiny Darwin-only C shim (`sugar-pty/bin/macos-ioctl-resize`)
    that does the syscall and is exec'd via `proc_open` — same indirection
    cost as stty but no shell parsing.
 3. Distribute a tiny "resize-ioctl" binary as a Composer post-install
@@ -200,7 +200,7 @@ fallback" on Darwin.
 
 🟡 **P5-LO-03 — `OrphanedChildReapTest` and `PythonReplTest` flake on
 macOS without a tracking issue.**
-*Where:* `candy-pty/tests/Integration/OrphanedChildReapTest.php` +
+*Where:* `sugar-pty/tests/Integration/OrphanedChildReapTest.php` +
 `PythonReplTest.php`. Status doc says: "These are pre-existing env
 issues, **not regressions**. Acceptable to defer with `markTestSkipped`
 on Darwin."
@@ -229,7 +229,7 @@ one we *do* hit on macOS arm64 resize.
 ✅ P6.1 Recorder tap, P6.2 PtyPool, P6.3 MultiPump, P6.4 Expect all shipped.
 
 🟡 **P6-LO-01 — Stale "TODO" block in `PosixPump.php` lines 220-237.**
-*Where:* `candy-pty/src/Posix/PosixPump.php` ends with a multi-line
+*Where:* `sugar-pty/src/Posix/PosixPump.php` ends with a multi-line
 comment explaining why `recordResize` is NOT wired in the pump,
 labeling it "TODO". The wiring has since shipped on the *consumer* side
 (`candy-vcr/src/Cli/RecordCommand.php:152` calls
@@ -247,7 +247,7 @@ consumer owns SIGWINCH detection; pump exposes `onSigwinch(cols,rows)`
 for it to drive directly."
 
 🟢 **P6-LO-02 — `PtyPool` has no tests for ReactPHP loop integration.**
-*Where:* `candy-pty/tests/PtyPoolTest.php` covers acquire/release and
+*Where:* `sugar-pty/tests/PtyPoolTest.php` covers acquire/release and
 exhaustion but not the typical SSH-server scenario where the pool is
 driven by a ReactPHP loop. Risk #3 of the plan flagged the
 `pcntl_async_signals` ↔ ReactPHP interaction; the pool inherits this.
@@ -255,7 +255,7 @@ driven by a ReactPHP loop. Risk #3 of the plan flagged the
 session and asserting no signal double-handling.
 
 🟢 **P6-LO-03 — `Expect` API has no integration with `PumpOptions::recorder`.**
-*Where:* `candy-pty/src/Expect.php`. The Expect API is currently a
+*Where:* `sugar-pty/src/Expect.php`. The Expect API is currently a
 synchronous wrapper around `MasterPty::read/write`; it cannot replay
 recorded sessions and cannot tee into a recorder.
 *Fix:* Add `Expect::recordedAgainst(Recorder)` factory or
@@ -264,8 +264,8 @@ replay forever — useful for the `candy-vcr` test helpers and for SSH
 fixtures in `candy-wish`.
 
 🟢 **P6-LO-04 — `MultiPump` is profiled but not documented in `README.md`.**
-*Where:* `candy-pty/src/Posix/MultiPump.php` shipped with `MultiPumpTest.php`
-but `candy-pty/README.md` has no "Splitting between multiple PTYs"
+*Where:* `sugar-pty/src/Posix/MultiPump.php` shipped with `MultiPumpTest.php`
+but `sugar-pty/README.md` has no "Splitting between multiple PTYs"
 section and no `examples/multi-pump.php`. Step P6.3 acceptance asked
 for "scales linearly, no deadlocks" tests but did not enforce docs.
 *Fix:* Add a 30-line example (`examples/multi-pump.php` spawning two
@@ -307,7 +307,7 @@ opt-out is a footgun and the flag's docblock should say so.
 *Where:* `candy-vcr/tests/Integration/ShirleyBashTest.php`,
 `ShirleyVimTest.php`. The plan called out `htop` and `python -i` as
 examples of "any terminal program". `python -i` is covered indirectly
-via `candy-pty/tests/Integration/PythonReplTest.php` (which itself
+via `sugar-pty/tests/Integration/PythonReplTest.php` (which itself
 flakes on macOS — see P5-LO-03). `htop` would exercise the alt-screen
 sequence which neither test currently does.
 *Fix:* Add `ShirleyHtopTest.php` — record `htop -n 1` (one tick), assert
@@ -338,10 +338,10 @@ entries but requires manual `composer.json` edits to fix.
 `sugar-charts/composer.json` and inserts it. Same rules as the manual
 process today; only difference is no human in the loop.
 
-### CC-LO-02 — Path-repo lock-version mismatch generates a 7-cell red on every candy-pty PR
+### CC-LO-02 — Path-repo lock-version mismatch generates a 7-cell red on every sugar-pty PR
 
 *Where:* `candy-core/composer.lock` (and consumers) pin
-`sugarcraft/candy-pty` to `"version": "dev-master"`; on a candy-pty PR
+`sugarcraft/sugar-pty` to `"version": "dev-master"`; on a sugar-pty PR
 branch the symlinked HEAD is `dev-ai/<branch>` and composer rejects the
 lock. Status doc calls this "expected".
 *Why it matters:* "Expected" failures train reviewers to ignore CI red.
@@ -365,7 +365,7 @@ brittleness.
 polled modes but not the case where the user also has a ReactPHP loop
 running `pcntl_signal_dispatch` itself.
 *Fix:* Add `SignalForwarderReactLoopTest.php` (under
-`candy-pty/tests/`) that boots a `React\EventLoop\Loop::get()`, attaches
+`sugar-pty/tests/`) that boots a `React\EventLoop\Loop::get()`, attaches
 a `SignalForwarder`, sends `posix_kill(getpid(), SIGWINCH)`, and asserts
 the callback fires exactly once.
 
@@ -393,7 +393,7 @@ master — opposite of `SIGINTForwardingTest`.
 "do we have a TTY that can render images?" — the canonical answer
 should come from `\SugarCraft\Pty\Contract\Termios::isAtty()` (or a
 new `Util\TtyDetect::isAtty()` static in candy-core that delegates to
-candy-pty).
+sugar-pty).
 *Fix:* Replace `posix_isatty(0) && posix_isatty(1)` with a single
 delegate call. Tracked under the broader audit in
 `plans/leftover_updates_later.md` (single-source-of-truth section)
@@ -412,12 +412,12 @@ construction; tests in `candy-core` remain green.
 ### CC-LO-08 — `candy-scriptui` still has its own `Process\Process.php` interface
 
 *Where:* `candy-scriptui/src/Process/Process.php`.
-*Why it matters:* `candy-pty/src/Contract/Process.php` was introduced in
+*Why it matters:* `sugar-pty/src/Contract/Process.php` was introduced in
 P0.1 as the canonical interface. `candy-scriptui` should re-export
 (`use SugarCraft\Pty\Contract\Process as Process;`) or implement the
 upstream contract, not maintain a parallel one.
 *Fix:* Verify the two interfaces have compatible methods; align signatures
-if drifted; have `candy-scriptui` import the candy-pty contract and delete its
+if drifted; have `candy-scriptui` import the sugar-pty contract and delete its
 own. Same shape as the `RealProcess` → `PosixProcess` move (P3.3).
 
 ---
@@ -509,6 +509,6 @@ gaps the audit surfaced.
 - **New PTY features beyond the deferred list.** If a user requests
   `forkpty(3)`-style anonymous spawn (no `proc_open` shim), open a new
   plan — that is a v2 surface, not a cleanup.
-- **Documentation rewrites.** `candy-pty/README.md` parity table and
-  `candy-pty/docs/CONCEPTS.md` are accurate. Touch them only if the
+- **Documentation rewrites.** `sugar-pty/README.md` parity table and
+  `sugar-pty/docs/CONCEPTS.md` are accurate. Touch them only if the
   underlying code shifts.

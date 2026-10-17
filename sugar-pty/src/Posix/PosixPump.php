@@ -1,0 +1,410 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Pty\Posix;
+
+use SugarCraft\Pty\Contract\Child;
+use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Contract\Pump as PumpContract;
+use SugarCraft\Pty\PumpOptions;
+
+/**
+ * Byte pump that forwards stdin ↔ master PTY with back-pressure,
+ * EOF grace, and optional SIGWINCH / keepalive / child-exit callbacks.
+ *
+ * Mirrors charmbracelet/bubbletea/pty.Pump for Go parity.
+ * Extracted from {@see \SugarCraft\Wish\Transport\InProcessTransport}.
+ *
+ * @see creack/pty.Pump
+ * @see portable-pty.Pump
+ *
+ * ## Caller-bounding contract (E717)
+ *
+ * A loop built on this pump carries no internal deadline; callers MUST
+ * bound it. The exit conditions are all EVENT-driven — child exit, STDOUT
+ * EPIPE, STDIN EOF + grace expiry — so a live-but-silent child paired with
+ * an open, silent STDIN keeps the loop spinning forever. That is deliberate:
+ * an interactive PTY session has no legitimate total runtime, and a
+ * wall-clock baked into the pump would kill healthy sessions. The caller
+ * owns the bound, and has three mechanisms:
+ *
+ * - {@see PumpOptions::$pumpDeadlineUs} — opt-in per-iteration bound; on
+ *   expiry the loop returns as if any other condition fired (child alive →
+ *   run() answers -1; nothing is killed, no state destroyed).
+ * - an {@see PumpOptions::$onIdle} callback that flips a caller flag and
+ *   kills the child (the kill trips the child-exit condition).
+ * - a supervisor process bounding the whole run (test-suite pattern:
+ *   `sugar-pty/tests/Support/HangWatchdog` — inside the process a pump
+ *   test can only hang, never fail).
+ *
+ * The same contract binds {@see MultiPump::run()} (which also takes a
+ * `run($pumpDeadlineUs)` bound) and the {@see ReactPump} promise (bound by
+ * `stop()`/cancellation, or by the same `$pumpDeadlineUs` option).
+ */
+final class PosixPump implements PumpContract
+{
+    /** Buffered stdin bytes not yet written to master (partial-write remainder). */
+    private string $pendingStdin = '';
+
+    /**
+     * Run the byte pump until pump conditions trigger: child exits,
+     * STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace
+     * window elapses.
+     *
+     * Does NOT block on {@see Child::wait()} when the child is still
+     * alive — the caller is responsible for cleanup (kill / PTY close)
+     * and the final wait() call. This keeps the supervisor in
+     * candy-wish::InProcessTransport in control of the kill-on-stdin-
+     * EOF policy: a long-running child (e.g. `/bin/sleep 5`) that
+     * doesn't react to VEOF gets SIGHUP'd by the caller, not blocked
+     * on inside the pump.
+     *
+     * @param MasterPty            $master
+     * @param resource              $stdinStream  PHP stream resource (e.g. STDIN)
+     * @param resource              $stdoutStream PHP stream resource (e.g. STDOUT)
+     * @param Child|null            $child        null when no child to monitor (stdin→master only)
+     * @param PumpOptions           $opts         pump configuration
+     * @return int  the child's exit code if it has already exited
+     *              by the time the pump returns; 0 if there is no
+     *              child to monitor (stdin→master only); -1 if a
+     *              child was supplied but is still running (caller
+     *              must kill + wait()).
+     *
+     * Carries no internal deadline; callers MUST bound — see the class
+     * docblock "Caller-bounding contract (E717)". When
+     * {@see PumpOptions::$pumpDeadlineUs} is set it acts as a fourth,
+     * caller-supplied exit condition checked once per loop iteration;
+     * expiry never kills the child and never closes the master.
+     *
+     * @see portable-pty.Pump.Run()
+     */
+    public function run(
+        MasterPty $master,
+        $stdinStream,
+        $stdoutStream,
+        ?Child $child = null,
+        ?PumpOptions $opts = null,
+    ): int {
+        $opts ??= new PumpOptions();
+        // A remainder parked by a previous run() on this instance belongs to
+        // that run's master, never this one.
+        $this->pendingStdin = '';
+
+        \stream_set_blocking($master->stream(), false);
+        \stream_set_blocking($stdinStream, false);
+
+        $this->pump($master, $stdinStream, $stdoutStream, $child, $opts);
+        $this->flushMaster($master, $stdoutStream, $child, $opts);
+
+        if ($child === null) {
+            return 0;
+        }
+        if ($child->exited()) {
+            return $child->exitCode() ?? 0;
+        }
+        return -1;
+    }
+
+    /**
+     * Inner pump loop. Exits when:
+     *  - child exits,
+     *  - STDOUT hits EPIPE (peer closed read end),
+     *  - STDIN reached EOF AND the post-EOF grace window expired
+     *    (child got VEOF + had stdinEofGraceSec to notice;
+     *    if it's still running we force-close the PTY). While stdin
+     *    bytes or the VEOF are still queued behind a full master, each
+     *    successful partial write restarts the grace window, so the
+     *    window is "grace with no progress", never a cut-off mid-drain,
+     *  - the optional caller-bound {@see PumpOptions::$pumpDeadlineUs}
+     *    has lapsed (E717 — off by default; the loop itself carries no
+     *    internal deadline and would otherwise spin while a silent child
+     *    stays alive).
+     *
+     * @param resource $stdinStream
+     * @param resource $stdoutStream
+     */
+    private function pump(
+        MasterPty $master,
+        $stdinStream,
+        $stdoutStream,
+        ?Child $child,
+        PumpOptions $opts,
+    ): void {
+        $masterStream = $master->stream();
+        $stdinClosed = false;
+        $stdinClosedDeadline = 0.0;
+        // VEOF bytes owed to the child once the queued stdin remainder
+        // drains. They must follow every data byte, so they are never
+        // written while $this->pendingStdin is non-empty.
+        $veofOwed = '';
+
+        // E717 caller-supplied bound: absolute wall-clock deadline computed
+        // once, checked at the top of every iteration. Overshoot is bounded
+        // by one select tick (<= selectTimeoutUs). Expiry is an exit
+        // condition, NOT a kill: flushMaster still runs so already-produced
+        // tail bytes are not lost, and run() reports the live child as -1.
+        $pumpDeadlineAt = $opts->pumpDeadlineUs === null
+            ? null
+            : \microtime(true) + $opts->pumpDeadlineUs / 1_000_000;
+
+        // Track last known PTY size so we can detect resize on idle
+        // ticks and fire onSigwinch. This makes onSigwinch work with
+        // SignalForwarder-driven resize without requiring a callback
+        // from MasterPty itself.
+        $lastKnownCols = 0;
+        $lastKnownRows = 0;
+        if ($opts->onSigwinch !== null) {
+            try {
+                $initialSize = $master->size();
+                $lastKnownCols = $initialSize['cols'];
+                $lastKnownRows = $initialSize['rows'];
+            } catch (\Throwable) {
+                // size() can fail if the FD is not a TTY; guard silently.
+            }
+        }
+
+        while (true) {
+            if ($child !== null && $child->exited()) {
+                return;
+            }
+
+            if ($pumpDeadlineAt !== null && \microtime(true) >= $pumpDeadlineAt) {
+                return;
+            }
+
+            if ($stdinClosed && \microtime(true) > $stdinClosedDeadline) {
+                return;
+            }
+
+            // Back-pressure: while a write remainder is parked, stop reading
+            // stdin (it would only grow the remainder) and watch the master
+            // for WRITABILITY instead, so the remainder drains on its own.
+            // Without the write set the remainder was retried only when stdin
+            // next became readable -- a caller that wrote all of its input
+            // and closed stdin left the tail undelivered forever.
+            $draining = $this->pendingStdin !== '' || $veofOwed !== '';
+            $r = ($stdinClosed || $draining) ? [$masterStream] : [$stdinStream, $masterStream];
+            $w = $draining ? [$masterStream] : null;
+            $e = null;
+            $ready = PosixMasterPty::retryOnEintr($r, $w, $e, 0, $opts->selectTimeoutUs);
+
+            if ($ready === false) {
+                return;
+            }
+
+            if ($ready === 0) {
+                if ($opts->onIdle !== null) {
+                    ($opts->onIdle)();
+                }
+                if ($opts->keepalive !== null) {
+                    ($opts->keepalive)();
+                }
+                // Detect size change — SignalForwarder calls master->resize()
+                // when SIGWINCH fires; the kernel stores the new size so the
+                // next size() call returns updated dimensions.
+                if ($opts->onSigwinch !== null && $lastKnownCols !== 0) {
+                    try {
+                        $current = $master->size();
+                        if ($current['cols'] !== $lastKnownCols || $current['rows'] !== $lastKnownRows) {
+                            ($opts->onSigwinch)((int) $current['cols'], (int) $current['rows']);
+                            $lastKnownCols = $current['cols'];
+                            $lastKnownRows = $current['rows'];
+                        }
+                    } catch (\Throwable) {
+                        // size() can fail; guard silently.
+                    }
+                }
+                continue;
+            }
+
+            if ($w !== null && $w !== []) {
+                if ($this->drainPendingStdin($master, $opts) > 0 && $stdinClosed) {
+                    $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
+                }
+                if ($veofOwed !== '' && $this->pendingStdin === '') {
+                    $before = \strlen($veofOwed);
+                    $veofOwed = $this->writeVeof($masterStream, $veofOwed);
+                    if (\strlen($veofOwed) < $before) {
+                        $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
+                    }
+                }
+            }
+
+            foreach ($r as $stream) {
+                if ($stream === $stdinStream && !$stdinClosed) {
+                    if (!$this->pumpStdinToMaster($stdinStream, $master, $opts)) {
+                        $stdinClosed = true;
+                        $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
+                        // VEOF goes out only behind the last data byte.
+                        $veofOwed = $this->pendingStdin !== ''
+                            ? $opts->veof
+                            : $this->writeVeof($masterStream, $opts->veof);
+                    }
+                } elseif ($stream === $masterStream) {
+                    if (!$this->pumpMasterToStdout($master, $stdoutStream, $opts)) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Write as much of the parked stdin remainder as the master accepts now.
+     *
+     * Bytes that land are teed into the recorder exactly as the read path
+     * tees them, so the cassette stays consistent with what the child saw.
+     *
+     * @return int bytes delivered by this call (0 when the master is still full)
+     */
+    private function drainPendingStdin(MasterPty $master, PumpOptions $opts): int
+    {
+        $written = 0;
+        $total = \strlen($this->pendingStdin);
+        while ($written < $total) {
+            $n = $master->write(\substr($this->pendingStdin, $written));
+            if ($n <= 0) {
+                break;
+            }
+            $written += $n;
+        }
+        if ($written === 0) {
+            return 0;
+        }
+        if ($opts->recorder !== null) {
+            $opts->recorder->recordInputBytes(\substr($this->pendingStdin, 0, $written));
+        }
+        $this->pendingStdin = (string) \substr($this->pendingStdin, $written);
+        return $written;
+    }
+
+    /**
+     * Deliver (the rest of) the end-of-input sequence. A would-block or short
+     * write leaves the remainder owed for the next writable tick; an outright
+     * write error (false -- the slave side is gone) abandons it, since no
+     * reader remains to receive it.
+     *
+     * @param resource $masterStream
+     * @return string the VEOF bytes still owed ('' once delivered or abandoned)
+     */
+    private function writeVeof($masterStream, string $veof): string
+    {
+        if ($veof === '') {
+            return '';
+        }
+        $n = @\fwrite($masterStream, $veof);
+        if ($n === false) {
+            return '';
+        }
+        return (string) \substr($veof, $n);
+    }
+
+    /**
+     * Drain remaining bytes from master after the pump loop exits.
+     *
+     * @param resource $stdoutStream
+     */
+    private function flushMaster(
+        MasterPty $master,
+        $stdoutStream,
+        ?Child $child,
+        PumpOptions $opts,
+    ): void {
+        $flushDeadline = \microtime(true) + $opts->flushDeadlineSec;
+        while (\microtime(true) < $flushDeadline) {
+            $tail = $master->read($opts->chunkBytes);
+            if ($tail === null || $tail === '') {
+                // Nothing to drain right now. Only sleep-and-retry while a
+                // live child could still emit tail bytes. If there is no
+                // child (stdin→master-only pump) or it has already exited,
+                // no more output is coming — return immediately instead of
+                // burning the whole flushDeadline in 20ms usleep() ticks.
+                if ($child === null || $child->exited()) {
+                    break;
+                }
+                \usleep(20_000);
+                continue;
+            }
+            @\fwrite($stdoutStream, $tail);
+        }
+    }
+
+    /**
+     * @param resource $stdinStream
+     * @return bool false if STDIN reached EOF (caller should handle)
+     */
+    private function pumpStdinToMaster(
+        $stdinStream,
+        MasterPty $master,
+        PumpOptions $opts,
+    ): bool {
+        $bytes = @\fread($stdinStream, $opts->chunkBytes);
+        if ($bytes === false || $bytes === '') {
+            if (\feof($stdinStream)) {
+                return false;
+            }
+            return true;
+        }
+
+        // Prepend any buffered remainder from a prior partial write.
+        $toWrite = $this->pendingStdin . $bytes;
+        $this->pendingStdin = '';
+
+        // Flush loop: handle short writes by looping until all bytes are accepted.
+        $written = 0;
+        while ($written < \strlen($toWrite)) {
+            $n = $master->write(\substr($toWrite, $written));
+            if ($n <= 0) {
+                // Would-block or error — buffer remainder for next iteration.
+                $this->pendingStdin = \substr($toWrite, $written);
+                break;
+            }
+            $written += $n;
+        }
+
+        // P6.1 Recorder tap: tee stdin bytes into the recorder after
+        // they've been written to master so a write failure leaves the
+        // cassette consistent with what the child actually saw. Zero
+        // overhead when recorder is null (single null-check per chunk).
+        if ($opts->recorder !== null && $written > 0) {
+            $opts->recorder->recordInputBytes(\substr($toWrite, 0, $written));
+        }
+        return true;
+    }
+
+    /**
+     * @param resource $stdoutStream
+     * @return bool false if STDOUT hit EPIPE (caller should exit pump)
+     */
+    private function pumpMasterToStdout(
+        MasterPty $master,
+        $stdoutStream,
+        PumpOptions $opts,
+    ): bool {
+        $bytes = $master->read($opts->chunkBytes);
+        if ($bytes === null || $bytes === '') {
+            return true;
+        }
+        // P6.1 Recorder tap: record output BEFORE the fwrite to stdout
+        // so a partial-write at exit doesn't leave the cassette ahead
+        // of what the terminal actually saw — better to over-record
+        // than to under-record (a torn frame still replays as bytes;
+        // a missing chunk replays as a hole).
+        if ($opts->recorder !== null) {
+            $opts->recorder->recordOutput($bytes);
+        }
+        $written = @\fwrite($stdoutStream, $bytes);
+        return $written !== false;
+    }
+
+    // Design note — SIGWINCH detection lives in the consumer:
+    //
+    // Real terminal-resize events are detected and propagated by the
+    // consumer's {@see SignalForwarder::attachSigwinch} callback, which
+    // pipes dimensions into `MasterPty::resize()`. The pump loop fires
+    // {@see PumpOptions::$onIdle} on every idle tick — that is the
+    // correct hook for keepalive / polling, not `onSigwinch`. The pump
+    // itself is reusable outside interactive-session contexts (e.g.
+    // piping a non-tty command into a recording).
+}

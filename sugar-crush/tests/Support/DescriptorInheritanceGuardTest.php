@@ -297,16 +297,16 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
         // WALKED, and for a DIFFERENT reachability - this one is the gap
         // ACCOUNTED_FOR_IN_LIBS' doc-block named and filed rather than fixed.
-        // `candy-pty/src/Spawn.php` holds `SHIM_RELATIVE = '/../bin/pty-shim.php'`
+        // `sugar-pty/src/Spawn.php` holds `SHIM_RELATIVE = '/../bin/pty-shim.php'`
         // and prepends `[PHP_BINARY, <shim>]` to the command it spawns, so the
         // shim runs as OUR CHILD and inherits every descriptor we had open;
         // anything it spawned in turn would inherit them again. Loadability
         // was never the right question for it.
         'bin' => [
             'walked' => true,
-            'reason' => 'exec\'d as a child of this process - candy-pty Spawn::SHIM_RELATIVE '
+            'reason' => 'exec\'d as a child of this process - sugar-pty Spawn::SHIM_RELATIVE '
                 . 'runs bin/pty-shim.php under PHP_BINARY, so it inherits our descriptors',
-            'mechanism' => ['candy-pty/src/Spawn.php', "SHIM_RELATIVE = '/../bin/pty-shim.php'"],
+            'mechanism' => ['sugar-pty/src/Spawn.php', "SHIM_RELATIVE = '/../bin/pty-shim.php'"],
         ],
 
         // NOT WALKED, and this is the one derived reason rather than a
@@ -382,7 +382,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * WHY THE GUARD WIDENED. Round 53 built this instrument, rostered seven
      * sites, and scoped it to `sugar-crush/src` - and the defect class is not
      * a sugar-crush property. The rows below are what the widening found, and
-     * most of them are in candy-pty, which every PTY-driven child in the tree
+     * most of them are in sugar-pty, which every PTY-driven child in the tree
      * goes through.
      *
      * NO CENSUS FIGURE IS WRITTEN IN THIS DOC-BLOCK, which is a correction
@@ -413,7 +413,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * them would otherwise think this guard had missed them.
      *
      * THE GAP THIS ARGUMENT DOES NOT COVER, because "loadable" is not the same
-     * as "runs and inherits our descriptors": code a lib EXECS. candy-pty
+     * as "runs and inherits our descriptors": code a lib EXECS. sugar-pty
      * ships `bin/pty-shim.php` and `Spawn.php::wrapInShim()` runs it as a
      * child, so that shim inherits this process's descriptors and anything it
      * spawned would inherit them again - and no arm of this guard reads it.
@@ -426,7 +426,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * the split into two rosters is the whole point rather than tidiness.
      * A sugar-crush row is a deferral: this package could fix it and has
      * chosen not to yet. A row here is a REPORT: sugar-crush cannot fix
-     * candy-pty from inside its own test suite, and a fix pushed from here
+     * sugar-pty from inside its own test suite, and a fix pushed from here
      * would be an edit to a file this package does not own. What this roster
      * buys is that the site cannot appear, move or multiply without somebody
      * seeing it - which is precisely what was missing before.
@@ -449,14 +449,14 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'rather than long because the handle goes to is_resource() first. Spec is '
                 . '0,1,2 only. NOT FIXABLE FROM THIS PACKAGE - candy-core owns it.',
         ],
-        'candy-pty/Spawn.php::proc' => [
+        'sugar-pty/Spawn.php::proc' => [
             'count' => 1,
             'reason' => 'the PTY child, whose three stdio descriptors are all the one open slave '
                 . 'stream; the handle is kept for the life of the pty. Spec names 0,1,2 only, so '
                 . 'anything the parent holds above that goes into a child that by design lives '
                 . 'as long as the terminal does. NOT FIXABLE FROM THIS PACKAGE.',
         ],
-        'candy-pty/Posix/PosixProcess.php::spawn' => [
+        'sugar-pty/Posix/PosixProcess.php::spawn' => [
             'count' => 1,
             'reason' => 'the same shape one layer down, and the spec here is the more '
                 . 'interesting one: it already names fd 0 as a file and routes 1 and 2 to pipes '
@@ -472,7 +472,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'tools/check-child-lifetimes.php (teardown via candy-core BoundedShutdown in '
                 . 'the lib, containment wrap via the embedder\'s spawnPlanner). This row is the '
                 .             'DESCRIPTOR half: spec names 0,1,2 only and says nothing about 3+, the same '
-                . 'shape as the candy-pty rows above. NOT FIXABLE FROM THIS PACKAGE.',
+                . 'shape as the sugar-pty rows above. NOT FIXABLE FROM THIS PACKAGE.',
         ],
         // crush-media W5.1 put sugar-video in the reachable closure (the /play
         // screen renders through it); both spawn sites are licensed here with
@@ -923,7 +923,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
             YOU ARE PROBABLY RESOLVING A MERGE. This guard reads through
             vendor/sugarcraft, which in the monorepo is a symlink into the tree, so
-            a change in candy-pty or candy-core reds THIS suite. That is deliberate
+            a change in sugar-pty or candy-core reds THIS suite. That is deliberate
             (E418) and the diff in front of you is very likely not the cause.
 
             THE RESOLUTION IS ALWAYS BOTH HALVES:
@@ -1366,7 +1366,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
               walked => true   the directory runs with this process's descriptors -
                                it is required at runtime (like lang/), or exec'd as
-                               our child (like candy-pty's bin/). The walk then reads
+                               our child (like sugar-pty's bin/). The walk then reads
                                it, and a spawn in there needs a roster row like any
                                other.
               walked => false  it cannot reach this process, and the reason is the
@@ -1615,7 +1615,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * SO WHY DOES THE ROSTER EXIST AT ALL. Because the src twin's advice -
      * "spell the spec where the call can see it, or widen the scanner" - is
      * advice sugar-crush can act on for its OWN files and cannot act on for a
-     * sibling's. A future unreadable spec in candy-pty is not this package's
+     * sibling's. A future unreadable spec in sugar-pty is not this package's
      * to rewrite, and a guard whose only resolution is an edit the reader
      * cannot make gets weakened instead of used. A row here says: this spec is
      * unreadable, a person looked at it, and widening the scanner was judged
@@ -1679,7 +1679,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             reported accurately, because the instrument has no opinion to report.
 
             YOU ARE PROBABLY RESOLVING A MERGE. This walk reads through
-            vendor/sugarcraft, so a change in candy-core or candy-pty reds THIS
+            vendor/sugarcraft, so a change in candy-core or sugar-pty reds THIS
             suite and the diff in front of you is very likely not the cause.
 
             THE RESOLUTIONS, best first:
@@ -2297,7 +2297,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             proc_close(). That is allowed. It is not allowed to be invisible.
 
             YOU ARE PROBABLY RESOLVING A MERGE. This arm reads through
-            vendor/sugarcraft, so a change in candy-pty or candy-core reds THIS
+            vendor/sugarcraft, so a change in sugar-pty or candy-core reds THIS
             suite and the diff in front of you is very likely not the cause.
 
             NOT RECORDED AT ALL: a CLOSING_HELPERS row was added, or a library
@@ -2507,8 +2507,8 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 );
 
                 // An autoload root is stripped from the key, which is why the
-                // rosters read `candy-pty/Spawn.php` and not
-                // `candy-pty/src/Spawn.php`. Predates this method and is left
+                // rosters read `sugar-pty/Spawn.php` and not
+                // `sugar-pty/src/Spawn.php`. Predates this method and is left
                 // alone: every roster key in this file is spelled that way.
                 foreach (self::phpUnder($lib . '/' . $root) as $relative => $source) {
                     // A root that IS a file keys as the root itself, which is
@@ -2527,7 +2527,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             // directories where the two differ, and the mechanism that makes
             // each one run, are rostered in LIB_HORIZON; the ones marked
             // walked are read here. Their keys keep the segment
-            // (`candy-pty/bin/pty-shim.php`) because unlike an autoload root
+            // (`sugar-pty/bin/pty-shim.php`) because unlike an autoload root
             // the segment is not implied by anything.
             foreach (self::LIB_HORIZON as $segment => $row) {
                 if ($row['walked'] !== true || $segment === '') {

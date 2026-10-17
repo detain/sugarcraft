@@ -15,7 +15,7 @@ use SugarCraft\Wish\Transport\InProcessTransport;
 
 /**
  * Pins that InProcessTransport's child termination never depends on
- * ext-posix. candy-pty made ext-posix optional (Libc::kill() falls back
+ * ext-posix. sugar-pty made ext-posix optional (Libc::kill() falls back
  * to libc kill(2) over FFI); candy-wish used to guard both its teardown
  * and signalChild() with function_exists('posix_kill'), so on a
  * posix-less host a SIGHUP-ignoring child held runChild() in wait() for
@@ -33,7 +33,7 @@ final class InProcessTransportKillFallbackTest extends TestCase
     private function requirePtySyscalls(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
         if (!\extension_loaded('ffi')) {
             $this->markTestSkipped('ext-ffi is required.');

@@ -78,7 +78,7 @@ auto-detection calls for it.
 ## Acceptance criteria
 
 Parity with the Linux/Darwin acceptance matrix from `pty-matrix.yml`
-(`candy-pty/pty-matrix.yml`):
+(`sugar-pty/pty-matrix.yml`):
 
 - P0: `PtySystemFactory` resolves to `ConPtySystem` on Windows; throws
   `UnsupportedPlatformException` on other platforms.
@@ -114,4 +114,4 @@ Parity with the Linux/Darwin acceptance matrix from `pty-matrix.yml`
 - Parent plan: [PTY_PLAN.md](PTY_PLAN.md) § Non-goals (line 53)
 - Parent plan: [sugarcraft-is-a-mono-logical-twilight.md](./sugarcraft-is-a-mono-logical-twilight.md) § Non-goals (line 53) + § Deferred (line 827)
 - Implementation: [plans/leftover/phase-12-deferred/step-04-windows-conpty.md](./leftover/phase-12-deferred/step-04-windows-conpty.md)
-- libc FFI counterpart: [candy-pty](../../candy-pty/) (already shipped for Linux/Darwin)
+- libc FFI counterpart: [sugar-pty](../../sugar-pty/) (already shipped for Linux/Darwin)

@@ -7,7 +7,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 ## Architecture
 
 - **Cassette formats**: JsonlFormat (default), CompressedJsonlFormat (gzip), RelativeFormat (delta timestamps, asciinema-style), YamlFormat, AsciinemaFormat (import only)
-- **Recording**: PTY-based via candy-pty, streaming JSONL with crash-safety, hook system (beforeSave/afterCapture), idle trimming, dual timestamps (t + tRaw)
+- **Recording**: PTY-based via sugar-pty, streaming JSONL with crash-safety, hook system (beforeSave/afterCapture), idle trimming, dual timestamps (t + tRaw)
 - **Replay**: SPEED_INSTANT (5ms yield between events) and SPEED_REALTIME modes, deterministic byte/cell-grid assertions
 - **Rendering pipeline**: .tape → Lexer → Parser → Compiler → Cassette → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer (Gd/Imagick) → GifEncoder (FFmpeg/Pure-PHP)
 - **Assertions**: ByteAssertion (strict byte equality), ScreenAssertion (cell-grid via candy-vt), ContainsAssertion, RegexAssertion

@@ -725,7 +725,7 @@ public function testUndoReversesAllDeleteActions(): void
 
 **Implementation:**
 
-- Use `candy-pty` to spawn `git status --porcelain`
+- Use `sugar-pty` to spawn `git status --porcelain`
 - Parse output and annotate entries with status marker (`M`, `A`, `D`, `??`)
 - Color code: green for added, red for modified, cyan for untracked
 

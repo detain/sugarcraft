@@ -18,7 +18,7 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  * child under a PTY, records via the P6.1 pump tap, and lays down a
  * JSONL cassette. The tests skip cleanly on FFI-less / sandboxed CI
  * — full record→cassette assertions are guarded behind a PTY-syscall
- * gate identical to the candy-pty test suite.
+ * gate identical to the sugar-pty test suite.
  */
 final class RecordCommandTest extends TestCase
 {

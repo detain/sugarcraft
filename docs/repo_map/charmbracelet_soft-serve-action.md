@@ -108,7 +108,7 @@ If mapping concepts to SugarCraft libs:
 | Soft Serve Action Concern | SugarCraft Lib | Rationale |
 |---|---|---|
 | Git repository synchronization | `candy-core` (core Git operations) | Both deal with Git repo management and push operations |
-| SSH authentication/agent | `candy-pty` (PTY/SSH wrappers) | SSH key handling and agent socket management |
+| SSH authentication/agent | `sugar-pty` (PTY/SSH wrappers) | SSH key handling and agent socket management |
 | Mirroring repositories | `sugar-widgets` (bits and pieces) | Repository clone/mirror operations conceptually similar |
 | Self-hostable server | No direct mapping | SugarCraft is a client-side TUI library ecosystem |
 | Repository push sync | No direct mapping | SugarCraft libs are local TUI, not server sync |

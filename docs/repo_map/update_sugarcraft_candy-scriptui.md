@@ -1,6 +1,6 @@
 # Overview
 
-CandyScriptui is a PHP port of `charmbracelet/gum` (~8.7k stars, Go) — a composer-installable CLI providing 13 subcommands for interactive TUI primitives in shell scripts. The package sits at the **application framework tier** (`Candy-` prefix per naming conventions), wrapping foundation libs (`candy-core`, `sugar-forms`, `candy-sprinkles`, `sugar-markdown`, `candy-pty`) with a Symfony Console surface. It provides ~85% functional parity with gum for typical shell script use cases.
+CandyScriptui is a PHP port of `charmbracelet/gum` (~8.7k stars, Go) — a composer-installable CLI providing 13 subcommands for interactive TUI primitives in shell scripts. The package sits at the **application framework tier** (`Candy-` prefix per naming conventions), wrapping foundation libs (`candy-core`, `sugar-forms`, `candy-sprinkles`, `sugar-markdown`, `sugar-pty`) with a Symfony Console surface. It provides ~85% functional parity with gum for typical shell script use cases.
 
 **Biggest opportunity areas:**
 
@@ -53,7 +53,7 @@ candy-scriptui
 ├── symfony/console ^6.4 || ^7.0     CLI framework
 ├── sugarcraft/candy-core             TEA runtime: Program, Model, Msg, KeyType, Cmd
 ├── sugarcraft/sugar-forms             Components: TextInput, ItemList, FilePicker, etc.
-├── sugarcraft/candy-pty               PosixProcess for spin command
+├── sugarcraft/sugar-pty               PosixProcess for spin command
 ├── sugarcraft/sugar-markdown            Renderer (markdown), Theme
 └── sugarcraft/candy-sprinkles        Style, Border, Align, Table
 ```
@@ -684,7 +684,7 @@ candy-scriptui represents a well-executed port of charmbracelet/gum to PHP, achi
 - Subscriptions (requires Program loop enhancement)
 
 **Ecosystem positioning:**
-candy-scriptui sits at the application framework tier, serving as the **CLI entry point** for the SugarCraft TUI ecosystem. It depends on foundation libs (candy-core, sugar-forms, candy-sprinkles, sugar-markdown, candy-pty) and provides no components itself — only command wrappers. This is the correct architecture: the foundation libs are reusable in custom TUI applications, while candy-scriptui provides the gum-compatible CLI surface for shell scripts.
+candy-scriptui sits at the application framework tier, serving as the **CLI entry point** for the SugarCraft TUI ecosystem. It depends on foundation libs (candy-core, sugar-forms, candy-sprinkles, sugar-markdown, sugar-pty) and provides no components itself — only command wrappers. This is the correct architecture: the foundation libs are reusable in custom TUI applications, while candy-scriptui provides the gum-compatible CLI surface for shell scripts.
 
 **Comparison with other PHP CLI frameworks:**
 

@@ -184,7 +184,7 @@ func suspendProcess() {
 }
 ```
 
-**Direct Risk to SugarCraft:** YES - Signal handling in candy-pty must properly deregister channels to prevent leaks.
+**Direct Risk to SugarCraft:** YES - Signal handling in sugar-pty must properly deregister channels to prevent leaks.
 
 ### Issue #1520: Carriage Return Rendering Issues
 

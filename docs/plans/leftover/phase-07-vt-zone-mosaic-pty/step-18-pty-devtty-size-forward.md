@@ -1,6 +1,6 @@
-# Step 07.18 — candy-pty /dev/tty size-forwarding variant
+# Step 07.18 — sugar-pty /dev/tty size-forwarding variant
 
-**Source:** `leftover_updates_later.md` candy-pty research §4.2.1
+**Source:** `leftover_updates_later.md` sugar-pty research §4.2.1
 **Branch:** `ai/pty-devtty-size-forward`
 
 ## Deliverable
@@ -14,18 +14,18 @@ TTY.
 
 **Modify:**
 
-- `candy-pty/src/SignalForwarder.php` — add
+- `sugar-pty/src/SignalForwarder.php` — add
   `attachSigwinchToFd(int $fd, ?\Closure $callback = null)` that
   resizes via `SizeIoctl` against a raw fd rather than a MasterPty.
 
 ## Tests
 
-- `candy-pty/tests/SignalForwarderDevTtyTest.php` — open `/dev/tty` if
+- `sugar-pty/tests/SignalForwarderDevTtyTest.php` — open `/dev/tty` if
   available, attach, send SIGWINCH; assert size is reported.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter "SignalForwarderDevTty"` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter "SignalForwarderDevTty"` green.
 
 ---
 

@@ -1,11 +1,11 @@
-# Step 07.16 — candy-pty openpty() FFI binding (Darwin)
+# Step 07.16 — sugar-pty openpty() FFI binding (Darwin)
 
-**Source:** `leftover_updates_later.md` candy-pty research §4.1.1
+**Source:** `leftover_updates_later.md` sugar-pty research §4.1.1
 **Branch:** `ai/pty-openpty-ffi`
 
 ## Deliverable
 
-Add an `openpty()` FFI binding. Today candy-pty uses
+Add an `openpty()` FFI binding. Today sugar-pty uses
 `posix_openpt + grantpt + unlockpt + ptsname_r` quartet. `openpty(3)`
 is a single call wrapper that some BSDs (macOS, FreeBSD) provide.
 Adds an alternate path that may resolve the macOS arm64 ABI issues
@@ -15,18 +15,18 @@ Adds an alternate path that may resolve the macOS arm64 ABI issues
 
 **Modify:**
 
-- `candy-pty/src/Libc.php` — extend cdef with `openpty`.
-- `candy-pty/src/Posix/PosixPtySystem.php` — try `openpty()` first
+- `sugar-pty/src/Libc.php` — extend cdef with `openpty`.
+- `sugar-pty/src/Posix/PosixPtySystem.php` — try `openpty()` first
   on Darwin; fall back to the existing quartet.
 
 ## Tests
 
-- `candy-pty/tests/Libc/OpenptyTest.php` — verifies the symbol resolves
+- `sugar-pty/tests/Libc/OpenptyTest.php` — verifies the symbol resolves
   and returns a valid master/slave pair.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter Openpty` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter Openpty` green.
 
 ## Notes
 

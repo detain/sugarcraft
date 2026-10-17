@@ -37,7 +37,7 @@ forking its own copy). Four changes, all inside candy-ansi:
   `CsiHandlerImpl` (count methods take `int $count = 1`) so the later candy-vt
   reimplementation is a drop-in. **BC-critical:** growing an interface breaks
   every implementer — the only in-repo implementer of `SugarCraft\Ansi\Parser\CsiHandler`
-  is `CsiHandlerImpl` (all dependents — candy-pty, candy-ansi-inspect, candy-codeshot —
+  is `CsiHandlerImpl` (all dependents — sugar-pty, candy-ansi-inspect, candy-codeshot —
   implement the `Handler` interface, NOT `CsiHandler`), so only `CsiHandlerImpl`
   needed new (no-op / return-0) method bodies.
 
@@ -70,7 +70,7 @@ The de-fork (W1, PRs #1262/#1263) put the REAL grid-mutating CSI impl in
 only ever the "step-12 pending" placeholder: **all 30 methods no-op**,
 `gridRows()`/`gridCols()` return `0`, and its test was 30 `assertTrue(true)`
 smoke assertions. Grep confirmed **zero real consumers** — the only references
-were the class's own file + its own test, and every dependent (candy-pty,
+were the class's own file + its own test, and every dependent (sugar-pty,
 candy-ansi-inspect, candy-codeshot) implements the `Handler` interface, while candy-vt
 supplies its own `CsiHandler` implementation. So both files were deleted.
 

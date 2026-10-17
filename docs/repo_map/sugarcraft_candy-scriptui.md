@@ -88,7 +88,7 @@ candy-scriptui
 ├── symfony/console ^6.4 || ^7.0    (CLI framework)
 ├── sugarcraft/candy-core              (TUI runtime: Program, Msg, Model)
 ├── sugarcraft/sugar-forms             (form components: TextInput, ItemList, etc.)
-├── sugarcraft/candy-pty              (PosixProcess for spin command)
+├── sugarcraft/sugar-pty              (PosixProcess for spin command)
 ├── sugarcraft/sugar-markdown            (Theme, Renderer for format command)
 └── sugarcraft/candy-sprinkles        (Style, Border, Align for style command)
 ```
@@ -919,7 +919,7 @@ Bash, Zsh, and Fish completion scripts generated from the application introspect
 candy-scriptui
 ├── candy-core          TUI runtime: Program, Model, Msg, KeyType, Cmd, Subscriptions
 ├── sugar-forms         Components: TextInput, TextArea, ItemList, FilePicker, Viewport, Spinner, Confirm
-├── candy-pty           PosixProcess for spawning child processes
+├── sugar-pty           PosixProcess for spawning child processes
 ├── sugar-markdown         Renderer (markdown), Theme system
 ├── candy-sprinkles    Style, Border, Align, Table (layout + styling)
 └── symfony/console    CLI application framework

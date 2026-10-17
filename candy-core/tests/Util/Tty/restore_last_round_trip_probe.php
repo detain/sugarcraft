@@ -18,7 +18,7 @@ declare(strict_types=1);
  * the caller and observed here.
  *
  * The terminal is read back with `stty -F <slave path> -a` rather than through
- * candy-pty. Two reasons: candy-pty treats `struct termios` as opaque on
+ * sugar-pty. Two reasons: sugar-pty treats `struct termios` as opaque on
  * purpose, so there is no field to read; and a reading taken through the same
  * binding that applied the change would not be an independent observation of
  * it.
@@ -85,7 +85,7 @@ if ($mode === 'round-trip') {
     PosixBackend::restoreLast();
     $out['snapshot_after_first'] = $snapshot();
 
-    // Take the terminal somewhere else, through candy-pty directly so that
+    // Take the terminal somewhere else, through sugar-pty directly so that
     // the change under observation is not made by the code being observed.
     TermiosFactory::open(0)->makeRaw()->apply();
     $out['state_after_raw'] = $isRaw($slavePath);

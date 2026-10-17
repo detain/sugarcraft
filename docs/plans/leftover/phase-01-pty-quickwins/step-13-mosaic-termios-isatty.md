@@ -10,7 +10,7 @@ WezTerm detection bug (bundle)
 1. Replace direct `posix_isatty(0)` + `posix_isatty(1)` calls with
    the canonical `\SugarCraft\Pty\Contract\Termios::isAtty()` (or a
    new `\SugarCraft\Core\Util\TtyDetect::isAtty()` static that
-   delegates to candy-pty). Single-source-of-truth violation.
+   delegates to sugar-pty). Single-source-of-truth violation.
 2. Fix the WezTerm detection: `Detect.php` currently classifies
    WezTerm as BOTH a Kitty candidate AND an iTerm2 candidate when
    `TERM_PROGRAM=WezTerm`. WezTerm should be its own protocol family
@@ -26,16 +26,16 @@ WezTerm detection bug (bundle)
     with `Termios::isAtty(STDIN) && Termios::isAtty(STDOUT)` via
     `TermiosFactory::open(...)`. Or, equivalently, call a new
     `\SugarCraft\Core\Util\TtyDetect::isAtty($stream)` that wraps
-    the candy-pty call.
+    the sugar-pty call.
   - Lines ~386-400 — for `TERM_PROGRAM=WezTerm`, return Kitty
     protocol family only; do not also list iTerm2 candidate.
-- `sugar-image/composer.json` — confirm `sugarcraft/candy-pty` is
+- `sugar-image/composer.json` — confirm `sugarcraft/sugar-pty` is
   in `require` (likely transitive via candy-core).
 
 **Create (recommended):**
 
 - `candy-core/src/Util/TtyDetect.php` — static helper:
-  `isAtty(resource $stream): bool` delegating to candy-pty. Single
+  `isAtty(resource $stream): bool` delegating to sugar-pty. Single
   call site for every lib that needs "is this a TTY?". Other libs
   (sugar-animation, candy-codeshot) can adopt later.
 
@@ -62,7 +62,7 @@ WezTerm detection bug (bundle)
   with `grep -rn "TERM_PROGRAM=WezTerm" /home/sites/sugarcraft` first.
 - TtyDetect goes in candy-core because other consumers (sugar-widgets,
   sugar-forms, candy-log) will want it without taking a direct
-  candy-pty dep. candy-core already depends on candy-pty.
+  sugar-pty dep. candy-core already depends on sugar-pty.
 
 ---
 

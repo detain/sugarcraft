@@ -103,7 +103,7 @@ public function handle(Session $session, callable $next): void
 
 **Two transports:**
 
-1. `InProcessTransport` (default): Allocates candy-pty, spawns subprocess
+1. `InProcessTransport` (default): Allocates sugar-pty, spawns subprocess
 2. `HostSshdTransport` (legacy): Runs middleware inline against sshd's PTY
 
 **Source:** `candy-wish/src/Transport/InProcessTransport.php:L137-L151`

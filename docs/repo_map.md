@@ -44,7 +44,7 @@
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, sugar-markdown |
 | charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
 | [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | candy-wish |
-| [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, candy-pty, candy-core |
+| [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, sugar-pty, candy-core |
 | [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-widgets, sugar-markdown |
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
 | [KevM/bubbleo](#kevmbubbleo) | Go | 69 | sugar-forms, sugar-widgets, candy-scriptui |
@@ -60,7 +60,7 @@
 | [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-widgets, candy-sprinkles |
 | [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | candy-core, sugar-markdown, sugar-widgets |
 | [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-widgets, candy-core |
-| [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | candy-pty, candy-core |
+| [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | sugar-pty, candy-core |
 | [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-widgets, sugar-table |
 | [daltonsw/bubbleup](#daltonswbubbleup) | Go | ~50 | sugar-toast |
 | [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | sugar-forms |
@@ -754,7 +754,7 @@
 **SugarCraft Mapping:**
 - `candy-ssh-launcher` → Primary port
 - `candy-scriptui` → TUI framework
-- `candy-pty` → PTY wrappers
+- `sugar-pty` → PTY wrappers
 
 **Note:** Port exists as `candy-ssh-launcher` (🟢 in MATCHUPS.md).
 
@@ -1044,7 +1044,7 @@
 **Features:** Server (socket/threading), Connection (SSH state machine), Ffi.php (PTY via FFI), Kex.php, PacketHandler (AES-256-GCM), PublicKeyValidator.
 
 **SugarCraft Mapping:**
-- `candy-pty` → PTY management
+- `sugar-pty` → PTY management
 - `candy-core` → Event loop / I/O multiplexing
 
 ---

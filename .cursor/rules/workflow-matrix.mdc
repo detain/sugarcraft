@@ -18,4 +18,4 @@ alwaysApply: false
 
 **VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. See `sugar-widgets/.vhs/spinners.tape` for canonical shape.
 
-**Non-visual libs exempt**: `candy-pty`, FFI bindings, codecs — skip both tape AND matrix; note exemption in PR body.
+**Non-visual libs exempt**: `sugar-pty`, FFI bindings, codecs — skip both tape AND matrix; note exemption in PR body.

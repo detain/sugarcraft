@@ -8,7 +8,7 @@ namespace SugarCraft\Core\Util;
  * Static TTY detection for the whole SugarCraft tree.
  *
  * Provides a single call-site for every lib that needs "is this stream a
- * TTY?" without taking a direct candy-pty dependency.
+ * TTY?" without taking a direct sugar-pty dependency.
  *
  * WHAT THE CONSUMER LIST USED TO SAY, AND WHY IT CHANGED.  It read
  * "(sugar-image, sugar-widgets, sugar-forms, candy-log, …) all route
@@ -40,7 +40,7 @@ namespace SugarCraft\Core\Util;
  *
  * ## WHAT THIS DOC-BLOCK USED TO SAY, AND WHY IT CHANGED
  *
- * WHAT IT SAID: "Static TTY-detection helpers that delegate to candy-pty
+ * WHAT IT SAID: "Static TTY-detection helpers that delegate to sugar-pty
  * … wraps `TermiosFactory::open($fd)->isAtty()` so that the fd→Termios→
  * isAtty dance is centralized in one place."
  *
@@ -64,7 +64,7 @@ namespace SugarCraft\Core\Util;
  * `isatty(fileno($stream))` — it asks about the STREAM, so no descriptor
  * number has to be derived, and there is no portable userland call that
  * would derive one correctly for an arbitrary stream.  Routing through it
- * loses nothing measurable: the two candy-pty implementations of this
+ * loses nothing measurable: the two sugar-pty implementations of this
  * predicate — {@see \SugarCraft\Pty\Posix\PosixTermios::isAtty()} and
  * {@see \SugarCraft\Pty\Posix\SttyTermios::isAtty()} — cannot disagree.
  * (Neither is "the same one line", as an earlier revision of this
@@ -79,26 +79,26 @@ namespace SugarCraft\Core\Util;
  * answer `false` outright when ext-posix is absent, where
  * `stream_isatty()` still answers.
  *
- * ## WHAT THIS DID TO candy-pty'S REACHABILITY — CORRECTED
+ * ## WHAT THIS DID TO sugar-pty'S REACHABILITY — CORRECTED
  *
- * An earlier revision of this block said candy-pty "is still reached
+ * An earlier revision of this block said sugar-pty "is still reached
  * from {@see RawMode} and {@see Tty\PosixBackend}".  HALF OF THAT WAS
  * INVERTED, and it was inverted in the direction that flattered the
  * change.
  *
- * {@see Tty\PosixBackend} is right, and candy-pty remains a genuine
+ * {@see Tty\PosixBackend} is right, and sugar-pty remains a genuine
  * candy-core dependency because of it: that class imports
  * `Contract\Termios`, `SizeIoctl` and `TermiosFactory`, and calls them.
  *
  * {@see RawMode} is WRONG.  MEASURED with `token_get_all()` over its
  * source with `T_COMMENT` and `T_DOC_COMMENT` dropped: it contains ZERO
- * candy-pty tokens in executable code.  Its only mention of the package
+ * sugar-pty tokens in executable code.  Its only mention of the package
  * is an `@see` tag contrasting the two approaches, its own class
- * doc-block gives "don't want the candy-pty dependency" as its REASON TO
+ * doc-block gives "don't want the sugar-pty dependency" as its REASON TO
  * EXIST, and its two methods call {@see isAtty()} and `stty` via
  * `shell_exec()` and nothing else.  This predicate WAS RawMode's only
- * route into candy-pty, so the change above SEVERED it.  RawMode is now
- * the strongest evidence in the tree that candy-pty is LESS reached, and
+ * route into sugar-pty, so the change above SEVERED it.  RawMode is now
+ * the strongest evidence in the tree that sugar-pty is LESS reached, and
  * the old sentence cited it as evidence of the opposite.
  *
  * ## THE CLOSED-DESCRIPTOR-0 FAMILY — read this before touching a member

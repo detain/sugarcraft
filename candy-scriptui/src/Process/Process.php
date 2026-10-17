@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Process;
 
 /**
- * candy-scriptui re-export of the candy-pty process contract so
+ * candy-scriptui re-export of the sugar-pty process contract so
  * {@see \SugarCraft\ScriptUi\Model\SpinModel} and all internal callers
  * can type against a single interface.
  *

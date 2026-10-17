@@ -3,9 +3,9 @@
 /**
  * Default-mode (in-process supervisor) candy-wish example.
  *
- * Spawns a fresh login bash inside a candy-pty for each connecting
+ * Spawns a fresh login bash inside a sugar-pty for each connecting
  * SSH user. Ctrl+C, vim, less, tmux all work properly because the
- * inner shell has its own controlling terminal (set by candy-pty's
+ * inner shell has its own controlling terminal (set by sugar-pty's
  * pty-shim).
  *
  * Wire via sshd's ForceCommand exactly like the pre-PTY-upgrade

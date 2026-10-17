@@ -26,7 +26,7 @@ From `repo_map/WhispPHP_whisp.md`:
 | WhispPHP/whisp Feature | SugarCraft Library | Status |
 |----------------------|-------------------|--------|
 | SSH Server / Connection handling | `candy-core` | Reference patterns |
-| PTY management / Terminal I/O | `candy-pty` | Direct port candidate |
+| PTY management / Terminal I/O | `sugar-pty` | Direct port candidate |
 | SSH protocol packets / Binary protocols | `sugar-widgets` | Low-level patterns |
 | Terminal mode handling | `candy-terminal` | Capability handling |
 | Channel / Session management | `candy-core` | Event/channel model |
@@ -60,7 +60,7 @@ The first-stage analysis identified:
 - OR the maintainer addresses issues rapidly before they're filed
 - OR the scope is so narrow that there are genuinely few bugs
 
-**Risk Assessment for SugarCraft**: If SugarCraft ports candy-pty, we should anticipate similar zero-issue scenarios initially, which could indicate either excellent quality or lack of real-world usage.
+**Risk Assessment for SugarCraft**: If SugarCraft ports sugar-pty, we should anticipate similar zero-issue scenarios initially, which could indicate either excellent quality or lack of real-world usage.
 
 ---
 
@@ -76,7 +76,7 @@ The first-stage analysis identified:
 
 **Direct Risk to SugarCraft**: 
 
-- **HIGH** — `candy-pty` relies on FFI and crypto operations. Cross-platform crypto detection is a known pain point.
+- **HIGH** — `sugar-pty` relies on FFI and crypto operations. Cross-platform crypto detection is a known pain point.
 - SugarCraft should implement fallback detection for crypto primitives on Apple Silicon.
 
 **Key Insight**: The maintainer noted that on his M2 Pro, the sodium check "worked 99% of the time, except for ~2 times when it randomly failed." This randomness suggests timing-dependent behavior in libsodium's detection.
@@ -98,7 +98,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 
 **Root Cause**: Understanding which terminal flags should be preserved vs. disabled requires deep POSIX knowledge.
 
-**SugarCraft Risk**: Similar issues in `candy-pty` could cause terminal rendering artifacts.
+**SugarCraft Risk**: Similar issues in `sugar-pty` could cause terminal rendering artifacts.
 
 ### 2. Signal Handling Tests Failing in CI (Apr 2025 - Multiple commits)
 
@@ -114,7 +114,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 
 **Root Cause**: Containerized CI environments don't handle signals the same as bare metal/VMs.
 
-**SugarCraft Risk**: **MEDIUM** — Signal handling is already identified as a candy-pty concern. CI environments may mask real signal issues.
+**SugarCraft Risk**: **MEDIUM** — Signal handling is already identified as a sugar-pty concern. CI environments may mask real signal issues.
 
 ### 3. Inactivity Timeout Bugs (Apr 2025)
 
@@ -127,7 +127,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 
 **Root Cause**: Time arithmetic bugs (months vs minutes, modulo 60 edge cases).
 
-**SugarCraft Risk**: **HIGH** — Any timer-based features in candy-pty could suffer similar issues.
+**SugarCraft Risk**: **HIGH** — Any timer-based features in sugar-pty could suffer similar issues.
 
 ### 4. Channel EOF Handling (Apr 2025)
 
@@ -145,7 +145,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 ```
 **Pattern**: PHP resources can become invalid (zombified processes) without immediate notification.
 
-**SugarCraft Risk**: **HIGH** — Process management in candy-pty needs robust resource state checking.
+**SugarCraft Risk**: **HIGH** — Process management in sugar-pty needs robust resource state checking.
 
 ---
 
@@ -165,7 +165,7 @@ However, **commit history reveals implicit feature development**:
 | `feat: prepend all connection logs with connectionId` | Connection tracking |
 | `feat: add memory usage logging every 30 seconds` | Built-in monitoring |
 
-**SugarCraft Opportunity**: These features represent natural extensions for `candy-pty`:
+**SugarCraft Opportunity**: These features represent natural extensions for `sugar-pty`:
 
 1. Non-interactive process execution
 2. Environment variable passing
@@ -200,7 +200,7 @@ if (!$hasSodiumGcm && !$hasOpenSslGcm) {
 
 **Lesson**: Cross-platform crypto detection must check multiple backends. libsodium is not universal even when present.
 
-**SugarCraft Implication**: `candy-pty`'s FFI layer should similarly detect and fall back between multiple backends (FFI, OpenSSL, sodium).
+**SugarCraft Implication**: `sugar-pty`'s FFI layer should similarly detect and fall back between multiple backends (FFI, OpenSSL, sodium).
 
 ---
 
@@ -241,7 +241,7 @@ The AES-256-GCM fix established a pattern: **detect multiple backends and fall b
 - Process per connection is memory-intensive
 - Single-threaded parent loop could be a bottleneck
 
-**SugarCraft Consideration**: The `candy-pty` port should consider whether to replicate the forking model or use ReactPHP-style async I/O for concurrent connections.
+**SugarCraft Consideration**: The `sugar-pty` port should consider whether to replicate the forking model or use ReactPHP-style async I/O for concurrent connections.
 
 ---
 
@@ -262,7 +262,7 @@ Server → Connection → Channel → Pty → CommandRunner
                               Apps receive env vars
 ```
 
-**SugarCraft Pattern**: This is similar to the BubbleTea model where the app receives update messages and renders view. SugarCraft could adopt this pattern for `candy-pty` callback-based extensibility.
+**SugarCraft Pattern**: This is similar to the BubbleTea model where the app receives update messages and renders view. SugarCraft could adopt this pattern for `sugar-pty` callback-based extensibility.
 
 ---
 
@@ -276,7 +276,7 @@ Server → Connection → Channel → Pty → CommandRunner
 - Environment variables as the primary configuration mechanism
 - Auto-discovery convention over configuration
 
-**SugarCraft Lesson**: The Whisp API is simple and convention-based. SugarCraft should maintain similar simplicity for `candy-pty`.
+**SugarCraft Lesson**: The Whisp API is simple and convention-based. SugarCraft should maintain similar simplicity for `sugar-pty`.
 
 ---
 
@@ -355,7 +355,7 @@ Server → Connection → Channel → Pty → CommandRunner
 
 ## 18. Problems Likely Relevant To SugarCraft
 
-| Problem | Likelihood in candy-pty | Mitigation |
+| Problem | Likelihood in sugar-pty | Mitigation |
 |---------|------------------------|------------|
 | PTY output processing/OPOST handling | **VERY HIGH** | FFI Terminal mode configuration |
 | Signal handling differences in CI vs prod | **HIGH** | Test environment detection |
@@ -368,7 +368,7 @@ Server → Connection → Channel → Pty → CommandRunner
 
 ## 19. Features SugarCraft Should Consider
 
-### High-Priority Features for candy-pty:
+### High-Priority Features for sugar-pty:
 
 1. **Multi-Backend Crypto Detection**
    - Pattern from PR #3: Check sodium OR openssl
@@ -420,13 +420,13 @@ Server → Connection → Channel → Pty → CommandRunner
 
 **Observation**: Whisp uses `apps/` directory auto-discovery with parameterized routing. No config files needed.
 
-**SugarCraft Application**: `candy-pty` could auto-discover PTY handlers in a directory.
+**SugarCraft Application**: `sugar-pty` could auto-discover PTY handlers in a directory.
 
 ### Lesson 3: Process Lifetime Management
 
 **Observation**: Whisp has multiple commits around process cleanup (resource validation, force stopping, EOF handling).
 
-**SugarCraft Application**: `candy-pty` needs robust process lifecycle management:
+**SugarCraft Application**: `sugar-pty` needs robust process lifecycle management:
 
 - Startup: open PTY, fork
 - Runtime: monitor, forward I/O
@@ -496,7 +496,7 @@ if ($channelType === 'direct-tcpip') {
 
 - SSH servers (Whisp)
 - Terminal emulators (SugarCraft)
-- FFI bindings (php-tui, candy-pty)
+- FFI bindings (php-tui, sugar-pty)
 
 **Opportunity**: The PHP ecosystem is warming to FFI-based system programming. SugarCraft should capitalize on this trend.
 
@@ -504,7 +504,7 @@ if ($channelType === 'direct-tcpip') {
 
 ## 23. Strategic Opportunities
 
-### For candy-pty Development:
+### For sugar-pty Development:
 
 1. **Borrow Whisp's FFI Pattern**
    - Whisp's `Ffi` class handles OS-specific terminal constants
@@ -517,7 +517,7 @@ if ($channelType === 'direct-tcpip') {
 
 3. **Process Lifecycle Library**
    - Separate library for process spawning, monitoring, cleanup
-   - Could be shared between candy-pty and candy-core
+   - Could be shared between sugar-pty and candy-core
 
 4. **SSH Key Validation Patterns**
    - Whisp's `PublicKeyValidator` class
@@ -547,7 +547,7 @@ if ($channelType === 'direct-tcpip') {
 
 ## 25. High ROI Recommendations
 
-### Immediate Actions for candy-pty:
+### Immediate Actions for sugar-pty:
 
 1. **Implement Multi-Backend Crypto Detection** (HIGH ROI)
    - Follow Whisp's pattern: check sodium OR openssl
@@ -573,11 +573,11 @@ if ($channelType === 'direct-tcpip') {
 
 6. **Hot Reload via SIGHUP** (MEDIUM ROI)
    - Whisp demonstrates clean SIGHUP handling
-   - Useful for candy-pty config reload
+   - Useful for sugar-pty config reload
 
 7. **Memory Monitoring** (LOW-MEDIUM ROI)
    - Whisp logs memory every 30s
-   - Could help debug candy-pty memory issues
+   - Could help debug sugar-pty memory issues
 
 8. **Connection ID Logging** (LOW ROI)
    - Prefixing logs with connection IDs

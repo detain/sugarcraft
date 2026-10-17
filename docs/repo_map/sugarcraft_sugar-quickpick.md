@@ -8,7 +8,7 @@
 - **PHP:** ^8.3
 - **Namespace:** `SugarCraft\QuickPick`
 - **Composer:** `sugarcraft/sugar-quickpick`
-- **Depends on:** `sugarcraft/candy-core` (Ansi, SignalForwarder), `sugarcraft/candy-sprinkles` (Border, Style, Align, VAlign), `sugarcraft/candy-pty` (SignalForwarder)
+- **Depends on:** `sugarcraft/candy-core` (Ansi, SignalForwarder), `sugarcraft/candy-sprinkles` (Border, Style, Align, VAlign), `sugarcraft/sugar-pty` (SignalForwarder)
 - **Test suite:** 4 test files (HermitTest, FilteredItemTest, ItemInterfaceTest, History/FileHistoryTest), ~47 test methods
 
 ---
@@ -446,7 +446,7 @@ The overlay pattern is useful for:
 2. ANSI-aware width calculation (leverage `SugarCraft\Core\Util\Width` or `Ansi` utilities)
 3. Optional pagination for large lists
 4. Quality-ranked fuzzy filtering (consider porting smith-waterman from `sugar-treelist`)
-5. Direct TTY ioctl for SIGWINCH size (via candy-pty SignalForwarder enhancements)
+5. Direct TTY ioctl for SIGWINCH size (via sugar-pty SignalForwarder enhancements)
 
 ---
 

@@ -205,8 +205,8 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 | Server mode SSH serving (`charmbracelet/ssh` + `charmbracelet/wish`) | `candy-scriptui` | The SSH server side of wishlist heavily uses `charmbracelet/ssh` and `charmbracelet/wish`. `candy-scriptui` is the SugarCraft port of the `wish` library for SSH server middleware. |
 | Config parsing (SSH config + YAML) | `candy-core` (future `candy-sshconfig`) | Wishlist's `sshconfig.ParseFile()` is a complex SSH config parser. SugarCraft does not yet have a dedicated SSH config parsing library. A `candy-sshconfig` leaf lib would be the natural home for this. |
 | Endpoint discovery (Zeroconf, SRV, Tailscale) | `sugar-widgets` (service discovery) | Discovery mechanisms are service-announcement patterns. Could be a `sugar-discovery` leaf lib if more such protocols are added. |
-| PTY / TTY handling + raw terminal mode | `candy-pty` | The local client raw terminal setup (`makeRaw`, `term.IsTerminal`, `RequestPty`) maps directly to `candy-pty`. |
-| Terminal reset序列 (`resetPty`) | `candy-pty` | ANSI escape sequences for terminal reset would be part of `candy-pty`. |
+| PTY / TTY handling + raw terminal mode | `sugar-pty` | The local client raw terminal setup (`makeRaw`, `term.IsTerminal`, `RequestPty`) maps directly to `sugar-pty`. |
+| Terminal reset序列 (`resetPty`) | `sugar-pty` | ANSI escape sequences for terminal reset would be part of `sugar-pty`. |
 | Bubbletea TUI framework | `sugar-widgets` | `charmbracelet/bubbletea` → `sugar-widgets`. The `ListModel` is a `tea.Model` using `bubbles/list`. |
 | Lipgloss styling | `sugar-markdown` | `charmbracelet/lipgloss` → `sugar-markdown`. The `styles` struct with `lipgloss.AdaptiveColor` maps to `sugar-markdown`'s theme system. |
 | Key bindings (`key.NewBinding`) | `sugar-widgets` | `charmbracelet/bubbles/key` → `sugar-widgets`. The `copyIPAddr` and `enter` bindings are standard bubble key patterns. |
@@ -225,7 +225,7 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 - `sugar-widgets` — ports `charmbracelet/bubbletea`, `charmbracelet/bubbles` (including `list`, `key`, `spinner`)
 - `candy-scriptui` — ports `charmbracelet/ssh`, `charmbracelet/wish`
 - `sugar-markdown` — ports `charmbracelet/lipgloss`, `muesli/termenv`
-- `candy-pty` — ports TTY/PTY raw mode and terminal control utilities
+- `sugar-pty` — ports TTY/PTY raw mode and terminal control utilities
 - `candy-core` — ports `charmbracelet/log`
 
 ---

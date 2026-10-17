@@ -98,7 +98,7 @@ final class PosixBackendRestoreLastTest extends TestCase
 
     /**
      * THE ROUND TRIP. Snapshot a cooked terminal, make it raw through
-     * candy-pty directly, and the second `restoreLast()` must put it back.
+     * sugar-pty directly, and the second `restoreLast()` must put it back.
      *
      * The middle step deliberately does NOT go through `PosixBackend`: if the
      * same code both made the change and undid it, a pair of no-ops would
@@ -162,7 +162,7 @@ final class PosixBackendRestoreLastTest extends TestCase
      * `PosixBackend::restore()`'s doc-block). A real-pty stty fixture cannot
      * reach this branch either, because `SttyTermios::runStty()` gives the
      * stty grandchild a pipe on fd 0, so `-F /dev/fd/0` from inside a probe
-     * child names the pipe, not the terminal — a candy-pty property, measured
+     * child names the pipe, not the terminal — a sugar-pty property, measured
      * while writing this test, and out of this file's scope. The spy is the
      * honest deterministic seam: it records WHICH method `restoreLast()`
      * called on the injected snapshot. `apply()` there is the bug this commit

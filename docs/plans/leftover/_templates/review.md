@@ -41,7 +41,7 @@ Per CLAUDE.md / AGENTS.md / the touched lib's CALIBER_LEARNINGS.md:
   Unicode, embedded ANSI?
 - No comments stating WHAT the code does (only WHY)?
 - No new `proc_open` / `posix_isatty` / `stream_isatty` / `shell_exec`
-  directly when `candy-pty` already provides the same surface?
+  directly when `sugar-pty` already provides the same surface?
 - README of the touched lib reflects the new public API?
 - New patterns logged in the touched lib's CALIBER_LEARNINGS.md?
 - Backwards-compat: no public API removed without a deprecation

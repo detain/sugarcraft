@@ -35,7 +35,7 @@ The 8 shared packages:
 
 | Step | Primary libs | Shared packages to adopt |
 |------|-------------|--------------------------|
-| Step 31 | candy-pty | candy-async, candy-input |
+| Step 31 | sugar-pty | candy-async, candy-input |
 | Step 32 | candy-tetris, candy-minesweeper | candy-buffer, candy-input, candy-async |
 | Step 33 | candy-kv, candy-ssh-launcher, candy-git | candy-buffer, sugar-fuzzy, sugar-mouse, candy-testing |
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
@@ -47,14 +47,14 @@ The 8 shared packages:
 
 ## Per-lib opportunities
 
-### candy-pty
+### sugar-pty
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-async | PtyPool/MultiPump use manual Deferred/Timer loops — AsyncOps::withTimeout() + CancellationToken would simplify cancellation | M |
 | candy-input | Pty read/write dispatches raw bytes — StreamInputDriver/KeyEvent decode would standardize input path | M |
 
-**Notes:** candy-pty is the most foundational async PTY lib. It predates candy-async and manually wires Loop + Deferred for timeout/cancellation. Adopting candy-async would reduce boilerplate in MultiPump and PtyPool. Input decoding is currently raw byte-oriented; candy-input would provide symbolic key decode.
+**Notes:** sugar-pty is the most foundational async PTY lib. It predates candy-async and manually wires Loop + Deferred for timeout/cancellation. Adopting candy-async would reduce boilerplate in MultiPump and PtyPool. Input decoding is currently raw byte-oriented; candy-input would provide symbolic key decode.
 
 ---
 
@@ -299,7 +299,7 @@ The 8 shared packages:
 | Effort | libs |
 |--------|------|
 | **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, sugar-cli (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, sugar-animation (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, candy-metrics, candy-log |
+| **M** (multiple pkgs or larger surface) | sugar-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, candy-metrics, candy-log |
 
 ---
 

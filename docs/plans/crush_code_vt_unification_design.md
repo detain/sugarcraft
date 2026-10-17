@@ -34,7 +34,7 @@ wider once Screen/Scrollback/Cursor/Sgr/Mode count in).
   palette-indexed cells; FrameDedup consumes dirty-region deltas.
 - **Emulator stack → candy-vcr `src/Assert/ScreenAssertion.php:7`**
   (`use SugarCraft\Vt\Terminal\Terminal;`), ~50 candy-vt tests, and
-  candy-pty `tests/Integration/VimSmokeTest.php:10`.
+  sugar-pty `tests/Integration/VimSmokeTest.php:10`.
 - **sugar-crush → NEITHER.** `grep -rn 'SugarCraft\\Vt' sugar-crush/` = **0**.
   The backlog §E729 acceptance clause "all downstream consumers (sugar-crush
   cell-grid tests via `SugarCraft\Vt\Terminal`)" was a FALSE premise; erratum

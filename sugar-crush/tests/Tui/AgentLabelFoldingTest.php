@@ -58,13 +58,13 @@ final class AgentLabelFoldingTest extends TestCase
     public function testTheTailCarriesUpToTwoWordsFromTheDifference(): void
     {
         $folded = AgentLabelFolding::fold([
-            'Repair the flaky suite in candy-pty now please',
+            'Repair the flaky suite in sugar-pty now please',
             'Repair the flaky suite in sugar-mosaic now please',
         ]);
 
         // Shared prefix is 5 words; the tail starts AT the difference.
         $this->assertSame(
-            ['Repair the … candy-pty now', 'Repair the … sugar-mosaic now'],
+            ['Repair the … sugar-pty now', 'Repair the … sugar-mosaic now'],
             $folded,
         );
     }

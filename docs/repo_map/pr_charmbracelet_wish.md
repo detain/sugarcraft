@@ -27,7 +27,7 @@ From `repo_map/charmbracelet_wish.md`:
 | `accesscontrol.Middleware` (command allowlist) | `(none)` | No SSH command restriction |
 | `recover.Middleware` (panic recovery) | `candy-core` error handling | Partial - worth reviewing |
 | `scp.Middleware` (file transfer) | `sugar-widgets` file components | **Gap:** SCP is a specific protocol |
-| `Cmd` / PTY execution helper | `candy-pty` (FFI/syscall PTY wrappers) | **Opportunity:** ssh-wrapped version |
+| `Cmd` / PTY execution helper | `sugar-pty` (FFI/syscall PTY wrappers) | **Opportunity:** ssh-wrapped version |
 | `WithAuthorizedKeys` (public key auth) | `SugarCraft\Core\Auth` | Different credential systems |
 
 **Overall Assessment:** Wish = SSH transport + Bubble Tea integration + Git server + middleware toolkit. SugarCraft has no SSH transport equivalent. The closest SugarCraft analogue for TUI-over-transport is `sugar-widgets`/`sugar-forms`, but without an SSH transport layer these cannot be served remotely.
@@ -40,7 +40,7 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 
 1. **No SSH transport in SugarCraft** — The entire TUI-over-SSH concept cannot be replicated without an SSH server implementation
 2. **No git server equivalent** — The `git` middleware provides complete git server functionality; SugarCraft has nothing comparable
-3. **PTY handling is different** — `candy-pty` wraps terminal I/O, but Wish's `Cmd` wraps this with SSH session awareness
+3. **PTY handling is different** — `sugar-pty` wraps terminal I/O, but Wish's `Cmd` wraps this with SSH session awareness
 4. **No rate limiting at SSH level** — Wish's `ratelimiter` operates at the SSH connection layer
 5. **No command allowlisting** — Wish's `accesscontrol` middleware restricts which shell commands can execute per session
 6. **No authorized keys management** — Wish provides `WithAuthorizedKeys()` for OpenSSH-style key allowlists
@@ -106,7 +106,7 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 **Assignee:** caarlos0
 **Problem:** Keypresses seem ignored on Windows when using PTY with Bubble Tea.
 **Suspected Cause:** Somewhere a `go io.Copy` needs to be made cancelable.
-**Direct Risk to SugarCraft:** Windows PTY support is notoriously difficult; `candy-pty` FFI wrappers must handle this.
+**Direct Risk to SugarCraft:** Windows PTY support is notoriously difficult; `sugar-pty` FFI wrappers must handle this.
 
 ### Issue #207: SCP Windows Issues (Jan 2024)
 
@@ -512,7 +512,7 @@ Requested in #488. This would make Wish act as an "Nginx for SSH." No commitment
 
 ### 1. PTY State Management
 
-SugarCraft's `candy-pty` will need careful handling of:
+SugarCraft's `sugar-pty` will need careful handling of:
 - Raw vs cooked terminal modes
 - Window resize signaling
 - Signal delivery to child processes
@@ -777,7 +777,7 @@ The `func(next ssh.Handler) ssh.Handler` pattern mirrors Go HTTP middleware. Thi
 
 ### PTY Handling ↔ Unix Terminal I/O
 
-PTY management in Wish is similar to general Unix terminal programming. The patterns from `candy-pty` will be relevant.
+PTY management in Wish is similar to general Unix terminal programming. The patterns from `sugar-pty` will be relevant.
 
 ### Bubble Tea Integration ↔ TUI Framework Integration
 
@@ -805,7 +805,7 @@ Color/profile detection failures in Docker (#456, #45) are relevant for any term
    - When designing any auth system for network services
    - Enable rate limiting before auth
 
-3. **Review candy-pty for Container Compatibility**
+3. **Review sugar-pty for Container Compatibility**
    - Ensure fallback when PTY not available
    - Document systemd/Docker requirements
 

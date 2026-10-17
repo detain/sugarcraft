@@ -24,7 +24,7 @@ for free.
 - `candy-core/src/Util/Open.php`:
   - Same migration — `xdg-open` / `open` / `start` invocations now
     go through PosixProcess.
-- `candy-core/composer.json` — confirm `sugarcraft/candy-pty` is in
+- `candy-core/composer.json` — confirm `sugarcraft/sugar-pty` is in
   `require` (yes, from P1.4 of original plan). Verify with
   `tools/check-path-repos.php`.
 

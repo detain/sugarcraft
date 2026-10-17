@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "584aaa2a1d4ea16aa38622d2014e4645",
+    "content-hash": "aeb75a08fd1cb44e8a263b9efefdd426",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3742,14 +3742,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-core",
-                "reference": "b4e47399c2a5e8bc61d217d64cab677b34a3698c"
+                "reference": "5d0ba0f81667d99b46ca9620afb863d068e7e08a"
             },
             "require": {
                 "ext-intl": "*",
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.1",
@@ -3941,13 +3941,13 @@
             "dist": {
                 "type": "path",
                 "url": "candy-gifview",
-                "reference": "6316b671587a9fc0c0c940fb53df7c3c579714d4"
+                "reference": "60a8a4952fbe2f5601446c5f7f731a4c710fecce"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/sugar-animation": "dev-master"
+                "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
@@ -4620,93 +4620,22 @@
             }
         },
         {
-            "name": "sugarcraft/candy-pty",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-pty",
-                "reference": "ed5e917369394c011252c15fcf81dbe802e3a990"
-            },
-            "require": {
-                "ext-ffi": "*",
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-input": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master",
-                "sugarcraft/candy-vcr": "dev-master",
-                "sugarcraft/candy-vt": "dev-master"
-            },
-            "suggest": {
-                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Pty\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Pty\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
-            "homepage": "https://github.com/sugarcraft/candy-pty",
-            "keywords": [
-                "cli",
-                "ffi",
-                "libc",
-                "posix",
-                "pseudo-terminal",
-                "pty",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "xpty"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-pty/issues",
-                "source": "https://github.com/sugarcraft/candy-pty",
-                "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-scriptui",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-scriptui",
-                "reference": "89e4d75c3b14bfb318eefeffb4bf0d8f772e6f30"
+                "reference": "4ca0f98af5292a102a874a38b32da6de20efac58"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-markdown": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
                 "symfony/console": "^6.4 || ^7.0"
             },
             "require-dev": {
@@ -5228,14 +5157,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "61dde2f1e7efbc8d0225dabe605243f4a2612f91"
+                "reference": "2345b0808643e8dd568ce1cee36cb90a1a08d60f"
             },
             "require": {
                 "ext-mbstring": "*",
                 "php": "^8.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
                 "symfony/console": "^6.4 || ^7.0",
                 "symfony/process": "^6.4 || ^7.0"
             },
@@ -5368,14 +5297,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-wish",
-                "reference": "5acb32cfaabc1dbd1a79cb792a16bf81d675a613"
+                "reference": "ee2c6177002434f3140f10ef8d06594db1acf642"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise-timer": "^1.9",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -5434,12 +5363,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-animation",
-                "reference": "3c651c1e7758ed1ccb197fe4e1219213ade74a1a"
+                "reference": "3b2503ffec829b81e09e25bba3599bc43c23f15e"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
@@ -5687,7 +5616,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "b79ef7a890f48111d5b2b6f3fe0cda5955b75707"
+                "reference": "872aa8cfe5b48dabe04c517e9b6ad73fa887a0dc"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5705,7 +5634,6 @@
                 "react/socket": "^1.16",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-cli": "@dev",
                 "sugarcraft/sugar-diff": "dev-master",
@@ -5717,6 +5645,7 @@
                 "sugarcraft/sugar-mcp-client": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-overlay": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master",
                 "sugarcraft/sugar-video": "@dev",
                 "symfony/yaml": "^7.4"
@@ -6759,20 +6688,91 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-pty",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-pty",
+                "reference": "6b5ea2e8992b83bb8b58fdd2a71bfce87e02a70d"
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-input": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master",
+                "sugarcraft/candy-vcr": "dev-master",
+                "sugarcraft/candy-vt": "dev-master"
+            },
+            "suggest": {
+                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+            "homepage": "https://github.com/sugarcraft/sugar-pty",
+            "keywords": [
+                "cli",
+                "ffi",
+                "libc",
+                "posix",
+                "pseudo-terminal",
+                "pty",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "xpty"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-pty/issues",
+                "source": "https://github.com/sugarcraft/sugar-pty",
+                "docs": "https://sugarcraft.github.io/lib/sugar-pty.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-quickpick",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-quickpick",
-                "reference": "b9c781eba1de015ab095d133d5f86ef20f65cf6a"
+                "reference": "aaba164eafbdc2e1faf50a7e4aff9f8063bdb2ca"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-fuzzy": "dev-master"
+                "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -8604,7 +8604,6 @@
         "sugarcraft/candy-mdview": 20,
         "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
-        "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-scriptui": 20,
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,
@@ -8637,6 +8636,7 @@
         "sugarcraft/sugar-navstack": 20,
         "sugarcraft/sugar-overlay": 20,
         "sugarcraft/sugar-panels": 20,
+        "sugarcraft/sugar-pty": 20,
         "sugarcraft/sugar-quickpick": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-spring": 20,

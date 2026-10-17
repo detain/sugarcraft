@@ -60,7 +60,7 @@
         "sugarcraft/candy-layout": "dev-master",
         "sugarcraft/sugar-focus": "@dev",
         "sugarcraft/sugar-cli": "@dev",
-        "sugarcraft/candy-pty": "dev-master",
+        "sugarcraft/sugar-pty": "dev-master",
         "sugarcraft/sugar-video": "@dev"
     },
     "require-dev": {

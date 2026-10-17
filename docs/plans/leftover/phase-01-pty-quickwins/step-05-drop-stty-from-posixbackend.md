@@ -9,7 +9,7 @@
 `candy-core/src/Util/Tty/PosixBackend.php` still shell-outs to
 `stty size`, `stty -g`, `stty $saved`, and `command -v stty`. The PTY
 consolidation plan said this should leave the primary path. Rewire
-both `size()` and `restoreLast()` to use candy-pty primitives.
+both `size()` and `restoreLast()` to use sugar-pty primitives.
 
 ## Files
 
@@ -26,7 +26,7 @@ both `size()` and `restoreLast()` to use candy-pty primitives.
     obtained via `TermiosFactory::open(STDIN)`. First call saves;
     second+ calls apply.
   - Drop `private static function hasStty()` and its `static $cached`.
-- `candy-core/composer.json` — verify `sugarcraft/candy-pty` is already
+- `candy-core/composer.json` — verify `sugarcraft/sugar-pty` is already
   in `require` (should be from P1.4 of the original PTY plan). If not,
   add it + path-repo per `tools/check-path-repos.php`.
 
@@ -38,7 +38,7 @@ both `size()` and `restoreLast()` to use candy-pty primitives.
   call `restoreLast()` twice; verify termios round-trips identically
   without invoking `stty -g`.
 - `SUGARCRAFT_TERMIOS=stty vendor/bin/phpunit` still green (forces
-  candy-pty's stty fallback, which is the only stty caller left).
+  sugar-pty's stty fallback, which is the only stty caller left).
 
 ## Acceptance
 
@@ -50,7 +50,7 @@ both `size()` and `restoreLast()` to use candy-pty primitives.
 
 ## Notes
 
-- The `SttyTermios` class in candy-pty is where the stty fallback now
+- The `SttyTermios` class in sugar-pty is where the stty fallback now
   lives — single rescue path. candy-core no longer has its own.
 - The `Backend` interface contract is unchanged; this is purely
   implementation cleanup.

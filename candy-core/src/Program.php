@@ -205,7 +205,7 @@ final class Program
      *             tests/PlayerTest.php, tests/Assert/ScreenRoundTripTest.php
      *             and examples/record.php (plus doc cites in its
      *             src/Recorder.php and src/Cli/RecordCommand.php). candy-vcr's
-     *             pump chains themselves ride candy-pty's
+     *             pump chains themselves ride sugar-pty's
      *             PumpOptions::withRecorder, a different class, and
      *             candy-testing's ProgramSimulator never carried the name.
      *             The delegating shim therefore stays for those in-tree

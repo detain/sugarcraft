@@ -47,7 +47,7 @@ From `repo_map/charmbracelet_glow.md`:
 | File browsing/stash | `sugar-forms` or `sugar-charts` | Could inspire file picker or tree-view |
 | viewport scrolling | `candy-core` | Scrollable viewport with status bar |
 | Fuzzy filtering | `sugar-widgets` | Real-time fuzzy string filtering |
-| fsnotify watching | `candy-pty` | File system notification |
+| fsnotify watching | `sugar-pty` | File system notification |
 | gitcha discovery | `sugar-widgets` | Git-aware file finding |
 | Clipboard (OSC 52) | `candy-core` | Terminal clipboard integration |
 | Viper config | `SugarCraft\Core` | YAML config with env overrides |

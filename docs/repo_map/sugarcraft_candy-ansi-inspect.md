@@ -343,7 +343,7 @@ candy-ansi-inspect can only inspect:
 
 3. Stdin piped data
 
-It cannot execute a command and inspect its live output because PHP lacks a native PTY library in the monorepo (though `candy-pty` may eventually provide this).
+It cannot execute a command and inspect its live output because PHP lacks a native PTY library in the monorepo (though `sugar-pty` may eventually provide this).
 
 ---
 
@@ -621,7 +621,7 @@ Sleep 5s
 
 1. **State machine parser** — Port from `charmbracelet/x/ansi/parser` for robustness
 
-2. **PTY execution** — Integrate with `candy-pty` when available
+2. **PTY execution** — Integrate with `sugar-pty` when available
 
 3. **Golden file tests** — Add snapshot tests for regression prevention
 

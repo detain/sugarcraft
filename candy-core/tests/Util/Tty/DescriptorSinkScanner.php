@@ -65,7 +65,7 @@ final class DescriptorSinkScanner
 
     /**
      * Libc symbols whose FIRST parameter is a file descriptor, DERIVED from
-     * candy-pty's own cdef rather than listed here.
+     * sugar-pty's own cdef rather than listed here.
      *
      * ## Why this is derived and the two lists above are not
      *
@@ -85,7 +85,7 @@ final class DescriptorSinkScanner
      * this kind are incomplete.
      *
      * So the roster is read out of {@see Libc::cdef()}, which is a
-     * declaration of exactly this fact and which candy-pty already keeps
+     * declaration of exactly this fact and which sugar-pty already keeps
      * loadable without the FFI runtime for introspection.
      *
      * ## What a new symbol in that cdef actually does here
@@ -137,7 +137,7 @@ final class DescriptorSinkScanner
     /**
      * First-parameter names that are an `int` but NOT a descriptor.
      *
-     * Taken from the vocabulary candy-pty's own cdef already uses for its
+     * Taken from the vocabulary sugar-pty's own cdef already uses for its
      * parameters rather than invented, so this list is a reading of the
      * declaration block and not a guess about future ones. `posix_openpt(int
      * flags)` and `waitpid(int pid, ...)` are the two live int-first
@@ -163,7 +163,7 @@ final class DescriptorSinkScanner
      * near-misses that must NOT come back: a path-first `open()`, a
      * `pid`-first `waitpid()`, a pointer-first `openpty()`.
      *
-     * Block comments are stripped first. candy-pty's cdef carries prose
+     * Block comments are stripped first. sugar-pty's cdef carries prose
      * inside them, and a census that reads a comment as a declaration is the
      * same class of error as one that reads a doc-comment as a call.
      *
@@ -176,7 +176,7 @@ final class DescriptorSinkScanner
      * synthetic block declaring `fsync(int fildes)`, `close(int fd)`,
      * `dup3(int oldfd, int newfd)` and `fchdir(int)`: it returned `['close']`
      * and dropped the other three in silence. Two of those are POSIX's own
-     * spellings and candy-pty already declares `dup`. WHY THE OLD SHAPE STILL
+     * spellings and sugar-pty already declares `dup`. WHY THE OLD SHAPE STILL
      * EARNS A MENTION: it was right that the roster must be DERIVED and never
      * hand-listed -- that part is unchanged and is the reason this method
      * exists. It was the derivation's alphabet that was too narrow, which is
@@ -281,7 +281,7 @@ final class DescriptorSinkScanner
             throw new \RuntimeException(
                 'this cdef declaration takes an UNNAMED int first, so whether it is a file '
                 . "descriptor cannot be read from the declaration at all:\n  " . $statement . ";\n"
-                . 'Resolve it by naming the parameter in candy-pty\'s cdef.',
+                . 'Resolve it by naming the parameter in sugar-pty\'s cdef.',
             );
         }
 
@@ -463,7 +463,7 @@ final class DescriptorSinkScanner
         // are ONE token each in PHP 8 (T_NAME_FULLY_QUALIFIED), not a
         // T_NS_SEPARATOR followed by a T_STRING. Matching only T_STRING would
         // therefore have missed the leading-backslash spelling entirely --
-        // which is how candy-pty's own `\posix_isatty($fd)` guard is written,
+        // which is how sugar-pty's own `\posix_isatty($fd)` guard is written,
         // i.e. the single most important call in this family. The alphabet of
         // a census is its coverage; this is that lesson applied to itself.
         $shortName = self::shortName($tok[1]);
@@ -475,7 +475,7 @@ final class DescriptorSinkScanner
         // its author had in hand -- and the backlog entry that commissioned
         // this arm demonstrated exactly that, with an alternation that could
         // not express `self::libc()->` and so missed four live sites in
-        // candy-pty. Anything at all may be on the left of the arrow; the
+        // sugar-pty. Anything at all may be on the left of the arrow; the
         // ROSTER is where a call that turns out not to be a libc call gets
         // said so.
         $before     = self::previousSignificant($tokens, $i - 1);

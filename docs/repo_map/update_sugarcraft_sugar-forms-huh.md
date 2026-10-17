@@ -216,7 +216,7 @@ The implementation lives in `sugar-forms/src/` with re-exports in `sugar-forms/s
 - **Source repo:** `charmbracelet/gum`
 - **Source reference:** `gum/write/write.go` — `startEditorMsg`/`editorFinishedMsg` for PTY-based editor
 - **Implementation ideas:** Add `withEditor(bool $useEditor = true)` to Text. On activate, spawn `$EDITOR` via PTY, capture output on close.
-- **Estimated complexity:** High — requires PTY handling from `candy-pty`
+- **Estimated complexity:** High — requires PTY handling from `sugar-pty`
 - **Expected impact:** Low — advanced users only
 
 ---
@@ -487,7 +487,7 @@ The implementation lives in `sugar-forms/src/` with re-exports in `sugar-forms/s
 
 9. **Buffer diffing renderer** — Double-buffering with cell-level updates
 10. **Cassowary layout** — Constraint-based responsive layouts
-11. **External editor integration** — `withEditor()` using `candy-pty`
+11. **External editor integration** — `withEditor()` using `sugar-pty`
 12. **Shell completion generation** — `Form::completionScript()`
 
 ### Experimental Ideas (6+ months)

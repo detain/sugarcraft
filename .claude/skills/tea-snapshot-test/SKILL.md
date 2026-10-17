@@ -54,7 +54,7 @@ public function testProgressBarWithFillColorRendersAnsi(): void
 Create the baseline once: `cd <slug> && UPDATE_GOLDENS=1 vendor/bin/phpunit --filter testProgressBar...`. This writes the `.golden` file only when missing. **Inspect the generated `.golden` by eye — a wrong baseline locks in a wrong result.** Optionally add `Assertions::assertViewIdempotent($p);` to guard render purity. **Verify: the fixture file exists and re-running without `UPDATE_GOLDENS` passes.**
 
 ### 4. Cell-grid test
-For grid assertions use `Assertions::assertCellGrid($expected, $buffer)` where `$expected[row][col] = ['rune' => 'a', 'style' => $style]` and `$buffer` is a `SugarCraft\Buffer\Buffer`. For full-terminal parsing (SGR → cells), feed bytes to `SugarCraft\Vt\Terminal` and read cells back (see `candy-pty/tests/Integration/VimSmokeTest.php`). Dimensions are checked first, so size the expected grid to match `$buffer->width()`/`$buffer->height()`. **Verify: expected grid dimensions equal the buffer's.**
+For grid assertions use `Assertions::assertCellGrid($expected, $buffer)` where `$expected[row][col] = ['rune' => 'a', 'style' => $style]` and `$buffer` is a `SugarCraft\Buffer\Buffer`. For full-terminal parsing (SGR → cells), feed bytes to `SugarCraft\Vt\Terminal` and read cells back (see `sugar-pty/tests/Integration/VimSmokeTest.php`). Dimensions are checked first, so size the expected grid to match `$buffer->width()`/`$buffer->height()`. **Verify: expected grid dimensions equal the buffer's.**
 
 ### 5. Behaviour test (`update()`)
 Destructure the tuple; the second element is the optional `Cmd`. Pattern from `sugar-mouse/tests/Zones/ZoneHoverTrackerTest.php`:

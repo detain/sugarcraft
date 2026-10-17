@@ -16,7 +16,7 @@ the constants.
 
 **Modify:**
 
-- `candy-pty/src/PumpOptions.php` — add the static `sshDefault()`
+- `sugar-pty/src/PumpOptions.php` — add the static `sshDefault()`
   method. Values come from the originals tracked in
   `InProcessTransport`:
   - `chunkBytes` default
@@ -31,7 +31,7 @@ the constants.
 
 ## Tests
 
-- `candy-pty/tests/PumpOptionsTest.php` — add test for `sshDefault()`
+- `sugar-pty/tests/PumpOptionsTest.php` — add test for `sshDefault()`
   returns the expected DTO shape.
 - `candy-wish/tests/InProcessTransportRunChildTest.php` should still
   pass byte-for-byte.

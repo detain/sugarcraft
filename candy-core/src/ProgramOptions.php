@@ -123,7 +123,7 @@ final class ProgramOptions
         /**
          * Override the {@see Termios} implementation used for raw-mode
          * setup / teardown. When null (default), {@see Tty} resolves
-         * via candy-pty's `TermiosFactory` (FFI primary, stty fallback).
+         * via sugar-pty's `TermiosFactory` (FFI primary, stty fallback).
          *
          * Production code rarely needs to set this — the factory hits
          * the right backend for the host. Tests inject a stub Termios

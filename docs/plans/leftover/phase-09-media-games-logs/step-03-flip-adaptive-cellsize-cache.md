@@ -1,4 +1,4 @@
-# Step 09.03 — sugar-animation adaptive cell size (via candy-pty SizeIoctl) + frame cache
+# Step 09.03 — sugar-animation adaptive cell size (via sugar-pty SizeIoctl) + frame cache
 
 **Source:** `leftover_updates_later.md` sugar-animation P7 + P12
 **Branch:** `ai/flip-adaptive-cache`
@@ -17,7 +17,7 @@
 
 - `sugar-animation/src/Renderer.php` — `withAdaptiveSize()` reads tty.
 - `sugar-animation/src/Cache/FrameCache.php` (new).
-- `sugar-animation/composer.json` — add `sugarcraft/candy-pty` if not
+- `sugar-animation/composer.json` — add `sugarcraft/sugar-pty` if not
   transitive.
 
 ## Tests

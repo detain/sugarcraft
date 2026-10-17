@@ -12,7 +12,7 @@ promote to first-class with documented scaling claims.
 
 ## Files
 
-**Modify:** `candy-pty/src/Posix/MultiPump.php` — tighten API; add
+**Modify:** `sugar-pty/src/Posix/MultiPump.php` — tighten API; add
 backpressure + per-pump error handling; expanded test coverage.
 
 ## Acceptance

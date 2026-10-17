@@ -14,16 +14,16 @@ named-constructor.
 
 ## Files
 
-**Modify:** `candy-pty/src/PtyPool.php`.
+**Modify:** `sugar-pty/src/PtyPool.php`.
 
 ## Tests
 
-- `candy-pty/tests/PtyPoolSshProfileTest.php` — fixture SSH server,
+- `sugar-pty/tests/PtyPoolSshProfileTest.php` — fixture SSH server,
   100 churn rounds, assert no leak.
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter PtyPoolSshProfile` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter PtyPoolSshProfile` green.
 - Documented in README with the measured churn baseline.
 
 ---

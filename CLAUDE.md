@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `sugar-forms` `candy-files` `sugar-animation` `candy-testing` `candy-vt` `candy-vcr` `candy-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
+**Foundation** (`candy-*`): `candy-core` `candy-ansi` `candy-buffer` `candy-async` `candy-layout` `candy-sprinkles` `sugar-forms` `candy-files` `sugar-animation` `candy-testing` `candy-vt` `candy-vcr` `sugar-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-crush` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
 
 ## Commands
 
@@ -41,9 +41,9 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 - **Immutable + fluent**: every `with*()` returns a new instance via `mutate()`; public `readonly` state. Canonical `candy-sprinkles/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`. Nullable fields pair a `bool $XSet` sentinel.
 - Bare accessors (no `get`). Factories mirror upstream: `Theme::ansi()`, `Spinner::line()`. `::new()` is the default root — never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`candy-core/src/Model.php`): `init()` · `update(Msg): [Model, ?Cmd]` · `view()`. Side effects → `Cmd`, never `view()`.
-- Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`candy-pty/src/Lang.php`).
+- Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`sugar-pty/src/Lang.php`).
 - Slug→namespace: `sugar-markdown/` → `SugarCraft\Markdown\` (quirk: `candy-core` → `SugarCraft\Core\`).
-- TEA test harness: `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, `Assertions::assertGoldenAnsi()`, and `LoopPin::pinStableClock()` (`candy-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php`, since ext-uv arms timers against a per-iteration cached clock and waits bounded on `Loop::get()` then fire early. `candy-pty/tests/bootstrap.php` adds `HangWatchdog::install()` after it — an out-of-process watchdog that kills a stalled runner with a forensic dump instead of hanging.
+- TEA test harness: `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, `Assertions::assertGoldenAnsi()`, and `LoopPin::pinStableClock()` (`candy-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php`, since ext-uv arms timers against a per-iteration cached clock and waits bounded on `Loop::get()` then fire early. `sugar-pty/tests/bootstrap.php` adds `HangWatchdog::install()` after it — an out-of-process watchdog that kills a stalled runner with a forensic dump instead of hanging.
 - `sugar-crush` docs are test-pinned: drift guards (`sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php`) re-derive the rosters in `sugar-crush/README.md` + `sugar-crush/docs/*.md` from `sugar-crush/src/` — add a tool/command/env var/key binding and the doc edit is mandatory.
 
 ## PR workflow

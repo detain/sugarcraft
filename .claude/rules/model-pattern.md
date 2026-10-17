@@ -12,4 +12,4 @@ paths:
 - Bare-named accessors (no `get`). Factories mirror upstream: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`. `::new()` is default — never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`candy-core/src/Model.php`): `init(): ?\Closure` · `update(Msg): [Model, ?Cmd]` · `view(): string`. `update()` returns a NEW model; side effects → `Cmd`s, never `view()`. Tutorial in `candy-core/README.md`.
 - Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.
-- i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`candy-pty/src/Lang.php`).
+- i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`sugar-pty/src/Lang.php`).

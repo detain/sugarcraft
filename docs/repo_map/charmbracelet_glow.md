@@ -186,7 +186,7 @@
 | File browsing & discovery | `sugar-forms` or `sugar-charts` | The stash/file-browser UI could inspire SugarCraft's file picker or tree-view components. |
 | `viewport` for scrolling | `candy-core` (scroll buffer) | The Bubble Tea viewport model for paginated content. |
 | Fuzzy filtering | `sugar-widgets` (filter/search) | Real-time fuzzy string filtering of file lists. |
-| fsnotify file watching | `candy-pty` (file watching) | File system notification for live reload. |
+| fsnotify file watching | `sugar-pty` (file watching) | File system notification for live reload. |
 | `gitcha` for file discovery | `sugar-widgets` (file discovery) | Git-aware file finding respecting .gitignore. |
 | Clipboard (OSC 52) | `candy-core` (clipboard) | Terminal clipboard integration via ANSI escape sequences. |
 | Configuration via Viper | `SugarCraft\Core` (config) | YAML config file handling with environment overrides. |

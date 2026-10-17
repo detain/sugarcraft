@@ -161,7 +161,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 | Config/flag parsing | `candy-core` | Command-line argument handling |
 | Window decorations | `sugar-widgets` | Border rendering, rounded corners |
 | Shadow effects | `sugar-widgets` / `sugar-markdown` | Visual effects, filters |
-| PTY execution | `candy-pty` | Pseudo-terminal control |
+| PTY execution | `sugar-pty` | Pseudo-terminal control |
 | Font handling | `candy-core` / `sugar-widgets` | Font metrics, text rendering |
 | Style/theming | `sugar-widgets` | Theme management, style registry |
 
@@ -179,7 +179,7 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 
 - **Configuration system** → `SugarCraft\Core\Config` - Layered config with XDG paths and JSON presets maps to SugarCraft's config management
 
-- **PTY command execution** → `SugarCraft\Candy\Pty` - The `--execute` flag with PTY spawning maps directly to the candy-pty library
+- **PTY command execution** → `SugarCraft\Candy\Pty` - The `--execute` flag with PTY spawning maps directly to the sugar-pty library
 
 ## Analysis
 

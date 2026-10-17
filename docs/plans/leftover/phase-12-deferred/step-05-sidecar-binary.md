@@ -13,8 +13,8 @@ downside is Composer post-install download per OS/arch.
 
 ## Files
 
-- `candy-pty/src/Sidecar/SidecarPtySystem.php`.
-- `candy-pty/bin/sidecar/<os>-<arch>/sugar-pty-sidecar` (binary
+- `sugar-pty/src/Sidecar/SidecarPtySystem.php`.
+- `sugar-pty/bin/sidecar/<os>-<arch>/sugar-pty-sidecar` (binary
   artifacts).
 - Composer post-install script that downloads the right binary.
 - `SUGARCRAFT_PTY_BACKEND=sidecar` (from step 01.08) wires this.

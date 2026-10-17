@@ -72,7 +72,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | Lib | Phase | Items | Key Critical Fix |
 |-----|-------|-------|------------------|
 | sugar-video | P1 | 3 | AudioPlayer::pause() SIGSTOP ineffective in PTY; mutate() `??` breaks falsy values |
-| candy-pty | P1 | 3 | FD reuse race via `fopen('php://fd/N')` dup(); EINTR silently treated as timeout |
+| sugar-pty | P1 | 3 | FD reuse race via `fopen('php://fd/N')` dup(); EINTR silently treated as timeout |
 | candy-sql | P1 | 8 | SQL injection in MysqlDatabase::rows() identifier quoting (7 critical + voryx replacement) |
 
 **Concurrency:** 3 libs, all isolated files — safe to parallelize.
@@ -156,7 +156,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 ### Group B Source Plans
 
 - `findings/plan_sugar-video.md` — Phase 1 (items 1.1–1.8), Phase 2–6 (deferred)
-- `findings/plan_candy-pty.md` — Phase 1 (FD reuse race, EINTR timeout)
+- `findings/plan_sugar-pty.md` — Phase 1 (FD reuse race, EINTR timeout)
 - `findings/plan_candy-sql.md` — Phase 1 (items 1.1–1.8 all critical SQL injection)
 
 ### Group C Source Plans
@@ -214,7 +214,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 1. Spawn 3 subagents in parallel:
    - **Subagent B1:** Implement sugar-video Phase 1.1–1.3 (AudioPlayer SIGSTOP, mutate() ?? bug)
-   - **Subagent B2:** Implement candy-pty Phase 1.1–1.3 (FD reuse race, EINTR timeout)
+   - **Subagent B2:** Implement sugar-pty Phase 1.1–1.3 (FD reuse race, EINTR timeout)
    - **Subagent B3:** Implement candy-sql Phase 1.1–1.8 (all SQL injection fixes)
 2. Each subagent: review → implement → run tests → fix any issues → commit
 3. After all 3 complete: commit to master, pull, continue to Group C

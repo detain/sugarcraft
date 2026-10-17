@@ -21,19 +21,19 @@ Three integration tests that have been Risk-flagged but never written:
 
 **Create:**
 
-- `candy-pty/tests/SignalForwarderReactLoopTest.php`:
+- `sugar-pty/tests/SignalForwarderReactLoopTest.php`:
   - Boot a `React\EventLoop\Loop::get()`.
   - Attach `SignalForwarder::attachSigwinch($master, $cb)`.
   - `posix_kill(getpid(), SIGWINCH)`.
   - Run loop for ~50ms.
   - Assert callback fired exactly once.
   - Markup with `markTestSkipped` if `react/event-loop` unavailable.
-- `candy-pty/tests/Integration/SIGHUPForwardingTest.php`:
+- `sugar-pty/tests/Integration/SIGHUPForwardingTest.php`:
   - Open PTY, spawn `sleep 30` with `controllingTerminal: true`.
   - Close master.
   - Assert child exits within 1s.
   - Use the PHPUnit watchdog wrapper (see brief).
-- `candy-pty/tests/Integration/NoControllingTerminalTest.php`:
+- `sugar-pty/tests/Integration/NoControllingTerminalTest.php`:
   - Open PTY, spawn `sleep 30` with `controllingTerminal: false`.
   - Write `\x03` (Ctrl-C) to master.
   - Wait 1s.
@@ -42,12 +42,12 @@ Three integration tests that have been Risk-flagged but never written:
 
 **Modify:**
 
-- `candy-pty/composer.json` — `require-dev` `react/event-loop` for the
+- `sugar-pty/composer.json` — `require-dev` `react/event-loop` for the
   ReactPHP test. Path-repo not needed (it's a Packagist dep).
 
 ## Acceptance
 
-- `cd candy-pty && vendor/bin/phpunit --filter "SignalForwarderReactLoop|SIGHUPForwarding|NoControllingTerminal"` green.
+- `cd sugar-pty && vendor/bin/phpunit --filter "SignalForwarderReactLoop|SIGHUPForwarding|NoControllingTerminal"` green.
 - `composer validate` clean.
 - All three tests use the watchdog pattern and don't leak processes.
 
@@ -55,7 +55,7 @@ Three integration tests that have been Risk-flagged but never written:
 
 - The ReactPHP test is the long-standing Risk #3 from the original
   plan. It should pass — if it fails, that's a real bug and a Blocker.
-- Use real PTYs (no mocks) per candy-pty CALIBER convention.
+- Use real PTYs (no mocks) per sugar-pty CALIBER convention.
 - `markTestSkipped('react/event-loop not installed')` is acceptable on
   CI runners that strip dev-deps, but production CI should install
   dev-deps so the test runs.

@@ -14,7 +14,7 @@ Three options (try in order, pick the first that works):
 
 1. Wait for a PHP FFI release supporting `FFI\CData` arrays as
    variadic params (tracked upstream — may be PHP 8.5+).
-2. Build a Darwin-only C shim `candy-pty/bin/macos-ioctl-resize`
+2. Build a Darwin-only C shim `sugar-pty/bin/macos-ioctl-resize`
    that does the syscall; invoke via `proc_open`.
 3. Distribute a tiny "resize-ioctl" binary as a Composer
    post-install artifact (Go or Zig static binary per arch).

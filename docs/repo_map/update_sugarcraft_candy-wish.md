@@ -1,6 +1,6 @@
 # Overview
 
-CandyWish is a PHP port of `charmbracelet/wish` — an SSH server middleware framework that lets developers build TUIs anyone can `ssh user@host` to run. The library provides composable middleware (auth, logging, rate-limiting), pluggable transport strategies (InProcessPTY or HostSshd inline), and deep integration with `candy-pty` for full pseudo-terminal semantics.
+CandyWish is a PHP port of `charmbracelet/wish` — an SSH server middleware framework that lets developers build TUIs anyone can `ssh user@host` to run. The library provides composable middleware (auth, logging, rate-limiting), pluggable transport strategies (InProcessPTY or HostSshd inline), and deep integration with `sugar-pty` for full pseudo-terminal semantics.
 
 **Biggest opportunity areas:**
 
@@ -37,7 +37,7 @@ CandyWish uses a deliberate architectural tradeoff: it delegates SSH to the host
 
 **Two transport strategies:**
 
-- `InProcessTransport` (default): Allocates a `candy-pty` master/slave pair, spawns user's cmd as subprocess with controlling terminal semantics, pumps bytes via `PosixPump`
+- `InProcessTransport` (default): Allocates a `sugar-pty` master/slave pair, spawns user's cmd as subprocess with controlling terminal semantics, pumps bytes via `PosixPump`
 - `HostSshdTransport` (legacy): Runs middleware chain inline where STDIN/STDOUT are sshd's PTY slave
 
 **Middleware stack execution:** Registration order, last registered is outermost (onion model): `a-pre → b-pre → c-pre → (terminal runs) → c-post → b-post → a-post`
@@ -94,7 +94,7 @@ Server::new()
 
 1. **Middleware composability** — Clean `Middleware::handle()` interface with async support via ReactPHP promises
 2. **Transport abstraction** — `InProcessTransport` vs `HostSshdTransport` elegantly handles two deployment modes
-3. **Deep candy-pty integration** — Signal forwarding (SIGWINCH → window resize), proper SIGHUP teardown, non-blocking pump
+3. **Deep sugar-pty integration** — Signal forwarding (SIGWINCH → window resize), proper SIGHUP teardown, non-blocking pump
 4. **Context propagation** — Mirrors Go's `context.Context` API enabling cancellation/deadline enforcement
 5. **Channel handler extensibility** — Custom `ChannelHandler` implementation injectable into `InProcessTransport`
 6. **Clean async story** — `AsyncMiddleware` abstract base provides path to async auth back-ends
@@ -359,9 +359,9 @@ Server::new()
 
 **Implementation ideas:**
 
-- Leverage `candy-pty` cross-platform support when available
+- Leverage `sugar-pty` cross-platform support when available
 - Document Windows limitations
-- Consider ConPTY FFI integration in candy-pty
+- Consider ConPTY FFI integration in sugar-pty
 
 **Estimated complexity:** High — Windows-specific
 
@@ -719,7 +719,7 @@ Server::new()
 
 16. **Mosh support** — UDP-based connection resilience (via tsshd integration?)
 17. **SSH proxy/router** — Forward sessions based on logic (enterprise feature)
-18. **Windows ConPTY** — Windows PTY support in candy-pty
+18. **Windows ConPTY** — Windows PTY support in sugar-pty
 
 # Priority Matrix
 
@@ -749,7 +749,7 @@ CandyWish represents a well-architected port of `charmbracelet/wish` that makes 
 
 - Transport abstraction (`InProcessTransport` vs `HostSshdTransport`) provides deployment flexibility
 - ReactPHP-based async middleware enables enterprise auth back-ends
-- Deep `candy-pty` integration provides cross-platform PTY support
+- Deep `sugar-pty` integration provides cross-platform PTY support
 - Proper histogram-based metrics (vs Go's counter for duration)
 
 **Strategic gaps to address:**

@@ -3,7 +3,7 @@
 `candy-wish` is a PHP SSH server middleware framework. It runs as a
 daemon invoked by `sshd` via `ForceCommand` — each SSH connection forks a
 fresh PHP supervisor process that runs the middleware stack and, under
-`InProcessTransport`, spawns a candy-pty subprocess.
+`InProcessTransport`, spawns a sugar-pty subprocess.
 
 ---
 
@@ -16,7 +16,7 @@ Under **InProcessTransport** (default):
 1. Reads session metadata from sshd environment variables (`SSH_ORIGINAL_COMMAND`, `SSH_CLIENT`, etc.)
 2. Builds a root `Context` and walks the middleware chain
 3. The terminal middleware (`Spawn`) calls `runChild()` on the injected `ChildSpawner`
-4. `InProcessTransport` allocates a candy-pty master/slave pair, spawns the user's command, pumps bytes between the PTY master and STDIN/STDOUT, forwards SIGWINCH on window-change, and SIGHUP on EOF
+4. `InProcessTransport` allocates a sugar-pty master/slave pair, spawns the user's command, pumps bytes between the PTY master and STDIN/STDOUT, forwards SIGWINCH on window-change, and SIGHUP on EOF
 
 Under **HostSshdTransport** (legacy, opt-in):
 
@@ -51,7 +51,7 @@ Neither path is written unless the corresponding middleware is registered.
 |-----|--------|
 | `TERM` | Inherited from sshd; passed to the PTY child; respected by `DefaultChannelHandler` |
 | `COLUMNS` / `LINES` | Fallback dimensions when sshd doesn't provide them (used by `DefaultChannelHandler`) |
-| `SUGARCRAFT_PTY_BACKEND` | Override PTY backend selection (see `candy-pty` docs) |
+| `SUGARCRAFT_PTY_BACKEND` | Override PTY backend selection (see `sugar-pty` docs) |
 
 ### CLI flags
 

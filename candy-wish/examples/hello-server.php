@@ -47,7 +47,7 @@ final class Banner implements Middleware
 // HostSshdTransport pinned explicitly because Banner reads STDIN
 // directly via fread(STDIN, 1). Under the new InProcessTransport
 // default, that STDIN is the supervisor's input pipe (already
-// being pumped into a candy-pty master), so an inline read would
+// being pumped into a sugar-pty master), so an inline read would
 // race with the pump. HostSshd keeps STDIN/STDOUT attached to
 // sshd's PTY, the way pre-PTY-upgrade candy-wish always was.
 exit(Server::new()

@@ -193,7 +193,7 @@ while len(output) < needed_length:
 | WhispPHP/whisp Feature | SugarCraft Library | Notes |
 |----------------------|-------------------|-------|
 | SSH Server / Connection handling | `candy-core` | Core TUI infrastructure, event loop patterns |
-| PTY management / Terminal I/O | `candy-pty` | Could be a direct port - PTY creation and management |
+| PTY management / Terminal I/O | `sugar-pty` | Could be a direct port - PTY creation and management |
 | SSH protocol packets / Binary protocols | `sugar-widgets` | Low-level bit/byte manipulation patterns |
 | Terminal mode handling | `candy-terminal` or `sugar-widgets` | Terminal capability handling |
 | Channel / Session management | `candy-core` | Similar event/channel model |
@@ -206,7 +206,7 @@ while len(output) < needed_length:
 **Relevant SugarCraft Libraries:**
 
 - `candy-core` — Foundation library with TUI event loop, process management
-- `candy-pty` — Would be a logical port target for PTY functionality
+- `sugar-pty` — Would be a logical port target for PTY functionality
 - `sugar-widgets` — Low-level data handling, could use packet construction patterns
 - `candy-terminal` — Terminal capability handling
 
@@ -222,4 +222,4 @@ From a software architecture perspective, Whisp uses a similar event-driven patt
 
 The main limitations are the lack of Windows support (due to PTY/signal dependencies) and the narrow feature set (no SFTP, no port forwarding, no SCP). The password authentication accepting any password is a deliberate demo feature but could be misconstrued as a security issue. Overall, Whisp is an excellent reference implementation for anyone building SSH-related tooling in PHP or looking to understand the SSH protocol at the wire level.
 
-The project would map most closely to `candy-pty` (for its PTY management) and `candy-core` (for its event loop and process management patterns) in the SugarCraft ecosystem. A port would require careful handling of the FFI layer and a clean separation between the SSH protocol state machine and the application layer.
+The project would map most closely to `sugar-pty` (for its PTY management) and `candy-core` (for its event loop and process management patterns) in the SugarCraft ecosystem. A port would require careful handling of the FFI layer and a clean separation between the SSH protocol state machine and the application layer.

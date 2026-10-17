@@ -323,7 +323,7 @@ sugar-quickpick/src/
 
 - Document the limitation and fallback behavior
 
-**Estimated complexity:** Medium — requires platform-specific code (already exists in `candy-pty`)
+**Estimated complexity:** Medium — requires platform-specific code (already exists in `sugar-pty`)
 
 **Expected impact:** LOW — works correctly in most environments
 

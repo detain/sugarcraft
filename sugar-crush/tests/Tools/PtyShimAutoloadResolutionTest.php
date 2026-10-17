@@ -10,17 +10,17 @@ use SugarCraft\Pty\Spawn;
 
 /**
  * Regression pin for the pty-shim autoload-resolution defect that made every
- * sugar-crush CI run touching candy-pty red: the shim is reached through the
- * `vendor/sugarcraft/candy-pty` PATH-REPO SYMLINK, PHP resolves `__DIR__` to
+ * sugar-crush CI run touching sugar-pty red: the shim is reached through the
+ * `vendor/sugarcraft/sugar-pty` PATH-REPO SYMLINK, PHP resolves `__DIR__` to
  * the real checkout (which carries no vendor/ in a CI job that installs only
  * the matrix lib's vendor), and the shim died at exit 3
  * `pty-shim: vendor/autoload.php not found near …`.
  *
  * WHY THESE TESTS BUILD A SANDBOX INSTEAD OF SKIPPING: the same lookup fails
- * in PRODUCTION for any consumer installing candy-pty as a path-repo
+ * in PRODUCTION for any consumer installing sugar-pty as a path-repo
  * dependency in a tree where the lib dir has no vendor — a test-only skip
  * would hide a real defect. The sandbox reproduces the symlinked shape
- * deterministically, independently of what the host's own candy-pty happens
+ * deterministically, independently of what the host's own sugar-pty happens
  * to have installed, and the discriminator is the shim's own exit code:
  *   rc 3 + "not found"  = autoload unresolvable (the bug),
  *   rc 2 + "usage"      = autoload resolved and required, command simply
@@ -53,7 +53,7 @@ final class PtyShimAutoloadResolutionTest extends TestCase
 
     /**
      * The shape that broke: invocation travels through
-     * vendor/sugarcraft/candy-pty (a symlink), `__DIR__` resolves to the
+     * vendor/sugarcraft/sugar-pty (a symlink), `__DIR__` resolves to the
      * symlink TARGET, and the target's tree has no autoloader anywhere the
      * upward probes reach. The shim must still find the CONSUMER's
      * autoload.php — read lexically off the as-invoked path, because the
@@ -153,7 +153,7 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     public function testShimStillResolvesAutoloadInCopiedVendorLayout(): void
     {
         $autoload = $this->plantConsumer();
-        $copied = \dirname($autoload) . '/sugarcraft/candy-pty';
+        $copied = \dirname($autoload) . '/sugarcraft/sugar-pty';
         \mkdir($copied . '/bin', 0o755, true);
         \copy(self::realShim(), $copied . '/bin/pty-shim.php');
 
@@ -247,7 +247,7 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     }
 
     /**
-     * Wires `consumer/vendor/sugarcraft/candy-pty` → `../../lib` (a path-repo
+     * Wires `consumer/vendor/sugarcraft/sugar-pty` → `../../lib` (a path-repo
      * symlink into a checkout with no vendor of its own) and returns the
      * shim's AS-INVOKED path through the symlink — mirroring exactly how
      * composer's `$bin` proxy and Spawn's argv reach the shim in CI.
@@ -256,14 +256,14 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     {
         $vendor = \dirname($consumerAutoload);
         \mkdir($vendor . '/sugarcraft', 0o755, true);
-        \symlink($this->sandbox . '/lib', $vendor . '/sugarcraft/candy-pty');
+        \symlink($this->sandbox . '/lib', $vendor . '/sugarcraft/sugar-pty');
 
-        return $vendor . '/sugarcraft/candy-pty/bin/pty-shim.php';
+        return $vendor . '/sugarcraft/sugar-pty/bin/pty-shim.php';
     }
 
     /**
      * The shipped shim, located through the package root of the loaded
-     * Spawn class — valid whether candy-pty is a monorepo sibling or an
+     * Spawn class — valid whether sugar-pty is a monorepo sibling or an
      * installed copy.
      */
     private static function realShim(): string

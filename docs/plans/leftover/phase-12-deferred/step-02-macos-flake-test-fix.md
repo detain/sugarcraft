@@ -19,9 +19,9 @@ fix:
 
 **Modify:**
 
-- `candy-pty/tests/Integration/OrphanedChildReapTest.php` — add Darwin
+- `sugar-pty/tests/Integration/OrphanedChildReapTest.php` — add Darwin
   skip with comment.
-- `candy-pty/tests/Integration/PythonReplTest.php` — same.
+- `sugar-pty/tests/Integration/PythonReplTest.php` — same.
 - `.github/workflows/pty-matrix.yml` — pre-install python3 step.
 
 ## Acceptance

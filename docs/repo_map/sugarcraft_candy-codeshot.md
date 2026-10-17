@@ -332,7 +332,7 @@ The package is at the **output edge** of the rendering pipeline — it produces 
 
 6. **User config** — Persist last-used settings to `$XDG_CONFIG_HOME/candy-codeshot/user.json`.
 
-7. **PTY capture** — Integrate `candy-pty` for `--execute` flag functionality.
+7. **PTY capture** — Integrate `sugar-pty` for `--execute` flag functionality.
 
 8. **Background color fix for PngRenderer** — Investigate using `imagettftext()` with a background rect per character to enable per-segment background in PNG output (currently only frame background works).
 

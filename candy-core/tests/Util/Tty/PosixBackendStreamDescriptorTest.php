@@ -492,7 +492,7 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      *
      * WHY THE SETUP CARRIES TWO DEVICE FLAGS, AND WHY THIS RAN ON LINUX
      * ONLY UNTIL NOW: BSD's stty takes the device flag lowercase and GNU's
-     * uppercase -- the same split {@see SttyReading::of()} and candy-pty's
+     * uppercase -- the same split {@see SttyReading::of()} and sugar-pty's
      * own stty(1) fallbacks use. The GNU-only `-F` spelling is what kept
      * this on Linux by its rc guard, and until recently the guard was doing
      * double duty: the first arm's {@see SizeIoctl::query()} -- the very
@@ -501,7 +501,7 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      * macos-15-arm64, PHP 8.3.33, run 33796495350, job 100785492531:
      * "TIOCGWINSZ ioctl failed on fd 8 with rc=-1"), so the arm fell
      * through to the pinned env and the test could only red there, never
-     * discriminate. candy-pty has since fixed the read path with a Darwin
+     * discriminate. sugar-pty has since fixed the read path with a Darwin
      * stty(1) fallback inside SizeIoctl, which is what lets the BSD flag
      * through: the residual rc skip is now a pure capability gate (no stty
      * binary, hung-up pty), not an OS exemption. The Darwin leg itself is
@@ -519,7 +519,7 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         // 137x43 is not a size anything on a host would choose by accident,
         // and it is not the env answer below. The device flag splits by
         // convention (GNU `-F`, BSD `-f`); the `rows R cols C` word order
-        // both spellings accept is the one candy-pty's own Darwin stty(1)
+        // both spellings accept is the one sugar-pty's own Darwin stty(1)
         // fallback uses.
         $deviceFlag = \PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
         exec('stty ' . $deviceFlag . ' ' . escapeshellarg($path) . ' rows 43 cols 137 2>/dev/null', $ignored, $rc);
@@ -553,7 +553,7 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      * into raw mode, and `restore()` really takes it back out.
      *
      * Read back with `stty -F <slave path> -a` from THIS process rather than
-     * through candy-pty, because a termios structure is opaque there and a
+     * through sugar-pty, because a termios structure is opaque there and a
      * reading taken through the same binding that applied it would not be an
      * independent observation.
      */
@@ -680,7 +680,7 @@ final class PosixBackendStreamDescriptorTest extends TestCase
             self::markTestSkipped('/dev/ptmx is unavailable; there is no terminal device to inject.');
         }
         if (!\extension_loaded('ffi')) {
-            self::markTestSkipped('candy-pty needs ext-ffi to allocate a pty pair.');
+            self::markTestSkipped('sugar-pty needs ext-ffi to allocate a pty pair.');
         }
 
         $pair = (new PosixPtySystem())->open();

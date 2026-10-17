@@ -11,7 +11,7 @@ namespace SugarCraft\Wish;
  * Two implementations ship with candy-wish:
  *
  *   - {@see Transport\InProcessTransport} (default) — allocates a
- *     pseudo-terminal via `candy-pty`, spawns the user's cmd as a
+ *     pseudo-terminal via `sugar-pty`, spawns the user's cmd as a
  *     subprocess with `controllingTerminal: true`, and pumps bytes
  *     between the supervisor's STDIN/STDOUT and the PTY master.
  *     Lets middleware mount arbitrary shells, editors, and signal-

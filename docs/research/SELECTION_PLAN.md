@@ -251,19 +251,19 @@
 - **Effort**: 2-3 hours
 - **Research**: `libraries/candy-sprinkles-research.md`
 
-### candy-pty
+### sugar-pty
 
 ### [ ] Add `openpty()` FFI binding
 
 - **Priority**: P1 - High
 - **Effort**: 1-2 days
-- **Research**: `libraries/candy-pty-research.md`
+- **Research**: `libraries/sugar-pty-research.md`
 
 ### [ ] Add `waitpid()` FFI binding
 
 - **Priority**: P1 - High
 - **Effort**: 1 day
-- **Research**: `libraries/candy-pty-research.md`
+- **Research**: `libraries/sugar-pty-research.md`
 
 ### candy-wish
 
@@ -443,7 +443,7 @@ All 45 research documents available at:
 | candy-starter | 18KB |
 | sugar-image | 24KB |
 | sugar-colorprofile | 15KB |
-| candy-pty | 24KB |
+| sugar-pty | 24KB |
 | candy-sql | 11KB |
 | candy-git-server | 12KB |
 | candy-scriptui | 18KB |

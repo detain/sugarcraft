@@ -254,7 +254,7 @@ exit(0);
 /**
  * Parse docs/MATCHUPS.md into a slug => type map. The "Charmbracelet libraries"
  * table yields libraries; the "## Apps" table yields apps. HTML-commented rows
- * (e.g. the TODO ConPTY-Windows row) are skipped, so candy-pty stays a library.
+ * (e.g. the TODO ConPTY-Windows row) are skipped, so sugar-pty stays a library.
  *
  * @return array<string,string>
  */

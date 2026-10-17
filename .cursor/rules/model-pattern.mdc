@@ -13,4 +13,4 @@ alwaysApply: false
 - Bare accessors (no `get`). Factories mirror upstream — `::new()` default, `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`; never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`candy-core/src/Model.php`): `init(): ?\Closure` · `update(Msg): [Model, ?Cmd]` · `view(): string`. Side effects → `Cmd`s, never `view()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.
-- i18n via `Lang::t($key,$params)` (`candy-pty/src/Lang.php`).
+- i18n via `Lang::t($key,$params)` (`sugar-pty/src/Lang.php`).

@@ -229,7 +229,7 @@ Model.lines()
 **Description:** `find()` is O(n) sequential. Go upstream's `GetIndex` launches one goroutine per item and collects via channels. In PHP this pattern would use ReactPHP promises or async workers.
 **Why it matters:** For large lists (10k+ items), parallel search would be significantly faster.
 **Source:** `docs/repo_map/treilik_bubblelister.md` (concurrent GetIndex with goroutines)
-**Implementation ideas:** Use `React\Promise\all()` with deferred promises per chunk of items. Or use `sugarcraft/candy-pty` for process-based parallelism. Chunk items (e.g., 100 per chunk) and search chunks in parallel.
+**Implementation ideas:** Use `React\Promise\all()` with deferred promises per chunk of items. Or use `sugarcraft/sugar-pty` for process-based parallelism. Chunk items (e.g., 100 per chunk) and search chunks in parallel.
 **Estimated complexity:** High — requires async/concurrent infrastructure
 **Expected impact:** Medium — only matters for large lists
 

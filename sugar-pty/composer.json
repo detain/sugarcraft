@@ -1,0 +1,61 @@
+{
+    "name": "sugarcraft/sugar-pty",
+    "description": "PHP port of charmbracelet/x/xpty \u2014 pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "cli",
+        "pty",
+        "pseudo-terminal",
+        "ffi",
+        "libc",
+        "posix",
+        "xpty",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-pty",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-pty/issues",
+        "source": "https://github.com/sugarcraft/sugar-pty",
+        "docs": "https://sugarcraft.github.io/lib/sugar-pty.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-ffi": "*",
+        "react/event-loop": "^1.6",
+        "react/promise": "^3.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-input": "dev-master",
+        "sugarcraft/candy-ansi": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-vt": "dev-master",
+        "sugarcraft/candy-vcr": "dev-master",
+        "sugarcraft/candy-testing": "dev-master"
+    },
+    "suggest": {
+        "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Pty\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Pty\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

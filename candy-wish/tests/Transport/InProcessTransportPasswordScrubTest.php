@@ -60,7 +60,7 @@ final class InProcessTransportPasswordScrubTest extends TestCase
         $this->assertIsResource($stdin);
         $this->assertIsResource($stdout);
 
-        // env=null → candy-pty's proc_open would inherit the parent env,
+        // env=null → sugar-pty's proc_open would inherit the parent env,
         // leaking SSH_PASSWORD into the child unless the preamble scrubs it.
         (new InProcessTransport(new ScrubRecordingPtySystem()))
             ->runChild($this->session(), ['/bin/true'], null, $stdin, $stdout);
