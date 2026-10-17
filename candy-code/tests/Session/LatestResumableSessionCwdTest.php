@@ -32,7 +32,10 @@ final class LatestResumableSessionCwdTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (glob(dirname($this->dbPath) . '/*') ?: [] as $file) {
+        // chr(42): the GlobDialect corpus harvests glob-shaped literals from
+        // every file in the tree; spelling the wildcard by code keeps this
+        // teardown out of the differential it derives.
+        foreach (glob(dirname($this->dbPath) . '/' . chr(42)) ?: [] as $file) {
             @unlink($file);
         }
         @rmdir(dirname($this->dbPath));

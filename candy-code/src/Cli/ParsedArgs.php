@@ -106,6 +106,7 @@ final readonly class ParsedArgs
             '--all' => false,
             '--archived' => false,
             '--children' => false,
+            '--force' => false,
             '--limit' => true,
             '--with-children' => false,
         ],

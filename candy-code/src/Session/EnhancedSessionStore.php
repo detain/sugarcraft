@@ -74,6 +74,33 @@ final class EnhancedSessionStore
         return SessionLock::holderPid($this->lockDirectory(), $sessionId);
     }
 
+    /**
+     * The pid of a process that holds $sessionId's lock RIGHT NOW, or null
+     * when nobody does — the probe destructive verbs gate on (sugar_issues.md
+     * ISS-079), where {@see sessionLockHolder()} cannot be trusted because a
+     * lock file outlives its writer between a crash and the next open.
+     *
+     * HOW IT ASKS without disturbing anybody: the lock is the flock, so the
+     * only honest question is "can I take it?". A probe that takes it has, in
+     * the meantime, proven no one else held it, and releases immediately —
+     * the same unlink-then-reacquire race the lock's own retry loop tolerates
+     * is bounded here by the verb continuing microseconds later. A refused
+     * acquire means a live holder, and the pid it records (file-read, so it
+     * can still be mid-write — the worst the answer can be wrong is the
+     * number beside a refusal that was correctly issued).
+     */
+    public function liveLockHolder(string $sessionId): ?int
+    {
+        $lock = $this->lockSession($sessionId);
+        if ($lock !== null) {
+            $lock->release();
+
+            return null;
+        }
+
+        return $this->sessionLockHolder($sessionId);
+    }
+
     private function lockDirectory(): ?string
     {
         if ($this->dbPath === '' || $this->dbPath === ':memory:' || str_starts_with($this->dbPath, 'file::memory:')) {

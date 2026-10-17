@@ -725,12 +725,17 @@ final class Subcommands
     private const SESSION_ACTION_FLAGS = [
         'list' => ['--all', '--archived', '--children', '--limit'],
         'show' => [],
-        'rename' => [],
-        'delete' => ['--with-children'],
-        'pin' => [],
-        'unpin' => [],
-        'archive' => [],
-        'unarchive' => [],
+        // --force (ISS-079): act on the row even while another candy-code
+        // window has it open. The gate is live-flock, not the stale-prone
+        // pid file, so refusing without --force is never a false alarm about
+        // a dead session; overriding is for the user who knows better than
+        // the flock — a wedged window they intend to kill, say.
+        'rename' => ['--force'],
+        'delete' => ['--with-children', '--force'],
+        'pin' => ['--force'],
+        'unpin' => ['--force'],
+        'archive' => ['--force'],
+        'unarchive' => ['--force'],
     ];
 
     /**
@@ -880,6 +885,10 @@ final class Subcommands
         if (\is_int($row)) {
             return $row;
         }
+        $refusal = self::refuseLiveLockedSession($row, $store, $args);
+        if ($refusal !== null) {
+            return $refusal;
+        }
 
         $store->renameSession($row->id, $title, TitleSource::User);
 
@@ -908,6 +917,10 @@ final class Subcommands
         $row = self::resolveSessionTarget('delete', $args, $store);
         if (\is_int($row)) {
             return $row;
+        }
+        $refusal = self::refuseLiveLockedSession($row, $store, $args);
+        if ($refusal !== null) {
+            return $refusal;
         }
 
         $deleted = $store->deleteSession($row->id, isset($args->subcommandFlags['--with-children']));
@@ -942,6 +955,10 @@ final class Subcommands
         if (\is_int($row)) {
             return $row;
         }
+        $refusal = self::refuseLiveLockedSession($row, $store, $args);
+        if ($refusal !== null) {
+            return $refusal;
+        }
 
         $changed = match ($verb) {
             'pin' => !$row->pinned && $store->setPinned($row->id, true),
@@ -969,8 +986,7 @@ final class Subcommands
      * reported: 2 for a missing target or an ambiguous prefix (the candidates
      * are listed in the hint), 1 for a target nothing matches.
      */
-    private static function resolveSessionTarget(
-        string $verb,
+    private static function resolveSessionTarget(        string $verb,
         ParsedArgs $args,
         EnhancedSessionStore $store,
     ): SessionRow|int {
@@ -1015,6 +1031,45 @@ final class Subcommands
         }
 
         return $matches[0];
+    }
+
+    /**
+     * The ISS-079 gate: a row another live candy-code window holds is not
+     * this verb's to rename, flag or delete — the window is still writing the
+     * row, so whatever this run reports as done its next save can silently
+     * undo, and a deleted row comes back as a ghost through saveTranscript()'s
+     * recreate arm with half its history pointed at the void. The probe is
+     * {@see EnhancedSessionStore::liveLockHolder()}, which ASKS the flock
+     * rather than reading the pid file, so a lock left by a dead process
+     * never refuses anything. `--force` skips the question entirely.
+     *
+     * The refusal rides the usage channel (exit 2, `usage` error document),
+     * not the not-found channel: the command as given cannot be honoured —
+     * the mutation is refused before it is attempted, which is exactly what
+     * exit 2's "nothing was attempted" states about the destructive half.
+     * A dedicated `locked` error.type would need README.md's error contract
+     * lines (closeout-owned this wave); that promotion is a DOC-ROW, not a
+     * reason to ship silence.
+     *
+     * @return int|null the exit code already reported, or null when the row
+     *                  is free to act on
+     */
+    private static function refuseLiveLockedSession(SessionRow $row, EnhancedSessionStore $store, ParsedArgs $args): ?int
+    {
+        if (isset($args->subcommandFlags['--force'])) {
+            return null;
+        }
+
+        $holder = $store->liveLockHolder($row->id);
+        if ($holder === null) {
+            return null;
+        }
+
+        return NonInteractive::failUsage(
+            'candy-code: ' . Lang::t('cli.session.locked', ['id' => self::sessionLabel($row), 'pid' => $holder]),
+            $args->outputFormat,
+            Lang::t('cli.session.locked_hint'),
+        );
     }
 
     private static function rejectSessionOperand(string $verb, string $operand, ParsedArgs $args): int

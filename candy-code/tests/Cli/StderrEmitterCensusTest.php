@@ -504,7 +504,10 @@ final class StderrEmitterCensusTest extends TestCase
         // a bad --limit, a stray operand, a missing title, an ambiguous id
         // prefix) took twenty-three to twenty-eight — same stderr-only
         // decision, nothing was opened or changed.
-        'src/Cli/Subcommands.php' => 28,
+        // +1 in ISS-079: refuseLiveLockedSession()'s envelope-carrying
+        // refusal line (usage channel, stderr + JSON document both via
+        // NonInteractive::failUsage).
+        'src/Cli/Subcommands.php' => 29,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
