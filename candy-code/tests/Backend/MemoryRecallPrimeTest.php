@@ -21,10 +21,12 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * Roadmap 5.3-2 end to end: `EngineBackend::completeAsync()` ranks the turn's
- * memory recall in the PARENT before it forks — the embedding call happens
- * there, once, through the configured `embeddingModel` — and the forked
- * turn's persisted `<turn-context>` row carries the recalled note.
+ * Roadmap 5.3-2 end to end after ISS-072: the turn's memory recall is ranked
+ * in the forked child — or the blocking fallback, or a direct call — through
+ * the configured `embeddingModel`, never in the parent of a fork, and the
+ * turn's persisted `<turn-context>` row carries the recalled note. A
+ * sessionless backend (the dream pass) primes nothing at all: no embedding
+ * HTTP on background turns.
  */
 final class MemoryRecallPrimeTest extends TestCase
 {
@@ -35,7 +37,7 @@ final class MemoryRecallPrimeTest extends TestCase
     protected function setUp(): void
     {
         if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-            self::markTestSkipped('the parent-side prime is the forked path; without pcntl the blocking fallback runs in-process');
+            self::markTestSkipped('the forked child is the priming path this pins; without pcntl only the fallback would run');
         }
 
         $this->dir = sys_get_temp_dir() . '/recall_prime_' . bin2hex(random_bytes(4));
@@ -57,7 +59,7 @@ final class MemoryRecallPrimeTest extends TestCase
         rmdir($this->dir);
     }
 
-    public function testAConfiguredEmbeddingModelRanksInTheParentAndTheRowCarriesTheNote(): void
+    public function testAConfiguredEmbeddingModelRanksInTheChildAndTheRowCarriesTheNote(): void
     {
         Bootstrap::writeUserConfig(['embeddingModel' => 'embed-x']);
         $store = new MemoryStore($this->dir . '/memory');
@@ -70,13 +72,22 @@ final class MemoryRecallPrimeTest extends TestCase
         $row = (string) TurnContextBlock::latestIn($reply->turnTranscript);
         self::assertStringContainsString('<memory-recall>', $row, 'only the vector leg can find this note: no shared word');
         self::assertStringContainsString($id, $row);
-        self::assertNotEmpty($provider->embeddingCalls, 'the embedding request ran in the parent, where this object lives');
-        self::assertSame('embed-x', $provider->embeddingCalls[0]['model']);
+        // The embed ran in the child: the parent's copy of the provider saw
+        // nothing (ISS-072), which is the whole point of the move.
+        self::assertSame([], $provider->embeddingCalls, 'the parent no longer makes the request');
+    }
 
-        // The second turn embeds only its query: the notes' vectors are cached.
-        $provider->embeddingCalls = [];
-        $this->turn($provider, $store, 'when is the rollout?');
-        self::assertSame([['when is the rollout?']], array_column($provider->embeddingCalls, 'input'));
+    public function testASecondRankedTurnStillCarriesTheNoteViaTheCachedVectors(): void
+    {
+        Bootstrap::writeUserConfig(['embeddingModel' => 'embed-x']);
+        $store = new MemoryStore($this->dir . '/memory');
+        $id = $store->add('Production rollouts happen on Tuesdays.', MemoryScope::Project);
+        $provider = self::provider();
+
+        $this->turn($provider, $store, 'when do we ship?');
+        $reply = $this->turn($provider, $store, 'when is the rollout?');
+
+        self::assertStringContainsString($id, (string) TurnContextBlock::latestIn($reply->turnTranscript));
     }
 
     public function testWithoutAnEmbeddingModelTheRecallIsKeywordOnlyAndCallsNoEndpoint(): void
@@ -106,13 +117,43 @@ final class MemoryRecallPrimeTest extends TestCase
             ini_set('error_log', (string) $previousLog);
         }
 
+        // The attempt, the degradation and the report all happen in the child
+        // now (ISS-072): the row still carries the note keyword-ranked, and
+        // the fork inherits error_log, so the warn lands in the same file —
+        // every fresh child re-arms the once-per-process latch.
         self::assertStringContainsString($id, (string) TurnContextBlock::latestIn($reply->turnTranscript));
-        self::assertNotEmpty($provider->embeddingCalls, 'the configured model was tried');
-        // Reported, not swallowed — once per process, so another test may
-        // already have spent this exact reason; the log is then empty.
-        if (is_file($log)) {
-            self::assertStringContainsString('ranking memory notes by keyword only', (string) file_get_contents($log));
-        }
+        self::assertSame([], $provider->embeddingCalls, 'the parent made no request itself');
+        self::assertFileExists($log);
+        self::assertStringContainsString('ranking memory notes by keyword only', (string) file_get_contents($log));
+    }
+
+    public function testASessionlessBackendPrimesNoEmbeddingsAtAll(): void
+    {
+        Bootstrap::writeUserConfig(['embeddingModel' => 'embed-x']);
+        $store = new MemoryStore($this->dir . '/memory');
+        $store->add('Production rollouts happen on Tuesdays.', MemoryScope::Project);
+        $provider = self::provider();
+
+        $backend = EngineBackend::new($provider, 'm')->withMemoryStore($store)->withRoot($this->dir . '/repo');
+        (new \ReflectionMethod($backend, 'primeMemoryRecallForTurn'))->invoke($backend, [Message::user('when do we ship?')]);
+
+        self::assertSame([], $provider->embeddingCalls, 'no session id means no per-turn embedding HTTP (ISS-072)');
+    }
+
+    public function testTheParentOfAForkNeverPrimesTheRanking(): void
+    {
+        $source = (string) file_get_contents((new \ReflectionClass(EngineBackend::class))->getFileName());
+        $lines = explode("\n", $source);
+        $body = static function (string $method) use ($lines): string {
+            $reflected = new \ReflectionMethod(EngineBackend::class, $method);
+
+            return implode("\n", \array_slice($lines, $reflected->getStartLine() - 1, $reflected->getEndLine() - $reflected->getStartLine() + 1));
+        };
+
+        self::assertStringNotContainsString('->primeMemoryRecall', $body('completeAsync'), 'ISS-072: the parent must not make the request');
+        self::assertStringContainsString('primeMemoryRecallForTurn($history);', $body('runCompleteInChild'));
+        self::assertStringContainsString('primeMemoryRecallForTurn($history);', $body('completeAsyncBlocking'));
+        self::assertStringContainsString('$this->sessionId === null', $body('primeMemoryRecallForTurn'), 'the sessionless guard is load-bearing');
     }
 
     // ── harness ─────────────────────────────────────────────────────────
@@ -121,7 +162,8 @@ final class MemoryRecallPrimeTest extends TestCase
     {
         $backend = EngineBackend::new($provider, 'm')
             ->withMemoryStore($store)
-            ->withRoot($this->dir . '/repo');
+            ->withRoot($this->dir . '/repo')
+            ->withSessionId('recall-session');
 
         $reply = $this->drainUntilSettled($backend->completeAsync([Message::user($prompt)]));
         self::assertInstanceOf(Message::class, $reply);

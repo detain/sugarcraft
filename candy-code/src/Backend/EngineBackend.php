@@ -3567,46 +3567,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             }
         }
 
-        // Roadmap 5.3-2: this turn's memory recall, ranked HERE in the parent
-        // before the fork, so the note reads and the one embedding request
-        // happen once per turn and the child's `<turn-context>` row reads the
-        // ranking warm (Runtime::memoryRecall()). Embeddings are opt-in
-        // (`embeddingModel`): without one the ranking is keyword-only, and a
-        // configured model that fails degrades to keyword-only and is
-        // reported once per process rather than silently.
-        if ($this->memoryStore !== null) {
-            $embeddingModel = self::userConfig()['embeddingModel'] ?? null;
-            $embeddingModel = \is_string($embeddingModel) ? trim($embeddingModel) : '';
-            $embedder = null;
-            if ($embeddingModel !== '') {
-                $provider = $this->provider;
-                $vectors = \SugarCraft\Code\Memory\EmbeddingCache::new();
-                $embedder = static fn (array $texts): array => $vectors->vectors(
-                    $embeddingModel,
-                    $texts,
-                    static fn (array $batch): array => $provider->embeddings(
-                        new \SugarCraft\Code\Providers\EmbeddingsRequest($embeddingModel, $batch),
-                    )->embeddings,
-                );
-            }
-            try {
-                $recall = $this->newRuntime(new HookManager(new HookRegistry()))->primeMemoryRecall(
-                    $this->sessionApp(),
-                    \SugarCraft\Code\Context\MemoryRecallBlock::queryFrom($history),
-                    $embedder,
-                );
-                $degraded = $recall->degradedReason();
-                if ($degraded !== null && \SugarCraft\Code\Context\MemoryRecallBlock::firstReportOf($degraded)) {
-                    \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(sprintf(
-                        'Memory recall: embedding model "%s" failed (%s); ranking memory notes by keyword only.',
-                        $embeddingModel,
-                        $degraded,
-                    ));
-                }
-            } catch (\Throwable) {
-                // Left to the child, which ranks keyword-only on first use.
-            }
-        }
+        // Roadmap 5.3-2 / ISS-072: this turn's memory recall is NOT ranked
+        // here any more. The one embedding request it costs now runs after
+        // the fork, inside the child that will read the ranking
+        // ({@see self::primeMemoryRecallForTurn()}), so embedding HTTP never
+        // sits on the parent's event loop, and the sessionless background
+        // turns (the dream pass) issue none at all. The two calls above stay
+        // in the parent deliberately: beginSessionTurn() and the symbol map
+        // are memo writes every later child inherits, and neither is HTTP.
 
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
             return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
@@ -4670,10 +4638,66 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @param array<int, Message> $history
      */
+    /**
+     * Rank this turn's memory recall in the process that assembles the
+     * request (ISS-072). Before this the embedding request ran in the parent
+     * before the fork, so one opt-in embedding HTTP call sat on the event
+     * loop at the head of every turn; here it stalls only the child, or the
+     * blocking fallback where no child exists. Sessionless backends — the
+     * dream pass, delegated background work — prime nothing: their recall is
+     * served keyword-only by Runtime::memoryRecall()'s own first-use
+     * fallback, with no request to wait for. Embeddings stay opt-in
+     * (`embeddingModel`); a configured model that fails degrades to
+     * keyword-only and is reported — on the fork path once per turn rather
+     * than once per process, because the fresh child re-arms the latch and
+     * the notice rides the result socket back to the parent.
+     *
+     * @param list<Message> $history
+     */
+    private function primeMemoryRecallForTurn(array $history): void
+    {
+        if ($this->sessionId === null || $this->memoryStore === null) {
+            return;
+        }
+
+        $embeddingModel = self::userConfig()['embeddingModel'] ?? null;
+        $embeddingModel = \is_string($embeddingModel) ? trim($embeddingModel) : '';
+        $embedder = null;
+        if ($embeddingModel !== '') {
+            $provider = $this->provider;
+            $vectors = \SugarCraft\Code\Memory\EmbeddingCache::new();
+            $embedder = static fn (array $texts): array => $vectors->vectors(
+                $embeddingModel,
+                $texts,
+                static fn (array $batch): array => $provider->embeddings(
+                    new \SugarCraft\Code\Providers\EmbeddingsRequest($embeddingModel, $batch),
+                )->embeddings,
+            );
+        }
+        try {
+            $recall = $this->newRuntime(new HookManager(new HookRegistry()))->primeMemoryRecall(
+                $this->sessionApp(),
+                \SugarCraft\Code\Context\MemoryRecallBlock::queryFrom($history),
+                $embedder,
+            );
+            $degraded = $recall->degradedReason();
+            if ($degraded !== null && \SugarCraft\Code\Context\MemoryRecallBlock::firstReportOf($degraded)) {
+                \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(sprintf(
+                    'Memory recall: embedding model "%s" failed (%s); ranking memory notes by keyword only.',
+                    $embeddingModel,
+                    $degraded,
+                ));
+            }
+        } catch (\Throwable) {
+            // Left to the request assembly, which ranks keyword-only on first use.
+        }
+    }
+
     private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {
             $engine = $this;
+            $this->primeMemoryRecallForTurn($history);
             $channel = ChildChannel::new(
                 $childSocket,
                 static function (array $frame) use ($childSocket): void {
@@ -5376,6 +5400,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     {
         try {
             $engine = $this;
+            // ISS-072: this path has no child, so the ranking is primed here
+            // — still never in the parent of a fork.
+            $this->primeMemoryRecallForTurn($history);
             if ($interactive && $onEvent !== null) {
                 $fallback = $this->permissionApprover;
                 $mode = $this->permissionGate?->mode()->value ?? '';

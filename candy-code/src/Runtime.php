@@ -5717,10 +5717,11 @@ final class Runtime
 
     /**
      * Rank $app's memory notes against $query and keep the result as this
-     * session's recall — the parent-side half of roadmap 5.3-2, run by
-     * EngineBackend before it forks a turn, so the note reads and the one
-     * embedding request ($embedder, null for keyword-only) happen once per
-     * turn in the process that outlives it.
+     * session's recall — the priming half of roadmap 5.3-2, run by
+     * EngineBackend in the process that assembles the request (the forked
+     * turn child, or the blocking fallback with no child) since ISS-072, so
+     * the note reads and the one embedding request ($embedder, null for
+     * keyword-only) happen once per turn off the parent's event loop.
      *
      * ONE memo slot per session, holding only the LATEST query's ranking:
      * a slot per query would grow by one every turn and, past the memo's
