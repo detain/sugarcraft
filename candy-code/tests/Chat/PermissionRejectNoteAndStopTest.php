@@ -54,6 +54,86 @@ final class PermissionRejectNoteAndStopTest extends TestCase
         self::assertTrue($answered->inFlight, 'a refusal with a note lets the model carry on');
     }
 
+    public function testTheNoteAnswerSendsTheExpandedChipPayload(): void
+    {
+        // ISS-051 (review fix): the AskUser/rejection note is a draft egress
+        // like submit — the model reads the paste, never the marker.
+        [$writing, $ask] = $this->armedPromptWithChip(PermissionPromptStage::WritingNote, "don't touch the fixtures\nthey are seeded");
+
+        [$answered] = $writing->update(new KeyMsg(KeyType::Enter));
+
+        self::assertSame(PermissionReply::Reject, $ask->resolution()?->reply);
+        self::assertSame("don't touch the fixtures\nthey are seeded", $ask->resolution()?->note, 'the note is the payload');
+        self::assertSame('', $answered->inputBuf, 'the box clears like any note answer');
+    }
+
+    public function testTheScopeEditorGrantsTheExpandedChipPayload(): void
+    {
+        // ISS-051 (review fix): a pasted rule line still grants the RULE.
+[$editing, $ask] = $this->armedPromptWithChip(PermissionPromptStage::EditingScope, 'Bash(git *)');
+
+        [$answered] = $editing->update(new KeyMsg(KeyType::Enter));
+
+        self::assertSame(PermissionReply::Always, $ask->resolution()?->reply);
+        self::assertArrayHasKey('rule:Bash(git *)', $answered->permissionGrants(), 'the grant is the pattern, not the marker');
+        self::assertNull($answered->pendingPermission(), 'the answer closed the modal');
+    }
+
+    /**
+     * A prompt inside the note editor or the scope editor with a chip in the
+     * box and its payload in the map: the pump arms the modal (the request is
+     * Chat's own — {@see KeyHelpTest}'s construction census), the constructor
+     * seeds the map, and the marker text is typed so the box holds exactly the
+     * chip its key names.
+     *
+     * @return array{0: Chat, 1: PendingAsk}
+     */
+    private function armedPromptWithChip(PermissionPromptStage $stage, string $payload): array
+    {
+        $chip = '[Pasted text #1 +2 lines]';
+        $inbox = new \ArrayObject();
+        $chat = (new Chat(
+            history: [Message::user('go')],
+            backend: new EchoBackend(),
+            inFlight: true,
+            generation: self::GENERATION,
+            liveToolEvents: $inbox,
+            pasteChips: [$chip => $payload],
+        ))->withSize(120, 40);
+
+        $ask = new PendingAsk(
+            PendingAsk::askId('call_Bash', 'Bash', ['command' => 'git reset --hard']),
+            'call_Bash',
+            'Bash',
+            ['command' => 'git reset --hard'],
+            'needs approval',
+            'gate',
+            'default',
+            [PermissionReply::Once->value, PermissionReply::Always->value, PermissionReply::Reject->value],
+            ['tool' => 'Bash'],
+            static function (PermissionResolved $resolution): void {
+            },
+        );
+        $inbox[] = [self::GENERATION, new PermissionAsked($ask)];
+        [$armed] = $chat->update(new ToolEventPumpMsg());
+
+        $key = $stage === PermissionPromptStage::WritingNote ? 'r' : 'e';
+        [$stageChat] = $armed->update(new KeyMsg(KeyType::Char, $key));
+        self::assertSame($stage, $stageChat->permissionStage(), 'fixture: the editor is open');
+        if ($stage === PermissionPromptStage::EditingScope) {
+            // `e` prefills the editable scope; the user replaces it whole.
+            while ($stageChat->inputBuf !== '') {
+                [$stageChat] = $stageChat->update(new KeyMsg(KeyType::Backspace, ''));
+            }
+        }
+        foreach (mb_str_split($chip) as $rune) {
+            [$stageChat] = $stageChat->update(new KeyMsg($rune === ' ' ? KeyType::Space : KeyType::Char, $rune));
+        }
+        self::assertSame($chip, $stageChat->inputBuf, 'fixture: the box holds the chip text');
+
+        return [$stageChat, $ask];
+    }
+
     public function testEscapeFromTheNoteGoesBackToTheQuestionKeepingTheText(): void
     {
         [$asking, $ask] = $this->asking();

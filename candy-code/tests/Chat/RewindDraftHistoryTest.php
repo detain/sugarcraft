@@ -21,6 +21,7 @@ use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Host\TurnController;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -166,6 +167,50 @@ final class RewindDraftHistoryTest extends TestCase
         $this->assertSame(self::REWIND_PROMPT, $rewound->inputBuf);
         $this->assertSame(4, $rewound->inputCursorOffset(), 'the caret still round-trips');
         $this->assertStringContainsString('Rewound 2 messages', $rewound->history[3]->content);
+    }
+
+    /**
+     * ISS-051 (review fix): the chip payloads ride the checkpoint beside the
+     * draft, so a rewound box is RE-SENDABLE — the map was cold in this Chat,
+     * and Enter still dispatches the whole paste, never the dangling marker.
+     */
+    public function testARestoredChipDraftExpandsToItsPayloadAfterARewind(): void
+    {
+        $chip = '[Pasted text #7 +2 lines]';
+        $payload = 'note: the long paste recovered whole, every line';
+        $this->store->saveCheckpoint(self::REWIND_SESSION, [
+            'messages' => [
+                ['role' => 'user', 'content' => 'earlier question'],
+                ['role' => 'assistant', 'content' => 'earlier answer'],
+            ],
+            TurnController::CHECKPOINT_PRE_TURN_KEY => true,
+            'inputBuf' => $chip,
+            'inputCursor' => 0,
+            'inFlight' => false,
+            'agentContext' => ['currentSessionId' => self::REWIND_SESSION],
+            'pasteChips' => [$chip => $payload],
+            'pasteCounter' => 7,
+        ]);
+
+        $chat = $this->chat([
+            Message::user('earlier question'),
+            Message::assistant('earlier answer'),
+            Message::user('undone prompt'),
+            Message::assistant('undone answer'),
+        ], $this->recordingBackend());
+
+        [$rewound] = $this->type($this->clearDraft($chat), '/rewind')->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame($chip, $rewound->inputBuf, 'the box comes back as it was: a chip');
+
+        [$resent] = $rewound->update(new KeyMsg(KeyType::Enter, ''));
+        $users = array_values(array_filter(
+            $resent->history,
+            static fn (Message $m): bool => $m->role === Role::User && !$m->uiOnly,
+        ));
+        $this->assertSame($payload, $users[count($users) - 1]->content, 'the resumed draft sent the paste, not the marker');
+        foreach ($resent->history as $row) {
+            $this->assertStringNotContainsString('[Pasted text', $row->content, 'no row in the transcript ever held the marker');
+        }
     }
 
     /**

@@ -122,7 +122,7 @@ final class Checkpoints
                 }
             }
 
-            [$messages, $draft, $cursor] = self::checkpointChatState($state);
+            [$messages, $draft, $cursor, $chips, $chipCount] = self::checkpointChatState($state);
             // Counted AFTER the legacy trim, so "Rewound N" is the rows the
             // restore really took away: the prompt, its reply and everything
             // the turn added in between.
@@ -130,7 +130,7 @@ final class Checkpoints
             $response = Lang::t('host.checkpoint.rewound', ['count' => $rewound, 'index' => $targetIndex]) . $filesNote
                 . Lang::t('host.checkpoint.redo_hint');
 
-            return self::restored($messages, $draft, $cursor, $text, $response);
+            return self::restored($messages, $draft, $cursor, $text, $response, $chips, $chipCount);
         } catch (\Throwable $e) {
             return CommandResult::reply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
         }
@@ -266,10 +266,12 @@ final class Checkpoints
     }
 
     /**
-     * The messages, draft and caret a checkpoint state restores.
+     * The messages, draft and caret a checkpoint state restores — plus the
+     * chip payloads captured beside the draft (ISS-051 review fix; empty for
+     * chip-less and pre-fix checkpoints) and the counter that issued them.
      *
      * @param array<string, mixed> $state
-     * @return array{0: list<Message>, 1: string, 2: ?int}
+     * @return array{0: list<Message>, 1: string, 2: ?int, 3: array<string, string>, 4: int}
      */
     public static function checkpointChatState(array $state): array
     {
@@ -300,7 +302,20 @@ final class Checkpoints
             $messages = self::withoutLegacyTrailingPrompt($messages, $draft);
         }
 
-        return [$messages, $draft, \is_int($cursor) ? $cursor : null];
+        // ISS-051 (review fix): the chip map rides the checkpoint, filtered to
+        // string payloads — a hand-mangled or foreign state contributes chips
+        // nothing matches, never garbage the model would read.
+        $rawChips = $state['state_data']['pasteChips'] ?? $state['pasteChips'] ?? [];
+        $chips = \is_array($rawChips)
+            ? array_filter(
+                $rawChips,
+                static fn (mixed $v, string|int $k): bool => \is_string($k) && \is_string($v),
+                \ARRAY_FILTER_USE_BOTH,
+            )
+            : [];
+        $rawCounter = $state['state_data']['pasteCounter'] ?? $state['pasteCounter'] ?? 0;
+
+        return [$messages, $draft, \is_int($cursor) ? $cursor : null, $chips, \is_int($rawCounter) ? $rawCounter : 0];
     }
 
     /**
@@ -308,11 +323,19 @@ final class Checkpoints
      * command and its reply appended as UI-only rows.
      *
      * @param list<Message> $messages
+     * @param array<string, string> $pasteChips the chip payloads stored beside the draft (ISS-051)
      */
-    public static function restored(array $messages, string $draft, ?int $cursor, string $text, string $response): CommandResult
-    {
+    public static function restored(
+        array $messages,
+        string $draft,
+        ?int $cursor,
+        string $text,
+        string $response,
+        array $pasteChips = [],
+        int $pasteCounter = 0,
+    ): CommandResult {
         return CommandResult::reply($text, $response)
-            ->withEffect(CommandEffect::restoreCheckpoint($messages, $draft, $cursor));
+            ->withEffect(CommandEffect::restoreCheckpoint($messages, $draft, $cursor, $pasteChips === [] ? null : $pasteChips, $pasteCounter));
     }
 
     /** @param list<Message> $messages */

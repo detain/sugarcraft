@@ -67,14 +67,14 @@ final class RedoCommand implements HostCommand
                 $filesNote = ' ' . Checkpoints::fileRestoreReport($checkpointer->restore($to['workspace']));
             }
 
-            [$messages, $draft, $cursor] = Checkpoints::checkpointChatState($step['state']);
+            [$messages, $draft, $cursor, $chips, $chipCount] = Checkpoints::checkpointChatState($step['state']);
             $restored = max(0, Checkpoints::agentVisibleCount($messages) - Checkpoints::agentVisibleCount($context->history));
             $response = $step['tip']
                 ? Lang::t('host.redo.to_tip', ['count' => $restored]) . $filesNote
                 : Lang::t('host.redo.to_checkpoint', ['count' => $restored, 'index' => $step['index']]) . $filesNote
                     . Lang::t('host.redo.again');
 
-            return Checkpoints::restored($messages, $draft, $cursor, $text, $response);
+            return Checkpoints::restored($messages, $draft, $cursor, $text, $response, $chips, $chipCount);
         } catch (\Throwable $e) {
             return CommandResult::reply($text, Lang::t('host.redo.error', ['error' => $e->getMessage()]));
         }

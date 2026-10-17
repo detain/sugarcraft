@@ -43,14 +43,28 @@ final class CommandEffect
      * @param list<Message> $messages the checkpoint's transcript
      * @param string $draft the draft the checkpoint captured
      * @param int|null $cursor its caret offset, when one was captured
+     * @param array<string, string>|null $pasteChips the chip payloads stored
+     *        beside the draft (ISS-051 review fix); null when the checkpoint
+     *        carried none
      */
-    public static function restoreCheckpoint(array $messages, string $draft, ?int $cursor): self
-    {
-        return new self(CommandEffectKind::RestoreCheckpoint, [
+    public static function restoreCheckpoint(
+        array $messages,
+        string $draft,
+        ?int $cursor,
+        ?array $pasteChips = null,
+        int $pasteCounter = 0,
+    ): self {
+        $data = [
             'messages' => array_values($messages),
             'draft' => $draft,
             'cursor' => $cursor,
-        ]);
+        ];
+        if ($pasteChips !== null) {
+            $data['pasteChips'] = $pasteChips;
+            $data['pasteCounter'] = $pasteCounter;
+        }
+
+        return new self(CommandEffectKind::RestoreCheckpoint, $data);
     }
 
     public static function switchSession(string $sessionId): self
@@ -175,6 +189,21 @@ final class CommandEffect
         $cursor = $this->data['cursor'] ?? null;
 
         return \is_int($cursor) ? $cursor : null;
+    }
+
+    /** @return array<string, string> {@see self::restoreCheckpoint()}'s chip payloads (ISS-051) */
+    public function pasteChips(): array
+    {
+        $chips = $this->data['pasteChips'] ?? [];
+
+        return \is_array($chips) ? $chips : [];
+    }
+
+    public function pasteCounter(): int
+    {
+        $counter = $this->data['pasteCounter'] ?? 0;
+
+        return \is_int($counter) ? $counter : 0;
     }
 
     public function sessionId(): string

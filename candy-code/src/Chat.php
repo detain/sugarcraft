@@ -888,8 +888,12 @@ final class Chat implements Model
          * text a 300-line paste used to dump there. Keyed by the exact chip
          * text {@see withCollapsedPaste()} inserted, valued by the payload as
          * pasted; {@see expandPasteChips()} restores it at every reader that
-         * treats the draft as sent text (submit, queue, permission answer,
-         * scope edit, history record). A chip the user hand-edits stops
+         * treats the draft as sent text (submit, queue, the AskUser/permission
+         * answer, the scope editor and the agent-mailbox send). History
+         * recording is NOT one of them: recall gives back what was typed,
+         * marker and all, by design ({@see recordInputHistory()}). The map
+         * rides the checkpoint beside the draft, so a rewound box is still
+         * re-sendable whole. A chip the user hand-edits stops
          * matching its key and survives as literal text — the honest,
          * visible failure, never a silently altered prompt.
          *
@@ -12631,7 +12635,7 @@ final class Chat implements Model
             $this->sessionStore,
             $this->currentSessionId,
             $this->projectRoot,
-            $turns->checkpointState($preTurnHistory, $preTurnDraft, $preTurnCursor, $this->currentSessionId),
+            $turns->checkpointState($preTurnHistory, $preTurnDraft, $preTurnCursor, $this->currentSessionId, $this->pasteChips, $this->pasteCounter),
         );
 
         // The row's turn count and last-prompt preview, which the session
@@ -13102,6 +13106,13 @@ final class Chat implements Model
                     // E681: the draft the checkpoint captured goes back into the
                     // box — one of mutate()'s replace-the-whole-draft routes.
                     $changes['inputBuf'] = $effect->draft();
+                    // ISS-051 (review fix): the chip payloads come back WITH
+                    // the draft — a restored box is re-sendable, its paste
+                    // whole. Union keeps live entries on identical chip text
+                    // (same key, same payload by construction); the counter
+                    // only moves forward.
+                    $changes['pasteChips'] = $this->pasteChips + $effect->pasteChips();
+                    $changes['pasteCounter'] = max($this->pasteCounter, $effect->pasteCounter());
                     // A summary landing after a restore would compact the
                     // transcript the user just recovered (see applyModelCompaction()).
                     $changes['pendingCompactionId'] = null;

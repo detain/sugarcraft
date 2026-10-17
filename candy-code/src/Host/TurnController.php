@@ -1183,11 +1183,22 @@ final class TurnController
      * route whatever the box held when it was parked.
      *
      * @param list<Message> $preTurnHistory
+     * @param array<string, string> $pasteChips ISS-051 (review fix): the chip
+     *        payloads the draft may reference ride WITH the draft, so a
+     *        rewound or restored box still expands to its paste on the next
+     *        Enter. Absent (chip-less dispatches, the host route) the state is
+     *        byte-identical to before.
      * @return array<string, mixed>
      */
-    public function checkpointState(array $preTurnHistory, string $draft, ?int $cursor, ?string $sessionId): array
-    {
-        return [
+    public function checkpointState(
+        array $preTurnHistory,
+        string $draft,
+        ?int $cursor,
+        ?string $sessionId,
+        array $pasteChips = [],
+        int $pasteCounter = 0,
+    ): array {
+        $state = [
             'messages' => CompactionService::withoutContextReminders($preTurnHistory),
             self::CHECKPOINT_PRE_TURN_KEY => true,
             // THE DRAFT IS THE CALLER'S, not the dispatched state's, whose box
@@ -1201,6 +1212,12 @@ final class TurnController
                 'currentSessionId' => $sessionId,
             ],
         ];
+        if ($pasteChips !== []) {
+            $state['pasteChips'] = $pasteChips;
+            $state['pasteCounter'] = $pasteCounter;
+        }
+
+        return $state;
     }
 
     /**

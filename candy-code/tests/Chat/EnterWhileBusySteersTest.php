@@ -66,6 +66,28 @@ final class EnterWhileBusySteersTest extends TestCase
         $this->assertSame(['too late'], $refused->queuedPrompts());
     }
 
+    public function testTheQueuedPromptCarriesTheExpandedChipPayload(): void
+    {
+        // ISS-051 (review fix): the queue is a draft egress exactly like submit.
+        $chip = '[Pasted text #3 +2 lines]';
+        $payload = "ship the notes\nboth of them";
+        $token = new CancellationToken();
+        $chat = (new Chat(
+            history: [Message::user('go')],
+            backend: new EchoBackend(),
+            inFlight: true,
+            generation: 1,
+            inFlightCancellation: $token,
+            inputBuf: $chip,
+            pasteChips: [$chip => $payload],
+        ))->withSize(120, 20);
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertSame([], $token->takeSteers(), 'fixture: the turn cannot take a steer, so Enter queues');
+        $this->assertSame([$payload], $next->queuedPrompts(), 'the queue holds the paste, not the marker');
+    }
+
     public function testTabMidTurnQueuesWithoutSteeringAndTheShellYieldsIt(): void
     {
         $token = new CancellationToken();
