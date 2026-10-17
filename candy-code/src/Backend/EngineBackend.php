@@ -101,19 +101,30 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * empty for the chunks that have nothing to show and are purely a sign of
      * life.
      *
-     * STILL NOT COVERED, and stated so nobody reads the paragraph above as
+     * CLOSING THAT GAP FROM THE PROVIDER SIDE, not from below this ceiling:
+     * E493 re-verified the silence, and E524 measured why neither cheap shape
+     * of a timer-raised heartbeat works inside the parent's wait — an async
+     * signal (pcntl_alarm) does not dispatch inside the blocking C call the
+     * provider response is waiting on, and a second writer pumping heartbeats
+     * into the same socket would interleave with the length-prefixed frames,
+     * whose drain discards a corrupt buffer whole, costing the turn. What DOES
+     * tick through a stalled transfer is an HTTP progress callback, and its
+     * seam lives in the providers. ISS-076 armed that seam on the streaming
+     * paths of the two providers riding the shared transport (CustomProvider,
+     * SglangProvider): the request's onHeartbeat now forwards onto that
+     * callback for the whole head-and-first-frame window, and one immediate
+     * beat lands the moment response headers arrive — so a server that thinks
+     * for minutes before its first byte is alive on the wire, not merely
+     * forgiven by a bigger number.
+     *
+     * STILL NOT COVERED, and stated so nobody reads the paragraphs above as
      * unconditional: a NON-streaming provider (`supportsStreaming() === false`)
      * makes one blocking call per agentic step, so between two steps there is
-     * genuinely nothing to announce and a slow batch provider still dies here.
-      * Closing that needs a heartbeat raised on a timer rather than on a chunk.
-      * E493 re-verified that gap at round 69; E524 measured why neither cheap
-      * shape of the heartbeat works from this side: an async signal
-      * (pcntl_alarm) does not dispatch inside the blocking C call the provider
-      * response is waiting on, and a second writer pumping heartbeats into the
-      * same socket would interleave with the length-prefixed frames — whose
-      * drain discards a corrupt buffer whole, costing the turn. What does tick
-      * through a stalled transfer is an HTTP progress callback, and its seam
-      * lives in the providers, not below this ceiling.
+     * genuinely nothing to announce, and providers whose SDK owns its transport
+     * (the openai-php client, Anthropic, Bedrock) expose no progress seam to
+     * forward onto. A slow step on either still dies here, as does anything on
+     * the blocking {@see completeAsyncBlocking()} twin, which does not consume
+     * heartbeats either.
       *
       * A DEFAULT SINCE N-P4a, not a fixed number: the `turnIdleTimeoutSeconds`
       * setting replaces it per turn ({@see turnIdleTimeoutSeconds()}), resolved

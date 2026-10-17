@@ -36,10 +36,20 @@ use SugarCraft\Code\Providers\SglangProvider;
  * throttle/fail-soft arms drive the captured callable directly - that
  * callable IS the wrapper the real transport would have rung, which is
  * exactly what is under test.
+ *
+ * ISS-076 extends the seam to the STREAMING path of both shared-transport
+ * providers: the same wrapper rides the stream request, and one immediate
+ * beat fires the moment response headers land - so a server that withholds
+ * its first body frame still resets the EngineBackend idle timer from the
+ * transport up. The streaming arms pin presence/absence on the request
+ * options, and that exactly one header beat lands per stream without the
+ * MockHandler ever ringing the callback.
  */
 final class ProviderHeartbeatProgressTest extends TestCase
 {
     private const BATCH_BODY = '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}';
+
+    private const STREAM_BODY = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n";
 
     /** @var list<array<string, mixed>> */
     private array $history = [];
@@ -198,5 +208,119 @@ final class ProviderHeartbeatProgressTest extends TestCase
             messages: [new UserMessage('hi')],
             onHeartbeat: $onHeartbeat,
         ));
+    }
+
+    /**
+     * ISS-076: drive the streaming path to its FIRST yielded chunk and stop.
+     * The POST has completed and the header beat has landed by then; the
+     * remaining SSE frames and the [DONE] sentinel go unread on purpose -
+     * stopping early is what proves the beat rides the headers, not the tail.
+     */
+    private function customStreamFirstChunk(?\Closure $onHeartbeat): void
+    {
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([new Response(200, [], self::STREAM_BODY)]));
+        $stack->push(Middleware::history($this->history));
+
+        $provider = new CustomProvider(
+            'test-provider',
+            'https://api.example.com',
+            'gpt-4',
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+            true,
+            true,
+        );
+        foreach ($provider->completeStream(new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('hi')],
+            onHeartbeat: $onHeartbeat,
+        )) as $chunk) {
+            return;
+        }
+    }
+
+    private function sglangStreamFirstChunk(?\Closure $onHeartbeat): void
+    {
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([new Response(200, [], self::STREAM_BODY)]));
+        $stack->push(Middleware::history($this->history));
+
+        $provider = new SglangProvider(
+            'https://api.example.com',
+            'MiniMax-M2.7',
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+        );
+        foreach ($provider->completeStream(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('hi')],
+            onHeartbeat: $onHeartbeat,
+        )) as $chunk) {
+            return;
+        }
+    }
+
+    public function testTheStreamingPathCarriesNoProgressOptionWhenNoHeartbeatIsAskedFor(): void
+    {
+        $this->customStreamFirstChunk(null);
+        $this->assertArrayNotHasKey('progress', $this->sentOptions());
+
+        $this->sglangStreamFirstChunk(null);
+        $this->assertArrayNotHasKey('progress', $this->sentOptions());
+    }
+
+    public function testTheStreamingPathForwardsTheHeartbeatOntoTheProgressCallback(): void
+    {
+        $this->customStreamFirstChunk(static function (): void {});
+        $this->assertIsCallable($this->sentOptions()['progress']);
+
+        $this->sglangStreamFirstChunk(static function (): void {});
+        $this->assertIsCallable($this->sentOptions()['progress']);
+    }
+
+    public function testTheHeaderBeatLandsExactlyOnceAndNeedsNoTransferTick(): void
+    {
+        $customBeats = 0;
+        $this->customStreamFirstChunk(static function () use (&$customBeats): void {
+            ++$customBeats;
+        });
+        $this->assertSame(
+            1,
+            $customBeats,
+            'the streaming path must deliver one beat when headers land - and only that one, since MockHandler never rings the wrapper',
+        );
+
+        $sglangBeats = 0;
+        $this->sglangStreamFirstChunk(static function () use (&$sglangBeats): void {
+            ++$sglangBeats;
+        });
+        $this->assertSame(1, $sglangBeats);
+    }
+
+    public function testAThrowingHeaderBeatIsSwallowedAndTheStreamStillParses(): void
+    {
+        $boom = static function (): void {
+            throw new \LogicException('heartbeat exploded at the headers');
+        };
+        $chunks = [];
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([new Response(200, [], self::STREAM_BODY)]));
+        $stack->push(Middleware::history($this->history));
+        $provider = new SglangProvider(
+            'https://api.example.com',
+            'MiniMax-M2.7',
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+        );
+        foreach ($provider->completeStream(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('hi')],
+            onHeartbeat: $boom,
+        )) as $chunk) {
+            $chunks[] = $chunk;
+        }
+
+        $this->assertNotEmpty($chunks, 'a detonating header beat must cost the stream nothing');
     }
 }

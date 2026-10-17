@@ -491,7 +491,24 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
                 'json' => $this->withExtraBody($params),
                 'stream' => true,
                 'headers' => $this->sessionAffinityHeaders($request->sessionId),
-            ]);
+                // ISS-076: the batch site above has beaten since E493; the
+                // streaming path - the one `Runtime` actually drives - did not,
+                // so a server thinking for two minutes before its FIRST frame
+                // had no transport-level mechanism to say "alive" through the
+                // EngineBackend idle timer. This forwards the request's
+                // heartbeat onto the progress callback for exactly that window.
+            ] + self::heartbeatOptions($request->onHeartbeat));
+
+            if ($request->onHeartbeat !== null) {
+                // Headers landed: deliver one fail-soft beat, so the wait for
+                // the first BODY frame starts from a freshly-reset idle clock
+                // rather than from whenever dialing began.
+                try {
+                    ($request->onHeartbeat)();
+                } catch (\Throwable) {
+                    // Fail-soft by contract - see CompleteRequest::$onHeartbeat.
+                }
+            }
 
             $stream = $response->getBody();
             $buffer = '';

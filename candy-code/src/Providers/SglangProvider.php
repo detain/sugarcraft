@@ -1197,7 +1197,21 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
                 'json' => $params,
                 'stream' => true,
                 'headers' => $this->sessionAffinityHeaders($request->sessionId),
-            ]);
+                // ISS-076: same forwarding as the batch site above - the
+                // streaming path is what the engine's idle timer measures, and
+                // until here nothing on it could heartbeat through a
+                // pre-first-frame stall.
+            ] + self::heartbeatOptions($request->onHeartbeat));
+
+            if ($request->onHeartbeat !== null) {
+                // Headers landed: one fail-soft beat so the wait for the first
+                // BODY frame starts from a freshly-reset idle clock.
+                try {
+                    ($request->onHeartbeat)();
+                } catch (\Throwable) {
+                    // Fail-soft by contract - see CompleteRequest::$onHeartbeat.
+                }
+            }
 
             $stream = $response->getBody();
             $buffer = '';
