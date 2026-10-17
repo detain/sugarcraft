@@ -150,6 +150,59 @@ final class CheckLibLicensesTest extends TestCase
         self::assertStringContainsString('UPWARD-LINK lib-a/README.md', $stderr);
     }
 
+    public function testALinkedLicenseWithIdenticalBytesIsStillRefused(): void
+    {
+        $root = $this->fixtureTree(['lib-a']);
+        // The evasion the byte check could never see: the link RESOLVES to the
+        // root LICENSE, so is_file() and md5_file() both pass — but splitsh
+        // carries only the link, and in the split repo it dangles.
+        $this->assertTrue(\symlink('../LICENSE', $root . '/lib-a/LICENSE'));
+
+        [$stdout, $stderr, $rc] = $this->runTool($root);
+        self::assertSame(1, $rc, $stdout . $stderr);
+        self::assertStringContainsString('SYMLINKED lib-a/LICENSE', $stderr);
+        // Distinct class: the link must not be laundered into the other legs.
+        self::assertStringNotContainsString('MISSING lib-a', $stderr);
+        self::assertStringNotContainsString('DRIFTED lib-a', $stderr);
+    }
+
+    public function testADeeperUpwardLinkBelowThePackageTopLevelIsNamed(): void
+    {
+        $root = $this->fixtureTree(['lib-a']);
+        \copy($root . '/LICENSE', $root . '/lib-a/LICENSE');
+        $this->assertNotFalse(\mkdir($root . '/lib-a/docs', 0777, true));
+        // The shape the old top-level glob plus exact-string needle missed:
+        // a two-level climb in a nested document evaded both sweep axes.
+        \file_put_contents($root . '/lib-a/docs/deep.md', "guide\n\n[MIT](../../LICENSE)\n");
+
+        [$stdout, $stderr, $rc] = $this->runTool($root);
+        self::assertSame(1, $rc, $stdout . $stderr);
+        self::assertStringContainsString('UPWARD-LINK lib-a/docs/deep.md references ](../../LICENSE)', $stderr);
+
+        // Regex boundary, pinned at unit level: a named intermediate directory
+        // is the same class, and a name that merely ENDS in LICENSE is not.
+        self::assertNotNull(\CheckLibLicenses::upwardLinkIn('[x](../sub/LICENSE)'));
+        self::assertNull(\CheckLibLicenses::upwardLinkIn('[x](../FOOLICENSE)'));
+        self::assertNull(\CheckLibLicenses::upwardLinkIn('[x](LICENSE)'));
+    }
+
+    public function testTheSweepDoesNotPoliceVendoredDocuments(): void
+    {
+        $root = $this->fixtureTree(['lib-a']);
+        \copy($root . '/LICENSE', $root . '/lib-a/LICENSE');
+        // Vendored prose is not part of the split; a recursive sweep that
+        // descended here would certify third-party files as ours (and in
+        // linked mode, walk every sibling checkout through vendor symlinks).
+        foreach (['vendor/third-party', 'node_modules/dep'] as $dir) {
+            $this->assertNotFalse(\mkdir($root . '/lib-a/' . $dir, 0777, true));
+            \file_put_contents($root . '/lib-a/' . $dir . '/README.md', "[MIT](../../LICENSE)\n");
+        }
+
+        [$stdout, $stderr, $rc] = $this->runTool($root);
+        self::assertSame(0, $rc, $stdout . $stderr);
+        self::assertStringContainsString('0 problems', $stdout);
+    }
+
     public function testFixCopiesTheRootLicenseDownUntilTheTreeIsClean(): void
     {
         $root = $this->fixtureTree(['lib-a', 'lib-b']);
@@ -194,12 +247,18 @@ final class CheckLibLicensesTest extends TestCase
 
     /**
      * Repo-wide sweep: no tracked markdown file anywhere in the monorepo may
-     * link `](../LICENSE)` — that is the class of reference the split repos
+     * upward-link a LICENSE — `](../LICENSE)` and every deeper shape the
+     * guard's pattern accepts are the class of reference the split repos
      * inherit broken, and sugar-pty/README.md was the last one standing.
      *
-     * The finder is proven non-blind with a known-positive: the same predicate
-     * over a planted temp file must report it, so a broken read cannot pass
-     * this arm vacuously.
+     * The sweep runs the SAME predicate the CLI sweep runs
+     * ({@see \CheckLibLicenses::upwardLinkIn()}), so the two can never drift
+     * apart into one seeing an evasion the other blesses.
+     *
+     * The finder is proven non-blind with known-positives: the predicate over
+     * planted temp files must report the canonical link AND an evasion shape
+     * the old exact-string needle missed, so a broken read or a neutered
+     * pattern cannot pass this arm vacuously.
      */
     public function testNoTrackedMarkdownCarriesAnUpwardLicenseLink(): void
     {
@@ -215,7 +274,6 @@ final class CheckLibLicensesTest extends TestCase
         \fclose($pipes[2]);
         self::assertSame(0, \proc_close($handle), 'git ls-files must enumerate the tracked tree');
 
-        $needle = \CheckLibLicenses::UPWARD_LINK;
         $scanned = 0;
         $offenders = [];
         foreach (explode("\0", $listing) as $path) {
@@ -227,18 +285,21 @@ final class CheckLibLicensesTest extends TestCase
                 continue;
             }
             ++$scanned;
-            if (str_contains($text, $needle)) {
-                $offenders[] = $path;
+            $link = \CheckLibLicenses::upwardLinkIn($text);
+            if ($link !== null) {
+                $offenders[] = $path . ' => ' . $link;
             }
         }
         self::assertGreaterThan(100, $scanned, 'the sweep found almost no markdown to read — the finder is blind');
         self::assertSame([], $offenders, 'tracked docs still reference the parent LICENSE');
 
-        // Known-positive: the predicate sees a planted link, so an empty
-        // $offenders above means clean, not deaf.
+        // Known-positives: the predicate sees both the canonical link and the
+        // two-level evasion, so an empty $offenders above means clean, not deaf.
         $probe = $this->tmpDir . '/probe.md';
-        \file_put_contents($probe, "badge " . $needle . " here\n");
-        self::assertStringContainsString($needle, (string) \file_get_contents($probe));
+        foreach ([\CheckLibLicenses::UPWARD_LINK, '](../../LICENSE)'] as $shape) {
+            \file_put_contents($probe, "badge " . $shape . " here\n");
+            self::assertNotNull(\CheckLibLicenses::upwardLinkIn((string) \file_get_contents($probe)), $shape);
+        }
     }
 
     public function testTheHelpTextDescribesTheGuardAndExitsClean(): void
