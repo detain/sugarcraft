@@ -187,6 +187,27 @@ async function signOut(): Promise<void> {
 .content > :deep(*:not(.tabs-strip)) {
   flex: 1;
 }
+@media (max-width: 480px) {
+  /* ISS-105: phone widths. The spacer becomes a deliberate line break, so
+     ☰+brand ride the first row and every action the second, instead of the
+     bar pushing the page into horizontal scroll. */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+  .spacer {
+    flex: 1 1 100%;
+  }
+  .status {
+    white-space: normal;
+    text-align: right;
+  }
+  .notify-problem {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+}
+
 @media (max-width: 760px) {
   .topbar {
     gap: 0.5rem;
