@@ -24,8 +24,6 @@ use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
  * An agent preset's `mcpServers` field names only the servers that preset
  * actually needs. Wildcard deny patterns like "untrusted_*" block whole
  * families of servers regardless of which preset is active.
- *
- * @see https://github.com/sugarcraft/candy-code/crush_code_plan.md P7.S8
  */
 final class McpRouter
 {

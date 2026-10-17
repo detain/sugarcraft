@@ -422,7 +422,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
   - `candy-code/src/Server/Http/ApiController.php:96-100` (host-only cookie, same name on every port)
   - `candy-code/src/Server/Http/AuthMiddleware.php:110-118` (cookie branch: only "Origin present, not `cross-site`, valid"), `:88-103` (ticket branch)
 - **Problem:**
-  - `sugarcrush_session` is a host-only cookie for `127.0.0.1` (or the bind IP). Browsers send it to every port on that host.
+  - `sugarcrush_session` is a host-only cookie for `127.0.0.1` (or the bind IP). Browsers send it to every port on that host. <!-- @rename-keep historical provenance -->
   - Anyone holding the value can mint a ticket outside a browser by forging `Origin`, and the ticket carries full owner scopes.
 - **Failure scenario:** Reproduced in headless Chromium with a second listener on another loopback port.
   - The cookie (`SameSite=Strict`, `HttpOnly`) was sent to the other port on direct navigation (typed URL, bookmark, terminal link) and on same-origin fetches from a page on that port.
@@ -433,7 +433,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Suggested fix:**
   - Make the ambient cookie insufficient: `/api/login` also returns a per-login secret in its JSON body. The page keeps it in `localStorage`, which is origin- and port-scoped and shared across tabs.
   - `/api/ticket` and cookie-authenticated `/api/*` POSTs then require that secret in a header, bound to the cookie session and compared with `hash_equals`.
-  - Name the cookie per port (`sugarcrush_session_<port>`), and use `__Host-` behind HTTPS.
+  - Name the cookie per port (`sugarcrush_session_<port>`), and use `__Host-` behind HTTPS. <!-- @rename-keep historical provenance -->
 - **Verification notes:** V6 downgraded to P2: the impact is full owner control, but it needs a hostile second account plus a user action. The auditor's "or loads one of its resources" holds only for same-site loads.
 
 <a id="iss-008"></a>

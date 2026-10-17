@@ -22,7 +22,7 @@ namespace SugarCraft\Core\Util;
  * string is imported as the empty string: a user who exported it meant it.
  *
  * Determinism: env vars are scanned in sorted-name order, so when two old
- * prefixes derive the same new name (`CANDY_CODE_MODE` and `CANDY_CODE_MODE`
+ * prefixes derive the same new name (`SUGARCRUSH_MODE` and `SUGAR_CRUSH_MODE` // @rename-keep
  * both mapping onto `CANDY_CODE_MODE`) the byte-first old var wins the import
  * and the loser is not reported — the result is reproducible regardless of how
  * the environment was assembled. // @rename-keep

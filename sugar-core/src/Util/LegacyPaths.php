@@ -10,7 +10,7 @@ namespace SugarCraft\Core\Util;
  * Never moves when the new path already exists (the user may have both; we don't merge).
  *
  * WHY THIS EXISTS. plan_rename.md step 0.5: when an app's state directory
- * changes name (the `~/.candy-code` -> `~/.candy-code` family), the app must
+ * changes name (the `~/.sugar-crush` -> `~/.candy-code` family), the app must // @rename-keep
  * find its users' existing state on first launch after the upgrade. // @rename-keep
  * rename(2) within one filesystem is atomic and keeps the directory's owner
  * and mode, so the private 0700 dirs survive the move and every downstream

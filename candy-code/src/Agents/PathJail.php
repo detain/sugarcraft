@@ -23,8 +23,6 @@ use SugarCraft\Code\Tools\PathJailInterface;
  * call, and a non-null result is already proven to be inside the worktree.
  * {@see expandPath()} only joins — it proves nothing; {@see jailPath()}, its
  * former alias, now enforces the jail its name promises.
- *
- * @see https://github.com/sugarcraft/candy-code/blob/master/crush_code_plan.md#path-isolation-layer
  */
 final class PathJail implements PathJailInterface
 {

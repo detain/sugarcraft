@@ -151,7 +151,7 @@ final class LegacyEnvTest extends TestCase
         $this->setEnv('SUGARCRUSH_ABE', 'a'); // @rename-keep
 
         $this->assertSame( // @rename-keep
-            ['CANDY_CODE_ABE', 'CANDY_CODE_ZET', 'CANDY_CODE_MID'],
+            ['SUGARCRUSH_ABE', 'SUGARCRUSH_ZET', 'SUGAR_CRUSH_MID'], // @rename-keep
             LegacyEnv::import([ // @rename-keep
                 'SUGARCRUSH_' => 'CANDY_CODE_', // @rename-keep
                 'SUGAR_CRUSH_' => 'CANDY_CODE_', // @rename-keep
