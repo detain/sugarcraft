@@ -38,7 +38,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-freeze | 350 | 752 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-fuzzy | 1006 | 35741 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-hermit | 159 | 601 | 0 | 0 | 0 | 0 |   <!-- @rename-keep historical provenance --> |
-| candy-input | 409 | 41381 | 0 | 0 | 1 | 0 |  |
+| candy-input | 409 | 41381 | 0 | 0 | 1 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-kit | 272 | 1634 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-layout | 293 | 3315 | 0 | 0 | 0 | 0 |  |
 | candy-lister | 162 | 386 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
