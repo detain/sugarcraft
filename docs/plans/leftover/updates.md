@@ -121,7 +121,7 @@ review for step 01.13 · clean · PR#516
 docs for step 01.13 · clean
 step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14)
 review for step 01.14 · clean · PR#517
-step 02.01 · PR#519 · candy-sprinkles: Theme class (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized* + with* + adaptive)
+step 02.01 · PR#519 · candy-sprinkles: Theme class (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized* + with* + adaptive) <!-- @rename-keep -->
 docs for step 02.01 · PR#520 · document Theme in README/end-user docs/PHPDoc/CALIBER_LEARNINGS.md
 step 02.02 · PR#521 · candy-sprinkles: StyleParser SSOT port from sugar-dash (inline [text](fg:red) syntax) <!-- @rename-keep -->
 review for step 02.02 · clean · PR#521
@@ -146,7 +146,7 @@ review for step 03.04 · clean · PR#532
 tests-ci for step 03.04 · clean
 docs for step 03.04 · clean
 step 03.05 · PR#533 · sugar-dash: Color.php replaced with class_alias shim → Core\Util\Color; Style/Theme/Rect/Buffer/Cell docblocks added (dual-SSOT clarified); StyleParser kept (not drop-in compatible — see Blockers); 6 CALIBER_LEARNINGS entries <!-- @rename-keep -->
-fix for step 03.05 · PR#534 · resolved 3 findings (StyleParser docblock + dead $clone in withPrimary + explicit nullable in setString); Finding 2 closed as false-positive (candy-sprinkles IS actively used in 15+ src/test files)
+fix for step 03.05 · PR#534 · resolved 3 findings (StyleParser docblock + dead $clone in withPrimary + explicit nullable in setString); Finding 2 closed as false-positive (candy-sprinkles IS actively used in 15+ src/test files) <!-- @rename-keep -->
 tests-ci for step 03.05 · clean
 docs for step 03.05 · PR#535 · sugar-dash README + docs/dev/sugar-dash.md: dual-SSOT primitives section documenting Foundation\Style/Theme/Rect/Buffer/Cell/StyleParser distinctions vs canonical siblings; Color flagged as class_alias <!-- @rename-keep -->
 step 03.06 · PR#536 · sugar-dash: built-in modules rewritten to Core\Model contract (immutable state, Cmd::tick for periodic refresh; Clock/System/Uptime/Generic all return [Module, ?Cmd]; Greeting static) <!-- @rename-keep -->
@@ -193,7 +193,7 @@ review for step 03.08 · clean · PR#541
   carry-forward: step 03.17 Issue #1: 760+ hardcoded Color::hex() calls remain in Components/ (Modal/Notification, Alert, Toast, Card/*, Tree/*, Media/*, Feedback/*, Gauge, Bullet, etc.) — bulk hex→theme conversion needed as follow-up
   carry-forward: step 03.17 Issue #3 (minor): DrawableThemeTest.php naming (vs step-spec RenderUsesThemeTest.php per family) — acceptable as test covers same ground; no action needed
   carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix <!-- @rename-keep historical provenance -->
-  step 04.01 · PR#564 · sugar-panels: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
+  step 04.01 · PR#564 · sugar-panels: compose candy-sprinkles Border/Style (leftover-rollout step 04.01) <!-- @rename-keep -->
   docs for step 04.01 · PR#565 · sugar-panels: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-panels.html quickstart + API table
   step 04.02 · PR#566 · sugar-flexbox: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02) <!-- @rename-keep historical provenance -->
 review for step 04.02 · clean · PR#566
@@ -394,9 +394,9 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   tests-ci for step 08.10 · clean
   fix for step 08.10 · PR#701 · resolved 4 findings (duplicate docblock + README docs + CALIBER_LEARNINGS + PR not merged)
   docs for step 08.10 · clean
-  step 08.11 · PR#702 · candy-sprinkles: Color::parse + Layout spacing + Hsl factory + Markup parser (leftover-rollout step 08.11)
+  step 08.11 · PR#702 · candy-sprinkles: Color::parse + Layout spacing + Hsl factory + Markup parser (leftover-rollout step 08.11) <!-- @rename-keep -->
   fix for step 08.11 · PR#703 · resolved 3 findings (path-repo restored + README docs + CALIBER_LEARNINGS)
-  step 08.12 · PR#704 · candy-sprinkles: BorderGradientBlend N-color (1-5) + Style::patch() + rapidBlink(SGR 6) (leftover-rollout step 08.12)
+  step 08.12 · PR#704 · candy-sprinkles: BorderGradientBlend N-color (1-5) + Style::patch() + rapidBlink(SGR 6) (leftover-rollout step 08.12) <!-- @rename-keep -->
   review for step 08.12 · clean · PR#704
   tests-ci for step 08.12 · clean
   step 08.13 · PR#705 · candy-codeshot: Segment::$bg + SvgRenderer::withLigatures() + LanguageDetector (shebang/extension/content; 44 filter tests; leftover-rollout step 08.13)
@@ -546,7 +546,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     docs for step 10.09 · PR#772 · document progressToast/action buttons/history log/animation stub in README/end-user HTML/CALIBER patterns
     step 10.10 · PR#773 · sugar-table: viewport virtualization + column widths + wrapping (leftover-rollout step 10.10)
     fix for step 10.10 · PR#774 · resolved 4 findings
-    step 10.11 · PR#776 · sugar-table: multi-line row support + candy-sprinkles Border integration (leftover-rollout step 10.11)
+    step 10.11 · PR#776 · sugar-table: multi-line row support + candy-sprinkles Border integration (leftover-rollout step 10.11) <!-- @rename-keep -->
     fix for step 10.11 · PR#777 · resolved 2 findings (CALIBER_LEARNINGS: add [pattern:border-from-sprinkles] + [pattern:multilineMode-row-height]; README: document withBorder() + withMultilineMode())
     docs for step 10.11 · PR#778 · document withBorder/withMultilineMode/withBorderStyle docblocks + docs/lib/sugar-table.html feature grid + API table
     step 10.12 · PR#779 · sugar-flexbox: sticky header/footer + scroll sync (leftover-rollout step 10.12)

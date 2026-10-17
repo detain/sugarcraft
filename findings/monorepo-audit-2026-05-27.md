@@ -29,13 +29,13 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 ## Package-by-Package Findings
 
-### Group 1: candy-core, candy-scriptui, candy-sprinkles, sugar-markdown, candy-git-server
+### Group 1: candy-core, candy-scriptui, candy-sprinkles, sugar-markdown, candy-git-server <!-- @rename-keep -->
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
 | candy-core | 588 ✓ | APPROVE | 0 | 2 | 3 | 0 |
 | candy-scriptui | 230 ✓ | APPROVE | 0 | 0 | 3 | 0 |
-| candy-sprinkles | 522 ✓ | APPROVE | 0 | 0 | 4 | 0 |
+| candy-sprinkles | 522 ✓ | APPROVE | 0 | 0 | 4 | 0 | <!-- @rename-keep -->
 | sugar-markdown | 158 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-git-server | 140 ✓ | APPROVE | 0 | 2 | 4 | 0 |
 
@@ -43,7 +43,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-scriptui** — Symfony Console CLI shell (gum port). Clean, 230 tests. Issues: `sugar-forms` dependency not in path-repo closure for some consumers; `CommandScanner::scan()` limitation.
 
-**candy-sprinkles** — Styling/layout library (lipgloss port). Excellent 522 tests. Issues: Style's sentinel-bool pattern is exceptional (documented but creates inconsistency).
+**candy-sprinkles** — Styling/layout library (lipgloss port). Excellent 522 tests. Issues: Style's sentinel-bool pattern is exceptional (documented but creates inconsistency). <!-- @rename-keep -->
 
 **sugar-markdown** — Markdown renderer (glamour port). 158 tests. Issues: `Theme::fromJsonString()` doesn't support all glamour v2 properties; incomplete emoji map.
 
@@ -562,7 +562,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Group | Packages | Tests | Status |
 |-------|----------|-------|--------|
-| 1 | candy-core, candy-scriptui, candy-sprinkles, sugar-markdown, candy-git-server | 1,638 | ✅ All pass |
+| 1 | candy-core, candy-scriptui, candy-sprinkles, sugar-markdown, candy-git-server | 1,638 | ✅ All pass | <!-- @rename-keep -->
 | 2 | candy-sql, candy-starter, sugar-cli, candy-codeshot | 283 | ✅ All pass |
 | 3 | candy-palette, candy-mosaic, candy-log, candy-metrics | 300 | ⚠️ mosaic blocked | <!-- @rename-keep historical provenance -->
 | 4 | candy-tetris, candy-minesweeper, candy-flip, sugar-treelist | 300 | ✅ All pass | <!-- @rename-keep -->
