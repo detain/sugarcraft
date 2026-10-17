@@ -955,8 +955,13 @@ final class BaseSystemPromptTest extends TestCase
         // one pure insertion of 699 B at offset 3,256 - the "Keep Bash for
         // what only a shell can do" paragraph plus its blank line, closing
         // "# Tool use"; head and tail byte-identical.
+        // MEASURED 2026-10-16 at rename lane f1: 11,377 -> 11,375. Two brand
+        // spellings shrank one byte each (`sugar-crush` -> `candy-code` in the
+        // Static base-prompt copy and in MemoryBlock's repository label); every
+        // other byte is identical, and the per-slot manifest moved by exactly
+        // the same two rows (tests/fixtures/prompt-snapshots/system-sections.txt).
         self::assertSame(
-            11377,
+            11375,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

@@ -52,7 +52,7 @@ final class AiCommentWatcher
     public const SETTINGS_KEY = 'watchFiles';
 
     /** The {@see \SugarCraft\Core\Subscriptions} id `Chat::subscriptions()` declares the poll under. */
-    public const SUBSCRIPTION = 'crush.ai-comment-watch';
+    public const SUBSCRIPTION = 'code.ai-comment-watch';
 
     /** Seconds between polls while the chat is idle. */
     public const POLL_SECONDS = 2.0;

@@ -125,11 +125,11 @@ final class LangParityTest extends TestCase
 
     public function testAnUnknownKeyFallsBackToTheNamespacedRawKey(): void
     {
-        $this->assertSame('crush.no.such.key', Lang::t('no.such.key'));
+        $this->assertSame('code.no.such.key', Lang::t('no.such.key'));
     }
 
     public function testParamsInterpolateEvenIntoTheFallback(): void
     {
-        $this->assertSame('crush.hello Ada', Lang::t('hello {name}', ['name' => 'Ada']));
+        $this->assertSame('code.hello Ada', Lang::t('hello {name}', ['name' => 'Ada']));
     }
 }

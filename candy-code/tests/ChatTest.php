@@ -3187,7 +3187,7 @@ final class ChatTest extends TestCase
         $subs = (new Chat(inFlight: true))->subscriptions();
 
         $this->assertNotNull($subs);
-        $this->assertTrue($subs->has('crush.tool-event-poll'));
+        $this->assertTrue($subs->has('code.tool-event-poll'));
 
         $sub = $subs->all()[0];
         $this->assertSame(\SugarCraft\Core\Kind::Tick, $sub->kind);
@@ -3206,7 +3206,7 @@ final class ChatTest extends TestCase
         $idle->enqueueToolEvent(ToolStarted::fromCall(new EngineToolCall('call_1', 'bash', [])));
         $subs = $idle->subscriptions();
         $this->assertNotNull($subs);
-        $this->assertTrue($subs->has('crush.tool-event-poll'));
+        $this->assertTrue($subs->has('code.tool-event-poll'));
     }
 
     public function testToolEventPumpAppliesOneEventPerUpdateAndReSchedulesForTheRest(): void
@@ -5603,7 +5603,7 @@ final class ChatTest extends TestCase
         $subs = (new Chat(backgroundSupervisor: $supervisor))->subscriptions();
 
         $this->assertNotNull($subs);
-        $this->assertTrue($subs->has('crush.background-poll'));
+        $this->assertTrue($subs->has('code.background-poll'));
 
         $sub = $subs->all()[0];
         $this->assertSame(\SugarCraft\Core\Kind::Tick, $sub->kind);

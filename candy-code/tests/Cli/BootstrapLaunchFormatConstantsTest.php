@@ -316,6 +316,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'docs/ENVIRONMENT.md' => self::PAGE_QUOTE_IS_PROSE,
             'docs/SETTINGS.md' => ReadmeSettingsTierClaimTest::class
                 . '::testTheSettingsPageQuotesTheSameLaunchReportByteForByte',
+            // rename lane f1: the "Upgrading from sugar-crush" section quotes a
+            // rendered deprecation line — the exact bytes LegacyMigrationTest pins.
+            'docs/TROUBLESHOOTING.md' => LegacyMigrationTest::class
+                . '::testLegacyEnvVarsFoldAndAPreSetNewNameWins',
         ],
         'PROJECT_TIER_TOOL_REMOVAL_FORMAT' => [
             'README.md' => ReadmeSettingsTierClaimTest::class

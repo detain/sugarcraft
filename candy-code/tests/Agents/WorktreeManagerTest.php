@@ -776,14 +776,14 @@ final class WorktreeManagerTest extends TestCase
 
     // -------------------------------------------------------------------------
     // Base-path override: CANDY_CODE_WORKTREES_DIR, with the pre-rename
-    // CANDY_CODE_WORKTREES_DIR honoured for one release
+    // SUGAR_CRUSH_WORKTREES_DIR honoured for one release // @rename-keep
     // (crush_code.md Phase 4 item 4).
     // -------------------------------------------------------------------------
 
     public function testCanonicalOverrideReplacesTheConfiguredBasePath(): void
     {
         $override = $this->tmpRoot . '/canonical-worktrees';
-        $this->setEnv('CANDY_CODE_WORKTREES_DIR', $override);
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', $override); // @rename-keep legacy dual-read
 
         $this->assertSame($override, $this->basePathOf($this->newManager()));
     }
@@ -808,7 +808,7 @@ final class WorktreeManagerTest extends TestCase
     public function testCanonicalOverrideWinsWhenBothAreSet(): void
     {
         $this->setEnv('CANDY_CODE_WORKTREES_DIR', $this->tmpRoot . '/canonical-worktrees');
-        $this->setEnv('CANDY_CODE_WORKTREES_DIR', $this->tmpRoot . '/legacy-worktrees');
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', $this->tmpRoot . '/legacy-worktrees'); // @rename-keep legacy dual-read
 
         $this->assertSame($this->tmpRoot . '/canonical-worktrees', $this->basePathOf($this->newManager()));
     }
@@ -822,7 +822,7 @@ final class WorktreeManagerTest extends TestCase
     public function testAnEmptyCanonicalOverrideFallsThroughToTheLegacyName(): void
     {
         $this->setEnv('CANDY_CODE_WORKTREES_DIR', '');
-        $this->setEnv('CANDY_CODE_WORKTREES_DIR', $this->tmpRoot . '/legacy-worktrees');
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', $this->tmpRoot . '/legacy-worktrees'); // @rename-keep legacy dual-read
 
         $this->assertSame($this->tmpRoot . '/legacy-worktrees', $this->basePathOf($this->newManager()));
     }
@@ -830,7 +830,7 @@ final class WorktreeManagerTest extends TestCase
     public function testWithNeitherVariableSetTheConfiguredBasePathIsUsed(): void
     {
         $this->setEnv('CANDY_CODE_WORKTREES_DIR', null);
-        $this->setEnv('CANDY_CODE_WORKTREES_DIR', null);
+        $this->setEnv('SUGAR_CRUSH_WORKTREES_DIR', null); // @rename-keep legacy dual-read
 
         $this->assertSame($this->tmpRoot . '/worktrees/', $this->basePathOf($this->newManager()));
     }

@@ -1,10 +1,10 @@
-01	Static	-	4662	0da3b603af5b9bba
+01	Static	-	4661	3d3e097bb78f2412
 02	Static	-	1965	71aaa24c5d7cd7ce
 03	PerSession	<repo-map>	722	2ff1bc6bd5afb278
 04	PerSession	<user-rules>	513	f82fefbb39fe5843
 05	PerSession	<project-instructions>	412	838a398c2ae30d99
 06	PerSession	<project-instructions>	397	eb17e95f5fa6b6c1
-07	PerSession	<project-memory>	2424	be616c9954bc187a
+07	PerSession	<project-memory>	2423	d2efe5b26d4c7b23
 08	PerTurn	-	69	07aa52713915bbd9
 09	PerTurn	<available-skills>	0	e3b0c44298fc1c14
 10	PerSession	<env>	199	3464c3dc8891bb37

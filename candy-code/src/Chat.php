@@ -493,7 +493,7 @@ final class Chat implements Model
      * recognises the timer it already started instead of restarting it on
      * every update cycle.
      */
-    private const BACKGROUND_POLL_SUBSCRIPTION = 'crush.background-poll';
+    private const BACKGROUND_POLL_SUBSCRIPTION = 'code.background-poll';
 
     /**
      * How often the poll pump wakes (seconds).
@@ -509,7 +509,7 @@ final class Chat implements Model
      * (crush_feat.md §1 E1). Stable across rebuilds for the same reason
      * {@see BACKGROUND_POLL_SUBSCRIPTION} is.
      */
-    private const TOOL_EVENT_POLL_SUBSCRIPTION = 'crush.tool-event-poll';
+    private const TOOL_EVENT_POLL_SUBSCRIPTION = 'code.tool-event-poll';
 
     /**
      * How often the live tool-event pump wakes (seconds) while a turn is in
@@ -537,26 +537,26 @@ final class Chat implements Model
      * longer than the period, which is precisely the overlap that derivation
      * exists to make impossible.
      */
-    private const STATUS_LINE_SUBSCRIPTION = 'crush.status-line';
+    private const STATUS_LINE_SUBSCRIPTION = 'code.status-line';
 
     /**
      * Reconciliation id of the runtime-notice poll subscription (E171).
      * Stable across rebuilds for {@see BACKGROUND_POLL_SUBSCRIPTION}'s reason.
      */
-    private const RUNTIME_NOTICE_SUBSCRIPTION = 'crush.runtime-notice-poll';
+    private const RUNTIME_NOTICE_SUBSCRIPTION = 'code.runtime-notice-poll';
 
     /**
      * Reconciliation id of the debounced transcript save's tick (audit R2) —
      * declared by {@see subscriptions()} only while a snapshot is pending.
      */
-    private const TRANSCRIPT_FLUSH_SUBSCRIPTION = 'crush.transcript-flush';
+    private const TRANSCRIPT_FLUSH_SUBSCRIPTION = 'code.transcript-flush';
 
     /**
      * Reconciliation id of the read-only window's lock retry (audit SES-3
      * residual) — declared by {@see subscriptions()} only while the open
      * session is read-only because another TUI holds it.
      */
-    private const SESSION_LOCK_RETRY_SUBSCRIPTION = 'crush.session-lock-retry';
+    private const SESSION_LOCK_RETRY_SUBSCRIPTION = 'code.session-lock-retry';
 
     /**
      * How often a read-only window retries the lock (seconds). The retry is
@@ -18272,7 +18272,7 @@ final class Chat implements Model
      * the next turn. One second is the strip's own resolution (its elapsed
      * figures are whole seconds).
      */
-    private const AGENT_STRIP_SUBSCRIPTION = 'crush.agent-strip-linger';
+    private const AGENT_STRIP_SUBSCRIPTION = 'code.agent-strip-linger';
 
     private const AGENT_STRIP_TICK_SECONDS = 1.0;
 

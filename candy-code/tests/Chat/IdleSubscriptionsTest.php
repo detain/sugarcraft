@@ -36,7 +36,7 @@ final class IdleSubscriptionsTest extends TestCase
         $live->apply(new SubAgentActivity(SubAgentActivity::OP_FINISHED, 'r1', 'explore', '', 2, 'done', parentCallId: 'call_1'));
         $armed = $chat->subscriptions();
         self::assertNotNull($armed, 'a finished run lingering on the strip arms the idle clock');
-        self::assertTrue($armed->has('crush.agent-strip-linger'));
+        self::assertTrue($armed->has('code.agent-strip-linger'));
 
         $this->now += AgentStrip::LINGER_SECONDS + 1;
         [$ticked] = $chat->update(new ToolEventPumpMsg());
@@ -56,8 +56,8 @@ final class IdleSubscriptionsTest extends TestCase
         ))->subscriptions();
 
         self::assertNotNull($subscriptions);
-        self::assertTrue($subscriptions->has('crush.tool-event-poll'));
-        self::assertFalse($subscriptions->has('crush.agent-strip-linger'), 'one clock at a time');
+        self::assertTrue($subscriptions->has('code.tool-event-poll'));
+        self::assertFalse($subscriptions->has('code.agent-strip-linger'), 'one clock at a time');
     }
 
     public function testTheNoticePollReadsTheWorkspacesOwnInbox(): void
@@ -71,6 +71,6 @@ final class IdleSubscriptionsTest extends TestCase
         $armed = $chat->subscriptions();
 
         self::assertNotNull($armed, 'a notice pending in THIS session\'s inbox arms the poll');
-        self::assertTrue($armed->has('crush.runtime-notice-poll'));
+        self::assertTrue($armed->has('code.runtime-notice-poll'));
     }
 }

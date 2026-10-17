@@ -120,7 +120,7 @@ final class AmbientColorProfileTest extends TestCase
 
         self::assertSame([], self::colourSgrTokens($frame), 'NO_COLOR-style frame must emit no colour SGR');
         // Text and structure survive: the frame is still the full 120x40 shell.
-        self::assertStringContainsString('welcome to candy-code', strtolower($frame));
+        self::assertStringContainsString('welcome to candycode', strtolower($frame));
         self::assertStringContainsString('▢ chat', $frame);
     }
 

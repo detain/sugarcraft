@@ -51,7 +51,7 @@ final class ShareCommandTest extends TestCase
     public function testEveryFormatWordExportsWithItsExtension(string $formatArg, string $extension): void
     {
         $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', null);
-        $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', null);
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null); // @rename-keep legacy dual-read
 
         [$exitCode, $output] = $this->share([$formatArg]);
 
@@ -79,7 +79,7 @@ final class ShareCommandTest extends TestCase
     public function testNoUploadHostMeansNoUploadLine(): void
     {
         $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', null);
-        $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', null);
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null); // @rename-keep legacy dual-read
 
         [$exitCode, $output] = $this->share([]);
 
@@ -109,7 +109,7 @@ final class ShareCommandTest extends TestCase
 
     // =========================================================================
     // Upload base URL: CANDY_CODE_SHARE_UPLOAD_URL, with the pre-rename
-    // CANDY_CODE_SHARE_UPLOAD_URL honoured for one release
+    // SUGAR_CRUSH_SHARE_UPLOAD_URL honoured for one release // @rename-keep
     // (crush_code.md Phase 4 item 4).
     // =========================================================================
 
@@ -139,7 +139,7 @@ final class ShareCommandTest extends TestCase
     public function testUploadBaseUrlIsNullWhenNeitherVariableIsSet(): void
     {
         $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', null);
-        $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', null);
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', null); // @rename-keep legacy dual-read
 
         $this->assertNull($this->uploadBaseUrl());
     }
@@ -158,7 +158,7 @@ final class ShareCommandTest extends TestCase
      */
     public function testLegacyUnderscoredVariableIsStillHonoured(): void
     {
-        $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', 'https://legacy.example');
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', 'https://legacy.example'); // @rename-keep legacy dual-read
 
         $this->assertSame('https://legacy.example', $this->uploadBaseUrl());
     }
@@ -166,7 +166,7 @@ final class ShareCommandTest extends TestCase
     public function testCanonicalVariableWinsWhenBothAreSet(): void
     {
         $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', 'https://canonical.example');
-        $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', 'https://legacy.example');
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', 'https://legacy.example'); // @rename-keep legacy dual-read
 
         $this->assertSame('https://canonical.example', $this->uploadBaseUrl());
     }
@@ -179,7 +179,7 @@ final class ShareCommandTest extends TestCase
     public function testAnEmptyCanonicalVariableFallsThroughToTheLegacyName(): void
     {
         $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', '');
-        $this->setEnv('CANDY_CODE_SHARE_UPLOAD_URL', 'https://legacy.example');
+        $this->setEnv('SUGAR_CRUSH_SHARE_UPLOAD_URL', 'https://legacy.example'); // @rename-keep legacy dual-read
 
         $this->assertSame('https://legacy.example', $this->uploadBaseUrl());
     }

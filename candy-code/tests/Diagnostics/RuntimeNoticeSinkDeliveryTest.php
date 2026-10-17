@@ -216,11 +216,11 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         $subscriptions = $chat->subscriptions();
         self::assertNotNull($subscriptions, 'a pending notice did not arm the poll');
-        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+        self::assertTrue($subscriptions->has('code.runtime-notice-poll'));
 
         $tick = null;
         foreach ($subscriptions->all() as $subscription) {
-            if ($subscription->id === 'crush.runtime-notice-poll') {
+            if ($subscription->id === 'code.runtime-notice-poll') {
                 $tick = $subscription;
             }
         }
@@ -436,7 +436,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         $subscriptions = self::ownerChat(inFlight: true)->subscriptions();
 
         self::assertNotNull($subscriptions);
-        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+        self::assertTrue($subscriptions->has('code.runtime-notice-poll'));
     }
 
     /**
@@ -483,17 +483,17 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             }
         }
 
-        self::assertArrayHasKey('crush.tool-event-poll', $seconds, 'the tool-event tick is gone; there is nothing to compare against');
-        self::assertArrayHasKey('crush.runtime-notice-poll', $seconds);
+        self::assertArrayHasKey('code.tool-event-poll', $seconds, 'the tool-event tick is gone; there is nothing to compare against');
+        self::assertArrayHasKey('code.runtime-notice-poll', $seconds);
 
         self::assertGreaterThan(
             0.0,
-            $seconds['crush.runtime-notice-poll'],
+            $seconds['code.runtime-notice-poll'],
             'the notice tick has a zero interval; that is a busy loop, not a poll',
         );
         self::assertGreaterThan(
-            $seconds['crush.tool-event-poll'],
-            $seconds['crush.runtime-notice-poll'],
+            $seconds['code.tool-event-poll'],
+            $seconds['code.runtime-notice-poll'],
             'the notice poll is no longer slower than the tool-event poll, which is the whole of '
                 . 'RUNTIME_NOTICE_POLL_SECONDS\' doc-block',
         );
@@ -527,14 +527,14 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         $inFlight = (new Chat(inFlight: true))->subscriptions();
         self::assertNotNull($inFlight, 'the tool-event poll vanished; this assertion is now vacuous');
         self::assertFalse(
-            $inFlight->has('crush.runtime-notice-poll'),
+            $inFlight->has('code.runtime-notice-poll'),
             'an in-flight turn on an unappointed Chat polled the inbox',
         );
 
         // KNOWN-POSITIVE: the same sink, the same row, an appointed reader.
         $subscriptions = self::ownerChat()->subscriptions();
         self::assertNotNull($subscriptions, 'the appointed Chat did not poll either; this test proves nothing');
-        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+        self::assertTrue($subscriptions->has('code.runtime-notice-poll'));
     }
 
     /**
@@ -559,7 +559,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         $subscriptions = $typed->subscriptions();
         self::assertNotNull($subscriptions, 'the drain owner lost its appointment on a keystroke');
-        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+        self::assertTrue($subscriptions->has('code.runtime-notice-poll'));
 
         [$next] = $typed->update(new RuntimeNoticePumpMsg());
         $rows = array_values(array_filter(
@@ -597,7 +597,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
             $subscriptions = $chat->subscriptions();
             self::assertNotNull($subscriptions, 'the Chat Bootstrap built does not poll the inbox it opened');
-            self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+            self::assertTrue($subscriptions->has('code.runtime-notice-poll'));
 
             [$next] = $chat->update(new RuntimeNoticePumpMsg());
             $rows = array_values(array_filter(
@@ -772,7 +772,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         $chat = self::ownerChat();
         $subscriptions = $chat->subscriptions();
         self::assertNotNull($subscriptions, 'the child\'s notice did not cross the fork');
-        self::assertTrue($subscriptions->has('crush.runtime-notice-poll'));
+        self::assertTrue($subscriptions->has('code.runtime-notice-poll'));
 
         [$next] = $chat->update(new RuntimeNoticePumpMsg());
 

@@ -840,10 +840,14 @@ final class PromptStabilityTest extends TestCase
     // production-side (14 -> 49; the heading's separator pre-existed and did
     // not move), and the 15 B directory spelling this file chose fixture-side
     // (59 -> 74). 35 + 15 = the +50 the total moved by.
-    private const STABLE_LAYERS_BYTES = 4831;
+    // MEASURED 2026-10-16 at rename lane f1: 4,831 -> 4,830. One mover only: MemoryBlock's
+    // repository-group label prose `.sugar-crush/memory` became `.candy-code/memory` —
+    // the 11 B spelling lost one byte per occurrence, production side, inside the
+    // <project-memory> layer (2,467 -> 2,466).
+    private const STABLE_LAYERS_BYTES = 4830;
 
     /**
-     * The same 4,831 bytes (post-fix-round-1; 4,781 post-skills-A; 4,505 post-5.3-2; 4,136 post-5.1-2; 4,029 post-5.1-1; 2,671 post-15d-07; 2,556 post-15d-02; 1,857 post-P5.S6; 1,575 before) as
+     * The same 4,830 bytes (post-f1-rename; 4,831 post-fix-round-1; 4,781 post-skills-A; 4,505 post-5.3-2; 4,136 post-5.1-2; 4,029 post-5.1-1; 2,671 post-15d-07; 2,556 post-15d-02; 1,857 post-P5.S6; 1,575 before) as
      * {@see STABLE_LAYERS_BYTES}, split per layer, so a
      * width that moves names the layer AND the code that authored the bytes.
      *
@@ -859,10 +863,10 @@ final class PromptStabilityTest extends TestCase
      *   |--------------------------|------:|--------:|-------------------------|
      *   | `<repo-map>`             |   727 |      19 |  708  RepoMapBlock header + PSR-4 note + entry formatting + fences |
      *   | `<project-instructions>` |   421 |      90 |  331  the fence spellings + P5.S6 authority preamble (280 B) + separator |
-     *   | `<project-memory>`       | 2,467 |      51 | 2416  MemoryBlock header + 15d-07 repository label + `- [pattern] <id>: ` + fences + standing instructions |
+     *   | `<project-memory>`       | 2,466 |      51 | 2415  MemoryBlock header + 15d-07 repository label + `- [pattern] <id>: ` + fences + standing instructions |
      *   | `## Skill: prefix-demo`  |   123 |      74 |   49  Skill::systemPromptContribution()'s heading + base-directory line (M5 parity) + the two "\n\n" gaps |
      *   | `<available-skills>`     | 1,093 |      70 | 1023  SkillListingSection's fence + 15d-02 preamble (648 B) + proactive-use mandate (275 B) + SkillMatcher's caption + `- [project] `/`: ` |
-     *   | **total**                | 4,831 |     304 | 4,527 |
+     *   | **total**                | 4,830 |     304 | 4,526 |
      *
      * The `project-instructions` row is MEASURED 2026-09-05 (P5.S6): the
      * pre-preamble take of it was 139/90/49, recorded 2026-08-31; the whole
@@ -878,7 +882,7 @@ final class PromptStabilityTest extends TestCase
     private const STABLE_LAYER_WIDTHS = [
         '<repo-map>' => 727,
         '<project-instructions>' => 421,
-        '<project-memory>' => 2467,
+        '<project-memory>' => 2466,
         '## Skill: prefix-demo' => 123,
         '<available-skills>' => 1093,
     ];

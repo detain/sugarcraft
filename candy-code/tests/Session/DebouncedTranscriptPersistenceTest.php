@@ -25,7 +25,7 @@ use SugarCraft\Code\TranscriptFlushMsg;
  */
 final class DebouncedTranscriptPersistenceTest extends TestCase
 {
-    private const FLUSH_SUBSCRIPTION = 'crush.transcript-flush';
+    private const FLUSH_SUBSCRIPTION = 'code.transcript-flush';
 
     private string $dir;
 

@@ -293,7 +293,7 @@ final class ReadOnlySessionTest extends TestCase
     // Becoming writable when the other window lets go (SES-3 residual)
     // =====================================================================
 
-    private const LOCK_RETRY = 'crush.session-lock-retry';
+    private const LOCK_RETRY = 'code.session-lock-retry';
 
     /**
      * THE RESIDUAL: closing the window that held the session used to leave

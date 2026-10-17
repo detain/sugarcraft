@@ -335,7 +335,7 @@ final class Subcommands
                 // the extension fails the same call at first paint — FAIL,
                 // never WARN, because the manifest already declares it.
                 try {
-                    $exercised = \mb_substr_count('candy-code', 'r') === 2;
+                    $exercised = \mb_substr_count('candy-code', 'c') === 2;
                     $state = Lang::t('cli.doctor.loaded');
                 } catch (\Throwable) {
                     $exercised = false;
