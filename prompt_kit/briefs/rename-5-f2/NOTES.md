@@ -26,4 +26,10 @@ Lane: f2 (batch-F line 58, kind=rename, ns CrushWeb→CodeWeb, type=lib, bins {}
 
 ## Progress log (append as work lands) <!-- @rename-keep -->
 
-(append)
+- Tool run: 42 files, 5 path renames, R1=12 R3=683, rc0; php -l sweep zero. Root lock: `composer update sugarcraft/candy-code-web --no-install` = 1 lock/1 removal/1 path-ref refresh, zero old entries. <!-- @rename-keep -->
+- npm quartet at tip: build ok, lint 0, typecheck 0, vitest 211/211 (24 files). gen:protocol output byte-IDENTICAL to committed generated.ts (8A's repo-wide R4 had converged exactly). dist/ rebuilt and committed; CI-shape parity proof at tip: rebuild -> git diff --exit-code clean + porcelain empty (DIST-PARITY-ZERO). <!-- @rename-keep -->
+- e2e (Playwright) NOT run locally (chromium install out of gate budget; web.yml owns it). Blindspot fixes: LoginView 3x sugarcrush serve -> candy-code serve; server.ts strip gains CANDY_CODE_ leg (keeps SUGARCRUSH_ legacy leg — live compat, not history); media.spec comment; docs body sugarcrush.v1/serve flips. <!-- @rename-keep -->
+- PHP: shim suite 5T/36A EXACT vs baseline row; candy-code --filter 'StaticFiles|Serve' 1011T/9851A green; serve --help prints all-new paths, zero old tokens. <!-- @rename-keep -->
+- K=8 (clean out-dir — FIRST run silently RESUMED f1's stale /tmp/parallel-tests done-markers, new law: always pass --out): 22,571T EXACT / 424,974A (+32 wobble vs figure 424,942, disclosed; zero tests added by lane) / 0F 0E 2S / rc0 after one accepted ChatTest async-flake rerun. <!-- @rename-keep -->
+- Guards: tools/tests 429/1517 EXACT, gen-docs --check ok (redirect stub docs/lib/sugar-crush-web.html minted via status flip), gen-ansi rc0, path-repos rc0, child-lifetimes rc0, residue --old=sugar-crush-web 0, untagged CrushWeb grep 0 (sole hit = renames.json ledger row, excluded file). <!-- @rename-keep -->
+- Chain: 77d43ba2f NOTES+tag -> fb5f25b94 rename (tool+npm+docs+lock+status+stub). Pushed rename/f2. No R2/R8/R9 (lane law). <!-- @rename-keep)
