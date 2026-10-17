@@ -2,7 +2,7 @@
 
 **sugar-navstack** is a PHP port of KevM/bubbleo providing NavStack (navigation stack) and Breadcrumb components for terminal UIs. It is a focused, framework-agnostic library (~370 lines of core source across 8 files) that produces pure string output, making it usable with any TUI framework. The library is 🟢 v1 ready with comprehensive test coverage (678+ lines across 6 test files).
 
-**Biggest opportunity areas:** Integration with the broader SugarCraft ecosystem (candy-core for message-driven patterns, sugar-style for styling, sugar-forms for selection dialogs), fuzzy filtering matching the quality of `sahilm/fuzzy`, and modal/overlay compositing for stacked navigation.
+**Biggest opportunity areas:** Integration with the broader SugarCraft ecosystem (sugar-core for message-driven patterns, sugar-style for styling, sugar-forms for selection dialogs), fuzzy filtering matching the quality of `sahilm/fuzzy`, and modal/overlay compositing for stacked navigation.
 
 **Biggest missing capabilities:** No message-driven navigation equivalent to bubbleo's `PushNavigation`/`PopNavigation` tea.Msg pattern; no animation/transition support; no built-in back-button/keybinding infrastructure; no fuzzy filtering with ranking/scoring.
 
@@ -249,7 +249,7 @@ Supporting classes: `NavigationItem` (title + data payload), `Closable` (onEnter
 **Source repo:** `KevM/bubbleo` (`window/model.go`)
 **Implementation ideas:**
 
-- Not needed until integration with candy-core's tea.WindowSizeMsg equivalent
+- Not needed until integration with sugar-core's tea.WindowSizeMsg equivalent
 
 **Estimated complexity:** N/A
 **Expected impact:** Low
@@ -365,9 +365,9 @@ promptkit's filter also supports custom filter functions with binary search pagi
    - Type-ahead filtering with custom rendering
    - Mouse-clickable breadcrumbs
 
-2. **Integration guide: candy-core**
-   - How sugar-navstack integrates with candy-core's message loop
-   - Wiring mouse events from `candy-core` to `sugar-navstack` via `Manager::anyInBoundsAndUpdate()`
+2. **Integration guide: sugar-core**
+   - How sugar-navstack integrates with sugar-core's message loop
+   - Wiring mouse events from `sugar-core` to `sugar-navstack` via `Manager::anyInBoundsAndUpdate()`
 
 3. **Integration guide: sugar-style**
    - Styling breadcrumbs with `sugar-style` Style
@@ -412,15 +412,15 @@ promptkit's filter also supports custom filter functions with binary search pagi
 3. **Concurrent access tests**
    - Though PHP is single-threaded for most TUI apps, async patterns in ReactPHP could introduce concurrency
 
-4. **Integration tests with candy-core**
+4. **Integration tests with sugar-core**
    - Full update/render cycle with real mouse/keyboard events
 
 ---
 
 # Ecosystem / Integration Opportunities
 
-1. **sugar-navstack → candy-core integration**
-   - Register as a standard navigation component in candy-core
+1. **sugar-navstack → sugar-core integration**
+   - Register as a standard navigation component in sugar-core
    - Document message types for PushNavigation/PopNavigation
 
 2. **sugar-navstack → sugar-forms integration**
@@ -552,7 +552,7 @@ The library's **core strengths** are its clean separation of concerns (NavStack 
 
 - Prioritize the "immediate wins" (onEnter/onLeave auto-invocation, back-button handling, change listener) — they have high impact per complexity
 - Invest in fuzzy filtering — it's the single highest-impact enhancement for deep navigation hierarchies
-- Consider integration with `candy-core` message loop for optional reactive navigation
+- Consider integration with `sugar-core` message loop for optional reactive navigation
 - Maintain framework-agnosticism — the pure string output is a key differentiator
 
 The library should remain focused (don't add unrelated features), continue emphasizing composition over inheritance (zoneManager pattern), and document integration patterns with other SugarCraft libraries.

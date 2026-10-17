@@ -31,35 +31,35 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos affected:** ultraviolet, sequin, go-termimg, bubblezone, phpschool/cli-menu
 - **Problem:** Missing OSC/DCS terminator (`\x1b\\`) causes sequence corruption on some terminals
-- **SugarCraft risk:** HIGH — affects `candy-core` input parsing, `sugar-markdown` rendering
+- **SugarCraft risk:** HIGH — affects `sugar-core` input parsing, `sugar-markdown` rendering
 - **Fix required:** Always terminate OSC/DCS sequences with `\x1b\\` or `\x9c`
 
 ### 3. Terminal Capability Query Races (🔴 CRITICAL - Appears in 7+ repos)
 
 - **Repos affected:** bubbletea, ultraviolet, glow, glamour, colorprofile, whisp, go-termimg
 - **Problem:** Async capability queries return after process exit, corrupting state
-- **SugarCraft risk:** HIGH — affects `candy-core` initialization
+- **SugarCraft risk:** HIGH — affects `sugar-core` initialization
 - **Fix required:** Synchronous fallback or query-with-timeout + ignore-if-stale
 
 ### 4. Event Loop Auto-Start Conflicts (🟡 MODERATE - Appears in 4+ repos)
 
 - **Repos affected:** alecrabbit/php-console-spinner, bubbletea, whisp, php-tui
 - **Problem:** Auto-starting event loops conflicts with error handlers and nested composition
-- **SugarCraft risk:** MEDIUM — affects `candy-core` ReactPHP integration
+- **SugarCraft risk:** MEDIUM — affects `sugar-core` ReactPHP integration
 - **Fix required:** Make event loop initialization explicit
 
 ### 5. Upstream Dependency Fragility (🟡 MODERATE - Appears in 5+ repos)
 
 - **Repos affected:** promptkit, fang, bubbletea, bubblezone, mods, phpschool/cli-menu
 - **Problem:** Upstream changes break downstream without warning (bubbletea v2 broke many components)
-- **SugarCraft risk:** MEDIUM — affects all leaf libs depending on `candy-core`
+- **SugarCraft risk:** MEDIUM — affects all leaf libs depending on `sugar-core`
 - **Fix required:** Abstraction layers over TTY framework, version pinning, regression tests
 
 ### 6. Multi-Width Character Optimization Collision (🟡 MODERATE - Appears in 4+ repos)
 
 - **Repos affected:** ultraviolet, bubblezone, go-termimg, pterm
 - **Problem:** Column-optimization (ECH/REP/ICH/DCH) assumes 1 cell = 1 column; wide chars break
-- **SugarCraft risk:** MEDIUM — affects `candy-core` renderer
+- **SugarCraft risk:** MEDIUM — affects `sugar-core` renderer
 - **Fix required:** Bypass all column-optimizations when line contains wide characters
 
 ---
@@ -98,7 +98,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 - **Repos:** harmonica, bubbleup, confettysh, textualize, ratatui
 - **What users want:** Fade-in, slide transitions, particle effects
-- **SugarCraft opportunity:** `sugar-spring` already exists; add animation driver to `candy-core`
+- **SugarCraft opportunity:** `sugar-spring` already exists; add animation driver to `sugar-core`
 - **Priority:** MEDIUM-TERM
 
 ### 6. Word Wrap with Style Preservation (🟡 MEDIUM DEMAND - 4+ repos)
@@ -172,7 +172,7 @@ This document synthesizes the most important findings from second-stage analysis
 
 ### 5. Cell-Based Buffer Rendering (HIGH-VALUE)
 
-- **Observation:** candy-core uses string diffing; ratatui/ultraviolet use true cell buffers
+- **Observation:** sugar-core uses string diffing; ratatui/ultraviolet use true cell buffers
 - **Opportunity:** Port `Buffer`/`Cell` model from ratatui for finer-grained repaints
 - **Action:** Implement `Buffer` value object + `CellBufferRenderer`
 
@@ -381,7 +381,7 @@ GOOD: // parse tokens, preserve complete sequences during wrap
 
 | Opportunity | Impact | Effort | Source Repos |
 |---|---|---|---|
-| Cell-based buffer rendering | HIGH | HIGH | ratatui, ultraviolet, candy-core |
+| Cell-based buffer rendering | HIGH | HIGH | ratatui, ultraviolet, sugar-core |
 | Plugin/Extension architecture | HIGH | HIGH | textualize, soft-serve, bubbletea |
 | Animation driver in core | MEDIUM | MEDIUM | textualize, harmonica, bubbleup |
 | VHS-based snapshot testing | HIGH | MEDIUM | bubbletea (no testing tools) |
@@ -430,7 +430,7 @@ soft-serve had multiple critical security issues found by community audit. Sugar
 
 ### 8. Documentation as Competitive Advantage
 
-Projects with poor docs (aleccrabbit, c9s/CLIFramework) have high pain points. sugar-widgets and candy-core should invest heavily in docs.
+Projects with poor docs (aleccrabbit, c9s/CLIFramework) have high pain points. sugar-widgets and sugar-core should invest heavily in docs.
 
 ---
 
@@ -440,8 +440,8 @@ These patterns appear across Go, Rust, Python, and PHP TUI ecosystems:
 
 | Pattern | Go | Rust | Python | PHP | SugarCraft |
 |---|---|---|---|---|---|
-| Elm Architecture | bubbletea | — | textual | candy-core | ✅ implemented |
-| Cell-based buffer | ultraviolet | ratatui | textual | candy-core (planned) | 🔲 planned |
+| Elm Architecture | bubbletea | — | textual | sugar-core | ✅ implemented |
+| Cell-based buffer | ultraviolet | ratatui | textual | sugar-core (planned) | 🔲 planned |
 | Constraint layout | bubbleboxer | ratatui | textual | sugar-markdown (planned) | 🔲 planned |
 | Fuzzy filtering | bubbles | — | textual | sugar-widgets (gaps) | 🔲 gaps |
 | CSS styling | lipgloss | ratatui | textual (TCSS) | sugar-style | ✅ implemented |

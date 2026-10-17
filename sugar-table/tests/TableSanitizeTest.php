@@ -55,7 +55,7 @@ final class TableSanitizeTest extends TestCase
 
     /**
      * Verify TAB (0x09) is replaced with · (U+00B7) in BOTH newline modes.
-     * This is the canonical candy-core cellValue policy — TAB is treated as
+     * This is the canonical sugar-core cellValue policy — TAB is treated as
      * a control byte rather than being passed through.
      */
     public function testSanitizeReplacesTab(): void

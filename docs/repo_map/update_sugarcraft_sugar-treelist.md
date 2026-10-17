@@ -172,7 +172,7 @@ Model.lines()
 ### 2. tea.Model Interface Compliance
 
 **Title:** BubbleTea-compatible Model interface
-**Description:** Not a BubbleTea component; cannot be dropped into a BubbleTea application. The Go upstream implements `tea.Model` (Init/Update/View). sugar-craft has `candy-core` with `Model` trait.
+**Description:** Not a BubbleTea component; cannot be dropped into a BubbleTea application. The Go upstream implements `tea.Model` (Init/Update/View). sugar-craft has `sugar-core` with `Model` trait.
 **Why it matters:** Cannot integrate with existing BubbleTea apps or use BubbleTea subscriptions, commands, or the broader ecosystem.
 **Source:** `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/treilik_bubblelister.md`
 **Implementation ideas:** Implement `SugarCraft\Core\Model` trait with `init()`, `update(Msg $msg): array{self,?Cmd}`, `view(): string`. Handle `WindowSizeMsg`, `KeyMsg`, `TickMsg`.
@@ -364,9 +364,9 @@ Model.lines()
 
 ## 1. Implement `SugarCraft\Core\Model` Trait
 
-Add `init()`, `update(Msg $msg): array{self,?Cmd}`, `view(): string` to enable integration with `candy-core` runtime. Handle `KeyMsg`, `WindowSizeMsg`, `TickMsg` internally.
+Add `init()`, `update(Msg $msg): array{self,?Cmd}`, `view(): string` to enable integration with `sugar-core` runtime. Handle `KeyMsg`, `WindowSizeMsg`, `TickMsg` internally.
 
-**Source:** `docs/repo_map/charmbracelet_bubbletea.md` (tea.Model interface), `docs/repo_map/sugarcraft_candy-core.md`
+**Source:** `docs/repo_map/charmbracelet_bubbletea.md` (tea.Model interface), `docs/repo_map/sugarcraft_sugar-core.md`
 
 ## 2. Extract Rendering from Model
 
@@ -540,7 +540,7 @@ A sugar-treelist instance could be a leaf in a bubbleboxer-style layout tree —
 
 ## 5. BubbleTea Program Integration
 
-If Model implements `tea.Model`, it can run inside `candy-core`'s `Program::run()`. This enables drop-in for Go BubbleTea apps being ported to PHP.
+If Model implements `tea.Model`, it can run inside `sugar-core`'s `Program::run()`. This enables drop-in for Go BubbleTea apps being ported to PHP.
 
 **Source:** `docs/repo_map/charmbracelet_bubbletea.md` (tea.Model integration)
 
@@ -600,7 +600,7 @@ If Model implements `tea.Model`, it can run inside `candy-core`'s `Program::run(
 
 ## Medium-term Improvements (1–3 months)
 
-5. **Built-in keyboard navigation** — Add `KeyBindings` class and `update(KeyMsg $msg)` method handling vim keys, pgup/pgdn, home/end. Integrate with `candy-core` event loop.
+5. **Built-in keyboard navigation** — Add `KeyBindings` class and `update(KeyMsg $msg)` method handling vim keys, pgup/pgdn, home/end. Integrate with `sugar-core` event loop.
 
 6. **Mouse support** — Add `withMouseEnabled()` and handle `MouseMsg` for click-to-select and scroll-wheel.
 
@@ -612,7 +612,7 @@ If Model implements `tea.Model`, it can run inside `candy-core`'s `Program::run(
 
 ## Major Architectural Upgrades (3–6 months)
 
-10. **`tea.Model` compliance** — Implement `SugarCraft\Core\Model` trait with `init()`/`update()`/`view()`. Enable integration with `candy-core` runtime.
+10. **`tea.Model` compliance** — Implement `SugarCraft\Core\Model` trait with `init()`/`update()`/`view()`. Enable integration with `sugar-core` runtime.
 11. **Concurrent search** — Use ReactPHP promises for parallel item search. Chunk items and search chunks in parallel.
 12. **Event system (UserEvent)** — Add `UserEvent*` types for application reaction to user interactions.
 13. **Built-in filter UI** — Add `withFilterInput()` method composing with `TextInput`. Handle `/` to trigger filtering.
@@ -656,7 +656,7 @@ If Model implements `tea.Model`, it can run inside `candy-core`'s `Program::run(
 
 The most pressing gap is **keyboard navigation** — every consumer must reimplement the same vim keys, pgup/pgdn, home/end logic. This is textbook premature generalization: the library correctly separated rendering from event handling, but overshot by leaving ALL event handling to consumers. Adding a `KeyBindings` class with a simple `update(KeyMsg $msg): array{Model,?Cmd}` method would dramatically improve usability.
 
-The second major gap is **tea.Model compliance**. Since `candy-core` implements the BubbleTea runtime in PHP, sugar-treelist should implement `SugarCraft\Core\Model` to enable drop-in use. This is the port's reason-for-being — being the list component for a PHP BubbleTea.
+The second major gap is **tea.Model compliance**. Since `sugar-core` implements the BubbleTea runtime in PHP, sugar-treelist should implement `SugarCraft\Core\Model` to enable drop-in use. This is the port's reason-for-being — being the list component for a PHP BubbleTea.
 
 The third gap is **mouse support and virtual scrolling** — modern TUI expectations in 2026. These are independent improvements that could be added in any order.
 

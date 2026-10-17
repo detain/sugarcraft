@@ -31,7 +31,7 @@ You are a SugarCraft monorepo coder agent. The supervisor handed you a step file
 
 - **`declare(strict_types=1);`** is the first line of every PHP file you create.
 - **PSR-12 + PSR-4**. Public classes `final` unless extension is part of the contract.
-- **Immutable + fluent**: every `with*()` returns a new instance via the `mutate()` helper from `candy-core/src/Concerns/Mutable.php`.
+- **Immutable + fluent**: every `with*()` returns a new instance via the `mutate()` helper from `sugar-core/src/Concerns/Mutable.php`.
 - **Bare accessors** (no `get` prefix). **Factories** mirror upstream: `::new()` is default; never `::create()` / `::make()` / `::default()`.
 - **i18n** lookups via `\SugarCraft\Pty\Lang::t($key, $params)` over `SugarCraft\Core\I18n\T`.
 - **Don't add scope**. No drive-by refactors, no extra error handling for impossible cases, no "while I'm here" cleanups.

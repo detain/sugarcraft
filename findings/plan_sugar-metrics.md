@@ -574,12 +574,12 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 
 - Add `failOnWarning="true"` to phpunit.xml root element
 - Add `cacheDirectory=".phpunit.cache"` to phpunit.xml root element
-- Reference: `candy-core/phpunit.xml` has both attributes
+- Reference: `sugar-core/phpunit.xml` has both attributes
 
 **Related Code:**
 
 - `sugar-metrics/phpunit.xml:1-16`
-- `candy-core/phpunit.xml:1-18` — reference implementation
+- `sugar-core/phpunit.xml:1-18` — reference implementation
 
 ---
 

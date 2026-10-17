@@ -1009,7 +1009,7 @@ final class KeyboardHandler
 
         // Space - the non-committing peek (crush_feat.md §5 E5): look at what
         // the selected worker is blocked on without leaving the dashboard.
-        // Both spellings are matched because candy-core reports the key as
+        // Both spellings are matched because sugar-core reports the key as
         // KeyType::Space ("space") but a Char " " reaches here from any
         // decoder that does not special-case it.
         if (($key === 'space' || $key === ' ') && $app->selectedAgentIndex >= 0) {

@@ -78,7 +78,7 @@
 
 ## SugarCraft Mapping
 
-- **candy-core**: The core rendering and event loop patterns (`show()`, `run_navigation()`, `draw()`) map to how `candy-core` handles TUI loop infrastructure. The ANSI color handling via the `color` module parallels `candy-core`'s theme/color support.
+- **sugar-core**: The core rendering and event loop patterns (`show()`, `run_navigation()`, `draw()`) map to how `sugar-core` handles TUI loop infrastructure. The ANSI color handling via the `color` module parallels `sugar-core`'s theme/color support.
 - **sugar-widgets**: This library is most directly comparable to `sugar-widgets` — it's a single component (a menu/selector widget) rather than a full application framework. The `Menu` struct is analogous to a `Component` in SugarCraft's `Component` trait.
 - **sugar-spring**: Not directly relevant — this library has no animation/timing physics.
 

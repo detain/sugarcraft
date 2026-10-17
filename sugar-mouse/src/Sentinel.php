@@ -15,7 +15,7 @@ use SugarCraft\Core\Util\Sanitize;
  * ESC]) or regular text.
  *
  * The values are anchored to {@see Sanitize::ZONE_SENTINEL_OPEN} /
- * {@see Sanitize::ZONE_SENTINEL_CLOSE} — candy-core owns the codepoint
+ * {@see Sanitize::ZONE_SENTINEL_CLOSE} — sugar-core owns the codepoint
  * reservation, so a sanitizer sweep and the markup it defends against can
  * never drift apart by a re-typed byte literal.
  *

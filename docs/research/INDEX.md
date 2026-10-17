@@ -22,7 +22,7 @@ To implement an item:
 
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
-| **candy-core** | [research/libraries/candy-core-research.md](libraries/candy-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
+| **sugar-core** | [research/libraries/sugar-core-research.md](libraries/sugar-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
 | **sugar-style** | [research/libraries/candy-sprinkles-research.md](libraries/candy-sprinkles-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing | <!-- @rename-keep -->
 | **sugar-pty** | [research/libraries/sugar-pty-research.md](libraries/sugar-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
 | **sugar-vterm** | [research/libraries/candy-vt-research.md](libraries/candy-vt-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing | <!-- @rename-keep -->

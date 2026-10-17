@@ -9,7 +9,7 @@ paths:
 
 ## Critical
 
-- Test file lives **always** alongside the lib's other tests (e.g. `sugar-widgets/tests/SpinnerTest.php`, `candy-core/tests/RendererTest.php`) — never under a top-level test root, never colocated with `src/`.
+- Test file lives **always** alongside the lib's other tests (e.g. `sugar-widgets/tests/SpinnerTest.php`, `sugar-core/tests/RendererTest.php`) — never under a top-level test root, never colocated with `src/`.
 - First three lines are exactly: `<?php`, blank, `declare(strict_types=1);`. Top of every file. No exceptions.
 - Namespace is `SugarCraft\<Sub>\Tests` where `<Sub>` matches the lib's source namespace (look at the lib's `composer.json` `autoload.psr-4` — drop the trailing `\`). Never invent a sub-namespace.
 - Test class is `final` and extends `PHPUnit\Framework\TestCase` — not any project base class.
@@ -117,7 +117,7 @@ paths:
    }
    ```
 
-8. **For test fixtures (recording models, deterministic RNGs, scripted readers)** define a separate `final class` in the same file *above* the test class, mirroring `candy-core/tests/ProgramTest.php:34`'s `RecordingModel`. Don't put fixtures under `src/`. Don't create a `tests/Support/` directory unless one already exists in that lib.
+8. **For test fixtures (recording models, deterministic RNGs, scripted readers)** define a separate `final class` in the same file *above* the test class, mirroring `sugar-core/tests/ProgramTest.php:34`'s `RecordingModel`. Don't put fixtures under `src/`. Don't create a `tests/Support/` directory unless one already exists in that lib.
 
 9. **Run the suite** from the lib root. Verify green before reporting done:
 
@@ -171,7 +171,7 @@ paths:
 
 - **`Cannot declare class …Test, because the name is already in use`** — duplicate `final class XTest` because the file was created twice. PHPUnit autoloads everything under the lib's tests dir. Delete the duplicate or rename one.
 
-- **`Risky test that printed output`** — your code-under-test wrote to STDOUT during a test. Either capture with `ob_start()` / `ob_get_clean()`, or pass a `php://memory` stream into the constructor like `candy-core/tests/ProgramTest.php:71` does (`fopen('php://memory', 'w+')`).
+- **`Risky test that printed output`** — your code-under-test wrote to STDOUT during a test. Either capture with `ob_start()` / `ob_get_clean()`, or pass a `php://memory` stream into the constructor like `sugar-core/tests/ProgramTest.php:71` does (`fopen('php://memory', 'w+')`).
 
 - **`failed asserting that 'hi' is identical to '\x1b[1mhi\x1b[0m'`** — you're passing a single-quoted string. Switch to double quotes so `\x1b` is interpreted: `"\x1b[1mhi\x1b[0m"`, not `'\x1b[1mhi\x1b[0m'`.
 

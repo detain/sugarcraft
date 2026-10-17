@@ -21,10 +21,10 @@ Based on the first-stage analysis, charmbracelet/log maps to:
 | Text formatting with ANSI colors | `sugar-markdown` | Existing |
 | JSON/Logfmt formatters | `sugar-widgets` | Existing |
 | Color/profile detection | `sugar-markdown` | Existing |
-| Context propagation | `candy-core` | Existing |
+| Context propagation | `sugar-core` | Existing |
 | slog.Handler interface | `sugar-widgets` | Partial |
 | Sub-loggers with fields | `sugar-widgets` | Existing |
-| Standard log adapter | `candy-core` | Partial |
+| Standard log adapter | `sugar-core` | Partial |
 
 **No dedicated `sugar-log` or `candy-log` library exists yet.** This represents a gap. <!-- @rename-keep historical provenance -->
 
@@ -514,7 +514,7 @@ func common() {
 
 1. **Formatter Interface**: Allow custom formatters (issue #125)
 2. **Handler/Logger Adapter**: PSR-3 compatibility layer
-3. **Context Propagation**: Store logger in `Context` (already in candy-core)
+3. **Context Propagation**: Store logger in `Context` (already in sugar-core)
 4. **Helper Function**: Mark calling functions for caller skip
 5. **Sub-logger with Prefix**: `WithPrefix()` functionality
 

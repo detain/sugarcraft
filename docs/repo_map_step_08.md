@@ -80,7 +80,7 @@ Reference: `docs/repo_map_update.md` §369.6 (consolidation of async patterns), 
   ## Summary
   - New foundation lib candy-async unifies ReactPHP usage across the monorepo. <!-- @rename-keep historical provenance -->
   - Provides Cancellable tokens, Subscriptions composition, AsyncOps (withTimeout, retry, debounce, throttle).
-  - Consumers (candy-core, sugar-forms, sugar-forms) migrate in step-23.
+  - Consumers (sugar-core, sugar-forms, sugar-forms) migrate in step-23.
 
   ## Test plan
   - [x] vendor/bin/phpunit in candy-async (≥95% coverage) <!-- @rename-keep historical provenance -->

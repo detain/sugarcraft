@@ -160,7 +160,7 @@ final class ThemeTest extends TestCase
 
     /**
      * Drift guard: every coloured dracula() slot must source its hex from
-     * {@see Palettes::DRACULA} (the candy-core single source of truth), so a
+     * {@see Palettes::DRACULA} (the sugar-core single source of truth), so a
      * change to a Palettes constant flows through byte-for-byte and a
      * re-hardcoded literal that diverges from the SSOT fails here.
      */

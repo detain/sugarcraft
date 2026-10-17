@@ -74,7 +74,7 @@ final class ToastStyledRenderTest extends TestCase
     {
         // Info icon renders red-free but coloured (SGR 34 → truecolor);
         // the icon must retain its own colour, not be overwritten by fg.
-        // Toast::ansiColorToRgb indexes candy-core Color::ANSI16_RGB, so
+        // Toast::ansiColorToRgb indexes sugar-core Color::ANSI16_RGB, so
         // 34 (slot 4) → #0000EE "blue2" → 38;2;0;0;238.
         $out = Toast::new(50)
             ->withPosition(Position::TopLeft)

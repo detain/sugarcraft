@@ -329,11 +329,11 @@ sugar-spring/src/
 2. **Physics visualization**: ASCII art showing each damping regime's behavior over time
 3. **Preset comparison table**: Visual reference for which preset to use when ( Gentle = modal dialogs, Wobbly = notifications, Stiff = sliders, etc.)
 4. **Game physics tutorial**: Build a simple bouncing ball game using Projectile + collision detection
-5. **Integration examples**: sugar-spring + candy-core (TUI animation), sugar-spring + candy-flappy (game physics)
+5. **Integration examples**: sugar-spring + sugar-core (TUI animation), sugar-spring + candy-flappy (game physics)
 
 # UX / TUI Improvements
 
-1. **Animator wrapper for candy-core**: `SugarCraft\Spring\Animator` class that auto-hooks springs to reactive properties in candy-core models — similar to textual's Animator class
+1. **Animator wrapper for sugar-core**: `SugarCraft\Spring\Animator` class that auto-hooks springs to reactive properties in sugar-core models — similar to textual's Animator class
 2. **Animation presets in sugar-widgets**: Pre-built animated components (animated list item, spring button, bounce notification) using sugar-spring springs
 3. **REDUCE_MOTION documentation**: Prominently document the accessibility feature — this is SugarCraft's strongest differentiation from upstream
 
@@ -347,7 +347,7 @@ sugar-spring/src/
 
 # Ecosystem / Integration Opportunities
 
-1. **sugar-spring + candy-core**: Animation system for TUI components — animated buttons, spring-based list reordering
+1. **sugar-spring + sugar-core**: Animation system for TUI components — animated buttons, spring-based list reordering
 2. **sugar-spring + candy-flappy**: Already exists — Flappy Bird clone using Projectile for vertical motion
 3. **sugar-spring + sugar-charts**: Animated chart transitions with spring-based easing
 4. **Publish as standalone package**: When SugarCraft reaches v1.0, publish `sugar-spring` separately to Packagist as `sugarcraft/sugar-spring`
@@ -387,12 +387,12 @@ sugar-spring/src/
 ### Animator class
 
 - Built-in animator with easing functions and transitions
-- **Lesson**: A `SugarCraft\Spring\Animator` wrapper for candy-core could provide similar ergonomics
+- **Lesson**: A `SugarCraft\Spring\Animator` wrapper for sugar-core could provide similar ergonomics
 
 ### Reactive state + watchers
 
 - Animations triggered automatically when reactive properties change
-- **Lesson**: Spring animations could be integrated into candy-core's reactive system
+- **Lesson**: Spring animations could be integrated into sugar-core's reactive system
 
 ## From charmbracelet/confettysh:
 
@@ -468,7 +468,7 @@ Second, the lack of animation completion callbacks is a notable ergonomic gap co
 Third, the mutable `Projectile` allocation pattern creates garbage in tight game loops. Adding a `ProjectileMutable` variant with in-place updates would enable high-performance particle systems without GC pressure.
 
 **Ecosystem positioning:**
-`sugar-spring` fills the physics/animation layer in SugarCraft's stack, sitting below `candy-core` (TUI runtime) and alongside `candy-flappy` (game physics consumer). Its physics-first approach is correct — consumers handle rendering, enabling use in TUIs, games, or any animation context. The library's independence from terminal dependencies is a strength that should be preserved.
+`sugar-spring` fills the physics/animation layer in SugarCraft's stack, sitting below `sugar-core` (TUI runtime) and alongside `candy-flappy` (game physics consumer). Its physics-first approach is correct — consumers handle rendering, enabling use in TUIs, games, or any animation context. The library's independence from terminal dependencies is a strength that should be preserved.
 
 **Recommended strategic direction:**
 

@@ -16,7 +16,7 @@
   orphaned (measured in the product).
 - **Close pipes BEFORE signalling in stop().** On stdin EOF a well-behaved
   server exits on its own: measured 1.05s → 0.010s and exit status 9 → 0.
-- **Teardown via candy-core `Util\Proc\BoundedShutdown`** — TERM → poll → KILL →
+- **Teardown via sugar-core `Util\Proc\BoundedShutdown`** — TERM → poll → KILL →
   poll → proc_close with exit-code harvest from the status poll (proc_close
   reports -1 after a reaped exit). `groupId()` must be computed while the child
   is alive. Signals are integer literals (15/9), never pcntl constants.

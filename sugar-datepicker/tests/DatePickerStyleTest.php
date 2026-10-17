@@ -121,7 +121,7 @@ final class DatePickerStyleTest extends TestCase
         $rgb = $this->invokeAnsiColorToRgb(0, false);
         $this->assertSame(0x000000, $rgb);
 
-        // Slot 7 = candy-core ANSI16_RGB[7] = [229,229,229] (xterm white).
+        // Slot 7 = sugar-core ANSI16_RGB[7] = [229,229,229] (xterm white).
         $rgb = $this->invokeAnsiColorToRgb(7, false);
         $this->assertSame(0xe5e5e5, $rgb);
     }

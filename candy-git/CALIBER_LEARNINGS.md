@@ -70,8 +70,8 @@ and sugar-toast:
    and verifies every key exists in `lang/en.php`. Prevents silent missing
    translations.
 
-5. **`candy-core` dep** — the `T` class lives in `candy-core`, so every
-   i18n lib needs `sugarcraft/candy-core: dev-master` in `require` plus a
+5. **`sugar-core` dep** — the `T` class lives in `sugar-core`, so every
+   i18n lib needs `sugarcraft/sugar-core: dev-master` in `require` plus a
    path-repo entry in `repositories`.
 
      6. **Keys in candy-git** — `git.spawn_failed`, `git.error`,
@@ -227,7 +227,7 @@ Pattern: When a lib needs type-to-filter with ranked results, adopt `sugarcraft/
 Anti-pattern: Ad-hoc `str_contains()` or `stripos()` boolean filtering; it gives no ranking signal and no match-position data for highlighting.
 Source: step-33 ai/filter-consumers
 
-### 2026-09-16 — Consume candy-core's shared lexer for diff syntax highlighting
+### 2026-09-16 — Consume sugar-core's shared lexer for diff syntax highlighting
 Pattern: Step 10.06's deferred "syntax highlighting in diff view" landed by
 consuming `SugarCraft\Core\Syntax\RegexHighlighter` — the pure tokenisation
 primitive shipped with the step 10.24 highlighting pipeline (candy-mdview itself

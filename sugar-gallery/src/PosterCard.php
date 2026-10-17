@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Width;
  * pulls in no image decoder. Attach the poster with {@see withPoster()} when an
  * async render resolves.
  *
- * Title sizing is ANSI-aware (via candy-core {@see Width}): an optional
+ * Title sizing is ANSI-aware (via sugar-core {@see Width}): an optional
  * pre-styled title (e.g. a fuzzy-highlighted one set with {@see withStyledTitle()})
  * keeps its escape sequences and still pads to the correct *visible* cell width.
  */

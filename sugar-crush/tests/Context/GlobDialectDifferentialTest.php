@@ -101,9 +101,9 @@ final class GlobDialectDifferentialTest extends TestCase
         [22, 'backslash as literal', 'a\\*b', 'a\\b', true, false],
         [23, 'Windows separators', 'src\\*.php', 'src\\a.php', true, false],
         [24, 'non-UTF-8 byte', 'src/*.php', "src/\xC3\x28.php", true, true],
-        [25, 'PLAN GOAL, 1 leading seg', '*/tests/**/*.php', 'candy-core/tests/FooTest.php', true, true],
+        [25, 'PLAN GOAL, 1 leading seg', '*/tests/**/*.php', 'sugar-core/tests/FooTest.php', true, true],
         [26, 'PLAN GOAL, 2 leading segs', '*/tests/**/*.php', 'a/b/tests/FooTest.php', false, true],
-        [27, 'plan goal, nested specs dir', '*/tests/**/*.php', 'candy-core/tests/Sub/FooTest.php', true, true],
+        [27, 'plan goal, nested specs dir', '*/tests/**/*.php', 'sugar-core/tests/Sub/FooTest.php', true, true],
         [28, 'newline vs star', '*.php', "a\nb.php", true, true],
         [29, 'trailing newline in path', 'src.php', "src.php\n", false, false],
         [30, 'three stars', 'src/***', 'src_x', false, true],
@@ -142,7 +142,7 @@ final class GlobDialectDifferentialTest extends TestCase
         "a\nb.php", "src.php\n", "a\nb\nc", "src/x\ny.php", 'SRC/X.PHP', 'Makefile',
         'makefile', "src/\xC3\x28.php", "\xff\xfe.php", "a\0b", "src/\0.php",
         'x/x/x/x/x/x/x/x/f.php', './a', './src/x.php', 'src/deep/x.php',
-        'candy-core/tests/FooTest.php', 'a/b/tests/FooTest.php', 'a/x/y/z/b',
+        'sugar-core/tests/FooTest.php', 'a/b/tests/FooTest.php', 'a/x/y/z/b',
         'src/x]y.php', 'src/a/b/c/d/e/f/x.php', 'composer.json', 'a/b/c/d/e/f/g/h/i/j.php',
     ];
 

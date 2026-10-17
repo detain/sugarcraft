@@ -40,7 +40,7 @@ From `repo_map/charmbracelet_charm.md`:
 | `ui/` (Bubble Tea) | `sugar-style` | TUI component patterns |
 | `server/` package | (none) | Server-side, not applicable |
 | `cmd/` package | `candy-scriptui` | CLI primitives |
-| Overall architecture | `candy-core` | Elm-style MVC TUI pattern |
+| Overall architecture | `sugar-core` | Elm-style MVC TUI pattern |
 
 **Identified Opportunities:**
 

@@ -8,7 +8,7 @@ use SugarCraft\Core\Msg;
 
 /**
  * The update_ms data tick. `$generation` lets the App ignore a tick armed
- * under a superseded period (after `+`/`-` re-arms) — candy-core ticks are
+ * under a superseded period (after `+`/`-` re-arms) — sugar-core ticks are
  * one-shot and cannot be cancelled, only outdated.
  */
 final class DataTickMsg implements Msg

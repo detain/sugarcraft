@@ -381,7 +381,7 @@ The research doc (`docs/research/libraries/candy-codetime-research.md`) recommen
 {
   "require": {
     "php": ">=8.3",
-    "sugarcraft/candy-core": "dev-master",
+    "sugarcraft/sugar-core": "dev-master",
     "sugarcraft/sugar-style": "dev-master",
     "sugarcraft/sugar-charts": "dev-master"
   }
@@ -479,11 +479,11 @@ Future roadmap items from research:
 
 | candy-codetime | SugarCraft | Notes |
 |---|---|---|
-| TUI Dashboard | `candy-core` | `Model` interface, `Program` runner |
+| TUI Dashboard | `sugar-core` | `Model` interface, `Program` runner |
 | Sparkline chart | `sugar-charts` | `Sparkline` component |
 | Styling | `sugar-style` | `Border`, `Color`, `Style`, `Layout` |
 | Theming | `sugar-style` | `Theme::dark()` / `Theme::light()` |
-| i18n | `candy-core` | `Core\I18n\T` with per-namespace facade |
+| i18n | `sugar-core` | `Core\I18n\T` with per-namespace facade |
 
 ### Not Mapped (external ecosystem)
 

@@ -44,7 +44,7 @@ interface Renderer
      *
      * False for pixel-graphics protocols (Sixel, Kitty, iTerm2) whose output is
      * one opaque escape blob with no per-row structure: it must be painted as an
-     * out-of-band overlay (see candy-core's `ImageOverlay`) rather than embedded
+     * out-of-band overlay (see sugar-core's `ImageOverlay`) rather than embedded
      * in the frame. Lets a caller route output without hard-coding protocol names.
      */
     public function isInline(): bool;

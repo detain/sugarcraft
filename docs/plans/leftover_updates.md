@@ -43,8 +43,8 @@ No leftovers.
 
 ### P1 — Termios FFI primary, stty fallback
 
-🟡 **P1-LO-01 — `candy-core::PosixBackend::size()` still falls through to `shell_exec('stty size')`.**
-*Where:* `candy-core/src/Util/Tty/PosixBackend.php:93-98`.
+🟡 **P1-LO-01 — `sugar-core::PosixBackend::size()` still falls through to `shell_exec('stty size')`.**
+*Where:* `sugar-core/src/Util/Tty/PosixBackend.php:93-98`.
 *Why it matters:* The plan (`P1.4` review focus) said `stty` should leave
 the primary code path entirely. Today `SizeIoctl::query()` is tried
 first, but if it throws (`posix_isatty` false, or any libc failure on
@@ -55,13 +55,13 @@ Darwin), the next branch is still `shell_exec('stty size')`, not
 `openTty()` → `SizeIoctl::query()` against the returned `/dev/tty` fd
 before falling through to env vars. Drop the `stty size` and `hasStty`
 branches. Keep the 80×24 default as the last resort.
-*Acceptance:* `grep -n "shell_exec.*stty" candy-core/src` returns
+*Acceptance:* `grep -n "shell_exec.*stty" sugar-core/src` returns
 nothing; `PosixBackendTest` covers `posix_isatty=false` + `/dev/tty`
 readable still returns real dimensions.
 
-🟡 **P1-LO-02 — `candy-core::PosixBackend::restoreLast()` still uses
+🟡 **P1-LO-02 — `sugar-core::PosixBackend::restoreLast()` still uses
 `shell_exec('stty -g')` and `shell_exec('stty $saved')`.**
-*Where:* `candy-core/src/Util/Tty/PosixBackend.php:177-202`,
+*Where:* `sugar-core/src/Util/Tty/PosixBackend.php:177-202`,
 plus the private `hasStty()` cache at line 194.
 *Why it matters:* `restoreLast()` is the emergency / panic-handler
 path. The plan’s `TermiosFactory` already exposes the `current()` →
@@ -72,7 +72,7 @@ parallel rescue mechanisms is brittle.
 `hasStty()` entirely. If `TermiosFactory` returns `SttyTermios` because
 ext-ffi is missing, the existing shell-out lives there — single rescue
 path.
-*Acceptance:* `grep -n "shell_exec" candy-core/src` returns nothing;
+*Acceptance:* `grep -n "shell_exec" sugar-core/src` returns nothing;
 panic-handler test (`tests/Util/Tty/PosixBackendRestoreLastTest.php`)
 calls `restoreLast()` twice, verifies termios round-trips identically.
 
@@ -340,7 +340,7 @@ process today; only difference is no human in the loop.
 
 ### CC-LO-02 — Path-repo lock-version mismatch generates a 7-cell red on every sugar-pty PR
 
-*Where:* `candy-core/composer.lock` (and consumers) pin
+*Where:* `sugar-core/composer.lock` (and consumers) pin
 `sugarcraft/sugar-pty` to `"version": "dev-master"`; on a sugar-pty PR
 branch the symlinked HEAD is `dev-ai/<branch>` and composer rejects the
 lock. Status doc calls this "expected".
@@ -392,22 +392,22 @@ master — opposite of `SIGINTForwardingTest`.
 *Why it matters:* Single-source-of-truth violation. Detect's job is
 "do we have a TTY that can render images?" — the canonical answer
 should come from `\SugarCraft\Pty\Contract\Termios::isAtty()` (or a
-new `Util\TtyDetect::isAtty()` static in candy-core that delegates to
+new `Util\TtyDetect::isAtty()` static in sugar-core that delegates to
 sugar-pty).
 *Fix:* Replace `posix_isatty(0) && posix_isatty(1)` with a single
 delegate call. Tracked under the broader audit in
 `plans/leftover_updates_later.md` (single-source-of-truth section)
 but listed here too because it touches the PTY surface.
 
-### CC-LO-07 — `candy-core/src/Util/Editor.php` and `Open.php` shell out to `$EDITOR` without using `PosixProcess`
+### CC-LO-07 — `sugar-core/src/Util/Editor.php` and `Open.php` shell out to `$EDITOR` without using `PosixProcess`
 
-*Where:* `candy-core/src/Util/Editor.php`, `candy-core/src/Util/Open.php`
+*Where:* `sugar-core/src/Util/Editor.php`, `sugar-core/src/Util/Open.php`
 use `proc_open` directly.
 *Why it matters:* The plan's Goal #4 was "Process unification". Both
 files would benefit from `PosixProcess` (zombie-reap safety net, exit
 code propagation, stderr capture).
 *Fix:* Replace inline `proc_open` blocks with `PosixProcess`
-construction; tests in `candy-core` remain green.
+construction; tests in `sugar-core` remain green.
 
 ### CC-LO-08 — `candy-scriptui` still has its own `Process\Process.php` interface
 
@@ -488,7 +488,7 @@ Recommended order (each line ≤1 PR unless `[multi-PR]` flag):
 8. CC-LO-03 + CC-LO-04 + CC-LO-05 (signal + ReactPHP + SIGHUP +
    no-ctty integration tests). Combined PR — adds 3 test files,
    touches nothing else.
-9. CC-LO-06 + CC-LO-07 (`sugar-image` + `candy-core/Util/Editor|Open`
+9. CC-LO-06 + CC-LO-07 (`sugar-image` + `sugar-core/Util/Editor|Open`
    single-source-of-truth fix). One PR.
 10. P6-LO-02 + P6-LO-03 + P6-LO-04 (Pool ReactPHP test, Expect ↔ Recorder
     integration, MultiPump docs+example). Combined PR.

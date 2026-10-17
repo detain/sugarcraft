@@ -45,7 +45,7 @@ Phases 0–6 shipped sequentially as individual PRs per the repo's standard cycl
 | Recorder | `candy-vcr/src/Recorder.php` | ✅ |
 | CLI scaffold | `candy-vcr/src/Cli/` — record, inspect, replay, diff, stats, migrate | ✅ 6 subcommands |
 | PTY abstraction | `sugar-pty/src/` | ✅ Reusable for shell exec |
-| Program/Msg primitives | `candy-core/src/` | ✅ |
+| Program/Msg primitives | `sugar-core/src/` | ✅ |
 
 ### What we don't have
 
@@ -129,7 +129,7 @@ This phase exists to make every later phase faster. Bundle into 1 PR.
 - **Fix candy-vcr PHPUnit suite.** Implement the missing `TickModel::subscriptions()` (likely just `return null;`).
 - **Add `candy-vcr/phpstan.neon`** at `level: max`, with paths `src/` and `tests/`. Fix any findings inline; if any can't be fixed without scope creep, add `// @phpstan-ignore-next-line` with an inline comment referencing this phase.
 - **Add `sugar-vterm/phpstan.neon`** same shape (still mostly empty source tree but the gate is in place for Phase 1).
-- **Add root `.php-cs-fixer.dist.php`** with PSR-12 + strict types + readonly preferences. Run it across `candy-core`, `candy-vcr`, `sugar-vterm` to seed the baseline (other libs adopt over time).
+- **Add root `.php-cs-fixer.dist.php`** with PSR-12 + strict types + readonly preferences. Run it across `sugar-core`, `candy-vcr`, `sugar-vterm` to seed the baseline (other libs adopt over time).
 - **Baseline benchmark.** Run the existing Player on a medium cassette (~150 events) and capture wall time + memory. Establishes the per-event cost the render work will add to.
 - **Decision log** committed to `candy-vcr/CALIBER_LEARNINGS.md`:
   - Primary rasterizer backend: `ext-gd` (universal availability).
@@ -276,7 +276,7 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 - Maintained by `.github/workflows/vhs-runner-image.yml`.
 
 **Workflow changes:**
-- New job `vhs-candy-vcr` runs in parallel with the existing `vhs` job on a seed lib (`candy-core` first). The job invokes `php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/`.
+- New job `vhs-candy-vcr` runs in parallel with the existing `vhs` job on a seed lib (`sugar-core` first). The job invokes `php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/`.
 - After visual sign-off on the seed lib, expand to 5 more libs.
 - After a 2-week soak with no regressions, the `vhs "$tape"` line is replaced.
 - The container-image swap is a separate PR.

@@ -178,7 +178,7 @@ final class MainMenu implements Overlay
     private function enter(): OverlayResult
     {
         // The App answers with its quit Cmd (config save first). Named rather
-        // than inlined: candy-core's descriptor census reads the argument of
+        // than inlined: sugar-core's descriptor census reads the argument of
         // anything called close(), and has no word for a closure literal.
         $quit = static fn (): Msg => new QuitRequestMsg();
 

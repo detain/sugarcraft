@@ -88,8 +88,8 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §7 wanted a parallel `vhs-candy-vcr` job on a seed lib, then expansion, then soak, then upstream replacement. Today only the runner image + smoke test exists.
 
-- [x] Add a new job `vhs-candy-vcr` in `.github/workflows/vhs.yml` that runs in parallel with the existing `vhs` job on **candy-core** (seed lib). (Single-key matrix `lib: [candy-core]` so the matrix can expand without restructuring; runs alongside the legacy `render` job in the same workflow.)
-- [x] Job uses the `vhs-runner-php` image and invokes `php candy-vcr/bin/candy-vcr render-batch candy-core/.vhs/`. (`container.image: ghcr.io/detain/sugarcraft-vhs-runner-php:latest`; renders the two tapes `counter.tape` + `timer.tape` with `--encoder ffmpeg` since the image bakes ffmpeg in.)
+- [x] Add a new job `vhs-candy-vcr` in `.github/workflows/vhs.yml` that runs in parallel with the existing `vhs` job on **sugar-core** (seed lib). (Single-key matrix `lib: [sugar-core]` so the matrix can expand without restructuring; runs alongside the legacy `render` job in the same workflow.)
+- [x] Job uses the `vhs-runner-php` image and invokes `php candy-vcr/bin/candy-vcr render-batch sugar-core/.vhs/`. (`container.image: ghcr.io/detain/sugarcraft-vhs-runner-php:latest`; renders the two tapes `counter.tape` + `timer.tape` with `--encoder ffmpeg` since the image bakes ffmpeg in.)
 - [x] Job uploads its GIFs as a workflow artifact for visual comparison. (Artifact name `vhs-candy-vcr-${{ matrix.lib }}`, `retention-days: 7`, `include-hidden-files: true` so the dot-prefixed `.vhs/` dir's GIFs ship.)
 - [x] Job is non-blocking initially (`continue-on-error: true`) so existing vhs CI stays green during the soak. (Set at the job level. Separate from the per-step smoke check, which exits non-zero on missing/empty/invalid GIFs but only marks this job failed — does not gate `render`.)
 - [x] Document the migration plan + rollback in `candy-vcr/README.md` under "CI integration". (New section between Development and License; covers the dual-renderer soak table, the three-step cutover plan, and the one-line `git revert` rollback.)
@@ -150,7 +150,7 @@ Spawn one last review agent to:
 - Phase 4: pass — `GdRasterizer` (default, cross-frame `Glyphs` cache with fingerprint invalidation), `ImagickRasterizer` (mirrored tile cache), `FontLoader`, `Glyphs`. JetBrainsMono Regular/Bold/Italic/BoldItalic + OFL `LICENSE` bundled; DejaVu retained as fallback.
 - Phase 5: pass — `FfmpegGifEncoder` (palettegen + paletteuse + VFR), `PhpGifEncoder` (deterministic). Both produce a valid GIF89a in end-to-end smoke.
 - Phase 6: pass — `RenderTapeCommand` (`#[AsCommand]`, `--dry-run`, font/theme/fps/backend/encoder/strict flags) + `RenderBatchCommand` (`#[AsCommand]`, `--recursive`, batch reuse) wired in `Application.php`; `bin/candy-vcr render-tape --help` and `render-batch --help` both respond.
-- Phase 7: pass — `scripts/Dockerfile.vhs-runner` builds `ghcr.io/detain/sugarcraft-vhs-runner-php`; `.github/workflows/vhs.yml` carries the `vhs-candy-vcr` job on seed lib `candy-core` with `continue-on-error: true` + artifact upload; rollback documented in `candy-vcr/README.md` ("CI integration" section).
+- Phase 7: pass — `scripts/Dockerfile.vhs-runner` builds `ghcr.io/detain/sugarcraft-vhs-runner-php`; `.github/workflows/vhs.yml` carries the `vhs-candy-vcr` job on seed lib `sugar-core` with `continue-on-error: true` + artifact upload; rollback documented in `candy-vcr/README.md` ("CI integration" section).
 
 **Test totals:**
 - candy-vcr: 634 tests / 5402 assertions (1 skipped — ffmpeg-gated VFR test on hosts without ffmpeg-on-PATH variant)

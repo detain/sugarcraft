@@ -35,7 +35,7 @@ The mapping is specifically to `sugar-navstack` for breadcrumb rendering. Howeve
 | `menu.Model` | `sugar-widgets` (list widget) | Wraps bubbles/list for menu selection |
 | `breadcrumb.Model` | `sugar-navstack` | Full mapping exists |
 | `shell.Model` | `candy-scriptui` | Composite nav + breadcrumb |
-| `window.Model` | `candy-core` | Offset-based dimension management |
+| `window.Model` | `sugar-core` | Offset-based dimension management |
 | `Closable` interface | Not directly mapped | Resource cleanup pattern |
 | `utils.Cmdize` | `SugarCraft\Core\Utils` | Message→Command wrapper |
 
@@ -562,7 +562,7 @@ The v0.1.5 push-symmetry change (closing on push AND pop) reflects a maturing un
 
 **Opportunity**: SugarCraft can implement disposal correctly from the start, avoiding the design mistake in bubbleo's `Closable`.
 
-**Recommendation**: Define `Disposable` interface in `candy-core`:
+**Recommendation**: Define `Disposable` interface in `sugar-core`:
 ```php
 interface Disposable {
     public function dispose(): ?Command;
@@ -575,7 +575,7 @@ All navigation items and long-lived views should implement this.
 
 **Opportunity**: Implement a general-purpose async init pattern that works across all SugarCraft models, not just forms.
 
-**Recommendation**: Add to `candy-core` base model:
+**Recommendation**: Add to `sugar-core` base model:
 ```php
 trait AsyncInitializable {
     private bool $loading = false;
@@ -609,7 +609,7 @@ trait AsyncInitializable {
 | **Cmdize** | `utils.Cmdize<T>` | `SugarCraft\Core\Utils::cmdize` | Already exists |
 | **tea.Sequence** | Navigation ordering | ReactPHP sequence pattern | Ensure ordering guarantees |
 | **Functional options** | PR #3 (pending) | Should use in all libs | Standard Go/PHP pattern |
-| **Window offsets** | `window.Model` | `candy-core` dimension | Compute-once, propagate deltas |
+| **Window offsets** | `window.Model` | `sugar-core` dimension | Compute-once, propagate deltas |
 | **Closable on push** | v0.1.5 | Implement in navigation | Bidirectional disposal |
 
 ---
@@ -618,7 +618,7 @@ trait AsyncInitializable {
 
 ### Priority 1: Fix Disposal Pattern (HIGH ROI)
 
-**Action**: Create `Disposable` interface in `candy-core` that returns `?Command`. Update `sugar-navstack` and any navigation model to use it.
+**Action**: Create `Disposable` interface in `sugar-core` that returns `?Command`. Update `sugar-navstack` and any navigation model to use it.
 
 **Why**: The current `Closable.Close() error` pattern cannot integrate with the command system. This is a foundational pattern used everywhere — fixing it early prevents cascading rework.
 
@@ -642,7 +642,7 @@ trait AsyncInitializable {
 
 ### Priority 4: Add Async Init Lifecycle (MEDIUM ROI)
 
-**Action**: Add `AsyncInitializable` trait to `candy-core` and document the pattern.
+**Action**: Add `AsyncInitializable` trait to `sugar-core` and document the pattern.
 
 **Why**: Issue #5 shows users need async data loading in TUI models. Having a standard pattern prevents ad-hoc solutions.
 

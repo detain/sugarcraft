@@ -207,7 +207,7 @@ final class ThemeTest extends TestCase
 
     /**
      * Drift guard: the 9 named colours the dracula() factory renders with
-     * must stay byte-identical to the candy-core Palettes SSOT they are
+     * must stay byte-identical to the sugar-core Palettes SSOT they are
      * now sourced from. Style hides its `$fg`/`$bg` behind private
      * readonly props, so we compare the emitted truecolor SGR sequence
      * (`38;2;r;g;b` for fg, `48;2;r;g;b` for bg) of each dracula slot

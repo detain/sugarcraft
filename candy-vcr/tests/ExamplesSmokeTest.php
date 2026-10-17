@@ -9,7 +9,7 @@ use Symfony\Component\Process\Process;
 
 /**
  * F4 (round 90): examples/record.php and examples/replay.php fataled at
- * class-definition time once candy-core's Model contract gained
+ * class-definition time once sugar-core's Model contract gained
  * subscriptions() — exactly the class of drift a smoke test exists to
  * catch. Both examples run for real here: record writes a cassette,
  * replay re-feeds it and prints its equality verdict.

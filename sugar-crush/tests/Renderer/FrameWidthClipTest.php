@@ -25,7 +25,7 @@ use SugarCraft\Image\Mosaic;
  * every terminal narrower than that, and 36 in flight. And `renderView()`
  * floored the pane width at 20, so the shell was 26 cells wide on any
  * terminal under 26 columns, and every overlay composited onto that backdrop
- * was 26 wide too. Over-wide rows are not cosmetic on this path: candy-core
+ * was 26 wide too. Over-wide rows are not cosmetic on this path: sugar-core
  * repaints with an absolute `cursorTo()`, so a row the terminal soft-wraps
  * shifts every row below it.
  *

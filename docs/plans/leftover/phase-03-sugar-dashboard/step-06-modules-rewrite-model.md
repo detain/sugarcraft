@@ -1,4 +1,4 @@
-# Step 03.06 — Rewrite sugar-dashboard built-in modules to candy-core Model contract
+# Step 03.06 — Rewrite sugar-dashboard built-in modules to sugar-core Model contract
 
 **Source:** `leftover_updates_later.md` Dash-04 (depends on step 02.04)
 **Branch:** `ai/dash-modules-model`
@@ -7,7 +7,7 @@
 
 Built-in modules in `sugar-dashboard/src/Modules/{Clock,System,Greeting,Uptime,Generic}/`
 were rewritten to the new `Module` interface in step 02.04. This step
-verifies they're idiomatic candy-core Model implementations — immutable
+verifies they're idiomatic sugar-core Model implementations — immutable
 state, `[Module, ?Cmd]` returns, proper Msg handling, Cmd dispatch for
 periodic refresh.
 
@@ -47,7 +47,7 @@ periodic refresh.
 
 - The shape MUST match `\SugarCraft\Core\Model` exactly for `Program`
   to drive them in step 03.07.
-- Use the `Cmd::` factory family from candy-core for side effects.
+- Use the `Cmd::` factory family from sugar-core for side effects.
   Never side-effect inside `view()` or `update()` directly.
 
 ---

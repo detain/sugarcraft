@@ -1,6 +1,6 @@
 # Overview
 
-SugarCli (`sugar-cli`) is a PHP port of `charmbracelet/fang` providing opinionated CLI presentation helpers (StatusLine, Banner, Section, Stage, HelpText, Logo, Theme) that turn ordinary command-line output into branded terminal output. It's library-only, framework-agnostic, and integrates with the SugarCraft ecosystem via `sugar-style` (styling) and `candy-core` (utilities).
+SugarCli (`sugar-cli`) is a PHP port of `charmbracelet/fang` providing opinionated CLI presentation helpers (StatusLine, Banner, Section, Stage, HelpText, Logo, Theme) that turn ordinary command-line output into branded terminal output. It's library-only, framework-agnostic, and integrates with the SugarCraft ecosystem via `sugar-style` (styling) and `sugar-core` (utilities).
 
 **Biggest opportunity areas:**
 
@@ -36,7 +36,7 @@ SugarCli (`sugar-cli`) is a PHP port of `charmbracelet/fang` providing opinionat
 
 ```
 sugar-cli/
-├── depends on: candy-core (Width utility, Color utilities)
+├── depends on: sugar-core (Width utility, Color utilities)
 ├── depends on: sugar-style (Style, Border)
 └── provides: CLI presentation helpers
 ```
@@ -387,7 +387,7 @@ public function withSuccess(Style $success): self {
 
 **Why external is better:** Correct alignment for all Unicode content, not just ASCII.
 
-**Tradeoffs:** Width::string() is already available in candy-core; only needs to be used.
+**Tradeoffs:** Width::string() is already available in sugar-core; only needs to be used.
 
 **Applicability:** Fix is trivial — replace one function call in HelpText::renderRows().
 

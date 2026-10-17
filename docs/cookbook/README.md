@@ -28,7 +28,7 @@ checkout. `vendor/` is gitignored.
 | --- | --- | --- |
 | [`spinner-in-table.php`](./spinner-in-table.php) | sugar-forms `Spinner` + sugar-table `Table` | A live spinner frame embedded in a `StyledCell`, used as a per-row job status. |
 | [`sparkline-in-table.php`](./sparkline-in-table.php) | sugar-charts `Sparkline` + sugar-table `Table` + sugar-forms `Spinner` | One inline trend chart per table row, with a spinner as the panel's "refreshing" indicator. |
-| [`program-within-program.php`](./program-within-program.php) | candy-core `Model` + sugar-forms `Spinner` | The MVC-style Model–Update–View "sub-program" pattern: a root model forwards messages to whichever child (a counter or a spinner) has focus. |
+| [`program-within-program.php`](./program-within-program.php) | sugar-core `Model` + sugar-forms `Spinner` | The MVC-style Model–Update–View "sub-program" pattern: a root model forwards messages to whichever child (a counter or a spinner) has focus. |
 
 ## The recurring trick
 
@@ -36,5 +36,5 @@ Most of these compositions rely on the same property: a SugarCraft component's
 `view()` returns a plain string of ANSI bytes. That means any component drops
 into any string slot — a `sugar-table` cell, a `sugar-toast` background, a
 parent model's frame — without a dedicated adapter. The "program-within-a-program"
-example shows the other half: candy-core's `Model::update()` contract lets one
+example shows the other half: sugar-core's `Model::update()` contract lets one
 model own and drive another as a sub-program.

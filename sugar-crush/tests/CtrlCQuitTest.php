@@ -12,14 +12,14 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 /**
  * Ctrl+C must quit — it stopped doing so on the live path.
  *
- * candy-core's InputReader normalizes control bytes 0x01-0x1a into
+ * sugar-core's InputReader normalizes control bytes 0x01-0x1a into
  * (Char, chr(0x60 + code), ctrl: true), so a real terminal delivers ^C as
  * rune 'c' WITH the ctrl flag. Chat tested only for the raw "\x03" rune, so
  * the check could never match in production and the user could not exit.
  */
 final class CtrlCQuitTest extends TestCase
 {
-    /** The encoding candy-core actually produces for byte 0x03. */
+    /** The encoding sugar-core actually produces for byte 0x03. */
     public function testCtrlFlaggedCQuitsStandalone(): void
     {
         [, $cmd] = (new Chat())->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));

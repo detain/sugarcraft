@@ -37,9 +37,9 @@ From the first-pass analysis, Ultraviolet maps across multiple SugarCraft libs:
 | Ultraviolet Component | SugarCraft Lib | Risk Level |
 |---|---|---|
 | Cell + Style + Link (ANSI SGR) | `sugar-widgets` | **HIGH** |
-| Buffer/RenderBuffer/Line diffing | `candy-core` | **CRITICAL** |
-| Screen interface + TerminalScreen | `candy-core` | **CRITICAL** |
-| Terminal lifecycle | `candy-core` | **HIGH** |
+| Buffer/RenderBuffer/Line diffing | `sugar-core` | **CRITICAL** |
+| Screen interface + TerminalScreen | `sugar-core` | **CRITICAL** |
+| Terminal lifecycle | `sugar-core` | **HIGH** |
 | KeyPress/Mouse/Paste/Focus events | `sugar-widgets` | **HIGH** |
 | Window parent/child hierarchy | `sugar-style` | MEDIUM |
 | Cassowary layout solver | `sugar-spring` | MEDIUM |
@@ -137,7 +137,7 @@ This is the **highest-frequency recurring bug** in the UV issue tracker:
 
 Maintainer position: "These optimizations don't fire on wide cells" — but the infinite loop (#109) contradicts this claim. The issue was the loop itself, not the optimizations firing.
 
-**Direct Risk to SugarCraft**: CRITICAL. The `candy-core` renderer will implement cell-grid diffing. Any loop over cells that doesn't re-read buffer state on each iteration risks an infinite loop. Wide characters (CJK, emoji) must be treated as first-class concerns from day one.
+**Direct Risk to SugarCraft**: CRITICAL. The `sugar-core` renderer will implement cell-grid diffing. Any loop over cells that doesn't re-read buffer state on each iteration risks an infinite loop. Wide characters (CJK, emoji) must be treated as first-class concerns from day one.
 
 ### 6.2 Inline Mode Complexity
 
@@ -159,7 +159,7 @@ Windows input handling is the most platform-specific and bug-prone subsystem:
 
 **Pattern**: Windows support requires significantly more code and testing than Unix. The Charm ecosystem has a recurring theme of Windows-specific bugs surfacing late.
 
-**Direct Risk to SugarCraft**: HIGH. SugarCraft's `candy-core` will need Windows support. The Windows input path should be minimal and well-tested, or potentially deferred.
+**Direct Risk to SugarCraft**: HIGH. SugarCraft's `sugar-core` will need Windows support. The Windows input path should be minimal and well-tested, or potentially deferred.
 
 ### 6.4 StreamEvents Goroutine Race
 
@@ -439,7 +439,7 @@ A contributor attempted to add reflow tracking but the PR was closed without mer
 
 ## 18. Problems Likely Relevant To SugarCraft
 
-### CRITICAL (must address in candy-core/sugar-widgets)
+### CRITICAL (must address in sugar-core/sugar-widgets)
 
 1. **Infinite loops in buffer traversal** — Any loop that iterates over cells and checks `IsZero()` or `Width` must re-read from the buffer on each iteration. Classic pattern: `for n++; next = newLine.At(n+1); next != nil && next.IsZero(); n++` — the `next = newLine.At(n+1)` must be inside the loop body.
 
@@ -483,7 +483,7 @@ A contributor attempted to add reflow tracking but the PR was closed without mer
 
 ### High Priority
 
-1. **Cell-Based Diffing Renderer** — The core competitive advantage of UV. Implement in `candy-core`:
+1. **Cell-Based Diffing Renderer** — The core competitive advantage of UV. Implement in `sugar-core`:
    - Touched-line tracking
    - Minimal SGR diffs
    - ECH/REP/ICH/DCH optimization when capabilities detected
@@ -627,7 +627,7 @@ Ultraviolet's Cassowary layout solver was derived from Ratatui. The Cell/Buffer/
 
 ### bubble tea (Go)
 
-UV is the foundational layer for Bubble Tea v2. Any breaking change in UV causes immediate breakage in Bubble Tea v2. SugarCraft's relationship to its consumer frameworks (whatever builds on candy-core/sugar-widgets) will be similar. Pin UV versions until 1.0.
+UV is the foundational layer for Bubble Tea v2. Any breaking change in UV causes immediate breakage in Bubble Tea v2. SugarCraft's relationship to its consumer frameworks (whatever builds on sugar-core/sugar-widgets) will be similar. Pin UV versions until 1.0.
 
 ### ncurses
 
@@ -641,7 +641,7 @@ Both terminals implement extended protocols (SGR mouse, OSC 66 text-sizing, OSC 
 
 ## 25. High ROI Recommendations
 
-### Immediate (Before Porting candy-core Renderer)
+### Immediate (Before Porting sugar-core Renderer)
 
 1. **Study the `transformLine` function completely** — It's the most complex and most-bug-prone function. Understand every optimization branch before designing SugarCraft's equivalent.
 

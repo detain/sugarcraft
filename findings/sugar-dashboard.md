@@ -8,7 +8,7 @@ sugar-dashboard is a comprehensive TUI dashboard library porting patterns from b
 
 **Review scope:** Full source tree under `sugar-dashboard/src/`, examining `Layout/`, `Module/`, `Modules/`, `Events/`, `Plot/`, `Output/`, `Plugin/`, `State/` directories plus key chart files.
 
-**Risk profile:** High — the library is complex with many interconnected components. Three critical issues found that will cause runtime failures. The dual-foundation pattern (sugar-dashboard vs sugar-style/candy-core having separate but similarly-named types) creates ongoing cognitive overhead and refactoring hazard.
+**Risk profile:** High — the library is complex with many interconnected components. Three critical issues found that will cause runtime failures. The dual-foundation pattern (sugar-dashboard vs sugar-style/sugar-core having separate but similarly-named types) creates ongoing cognitive overhead and refactoring hazard.
 
 ---
 

@@ -2,8 +2,8 @@
 
 ## Accumulated Learnings
 
-### 2026-07-01 — candy-core dev-master dependency carries stability risk
-Pattern: When a Sugarcraft lib depends on `sugarcraft/candy-core`, prefer a stable version constraint once available. Using `dev-master` risks pulling breaking changes in CI.
+### 2026-07-01 — sugar-core dev-master dependency carries stability risk
+Pattern: When a Sugarcraft lib depends on `sugarcraft/sugar-core`, prefer a stable version constraint once available. Using `dev-master` risks pulling breaking changes in CI.
 Anti-pattern: Do not ship production code that depends on `@dev` dependencies without a plan to pin.
 Source: Phase 6 Item 8.1 (findings/plan_sugar-cellbuffer.md)
 

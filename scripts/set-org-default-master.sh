@@ -12,7 +12,7 @@ unset GITHUB_TOKEN
 ORG="sugarcraft"
 
 LIBS=(
-    candy-core sugar-style sugar-spring sugar-mouse
+    sugar-core sugar-style sugar-spring sugar-mouse
     sugar-widgets sugar-charts sugar-forms candy-scriptui
     sugar-markdown sugar-cli candy-codeshot candy-mdview candy-ansi-inspect
     sugar-ssh-server candy-ssh-launcher sugar-metrics

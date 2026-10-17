@@ -311,7 +311,7 @@ with no behavioural divergence.
 
 ## Dependencies
 
-- `sugarcraft/candy-core` — Model–Update–View TUI runtime
+- `sugarcraft/sugar-core` — Model–Update–View TUI runtime
 - `sugarcraft/sugar-style` — Declarative styling
 
 ### Versioning

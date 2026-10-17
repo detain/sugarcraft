@@ -10,7 +10,7 @@
 
 - **Upstream:** NimbleMarkets/ntcharts (primary), with Charmbracelet/bubbletea (canvas rendering patterns), ratatui/ratatui (widget trait patterns), rasjonell/dashbrew (dashboard integration)
 
-- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `sugarcraft/sugar-dashboard`
+- **Dependencies:** `sugarcraft/sugar-core`, `sugarcraft/sugar-style`, `sugarcraft/sugar-dashboard`
 
 - **Description:** PHP terminal charting library providing ASCII/Unicode chart rendering with ANSI SGR color support for SugarCraft TUI ecosystem
 
@@ -23,7 +23,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
          ↓
    Canvas Primitives (Canvas, Graph, BrailleGrid, Cell)
          ↓
-  sugar-style Style / candy-core Color / ColorProfile
+  sugar-style Style / sugar-core Color / ColorProfile
 ```
 
 ### Canvas Layer (`SugarCraft\Charts\Canvas`)
@@ -466,7 +466,7 @@ Dashbrew uses `guptarohit/asciigraph` for ASCII charts. sugar-charts implements 
 
 ```
 sugar-charts
-├── candy-core (foundation: Style, Ansi, Color, etc.)
+├── sugar-core (foundation: Style, Ansi, Color, etc.)
 ├── sugar-style (Theme, input handling)
 └── sugar-dashboard (BrailleCanvas, Plot/Braille for sub-cell rendering)
 ```

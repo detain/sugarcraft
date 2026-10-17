@@ -29,7 +29,7 @@ use SugarCraft\Tetris\Scoring\TSpin;
  *   - The lock-delay window is real-time (milliseconds), independent
  *     of gravity speed, and generation-tagged via
  *     {@see LockDelayMsg}: superseded windows go stale by tag
- *     mismatch rather than by cancellation (candy-core ticks have
+ *     mismatch rather than by cancellation (sugar-core ticks have
  *     no cancel API).
  *   - Game-over is detected when a freshly-spawned piece doesn't
  *     {@see Board::fits()}. After that, only `q` is honoured.
@@ -90,7 +90,7 @@ final class Game implements Model
     /**
      * Construct a new Game from the current state with optional field overrides.
      * Mirrors the canonical SugarCraft immutable/fluent pattern (see
-     * sugar-style/src/Style.php, candy-core/src/Concerns/Mutable.php).
+     * sugar-style/src/Style.php, sugar-core/src/Concerns/Mutable.php).
      *
      * `lockWindowGeneration` is nullable and closes via explicit null, so
      * it uses array_key_exists rather than the ?? carry — otherwise

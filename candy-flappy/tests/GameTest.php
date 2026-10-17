@@ -200,7 +200,7 @@ final class GameTest extends TestCase
     {
         // A present-but-corrupt saved-state file whose top level is a JSON
         // scalar (not an array) must be rejected with a clean RuntimeException
-        // via the candy-core Json::decodeArray SSOT — never a raw TypeError
+        // via the sugar-core Json::decodeArray SSOT — never a raw TypeError
         // from array_filter() on a non-array. The pre-SSOT loader ALREADY
         // rejected a non-array via a local is_array() check, so a bare
         // expectException(RuntimeException) pins nothing the migration added.

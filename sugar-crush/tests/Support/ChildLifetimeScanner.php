@@ -934,7 +934,7 @@ final class ChildLifetimeScanner
     /**
      * The two arms of a top-level ternary, or null when the literal is not one.
      *
-     * E447. `candy-core/src/Program.php::runExec()` spells its descriptor spec
+     * E447. `sugar-core/src/Program.php::runExec()` spells its descriptor spec
      * `$descriptors = $req->captureOutput ? [...] : [...]`, and until this
      * method existed that was the ONE unreadable spec in the whole reachable
      * closure - the local-variable path resolved the assignment perfectly and

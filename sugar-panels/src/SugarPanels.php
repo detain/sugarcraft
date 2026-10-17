@@ -501,7 +501,7 @@ final class SugarPanels
      * The line is split into visible cells — each carrying its leading escape
      * sequences with the visible grapheme they style (escapes are zero-width, so
      * they ride in the same grid cell and never consume a column). Placement and
-     * truncation are measured by VISIBLE columns (candy-core {@see Width}), so a
+     * truncation are measured by VISIBLE columns (sugar-core {@see Width}), so a
      * styled span keeps its true width and its escapes survive in order; a wide
      * (CJK/emoji) grapheme occupies its two columns with a blanked continuation
      * cell.
@@ -1034,7 +1034,7 @@ final class SugarPanels
     // Helpers
     // -------------------------------------------------------------------------
 
-    /** Visible width — delegates to candy-core's grapheme/width-aware util. */
+    /** Visible width — delegates to sugar-core's grapheme/width-aware util. */
     private function strWidth(string $s): int
     {
         return Width::string($s);

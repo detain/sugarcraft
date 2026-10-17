@@ -25,15 +25,15 @@ From `repo_map/WhispPHP_whisp.md`:
 
 | WhispPHP/whisp Feature | SugarCraft Library | Status |
 |----------------------|-------------------|--------|
-| SSH Server / Connection handling | `candy-core` | Reference patterns |
+| SSH Server / Connection handling | `sugar-core` | Reference patterns |
 | PTY management / Terminal I/O | `sugar-pty` | Direct port candidate |
 | SSH protocol packets / Binary protocols | `sugar-widgets` | Low-level patterns |
 | Terminal mode handling | `candy-terminal` | Capability handling |
-| Channel / Session management | `candy-core` | Event/channel model |
+| Channel / Session management | `sugar-core` | Event/channel model |
 | Environment variable passing | `sugar-widgets` | Parameter passing |
-| Signal handling (SIGCHLD, SIGHUP) | `candy-core` | Process management |
+| Signal handling (SIGCHLD, SIGHUP) | `sugar-core` | Process management |
 | Logging (PSR-3) | Already in `SugarCraft\Core` | Complete |
-| Process forking (pcntl) | `candy-core` | Process management |
+| Process forking (pcntl) | `sugar-core` | Process management |
 | FFI for terminal ioctl | `candy-sys` (hypothetical) | System FFI layer |
 
 ---
@@ -517,7 +517,7 @@ if ($channelType === 'direct-tcpip') {
 
 3. **Process Lifecycle Library**
    - Separate library for process spawning, monitoring, cleanup
-   - Could be shared between sugar-pty and candy-core
+   - Could be shared between sugar-pty and sugar-core
 
 4. **SSH Key Validation Patterns**
    - Whisp's `PublicKeyValidator` class

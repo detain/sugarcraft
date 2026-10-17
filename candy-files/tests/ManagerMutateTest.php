@@ -15,7 +15,7 @@ use SugarCraft\Files\UndoAction;
  * Load-bearing pin for the W13 `mutate()` refactor.
  *
  * Every `with*()`/tab method on {@see Manager} used to hand-list all 16
- * constructor params; they now delegate to the candy-core `Mutable::mutate()`
+ * constructor params; they now delegate to the sugar-core `Mutable::mutate()`
  * helper. These tests prove that migration is BEHAVIOR-PRESERVING: each method
  * returns a NEW instance, leaves the receiver UNMUTATED, and — the critical
  * invariant — carries EVERY sibling field through unchanged. Reverting any

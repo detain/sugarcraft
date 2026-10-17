@@ -191,7 +191,7 @@ final class WeatherModuleTest extends TestCase
     }
 
     /**
-     * Regression: the weather cache now round-trips through candy-core's
+     * Regression: the weather cache now round-trips through sugar-core's
      * AtomicJsonFile — saveCache() must produce a file loadCache() can read
      * back, and the atomic tmp+rename must leave no temp artifacts behind.
      */
@@ -238,7 +238,7 @@ final class WeatherModuleTest extends TestCase
 
     /**
      * E726 pin (finding D-5, verdict documented-contract): the "missing mkdir
-     * guard" is not missing — it lives in the SHARED candy-core helper.
+     * guard" is not missing — it lives in the SHARED sugar-core helper.
      * AtomicJsonFile::write() creates the parent tree itself (recursive,
      * race-safe re-check, 0700), which is exactly why WeatherModule must NOT
      * carry its own mkdir: a copy at the call site would re-hand-roll the save

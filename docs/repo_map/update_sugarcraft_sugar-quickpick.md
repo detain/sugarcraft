@@ -754,7 +754,7 @@ Document using Hermit as the search mechanism for desktop launcher integration.
 
 **Lessons learned:** ANSI-aware width calculation is foundational — it affects every text rendering operation. Getting it right enables correct compositing, truncation, and alignment.
 
-**Potential adaptations:** Review existing `SugarCraft\Core\Ansi` for width/Unicode handling; add to `candy-core` if not present.
+**Potential adaptations:** Review existing `SugarCraft\Core\Ansi` for width/Unicode handling; add to `sugar-core` if not present.
 
 ---
 
@@ -804,7 +804,7 @@ Document using Hermit as the search mechanism for desktop launcher integration.
 ## Medium-Term Improvements (1-2 weeks each)
 
 4. **ANSI-aware width utility**
-   - Extract `Width` utility to `candy-core` or `sugar-style`
+   - Extract `Width` utility to `sugar-core` or `sugar-style`
 
    - Use in `replaceSegment()` for correct positioning
 

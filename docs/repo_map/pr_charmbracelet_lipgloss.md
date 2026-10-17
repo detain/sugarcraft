@@ -31,7 +31,7 @@
 | **SugarCharts** (`sugar-charts/`) | `SugarCraft\Charts` | `Blend2D` / color gradient functions could power heatmap cell coloring |
 | **SugarForms** (`sugar-forms/`) | `SugarCraft\Forms` | Adjacent: `huh` forms use Lip Gloss for styling internally; styles compose in the Bubble Tea render loop |
 
-**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **SugarStyle** (`sugar-style/`) is the equivalent foundation layer that everything else (`sugar-widgets`, `sugar-forms`, etc.) imports for styling. SugarCraft's `candy-core` (Elm-architecture runtime) pairs with `sugar-style` (styling) in the same way Bubble Tea pairs with Lip Gloss.
+**Key architectural insight:** Lip Gloss is the *foundation* that all other Charm libraries build upon. In SugarCraft, **SugarStyle** (`sugar-style/`) is the equivalent foundation layer that everything else (`sugar-widgets`, `sugar-forms`, etc.) imports for styling. SugarCraft's `sugar-core` (Elm-architecture runtime) pairs with `sugar-style` (styling) in the same way Bubble Tea pairs with Lip Gloss.
 
 ---
 
@@ -483,7 +483,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 1. **AI Agents Moving to Terminal** — From the v2 announcement: "AI agents moved into the terminal, and suddenly the rest of the industry saw what many already knew: the terminal is the most powerful way to interface with the operating system." Lip Gloss v2 is optimized for AI tool output.
 
-2. **Coordinated Library Versions** — The v2 release coordinated across Bubble Tea, Lip Gloss, and Bubbles simultaneously. SugarCraft should coordinate releases of `sugar-style`, `candy-core`, and `sugar-widgets`.
+2. **Coordinated Library Versions** — The v2 release coordinated across Bubble Tea, Lip Gloss, and Bubbles simultaneously. SugarCraft should coordinate releases of `sugar-style`, `sugar-core`, and `sugar-widgets`.
 
 3. **Separation of Rendering and Output** — v2's architecture (render always emits full ANSI; writer handles downsampling) is the correct pattern for composability.
 
@@ -501,9 +501,9 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 2. **Layout System from Day One** — Rather than adding layout later (as lipgloss is now doing with charm-layout), SugarCraft should implement the layout primitives simultaneously with styling.
 
-3. **Coroutine-Friendly Architecture** — PHP's ReactPHP ecosystem can handle async terminal I/O. SugarCraft's `candy-core` can be designed for non-blocking terminal queries.
+3. **Coroutine-Friendly Architecture** — PHP's ReactPHP ecosystem can handle async terminal I/O. SugarCraft's `sugar-core` can be designed for non-blocking terminal queries.
 
-4. **Coordinated Multi-Library Releases** — When releasing v2 of `sugar-style`, coordinate with `candy-core` and `sugar-widgets` simultaneously.
+4. **Coordinated Multi-Library Releases** — When releasing v2 of `sugar-style`, coordinate with `sugar-core` and `sugar-widgets` simultaneously.
 
 5. **Superior Theme System** — The upstream `charm-themes` POC exists but hasn't been merged. SugarCraft could create an official theming system that spans all libraries.
 
@@ -549,7 +549,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 
 ### Long-Term (High Strategic Value)
 
-10. **Coordinated Multi-Library Release** — When releasing `sugar-style` v2, coordinate with `candy-core` v2 and `sugar-widgets` v2 simultaneously, with matching upgrade guides.
+10. **Coordinated Multi-Library Release** — When releasing `sugar-style` v2, coordinate with `sugar-core` v2 and `sugar-widgets` v2 simultaneously, with matching upgrade guides.
 11. **Windows Console FFI** — PHP 8.4+ FFI improvements enable direct Windows console API access. Leverage this for proper Windows support in `sugar-style`.
 
 ---

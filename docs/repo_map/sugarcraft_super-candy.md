@@ -266,10 +266,10 @@ Pane::open($cwd, fn(string $path): list<Entry> => $fakeEntries);
 
 | Component | SugarCraft Dependency | Role |
 |-----------|----------------------|------|
-| Manager (TEA Model) | `candy-core` | Implements `Model` interface, uses `KeyMsg`, `Cmd`, `KeyType`, `Subscriptions` |
+| Manager (TEA Model) | `sugar-core` | Implements `Model` interface, uses `KeyMsg`, `Cmd`, `KeyType`, `Subscriptions` |
 | Rendering | `sugar-style` | `Style`, `Border`, `Layout` for pane boxes and status bar |
 | Image preview | `sugar-image` | `Mosaic::probe()`, `ImageSource::fromFile()` for Kitty/Sixel/iTerm2 rendering |
-| i18n | `candy-core` | `SugarCraft\Core\I18n\Lang` base class |
+| i18n | `sugar-core` | `SugarCraft\Core\I18n\Lang` base class |
 | Async ops | `react/promise` | `React\Promise\Deferred`, `React\EventLoop\Loop` |
 
 ---
@@ -526,7 +526,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
 {
   "require": {
     "php": ">=8.3",
-    "sugarcraft/candy-core": "dev-master",
+    "sugarcraft/sugar-core": "dev-master",
     "sugarcraft/sugar-style": "dev-master",
     "sugarcraft/sugar-image": "dev-master",
     "react/promise": "^3.3"
@@ -536,7 +536,7 @@ This pattern prevents accidental deletions. superfile uses similar modal confirm
 
 | Dependency | Purpose |
 |-------------|---------|
-| `candy-core` | TEA Model, KeyMsg, Cmd, Program, Ansi utilities |
+| `sugar-core` | TEA Model, KeyMsg, Cmd, Program, Ansi utilities |
 | `sugar-style` | Style, Border, Layout for pane rendering |
 | `sugar-image` | Image preview rendering (Kitty/Sixel/iTerm2 protocols) |
 | `react/promise` | Async file operations via promises |

@@ -494,7 +494,7 @@ final class GenDocsTest extends TestCase
      * Head markup that legitimately diverges from the shared template survives a
      * round trip, rather than being normalized away.
      *
-     * The real case is candy-core's skip-link + ARIA nav + twitter:image. If
+     * The real case is sugar-core's skip-link + ARIA nav + twitter:image. If
      * prefixOverride stopped being captured, the accessibility markup on that
      * page would vanish on the next regen with no diff to explain it.
      */

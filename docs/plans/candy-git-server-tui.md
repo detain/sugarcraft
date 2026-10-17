@@ -86,7 +86,7 @@ sugar-ssh-server  Channel              (existing — pty-req, shell, window-chan
 candy-git-server  TuiSession         (NEW — phase 1)
     │  builds context (user, accessible repos)
     ▼
-candy-core  Program             (existing — Bubble Tea runtime)
+sugar-core  Program             (existing — Bubble Tea runtime)
     │  Model / update / view
     ▼
 candy-git-server  RepoListModel ←→ ChildModels (NEW — phases 1–5)
@@ -97,8 +97,8 @@ candy-git-server  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     ├── sugar-markdown      Renderer       (markdown → ANSI for README)
     ├── sugar-markdown      SyntaxHighlighter (file viewer colourisation)
     ├── candy-git      Git            (`log`, `show`, `cat-file`, `ls-tree`)
-    ├── candy-core       Cmd::setClipboard()   (OSC 52 emitter, phase 5)
-    └── sugar-vterm         (terminal-state model used by candy-core writer)
+    ├── sugar-core       Cmd::setClipboard()   (OSC 52 emitter, phase 5)
+    └── sugar-vterm         (terminal-state model used by sugar-core writer)
 ```
 
 ### 2.1 SSH → TUI plumbing (sugar-ssh-server handles it)
@@ -137,15 +137,15 @@ PTY-resize handling for free (sugar-ssh-server ships those Msgs since step
 > alongside it for the TUI path.** Both listeners can share the
 > same `User` / `AccessControl` registry.
 
-### 2.2 TUI runtime (candy-core)
+### 2.2 TUI runtime (sugar-core)
 
-candy-core ships `Program` (event loop) + `Model` (interface) + `Msg`
+sugar-core ships `Program` (event loop) + `Model` (interface) + `Msg`
 hierarchy. The TUI's root model holds a stack of child models, one per
 "screen". The ScreenStack helper landed in step 06.02
-(`candy-core/src/ScreenStack.php`, plus
-`candy-core/src/ScreenStackCapable.php`,
-`candy-core/src/RootModelWithScreenStack.php`, and the
-`candy-core/src/Msg/ScreenStackPushedMsg.php` event) — TUI navigation
+(`sugar-core/src/ScreenStack.php`, plus
+`sugar-core/src/ScreenStackCapable.php`,
+`sugar-core/src/RootModelWithScreenStack.php`, and the
+`sugar-core/src/Msg/ScreenStackPushedMsg.php` event) — TUI navigation
 uses `ScreenStack::push()` / `pop()` rather than re-implementing nav. <!-- @rename-keep -->
 
 ### 2.3 Git access (candy-git)
@@ -360,7 +360,7 @@ and the repo-list screen.
 **New files:**
 
 - `candy-git-server/src/Tui/TuiSession.php` — bridge from sugar-ssh-server channel
-  to candy-core `Program`; resolves the authed user and starts a
+  to sugar-core `Program`; resolves the authed user and starts a
   `RepoListModel`.
 - `candy-git-server/src/Tui/RepoListModel.php` — Bubble Tea Model returning
   `[Model, ?Cmd]` from `update()`.
@@ -379,12 +379,12 @@ and the repo-list screen.
   long as both live under `bin/`.)
 - `candy-git-server/src/SSH/TuiChannelHandler.php` — `ChannelHandler` that
   delegates exec to existing `UploadPack`/`ReceivePack` and otherwise
-  pipes the candy-core Program over the channel.
+  pipes the sugar-core Program over the channel.
 
 **Changed files:**
 
 - `candy-git-server/composer.json` — add `sugarcraft/sugar-ssh-server`,
-  `sugarcraft/candy-core`, `sugarcraft/sugar-style`,
+  `sugarcraft/sugar-core`, `sugarcraft/sugar-style`,
   `sugarcraft/candy-git`, `sugarcraft/sugar-panels`,
   `sugarcraft/sugar-flexbox`, `sugarcraft/sugar-markdown` as `@dev` plus
   matching path-repo entries (closure via `tools/check-path-repos.php
@@ -412,7 +412,7 @@ and the repo-list screen.
 - `git clone ssh://user@host:23231/<repo>` still works (existing
   path).
 - `vendor/bin/phpunit` green in candy-git-server + all four consuming libs
-  (sugar-ssh-server, candy-core, candy-git, sugar-markdown).
+  (sugar-ssh-server, sugar-core, candy-git, sugar-markdown).
 - `cd candy-git-server && composer validate` clean (drop `--strict`).
 
 ### Phase 2 — Repo detail view (≈ 1.5 weeks)
@@ -440,7 +440,7 @@ and the repo-list screen.
 
 **Tests (≥ 20):** snapshot tests for the three sub-panes; behaviour
 test for `tab` focus rotation; behaviour test for `c` emitting the
-clone-URL OSC-52 Cmd (via candy-core `Cmd::setClipboard()`).
+clone-URL OSC-52 Cmd (via sugar-core `Cmd::setClipboard()`).
 
 **Acceptance:** drilling into any repo shows branches / tags /
 collaborators panes; `c` copies clone URL; `Esc` returns to list with
@@ -522,10 +522,10 @@ diff with file-level colourisation.
 - README markdown rendering on `RepoDetailView` via sugar-markdown
   `Renderer` (the `README` block in the §4.2 mock-up).
 - OSC 52 clipboard for the `c` keybind on both `RepoListView` and
-  `RepoDetailView` — consume candy-core's existing
-  `Cmd::setClipboard($url, 'c')` (`candy-core/src/Cmd.php:L267`,
+  `RepoDetailView` — consume sugar-core's existing
+  `Cmd::setClipboard($url, 'c')` (`sugar-core/src/Cmd.php:L267`,
   shipped). No sugar-vterm prerequisite (sugar-vterm has OSC 52 *read*
-  support; emit lives in candy-core via `Util/Ansi::setClipboard`).
+  support; emit lives in sugar-core via `Util/Ansi::setClipboard`).
 - HelpPanel modal (`?` keybind from any screen).
 - Theme polish — pick default theme; map keyboard cues consistently
   across all screens (current Charm convention: dim grey for hints,
@@ -553,9 +553,9 @@ Pre-conditions that **must** be true before phase-1 ships:
 | sugar-ssh-server ChannelHandler API | ✅ landed step 06.09 (PR #607) | `sugar-ssh-server/src/Channel/` | needed for TUI vs exec routing |
 | sugar-ssh-server Session metadata | ✅ landed step 06.12 (PR #613) | `sugar-ssh-server/src/Session.php` | user-id, key-fingerprint surface |
 | sugar-ssh-server async Middleware | ✅ landed step 06.13 (PR #615) | `sugar-ssh-server/src/Middleware.php` | TUI session is long-lived |
-| candy-core ScreenStack | ✅ landed step 06.02 (PR #583) | `candy-core/src/ScreenStack.php` | TUI nav stack |
-| candy-core Component lifecycle | ✅ landed step 06.03 (PR #587) | `candy-core/src/Component.php` | onMount / onUnmount for modals |
-| candy-core OSC 52 emitter | ✅ shipped | `candy-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) | clipboard for `c` keybind (phase 5) |
+| sugar-core ScreenStack | ✅ landed step 06.02 (PR #583) | `sugar-core/src/ScreenStack.php` | TUI nav stack |
+| sugar-core Component lifecycle | ✅ landed step 06.03 (PR #587) | `sugar-core/src/Component.php` | onMount / onUnmount for modals |
+| sugar-core OSC 52 emitter | ✅ shipped | `sugar-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) | clipboard for `c` keybind (phase 5) |
 | sugar-markdown Renderer | ✅ shipped | `sugar-markdown/src/Renderer.php` | README block |
 | sugar-markdown SyntaxHighlighter | ✅ shipped | `sugar-markdown/src/SyntaxHighlighter.php` | file viewer |
 | sugar-flexbox Viewport | ✅ shipped | `sugar-flexbox/src/Viewport.php` | scrollable lists |
@@ -597,14 +597,14 @@ sub-PRs, scheduled ahead of candy-git-server phase-2 kickoff. The
 candy-git-server phase-1 plan files should reference that step ID once
 authored.
 
-**candy-core OSC 52 emitter — already shipped:**
+**sugar-core OSC 52 emitter — already shipped:**
 
-`candy-core/src/Cmd.php:L267` already exposes
+`sugar-core/src/Cmd.php:L267` already exposes
 `Cmd::setClipboard($text, $selection = 'c')`, which emits the OSC 52
-escape (via `candy-core/src/Util/Ansi.php:L400` `Ansi::setClipboard`).
+escape (via `sugar-core/src/Util/Ansi.php:L400` `Ansi::setClipboard`).
 Phase 5 consumes this directly — there is **no sugar-vterm prerequisite**
 for the clipboard emitter. (sugar-vterm has OSC 52 *read* support; emit
-lives in candy-core.)
+lives in sugar-core.)
 
 ---
 
@@ -649,7 +649,7 @@ A phase is "done" when:
    16 locale files (placeholder English fallback is fine; real
    translations are a separate i18n carry-forward).
 6. `vendor/bin/phpunit` in **every** consumer lib that candy-git-server
-   pulls in (sugar-ssh-server, candy-core, candy-git, sugar-markdown,
+   pulls in (sugar-ssh-server, sugar-core, candy-git, sugar-markdown,
    sugar-style, sugar-panels, sugar-flexbox) still green.
 7. `php tools/check-path-repos.php` reports closure clean.
 
@@ -657,9 +657,9 @@ A phase is "done" when:
 
 ## 9. Risks + open questions
 
-### 9.1 Will candy-core handle this scale?
+### 9.1 Will sugar-core handle this scale?
 
-candy-core's `Program` event loop has been tested on smaller TUIs
+sugar-core's `Program` event loop has been tested on smaller TUIs
 (sugar-widgets demos, sugar-dashboard dashboard). A repo-browser TUI is not
 unreasonably bigger — five screens, single-user, single-program. The
 main load point is the commit log on a large repo (10k+ commits);
@@ -726,7 +726,7 @@ phase-1 implementer must inherit the pattern explicitly.
 
 | Phase | Effort | Notes |
 |---|---|---|
-| 1 | ≈ 2 weeks | wires sugar-ssh-server ↔ candy-core, repo list |
+| 1 | ≈ 2 weeks | wires sugar-ssh-server ↔ sugar-core, repo list |
 | 2 | ≈ 1.5 weeks | detail view |
 | 3 | ≈ 2 weeks | tree + viewer (chunkiest) |
 | 4 | ≈ 1.5 weeks | commit log + diff |
@@ -784,13 +784,13 @@ the wire-protocol port — the marquee TUI feature has not been built.
 
 - `sugar-ssh-server/src/Server.php` + `sugar-ssh-server/src/Channel/` —
   SSH server + channel API.
-- `candy-core/src/Program.php` + `candy-core/src/Model.php` — Bubble
+- `sugar-core/src/Program.php` + `sugar-core/src/Model.php` — Bubble
   Tea runtime.
-- `candy-core/src/ScreenStack.php` (+ `ScreenStackCapable.php`,
+- `sugar-core/src/ScreenStack.php` (+ `ScreenStackCapable.php`,
   `RootModelWithScreenStack.php`, `Msg/ScreenStackPushedMsg.php`) —
   nav stack (step 06.02, PR #583).
-- `candy-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) +
-  `candy-core/src/Util/Ansi.php` (`Ansi::setClipboard()`, L400) —
+- `sugar-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) +
+  `sugar-core/src/Util/Ansi.php` (`Ansi::setClipboard()`, L400) —
   OSC 52 emitter helper used by phase-5 clipboard keybind.
 - `sugar-style/src/Style.php` + `sugar-style/src/Theme.php` —
   styling.

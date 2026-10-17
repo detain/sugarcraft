@@ -1,6 +1,6 @@
-# Step 06.01 — candy-core Subscriptions
+# Step 06.01 — sugar-core Subscriptions
 
-**Source:** `leftover_updates_later.md` candy-core §3.1
+**Source:** `leftover_updates_later.md` sugar-core §3.1
 **Branch:** `ai/core-subscriptions`
 
 ## Deliverable
@@ -14,31 +14,31 @@ declare "this Model wants a tick every 1s". Add a `Subscription` /
 
 **Create:**
 
-- `candy-core/src/Subscription.php` — value object: kind (Tick / Key /
+- `sugar-core/src/Subscription.php` — value object: kind (Tick / Key /
   Signal / Custom), parameters, message constructor.
-- `candy-core/src/Subscriptions.php` — collection wrapper with
+- `sugar-core/src/Subscriptions.php` — collection wrapper with
   `withTick(...)`, `withKey(...)`, `withSignal(...)`, fluent.
-- `candy-core/src/Cmd/SubscribeCmd.php` — Cmd subclass that updates
+- `sugar-core/src/Cmd/SubscribeCmd.php` — Cmd subclass that updates
   the Program's subscription set.
 
 **Modify:**
 
-- `candy-core/src/Program.php` — accepts an optional
+- `sugar-core/src/Program.php` — accepts an optional
   `subscriptions(Model): Subscriptions` callback; reconciles between
   ticks (adds new subs, removes dropped ones, leaves stable subs alone).
-- `candy-core/src/Model.php` — optional `subscriptions(): ?Subscriptions`
+- `sugar-core/src/Model.php` — optional `subscriptions(): ?Subscriptions`
   default returns null.
 
 **Tests:**
 
-- `candy-core/tests/SubscriptionsReconcileTest.php` — fixture model
+- `sugar-core/tests/SubscriptionsReconcileTest.php` — fixture model
   whose subscription set changes per Msg; assert Program tracks the
   set correctly.
 
 ## Acceptance
 
 - Mirrors Elm subscription reconciliation semantics.
-- `cd candy-core && vendor/bin/phpunit --filter Subscription` green.
+- `cd sugar-core && vendor/bin/phpunit --filter Subscription` green.
 - `Program` does not double-fire ticks after reconciliation.
 
 ---

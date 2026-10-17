@@ -7,7 +7,7 @@
 **Namespace:** `SugarCraft\Vcr`  
 **Status:** 🟢 v1 ready (11 PRs merged)  
 **Upstream:** [charmbracelet/x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) — and serves as a drop-in PHP replacement for [charmbracelet/vhs](https://github.com/charmbracelet/vhs) (.tape → .gif renderer)  
-**Primary role:** Record and replay candy-core TUI sessions with byte/cell-grid assertions, plus full VHS-style .tape → GIF rendering pipeline
+**Primary role:** Record and replay sugar-core TUI sessions with byte/cell-grid assertions, plus full VHS-style .tape → GIF rendering pipeline
 
 ---
 
@@ -131,7 +131,7 @@ $step = function () use (&$step, &$i, $events, ...) : void {
 **JSONL schema** (`docs/CASSETTE.md`):
 
 ```jsonl
-{"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/candy-core@1.0.0"}
+{"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/sugar-core@1.0.0"}
 {"t":0.000,"k":"resize","cols":80,"rows":24}
 {"t":0.001,"k":"output","b":"\x1b[2J\x1b[H..."}
 {"t":0.450,"k":"input","msg":{"@type":"KeyMsg","key":"j"}}
@@ -347,7 +347,7 @@ public const SECRET_KEY_REGEX = '/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)
 
 ---
 
-## 5. Integration with candy-core
+## 5. Integration with sugar-core
 
 ### 5.1 Program::withRecorder()
 

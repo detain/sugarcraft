@@ -309,7 +309,7 @@ func (m *Model[T]) filteredAndPagedChoices() ([]*Choice[T], int) {
 | Template-based rendering | `sugar-forms` | Uses template system similar to SugarCraft's view templates |
 | KeyMap/keybindings | `sugar-forms` | Key binding configuration |
 | Lipgloss styling | `sugar-markdown` | Style system for terminal colors/formatting |
-| BubbleTea Model pattern | `candy-core` | MVC pattern implementation |
+| BubbleTea Model pattern | `sugar-core` | MVC pattern implementation |
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text wrapping utilities |
 
 **Mapping Notes:**

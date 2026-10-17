@@ -24,7 +24,7 @@ namespace SugarCraft\ColorProfile;
  * 16-231 the canonical xterm 6×6×6 cube (channel levels 0, 95, 135, 175, 215,
  * 255 — {@see Color::CUBE_LEVELS}); 232-255 the 8+10n grey ramp. The table is
  * built straight from {@see Color::fromAnsi256Index()} so the matcher's
- * palette, the encoder's rounding targets, and candy-core's Util\Color::ansi256
+ * palette, the encoder's rounding targets, and sugar-core's Util\Color::ansi256
  * share ONE source of truth (a cross-library pin guards this — the old local
  * even-51-step cube diverged from every real terminal in 721 channel values
  * and made encode/decode round-trips disagree with matching).

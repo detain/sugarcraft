@@ -27,7 +27,7 @@ From the first-stage analysis, SugarCraft maps to Bubble Tea ecosystem as:
 
 | bubbletea | SugarCraft | Status |
 |---|---|---|
-| `bubbletea` | `candy-core` | Core runtime, Model/Program/Update |
+| `bubbletea` | `sugar-core` | Core runtime, Model/Program/Update |
 | `lipgloss` | `sugar-style` | Declarative styling |
 | `harmonica` | `sugar-spring` | Spring animations |
 | `bubblezone` | `sugar-mouse` | Mouse zone tracking |
@@ -60,7 +60,7 @@ A community proposal for an official DevTools middleware that wraps any Bubble T
 - State viewer (`fmt.Sprintf("%+v")` dump)
 - Component tree (auto-detected via reflection on nested `tea.Model` fields)
 
-**Strategic Note:** This is a direct response to the lack of visibility into running TUI applications. SugarCraft should consider building similar introspection capabilities into candy-core from the start.
+**Strategic Note:** This is a direct response to the lack of visibility into running TUI applications. SugarCraft should consider building similar introspection capabilities into sugar-core from the start.
 
 ### Issue #1654: Proposal: Testing Framework (charm-test)
 
@@ -90,7 +90,7 @@ Bubble Tea v2 queries for terminal capabilities (mode 2026, mode 2027) asynchron
 2. Documented way to inhibit probes
 3. Attempt to drain pending responses during terminal restoration
 
-**Direct Risk to SugarCraft:** YES - If candy-core queries terminal capabilities asynchronously, same leak could occur. Must handle capability responses synchronously or provide opt-out.
+**Direct Risk to SugarCraft:** YES - If sugar-core queries terminal capabilities asynchronously, same leak could occur. Must handle capability responses synchronously or provide opt-out.
 
 ### Issue #1571: Scrollback Lost on tea.Quit (WezTerm-specific)
 
@@ -405,7 +405,7 @@ func (m Model) View() tea.View {
 - All `tea.WithX()` options → `View.X` fields
 - All `tea.EnterAltScreen` etc. commands → `View.AltScreen` field
 
-**SugarCraft Recommendation:** The declarative approach is superior. candy-core should follow v2's lead - make View properties the single source of truth for terminal state.
+**SugarCraft Recommendation:** The declarative approach is superior. sugar-core should follow v2's lead - make View properties the single source of truth for terminal state.
 
 ### PR #1568: Combine Event and Render Loops
 
@@ -481,7 +481,7 @@ The v2 Cursed Renderer is a complete rewrite modeled on ncurses:
 - Synchronized output mode (ANSI 2026)
 - Debounced resize handling
 
-**SugarCraft Implication:** Rendering is where most complexity lives. candy-core's renderer must be carefully designed.
+**SugarCraft Implication:** Rendering is where most complexity lives. sugar-core's renderer must be carefully designed.
 
 ---
 
@@ -1157,7 +1157,7 @@ The proposal for charm-devtools mirrors React's inspector:
 - State viewer = React's component inspector
 - Component tree = React's component hierarchy
 
-**SugarCraft Recommendation:** Build similar inspector as separate package that wraps any candy-core program.
+**SugarCraft Recommendation:** Build similar inspector as separate package that wraps any sugar-core program.
 
 ### Jest/Vitest Snapshot Testing → SugarCraft Snapshots
 
@@ -1240,7 +1240,7 @@ function suspendProcess(): void {
 ### Medium-Term (v1.0)
 
 7. **Web-Based DevTools**
-   - Separate package wrapping any candy-core program
+   - Separate package wrapping any sugar-core program
    - Inspect message flow, state, component hierarchy
    - Toggle with key combination or signal
 

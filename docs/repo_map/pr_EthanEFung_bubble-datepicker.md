@@ -26,7 +26,7 @@ From `repo_map/EthanEFung_bubble-datepicker.md`:
 | Datepicker component | `sugar-widgets` (foundation components) | TUI "bubble" component like textinput, list, viewport |
 | Calendar grid rendering | `sugar-widgets` `View()` rendering | Snapshot testing pattern applies |
 | Focus state machine (HeaderMonth/Year/Calendar) | `sugar-widgets` focus handling | Elm-style Model/Update/View |
-| `KeyMap` + key bindings | `candy-core` key handling | Same pattern as Charmbracelet's `bubbles/key` |
+| `KeyMap` + key bindings | `sugar-core` key handling | Same pattern as Charmbracelet's `bubbles/key` |
 | `Styles` with lipgloss | `sugar-widgets` styling | Lipgloss used in both ecosystems |
 | Two-way data binding example | `sugar-widgets` component integration | Compositing bubbles |
 
@@ -235,7 +235,7 @@ Multiple users independently arrive at the same requirement:
 
 **Emerging standard**: `key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "previous week/year"))`
 **Pattern source**: Charmbracelet conventions
-**SugarCraft alignment**: Already follows same pattern in `candy-core`
+**SugarCraft alignment**: Already follows same pattern in `sugar-core`
 
 ---
 

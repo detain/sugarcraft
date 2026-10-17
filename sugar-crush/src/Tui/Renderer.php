@@ -285,7 +285,7 @@ final class Renderer
      * ambient default for every {@see Style} this process mints afterwards.
      *
      * Until rv-devops-1/rv-a11y-M1 only PaneFrame's border glyphs consulted
-     * candy-core's detection ladder, so `NO_COLOR=1` still shipped full
+     * sugar-core's detection ladder, so `NO_COLOR=1` still shipped full
      * `38;2;r;g;b` sweeps in the rest of the frame. The single ladder lives
      * in {@see ColorProfile::detect()} — this method only decides WHEN to
      * consult it, it never re-implements the WHAT.
@@ -555,7 +555,7 @@ final class Renderer
      * Three invariants this method owns, the first two re-learned the hard way
      * on the live path (PR #1403) and just as binding here:
      *
-     * 1. The frame is CLIPPED to `$rows`, never merely padded. candy-core's
+     * 1. The frame is CLIPPED to `$rows`, never merely padded. sugar-core's
      *    `Renderer` repaints with an ABSOLUTE `cursorTo($row, 1)` and has no
      *    concept of scrolling, so every line past the terminal's last row is
      *    silently clamped onto it and distinct logical rows collide on one
@@ -565,13 +565,13 @@ final class Renderer
      *    the chrome — it keeps the bottom, which is where the input line and
      *    status bar live.
      * 2. `$cols`/`$rows` come from the caller — {@see App::view()} passes the
-     *    size the App recorded from `WindowSizeMsg`, the one size candy-core's
+     *    size the App recorded from `WindowSizeMsg`, the one size sugar-core's
      *    `Program` actually dispatches and re-dispatches on SIGWINCH.
      *    {@see getTerminalSize()} is only the no-WindowSizeMsg-yet fallback: it
      *    is a one-shot probe cached in a never-invalidated static, so making it
      *    the primary path lets the shell chrome and the hosted chat render at
      *    two disagreeing geometries after a live resize.
-     * 3. Every line is CLIPPED to `$cols` too. candy-core's renderer does no
+     * 3. Every line is CLIPPED to `$cols` too. sugar-core's renderer does no
      *    wrapping, so an over-wide line is wrapped by the TERMINAL, every later
      *    row shifts down one, and the absolute `cursorTo()` repaint
      *    desynchronises exactly as an over-tall frame does. The panes are sized
@@ -1228,7 +1228,7 @@ final class Renderer
      * story and it was not.
      *
      * NO FRAME. `Chat::workflowRun()` called `$this->workflowEngine->run()`
-     * SYNCHRONOUSLY from inside `update()`, and candy-core's `Program`
+     * SYNCHRONOUSLY from inside `update()`, and sugar-core's `Program`
      * repaints from a periodic timer on the ReactPHP loop
      * (`Program.php:387`), so the tick could not fire until the whole workflow
      * was over. It now runs in a `\Fiber` that a timer on that same loop

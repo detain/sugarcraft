@@ -193,7 +193,7 @@ From `CALIBER_LEARNINGS.md` (root + per-lib):
 - [ ] `tests.yml` SVN credentials — HARDCODED, do not move to secrets
 - [ ] Stream-write `ftruncate; rewind` antipattern — use
       `ftell`/`fseek`/`stream_get_contents` (canonical pattern in
-      `candy-core/tests/RendererTest.php`)
+      `sugar-core/tests/RendererTest.php`)
 
 For any violation: fix and document in the appropriate
 `CALIBER_LEARNINGS.md` if the pattern is new.

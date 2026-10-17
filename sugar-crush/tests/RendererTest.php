@@ -913,7 +913,7 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * Regression: candy-core's Renderer repaints a changed row via an
+     * Regression: sugar-core's Renderer repaints a changed row via an
      * ABSOLUTE cursorTo($row, 1) - once a frame is taller than the real
      * terminal, every row past the terminal's last line gets clamped there
      * by the terminal itself, so distinct rows (input box, status bar,
@@ -1230,7 +1230,7 @@ final class RendererTest extends TestCase
 
     /**
      * Render invariant: one logical line per physical row. A diff line wider
-     * than the viewport must be truncated, never wrapped -- candy-core's
+     * than the viewport must be truncated, never wrapped -- sugar-core's
      * Renderer repaints by absolute row, so a wrapped line shifts every row
      * below it.
      */
@@ -1267,10 +1267,10 @@ final class RendererTest extends TestCase
     /**
      * The PR #1403 failure class, reached through TAB.
      *
-     * candy-core's Sanitize::untrusted() preserves TAB and Width::string("\t")
+     * sugar-core's Sanitize::untrusted() preserves TAB and Width::string("\t")
      * is 0, but sugar-style' Style::render() paints each tab as tabWidth
      * spaces -- so a Go/Makefile/C diff was budgeted 0 cells per tab and
-     * painted 4, and the box emitted rows wider than the viewport. candy-core's
+     * painted 4, and the box emitted rows wider than the viewport. sugar-core's
      * Renderer repaints by absolute row and clamps cursorTo(), so an over-wide
      * row lands on the status bar.
      *
@@ -2173,7 +2173,7 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * The tail is model-authored text on a row candy-core repaints by
+     * The tail is model-authored text on a row sugar-core repaints by
      * absolute position, so it must never push the row past the terminal.
      */
     public function testCommandTailIsTruncatedToTheTerminalWidth(): void

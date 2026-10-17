@@ -8,7 +8,7 @@
 
 - **Status:** v1 Ready
 
-- **Depends on:** `candy-core` (runtime), `sugar-style` (Border/Style), `sugar-mouse` (Manager), `sugar-spring` (CubicBezier easing)
+- **Depends on:** `sugar-core` (runtime), `sugar-style` (Border/Style), `sugar-mouse` (Manager), `sugar-spring` (CubicBezier easing)
 
 - **Namespace:** `SugarCraft\Overlay`
 
@@ -380,11 +380,11 @@ $scaledLines = \array_slice($lines, $startLine, $visibleCount);
 Unlike upstream `rmhubbert/bubbletea-overlay` which uses a `Viewable` interface (`View() string`), sugar-overlay takes a simpler approach: `composite()` accepts raw strings. The veil itself does not implement `tea.Model` or any equivalent interface — it is a pure renderer utility.
 
 This design choice makes sugar-overlay **framework-agnostic**:
-- No dependency on `candy-core` for the compositing itself
+- No dependency on `sugar-core` for the compositing itself
 
 - Works with any TUI framework (or even non-TUI contexts)
 
-- The candy-core dependency is only needed for `MouseMsg` type hint in `isClickOutside()`
+- The sugar-core dependency is only needed for `MouseMsg` type hint in `isClickOutside()`
 
 Consumers render their models first, then call `Veil::composite()` on the resulting strings:
 ```php
@@ -398,9 +398,9 @@ return $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
 ---
 
-## Integration with candy-core, sugar-style, sugar-mouse, sugar-spring
+## Integration with sugar-core, sugar-style, sugar-mouse, sugar-spring
 
-### candy-core
+### sugar-core
 
 - **MouseMsg** type for `isClickOutside()` parameter
 
@@ -631,7 +631,7 @@ The backdrop is dimmed **before** position offsets are computed. This ensures th
 
 ### 4. No tea.Model / Model Interface
 
-sugar-overlay intentionally does not implement `candy-core`'s `Model` interface (unlike upstream bubbletea-overlay which wraps `tea.Model`). This is a deliberate design choice:
+sugar-overlay intentionally does not implement `sugar-core`'s `Model` interface (unlike upstream bubbletea-overlay which wraps `tea.Model`). This is a deliberate design choice:
 - Veils are stateless renderers, not stateful components
 
 - The consumer's model manages state; veils just composite strings
@@ -671,7 +671,7 @@ The `Manager` is injected via `withManager()`, not created internally. This:
 
 | Library | Relationship |
 |---------|--------------|
-| `candy-core` | Provides `Model` interface + `MouseMsg` + `Width` + `Ansi` utilities |
+| `sugar-core` | Provides `Model` interface + `MouseMsg` + `Width` + `Ansi` utilities |
 | `sugar-style` | Provides `Border` and `Style` for border chrome |
 | `sugar-mouse` | Provides `Manager` for spatial hit testing |
 | `sugar-spring` | Provides `CubicBezier` easing for animations |

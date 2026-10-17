@@ -11,7 +11,7 @@ use SugarCraft\Core\Msg;
  *
  * The window is generation-tagged: every open/reset bumps
  * {@see Game::$lockGeneration} and the armed message carries the new
- * tag. candy-core's tick scheduler has no cancel API, so superseded
+ * tag. sugar-core's tick scheduler has no cancel API, so superseded
  * windows are made inert by tag mismatch instead — a
  * {@see LockDelayMsg} whose generation no longer equals
  * {@see Game::$lockWindowGeneration} is dropped without effect.

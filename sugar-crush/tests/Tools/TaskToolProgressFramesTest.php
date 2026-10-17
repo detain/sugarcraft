@@ -86,7 +86,7 @@ final class TaskToolProgressFramesTest extends TestCase
             'P-B2: the run\'s prose rides as a text item, for the parent\'s live line',
         );
         $this->assertSame('coder', $started->name);
-        $this->assertSame('Audit candy-core and report the findings', $started->task, 'started carries the prompt snippet');
+        $this->assertSame('Audit sugar-core and report the findings', $started->task, 'started carries the prompt snippet');
         $this->assertSame('', $started->tail, 'nothing has been produced at the open beat');
         $this->assertStringStartsWith('subagent_' . getmypid() . '_', $started->id, 'the id is pid-namespaced (E329)');
         foreach ($frames as $frame) {
@@ -385,7 +385,7 @@ final class TaskToolProgressFramesTest extends TestCase
 
         foreach ($frames as $frame) {
             $this->assertSame('tc_parent', $frame->parentCallId, 'every frame names the Task row it belongs under');
-            $this->assertSame('Audit candy-core', $frame->description);
+            $this->assertSame('Audit sugar-core', $frame->description);
         }
         $this->assertSame([], $started->items);
         $this->assertSame(
@@ -443,8 +443,8 @@ final class TaskToolProgressFramesTest extends TestCase
         $this->assertSame(SubAgentActivity::queuedId('tc_9'), $beat->id);
         $this->assertSame('coder', $beat->name);
         $this->assertSame('tc_9', $beat->parentCallId);
-        $this->assertSame('Audit candy-core', $beat->description);
-        $this->assertSame('Audit candy-core and report the findings', $beat->task);
+        $this->assertSame('Audit sugar-core', $beat->description);
+        $this->assertSame('Audit sugar-core and report the findings', $beat->task);
         $this->assertNull((new TaskTool($manager))->queuedActivity(new ToolCall('tc_9', 'Task', []), ['prompt' => 'x']), 'no agent, no row');
     }
 
@@ -472,8 +472,8 @@ final class TaskToolProgressFramesTest extends TestCase
     private static function call(array $overrides = []): array
     {
         return $overrides + [
-            'description' => 'Audit candy-core',
-            'prompt' => 'Audit candy-core and report the findings',
+            'description' => 'Audit sugar-core',
+            'prompt' => 'Audit sugar-core and report the findings',
             'agent' => 'coder',
         ];
     }

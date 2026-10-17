@@ -174,19 +174,19 @@ func (b *Boxer) EditLeaf(address string, editFunc func(tea.Model) (tea.Model, er
 
 | treilik/bubbleboxer | SugarCraft Equivalent | Notes |
 |---------------------|----------------------|-------|
-| `Boxer` struct + `LayoutTree` | `candy-core` viewport/layout primitives | Both provide TUI layout composition; bubbleboxer is tree-based, SugarCraft uses termbox-cell approach |
+| `Boxer` struct + `LayoutTree` | `sugar-core` viewport/layout primitives | Both provide TUI layout composition; bubbleboxer is tree-based, SugarCraft uses termbox-cell approach |
 | `Node.VerticalStacked` | `sugar-markdown` table layout | Vertical/horizontal stacking maps to row/column orientation |
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` indirection | Both use address/key lookup pattern separating reference from data |
 | `SizeFunc` custom allocation | `sugar-spring` layout weights | Custom size distribution similar to flex-weight or grid-template sizing |
 | `EditLeaf()` safe edit pattern | Immutable `with*()` builders | Both provide safe mutation patterns; bubbleboxer uses functional edit, SugarCraft uses copy-on-write |
 | `View()` string rendering | `sugar-widgets` view rendering | Both produce final string output for terminal display |
 | `renderHorizontal()` / `renderVertical()` | Table rendering in `sugar-markdown` | Horizontal join with separator parallels table cell rendering |
-| `UpdateSize()` propagation | `candy-core` resize handling | Both propagate size constraints down a hierarchy |
+| `UpdateSize()` propagation | `sugar-core` resize handling | Both propagate size constraints down a hierarchy |
 | `tea.Model` interface compliance | SugarCraft `Model` contract | Both implement Charmbracelet-style Model pattern for TEA architecture |
 
 **Multi-lib mapping**: bubbleboxer combines concepts from:
 
-- `candy-core` (viewport management, term dimensions)
+- `sugar-core` (viewport management, term dimensions)
 
 - `sugar-markdown` (table/grid layout with separators)
 

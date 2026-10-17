@@ -12,7 +12,7 @@
 
 - **PHP:** ^8.3 | **ext-gd:** Required
 
-- **Key Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `react/promise`
+- **Key Dependencies:** `sugarcraft/sugar-core`, `sugarcraft/sugar-style`, `react/promise`
 
 ---
 
@@ -56,7 +56,7 @@ SugarImage is the most complete PHP terminal image rendering library, rendering 
 sugar-image/src/
 ├── AdaptiveImage.php              # LRU memoizing wrapper (key: "WxH")
 ├── Animation.php                   # Immutable frame sequence value object
-├── AnimationDriver.php             # Model implementing candy-core tick() API
+├── AnimationDriver.php             # Model implementing sugar-core tick() API
 ├── AsyncRenderer.php               # Interface for async rendering
 ├── Capability.php                 # Immutable terminal capability snapshot
 ├── CellSize.php                   # Font-size value object (cellW × cellH)
@@ -90,7 +90,7 @@ sugar-image/src/
 
 - **tmux passthrough:** Full DCS/APC/OSC envelope wrapping
 
-- **Animation support:** `Animation` value object + `AnimationDriver` as candy-core Model
+- **Animation support:** `Animation` value object + `AnimationDriver` as sugar-core Model
 
 - **LRU resize cache:** 4-entry LRU keyed on cell dimensions
 
@@ -615,7 +615,7 @@ SugarImage is a **mature, well-architected** PHP library that represents the mos
 
 - Full terminal detection with caching
 
-- Animation driver integration with candy-core
+- Animation driver integration with sugar-core
 
 - LRU memoization
 

@@ -33,7 +33,7 @@
         "ext-ffi": "*",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
-        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-input": "dev-master",
         "sugarcraft/sugar-ansi-parser": "dev-master"
     },

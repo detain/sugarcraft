@@ -169,21 +169,21 @@
 
 | Sequin Feature | SugarCraft Library | Mapping Rationale |
 |----------------|-------------------|-------------------|
-| ANSI sequence parsing (SGR, CSI, OSC) | `candy-core` | Core TUI rendering foundation that would use ANSI sequences |
+| ANSI sequence parsing (SGR, CSI, OSC) | `sugar-core` | Core TUI rendering foundation that would use ANSI sequences |
 | 24-bit color, ANSI256, basic colors | `sugar-markdown` | Color handling and rendering (Shine = visual styling) |
 | Text styling (bold, italic, underline) | `sugar-markdown` | Text attribute rendering |
-| Cursor movement/positioning | `candy-core` | Cursor management in terminal rendering |
-| Screen erase/scroll operations | `candy-core` | Screen buffer management |
-| Terminal mode handling (mouse, bracketed paste) | `candy-core` | Terminal capability negotiation |
+| Cursor movement/positioning | `sugar-core` | Cursor management in terminal rendering |
+| Screen erase/scroll operations | `sugar-core` | Screen buffer management |
+| Terminal mode handling (mouse, bracketed paste) | `sugar-core` | Terminal capability negotiation |
 | Theme support (dark/light) | `sugar-markdown` | Theme system for visual styling |
 | Golden file comparison for ANSI output | `sugar-widgets` | Snapshot testing patterns for TUI output |
 | PTY execution for command output capture | `sugar-pty` (if exists) | PTY/sudo process handling |
 
 **SugarCraft Category**: `candy-*` (foundation/system/framework)
 
-**Primary Mapping**: `candy-core` for ANSI parsing/rendering primitives, `sugar-markdown` for visual styling/color handling
+**Primary Mapping**: `sugar-core` for ANSI parsing/rendering primitives, `sugar-markdown` for visual styling/color handling
 
-**Indirect Mapping**: Sequin is primarily a debugging/development tool rather than a runtime TUI component. SugarCraft equivalent would be the internal ANSI rendering pipeline within `candy-core` that generates the raw sequences sequin consumes.
+**Indirect Mapping**: Sequin is primarily a debugging/development tool rather than a runtime TUI component. SugarCraft equivalent would be the internal ANSI rendering pipeline within `sugar-core` that generates the raw sequences sequin consumes.
 
 ## Analysis
 

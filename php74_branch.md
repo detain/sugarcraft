@@ -68,7 +68,7 @@ without changing comparison semantics, and (c) **fibers** in `candy-ansi`/`candy
 - **Integration branch:** `php7.4`, cut once from `master`. This is the trunk for the whole
   effort — every step merges into `php7.4`. The real `master` is **never** checked out for writes
   during this effort.
-- **Per‑step branch:** `php7.4/<phase>-<lib>[-<chunk>]` (e.g. `php7.4/p2-candy-core-msg-1`).
+- **Per‑step branch:** `php7.4/<phase>-<lib>[-<chunk>]` (e.g. `php7.4/p2-sugar-core-msg-1`).
 - **Every step is exactly one commit → one PR → merged into `php7.4`.** PR **base branch is
   `php7.4`**, not `master`.
 - Author on every commit: `Joe Huss <detain@interserver.net>`.
@@ -359,7 +359,7 @@ keystone, so they come first within the phase.
 - **1.6** `candy-input` (11 src, high) — union types, `readonly class`, mixed; no deps so safe early. <!-- @rename-keep historical provenance -->
 
 ### Phase 2 — Keystone: candy‑core (+ candy‑pty, cyclic)
-`candy-core` (118 src, high) split by subdir; **2.1 must ship the polyfills first.**
+`sugar-core` (118 src, high) split by subdir; **2.1 must ship the polyfills first.**
 - **2.1** candy‑core **polyfills + composer/phpunit**: `Polyfill/BackedEnum`, `Polyfill/UnitEnum`,
   `Polyfill/UnhandledMatchError`; add `symfony/polyfill-php80`; constraint+phpunit.xml. *(Written
   natively in 7.4 syntax; has its own new tests.)*
@@ -476,7 +476,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 
 | Lib | diff | src | Key PHP 8+ constructs present |
 |---|---|---:|---|
-| candy-core | high | 118 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args, readonly |
+| sugar-core | high | 118 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args, readonly |
 | candy-codeshot | high | 10 | ctor-promotion, enum, match, mixed, new-in-init, php8-strfn |
 | candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union | <!-- @rename-keep historical provenance -->
 | sugar-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |

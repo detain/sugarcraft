@@ -23,7 +23,7 @@ use SugarCraft\Mouse\Zone;
  * The strip sits above the shell, outside every clip, and used to join every
  * listed session's full name. Eight sessions named "Refactor the
  * authentication middleware part N" gave a 383-cell top row at 80 columns,
- * which the terminal wraps and candy-core's absolute-cursor repaint then
+ * which the terminal wraps and sugar-core's absolute-cursor repaint then
  * paints one line low. Names also reached the frame raw: `/rename` stores
  * typed text as is, and other writers (another sugar-crush version, the
  * Python port, a hand-edited session.db) share the same database.

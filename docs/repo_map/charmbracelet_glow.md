@@ -184,11 +184,11 @@
 | `lipgloss` styling system | `sugar-markdown` (styling), `sugar-widgets` (output) | Lipgloss is the Charm styling engine; SugarCraft ports lipgloss for ANSI text styling, colors, and layout. |
 | `bubbletea` TUI framework | `sugar-widgets` (TUI components) | Bubble Tea is the TUI framework; SugarCraft's TUI patterns (Model/Update/View) mirror Bubble Tea's architecture. |
 | File browsing & discovery | `sugar-forms` or `sugar-charts` | The stash/file-browser UI could inspire SugarCraft's file picker or tree-view components. |
-| `viewport` for scrolling | `candy-core` (scroll buffer) | The Bubble Tea viewport model for paginated content. |
+| `viewport` for scrolling | `sugar-core` (scroll buffer) | The Bubble Tea viewport model for paginated content. |
 | Fuzzy filtering | `sugar-widgets` (filter/search) | Real-time fuzzy string filtering of file lists. |
 | fsnotify file watching | `sugar-pty` (file watching) | File system notification for live reload. |
 | `gitcha` for file discovery | `sugar-widgets` (file discovery) | Git-aware file finding respecting .gitignore. |
-| Clipboard (OSC 52) | `candy-core` (clipboard) | Terminal clipboard integration via ANSI escape sequences. |
+| Clipboard (OSC 52) | `sugar-core` (clipboard) | Terminal clipboard integration via ANSI escape sequences. |
 | Configuration via Viper | `SugarCraft\Core` (config) | YAML config file handling with environment overrides. |
 
 ### Specific SugarCraft Equivalents
@@ -197,7 +197,7 @@
 - **TUI Components:** `sugar-widgets` / `sugar-markdown` would provide `ListModel`, `PagerModel`, `SpinningModel`, `TextInputModel` following Bubble Tea patterns
 - **File Browser:** `sugar-widgets` could provide `FileStashModel` for directory browsing with fuzzy filter
 - **Styling:** `sugar-markdown` provides `Lipgloss`-equivalent adaptive colors and styles
-- **Viewport:** `candy-core` provides scrollable viewport with status bar
+- **Viewport:** `sugar-core` provides scrollable viewport with status bar
 
 ## Analysis
 

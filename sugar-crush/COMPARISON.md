@@ -4047,7 +4047,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>UI-04</b> Syntax highlighting</summary>
 
-- **sugar-crush** 🟡 — sugar-markdown `SyntaxHighlighter` wraps candy-core `RegexHighlighter`. It covers PHP, JS, TS, JSON, Python, Go, Bash and SQL, with a 1 MB DoS cap. Unknown languages fall back to plain code style. Diffs and tool output are not syntax-highlighted. Not comparable to Shiki/tree-sitter-grade highlighting. — _Evidence:_ `sugar-markdown/src/SyntaxHighlighter.php:1-60`
+- **sugar-crush** 🟡 — sugar-markdown `SyntaxHighlighter` wraps sugar-core `RegexHighlighter`. It covers PHP, JS, TS, JSON, Python, Go, Bash and SQL, with a 1 MB DoS cap. Unknown languages fall back to plain code style. Diffs and tool output are not syntax-highlighted. Not comparable to Shiki/tree-sitter-grade highlighting. — _Evidence:_ `sugar-markdown/src/SyntaxHighlighter.php:1-60`
 - **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/lib/highlight.ts:192,356-374`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#theme-and-display
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/parsers-config.ts
@@ -4307,7 +4307,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>UI-30</b> Accessibility (screen reader, reduced motion, colour-blind)</summary>
 
-- **sugar-crush** 🟡 — Reduced motion only freezes the agent-live spinner (the main spinner never animates anyway). Colour-blind palettes and a screen-reader/plain-text mode are absent. All strings go through `Lang::t()`, but only `en` ships. — _Evidence:_ docs/ENVIRONMENT.md:62; `src/Theme.php:139-147,410-480`; `candy-core/src/Util/ColorProfile.php`; `lang/en.php`
+- **sugar-crush** 🟡 — Reduced motion only freezes the agent-live spinner (the main spinner never animates anyway). Colour-blind palettes and a screen-reader/plain-text mode are absent. All strings go through `Lang::t()`, but only `en` ships. — _Evidence:_ docs/ENVIRONMENT.md:62; `src/Theme.php:139-147,410-480`; `sugar-core/src/Util/ColorProfile.php`; `lang/en.php`
 - **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/styles/tokens.css:132`; `src-web/views/SessionView.vue:125`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:accessibility
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/keybinds (app_toggle_animations)
@@ -4397,7 +4397,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>UI-N5</b> 🆕 Prompt hygiene (strip invisible Unicode before sending; spellcheck)</summary>
 
-- **sugar-crush** 🟡 — candy-core's InputReader sanitises bracketed paste (`ProgramOptions::$sanitizePaste`, default true, which applies `Sanitize::untrusted`). That removes every ESC/CSI/OSC/DCS sequence, C0 controls except TAB/LF/CR, DEL and C1. The Renderer draws the in-progress input and user rows through `untrustedForDisplay()` → `markInvisibleFormatting()`, so these become visible `<U+XXXX>` markers: U+200B, U+202A-202E, U+2066-2069, U+2060 and U+FEFF always, and ZWJ/ZWNJ/LRM/RLM/ALM unless they follow a non-ASCII character. That makes Trojan-Source text visible. `untrusted()` keeps these characters for paste fidelity, so they reach the model unchanged (CC strips them). There is no spellcheck. — _Evidence:_ `candy-core/src/ProgramOptions.php:160`; `candy-core/src/Util/Sanitize.php:239-262`, `:320-380`; `src/Renderer.php:84-89`, `:1628`; `src/Chat.php:2798-2800`
+- **sugar-crush** 🟡 — sugar-core's InputReader sanitises bracketed paste (`ProgramOptions::$sanitizePaste`, default true, which applies `Sanitize::untrusted`). That removes every ESC/CSI/OSC/DCS sequence, C0 controls except TAB/LF/CR, DEL and C1. The Renderer draws the in-progress input and user rows through `untrustedForDisplay()` → `markInvisibleFormatting()`, so these become visible `<U+XXXX>` markers: U+200B, U+202A-202E, U+2066-2069, U+2060 and U+FEFF always, and ZWJ/ZWNJ/LRM/RLM/ALM unless they follow a non-ASCII character. That makes Trojan-Source text visible. `untrusted()` keeps these characters for paste fidelity, so they reach the model unchanged (CC strips them). There is no spellcheck. — _Evidence:_ `sugar-core/src/ProgramOptions.php:160`; `sugar-core/src/Util/Sanitize.php:239-262`, `:320-380`; `src/Renderer.php:84-89`, `:1628`; `src/Chat.php:2798-2800`
 - **sugar-crush-web** 🟡 — The composer `<textarea>` sets no `spellcheck` attribute, so the browser default applies (on for textareas in Chrome and Firefox). `session.send` passes the text through unchanged. — _Evidence:_ `sugar-crush-web/src-web/components/Composer.vue:109-119`; `src/Protocol/Methods/TurnMethods.php:56-67`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#invisible-characters-in-prompts; cc:interactive-mode#check-spelling-as-you-type
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ TUI/component/prompt/ (grep)

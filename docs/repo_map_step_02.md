@@ -49,8 +49,8 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
 1. **Invoke `scaffold-library`** with slug `sugar-cellbuffer`, namespace `SugarCraft\CellBuffer\`, role "Cell-grid value objects for terminal rendering (shared)".
 2. **Invoke `sugarcraft-model-pattern`** when designing Cell + Buffer — they are canonical immutable value objects:
    - `Cell` is `readonly`, all-arg constructor, no `with*()` (it's tiny; rebuild via `new`).
-   - `Buffer` uses the `Mutable` trait from candy-core for `mutate()` — `with*()` returns new instance.
-3. **Width handling**: don't reimplement width calculation — call out to `\SugarCraft\Core\Util\Width::of($rune)` (existing). If candy-core's util doesn't already expose this, append `Need candy-core::Width::of(string): int` to `docs/repo_map_updates.md` for step-09 to address.
+   - `Buffer` uses the `Mutable` trait from sugar-core for `mutate()` — `with*()` returns new instance.
+3. **Width handling**: don't reimplement width calculation — call out to `\SugarCraft\Core\Util\Width::of($rune)` (existing). If sugar-core's util doesn't already expose this, append `Need sugar-core::Width::of(string): int` to `docs/repo_map_updates.md` for step-09 to address.
 4. **`Buffer::diff()` is a stub**: declare the signature
    ```php
    /** @return list<DiffOp> */
@@ -84,7 +84,7 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
   ## Summary
   - New foundation lib sugar-cellbuffer adds Buffer (Cell grid) + Cell value objects for terminal rendering.
   - Buffer::diff() declared but unimplemented — step-26 ships the delta-ANSI emitter (ECH/REP/ICH/DCH).
-  - Wide-char (CJK/emoji) handled via Width::of from candy-core.
+  - Wide-char (CJK/emoji) handled via Width::of from sugar-core.
   - Unblocks consumer migration in steps 14-18 (sugar-widgets, sugar-forms, sugar-forms, sugar-charts, sugar-table).
 
   ## Test plan

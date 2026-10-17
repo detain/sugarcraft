@@ -36,7 +36,7 @@ Fix all critical bugs, high-severity issues, medium/low-severity improvements, m
 - [ ] **1.2 Reflection encapsulation violation** — Add `getModel(): Model` method to `Program` class to provide a stable API for test utilities. Update `ProgramSimulator::getModelFromProgram()` to use `$this->program->getModel()` instead of Reflection-based private property access.
   
   **Expected:** `Program::getModel()` returns `$this->model`; Reflection is no longer used  
-  **Files:** `candy-core/src/Program.php:39-41`, `sugar-testing/src/ProgramSimulator.php:242-256`
+  **Files:** `sugar-core/src/Program.php:39-41`, `sugar-testing/src/ProgramSimulator.php:242-256`
 
 - [ ] **1.3 preg_replace_callback null coalescing clarity** — Replace `?? $bytes` with explicit `is_string()` check in `Assertions::escapeAnsi()`. The current `?? $bytes` pattern is confusing since `preg_replace_callback` returns `null` (not `false`) on error, and with a valid regex this never triggers.
   
@@ -57,7 +57,7 @@ Fix all critical bugs, high-severity issues, medium/low-severity improvements, m
   
   **Expected:** Returns non-null for at least F1-F12, Home, End, PageUp, PageDown, Delete, Insert  
   **File:** `sugar-testing/src/Tape/TapeRecorder.php:175-196`  
-  **Reference:** `candy-core/src/KeyType.php:16-317` — full enum with 120+ cases
+  **Reference:** `sugar-core/src/KeyType.php:16-317` — full enum with 120+ cases
 
 - [ ] **2.2 Incomplete keyMsgToVhs test coverage** — Add test cases for all newly supported KeyType values. Tests currently only cover character keys, Enter, Escape, Backspace, Tab, and arrow keys. Most key types return `null` without ever being tested.
   
@@ -150,7 +150,7 @@ Fix all critical bugs, high-severity issues, medium/low-severity improvements, m
 - [ ] **5.5 Paste/clipboard support** — Add `paste()` and `clipboard()` methods to `ScriptedInput`. Map to `PasteMsg` and `ClipboardMsg` from `Msg` interface.
   
   **Expected:** Methods to generate paste/clipboard messages  
-  **Files:** `candy-core/src/Msg/` — PasteMsg, ClipboardMsg definitions
+  **Files:** `sugar-core/src/Msg/` — PasteMsg, ClipboardMsg definitions
 
 - [ ] **5.6 Keyboard enhancements/IME support** — Add `KeyboardEnhancementsMsg` helper method to `ScriptedInput`. Support for IME composition events is important for internationalization.
   

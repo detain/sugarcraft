@@ -16,7 +16,7 @@
 
 - **Upstream:** `charmbracelet/wishlist` (Go, ~700 stars)
 
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-widgets`, `sugarcraft/sugar-pty`, `sugarcraft/sugar-style`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-mouse`, `sugarcraft/sugar-spring`, `sugarcraft/sugar-colorprofile`
+- **Depends on:** `sugarcraft/sugar-core`, `sugarcraft/sugar-widgets`, `sugarcraft/sugar-pty`, `sugarcraft/sugar-style`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-mouse`, `sugarcraft/sugar-spring`, `sugarcraft/sugar-colorprofile`
 
 ---
 
@@ -124,7 +124,7 @@ A lightweight, single-purpose TUI widget (not a full SugarWidgets `List`). Key d
 
 - **No full event loop** — Uses a simple `while(true)` loop with blocking `fread()` on STDIN. Directly draws to STDOUT via ANSI escape sequences.
 
-- **Raw mode via `candy-core` `RawMode`** — Delegates terminal raw-mode setup to `SugarCraft\Core\Util\RawMode::enable/disable()`, which is a portable no-op on non-tty streams (enabling testability).
+- **Raw mode via `sugar-core` `RawMode`** — Delegates terminal raw-mode setup to `SugarCraft\Core\Util\RawMode::enable/disable()`, which is a portable no-op on non-tty streams (enabling testability).
 
 - **ANSI rendering** — Uses `SugarCraft\Core\Util\Ansi` for `cursorTo()`, `eraseToEnd()`, `sgr()`, `reset()`.
 
@@ -243,7 +243,7 @@ This is architecturally cleaner than a PHP-based SSH proxy, but means candy-ssh-
 | SSH options passthrough (`-o`) | ✅ Implemented |
 | pcntl_exec process replacement | ✅ Implemented |
 | i18n (16 locales) | ✅ Implemented (upstream has no i18n) |
-| ANSI rendering via candy-core | ✅ Implemented (upstream uses lipgloss) |
+| ANSI rendering via sugar-core | ✅ Implemented (upstream uses lipgloss) |
 
 ### What is deferred/not implemented
 
@@ -286,7 +286,7 @@ This is architecturally cleaner than a PHP-based SSH proxy, but means candy-ssh-
 
 6. **Real SSH config import** — The `SshConfigParser` properly handles `Host *` global defaults, per-host overrides, `~` path expansion, and comment stripping — matching actual OpenSSH behavior.
 
-7. **Portable raw mode** — `RawMode::enable()` from candy-core handles non-tty streams gracefully (no-op), making the Picker testable without overriding.
+7. **Portable raw mode** — `RawMode::enable()` from sugar-core handles non-tty streams gracefully (no-op), making the Picker testable without overriding.
 
 8. **Clean immutability** — `Endpoint` is a true immutable value object with `readonly` properties and `with*()` factory methods returning new instances.
 
@@ -330,7 +330,7 @@ Provides SSH-based authentication, encrypted KV store, and cloud filesystem. Not
 
 ### `sugar-ssh-server` (SugarCraft port of charmbracelet/wish)
 
-SSH server middleware framework. candy-ssh-launcher declares it as a dependency (via `candy-core`, `sugar-pty`) but does not invoke its SSH server capabilities in v1. The dependency exists for future SSH-server TUI mode.
+SSH server middleware framework. candy-ssh-launcher declares it as a dependency (via `sugar-core`, `sugar-pty`) but does not invoke its SSH server capabilities in v1. The dependency exists for future SSH-server TUI mode.
 
 ---
 

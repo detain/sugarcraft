@@ -206,7 +206,7 @@ migrateHeader() only sets numeric version to 2. Doesn't add documented v2 fields
 
 **Location:** src/BuiltinSerializer.php
 
-Some candy-core Msg types fall through to JsonableSerializer. Should be documented.
+Some sugar-core Msg types fall through to JsonableSerializer. Should be documented.
 
 ---
 

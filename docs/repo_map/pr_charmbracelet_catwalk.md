@@ -23,7 +23,7 @@ From the prior analysis (`repo_map/charmbracelet_catwalk.md`):
 | `sugar-charts` | Potential consumer | Pricing comparison visualizations |
 | `sugar-log` | Potential consumer | Improved observability vs `log.Printf` |
 | `sugar-metrics` | Already aligned | Same Prometheus metrics pattern |
-| `candy-core` | Reference architecture | Elm-style `Model/Update/View` similar to catwalk's state organization |
+| `sugar-core` | Reference architecture | Elm-style `Model/Update/View` similar to catwalk's state organization |
 
 **No direct port exists** because catwalk's core value is a data-management problem (structured provider/model database), not a TUI rendering problem.
 

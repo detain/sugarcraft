@@ -408,7 +408,7 @@ the *inverse* of what the decoders need. Worth lifting either:
   `sugar-vterm/src/Graphics/Image/{PngCodec,RgbaCodec}.php` and let
   sugar-image depend on sugar-vterm (today it does not). Pulls
   sugar-image into the sugar-vterm dependency closure.
-- **Option B — shared util in candy-core or a new tiny lib:** new
+- **Option B — shared util in sugar-core or a new tiny lib:** new
   `candy-pixel` (or `candy-img`) lib that both consume. Cleanest but
   adds a 7th lib to the foundation cluster.
 - **Option C — duplicate the GD glue:** ~30 LOC duplicated between

@@ -553,7 +553,7 @@ Bundles `ColorProfile` + `hasDarkBackground` flag:
 
 lipgloss's `Blend2D` uses CIELAB interpolation at rotated positions — the algorithm samples a 1D gradient at `(cos(θ)×x + sin(θ)×y, -sin(θ)×x + cos(θ)×y)` for each cell. This would enable heatmap-style visualizations directly in Style rendering. Additionally, lipgloss's `Wrap()` / `WrapWriter` should be integrated into `Style::render()` for automatic word-wrap.
 
-**File reference:** `sugar-style/src/Style.php` — `render()` method at line 915; color blending at `candy-core/src/Util/Color.php`
+**File reference:** `sugar-style/src/Style.php` — `render()` method at line 915; color blending at `sugar-core/src/Util/Color.php`
 
 ### From ratatui: Flex alignment variants
 
@@ -588,7 +588,7 @@ php-tui's `Text` (collection of Lines) → `Line` (single row) → `Span` (style
 
 pterm's `RGB.Fade(min, max float32, end ...RGB)` interpolates through N color stops. This could be added to `Color` in sugar-core and used in `Style` for gradient text/background effects.
 
-**File reference:** `candy-core/src/Util/Color.php` — `blend()` exists but no Fade with multiple stops
+**File reference:** `sugar-core/src/Util/Color.php` — `blend()` exists but no Fade with multiple stops
 
 ---
 
@@ -648,7 +648,7 @@ php-tui's `Display::diff()` computes minimal cell updates between two buffers. F
 
 Currently `Color::hex()`, `Color::ansi()`, `Color::ansi256()`, `Color::hsl()`, `Color::parse()` live in `SugarCraft\Core\Util\Color`. They should implement a `ColorValueObject` interface that `Style` consumes, allowing third-party color types to be injected.
 
-**Affected files:** `sugar-style/src/Style.php` (imports `SugarCraft\Core\Util\Color`), `candy-core/src/Util/Color.php`
+**Affected files:** `sugar-style/src/Style.php` (imports `SugarCraft\Core\Util\Color`), `sugar-core/src/Util/Color.php`
 
 ### 2. Unify `Markup::parse()` and `StyleParser` into a single text model
 

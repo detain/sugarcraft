@@ -10,16 +10,16 @@
 
 | 3rd-Party Repo | Language | Stars | SugarCraft Libraries |
 |---|---|---|---|
-| [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | candy-core, sugar-widgets |
-| [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-widgets, candy-core |
+| [alecrabbit/php-console-spinner](#alecrabbitphp-console-spinner) | PHP | ~niche | sugar-core, sugar-widgets |
+| [Bdeering1/console-menu](#bdeering1console-menu) | Rust | ~niche | sugar-widgets, sugar-core |
 | [blacktop/go-termimg](#blacktopgo-termimg) | Go | ~57 | sugar-image |
 | [c9s/CLIFramework](#c9scliframework) | PHP | 436 | candy-scriptui, sugar-cli, sugar-forms |
 | [charmbracelet/bubbles](#charmbraceletbubbles) | Go | ~2000 | sugar-widgets, sugar-forms |
-| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core (primary), sugar-widgets, candy-scriptui |
-| [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | candy-core |
+| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | sugar-core (primary), sugar-widgets, candy-scriptui |
+| [charmbracelet/bubbletea-app-template](#charmbraceletbubbletea-app-template) | Go | 248 | sugar-core |
 | [charmbracelet/catwalk](#charmbraceletcatwalk) | Go | 687 | candy-scriptui, sugar-forms |
-| [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, sugar-style, candy-core |
-| [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | candy-core, sugar-colorprofile |
+| [charmbracelet/charm](#charmbraceletcharm) | Go | ~2400 | candy-scriptui, sugar-style, sugar-core |
+| [charmbracelet/colorprofile](#charmbraceletcolorprofile) | Go | 111 | sugar-core, sugar-colorprofile |
 | [charmbracelet/confettysh](#charmbraceletconfettysh) | Go | 81 | sugar-spring, sugar-charts |
 | [charmbracelet/crush](#charmbraceletcrush) | Go | 24731 | candy-scriptui, sugar-forms, sugar-markdown |
 | [charmbracelet/fang](#charmbraceletfang) | Go | ~600 | sugar-cli |
@@ -36,38 +36,38 @@
 | [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, sugar-forms |
 | [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | candy-mail, candy-scriptui, sugar-markdown |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | sugar-metrics |
-| [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, candy-ansi-inspect |
+| [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | sugar-core, candy-ansi-inspect |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 | [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | candy-kv |
 | [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-git-server |
-| [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-widgets |
-| [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, sugar-markdown |
+| [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | sugar-core, sugar-widgets |
+| [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | sugar-core, sugar-markdown |
 | charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
 | [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | sugar-ssh-server |
-| [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, sugar-pty, candy-core |
-| [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-widgets, sugar-markdown |
+| [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, sugar-pty, sugar-core |
+| [charmbracelet/x](#charmbraceletx) | Go | 293 | sugar-core, sugar-widgets, sugar-markdown |
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
 | [KevM/bubbleo](#kevmbubbleo) | Go | 69 | sugar-forms, sugar-widgets, candy-scriptui |
 | [kojiflowers/php-tui-chart](#kojiflowersphp-tui-chart) | PHP | ~niche | sugar-charts (data parsing only) |
 | [lrstanley/bubblezone](#lrstanleybubblezone) | Go | 880 | sugar-mouse |
 | [p-gen/smenu](#p-gensmenu) | C | ~900 | candy-scriptui |
-| [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-widgets, sugar-markdown, candy-core |
+| [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-widgets, sugar-markdown, sugar-core |
 | [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-widgets, candy-scriptui |
-| [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | candy-core, sugar-style, sugar-widgets |
-| [rasjonell/dashbrew](#rasjonelldashbrew) | Go | ~100 | candy-core, sugar-markdown, sugar-charts |
-| [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | candy-core, sugar-widgets, sugar-style |
+| [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | sugar-core, sugar-style, sugar-widgets |
+| [rasjonell/dashbrew](#rasjonelldashbrew) | Go | ~100 | sugar-core, sugar-markdown, sugar-charts |
+| [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | sugar-core, sugar-widgets, sugar-style |
 | [ratatui/ratatui-image](#ratatuiratatui-image) | Rust | ~400 | sugar-image |
-| [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-widgets, sugar-style |
-| [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | candy-core, sugar-markdown, sugar-widgets |
-| [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-widgets, candy-core |
-| [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | sugar-pty, candy-core |
+| [textualize/textual](#textualizetextual) | Python | ~35000 | sugar-core, sugar-widgets, sugar-style |
+| [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | sugar-core, sugar-markdown, sugar-widgets |
+| [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-widgets, sugar-core |
+| [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | sugar-pty, sugar-core |
 | [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-widgets, sugar-table |
 | [daltonsw/bubbleup](#daltonswbubbleup) | Go | ~50 | sugar-toast |
 | [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | sugar-forms |
 | [EthanEFung/bubble-datepicker](#ethanefungbubble-datepicker) | Go | ~40 | sugar-datepicker |
 | [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-widgets |
 | [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-widgets |
-| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-widgets, candy-scriptui |
+| [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | sugar-core, sugar-widgets, candy-scriptui |
 | charmbracelet/meta | Go | ~100 | (CI infrastructure only) |
 | charmbracelet/scoop-bucket | JSON/YAML | 29 | (distribution manifests) |
 | charmbracelet/soft-serve-action | TypeScript | ~30 | (GitHub Action) |
@@ -94,7 +94,7 @@
 **Features:** Dual-mode (sync/async), ANSI color, auto cursor hide/show, SIGINT/SIGTERM, pipe/stream redirection, PSR container DI, custom character palettes, built-in spinners.
 
 **SugarCraft Mapping:**
-- `candy-core` → ANSI cursor management (`ConsoleCursor`, `SequenceStateWriter`) patterns
+- `sugar-core` → ANSI cursor management (`ConsoleCursor`, `SequenceStateWriter`) patterns
 - `sugar-widgets` → Spinner/progress component
 
 **Strengths:** Zero external deps, high-res timing (hrtime), correct pipe handling, extensible.
@@ -116,7 +116,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-widgets` → Menu component (single widget)
-- `candy-core` → Rendering/event loop patterns
+- `sugar-core` → Rendering/event loop patterns
 
 **Strengths:** Simple, no dependencies, ANSI 8-bit colors, vim keys.
 **Weaknesses:** No Bubble Tea pattern, no composition, no immutable state.
@@ -201,7 +201,7 @@
 **Features:** Elm Architecture (Model/Update/View), keyboard (Kitty protocol) + mouse (SGR) input, alt screen, cursor control, clipboard, signal handling, suspend/resume.
 
 **SugarCraft Mapping:**
-- `candy-core` → Primary port (main framework)
+- `sugar-core` → Primary port (main framework)
 - `sugar-widgets` → Components built on core
 - `candy-scriptui` → Application shell
 - `sugar-style` → Styling
@@ -225,7 +225,7 @@
 **Features:** TEA pattern boilerplate, Bubble Tea v1.3.10, bubbles v1.0.0, lipgloss v1.1.0, comprehensive GitHub Actions.
 
 **SugarCraft Mapping:**
-- `candy-core` → TEA runner pattern
+- `sugar-core` → TEA runner pattern
 - `sugar-widgets` → Components
 - `sugar-markdown` → Styling
 
@@ -282,7 +282,7 @@
 **Features:** 5-profile system, Color.Convert() for downsampling, Writer wrapper for transparent conversion, environment/terminfo/tmux/Windows detection layers.
 
 **SugarCraft Mapping:**
-- `candy-core` → Terminal capability detection
+- `sugar-core` → Terminal capability detection
 - `sugar-colorprofile` → Color profile handling
 
 **Strengths:** Standards-compliant (NO_COLOR, CLICOLOR), thread-safe memoization, recognizes modern terminals.
@@ -616,7 +616,7 @@
 **Features:** Full ANSI parsing (CSI/DCS/OSC/ESC/PM/SOS), SGR text styling, theme support, PTY execution, golden file testing.
 
 **SugarCraft Mapping:**
-- `candy-core` → ANSI parsing/rendering
+- `sugar-core` → ANSI parsing/rendering
 - `candy-ansi-inspect` → Visual debugging
 
 **Note:** Port exists as `candy-ansi-inspect` (🟢 in MATCHUPS.md).
@@ -692,7 +692,7 @@
 **Features:** Cassowary constraints, cell diffing (touched-line tracking), ECH/REP/ICH/DCH optimization, ANSI SGR, border primitives, progress bars.
 
 **SugarCraft Mapping:**
-- `candy-core` → Buffer/screen/terminal
+- `sugar-core` → Buffer/screen/terminal
 - `sugar-widgets` → Styling/input/width methods
 - `candy-scriptui`/`sugar-style` → Borders/windows
 - `sugar-spring` → Cassowary layout
@@ -712,7 +712,7 @@
 **Features:** .tape DSL (Type/Sleep/Enter/Set/Click/Keys), frame capture via go-rod browser automation, FFmpeg encoding, 40+ themes, VHS格式 parser, SSH server.
 
 **SugarCraft Mapping:**
-- `candy-core` → Input simulation, TTY handling
+- `sugar-core` → Input simulation, TTY handling
 - `sugar-markdown` → ANSI/Theming
 - `sugar-widgets` → Component concepts
 
@@ -773,7 +773,7 @@
 **Features:** ANSI/ECMA-48 parser, vt (virtual terminal), cellbuf, term/termios/xpty, colors/charmtone/toner/mosaic, input/key/clipboard, teatest/golden/vcr testing tools.
 
 **SugarCraft Mapping:**
-- `candy-core` → ansi, term, termios, cellbuf
+- `sugar-core` → ansi, term, termios, cellbuf
 - `sugar-widgets` → colors, charmtone
 - `sugar-vterm` → virtual terminal emulator
 
@@ -872,7 +872,7 @@
 **SugarCraft Mapping:**
 - `sugar-widgets` → Primary target (all components)
 - `sugar-markdown` → Color/style system
-- `candy-core` → Terminal utilities
+- `sugar-core` → Terminal utilities
 - `sugar-spring` → Math utilities (MapRangeToRange, Fade)
 
 ---
@@ -908,7 +908,7 @@
 **Features:** 15+ widgets (Paragraph/Block/List/Table/Chart/BarChart/Sparkline/Gauge/Scrollbar/Tabs/Canvas/Grid), BDF fonts, ImageMagick images, double-buffering with cell diffing.
 
 **SugarCraft Mapping:**
-- `candy-core` → Display/Buffer/Backend/Widget interfaces
+- `sugar-core` → Display/Buffer/Backend/Widget interfaces
 - `sugar-style` → Style/Color/Modifier/Text/Span
 - `sugar-spring` → Cassowary constraint solver
 - `sugar-widgets` → Individual widgets
@@ -928,7 +928,7 @@
 **Features:** Recursive flexbox layout, bounding-box navigation (4-directional neighbor lookup), LAB color blending, asciigraph charts, HTTP fetch + scheduling.
 
 **SugarCraft Mapping:**
-- `candy-core` → Layout, TEA model, actions
+- `sugar-core` → Layout, TEA model, actions
 - `sugar-markdown` → Styling/themes
 - `sugar-style` → Key bindings
 - `sugar-charts` → chart/histogram
@@ -948,7 +948,7 @@
 **Features:** 18+ widgets, immediate-mode rendering with buffer diffing, Widget/StatefulWidget trait system, Stylize fluent styling, layout constraints.
 
 **SugarCraft Mapping:**
-- `candy-core` → Framework foundation (Display/Buffer/Terminal)
+- `sugar-core` → Framework foundation (Display/Buffer/Terminal)
 - `sugar-widgets` → Widget library
 - `sugar-style` → Styling/layout
 - `candy-scriptui` → TTY I/O
@@ -986,7 +986,7 @@
 **Features:** 40+ widgets, Reactive state (watchers), CSS-based styling (TCSS), MessagePump for async, compositor for efficient redraws, Tree-sitter integration, command palette.
 
 **SugarCraft Mapping:**
-- `candy-core` → App/Widget/Screen/MessagePump
+- `sugar-core` → App/Widget/Screen/MessagePump
 - `sugar-widgets` → Widget library
 - `sugar-style` → CSS/layout engine
 
@@ -1007,7 +1007,7 @@
 **Features:** Boxer tea.Model, LayoutTree (Node tree), ModelMap (address → model), recursive rendering with ANSI-aware width.
 
 **SugarCraft Mapping:**
-- `candy-core` → Viewport
+- `sugar-core` → Viewport
 - `sugar-markdown` → Table layout
 - `sugar-widgets` → View rendering
 
@@ -1027,7 +1027,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-widgets` → List widget with cursor navigation
-- `candy-core` → Core model infrastructure
+- `sugar-core` → Core model infrastructure
 
 ---
 
@@ -1045,7 +1045,7 @@
 
 **SugarCraft Mapping:**
 - `sugar-pty` → PTY management
-- `candy-core` → Event loop / I/O multiplexing
+- `sugar-core` → Event loop / I/O multiplexing
 
 ---
 

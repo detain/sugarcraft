@@ -1249,7 +1249,7 @@ final class PlayerTest extends TestCase
 
     /**
      * Regression: view() must emit the FULL current frame every call so
-     * candy-core's Renderer can diff it. A previous implementation diffed
+     * sugar-core's Renderer can diff it. A previous implementation diffed
      * inside view() and returned an empty string for every frame after the
      * first, freezing playback. Two visibly different frames must therefore
      * produce two different, non-empty renders.

@@ -258,7 +258,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 
 | bubbletea | SugarCraft | Notes |
 |---|---|---|
-| `bubbletea` | `candy-core` | The TUI runtime — Model interface, Program, Update loop, renderer |
+| `bubbletea` | `sugar-core` | The TUI runtime — Model interface, Program, Update loop, renderer |
 | `lipgloss` | `sugar-style` | Declarative styling, colors, layout |
 | `harmonica` | `sugar-spring` | Spring animations for smooth motion |
 | `bubblezone` | `sugar-mouse` | Mouse zone tracking for clickable regions |
@@ -300,4 +300,4 @@ Bubble Tea is a mature, production-ready TUI framework that brings The Elm Archi
 
 The framework excels at handling the complexity of real terminal applications. Its high-performance cell-based renderer built on the ultraviolet library handles delta updates efficiently, only redrawing changed lines. Support for synchronized output mode (ANSI 2026) eliminates flickering on supported terminals. The comprehensive input handling covers keyboard (with full modifier support via the Kitty keyboard protocol), mouse (click, wheel, motion with SGR extended mode), focus events, and bracketed paste. The renderer gracefully degrades on older terminals.
 
-SugarCraft's `candy-core` port maps directly to bubbletea's core: the `Model` interface with `init()`/`update()`/`view()` mirrors the Go interface exactly. The main challenge in the PHP port is simulating Go's concurrency model where commands are goroutines that send messages back via channels. PHP uses callbacks and the ReactPHP event loop instead. The immutable, fluent pattern with `with*()` setters and `mutate()` helpers that return new instances mirrors bubbletea's approach of treating models as values. Key differences include PHP's lack of native tuples (the `[Model, Cmd]` return type becomes `array{0: Model, 1: ?Closure}`) and the fundamentally single-threaded nature of PHP compared to Go's lightweight goroutines. The PHP port successfully captures bubbletea's architectural essence while adapting to PHP's event-driven paradigm through ReactPHP integration.
+SugarCraft's `sugar-core` port maps directly to bubbletea's core: the `Model` interface with `init()`/`update()`/`view()` mirrors the Go interface exactly. The main challenge in the PHP port is simulating Go's concurrency model where commands are goroutines that send messages back via channels. PHP uses callbacks and the ReactPHP event loop instead. The immutable, fluent pattern with `with*()` setters and `mutate()` helpers that return new instances mirrors bubbletea's approach of treating models as values. Key differences include PHP's lack of native tuples (the `[Model, Cmd]` return type becomes `array{0: Model, 1: ?Closure}`) and the fundamentally single-threaded nature of PHP compared to Go's lightweight goroutines. The PHP port successfully captures bubbletea's architectural essence while adapting to PHP's event-driven paradigm through ReactPHP integration.

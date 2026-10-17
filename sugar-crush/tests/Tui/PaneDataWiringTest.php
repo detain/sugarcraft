@@ -146,7 +146,7 @@ final class PaneDataWiringTest extends TestCase
         $manager = new \SugarCraft\Crush\Agents\AgentManager($this->provider, new \SugarCraft\Crush\Skills\SkillRegistry());
         $manager->register(\SugarCraft\Crush\Tests\Support\RosterAgent::named('reviewer')->withActive(false));
         $manager->projectRemoteSubAgent(new \SugarCraft\Crush\Events\SubAgentActivity(
-            'started', 'run-1', 'reviewer', 'Audit candy-core', 1, '', 0, 0.0, 0, '', 0,
+            'started', 'run-1', 'reviewer', 'Audit sugar-core', 1, '', 0, 0.0, 0, '', 0,
             [
                 ['id' => 'a', 'label' => 'Read(path: "src/Foo.php")', 'state' => 'ok', 'at' => 2_000_000_000],
                 ['id' => 'b', 'label' => 'Bash: Run the tests', 'state' => 'running', 'at' => 2_000_000_001],
@@ -178,7 +178,7 @@ final class PaneDataWiringTest extends TestCase
         $app = $this->appWithHistory(Pane::Tools, [
             Message::assistant('audits')->withToolResults([ToolResult::ok('Task', 'report', 'c1')]),
             Message::assistant('read it')->withToolResults([ToolResult::ok('Read', 'contents', 'c2')]),
-            Message::toolRunning(new ToolCall('Task', ['description' => 'Audit candy-core', 'agent' => 'reviewer'], 'c3')),
+            Message::toolRunning(new ToolCall('Task', ['description' => 'Audit sugar-core', 'agent' => 'reviewer'], 'c3')),
             Message::toolRunning(new ToolCall('Bash', ['description' => 'List files'], 'c4')),
         ]);
 
@@ -187,7 +187,7 @@ final class PaneDataWiringTest extends TestCase
         $this->assertStringContainsString('Read', $output);
         $this->assertStringContainsString('List files', $output);
         $this->assertStringNotContainsString('Task', $output, 'a finished delegation is listed by the Agents pane, not here');
-        $this->assertStringNotContainsString('Audit candy-core', $output, 'nor is a running one');
+        $this->assertStringNotContainsString('Audit sugar-core', $output, 'nor is a running one');
     }
 
     /**

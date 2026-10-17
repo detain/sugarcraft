@@ -1,0 +1,59 @@
+{
+    "name": "sugarcraft/sugar-core",
+    "description": "PHP port of charmbracelet/bubbletea \u2014 Elm-architecture TUI runtime.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "cli",
+        "console",
+        "bubbletea",
+        "bubble-tea",
+        "elm",
+        "elm-architecture",
+        "ansi",
+        "react-php",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-core",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-core/issues",
+        "source": "https://github.com/sugarcraft/sugar-core",
+        "docs": "https://sugarcraft.github.io/lib/sugar-core.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-intl": "*",
+        "react/event-loop": "^1.6",
+        "react/promise": "^3.3",
+        "sugarcraft/sugar-pty": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "scripts": {
+        "analyse": "vendor/bin/phpstan analyse src --no-progress"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Core\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Core\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -257,7 +257,7 @@ unasked when **every** command of its body is read-only, and so does an
 list may hold words and globs but no command substitution
 (`for f in $(ls)` asks), and the body may read **only the loop variables**
 (`$f`, `"$f"`, `${f}` — `$HOME`, `$1`, `$@` in a body ask). When every list
-word is literal (`for d in candy-core sugar-forms`) the body is judged once
+word is literal (`for d in sugar-core sugar-forms`) the body is judged once
 per value, as each iteration will run. When the values are not known (a
 glob, `read` input), a command that checks its arguments (`sed`, `sort`,
 `git`, `find` …) accepts the variable only **double-quoted** and only where

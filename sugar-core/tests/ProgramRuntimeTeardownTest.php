@@ -1,0 +1,449 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Core\Tests;
+
+use PHPUnit\Framework\TestCase;
+use React\EventLoop\StreamSelectLoop;
+use React\Promise\Deferred;
+use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Tests\Support\LoggingModel;
+
+/**
+ * crush_libs.md sugar-core #3: run() cancelled its render tick and its
+ * subscriptions but not the one-shot timers it armed (TickRequest, the
+ * lone-ESC flush), and never restored the process-wide signal handlers it
+ * replaced. On a shared loop a tick due after QuitMsg fired into the dead
+ * Program; the handler closures kept the Program reachable and answered a
+ * later Program's signals.
+ */
+final class ProgramRuntimeTeardownTest extends TestCase
+{
+    /** @return array{0:resource, 1:resource, 2:resource} input, output, inputWriter */
+    private function pipes(): array
+    {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertNotFalse($sockets);
+        [$reader, $writer] = $sockets;
+        $output = fopen('php://memory', 'w+');
+        $this->assertNotFalse($output);
+        return [$reader, $output, $writer];
+    }
+
+    private function options($in, $out, StreamSelectLoop $loop, bool $catchInterrupts = false): ProgramOptions
+    {
+        return new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: $catchInterrupts,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        );
+    }
+
+    /** Spin the (shared) loop on its own for `$seconds` after run() returned. */
+    private function spin(StreamSelectLoop $loop, float $seconds): void
+    {
+        $loop->addTimer($seconds, static fn () => $loop->stop());
+        $loop->run();
+    }
+
+    public function testTickRequestStillArmedAtQuitNeverFiresAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $fired = false;
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            Cmd::tick(0.2, static function () use (&$fired): ?Msg {
+                $fired = true;
+                return null;
+            }),
+            Cmd::quit(),
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop()); // safety net
+        $program->run();
+
+        $timers = new \ReflectionProperty(Program::class, 'oneShotTimers');
+        $this->assertSame([], $timers->getValue($program), 'run() must cancel its one-shot timers');
+
+        $this->spin($loop, 0.4);
+        $this->assertFalse($fired, 'a tick armed before quit fired into the torn-down Program');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testFiredTickRequestIsForgottenNotLeaked(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new LoggingModel(initCmd: Cmd::tick(0.01, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $timers = new \ReflectionProperty(Program::class, 'oneShotTimers');
+        $this->assertSame([], $timers->getValue($program));
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testPendingEscapeFlushDoesNotFireAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        // A lone ESC arms the 50 ms disambiguation timer; the program quits
+        // well before it is due.
+        fwrite($writer, "\x1b");
+        $model = new LoggingModel(initCmd: Cmd::tick(0.02, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $this->spin($loop, 0.2);
+
+        $escapes = array_filter(
+            $program->model()->log,
+            static fn (Msg $m): bool => $m instanceof KeyMsg && $m->type === KeyType::Escape,
+        );
+        $this->assertSame([], array_values($escapes), 'the ESC flush fired after run() returned');
+        $this->assertCount($before, $program->model()->log);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * futureTick callbacks cannot be cancelled, so an init Cmd queued before
+     * an early quit (a QuitMsg send() buffered before run()) used to run on
+     * the next spin of a shared loop and dispatch into the finished Program.
+     */
+    public function testInitCmdQueuedBeforeEarlyQuitStaysInertAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $ran = false;
+        $model = new LoggingModel(initCmd: static function () use (&$ran): Msg {
+            $ran = true;
+            return new KeyMsg(KeyType::Char, 'x');
+        });
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $program->send(new \SugarCraft\Core\Msg\QuitMsg());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $this->spin($loop, 0.05);
+
+        $this->assertFalse($ran, 'the init Cmd ran on the shared loop after run() returned');
+        $this->assertCount($before, $program->model()->log);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** The rest of a Cmd::sequence() re-queues itself tick by tick; it must stop at teardown. */
+    public function testSequenceTailStaysInertAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $ran = false;
+        $model = new LoggingModel(initCmd: Cmd::sequence(
+            Cmd::quit(),
+            static function () use (&$ran): Msg {
+                $ran = true;
+                return new KeyMsg(KeyType::Char, 'x');
+            },
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $this->spin($loop, 0.05);
+
+        $this->assertFalse($ran, 'a sequence step ran on the shared loop after run() returned');
+        $this->assertCount($before, $program->model()->log);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** A send() made while running is delivered on a later tick, which may come after teardown. */
+    public function testSendQueuedBeforeQuitIsNotDispatchedAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $program = null;
+        $late = new KeyMsg(KeyType::Char, 'z');
+        $model = new LoggingModel(initCmd: static function () use (&$program, $late): Msg {
+            $program->send($late);
+            return new \SugarCraft\Core\Msg\QuitMsg();
+        });
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertNotContains($late, $program->model()->log, 'precondition: the send() was still queued at quit');
+        $this->spin($loop, 0.05);
+
+        $this->assertNotContains($late, $program->model()->log, 'send() dispatched into the finished Program');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** The guard is per run: a second run() of the same Program still executes its Cmds. */
+    public function testCmdsRunNormallyOnASecondRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $runs = 0;
+        $model = new LoggingModel(initCmd: static function () use (&$runs): Msg {
+            $runs++;
+            return new \SugarCraft\Core\Msg\QuitMsg();
+        });
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+        $this->assertSame(1, $runs);
+
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+        $this->assertSame(2, $runs);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testRunRestoresTheSignalHandlersAndAsyncModeItReplaced(): void
+    {
+        if (!function_exists('pcntl_signal')
+            || !function_exists('pcntl_signal_get_handler')
+            || !function_exists('pcntl_async_signals')
+            || !defined('SIGWINCH') || !defined('SIGTSTP') || !defined('SIGCONT')
+        ) {
+            $this->markTestSkipped('pcntl signal introspection not available');
+        }
+
+        // StreamSelectLoop's constructor turns async delivery ON (it relies on
+        // it for addSignal()), so build the loop first, then switch it off:
+        // "off" is the pre-run state the Program must put back.
+        $loop = new StreamSelectLoop();
+        $prevAsync = pcntl_async_signals(false);
+        $sentinelInt = static function (): void {
+        };
+        $sentinelWinch = static function (): void {
+        };
+        pcntl_signal(SIGINT, $sentinelInt);
+        pcntl_signal(SIGWINCH, $sentinelWinch);
+        pcntl_signal(SIGTSTP, SIG_IGN);
+        pcntl_signal(SIGCONT, SIG_DFL);
+
+        try {
+            [$in, $out, $writer] = $this->pipes();
+            $program = new Program(
+                new LoggingModel(initCmd: Cmd::quit()),
+                $this->options($in, $out, $loop, catchInterrupts: true),
+            );
+            $loop->addTimer(2.0, static fn () => $loop->stop());
+            $program->run();
+
+            $this->assertSame($sentinelInt, pcntl_signal_get_handler(SIGINT));
+            $this->assertSame($sentinelWinch, pcntl_signal_get_handler(SIGWINCH));
+            $this->assertSame(SIG_IGN, pcntl_signal_get_handler(SIGTSTP));
+            $this->assertSame(SIG_DFL, pcntl_signal_get_handler(SIGCONT));
+            $this->assertFalse(pcntl_async_signals(), 'async signal delivery must be put back');
+
+            fclose($writer);
+            fclose($in);
+            fclose($out);
+        } finally {
+            pcntl_signal(SIGINT, SIG_DFL);
+            pcntl_signal(SIGWINCH, SIG_DFL);
+            pcntl_signal(SIGTSTP, SIG_DFL);
+            pcntl_signal(SIGCONT, SIG_DFL);
+            pcntl_async_signals($prevAsync);
+        }
+    }
+
+    /**
+     * A signal subscription that displaced the Program's own SIGWINCH handler
+     * must give the signal back to the Program while it runs, and the
+     * Program must give it back to the pre-run handler when it ends.
+     */
+    public function testSignalSubscriptionOnAProgramSignalUnwindsInOrder(): void
+    {
+        if (!function_exists('pcntl_signal')
+            || !function_exists('pcntl_signal_get_handler')
+            || !defined('SIGWINCH')
+        ) {
+            $this->markTestSkipped('pcntl signal introspection not available');
+        }
+
+        $prevAsync = function_exists('pcntl_async_signals') ? pcntl_async_signals() : null;
+        $sentinel = static function (): void {
+        };
+        pcntl_signal(SIGWINCH, $sentinel);
+
+        try {
+            [$in, $out, $writer] = $this->pipes();
+            $loop = new StreamSelectLoop();
+            $opts = new ProgramOptions(
+                useAltScreen: false,
+                catchInterrupts: true,
+                hideCursor: false,
+                input: $in,
+                output: $out,
+                loop: $loop,
+                subscriptions: static fn () => (new \SugarCraft\Core\Subscriptions())
+                    ->withSignal('winch', SIGWINCH, static fn (): ?Msg => null),
+            );
+            $program = new Program(new LoggingModel(initCmd: Cmd::quit()), $opts);
+            $loop->addTimer(2.0, static fn () => $loop->stop());
+            $program->run();
+
+            $this->assertSame($sentinel, pcntl_signal_get_handler(SIGWINCH));
+
+            fclose($writer);
+            fclose($in);
+            fclose($out);
+        } finally {
+            pcntl_signal(SIGINT, SIG_DFL);
+            pcntl_signal(SIGWINCH, SIG_DFL);
+            if (defined('SIGTSTP')) {
+                pcntl_signal(SIGTSTP, SIG_DFL);
+            }
+            if (defined('SIGCONT')) {
+                pcntl_signal(SIGCONT, SIG_DFL);
+            }
+            if ($prevAsync !== null) {
+                pcntl_async_signals($prevAsync);
+            }
+        }
+    }
+
+    /**
+     * crush_libs.md sugar-core C1: an AsyncCmd's promise used to dispatch
+     * straight into the Program from then()/otherwise() with no generation
+     * check, so a promise settling after releaseRuntime() mutated the dead
+     * model and appended render bytes onto the restored terminal. The fix
+     * mirrors the deferTick capture law; these pins go red exactly when the
+     * guard is dropped.
+     */
+    public function testAsyncCmdResolvingAfterTeardownIsDropped(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            static fn (): Msg => new AsyncCmd($deferred->promise()),
+            Cmd::tick(0.01, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()),
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $late = new KeyMsg(KeyType::Char, 'z');
+        $before = count($program->model()->log);
+        $bytes = ftell($out);
+        $this->assertIsInt($bytes);
+
+        $deferred->resolve($late);
+        $this->spin($loop, 0.05);
+
+        $this->assertNotContains($late, $program->model()->log, 'AsyncCmd dispatched into the torn-down Program');
+        $this->assertCount($before, $program->model()->log);
+        $this->assertSame($bytes, ftell($out), 'post-teardown dispatch painted the restored terminal');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** Reject path: no ExceptionMsg, no log line, and the user handler must NOT run after teardown. */
+    public function testAsyncCmdRejectingAfterTeardownRunsNothing(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+
+        $handlerRan = false;
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            static fn (): Msg => new AsyncCmd($deferred->promise()),
+            Cmd::tick(0.01, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()),
+        ));
+        $program = (new Program($model, $this->options($in, $out, $loop)))
+            ->withExceptionHandler(static function () use (&$handlerRan): void {
+                $handlerRan = true;
+            });
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $deferred->reject(new \RuntimeException('late rejection'));
+        $this->spin($loop, 0.05);
+
+        $this->assertFalse($handlerRan, 'the user exception handler fired into a finished runtime');
+        $this->assertCount($before, $program->model()->log);
+        $exceptions = array_filter(
+            $program->model()->log,
+            static fn (Msg $m): bool => $m instanceof \SugarCraft\Core\Msg\ExceptionMsg,
+        );
+        $this->assertSame([], array_values($exceptions), 'ExceptionMsg was dispatched after teardown');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** Non-vacuity control: inside the same generation the resolved Msg still lands. */
+    public function testAsyncCmdResolvingWhileStillRunningStillDispatches(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+        $late = new KeyMsg(KeyType::Char, 'z');
+
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            static fn (): Msg => new AsyncCmd($deferred->promise()),
+            Cmd::tick(0.05, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()),
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(0.02, static fn () => $deferred->resolve($late));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertContains($late, $program->model()->log, 'the generation guard swallowed a live dispatch');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+}

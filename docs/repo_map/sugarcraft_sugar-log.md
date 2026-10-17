@@ -438,14 +438,14 @@ Configurable log-part ordering enables:
     "require": {
         "php": "^8.3",
         "psr/log": "^3.0",
-        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-style": "dev-master"
     }
 }
 ```
 
-- **candy-core** — `Tty::restoreLast()` for terminal recovery
+- **sugar-core** — `Tty::restoreLast()` for terminal recovery
 - **sugar-colorprofile** — `Probe::colorProfile()->allowsColor()` for color detection
 - **sugar-style** — `Style` for ANSI SGR rendering
 

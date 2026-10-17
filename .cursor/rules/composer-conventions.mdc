@@ -10,6 +10,6 @@ alwaysApply: false
 - Sibling deps: `"sugarcraft/<dep>": "@dev"` (or `dev-master`) in `require` AND a path-repo in `repositories` (`{type: path, url: "../<dep>", options: {symlink: true}}`).
 - Path-repos cover the FULL transitive closure — copy from `sugar-charts/composer.json`; verify with `tools/check-path-repos.php`.
 - Metadata (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage: "https://github.com/sugarcraft/<slug>"`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`.
-- PSR-4 `"<NS>\\<Sub>\\": "src/"` + matching test namespace. Quirk: `candy-core` → `SugarCraft\\Core\\`.
+- PSR-4 `"<NS>\\<Sub>\\": "src/"` + matching test namespace. Quirk: `sugar-core` → `SugarCraft\\Core\\`.
 - `composer validate --strict` flags every `"@dev"` — EXPECTED, drop `--strict`.
 - New lib also touches root `composer.json`, `<slug>/phpunit.xml`, `.github/workflows/vhs.yml`, `README.md`, `MATCHUPS.md`, `docs/index.html`, `docs/lib/<slug>.html`, `media/icons/<slug>.png`, `codecov.yml`.

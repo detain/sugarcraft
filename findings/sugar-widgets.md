@@ -57,7 +57,7 @@ private static function sanitizeCell(string $s): string
 }
 ```
 
-This violates DRY. A shared utility in `candy-core` or a base `Model` trait would eliminate duplication.
+This violates DRY. A shared utility in `sugar-core` or a base `Model` trait would eliminate duplication.
 
 ### 3. `Table::sortedRows()` — Multiple Full Array Sorts for Multi-Criteria Sort
 
@@ -301,9 +301,9 @@ All Model components return `null` from `subscriptions()`. In a Bubble-Tea TEA (
 
 ## WAYS TO IMPROVE
 
-### 21. Extract Shared `sanitizeCell()` to candy-core
+### 21. Extract Shared `sanitizeCell()` to sugar-core
 
-The C0-stripping logic appears in 3 places. A `SugarCraft\Core\Util\Sanitize::controlChars(string $s): string` utility in candy-core would:
+The C0-stripping logic appears in 3 places. A `SugarCraft\Core\Util\Sanitize::controlChars(string $s): string` utility in sugar-core would:
 - Eliminate duplication
 - Provide a single point for security auditing
 - Allow consistent behavior across all components

@@ -182,7 +182,7 @@ final class CommandFailureTranscriptTest extends TestCase
      * attempt here matched this very docblock quoting the bad line.
      *
      * The wider rule is the one that actually holds: `Chat` is a TEA model, its
-     * side effects belong in a `Cmd`, and the screen belongs to candy-core's frame
+     * side effects belong in a `Cmd`, and the screen belongs to sugar-core's frame
      * renderer — so writing to stdout from this file is wrong whether or not it
      * also crashes. Measured at the time of writing: zero `T_PRINT`/`T_ECHO`
      * tokens, so the assertion starts satisfied rather than grandfathering

@@ -8,7 +8,7 @@ use SugarCraft\Crush\Lang;
 
 // Roadmap 5.14h. No key binding: Ctrl+G, the usual chord for this, is
 // `shell.group-input` here, so the command is the one door. Hands the terminal
-// to $VISUAL/$EDITOR through candy-core's Cmd::exec; what the editor saves comes
+// to $VISUAL/$EDITOR through sugar-core's Cmd::exec; what the editor saves comes
 // back as one PasteMsg into the emptied box and is NOT sent.
 return BuiltInCommand::new(CommandSpec::new(
     'editor',

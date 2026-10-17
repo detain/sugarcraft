@@ -219,7 +219,7 @@ YAML;
     public function testMalformedJsonRejectedViaGuardedDecode(): void
     {
         // A present-but-corrupt JSON config must be rejected with the
-        // localized config error. The guarded decode (candy-core
+        // localized config error. The guarded decode (sugar-core
         // Json::decodeArray, JSON_THROW_ON_ERROR) chains the underlying
         // \JsonException as the cause; the old unguarded json_decode()
         // returned null with no cause, so getPrevious() pins the guard.

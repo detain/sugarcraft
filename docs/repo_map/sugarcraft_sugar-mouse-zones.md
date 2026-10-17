@@ -167,7 +167,7 @@ public function scan(string $rendered): string
 
 - Newlines track the rightmost column for each open zone before resetting column counter
 
-- Grapheme width uses `Width::string()` from candy-core (supports wide East-Asian chars, emoji, zero-width combining marks)
+- Grapheme width uses `Width::string()` from sugar-core (supports wide East-Asian chars, emoji, zero-width combining marks)
 
 - End column calculation has special logic for single-line vs. multi-line zones
 
@@ -427,7 +427,7 @@ Tests cover:
 
 `Manager::newPrefix()` enables multiple SugarMouse-aware components to coexist without ID collisions. The `nested-components.php` example demonstrates two lists both using `"item-0"` without conflict.
 
-### 7. Integration with candy-core TEA
+### 7. Integration with sugar-core TEA
 
 `anyInBoundsAndUpdate()` follows the TEA pattern `[Model, ?Cmd]`, dispatching `MsgZoneInBounds` through the model's `update()` method — idiomatic for the SugarCraft runtime.
 
@@ -509,7 +509,7 @@ Upstream bubblezone uses `time.Now().Nanosecond()` as an iteration marker to aut
 |---------|-----------------|------------------|
 | Marker format | CSI `\x1B[<num>z` | APC `\x1b_ candyzone:S: <id> \x1b\\` | <!-- @rename-keep legacy wire token / historical log -->
 | Zone storage | Goroutine + channel | Synchronous array |
-| Width measurement | `go-runewidth.RuneWidth()` | `Width::string()` from candy-core |
+| Width measurement | `go-runewidth.RuneWidth()` | `Width::string()` from sugar-core |
 | ID generation | Atomic `int64` counter | Static `int` counter |
 | Iteration invalidation | `time.Now().Nanosecond()` | Direct replacement on rescan |
 | Motion tracking | SGR mode 1003 via `SetMotionTracking()` | Same CSI sequences |
@@ -563,9 +563,9 @@ This is the same AABB pattern but **inline** in each widget's event handler — 
 
 ---
 
-## Integration with candy-core and sugar-style
+## Integration with sugar-core and sugar-style
 
-### candy-core Integration
+### sugar-core Integration
 
 sugar-mouse uses `SugarCraft\Core\Msg\MouseMsg` for coordinates:
 
@@ -578,7 +578,7 @@ use SugarCraft\Core\MouseButton;
 $click = new MouseMsg(5, 1, MouseButton::Left, MouseAction::Press);
 ```
 
-The `MouseMsg` class (`candy-core/src/Msg/MouseMsg.php`) is the standard bubbletea mouse event type, with 1-based coordinates matching terminal reporting.
+The `MouseMsg` class (`sugar-core/src/Msg/MouseMsg.php`) is the standard bubbletea mouse event type, with 1-based coordinates matching terminal reporting.
 
 ### sugar-style Integration
 
@@ -769,4 +769,4 @@ sugar-mouse is a well-executed, complete port of bubblezone that faithfully repl
 
 The main limitations — AABB-only collision detection, no z-ordering for overlapping zones, and O(n) zone iteration — are inherited from upstream and are acceptable tradeoffs for the design's simplicity. The `ext-intl` fallback concern and static facade singleton are addressable improvements.
 
-The port is production-ready and integrates cleanly with candy-core's TEA runtime and sugar-style' styling system.
+The port is production-ready and integrates cleanly with sugar-core's TEA runtime and sugar-style' styling system.

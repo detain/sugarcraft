@@ -35,7 +35,7 @@ From `repo_map/charmbracelet_confettysh.md`:
 |---|---|---|
 | `sugar-widgets` | Bubble Tea `Model` pattern (`init/update/view` cycle) | Direct |
 | `sugar-spring` | Particle physics (velocity, gravity, projectile trajectory) | Conceptual |
-| `candy-core` | SSH server infrastructure (wish, ssh) | Theoretical |
+| `sugar-core` | SSH server infrastructure (wish, ssh) | Theoretical |
 | `sugar-charts` | ANSI color palette + terminal rendering | Loose |
 | `sugar-markdown` | "Delightful" status output effects | Very loose |
 

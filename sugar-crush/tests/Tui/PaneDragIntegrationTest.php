@@ -271,7 +271,7 @@ final class PaneDragIntegrationTest extends TestCase
     }
 
     /**
-     * Step 0 (b2), pinned empirically: candy-core's Program repaints from its
+     * Step 0 (b2), pinned empirically: sugar-core's Program repaints from its
      * periodic timer, so a motion event that mutates the dock is VISIBLE on
      * the very next frame with no extra signal — the live preview needs no
      * dirty flag. The divider column moving ten cells is the proof.

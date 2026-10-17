@@ -251,7 +251,7 @@ final class PaneFrameTest extends TestCase
 
     public function testDetectionRoutesStandardCapabilityVariables(): void
     {
-        // The feature must reach these tiers through the existing candy-core
+        // The feature must reach these tiers through the existing sugar-core
         // path, never a private spelling of its own.
         self::assertSame(ColorProfile::TrueColor, PaneFrame::detectProfile(['COLORTERM' => 'truecolor'], null));
         self::assertSame(ColorProfile::Ansi256, PaneFrame::detectProfile(['TERM' => 'xterm-256color'], null));

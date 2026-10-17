@@ -35,7 +35,7 @@ public surface is identical.
   across the four files.
 - Each facade still has its `@deprecated since v0.x, use <new path>`
   doc-block.
-- sugar-pty + candy-core + candy-scriptui + sugar-ssh-server + candy-vcr full
+- sugar-pty + sugar-core + candy-scriptui + sugar-ssh-server + candy-vcr full
   suites green.
 - `grep -rn "use SugarCraft\\\\Pty\\\\Pty;\|use SugarCraft\\\\Pty\\\\Spawn;" /home/sites/sugarcraft/*/src`
   — confirm any remaining callers still get correct behaviour (they

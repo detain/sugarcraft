@@ -41,7 +41,7 @@ final class SubAgentActivityRelayTest extends TestCase
         }
         if ($pid === 0) {
             $sink = $relay->childSink();
-            $sink->emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'id-1', 'reviewer', 'look over candy-core', 1, ''));
+            $sink->emit(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'id-1', 'reviewer', 'look over sugar-core', 1, ''));
             $sink->emit(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'id-1', 'reviewer', '', 2, "-> Read\nthinking: …"));
             $sink->emit(new SubAgentActivity(SubAgentActivity::OP_FINISHED, 'id-1', 'reviewer', '', 3, 'report'));
             ForkedChild::exitNow(0);
@@ -56,7 +56,7 @@ final class SubAgentActivityRelayTest extends TestCase
             [SubAgentActivity::OP_STARTED, SubAgentActivity::OP_PROGRESS, SubAgentActivity::OP_FINISHED],
             array_map(static fn (SubAgentActivity $b): string => $b->op, $beats),
         );
-        $this->assertSame('look over candy-core', $beats[0]->task);
+        $this->assertSame('look over sugar-core', $beats[0]->task);
         $this->assertSame("-> Read\nthinking: …", $beats[1]->tail);
         $this->assertSame([1, 2, 3], array_map(static fn (SubAgentActivity $b): int => $b->seq, $beats));
         $this->assertSame([], $relay->drain(), 'a drained relay has nothing left to hand out');

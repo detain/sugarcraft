@@ -189,7 +189,7 @@ final class App implements Model
         public readonly ?Chat $chat = null,
         /**
          * Real terminal dimensions, sourced from {@see WindowSizeMsg} — the
-         * one size candy-core's Program dispatches at startup AND again on
+         * one size sugar-core's Program dispatches at startup AND again on
          * every SIGWINCH resize. Null until the first WindowSizeMsg arrives
          * (or for an App built directly in a test, never), in which case
          * {@see TuiRenderer::getTerminalSize()}'s own detection is the
@@ -2544,7 +2544,7 @@ final class App implements Model
      * is a `Closure(): ?Msg` the Program runs; re-wrapping it here would
      * change when it runs).
      *
-     * The parameter widened from this file's own `Msg` to candy-core's:
+     * The parameter widened from this file's own `Msg` to sugar-core's:
      * implementing {@see Model} requires accepting every Msg the Program can
      * deliver — KeyMsg, MouseMsg, WindowSizeMsg — not just this namespace's.
      * `Msg` now extends the core marker, so every existing caller still
@@ -2937,7 +2937,7 @@ final class App implements Model
      * Run one event of an in-flight gesture.
      *
      * Motion previews: a resize mutates the dock state (no persist — see the
-     * persist-only-on-release law), and candy-core's periodic repaint makes
+     * persist-only-on-release law), and sugar-core's periodic repaint makes
      * the new widths visible on the very next frame, measured in the phase
      * plan's step 0. A dock drag's motion only decides arming. Release
      * commits or cancels and clears the state; Escape clears with zero
@@ -3342,7 +3342,7 @@ final class App implements Model
      * {@see consumeShellCmd()}, which TRANSLATES it into shell state changes
      * or into keystrokes the hosted {@see Chat} already answers. It is still
      * never returned: a `KeyCmd`/`MenuSelectedMsg` is a declarative
-     * instruction object, not the `Closure(): ?Msg` candy-core's
+     * instruction object, not the `Closure(): ?Msg` sugar-core's
      * `Program::scheduleCmd()` accepts, so returning one would TypeError and
      * kill the loop.
      *
@@ -3354,7 +3354,7 @@ final class App implements Model
         // BEFORE the shell's own bindings, because mid-drag the keystroke
         // means "put the pane back", not "cancel the turn". The press
         // snapshotted the dock and every motion preview rode the model
-        // (that preview IS the live feedback candy-core's repaint tick
+        // (that preview IS the live feedback sugar-core's repaint tick
         // shows), so cancelling hands back the snapshot: zero state change,
         // zero disk write — the release is the only path that persists.
         if (!self::paneDragController()->isIdle() && $msg->type === KeyType::Escape && self::paneDragController()->isSplitResizing()) {
@@ -3905,7 +3905,7 @@ final class App implements Model
      *
      * Only the LAST non-null Cmd survives, because only the final Enter can
      * produce one — the typing keystrokes before it are pure state changes,
-     * and candy-core's Program takes a single Cmd per update.
+     * and sugar-core's Program takes a single Cmd per update.
      *
      * @param list<KeyMsg> $keys
      * @return array{0: self, 1: ?\Closure}
@@ -3948,7 +3948,7 @@ final class App implements Model
      * The engine-facing half of {@see update()}: answer a shell/engine message
      * and report the {@see Cmd} it asks for.
      *
-     * This is deliberately NOT on the Model path. candy-core's
+     * This is deliberately NOT on the Model path. sugar-core's
      * `Program::scheduleCmd()` is declared `private function
      * scheduleCmd(\Closure $cmd)` and is called for every non-null second
      * tuple element, so returning one of this namespace's plain `Cmd` objects

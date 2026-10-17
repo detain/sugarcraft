@@ -23,7 +23,7 @@ final class Renderer
     /**
      * Strip C0/C1 control bytes and every escape sequence from untrusted git
      * output. Applied before concatenation to prevent terminal escape
-     * injection. Rides candy-core's fail-closed sanitizer: the previous `/u`
+     * injection. Rides sugar-core's fail-closed sanitizer: the previous `/u`
      * preg pattern returned FALSE on malformed UTF-8 (git subjects can carry
      * arbitrary bytes), which silently skipped ALL stripping — ESC included.
      */

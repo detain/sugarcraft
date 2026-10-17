@@ -19,7 +19,7 @@ use SugarCraft\Crush\ToolResult;
  * permission prompt would read differently from what runs; a zero-width space
  * makes two different paths look identical.
  *
- * The rows go through candy-core's `Sanitize::untrustedForDisplay()` (tool
+ * The rows go through sugar-core's `Sanitize::untrustedForDisplay()` (tool
  * and transcript rows) and `Sanitize::visibleControls()` (the permission
  * modal), which render these codepoints as `<U+XXXX>` markers.
  */

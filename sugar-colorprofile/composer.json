@@ -30,7 +30,7 @@
         "php": "^8.3",
         "react/child-process": "^0.6",
         "react/promise": "^3.3",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/sugar-core": "dev-master"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.1",

@@ -566,7 +566,7 @@ final class TaskSpendPropagationTest extends TestCase
      */
     private static function taskArgs(array $overrides = []): array
     {
-        return $overrides + ['description' => 'Audit candy-core', 'prompt' => 'Audit candy-core', 'agent' => 'coder'];
+        return $overrides + ['description' => 'Audit sugar-core', 'prompt' => 'Audit sugar-core', 'agent' => 'coder'];
     }
 
     private static function probeTool(): Tool

@@ -26,19 +26,19 @@ From the first-pass analysis (`rasjonell_dashbrew.md`), SugarCraft maps to Dashb
 
 | Dashbrew Concept | SugarCraft Lib(s) | Status |
 |---|---|---|
-| Dashboard model (layout tree, flex routing) | `candy-core` | Not yet built |
-| Terminal rendering (lipgloss borders, styles) | `candy-core` + `sugar-markdown` | Partial |
+| Dashboard model (layout tree, flex routing) | `sugar-core` | Not yet built |
+| Terminal rendering (lipgloss borders, styles) | `sugar-core` + `sugar-markdown` | Partial |
 | Text/scrollable viewport | `sugar-widgets` | Partial |
 | Line/area ASCII chart | `sugar-charts` | Partial |
 | Histogram/bar chart | `sugar-charts` | Partial |
 | Table (column-flex, paginated) | `sugar-widgets` or `sugar-charts` | Partial |
 | Todo list (persistent, keyboard-driven) | `sugar-widgets` or new `sugar-todo` | Not yet built |
-| Action system (shell dispatch, timeout, sticky state) | `candy-core` | Not yet built |
-| Bounding-box navigation (focus ring, neighbor finding) | `candy-core` | Partial |
+| Action system (shell dispatch, timeout, sticky state) | `sugar-core` | Not yet built |
+| Bounding-box navigation (focus ring, neighbor finding) | `sugar-core` | Partial |
 | Theme system (named palettes, auto detection) | `sugar-markdown` | Partial |
 | Key bindings / action palette | `sugar-style` | Partial |
 | HTTP data fetching (API source, JSONPath) | `sugar-widgets` | Partial |
-| Layout containers (row/column flex) | `candy-core` | Not yet built |
+| Layout containers (row/column flex) | `sugar-core` | Not yet built |
 
 ---
 

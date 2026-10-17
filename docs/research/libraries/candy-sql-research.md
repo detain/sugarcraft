@@ -350,7 +350,7 @@ Week 3:
 | `src/App.php` | Add pagination state, edit mode state, horizontal scroll offset |
 | `src/Renderer.php` | Render column headers with types, pagination controls, NULL/JSON formatting |
 | `src/Pane.php` | Add `Schema` pane enum case |
-| `composer.json` | Add `sugarcraft/candy-core` dep if not present |
+| `composer.json` | Add `sugarcraft/sugar-core` dep if not present |
 
 ---
 

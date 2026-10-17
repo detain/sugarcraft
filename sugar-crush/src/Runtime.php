@@ -823,7 +823,7 @@ final class Runtime
      * {@see $repoMapBlock}), memoised, then put through each of the two
      * canonical mutator forms in this monorepo:
      *
-     *  - `candy-core/src/Concerns/Mutable.php`'s
+     *  - `sugar-core/src/Concerns/Mutable.php`'s
      *    `new static(...array_merge(get_object_vars($this), $changes))` does
      *    not merely reset the memos on this shape — it FATALS,
      *    `Error: Unknown named parameter $memoryBlock`, because

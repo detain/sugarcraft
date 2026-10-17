@@ -173,7 +173,7 @@ SugarCraft is a PHP monorepo of TUI library ports from the Charmbracelet ecosyst
 | **MCP client integration** | Not yet ported | Could be `sugar-mcp-client` or `honey-mcp` |
 | **Interactive forms (huh)** | `candy-scriptui` input | `huh` form library port |
 | **Spinner/Animation** | `candy-scriptui` spinner | `bubbletea` spinner components |
-| **Config/YAML** | `candy-core` | Configuration management patterns |
+| **Config/YAML** | `sugar-core` | Configuration management patterns |
 | **SQLite storage** | Not yet ported | Could leverage existing `sugar-widgets` persistence |
 
 ### Specific Mapping Candidates:

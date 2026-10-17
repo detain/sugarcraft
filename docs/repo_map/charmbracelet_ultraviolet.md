@@ -248,9 +248,9 @@ Ultraviolet is a terminal TUI foundation layer. SugarCraft is a PHP monorepo of 
 | Ultraviolet Component | SugarCraft Lib | Notes |
 |---|---|---|
 | `Cell` + `Style` + `Link` (ANSI SGR, hyperlinks, wide chars) | `sugar-widgets` | Styled text rendering, ANSI escape sequence generation |
-| `Buffer` / `RenderBuffer` / `Line` / `Lines` (cell grid, touched-line diffing) | `candy-core` | Screen buffer model; core rendering primitives |
-| `Screen` interface + `TerminalScreen` (render, flush, alternate screen, cursor) | `candy-core` | Terminal I/O, screen management |
-| `Terminal` (event loop, start/stop, raw mode, suspend/resume) | `candy-core` | Application lifecycle management |
+| `Buffer` / `RenderBuffer` / `Line` / `Lines` (cell grid, touched-line diffing) | `sugar-core` | Screen buffer model; core rendering primitives |
+| `Screen` interface + `TerminalScreen` (render, flush, alternate screen, cursor) | `sugar-core` | Terminal I/O, screen management |
+| `Terminal` (event loop, start/stop, raw mode, suspend/resume) | `sugar-core` | Application lifecycle management |
 | `KeyPressEvent` / `KeyReleaseEvent` / `MouseClickEvent` / `MouseScrollEvent` / `PasteEvent` / `FocusEvent` | `sugar-widgets` | Input event types and keyboard/mouse handling |
 | `Window` (parent/child hierarchy, shared-buffer views) | `sugar-style` | Windowing model, view composition |
 | `layout` package with Cassowary algorithm | `sugar-spring` or `sugar-markdown` | Constraint-based layout solver |
@@ -260,10 +260,10 @@ Ultraviolet is a terminal TUI foundation layer. SugarCraft is a PHP monorepo of 
 | `Cursor` + `EncodeCursorStyle()` + `EncodeCursorColor()` | `sugar-widgets` | Cursor shape/color control |
 | `MouseMode` / `MouseEncoding` + Kitty keyboard enhancements | `sugar-widgets` | Advanced mouse and keyboard protocol support |
 | Width methods (`WcWidth`, `GraphemeWidth`) | `sugar-widgets` | Unicode character width calculation |
-| `WindowSizeEvent` / `PixelSizeEvent` / `Winsize` | `candy-core` | Terminal dimension reporting |
+| `WindowSizeEvent` / `PixelSizeEvent` / `Winsize` | `sugar-core` | Terminal dimension reporting |
 | Color profile detection (`colorprofile.Detect`) | `sugar-widgets` | TrueColor/ANSI256/ANSI detection and mapping |
 
-**Summary**: Ultraviolet maps most closely to `candy-core` (foundation: buffer, screen, terminal, events) + `sugar-widgets` (styling, input, cursor, mouse, progress bars, width methods) + `candy-scriptui`/`sugar-style`/`sugar-spring` (layout/borders/windows). There is no single equivalent — a full port would be split across multiple libs following the Charm pattern.
+**Summary**: Ultraviolet maps most closely to `sugar-core` (foundation: buffer, screen, terminal, events) + `sugar-widgets` (styling, input, cursor, mouse, progress bars, width methods) + `candy-scriptui`/`sugar-style`/`sugar-spring` (layout/borders/windows). There is no single equivalent — a full port would be split across multiple libs following the Charm pattern.
 
 ## Analysis
 

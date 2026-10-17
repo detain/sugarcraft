@@ -168,7 +168,7 @@ Uses `SugarCraft\Core\Util\Width::wrapAnsi()` — a custom ANSI-aware word wrapp
 
 - Treats `\n` in the input as a hard break, and `\r\n` as one hard break that emits a bare `\n` (the same rule as `Width::wrap()`)
 
-- Fit-checks every word before committing it — at a space, at a hard break, before an over-wide cluster and at end of input — so a word that ends right before `\n` can no longer leave a line wider than the wrap width (candy-core 3ec7bd421)
+- Fit-checks every word before committing it — at a space, at a hard break, before an over-wide cluster and at end of input — so a word that ends right before `\n` can no longer leave a line wider than the wrap width (sugar-core 3ec7bd421)
 
 **Applied to**: paragraphs (full width), blockquotes (width - 2 for `▎ ` prefix), list item bodies (via indent calculation), table cells (when `tableWrap` enabled)
 
@@ -280,7 +280,7 @@ Maps to sugar-markdown only for the **theme system** concept:
 ### 2.4 pterm/pterm (styling) — 6k stars
 
 No direct markdown rendering. However:
-- `pterm.ThemeDefault` maps to `sugar-markdown` + `candy-core` as the SugarCraft theme defaults
+- `pterm.ThemeDefault` maps to `sugar-markdown` + `sugar-core` as the SugarCraft theme defaults
 
 - The `Style` chain pattern (`color.go:L263-L396`) is functionally similar to `SugarCraft\Style\Style` — both use fluent builders returning new instances
 
@@ -417,11 +417,11 @@ This allows nested blockquotes at any depth to correctly compute their available
 
 ### Dependencies
 
-- `/home/sites/sugarcraft/sugar-markdown/composer.json` — `league/commonmark:^2.4`, `sugarcraft/candy-core`, `sugarcraft/sugar-style`
+- `/home/sites/sugarcraft/sugar-markdown/composer.json` — `league/commonmark:^2.4`, `sugarcraft/sugar-core`, `sugarcraft/sugar-style`
 
-- `/home/sites/sugarcraft/candy-core/src/Util/Width.php` — Word wrap + ANSI-aware utilities
+- `/home/sites/sugarcraft/sugar-core/src/Util/Width.php` — Word wrap + ANSI-aware utilities
 
-- `/home/sites/sugarcraft/candy-core/src/Util/Ansi.php` — OSC 8 hyperlink primitives (lines 269-303)
+- `/home/sites/sugarcraft/sugar-core/src/Util/Ansi.php` — OSC 8 hyperlink primitives (lines 269-303)
 
 - `/home/sites/sugarcraft/sugar-style/src/Style.php` — ANSI styling primitives
 

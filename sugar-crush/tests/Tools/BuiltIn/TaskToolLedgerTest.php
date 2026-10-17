@@ -93,7 +93,7 @@ final class TaskToolLedgerTest extends TestCase
         $receipt = (string) self::sent($provider->requests[2], 'p1');
         $this->assertStringContainsString('nothing was pruned', $receipt);
         $this->assertStringContainsString('r1 (a prompt, not a tool result)', $receipt);
-        $this->assertSame(RefTag::appendTo('Audit candy-core and report the findings', 1), self::prompt($provider->requests[2]), 'the task reaches every request whole');
+        $this->assertSame(RefTag::appendTo('Audit sugar-core and report the findings', 1), self::prompt($provider->requests[2]), 'the task reaches every request whole');
         $this->assertNotContains('Compress', self::offered($provider->requests[0]), 'Compress needs a person\'s /compress, which a delegated run never has');
     }
 
@@ -193,8 +193,8 @@ final class TaskToolLedgerTest extends TestCase
     private static function call(array $overrides = []): array
     {
         return $overrides + [
-            'description' => 'Audit candy-core',
-            'prompt' => 'Audit candy-core and report the findings',
+            'description' => 'Audit sugar-core',
+            'prompt' => 'Audit sugar-core and report the findings',
             'agent' => 'coder',
         ];
     }
@@ -219,7 +219,7 @@ final class TaskToolLedgerTest extends TestCase
     private static function prompt(CompleteRequest $request): ?string
     {
         foreach ($request->messages as $message) {
-            if ($message instanceof UserMessage && str_starts_with($message->content(), 'Audit candy-core')) {
+            if ($message instanceof UserMessage && str_starts_with($message->content(), 'Audit sugar-core')) {
                 return $message->content();
             }
         }

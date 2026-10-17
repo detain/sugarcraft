@@ -11,7 +11,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 /**
  * E680 — the entry said `src/Session.php` still blocks on an unbounded
  * flock. MEASURED FALSE at f0b4b0945: Session has no flock of its own;
- * persistence runs through candy-core AtomicJsonFile, whose flock() lands on
+ * persistence runs through sugar-core AtomicJsonFile, whose flock() lands on
  * a PER-WRITER uniquely-named temp file (`.session.json.tmp.<16 hex>`) —
  * nothing else can contend with it, and the rename onto the destination is
  * not lock-guarded. These rows pin the MEASURED shape rather than the stale

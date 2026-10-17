@@ -555,7 +555,7 @@ Address all 13 findings from the sugar-constraints code review including the Cas
 **Conditions for Success:**
 
 - [ ] Integration helpers available for TUI consumers
-- [ ] No hard coupling to candy-core
+- [ ] No hard coupling to sugar-core
 
 ---
 

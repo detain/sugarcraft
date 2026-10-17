@@ -24,7 +24,7 @@ use SugarCraft\Style\Style;
  * The body is normalised to EXACTLY the available height — shorter content is
  * blank-padded, taller content is hard-truncated — so the whole frame is
  * always a constant `$rows` lines. This is load-bearing for a TEA program
- * whose frame-diff renderer (candy-core) owns the screen: it paints once and
+ * whose frame-diff renderer (sugar-core) owns the screen: it paints once and
  * then emits minimal per-line diffs, so a frame that changed its line count,
  * ran a line past the terminal width (forcing a wrap), or emitted a mid-frame
  * screen clear would desync the renderer's one-line-per-row model and corrupt

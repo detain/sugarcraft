@@ -182,11 +182,11 @@ The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `c
 
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
-| `ansi` | `candy-core` (planned) | ANSI escape sequences, cursor control, color SGR sequences |
+| `ansi` | `sugar-core` (planned) | ANSI escape sequences, cursor control, color SGR sequences |
 | `vt` | None yet | Full virtual terminal emulator would be complex to port |
 | `cellbuf` | None yet | Cell-based buffer for terminal rendering |
-| `term` | `candy-core` | Raw mode, terminal size, password input |
-| `wcwidth` | `candy-core` | Wide char width calculation |
+| `term` | `sugar-core` | Raw mode, terminal size, password input |
+| `wcwidth` | `sugar-core` | Wide char width calculation |
 
 ### Color/Graphics
 
@@ -202,21 +202,21 @@ The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `c
 
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
-| `input` | `candy-core` (planned) | Terminal event input driver |
-| `input/key` | `candy-core` | Key event definitions |
+| `input` | `sugar-core` (planned) | Terminal event input driver |
+| `input/key` | `sugar-core` | Key event definitions |
 
 ### Testing
 
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
-| `teatest` | `candy-core` tests | Bubble Tea testing patterns |
-| `golden` | `candy-core` tests | Snapshot/golden file testing |
+| `teatest` | `sugar-core` tests | Bubble Tea testing patterns |
+| `golden` | `sugar-core` tests | Snapshot/golden file testing |
 
 ### Utilities
 
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
-| `json` | `candy-core` | JSON parsing with generics (native PHP) |
+| `json` | `sugar-core` | JSON parsing with generics (native PHP) |
 | `gitignore` | None needed | PHP has `fnmatch()` and `glob()` |
 | `xpty` | `sugar-pty` (existing) | PTY interface |
 | `termios` | `sugar-pty` | Termios wrapper |
@@ -239,6 +239,6 @@ The repository's crown jewel is the `ansi` package, which provides the most comp
 
 The `pony` package is particularly interesting as an AI-generated experiment in declarative TUI markup — it allows developers to describe terminal UIs using XML-like syntax with Go template interpolation. While marked experimental and AI-generated, it demonstrates interesting patterns for building type-safe declarative TUI frameworks that could inspire similar PHP implementations.
 
-For SugarCraft, this repository suggests several additional porting opportunities beyond the current 40+ libraries. The `wcwidth` and `termios` functionality overlaps significantly with `candy-core` and `sugar-pty`, while color-related packages could enhance `sugar-widgets`. The `cellbuf` concept of a cell-based terminal buffer could be particularly valuable for building terminal emulators or more sophisticated TUI components in PHP.
+For SugarCraft, this repository suggests several additional porting opportunities beyond the current 40+ libraries. The `wcwidth` and `termios` functionality overlaps significantly with `sugar-core` and `sugar-pty`, while color-related packages could enhance `sugar-widgets`. The `cellbuf` concept of a cell-based terminal buffer could be particularly valuable for building terminal emulators or more sophisticated TUI components in PHP.
 
 The repository's MIT license and the Charm team's commitment to open source make it a reliable reference implementation for ANSI/vt100 terminal behavior. SugarCraft implementers would benefit from studying the parser state machines and damage-tracking algorithms when building PHP terminal applications.

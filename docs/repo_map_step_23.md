@@ -15,7 +15,7 @@ Reference: §369.6 (consolidate async), §387.5 (ReactPHP reinvention).
 - `sugar-forms/composer.json` · `sugar-forms/composer.json` · `candy-core/composer.json` — add `sugarcraft/candy-async` via `path-repo-closure`. <!-- @rename-keep historical provenance -->
 - `sugar-forms/src/` async suggestion code paths → use `CancellationToken` so a typing user can cancel a pending suggestion fetch.
 - `sugar-forms/src/` same.
-- `candy-core/src/` `subscriptions()` plumbing → use `Subscriptions::compose()` for atomic disposal.
+- `sugar-core/src/` `subscriptions()` plumbing → use `Subscriptions::compose()` for atomic disposal.
 
 ## Acceptance criteria
 
@@ -31,14 +31,14 @@ Reference: §369.6 (consolidate async), §387.5 (ReactPHP reinvention).
 1. **Reference the audit from step-08's coder** in `docs/repo_map_updates.md` — it should have a per-file roadmap of where ReactPHP usage lives.
 2. **path-repo closure**: candy-async to the 3 libs. <!-- @rename-keep historical provenance -->
 3. **sugar-forms / sugar-forms async suggestions**: wrap the suggestion fetch in a `CancellationSource`; when a new keystroke arrives, cancel the old one first.
-4. **candy-core subscriptions**: refactor `Program::subscriptions()` return type from `?Cmd` to `?Subscription` (or keep both; provide an adapter). Compose multiple via `Subscriptions::compose()`.
+4. **sugar-core subscriptions**: refactor `Program::subscriptions()` return type from `?Cmd` to `?Subscription` (or keep both; provide an adapter). Compose multiple via `Subscriptions::compose()`.
 5. **withExceptionHandler integration**: any async error caught becomes a Throwable passed to the Program's exceptionHandler.
 6. Run phpunit in all 3 + dependents.
 
 ## Tester brief
 
 - sugar-forms / sugar-forms: debounce + cancel test (described above).
-- candy-core: subscriptions composed → dispose all atomically.
+- sugar-core: subscriptions composed → dispose all atomically.
 - Existing async tests still pass.
 
 ## Scribe brief
@@ -58,7 +58,7 @@ Reference: §369.6 (consolidate async), §387.5 (ReactPHP reinvention).
   - Async error paths flow through Program::withExceptionHandler (step-09).
 
   ## Test plan
-  - [x] vendor/bin/phpunit in sugar-forms / sugar-forms / candy-core (≥95%)
+  - [x] vendor/bin/phpunit in sugar-forms / sugar-forms / sugar-core (≥95%)
   - [x] New cancellation test for debounce-then-cancel scenario
   - [x] php tools/check-path-repos.php
 

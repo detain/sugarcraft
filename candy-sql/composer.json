@@ -32,7 +32,7 @@
     "require": {
         "php": ">=8.3",
         "sugarcraft/sugar-async": "dev-master",
-        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/sugar-cli": "dev-master",
         "sugarcraft/sugar-constraints": "dev-master",

@@ -123,7 +123,7 @@ conversions per search would add ≈40 % on top (see `NearestColorTest`).
 The matcher's 256-entry table is the canonical xterm palette: slots 0-15 are the
 ANSI-16 set, 16-231 the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
 232-255 the `8+10n` grey ramp — derived from `Color::fromAnsi256Index()` and
-cross-pinned to candy-core's decoder (`Ansi256TableParityTest`). Earlier
+cross-pinned to sugar-core's decoder (`Ansi256TableParityTest`). Earlier
 versions shipped a private even-51-step cube; that table never matched a real
 terminal and is gone.
 

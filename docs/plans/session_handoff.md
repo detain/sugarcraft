@@ -39,7 +39,7 @@ through P6.5.6 unless I tell you to stop.
 | Lib | Count | Notes |
 |---|---|---|
 | candy-pty | 264 | +3 from P6.1 (`PumpRecorderTapTest`) | <!-- @rename-keep historical provenance -->
-| candy-core | 545 | unchanged |
+| sugar-core | 545 | unchanged |
 | candy-wish | 70 | unchanged | <!-- @rename-keep -->
 | candy-scriptui | 180 | unchanged |
 | candy-vcr | 324 | unchanged |
@@ -69,7 +69,7 @@ The Shirley-style `candy-vcr record` CLI hinges on this. P6.1 wired:
 - candy-vcr added to candy-pty's `require-dev` + path-repo <!-- @rename-keep historical provenance -->
 - `PumpRecorderTapTest` walks a real bash session through the tap, validates via `JsonlFormat`
 
-**Key design decision worth knowing**: the test in P6.1 uses `JsonlFormat` direct cassette walk (not `Player::play()`) because `Player` drives a candy-core `Program`, not a raw byte stream. P6.5's integration tests (P6.5.5) can use `Player::play()` because the CLI naturally pairs with Program-style replay.
+**Key design decision worth knowing**: the test in P6.1 uses `JsonlFormat` direct cassette walk (not `Player::play()`) because `Player` drives a sugar-core `Program`, not a raw byte stream. P6.5's integration tests (P6.5.5) can use `Player::play()` because the CLI naturally pairs with Program-style replay.
 
 ## Plan steps for the next session
 

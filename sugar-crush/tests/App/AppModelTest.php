@@ -445,7 +445,7 @@ final class AppModelTest extends TestCase
     }
 
     /**
-     * The hard render invariant: candy-core's Renderer repaints with an
+     * The hard render invariant: sugar-core's Renderer repaints with an
      * ABSOLUTE cursorTo(), so anything past the last row is clamped onto it and
      * distinct logical rows collide. A hosted Chat renders a full-screen frame
      * of its own, which is exactly how the shell used to end up at rows+7.
@@ -576,7 +576,7 @@ final class AppModelTest extends TestCase
 
         foreach ($msgs as $msg) {
             [, $cmd] = $app->update($msg);
-            // candy-core's Program::scheduleCmd() is typed \Closure and is
+            // sugar-core's Program::scheduleCmd() is typed \Closure and is
             // called for every non-null Cmd - anything else TypeErrors and
             // kills the loop.
             $this->assertTrue(

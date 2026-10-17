@@ -19,7 +19,7 @@ From `repo_map/php-tui_php-tui.md`:
 
 | SugarCraft Lib | php-tui Component |
 |--------------|------------------|
-| `candy-core` | Display, Backend, Buffer, Cell, Area, Widget/WidgetRenderer interfaces, Viewport |
+| `sugar-core` | Display, Backend, Buffer, Cell, Area, Widget/WidgetRenderer interfaces, Viewport |
 | `sugar-style` | Style, Color, Modifier, Text/Line/Span, Borders, BlockWidget |
 | `sugar-spring` | Layout, Constraint, CassowaryConstraintSolver |
 | `sugar-widgets` | ParagraphWidget, ParagraphRenderer |
@@ -756,7 +756,7 @@ Key patterns:
 
 ### Immediate (High Impact, Low Effort)
 
-1. **Add `__destruct` cleanup for raw TTY mode** in candy-core
+1. **Add `__destruct` cleanup for raw TTY mode** in sugar-core
 2. **Clamp scroll indices** in all scrollable widgets (List, Table, Scrollbar)
 3. **Throw on missing widget renderer** instead of silent iteration
 4. **Document extension points** with worked examples

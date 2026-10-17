@@ -134,7 +134,7 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
      * and STDOUT not a tty, `getTerminalSize()` answers exactly the documented
      * 60x200 default — AND that arm is only true when `LINES`/`COLUMNS` are
      * unset. The env pair is load-bearing, not atmosphere: with no tty for the
-     * ioctl to answer, candy-core's `PosixBackend::size()` falls through to
+     * ioctl to answer, sugar-core's `PosixBackend::size()` falls through to
      * `getenv('COLUMNS')`/`getenv('LINES')` ahead of every later fallback, so
      * a harness that pipes STDOUT yet exports a window — the measured shapes
      * were a ctty handoff at 40x120 and a 50x254 supervising shell — pre-empts

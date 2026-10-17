@@ -55,7 +55,7 @@ candy-sql/
 ├── .vhs/
 │   ├── play.tape / play.gif         # Query execution demo
 │   └── query-history.tape / query-history.gif  # History cycling demo
-├── composer.json                    # Requires candy-core, sugar-style
+├── composer.json                    # Requires sugar-core, sugar-style
 ├── phpunit.xml                      # Bootstrap vendor/autoload.php, colors=true
 ├── README.md                        # 160 lines — architecture table, usage examples
 └── CALIBER_LEARNINGS.md            # 4 patterns (pragma-schema, immutable-cursor-pager, etc.)
@@ -83,7 +83,7 @@ The `App` class is a SugarCraft `Model` implementing the canonical `init()`/`upd
 
 ### Dependency Usage of SugarCraft Components
 
-candy-sql depends only on `candy-core` and `sugar-style`:
+candy-sql depends only on `sugar-core` and `sugar-style`:
 
 | Component | Usage in candy-sql |
 |-----------|---------------------|
@@ -581,7 +581,7 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 
 ### Configuration
 
-- `/home/sites/sugarcraft/candy-sql/composer.json` — Requires candy-core, sugar-style; path repos
+- `/home/sites/sugarcraft/candy-sql/composer.json` — Requires sugar-core, sugar-style; path repos
 - `/home/sites/sugarcraft/candy-sql/phpunit.xml` — Bootstrap vendor/autoload.php, colors=true
 - `/home/sites/sugarcraft/candy-sql/bin/candy-sql` — CLI entry point (31 lines)
 

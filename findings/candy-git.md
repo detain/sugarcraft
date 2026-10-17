@@ -122,7 +122,7 @@ The library has no `.github/workflows/ci.yml` of its own. CI discovery in this m
 - Codecov and other PR integrations may not show per-lib status
 
 **Recommendation:**
-Add `candy-git/.github/workflows/ci.yml` following the pattern used in other libs in the monorepo. See `candy-core/.github/workflows/ci.yml` as a reference.
+Add `candy-git/.github/workflows/ci.yml` following the pattern used in other libs in the monorepo. See `sugar-core/.github/workflows/ci.yml` as a reference.
 
 **Confidence:** 85%
 

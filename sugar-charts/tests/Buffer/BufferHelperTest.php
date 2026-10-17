@@ -304,7 +304,7 @@ final class BufferHelperTest extends TestCase
     }
 
     /**
-     * Audit F6: width is answered by the shared candy-core table, not a
+     * Audit F6: width is answered by the shared sugar-core table, not a
      * forked private one. Delegation parity — every sample must agree
      * with Width::of() exactly.
      */

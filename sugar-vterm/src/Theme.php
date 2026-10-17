@@ -66,7 +66,7 @@ final class Theme
 
     /**
      * The canonical 16..255 colour extension (E742 — mirrors the xterm-256
-     * table candy-core's Color::ansi256() parses): the 6×6×6 cube at indices
+     * table sugar-core's Color::ansi256() parses): the 6×6×6 cube at indices
      * CUBE_OFFSET..231 with idx = 16 + 36r + 6g + b and component levels
      * 0 | 55+40·L, then the 24-step grayscale ramp at GRAYSCALE_OFFSET..255
      * with value 8 + 10·(i − 232). Keyed by absolute index so it unions
@@ -154,7 +154,7 @@ final class Theme
                 // the Dracula named `background` (#282a36) — stays lib-local.
                 0x21222c,
                 // slots 1-8: the seven Dracula named colours sugar-vterm overlaps —
-                // re-sourced from candy-core's Palettes SSOT (string→int).
+                // re-sourced from sugar-core's Palettes SSOT (string→int).
                 hexdec(ltrim(Palettes::DRACULA['red'], '#')),
                 hexdec(ltrim(Palettes::DRACULA['green'], '#')),
                 hexdec(ltrim(Palettes::DRACULA['yellow'], '#')),

@@ -293,7 +293,7 @@ final class ThemeTest extends TestCase
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * Each migrated slot must equal its candy-core {@see Palettes} source.
+     * Each migrated slot must equal its sugar-core {@see Palettes} source.
      * Compared via the rendered/normalised hex ({@see Color::toHex}) so the
      * cosmetic uppercase→lowercase change is transparent and the assertion
      * fails loudly if either the palette or the mapping ever drifts.

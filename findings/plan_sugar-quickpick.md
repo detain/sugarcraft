@@ -726,12 +726,12 @@ HelpBar and StatusBar have nearly identical patterns: both store `bool $visible`
 **Files:** `src/Hermit.php`, `src/StatusBar.php`, `src/HelpBar.php`, etc.
 
 **What is expected:**
-Use the existing mutable trait pattern from `candy-core` (`SugarCraft\Core\Concerns\Mutable`) instead of repeating clone-and-mutate in every setter.
+Use the existing mutable trait pattern from `sugar-core` (`SugarCraft\Core\Concerns\Mutable`) instead of repeating clone-and-mutate in every setter.
 
 However, this is a LARGE refactoring that would touch every method. Consider whether the benefit outweighs the risk pre-1.0. For now, document as a future consideration.
 
 **Why the change should be done:**
-Every setter does: `$clone = clone $this; $clone->property = $value; return $clone;`. The `Mutable` trait in candy-core provides a standardized `mutate()` method to reduce boilerplate.
+Every setter does: `$clone = clone $this; $clone->property = $value; return $clone;`. The `Mutable` trait in sugar-core provides a standardized `mutate()` method to reduce boilerplate.
 
 **Severity:** low
 
@@ -743,7 +743,7 @@ Every setter does: `$clone = clone $this; $clone->property = $value; return $clo
 **Related code locations:**
 
 - All `with*()` methods in `src/Hermit.php`, `src/StatusBar.php`, `src/HelpBar.php`
-- `candy-core/src/Concerns/Mutable.php` (existing trait)
+- `sugar-core/src/Concerns/Mutable.php` (existing trait)
 
 ---
 

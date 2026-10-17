@@ -14,7 +14,7 @@ use SugarCraft\Crush\Lang;
  * Locale parity guard for the `crush` namespace (audit 15b-14, step
  * 15b-14-1): every shipped locale carries every English key with the same
  * {placeholders}, every key src asks Lang::t() for exists in English, and the
- * facade resolves through candy-core's registry.
+ * facade resolves through sugar-core's registry.
  *
  * The locale set is the `lang/` directory itself rather than a typed list, so
  * a translation added later is checked the moment its file lands.

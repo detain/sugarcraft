@@ -678,13 +678,13 @@ The following findings are positive — the code is correct and well-designed. N
 
 ### New Files to Create
 
-- `candy-core/src/Util/ColorUtil.php` — shared `luma()` and `squaredDistance()` static methods (3.2)
+- `sugar-core/src/Util/ColorUtil.php` — shared `luma()` and `squaredDistance()` static methods (3.2)
 - `sugar-animation/src/GifDecoder.php` — GIF frame extraction (5.1, if sugar-animation exists)
 
 ### Cross-Library Dependencies
 
 - Finding 17 (GIF decoder) requires `sugar-animation` — depends on whether it exists in monorepo
-- Finding 16 (ColorUtil) requires adding to `candy-core` which is a dependency of sugar-image
+- Finding 16 (ColorUtil) requires adding to `sugar-core` which is a dependency of sugar-image
 
 ### Testing Requirements
 

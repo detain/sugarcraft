@@ -69,7 +69,7 @@ final class Config
      */
     private static function parseJson(string $raw): array
     {
-        // Guarded decode via candy-core's SSOT helper: JSON_THROW_ON_ERROR
+        // Guarded decode via sugar-core's SSOT helper: JSON_THROW_ON_ERROR
         // rejects malformed input (\JsonException) and a non-array top level
         // is rejected loudly (\RuntimeException) instead of silently becoming
         // a surprising shape. Both map back to the localized config error the

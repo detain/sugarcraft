@@ -48,7 +48,7 @@ final class ThemeTest extends TestCase
     public function testDraculaAccentIsPinkFromPalettes(): void
     {
         // W5 fix: sugar-cli's dracula accent had diverged to purple #bd93f9.
-        // It is now re-sourced from candy-core's Palettes SSOT and bound to
+        // It is now re-sourced from sugar-core's Palettes SSOT and bound to
         // Dracula's `pink` (#ff79c6 → SGR 38;2;255;121;198), matching the
         // canonical sugar-style accent slot.
         $this->assertSame('#ff79c6', Palettes::DRACULA['pink']);
@@ -72,7 +72,7 @@ final class ThemeTest extends TestCase
     public function testDraculaSlotsSourcedFromPalettes(): void
     {
         // Parity: every migrated slot renders the truecolor SGR derived from
-        // its candy-core Palettes hex, so the two stay locked together.
+        // its sugar-core Palettes hex, so the two stay locked together.
         $p = Palettes::DRACULA;
         $map = [
             'success' => $p['green'],

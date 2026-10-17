@@ -1471,7 +1471,7 @@ final class ScreenHandler implements SubparamsAwareHandler
      * in xterm `ESC [` + `#` switches to the palette-stack substate
      * (`csi_hash_table[]`, the `CSI # P/Q/R/S` XT*COLORS family), never a
      * DECALN trigger. The sequence reaches here through
-     * {@see self::escDispatch()}; candy-core's `Ansi::decaln()` emits the
+     * {@see self::escDispatch()}; sugar-core's `Ansi::decaln()` emits the
      * same bytes, closing the emitter→emulator round trip.
      *
      * @see https://vt100.net/docs/vt510-rm/DECALN.html (DECALN)

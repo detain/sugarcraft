@@ -137,7 +137,7 @@ pull-based seams for a doctor report or a debug pane, with
 
 ## `Chat` — the hosted model, not the root
 
-`src/Chat.php` is `final class Chat implements Model` in candy-core's Model–Update–View shape:
+`src/Chat.php` is `final class Chat implements Model` in sugar-core's Model–Update–View shape:
 `init()`, `update(Msg): [Model, ?Cmd]`, `view()`. Side effects are `Cmd`s and
 never happen in `view()`.
 
@@ -157,7 +157,7 @@ built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
 a "<thing> not configured" message rather than throwing —
-candy-core's `Program` has no try/catch around its synchronous `update()`
+sugar-core's `Program` has no try/catch around its synchronous `update()`
 dispatch, so an exception there propagates out of the event loop entirely,
 skipping terminal teardown and leaving the real terminal in raw/alt-screen state.
 That is why `/agents`, `/workflow` and `/memory` all answer politely on an
@@ -1201,7 +1201,7 @@ Keyboard focus order and meaning:
 Two invariants the layer depends on, both of which have been broken before:
 
 - **The frame must clip to the terminal height, not merely pad to it.** An
-  unbounded frame plus candy-core's absolute `cursorTo()` clamping is what
+  unbounded frame plus sugar-core's absolute `cursorTo()` clamping is what
   produced the status-bar collision.
 - **Never over-wide lines.** The diff renderer paints one line per row.
 
@@ -1220,7 +1220,7 @@ of that data is a workflow's parallel stage, and that stage was invisible for
 two independent reasons:
 
 - **No frame.** `Chat::workflowRun()` called `WorkflowEngine::run()`
-  synchronously from inside `update()`, so candy-core's render tick could not
+  synchronously from inside `update()`, so sugar-core's render tick could not
   fire between the keystroke and the last stage. It now hands the run to a
   `\Fiber` that a periodic timer on the ReactPHP loop steps, suspending at
   `AgentWorkerPool::idle()`. (The `stream_select()` this paragraph used to
@@ -1288,7 +1288,7 @@ only through the settings layers like every other key.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`sugarcrush serve`'s HTTP + WebSocket transport), sixteen SugarCraft siblings: `candy-core` (the MVC-style runtime —
+`sugarcrush serve`'s HTTP + WebSocket transport), sixteen SugarCraft siblings: `sugar-core` (the MVC-style runtime —
 `Program`, `Model`, `Cmd`), `sugar-forms`, `sugar-style` (styles),
 `sugar-markdown`, `sugar-fuzzy`, `sugar-overlay`, `sugar-mcp-client` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),

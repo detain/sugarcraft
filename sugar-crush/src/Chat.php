@@ -683,7 +683,7 @@ final class Chat implements Model
         private readonly ?float $lastEscapeAt = null,
         /**
          * Real terminal dimensions, sourced from {@see WindowSizeMsg} - the
-         * one size candy-core's Program actually dispatches at startup AND
+         * one size sugar-core's Program actually dispatches at startup AND
          * again on every SIGWINCH resize (see Program::installSignalHandlers()).
          * Null until the first WindowSizeMsg arrives (or for a Chat built
          * directly in a test, never); {@see rows()}/{@see cols()} fall back
@@ -2870,7 +2870,7 @@ final class Chat implements Model
                 return [$this, null];
             }
         }
-        // BOTH encodings of Ctrl+C. candy-core's InputReader normalizes every
+        // BOTH encodings of Ctrl+C. sugar-core's InputReader normalizes every
         // control byte 0x01-0x1a into (Char, chr(0x60 + code), ctrl: true), so
         // the real terminal delivers ^C as rune 'c' WITH the ctrl flag and
         // never as the raw "\x03" this used to test for alone — which meant
@@ -3178,7 +3178,7 @@ final class Chat implements Model
             // Kitty-capable terminals Shift+Enter (`CSI 13;2u`) and
             // Ctrl+Enter (`CSI 13;5u`) arrive as Enter KeyMsgs carrying their
             // modifier flags and land here. Alt+Enter stays the reliable one
-            // everywhere (ESC+CR, decoded by candy-core's Alt-prefixed-key
+            // everywhere (ESC+CR, decoded by sugar-core's Alt-prefixed-key
             // fix); on legacy terminals the modified chords are physically
             // indistinguishable from plain Enter — the terminal sends the same
             // CR byte — so they submit, which is the honest degradation.
@@ -3374,7 +3374,7 @@ final class Chat implements Model
             // Four of those six -- "\t", " \t ", plus "\r" and "\x0B", which the
             // corpus does not carry -- cannot be TYPED, and the verb is the whole
             // correction: the previous revision called them "SYNTHETIC drafts: no
-            // keystroke produces them", which is wrong. Measured at candy-core's
+            // keystroke produces them", which is wrong. Measured at sugar-core's
             // decoder, InputReader::parse("\t") yields KeyType::Tab, not
             // KeyType::Char "\t", and the Tab arm below leaves the buffer alone, so
             // no rune puts "\t" or " \t " in the box. Space and "\0" (Ctrl+Space)
@@ -3451,7 +3451,7 @@ final class Chat implements Model
                 && $msg->rune === '?' && trim($this->inputBuf) === ''
                 => [$this->withKeyHelp(0), null],
             // Word-delete: Ctrl+W (the usual terminal-wide convention) or a
-            // correctly alt-flagged Backspace (see candy-core's
+            // correctly alt-flagged Backspace (see sugar-core's
             // Alt-prefixed-key fix - before it, Alt+Backspace mis-decoded
             // as a bare Escape and quit the app instead of reaching here at
             // all). Must be checked before the plain Backspace arm below.
@@ -3479,7 +3479,7 @@ final class Chat implements Model
             // the boundary instead of the widget.
             //
             // Both modifiers, and which BYTES reach this arm is measured at
-            // candy-core's decoder rather than assumed:
+            // sugar-core's decoder rather than assumed:
             // InputReader::parse("\x1b[1;5D") yields KeyMsg(Left, ctrl) - the
             // xterm-family spelling - and parse("\x1b[1;3D") yields
             // KeyMsg(Left, alt), the spelling terminals that report modifiers
@@ -3618,7 +3618,7 @@ final class Chat implements Model
      *
      * Reachability: live end to end since 737da6413 (W3.S1). The chain a
      * real keypress takes is
-     *   candy-core `InputReader` decodes `CSI 1;5I`/`CSI 1;6I` into
+     *   sugar-core `InputReader` decodes `CSI 1;5I`/`CSI 1;6I` into
      *   `KeyMsg(Tab, ctrl: true[, shift: true])`
      *   -> `Tui\KeyboardHandler` deliberately declines Ctrl+Tab (its
      *      pane-cycling arm requires an UNmodified Tab) so the App shell
@@ -7753,7 +7753,7 @@ final class Chat implements Model
      * only the changed bytes - but Program (see `bin/sugarcrush`, a plain
      * `new Program(Bootstrap::chat(), ...)`) ALSO diffs whatever a Model's
      * view() returns, line-by-line, against the previous call's return
-     * value (candy-core's own Renderer::render(), which every other Model
+     * value (sugar-core's own Renderer::render(), which every other Model
      * in this framework relies on for exactly this). Chat's pre-diffed
      * cursor-jump escape bytes were never literal display text, so
      * Program's Renderer was diffing one diff's raw bytes against the
@@ -12972,7 +12972,7 @@ final class Chat implements Model
      * already released it, a {@see CancelledWorkflowReportMsg} that only
      * appends the row, so it cannot settle a turn started since.
      *
-     * Resolves, never rejects: a rejection would surface as candy-core's
+     * Resolves, never rejects: a rejection would surface as sugar-core's
      * `ExceptionMsg`, which nothing handles, and leave `inFlight` latched.
      *
      * @param \Closure(): PromiseInterface<string> $run
@@ -13067,7 +13067,7 @@ final class Chat implements Model
 
     /**
      * `/editor [text]` (roadmap 5.14h) — hands the terminal to $VISUAL/$EDITOR
-     * through candy-core's Cmd::exec; what the editor saves comes back as one
+     * through sugar-core's Cmd::exec; what the editor saves comes back as one
      * PasteMsg into the emptied box and is NOT sent. The argument, if any, is
      * the text the editor opens on. Allowed in a read-only window: it edits the
      * draft, never the session.
@@ -13911,7 +13911,7 @@ final class Chat implements Model
      * {@see \SugarCraft\Core\Program::dispatch()} requires a `Msg` — the app
      * died on the first `/websearch` with no query. Writing to stdout was the
      * wrong shape even before the TypeError: the screen belongs to
-     * candy-core's frame renderer. So the echo and the output both land, the
+     * sugar-core's frame renderer. So the echo and the output both land, the
      * output as `Role::System` — an app-generated failure notice is not a
      * model reply and must not be replayed to the provider as one.
      *
@@ -17344,7 +17344,7 @@ final class Chat implements Model
      * (0 when there is none - the left clamp).
      *
      * ICU segmentation via `grapheme_extract()`, the one segmentation
-     * candy-core guarantees (`ext-intl` is its declared dependency, and
+     * sugar-core guarantees (`ext-intl` is its declared dependency, and
      * `Width` walks the same ICU boundaries since E68). Queries are a few
      * keystrokes long and the walk stops at `$at`, so this runs the length
      * of the caret's own column, not of any buffer - the ~24ms full-frame

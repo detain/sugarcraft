@@ -81,7 +81,7 @@ The game ends on any of three contacts, all handled identically:
 
 ## High-score persistence
 
-On a game-over that beats the current best, the new score is merged into a leaderboard and written to `scores.json` under the config dir (`$XDG_CONFIG_HOME` or `$HOME/.config`, in `.candy-flappy/`). The list is bounded to the top `Game::MAX_HIGH_SCORES` (10) entries. The write runs off the synchronous `update()` path via a `Cmd` and swallows I/O errors, so a full or unwritable disk can never crash the render loop. Saved scores are re-seeded on the next `Game::start()`, and a corrupt/non-array save file is rejected via the shared `candy-core` `Json::decodeArray` guard.
+On a game-over that beats the current best, the new score is merged into a leaderboard and written to `scores.json` under the config dir (`$XDG_CONFIG_HOME` or `$HOME/.config`, in `.candy-flappy/`). The list is bounded to the top `Game::MAX_HIGH_SCORES` (10) entries. The write runs off the synchronous `update()` path via a `Cmd` and swallows I/O errors, so a full or unwritable disk can never crash the render loop. Saved scores are re-seeded on the next `Game::start()`, and a corrupt/non-array save file is rejected via the shared `sugar-core` `Json::decodeArray` guard.
 
 ## Test
 

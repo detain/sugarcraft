@@ -18,16 +18,16 @@ From the first analysis, the following mappings were identified:
 
 | Package | SugarCraft Lib | Status |
 |---------|---------------|--------|
-| `ansi` | `candy-core` (planned) | ANSI escape sequences, cursor control, color SGR sequences |
+| `ansi` | `sugar-core` (planned) | ANSI escape sequences, cursor control, color SGR sequences |
 | `vt` | `sugar-vterm` (existing) | Full virtual terminal emulator |
 | `cellbuf` | None yet | Cell-based buffer for terminal rendering |
-| `term` | `candy-core` | Raw mode, terminal size, password input |
-| `wcwidth` | `candy-core` | Wide char width calculation |
+| `term` | `sugar-core` | Raw mode, terminal size, password input |
+| `wcwidth` | `sugar-core` | Wide char width calculation |
 | `colors` | `sugar-widgets` (existing) | Color parsing and manipulation |
-| `input` | `candy-core` (planned) | Terminal event input driver |
-| `input/key` | `candy-core` | Key event definitions |
-| `teatest` | `candy-core` tests | Bubble Tea testing patterns |
-| `golden` | `candy-core` tests | Snapshot/golden file testing |
+| `input` | `sugar-core` (planned) | Terminal event input driver |
+| `input/key` | `sugar-core` | Key event definitions |
+| `teatest` | `sugar-core` tests | Bubble Tea testing patterns |
+| `golden` | `sugar-core` tests | Snapshot/golden file testing |
 | `xpty` | `sugar-pty` (existing) | PTY interface |
 | `termios` | `sugar-pty` | Termios wrapper |
 
@@ -57,7 +57,7 @@ The first analysis identified these gaps:
 
 **Maintainer Note**: "TruncateLeft removes n characters from the left" — indicates the bug is in the width calculation, not the character removal logic itself.
 
-**SugarCraft Direct Risk**: **HIGH** — If `candy-core` or `sugar-vterm` implement `Truncate` or similar width-constrained operations, they could inherit this same bug. The issue stems from conflating byte-length with display-width in edge cases.
+**SugarCraft Direct Risk**: **HIGH** — If `sugar-core` or `sugar-vterm` implement `Truncate` or similar width-constrained operations, they could inherit this same bug. The issue stems from conflating byte-length with display-width in edge cases.
 
 ---
 
@@ -72,7 +72,7 @@ The first analysis identified these gaps:
 **Impact**: Affects opencode and any other application using `x/input` on Windows
 **Related To**: opencode issues #460, #631
 
-**SugarCraft Direct Risk**: **MEDIUM** — `candy-core` input handling on Windows could face similar issues if NumLock state isn't properly accounted for. Windows keyboard input handling is notoriously complex.
+**SugarCraft Direct Risk**: **MEDIUM** — `sugar-core` input handling on Windows could face similar issues if NumLock state isn't properly accounted for. Windows keyboard input handling is notoriously complex.
 
 ---
 
@@ -157,7 +157,7 @@ The first analysis identified these gaps:
 
 **Maintainer Guidance**: "use v0.4.5" as workaround; "ansi is good for a release while input needs some work"
 
-**SugarCraft Direct Risk**: **HIGH** — The same pattern occurs in any monorepo with interdependent experimental packages. SugarCraft's `candy-core`, `sugar-vterm`, and `sugar-pty` have similar interdependencies.
+**SugarCraft Direct Risk**: **HIGH** — The same pattern occurs in any monorepo with interdependent experimental packages. SugarCraft's `sugar-core`, `sugar-vterm`, and `sugar-pty` have similar interdependencies.
 
 ---
 
@@ -316,7 +316,7 @@ The first analysis identified these gaps:
 
 **Status**: Merged (March 2025)
 
-**SugarCraft Opportunity**: Style-aware wrapping is important for complex TUI applications. SugarCraft's `sugar-vterm` or `candy-core` should consider this pattern.
+**SugarCraft Opportunity**: Style-aware wrapping is important for complex TUI applications. SugarCraft's `sugar-vterm` or `sugar-core` should consider this pattern.
 
 ---
 
@@ -799,7 +799,7 @@ type Terminal interface {
 
 **Risk**: HIGH
 
-**Description**: When `candy-core` changes internal APIs, all consuming packages break
+**Description**: When `sugar-core` changes internal APIs, all consuming packages break
 
 **Mitigation**:
 

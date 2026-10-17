@@ -664,7 +664,7 @@ For modules that fan out (Docker stats across N containers, HTTP fetches across 
 
 ### LAB color interpolation for fade animations
 
-teanotify uses `back.BlendLab(fore, step)` for toast fade-in/fade-out. PHP needs a CIELAB color-space converter (sRGB → XYZ → LAB → interpolate → back). candy-core likely has the math already — check `SugarCraft\Core\Util\Color` for `blendLab(Color $target, float $t): Color`. If missing, port from teanotify's color helpers. Used by Phase 6 Toast.
+teanotify uses `back.BlendLab(fore, step)` for toast fade-in/fade-out. PHP needs a CIELAB color-space converter (sRGB → XYZ → LAB → interpolate → back). sugar-core likely has the math already — check `SugarCraft\Core\Util\Color` for `blendLab(Color $target, float $t): Color`. If missing, port from teanotify's color helpers. Used by Phase 6 Toast.
 
 ### 9-position Notice anchoring
 

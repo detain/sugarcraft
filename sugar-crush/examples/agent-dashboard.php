@@ -285,7 +285,7 @@ $supervisor->addSession($defuseHeartbeat(new BackgroundSession(
     createdAt: new FixedAge(742),
     status: BackgroundSessionStatus::Running,
     output: implode("\n", [
-        'candy-core .................................. OK (1204 tests)',
+        'sugar-core .................................. OK (1204 tests)',
         'sugar-style ............................. OK (388 tests)',
         'sugar-crush ................................. running',
     ]),

@@ -310,7 +310,7 @@ candy-kv/
 
 **Implementation ideas:**
 
-- Implement `candy-kv browse [db]` command using `candy-core`
+- Implement `candy-kv browse [db]` command using `sugar-core`
 - Browse entries with vim-style navigation
 - Support search/filter within the browser
 - Add interactive key-value editor
@@ -646,7 +646,7 @@ foreach ($store->listDatabases() as $db) {
 
 ## 1. Interactive Browser Mode
 
-Using `candy-core` (TUI framework), implement `candy-kv browse [db]`:
+Using `sugar-core` (TUI framework), implement `candy-kv browse [db]`:
 
 - Vim-style key navigation (j/k/h/l, gg, G)
 - Real-time search/filter as you type

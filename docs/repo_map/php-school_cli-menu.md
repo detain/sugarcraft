@@ -189,7 +189,7 @@ This library maps primarily to the **candy-scriptui** tier (framework/system lay
 
 - **`sugar-widgets`**: The individual `MenuItem` types (`SelectableItem`, `CheckboxItem`, `RadioItem`, `StaticItem`, etc.) map to discrete TUI component implementations — each one is a renderable, selectable piece of UI similar to what `sugar-widgets` components would be.
 
-- **`candy-core`**: The style system (`MenuStyle`, `ItemStyle`, `Locator`) and ANSI SGR color handling map to the styling/internals of `candy-core`.
+- **`sugar-core`**: The style system (`MenuStyle`, `ItemStyle`, `Locator`) and ANSI SGR color handling map to the styling/internals of `sugar-core`.
 
 - **`sugar-spring`**: The `Frame` class and the animation-like redraw loop could leverage spring physics for smooth transitions between menu states.
 

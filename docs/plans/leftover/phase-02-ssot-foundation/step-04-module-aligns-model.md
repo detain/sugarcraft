@@ -1,4 +1,4 @@
-# Step 02.04 — Align sugar-dashboard Module\Module contract with candy-core Model
+# Step 02.04 — Align sugar-dashboard Module\Module contract with sugar-core Model
 
 **Source:** `leftover_updates_later.md` SSOT-09 + Dash-04
 **Branch:** `ai/dash-module-aligns-model`
@@ -8,7 +8,7 @@
 
 `sugar-dashboard/src/Module/Module.php` today uses `array<string,mixed>` for
 state. `\SugarCraft\Core\Model` is the established Elm-style contract
-in candy-core (`init(): ?Closure`, `update(Msg): [Model, ?Cmd]`,
+in sugar-core (`init(): ?Closure`, `update(Msg): [Model, ?Cmd]`,
 `view(): string`). Two incompatible contracts in one monorepo.
 
 Redefine `Module::update()` to return `array{0:Module, 1:?Cmd}` aligned
@@ -22,7 +22,7 @@ with Core's `Model`. Keep the old array-state contract alive as
 - `sugar-dashboard/src/Module/Module.php` — interface signatures change:
   - `update(Msg $msg): array` returning `[Module, ?Cmd]` (was
     `array $state, mixed $msg`).
-  - Inherit `init(): ?Closure` and `view(): string` from candy-core's
+  - Inherit `init(): ?Closure` and `view(): string` from sugar-core's
     Model.
   - Add `name(): string` and `minSize(): array{0:int, 1:int}` since
     those are module-specific.
@@ -68,10 +68,10 @@ with Core's `Model`. Keep the old array-state contract alive as
 
 ## Notes
 
-- `Cmd` is candy-core's command type — modules return `Cmd::tick(...)`
+- `Cmd` is sugar-core's command type — modules return `Cmd::tick(...)`
   for periodic refresh, `Cmd::http(...)` for fetches, etc.
 - The headline `dashboard-live.php` example in step 03.07 depends on
-  this — modules MUST behave as candy-core Models so Program can run
+  this — modules MUST behave as sugar-core Models so Program can run
   them.
 - Don't break the `Registry` API; existing callers should keep working
   via the adapter.

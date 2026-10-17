@@ -274,7 +274,7 @@ box.enableKeys();
 
 #### sugar-dashboard Current: None
 
-Sugar-dash components are **pure render-only** — they have no event handling built in. Events are handled externally (in the candy-core runtime).
+Sugar-dash components are **pure render-only** — they have no event handling built in. Events are handled externally (in the sugar-core runtime).
 
 #### Ratatui: External Loop + StatefulWidget
 

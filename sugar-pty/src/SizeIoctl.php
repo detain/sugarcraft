@@ -191,7 +191,7 @@ final class SizeIoctl
      * original's inheritance contract stays untouched.
      *
      * Kept as the ONE `dup`/`close` site in this file, shared by both
-     * stty fallbacks — the descriptor-argument census in candy-core
+     * stty fallbacks — the descriptor-argument census in sugar-core
      * (`DescriptorSinkArgumentCensusTest`) judges each call-site
      * spelling once per file, so a second same-spelled pair would land
      * as unjudged ` #2` keys; one shared alias helper keeps the

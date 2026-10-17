@@ -65,7 +65,7 @@ detour. `Animation` is therefore decoupled from `Frame`.
 | `Lang.php` | 31 | i18n facade — wraps `SugarCraft\Core\I18n\T` |
 
 Composer surface: `sugarcraft/sugar-animation` requires `php:>=8.3`,
-`sugarcraft/candy-core`, `sugarcraft/sugar-style`, `ext-gd`.
+`sugarcraft/sugar-core`, `sugarcraft/sugar-style`, `ext-gd`.
 Ships a `bin/sugar-animation` binary that loads frames, instantiates a
 `Player`, and runs it through `SugarCraft\Core\Program`.
 
@@ -104,7 +104,7 @@ research backlog item — that item is the subject of this memo.
 | `Renderer/ChafaRenderer.php` | 115 | Shells out to `chafa` |
 
 Composer surface: `sugarcraft/sugar-image` requires `php:^8.3`,
-`sugarcraft/candy-core`, `sugarcraft/sugar-style`, `ext-gd`,
+`sugarcraft/sugar-core`, `sugarcraft/sugar-style`, `ext-gd`,
 `ext-mbstring`, `react/promise`. Library type (no `bin/`).
 
 What `sugar-image` is **not**: it is single-frame only today.
@@ -161,7 +161,7 @@ sugar-animation  ── exposes ── list<Frame>  ─→  bridge  ─→  suga
 
 - Forces `sugar-image` to require `sugar-animation`. That is the *wrong*
   direction. sugar-animation is a higher-level lib that already requires
-  candy-core + sugar-style + ext-gd — making mosaic depend on
+  sugar-core + sugar-style + ext-gd — making mosaic depend on
   flip pulls a binary-shipping app into the dependency closure of
   every consumer of sugar-image (sugar-charts, sugar-dashboard, hypothetical
   candy-glow image-in-markdown, etc.). That is a dependency-direction
@@ -392,7 +392,7 @@ use SugarCraft\Image\Renderer\Renderer;
 
 /**
  * Drives an {@see Animation} onto a {@see Renderer}. Implements
- * candy-core's Model contract so it can be embedded directly in a
+ * sugar-core's Model contract so it can be embedded directly in a
  * Program, or composed into a parent Model via Composite.
  *
  * Frame timing comes from Cmd::tick(); per-frame delete-and-redraw
@@ -498,7 +498,7 @@ Program ────► AnimationDriver.init() ── Cmd::tick(delay[0]) ──
             └──────────┘
 ```
 
-No new types in candy-core. No new types in sugar-style. The
+No new types in sugar-core. No new types in sugar-style. The
 animation surface is entirely additive to sugar-image.
 
 ---
@@ -577,7 +577,7 @@ final class MosaicBridge
 ```
 
 This bridge lives in sugar-animation (which already requires
-sugar-style + candy-core + ext-gd; it just needs sugar-image
+sugar-style + sugar-core + ext-gd; it just needs sugar-image
 added). **sugar-image does not depend on sugar-animation; sugar-animation
 depends on sugar-image only IF and WHEN the bridge ships.** This
 dependency direction is fine — sugar-animation is downstream of

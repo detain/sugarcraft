@@ -503,7 +503,7 @@ final class ReadOnlyCommands
      * written. Inside one, every `$name` / `${name}` must be a loop variable
      * in scope (anything else — `$HOME`, `$1`, `$@` — is refused there), and:
      *
-     * - a variable whose values are all KNOWN (`for d in candy-core
+     * - a variable whose values are all KNOWN (`for d in sugar-core
      *   sugar-forms`) is substituted, and the command is judged once per
      *   combination of values, exactly as each iteration will run it — up to
      *   {@see MAX_BINDINGS} combinations;
@@ -695,7 +695,7 @@ final class ReadOnlyCommands
      * NAME not one already bound (after an inner loop re-binds it, the outer
      * name holds the inner's last value), and the body qualifying with NAME
      * bound. The values are KNOWN when every word is literal text a bare
-     * substitution cannot split or glob (`candy-core`, `Core:candy-core`);
+     * substitution cannot split or glob (`sugar-core`, `Core:sugar-core`);
      * they are option-safe when none can begin with `-` — a glob or variable
      * word must start with a literal letter, digit, `_`, `.` or `/` and read
      * its variables quoted.

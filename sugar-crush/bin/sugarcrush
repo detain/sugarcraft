@@ -549,7 +549,7 @@ register_shutdown_function(static function () use (&$terminalWasRun): void {
 // arguments — no Bootstrap call of their own may sit between the TUI log
 // redirect above and Program — and the hosted Chat submits them from init().
 $program = new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions());
-// Armed at the call, not at setupTerminal(): candy-core owns the attach and
+// Armed at the call, not at setupTerminal(): sugar-core owns the attach and
 // exposes no hook, so the flag's window is deliberately a superset — see the
 // idempotent-OFF note above for why the superset costs nothing.
 $terminalWasRun = true;

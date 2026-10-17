@@ -44,7 +44,7 @@ final class CounterModel implements Model
     {
         return "counter: {$this->count}\n  press any key, q to quit\n";
     }
-    // F3 (round 90): required by candy-core's Model contract; see
+    // F3 (round 90): required by sugar-core's Model contract; see
     // examples/record.php for the same fix.
     public function subscriptions(): ?Subscriptions
     {

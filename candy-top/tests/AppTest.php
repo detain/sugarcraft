@@ -416,7 +416,7 @@ final class AppTest extends TestCase
 
     public function testPanelConfigWritesApplyBeforeTheNextKeyWithoutRunningCmds(): void
     {
-        // candy-core's Program dispatches every key of one read before any Cmd
+        // sugar-core's Program dispatches every key of one read before any Cmd
         // runs, so the keys below are fed back-to-back with NO Cmd executed in
         // between — btop's Config::set is immediate (btop_input.cpp:303-391).
         // proc `e` writes proc_tree and, with it on, the proc box claims `+`
@@ -518,7 +518,7 @@ final class AppTest extends TestCase
 
         [$app] = $app->update(new MouseWheelMsg(10, 30, MouseButton::WheelUp, MouseAction::Press));
         [$app] = $app->update(new MouseMotionMsg(10, 30, MouseButton::Left, MouseAction::Motion));
-        // candy-core emits MouseClickMsg for every press; btop's filter only
+        // sugar-core emits MouseClickMsg for every press; btop's filter only
         // passes the bare left press `[<0;...M`.
         [$app] = $app->update(new MouseClickMsg(10, 30, MouseButton::Right, MouseAction::Press));
         [$app] = $app->update(new MouseClickMsg(10, 30, MouseButton::Middle, MouseAction::Press));

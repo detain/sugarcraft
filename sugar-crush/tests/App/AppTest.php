@@ -258,7 +258,7 @@ final class AppTest extends TestCase
         $msg = new UserInputMsg('Hello, world!');
 
         // The engine's Cmd lives on dispatch(), not on the Model-contract
-        // update() (whose second element must be null|Closure or candy-core's
+        // update() (whose second element must be null|Closure or sugar-core's
         // Program::scheduleCmd() TypeErrors) - see App::dispatch().
         [$nextApp, $cmd] = $app->dispatch($msg);
 

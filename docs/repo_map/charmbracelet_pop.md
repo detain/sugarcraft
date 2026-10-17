@@ -113,11 +113,11 @@ SugarCraft does not have a direct email-sending library. Pop maps to several Sug
 | pop feature | SugarCraft lib | Notes |
 |---|---|---|
 | TUI form with sequential field navigation (`textinput`, `textarea`, `list`) | `sugar-forms` | The `Prompt` model with its multi-step keybinding flow and `with*()` state building is the closest structural match |
-| Bubble Tea `Model` with `State` enum and `Update`/`View` | `sugar-widgets` / `candy-core` | The Model/init/update/view pattern mirrors SugarCraft's `Model` TUI contract |
+| Bubble Tea `Model` with `State` enum and `Update`/`View` | `sugar-widgets` / `sugar-core` | The Model/init/update/view pattern mirrors SugarCraft's `Model` TUI contract |
 | Lipgloss styling (`activeLabelStyle`, `textStyle`, etc.) | `sugar-markdown` | Both use lipgloss for terminal color/style; `Shine` is the styling utility lib |
 | File picker for attachments | `sugar-widgets` | If `sugar-widgets` has filepicker-like `List`/`Delegate` patterns, those would be relevant |
-| Markdown → ANSI rendering (goldmark → SGR bytes) | `sugar-widgets` (via `sugar-markdown` ANSI rendering) | Snapshot-testing the raw SGR output matches the `view()` testing approach in `candy-core` tests |
-| Keymap struct with `key.Binding` fields | `sugar-forms` or `candy-core` | Keybinding patterns with `WithKeys`, `WithHelp`, `SetEnabled` are directly reusable |
+| Markdown → ANSI rendering (goldmark → SGR bytes) | `sugar-widgets` (via `sugar-markdown` ANSI rendering) | Snapshot-testing the raw SGR output matches the `view()` testing approach in `sugar-core` tests |
+| Keymap struct with `key.Binding` fields | `sugar-forms` or `sugar-core` | Keybinding patterns with `WithKeys`, `WithHelp`, `SetEnabled` are directly reusable |
 | CLI flag parsing (Cobra) | N/A | SugarCraft libs don't expose CLI layer; this is app-level only |
 | Email sending (SMTP/Resend API) | N/A | No SugarCraft lib for network/email; would be net-new |
 

@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg;
  * handles the given Msg / envelope.
  *
  * Use {@see default()} for a registry pre-loaded with the
- * {@see BuiltinSerializer} (candy-core Msgs) and the
+ * {@see BuiltinSerializer} (sugar-core Msgs) and the
  * {@see JsonableSerializer} catch-all (user Msgs implementing
  * `\JsonSerializable`). Custom serializers can be inserted between
  * those two via {@see register()}.
@@ -66,12 +66,12 @@ final class Registry
     }
 
     /**
-     * Default registry: `BuiltinSerializer` first (specific candy-core
+     * Default registry: `BuiltinSerializer` first (specific sugar-core
      * Msgs), then `JsonableSerializer` (catch-all for user Msgs
      * implementing `\JsonSerializable`). User serializers can be slotted
      * in between with `Registry::default()->register(new MyOne())` —
      * but note that catch-all decode order means BuiltinSerializer wins
-     * for the candy-core Msgs it knows.
+     * for the sugar-core Msgs it knows.
      */
     public static function default(): self
     {

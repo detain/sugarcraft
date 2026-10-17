@@ -45,7 +45,7 @@ ANSI output
 - ✅ OSC 8 hyperlinks
 - ✅ GFM tables, task lists, strikethrough
 - ✅ JSON theme loading via Theme::fromJson()
-- ✅ Paging via Viewport (candy-core)
+- ✅ Paging via Viewport (sugar-core)
 
 ### Current Limitations
 
@@ -366,7 +366,7 @@ var options = {
 |---------|----------|
 | glow | Bubble Tea viewport + fsnotify file watching |
 | glow (CLI) | External `less -r` |
-| **candy-mdview** | candy-core Viewport (no file watching) |
+| **candy-mdview** | sugar-core Viewport (no file watching) |
 | marked-terminal | External pager via shell |
 
 ### Link Handling

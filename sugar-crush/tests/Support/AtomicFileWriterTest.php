@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Support\AtomicFileWriter;
 
 /**
- * Pins for the raw-bytes sibling of candy-core AtomicJsonFile (audit M3).
+ * Pins for the raw-bytes sibling of sugar-core AtomicJsonFile (audit M3).
  *
  * The class exists because the memory system persists markdown, not JSON —
  * AtomicJsonFile's array-in/JSON-out contract does not fit — so everything

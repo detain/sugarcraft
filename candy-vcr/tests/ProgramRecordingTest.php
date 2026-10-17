@@ -20,7 +20,7 @@ use SugarCraft\Vcr\Recorder;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
- * End-to-end: run a candy-core Program with a Recorder attached, then
+ * End-to-end: run a sugar-core Program with a Recorder attached, then
  * decode the cassette and assert it captured the expected lifecycle.
  */
 final class ProgramRecordingTest extends TestCase

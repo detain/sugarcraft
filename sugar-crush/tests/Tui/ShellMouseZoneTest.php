@@ -229,7 +229,7 @@ final class ShellMouseZoneTest extends TestCase
     }
 
     /**
-     * The image/zone invariant the offset must not disturb: candy-core's
+     * The image/zone invariant the offset must not disturb: sugar-core's
      * image markers and sugar-mouse's sentinels share the Private-Use block,
      * so {@see LiveRenderer::maskImageMarkers()} masks the scan copy. With a
      * picture on screen the placement still rides out of the pane AND the

@@ -14,7 +14,7 @@ Apply only the items relevant to this step.
 
 ### Per-lib `README.md`
 
-- New foundation lib: full `Composer install` + Quickstart code block + brief feature list. Use the candy-core README as template.
+- New foundation lib: full `Composer install` + Quickstart code block + brief feature list. Use the sugar-core README as template.
 - Existing lib that adopted a new shared package: a paragraph under a `## Shared foundations` heading naming each adopted package and the API benefit (link to that package's README).
 - Existing lib that lost a duplicate implementation: update the API surface section if the deprecation is user-visible.
 

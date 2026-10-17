@@ -14,9 +14,9 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| Extract shared `clamp()` utility to `candy-core/src/Util/Clamp.php` | 4 divergent implementations found; a simple utility eliminates duplication | `ref:repeated_logic.md` Finding #9 |
-| Audit Mutable trait adoption gap via delegation | 35 classes re-implement `mutate()` locally instead of using the `candy-core` trait; need to understand root cause before prescribing migration | `ref:repeated_logic.md` Finding #1 |
-| Create shared validation utilities in `candy-core` | 131 identical error-throwing patterns using `Lang::t()` can be centralized via `validateNonNeg()`, `validatePositive()` helpers | `ref:repeated_logic.md` Finding #4 |
+| Extract shared `clamp()` utility to `sugar-core/src/Util/Clamp.php` | 4 divergent implementations found; a simple utility eliminates duplication | `ref:repeated_logic.md` Finding #9 |
+| Audit Mutable trait adoption gap via delegation | 35 classes re-implement `mutate()` locally instead of using the `sugar-core` trait; need to understand root cause before prescribing migration | `ref:repeated_logic.md` Finding #1 |
+| Create shared validation utilities in `sugar-core` | 131 identical error-throwing patterns using `Lang::t()` can be centralized via `validateNonNeg()`, `validatePositive()` helpers | `ref:repeated_logic.md` Finding #4 |
 | Merge `candy-files/src/AsyncOps` into `sugar-async/src/AsyncOps` | Both implement the same `Deferred` + `futureTick` pattern; file operations could reuse async utilities | `ref:repeated_logic.md` Finding #5 |
 | Document `::new()` factory as required pattern | 3,042 call sites = de facto standard; CALIBER_LEARNINGS.md should explicitly require it for all new classes | `ref:repeated_logic.md` Finding #6 |
 | Keep Model interface, i18n, Width, Ansi as-is | Already well-centralized with 92/41/736/700+ lines of well-tested code; no duplication detected | `ref:repeated_logic.md` Findings #2, #3, #7, #10 |
@@ -26,9 +26,9 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 
 ## Phase 1: Foundation — Shared Utilities [PENDING]
 
-### 1.1 Extract Clamp Utility to candy-core [PENDING]
+### 1.1 Extract Clamp Utility to sugar-core [PENDING]
 
-**What:** Create `candy-core/src/Util/Clamp.php` with a reusable clamping utility.
+**What:** Create `sugar-core/src/Util/Clamp.php` with a reusable clamping utility.
 
 **Why:** Four different clamp implementations exist across candy-git, sugar-colorprofile, sugar-widgets, and sugar-forms. A centralized utility ensures consistency and reduces maintenance burden.
 
@@ -44,7 +44,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 **Implementation:**
 
 ```php
-// candy-core/src/Util/Clamp.php
+// sugar-core/src/Util/Clamp.php
 declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
@@ -94,15 +94,15 @@ final class Clamp
 
 **Verification:**
 
-- Create `candy-core/tests/Unit/Util/ClampTest.php` with edge case tests (min=max, value<min, value>max, negative values)
-- Run `cd candy-core && vendor/bin/phpunit` — all tests pass
+- Create `sugar-core/tests/Unit/Util/ClampTest.php` with edge case tests (min=max, value<min, value>max, negative values)
+- Run `cd sugar-core && vendor/bin/phpunit` — all tests pass
 - Replace 4 local clamp implementations with the shared utility
 
 ---
 
-### 1.2 Create Validation Utilities in candy-core [PENDING]
+### 1.2 Create Validation Utilities in sugar-core [PENDING]
 
-**What:** Create `candy-core/src/Util/Validation.php` with standardized validation helpers used across the monorepo.
+**What:** Create `sugar-core/src/Util/Validation.php` with standardized validation helpers used across the monorepo.
 
 **Why:** 131 identical error-throwing patterns with `Lang::t()` exist. Centralizing common validations (non-negative, positive, range) reduces duplication and ensures consistent error messages.
 
@@ -118,7 +118,7 @@ final class Clamp
 **Implementation:**
 
 ```php
-// candy-core/src/Util/Validation.php
+// sugar-core/src/Util/Validation.php
 declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
@@ -171,9 +171,9 @@ final class Validation
 
 **Verification:**
 
-- Create `candy-core/tests/Unit/Util/ValidationTest.php`
+- Create `sugar-core/tests/Unit/Util/ValidationTest.php`
 - Migrate 3-5 existing validation call sites to use the new utilities
-- Run `cd candy-core && vendor/bin/phpunit` — all tests pass
+- Run `cd sugar-core && vendor/bin/phpunit` — all tests pass
 
 ---
 
@@ -232,7 +232,7 @@ Add to `CALIBER_LEARNINGS.md`:
 - `copyManyAsync(array $map): PromiseInterface<array<string, bool>>`
 - `moveManyAsync(array $map): PromiseInterface<array<string, bool>>`
 
-**Key insight:** These are distinct operations — sugar-async handles generic async patterns (timeout, retry, debounce, throttle), while candy-files handles file-specific I/O. They don't directly overlap but could share the underlying `Deferred` + `futureTick` pattern. Recommend keeping separate but extracting shared pattern to `candy-core` if needed.
+**Key insight:** These are distinct operations — sugar-async handles generic async patterns (timeout, retry, debounce, throttle), while candy-files handles file-specific I/O. They don't directly overlap but could share the underlying `Deferred` + `futureTick` pattern. Recommend keeping separate but extracting shared pattern to `sugar-core` if needed.
 
 **Verification:**
 
@@ -247,13 +247,13 @@ Add to `CALIBER_LEARNINGS.md`:
 
 **What:** Understand why 35 classes re-implement `mutate()` locally instead of using the `SugarCraft\Core\Concerns\Mutable` trait.
 
-**Why:** The trait exists in `candy-core` but is underutilized. Understanding the gap is prerequisite to any migration effort.
+**Why:** The trait exists in `sugar-core` but is underutilized. Understanding the gap is prerequisite to any migration effort.
 
 **Severity:** High
 
 **Source locations:**
 
-- Canonical trait: `candy-core/src/Concerns/Mutable.php:L27-L39`
+- Canonical trait: `sugar-core/src/Concerns/Mutable.php:L27-L39`
 - 35 local implementations found via grep across: `sugar-overlay/Veil.php`, `sugar-forms/Field/Input.php`, `sugar-forms/Field/Select.php`, `sugar-cellbuffer/Style.php`, `candy-git/App.php`, etc.
 
 **Known reasons for local implementation:**
@@ -350,7 +350,7 @@ Update the entry to explicitly list when local override IS required:
 
 ### 5.1 Evaluate Validator Interface for Broader Adoption [PENDING]
 
-**What:** Assess whether the `Validator` interface in `sugar-forms` should be promoted to `candy-core` for broader monorepo use.
+**What:** Assess whether the `Validator` interface in `sugar-forms` should be promoted to `sugar-core` for broader monorepo use.
 
 **Why:** The Validator interface is well-designed but only used within forms/prompt contexts. It could potentially serve input validation needs across the broader monorepo.
 
@@ -364,8 +364,8 @@ Update the entry to explicitly list when local override IS required:
 **Implementation:**
 
 If evaluation recommends promotion:
-1. Move `Validator` interface + implementations to `candy-core/src/Validator/`
-2. Update `sugar-forms/composer.json` to depend on `candy-core`
+1. Move `Validator` interface + implementations to `sugar-core/src/Validator/`
+2. Update `sugar-forms/composer.json` to depend on `sugar-core`
 3. Update re-export in `sugar-forms`
 
 If evaluation recommends keeping as-is:
@@ -383,13 +383,13 @@ If evaluation recommends keeping as-is:
 | Priority | Item | Action | Files Affected |
 |----------|------|--------|----------------|
 | High | 3.1 Mutable trait gap audit | Delegation to researcher | All 35 implementation files |
-| Medium | 1.1 Clamp utility | Create new utility + migrate callers | candy-core, candy-git, sugar-colorprofile, sugar-widgets, sugar-forms |
-| Medium | 1.2 Validation utilities | Create new utility + migrate callers | candy-core, + 5-10 calling libs |
+| Medium | 1.1 Clamp utility | Create new utility + migrate callers | sugar-core, candy-git, sugar-colorprofile, sugar-widgets, sugar-forms |
+| Medium | 1.2 Validation utilities | Create new utility + migrate callers | sugar-core, + 5-10 calling libs |
 | Medium | 2.1 AsyncOps audit | Delegation/investigation | sugar-async, candy-files |
 | Medium | 4.1 Mutable trait guidance | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 1.3 ::new() factory contract | Update CALIBER_LEARNINGS.md | CALIBER_LEARNINGS.md |
 | Low | 4.2 AsyncOps ADR | Create ADR document | docs/adr/001-asyncops-consolidation.md |
-| Low | 5.1 Validator evaluation | Investigate and decide | candy-core, sugar-forms, sugar-forms |
+| Low | 5.1 Validator evaluation | Investigate and decide | sugar-core, sugar-forms, sugar-forms |
 
 ---
 

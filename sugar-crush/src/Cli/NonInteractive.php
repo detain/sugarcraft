@@ -1211,7 +1211,7 @@ final class NonInteractive
      * than assumed from "it is a TUI": `bin/sugarcrush` constructs its
      * `Program` with {@see \SugarCraft\Crush\Chat::programOptions()}, which
      * passes `useAltScreen: true` — the parameter's own default is FALSE — and
-     * `candy-core`'s `Program::setupTerminal()` writes `Ansi::altScreenEnter()`
+     * `sugar-core`'s `Program::setupTerminal()` writes `Ansi::altScreenEnter()`
      * on exactly that flag. An `fwrite(STDERR, …)` in `Runtime::gate()` would
      * therefore paint a refusal line straight onto a live TUI frame on every
      * denied call — the hazard

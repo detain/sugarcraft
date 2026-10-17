@@ -546,7 +546,7 @@ Bubbles provides `TextInput` and `TextArea` as Bubble Tea models. sugar-readline
 
 ## Weaknesses
 
-1. **No input driver**: `sugar-readline` has no code that reads actual keypresses from a terminal. It only processes already-decoded key names. A higher-level driver (like a TTY loop in `candy-core` or a ReactPHP stream reader) is needed to turn terminal escape sequences into `Key` constants. The README examples show simulated keypresses only.
+1. **No input driver**: `sugar-readline` has no code that reads actual keypresses from a terminal. It only processes already-decoded key names. A higher-level driver (like a TTY loop in `sugar-core` or a ReactPHP stream reader) is needed to turn terminal escape sequences into `Key` constants. The README examples show simulated keypresses only.
 
 2. **Hardcoded ANSI codes**: Styles are bare SGR strings (`'1;36'`, `'7'`, `'31'`) rather than a proper style system. Customization requires string manipulation. Compare to `sugar-markdown` which has a proper `Style` class with chainable methods.
 

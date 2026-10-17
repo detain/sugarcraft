@@ -126,13 +126,13 @@ SugarCraft\Overlay\VeilStack (immutable stack)
 ### 3. No Animation Tick / Time Integration
 
 **Title:** Animation progress must be driven externally; no internal timing
-**Description:** `Veil::animate($fg, $bg, $v, $h, $progress)` accepts a 0-1 float but provides no timing. The consumer implements the animation loop (e.g., via candy-core's `Tick` subscription).
+**Description:** `Veil::animate($fg, $bg, $v, $h, $progress)` accepts a 0-1 float but provides no timing. The consumer implements the animation loop (e.g., via sugar-core's `Tick` subscription).
 **Why it matters:** Every consumer re-implements the same tick loop pattern. No built-in easing curve application over time.
 **Source:** `docs/repo_map/charmbracelet_bubbletea.md` — `tea.Every` / `tea.Tick` for time-based subscriptions
 **Implementation ideas:**
 
 - Add `VeilAnimator` class that accepts a start time + duration + easing, computes progress from current time
-- Or provide `AnimationLoop` helper using `candy-core` `Tick` subscription
+- Or provide `AnimationLoop` helper using `sugar-core` `Tick` subscription
 - `animateWithTiming($fg, $bg, $v, $h, int $startMs, int $durationMs, ?CubicBezier $easing): string`
 
 **Complexity:** Medium
@@ -643,11 +643,11 @@ class ToastStack {
 }
 ```
 
-## 2. candy-core Tick Integration
+## 2. sugar-core Tick Integration
 
-Add first-class support for animated veils in candy-core's update loop:
+Add first-class support for animated veils in sugar-core's update loop:
 ```php
-// In a candy-core Model
+// In a sugar-core Model
 $veilModel = new AnimatedVeilModel(
     veil: $veil,
     fg: fn() => $this->modalView(),
@@ -821,7 +821,7 @@ The **ecosystem gap** sugar-overlay uniquely fills is providing overlay/modal co
 **Key risks:**
 
 - PHP's lack of native cell buffer support means Canvas would need significant new infrastructure
-- Animation tick integration requires candy-core Tick subscription patterns
+- Animation tick integration requires sugar-core Tick subscription patterns
 - Style-preserving text wrap is complex and requires careful implementation
 - FFI-based ultraviolet bindings are experimental and high-complexity
 

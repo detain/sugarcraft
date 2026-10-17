@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "385e9e3ca679941ad8a37865e93f3477",
+    "content-hash": "2e84c08d38d58cdfa72ee2b9bd1be45e",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3381,12 +3381,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-ansi-inspect",
-                "reference": "b11b6f4a95c45a7715cde93572082c8df1ccfad4"
+                "reference": "af8d27a15cf0b86ddc9eec715e03328d21eee584"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-ansi-parser": "dev-master"
+                "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3443,12 +3443,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-codeshot",
-                "reference": "a3c6dbebd6951dc9048d0848ef8d516bb2676b0d"
+                "reference": "1ebee6eac1cdbb4ad080c80fd9bc19483378a889"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-ansi-parser": "dev-master"
+                "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3507,14 +3507,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-codetime",
-                "reference": "dc0af38f82fa880b747264eedea46e16e5f01d51"
+                "reference": "782a3eb9f9e7e93faa29942e736c1c7d44fe023d"
             },
             "require": {
                 "ext-sqlite3": "*",
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-async": "dev-master",
                 "sugarcraft/sugar-charts": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -3566,89 +3566,18 @@
             }
         },
         {
-            "name": "sugarcraft/candy-core",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-core",
-                "reference": "5d0ba0f81667d99b46ca9620afb863d068e7e08a"
-            },
-            "require": {
-                "ext-intl": "*",
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/sugar-pty": "dev-master"
-            },
-            "require-dev": {
-                "phpstan/phpstan": "^2.1",
-                "phpstan/phpstan-phpunit": "^2.0",
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Core\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Core\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "analyse": [
-                    "vendor/bin/phpstan analyse src --no-progress"
-                ]
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/bubbletea — Elm-architecture TUI runtime.",
-            "homepage": "https://github.com/sugarcraft/candy-core",
-            "keywords": [
-                "ansi",
-                "bubble-tea",
-                "bubbletea",
-                "cli",
-                "console",
-                "elm",
-                "elm-architecture",
-                "react-php",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-core/issues",
-                "source": "https://github.com/sugarcraft/candy-core",
-                "docs": "https://sugarcraft.github.io/lib/candy-core.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-files",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-files",
-                "reference": "61905b3694a55d1db8a73d1680683e9a36eefb95"
+                "reference": "d000cbe4a372be211a4bab5684ec64aa4d3f56a3"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -3707,11 +3636,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flappy",
-                "reference": "f856ae58eb66d1ee52bc378a94b92e1cfb7adc89"
+                "reference": "949e096cc4aae07d53aea24caaa16690485cbc19"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-spring": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -3770,12 +3699,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-gifview",
-                "reference": "c393a49503938529baedf368bd17ba35cd3bd80a"
+                "reference": "0656cbfcc6dee035d290fd3b2cdb4586f531b17a"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
@@ -3837,11 +3766,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-git",
-                "reference": "d1daaf039e0e11c84291275756569581a804b135"
+                "reference": "3b6654b6b7a7920a459feaf272fd06c541ff4f7b"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -3897,7 +3826,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-git-server",
-                "reference": "99f9f709221058af11516eb2308157ed96e7c7b6"
+                "reference": "d07f027917332a64d996de04ffe8f175f3a9381e"
             },
             "require": {
                 "ext-json": "*",
@@ -3906,8 +3835,8 @@
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-async": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "symfony/yaml": "^6.4 || ^7.0"
             },
             "require-dev": {
@@ -3971,12 +3900,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-kv",
-                "reference": "cec2b3c6dee8f81ced6c10a7264950685a3c70a1"
+                "reference": "15950afb5323e5532ee0b32af81ddbc701f880e4"
             },
             "require": {
                 "ext-sqlite3": "*",
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master"
             },
             "require-dev": {
@@ -4031,12 +3960,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mail",
-                "reference": "f77dd0895759582f6f1b2644355aae86f350e0e2"
+                "reference": "3dd8e81c6459d52324f0e1588202104adf656c87"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-async": "dev-master"
+                "sugarcraft/sugar-async": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.2",
@@ -4092,11 +4021,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mdview",
-                "reference": "709f8a6e1cbc860d65b75f4721131ab7f6c2ee08"
+                "reference": "b1f5deedfed9132b667901601cbbfc87c6ffcf5f"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-markdown": "dev-master",
                 "sugarcraft/sugar-widgets": "dev-master",
                 "symfony/console": "^6.4 || ^7.0"
@@ -4157,12 +4086,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-minesweeper",
-                "reference": "274f37d82404d74ffb1eba9e3bfa6f8adeba1fe0"
+                "reference": "97accfeb7abe126ac17c4f465995a5f30b902669"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -4219,12 +4148,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-scriptui",
-                "reference": "95e0683b99737d4261646f081f52c9d37056eb38"
+                "reference": "b6300ab4fb442426ebe6c14b2177fa30d5a4aefb"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-markdown": "dev-master",
@@ -4291,7 +4220,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sql",
-                "reference": "549b8d17bb542d346cae20e517e527534c8e30b8"
+                "reference": "1394e6cfd08f53beadc31de2efa3e915e115af87"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -4300,11 +4229,11 @@
                 "php": ">=8.3",
                 "react/mysql": "0.7.x-dev",
                 "react/promise-timer": "^1.9",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-async": "dev-master",
                 "sugarcraft/sugar-charts": "dev-master",
                 "sugarcraft/sugar-cli": "dev-master",
                 "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-dashboard": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-style": "dev-master",
@@ -4368,12 +4297,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-ssh-launcher",
-                "reference": "d826445fb030229a580c876d2c62b6579b5a6114"
+                "reference": "231f9b34661628927d7a6d96dbc02e40dcf2e5ab"
             },
             "require": {
                 "ext-pcntl": "*",
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master"
             },
             "require-dev": {
@@ -4431,11 +4360,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-starter",
-                "reference": "d4e74212932e5b1713eb90e7539a2435293994c9"
+                "reference": "54dbb5c7a155551d5e99bd60431dab7960ec25f4"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -4492,12 +4421,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-tetris",
-                "reference": "2267f62254ee0c70bffca41d57f765ef3b80c5cb"
+                "reference": "73d42ce94490540097c9223d99b25db59ff9c8d3"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -4554,14 +4483,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-top",
-                "reference": "31fb965ef75088964ed31628f9dc6e5393550acd"
+                "reference": "82557c83b3c5b4557437388e70b70f8106fa5589"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "@dev",
                 "sugarcraft/sugar-animation": "@dev",
+                "sugarcraft/sugar-core": "@dev",
                 "sugarcraft/sugar-dashboard": "@dev",
                 "sugarcraft/sugar-style": "@dev",
                 "sugarcraft/sugar-widgets": "@dev"
@@ -4628,13 +4557,13 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "1473c512ecf2e5563be1df5da75770d872633795"
+                "reference": "dc3257e91c01313e34710fff568ff14a58a8f5b3"
             },
             "require": {
                 "ext-mbstring": "*",
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-pty": "dev-master",
                 "symfony/console": "^6.4 || ^7.0",
                 "symfony/process": "^6.4 || ^7.0"
@@ -4676,7 +4605,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Record and replay candy-core Program sessions into cassettes — bug-repro / regression / fuzzing.",
+            "description": "Record and replay sugar-core Program sessions into cassettes — bug-repro / regression / fuzzing.",
             "homepage": "https://github.com/sugarcraft/candy-vcr",
             "keywords": [
                 "ansi",
@@ -4704,11 +4633,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-animation",
-                "reference": "e7aeecf674a5fefff284f06dddf91ec617295f5c"
+                "reference": "6c59d08a0e7b21701ec303ef9768d1157aea745a"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
@@ -4823,13 +4752,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-async",
-                "reference": "e1eb2f756834035a8abc60bd0cedc610f8a2e5f2"
+                "reference": "2692fb02c4a23e2458b85040145f00f6b3200297"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -4882,11 +4811,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-cellbuffer",
-                "reference": "add0f59e29b4e43e4040aa0eca7e0e048de8a26c"
+                "reference": "f812ae7a3785896e91fe279ac49564a1930c2370"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -4937,12 +4866,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-charts",
-                "reference": "ec38b12e9217d0a8f2af61b4c8aa378537951ab3"
+                "reference": "81010f221b592a1ff9a9b1550f802601c57b5d5f"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-dashboard": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -5006,11 +4935,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-cli",
-                "reference": "bc224f1d5f74225708c50e291040b7cde44dccad"
+                "reference": "8e09f4b0e00e4cd9bdfa389885fb2f538ef10cf3"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -5066,13 +4995,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-colorprofile",
-                "reference": "dbf0d51bbfcc70b384e94837f657d7b29bb36789"
+                "reference": "25a744d6995726a8f7453f4372eb97d0934c5b48"
             },
             "require": {
                 "php": "^8.3",
                 "react/child-process": "^0.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.1",
@@ -5178,12 +5107,83 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-core",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-core",
+                "reference": "59a5d928de9cb58fc4fec62089578f56287c4bf3"
+            },
+            "require": {
+                "ext-intl": "*",
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/sugar-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Core\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Core\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "analyse": [
+                    "vendor/bin/phpstan analyse src --no-progress"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/bubbletea — Elm-architecture TUI runtime.",
+            "homepage": "https://github.com/sugarcraft/sugar-core",
+            "keywords": [
+                "ansi",
+                "bubble-tea",
+                "bubbletea",
+                "cli",
+                "console",
+                "elm",
+                "elm-architecture",
+                "react-php",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-core/issues",
+                "source": "https://github.com/sugarcraft/sugar-core",
+                "docs": "https://sugarcraft.github.io/lib/sugar-core.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-crush",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "94a69196d3c4b78e2c30f87a6604b4a53c1eb200"
+                "reference": "a27134af48250fba9513602561f263ffe1aa8520"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5199,9 +5199,9 @@
                 "react/http": "^1.11",
                 "react/promise": "^3.3",
                 "react/socket": "^1.16",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cli": "@dev",
                 "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-focus": "@dev",
                 "sugarcraft/sugar-forms": "dev-master",
@@ -5364,12 +5364,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dashboard",
-                "reference": "ec9ed780e5709d496d68d09973c28523e142c184"
+                "reference": "5beddb88a8ba05fb83c4e67de71f6694cac07274"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-focus": "dev-master",
                 "sugarcraft/sugar-style": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master"
@@ -5435,12 +5435,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-datepicker",
-                "reference": "bbd7224809593a4ce5d0f88bf70a41364c2ff036"
+                "reference": "33449b66405de9d041fc727d74476eeb31c79c95"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-cellbuffer": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -5548,11 +5548,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-flexbox",
-                "reference": "c7656dbea11d801e29a12c5bcadc9d579401b768"
+                "reference": "07e9067c835001e7d00b8565090400f129cfd89e"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-widgets": "@dev"
             },
             "require-dev": {
@@ -5662,14 +5662,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-forms",
-                "reference": "47935f5cc15621bd3907d0b94660843f858e962c"
+                "reference": "886d2be48ea66ce4716f199c5ccbede43ffd565b"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-async": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -5780,11 +5780,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-gallery",
-                "reference": "d72a7aa54f83c24186551a923ffa664eec0bacbb"
+                "reference": "c454a7592cd6009fd405bac7181bc9c4bb0abf37"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
@@ -5841,16 +5841,16 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-image",
-                "reference": "791345f30b3af6eb4a4b4ae159b8676178db09a2"
+                "reference": "655c98421e83fe8ae532770a479477d6264b4f9b"
             },
             "require": {
                 "ext-gd": "*",
                 "ext-mbstring": "*",
                 "php": "^8.3",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-animation": "dev-master",
-                "sugarcraft/sugar-colorprofile": "dev-master"
+                "sugarcraft/sugar-colorprofile": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -5910,12 +5910,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-input",
-                "reference": "616fd48c2fa7c0528c509150448911157bf454a3"
+                "reference": "8a5258921fe36994b29c6aea704516107eff7d98"
             },
             "require": {
                 "php": "^8.3",
                 "react/stream": "^1.2",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -5970,13 +5970,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-log",
-                "reference": "8897e4d70ab0bafefb6bdf0a91ee5b6e2a458bdb"
+                "reference": "797802cd26b3203c450d5f74ed8b78b9b0301000"
             },
             "require": {
                 "php": "^8.3",
                 "psr/log": "^3.0",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-colorprofile": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -6029,12 +6029,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-markdown",
-                "reference": "9308b188daf5239b7f24da743c650955b509a10a"
+                "reference": "71ac9e0d5ab58d6e9eb5f7388311522404e26fc0"
             },
             "require": {
                 "league/commonmark": "^2.4",
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -6091,11 +6091,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-mcp-client",
-                "reference": "f97820e05d7619a221da8fb08e37e35d3bd3856d"
+                "reference": "c786be142dd966ca23773177c03879561e3b819b"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6148,11 +6148,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-metrics",
-                "reference": "e75215da25d41bc0acc18802587fddad939dc46c"
+                "reference": "8d96c0b5746b0d3a8c97a40e2902d563ae923360"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-ssh-server": "dev-master"
             },
             "require-dev": {
@@ -6209,11 +6209,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-mouse",
-                "reference": "8b4a8a5f3d2a83e8862cc6b2277cabc03ce1705e"
+                "reference": "ac7c95dc3904ab8410f39208acb765f89af76c40"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6265,11 +6265,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-navstack",
-                "reference": "d08ef69ca8bafe34e5dabe64268d5485b85cb97d"
+                "reference": "8d41d9ce65fd4aac0a6543590d4b4750e1405402"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master"
             },
             "require-dev": {
@@ -6321,12 +6321,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-overlay",
-                "reference": "6e1a68f333bde08438c5c27507d6324cad461605"
+                "reference": "0691b30e78a214b313098c47fdb0abf8fa37c83b"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-spring": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
@@ -6381,13 +6381,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-panels",
-                "reference": "cee97f719315559750dd3660d38e4d020d63c8e7"
+                "reference": "9b2aaf2238f77214231ae5731a9cd245fc18111d"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -6440,15 +6440,15 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-pty",
-                "reference": "3232a73b8ce37413af6417c35c5e6928bf3fa659"
+                "reference": "17cea8c04b25e1e6a33e9f4f722a714bb4c641ae"
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-input": "dev-master"
             },
             "require-dev": {
@@ -6511,12 +6511,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-quickpick",
-                "reference": "7d25baf3b6faf6f63d6e811d0bc1df01c1f89330"
+                "reference": "793202d663fff34bc144c63a5fcc5ec8453c69a8"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-pty": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
@@ -6627,12 +6627,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-spring",
-                "reference": "1d99fb9fd4c256f397605174f2a3498de858fab5"
+                "reference": "9b942dd27ebb766e8b855f5d4d25002121fec215"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-colorprofile": "dev-master"
+                "sugarcraft/sugar-colorprofile": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -6688,13 +6688,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-ssh-server",
-                "reference": "10106d70702ae40cf3f86443a92b7dc9d0027b77"
+                "reference": "258b61f625d733d0f1dd386d6ef067bbeda815dd"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise-timer": "^1.9",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
@@ -6754,13 +6754,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-style",
-                "reference": "36252374a3ae32fc40414f9f9e8c1e279dc84032"
+                "reference": "62afffaad540bc5045a83cd9d6da048fe187e4ca"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
-                "sugarcraft/sugar-constraints": "dev-master"
+                "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6818,12 +6818,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-table",
-                "reference": "2cf2147d0e912e36e588be98409d30b813bb3e97"
+                "reference": "ec4a0299f96e890a5f12d04a77e838e9f8a7548d"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
@@ -6878,13 +6878,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-testing",
-                "reference": "37fcd5227c8af1b89526aa080cf988609d316171"
+                "reference": "d2f9c5bf2c6ea8627a6243d53f86033f928544cb"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
-                "sugarcraft/candy-core": "@dev",
-                "sugarcraft/sugar-cellbuffer": "@dev"
+                "sugarcraft/sugar-cellbuffer": "@dev",
+                "sugarcraft/sugar-core": "@dev"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6937,12 +6937,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-toast",
-                "reference": "972b1e442fe722d0ed02c0dbc0981eec4818bdd5"
+                "reference": "8ddf7124d4b5d5f89a871cdc1c35381e229c168c"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-cellbuffer": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -6995,13 +6995,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-treelist",
-                "reference": "6d9a4b7d9cf370c0cfebf47b0b8f2ff5bc695f47"
+                "reference": "b83a1e30825e0a1a76e20438b380a159f0ee7050"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-async": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master"
             },
             "require-dev": {
@@ -7056,14 +7056,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-video",
-                "reference": "a9349a5f7bfef4516c0b6f1d5317132c31e513ec"
+                "reference": "fe7bb37981361778ab26dcaf1a5dcbe6ff81afb3"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-animation": "dev-master",
                 "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-colorprofile": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-image": "dev-master"
             },
             "require-dev": {
@@ -7124,15 +7124,15 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-vterm",
-                "reference": "9989ee6f223127f5f8689684248022b90de948fd"
+                "reference": "1d809b37d9c110084afa25e6358a21a88886108e"
             },
             "require": {
                 "php": "^8.3",
                 "react/promise": "^3.3",
                 "react/stream": "^1.2",
-                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-ansi-parser": "dev-master",
-                "sugarcraft/sugar-async": "dev-master"
+                "sugarcraft/sugar-async": "dev-master",
+                "sugarcraft/sugar-core": "dev-master"
             },
             "require-dev": {
                 "friendsofphp/php-cs-fixer": "^3.65",
@@ -7188,11 +7188,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-widgets",
-                "reference": "c08d19cc5e816af878066c07af46d97a34fccf55"
+                "reference": "6c6de18e02cacda725201ddaf1b2fc48e5f24235"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-spring": "dev-master",
@@ -8589,7 +8589,6 @@
         "sugarcraft/candy-ansi-inspect": 20,
         "sugarcraft/candy-codeshot": 20,
         "sugarcraft/candy-codetime": 20,
-        "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flappy": 20,
         "sugarcraft/candy-gifview": 20,
@@ -8613,6 +8612,7 @@
         "sugarcraft/sugar-charts": 20,
         "sugarcraft/sugar-cli": 20,
         "sugarcraft/sugar-colorprofile": 20,
+        "sugarcraft/sugar-core": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dashboard": 20,

@@ -1,12 +1,12 @@
 # CandyVcr
 
-Cassette recorder / replayer for candy-core `Program`s **and** a
+Cassette recorder / replayer for sugar-core `Program`s **and** a
 `.tape` → `.gif` terminal-demo renderer for PHP 8.3+. Pairs with
 [sugar-vterm](../sugar-vterm/) — every frame
 fed to the GIF encoder is a `SugarCraft\Vterm\Snapshot` taken off
 sugar-vterm's `Terminal`.
 
-Records every Msg fed into a candy-core `Program` and every frame emitted by
+Records every Msg fed into a sugar-core `Program` and every frame emitted by
 `view()`, with timing, into a cassette file. Replays cassettes by feeding the
 recorded Msgs back at recorded cadence and asserting frames match (cell-grid
 equality via [sugar-vterm](../sugar-vterm/), with byte-equality fallback).
@@ -56,7 +56,7 @@ composer require sugarcraft/candy-vcr
 > structure.
 
 ```jsonl
-{"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/candy-core@1.0.0"}
+{"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/sugar-core@1.0.0"}
 {"t":0.000,"k":"resize","cols":80,"rows":24}
 {"t":0.001,"k":"output","b":"[2J[H..."}
 {"t":0.450,"k":"input","msg":{"@type":"KeyMsg","key":"j"}}

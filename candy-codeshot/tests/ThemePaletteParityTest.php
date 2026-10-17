@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Guards that {@see Theme::dracula()} stays byte-identical to the
- * candy-core {@see Palettes::DRACULA} single-source-of-truth it is
+ * sugar-core {@see Palettes::DRACULA} single-source-of-truth it is
  * sourced from, so the hex literals can never silently drift apart.
  */
 final class ThemePaletteParityTest extends TestCase

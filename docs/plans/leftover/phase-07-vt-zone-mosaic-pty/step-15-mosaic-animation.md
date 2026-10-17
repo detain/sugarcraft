@@ -19,7 +19,7 @@ sequence of frames from sugar-animation and drives the renderer.
 - `sugar-image/src/Animation.php` — readonly: array of frames + per-frame
   delays. Methods to play / pause / step.
 - `sugar-image/src/AnimationDriver.php` — drives an Animation onto a
-  Renderer; uses candy-core `Cmd::tick(...)` for frame timing.
+  Renderer; uses sugar-core `Cmd::tick(...)` for frame timing.
 
 **Modify:**
 

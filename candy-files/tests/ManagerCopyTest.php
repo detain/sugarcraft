@@ -84,7 +84,7 @@ final class ManagerCopyTest extends TestCase
      * true by construction. CopyCompletedMsg also implemented no Core\Msg,
      * so Program's `?Msg` dispatch TypeError'd on resolution and update()
      * additionally returned `self` where `array` was declared — completion
-     * NEVER reached the Model. This test now mirrors candy-core Program's
+     * NEVER reached the Model. This test now mirrors sugar-core Program's
      * AsyncCmd wiring exactly (promise->then(?Msg -> update()), then
      * Loop::run() drains the futureTick I/O) and pins the whole chain:
      * files land, pane refreshes, undo finalizes, honest status.
@@ -114,7 +114,7 @@ final class ManagerCopyTest extends TestCase
         $this->assertFileDoesNotExist($dstDir . '/subdir/nested.txt');
 
         // …then feed the resolution back through update(), like the
-        // promise->then(?Msg -> dispatch) hop in candy-core Program.
+        // promise->then(?Msg -> dispatch) hop in sugar-core Program.
         // Pre-fix, CopyCompletedMsg was not a Msg and this very step threw.
         $this->extractResolved($async);
         $finalState = null;
@@ -194,7 +194,7 @@ final class ManagerCopyTest extends TestCase
 
     /**
      * Type-level pin of the HIGH defect: the completion message crosses
-     * candy-core's `?Msg`-typed dispatch closure, so it MUST be a Msg —
+     * sugar-core's `?Msg`-typed dispatch closure, so it MUST be a Msg —
      * the class shipped without the interface and the copy path died with
      * an "Unhandled promise rejection" TypeError.
      */

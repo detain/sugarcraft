@@ -265,7 +265,7 @@ candy-sql/src/
 - **External approach**: ratatui's dirty-flag rendering (issue #1338) shows 50x CPU improvement for static content — buffer diffing every frame is expensive.
 - **Why external is better**: Continuous rendering at 60fps even for unchanged output wastes CPU.
 - **Tradeoffs**: Requires isDirty() state tracking; must clear at appropriate moments.
-- **Applicability**: Medium — candy-core's Program loop should support dirty-flag rendering; the pattern would benefit all SugarCraft apps.
+- **Applicability**: Medium — sugar-core's Program loop should support dirty-flag rendering; the pattern would benefit all SugarCraft apps.
 
 ## Layout Caching
 

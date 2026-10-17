@@ -45,11 +45,11 @@ From `repo_map/charmbracelet_glow.md`:
 | lipgloss styling | `sugar-markdown` | Ports lipgloss for ANSI styling, colors, layout |
 | bubbletea TUI | `sugar-widgets` (TUI components) | Model/Update/View pattern mirrors Bubble Tea |
 | File browsing/stash | `sugar-forms` or `sugar-charts` | Could inspire file picker or tree-view |
-| viewport scrolling | `candy-core` | Scrollable viewport with status bar |
+| viewport scrolling | `sugar-core` | Scrollable viewport with status bar |
 | Fuzzy filtering | `sugar-widgets` | Real-time fuzzy string filtering |
 | fsnotify watching | `sugar-pty` | File system notification |
 | gitcha discovery | `sugar-widgets` | Git-aware file finding |
-| Clipboard (OSC 52) | `candy-core` | Terminal clipboard integration |
+| Clipboard (OSC 52) | `sugar-core` | Terminal clipboard integration |
 | Viper config | `SugarCraft\Core` | YAML config with env overrides |
 
 ---

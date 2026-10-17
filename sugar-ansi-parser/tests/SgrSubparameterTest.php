@@ -13,10 +13,10 @@ use SugarCraft\AnsiParser\Parser\Parser;
 /**
  * ECMA-48 sub-parameter structure through the SGR path.
  *
- * candy-core EMITS SGR 58 (underline colour) from
+ * sugar-core EMITS SGR 58 (underline colour) from
  * {@see \SugarCraft\Core\Util\Color::toUnderline()} as `58;2;R;G;B` /
  * `58;5;N`, so the parser must round-trip those byte forms — semicolon
- * spelling from candy-core and the `:`-subparameter spelling accepted by
+ * spelling from sugar-core and the `:`-subparameter spelling accepted by
  * modern terminals — without collapsing their structure into an
  * ambiguous flat list.
  */
@@ -73,12 +73,12 @@ final class SgrSubparameterTest extends TestCase
         self::assertSame([58, 2, -1, 148, 199, 255], $groups[0]);
     }
 
-    public function testUnderlineColorSemicolonFormRoundTripsCandyCoreEmission(): void
+    public function testUnderlineColorSemicolonFormRoundTripsSugarCoreEmission(): void
     {
-        // Wire form emitted by candy-core's Util\Color::toUnderline() at a
-        // truecolor profile (candy-core/src/Util/Color.php:523) — e.g.
+        // Wire form emitted by sugar-core's Util\Color::toUnderline() at a
+        // truecolor profile (sugar-core/src/Util/Color.php:523) — e.g.
         // Color::rgb(148, 199, 255) renders exactly "\x1b[58;2;148;199;255m".
-        // sugar-ansi-parser has no candy-core dependency, so this pins the emitted
+        // sugar-ansi-parser has no sugar-core dependency, so this pins the emitted
         // bytes rather than generating them; keep it in sync with Color.php.
         $emitted = "\x1b[58;2;148;199;255m";
 

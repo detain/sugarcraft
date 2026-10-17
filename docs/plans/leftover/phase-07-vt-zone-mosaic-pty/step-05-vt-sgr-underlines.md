@@ -13,7 +13,7 @@ handled.
 
 **Modify:**
 
-- `sugar-vterm/src/SgrState.php` (in candy-core, actually — check;
+- `sugar-vterm/src/SgrState.php` (in sugar-core, actually — check;
   sugar-vterm likely has its own copy) — add `UnderlineStyle` enum
   field. SgrState becomes immutable+fluent for it.
 - `sugar-vterm/src/Handler/SgrHandler.php` — recognize `4:N` forms.

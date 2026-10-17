@@ -654,7 +654,7 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 
 ### Group 2-A (3 agents)
 
-#### 2.1 🟢 candy-core: Extract `Clamp.php` migration incomplete (Item 1.1)
+#### 2.1 🟢 sugar-core: Extract `Clamp.php` migration incomplete (Item 1.1)
 
 **Plan:** `findings/plan_repeated_logic.md` — Item 1.1
 **Status:** sugar-widgets and sugar-forms still have local `clamp()` methods
@@ -668,14 +668,14 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Plan:** `findings/plan_repeated_logic.md` — Item 1.2
 **Issue:** Implemented `nonNeg(int $value, string $name = 'value'): int` but plan spec said `nonNeg(int|float $value, string $key, array $params = []): void`
 **Fix:** Evaluate: current API (returns value) is more usable than spec (void). Keep current API. Add `positive()` and `range()` if needed.
-**Files:** `candy-core/src/Util/Validation.php`
+**Files:** `sugar-core/src/Util/Validation.php`
 **Agent:** Same coder agent as 2.1 (grouped — same lib area)
 
-#### 2.3 🟢 sugar-widgets: Extract sanitizeCell() to candy-core (Item 2.1)
+#### 2.3 🟢 sugar-widgets: Extract sanitizeCell() to sugar-core (Item 2.1)
 
 **Plan:** `findings/plan_sugar-widgets.md` — Item 2.1
-**Fix:** Create `candy-core/src/Util/Sanitize.php` with `sanitizeCell()`; update Tabs, Tree, Table to use it
-**Files:** `candy-core/src/Util/Sanitize.php` (new), `sugar-widgets/src/Tabs.php`, `sugar-widgets/src/Tree.php`, `sugar-widgets/src/Table.php`
+**Fix:** Create `sugar-core/src/Util/Sanitize.php` with `sanitizeCell()`; update Tabs, Tree, Table to use it
+**Files:** `sugar-core/src/Util/Sanitize.php` (new), `sugar-widgets/src/Tabs.php`, `sugar-widgets/src/Tree.php`, `sugar-widgets/src/Table.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 ---
@@ -688,7 +688,7 @@ cd <lib> && composer install --quiet 2>/dev/null && vendor/bin/phpunit 2>&1 | ta
 **Fix:**
 
 - Extract `Renderer::prepareRender()` base method (or document why not)
-- Create `candy-core/src/Util/ColorUtil.php` for `dist()` and `luma()`
+- Create `sugar-core/src/Util/ColorUtil.php` for `dist()` and `luma()`
 - Split `QuarterBlockRenderer::renderCell()` into 4 methods
 - Extract RLE inner loop from `emitBand()`
 **Files:** `sugar-image/src/QuarterBlockRenderer.php`, `sugar-image/src/SixelRenderer.php`, etc.
@@ -1091,14 +1091,14 @@ Same verification as previous phases.
 
 **Plan:** `findings/plan_repeated_logic.md` — Item 1.3
 **Fix:** Add entry requiring all new classes to provide `::new(): self` factory method
-**Files:** `candy-core/CALIBER_LEARNINGS.md`
+**Files:** `sugar-core/CALIBER_LEARNINGS.md`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 4.2 🟢 CALIBER_LEARNINGS: mutable trait guidance (Item 4.1)
 
 **Plan:** `findings/plan_repeated_logic.md` — Item 4.1
 **Fix:** Add guidance for 10+ parameter constructors, manual state copying cases
-**Files:** `candy-core/CALIBER_LEARNINGS.md`
+**Files:** `sugar-core/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.1 (grouped — same file)
 
 #### 4.3 🟢 CALIBER_LEARNINGS: AsyncOps ADR (Item 4.2)
@@ -1169,14 +1169,14 @@ Same verification as previous phases.
 
 **Plan:** `findings/plan_sugar-widgets.md` — Item 3.4
 **Fix:** Document deprecated aliases and transitional architecture in CALIBER_LEARNINGS.md
-**Files:** `candy-core/CALIBER_LEARNINGS.md`
+**Files:** `sugar-core/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.10 (grouped — same file area)
 
 #### 4.12 🟢 CALIBER_LEARNINGS: sugar-widgets ReactPHP/async note (Item 6.2)
 
 **Plan:** `findings/plan_sugar-widgets.md` — Item 6.2
 **Fix:** Add note about Cmd::tick() vs subscriptions() pattern
-**Files:** `candy-core/CALIBER_LEARNINGS.md`
+**Files:** `sugar-core/CALIBER_LEARNINGS.md`
 **Agent:** Same coder agent as 4.10 (grouped — same file area)
 
 ---

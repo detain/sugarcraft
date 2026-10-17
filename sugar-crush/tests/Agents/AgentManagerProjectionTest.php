@@ -49,7 +49,7 @@ final class AgentManagerProjectionTest extends TestCase
     {
         $manager = $this->manager();
 
-        $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'cid-1', 'coder', 'Audit candy-core', 1, 'begins'));
+        $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'cid-1', 'coder', 'Audit sugar-core', 1, 'begins'));
 
         $this->assertSame(1, $manager->projectedSubAgentCount());
         $this->assertTrue($manager->isWorking('coder'), 'the dashboard dot flips on from the open beat alone');

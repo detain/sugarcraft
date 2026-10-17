@@ -16,7 +16,7 @@ Address all 25 findings from the sugar-widgets code review, organized into phase
 |----------|-----------|--------|
 | Static $nextId in Timer/Stopwatch is a test isolation issue | Monotonic counter pollutes test state across test suite runs | `findings/sugar-widgets.md:13-35` |
 | C0 sanitization is security-critical | Terminal control sequence injection is a real TUI attack vector | `findings/sugar-widgets.md:265-271` |
-| DRY violations in sanitizeCell() should be centralized to candy-core | Single point for security auditing; eliminating 3 duplicate implementations | `findings/sugar-widgets.md:41-58` |
+| DRY violations in sanitizeCell() should be centralized to sugar-core | Single point for security auditing; eliminating 3 duplicate implementations | `findings/sugar-widgets.md:41-58` |
 | Deprecated aliases (8 files) are transitional architecture | sugar-widgets is a re-export layer; sugar-forms is canonical home | `findings/sugar-widgets.md:159-174` |
 | Performance issues (sorting, shrinking, visibleRows caching) matter for large tables | O(N×M×log M) sort and O(budget×cols) shrink are measurable at scale | `findings/sugar-widgets.md:60-106` |
 
@@ -31,9 +31,9 @@ Address all 25 findings from the sugar-widgets code review, organized into phase
 
 ## Phase 2: High Priority Issues [PENDING]
 
-- [x] **2.1** Extract Shared `sanitizeCell()` to `candy-core` — Create `candy-core/src/Util/Sanitize.php` with `public static function controlChars(string $s): string`; update Tabs, Tree, Table to use it
-  - **r86-v3:** ✅ landed (pre-v3, verified by read): canonical `candy-core/src/Util/Sanitize.php::controlChars()`; call sites Tabs.php:193, Tree.php:169, Table.php:643, Progress.php:75-76/118-119, Help.php:252-253.
-  - **Files:** `src/Tabs/Tabs.php:462-466`, `src/Tree/Tree.php:366-372`, `src/Table/Table.php:580-584`, `candy-core/src/Util/Sanitize.php` (new)
+- [x] **2.1** Extract Shared `sanitizeCell()` to `sugar-core` — Create `sugar-core/src/Util/Sanitize.php` with `public static function controlChars(string $s): string`; update Tabs, Tree, Table to use it
+  - **r86-v3:** ✅ landed (pre-v3, verified by read): canonical `sugar-core/src/Util/Sanitize.php::controlChars()`; call sites Tabs.php:193, Tree.php:169, Table.php:643, Progress.php:75-76/118-119, Help.php:252-253.
+  - **Files:** `src/Tabs/Tabs.php:462-466`, `src/Tree/Tree.php:366-372`, `src/Table/Table.php:580-584`, `sugar-core/src/Util/Sanitize.php` (new)
   - **Verification:** All three components render identically before/after; unit test verifies C0 stripping
   - **Severity:** high
   - **Notes:** Method replaces `\n\r\t` with space; strips `\x00-\x08\x0b\x0c\x0e-\x1f`. CORRECTED: the original note claimed it "preserves ESC for SGR" — it does not, ESC (0x1b) sits inside the stripped range and is deleted, while DEL/C1 pass through. Styled output must therefore be built by sanitizing plain text and applying SGR afterwards. All three implementations are byte-identical.
@@ -106,7 +106,7 @@ Address all 25 findings from the sugar-widgets code review, organized into phase
 
 - [x] **3.7** Progress and Help Do Not Sanitize Input — Add C0 sanitization for `fullChar`/`emptyChar` in Progress and for Binding key/desc in Help
   - **r86-v3:** ✅ landed (pre-v3, verified by read): Progress.php:75-76/118-119 + Help.php:252-253 route through Sanitize (see 2.1).
-  - **Files:** `src/Progress/Progress.php:38-62,303,309`, `src/Help/Help.php:245-258`, `candy-core/src/Util/Sanitize.php` (after 2.1), `tests/Progress/ProgressTest.php`, `tests/Help/HelpTest.php`
+  - **Files:** `src/Progress/Progress.php:38-62,303,309`, `src/Help/Help.php:245-258`, `sugar-core/src/Util/Sanitize.php` (after 2.1), `tests/Progress/ProgressTest.php`, `tests/Help/HelpTest.php`
   - **Verification:** C0 characters stripped; existing tests pass
   - **Severity:** medium (security-relevant)
   - **Notes:** Use `Sanitize::controlChars()` after Phase 2.1 complete. Consistent guarantees across all components.

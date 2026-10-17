@@ -49,7 +49,7 @@ final class CellValue
      *   2. collapse newlines to a visible marker (no extra rows), and
      *   3. replace every other control byte (C0, DEL, C1) with a middle dot.
      *
-     * Delegates to candy-core's canonical {@see Sanitize::cellValue()} — the
+     * Delegates to sugar-core's canonical {@see Sanitize::cellValue()} — the
      * single source of truth shared with the sugar-table grid — so both grids
      * neutralize binary/ANSI payloads identically. This grid is always
      * single-line, so newlines collapse to the ↵ glyph ($preserveNewlines

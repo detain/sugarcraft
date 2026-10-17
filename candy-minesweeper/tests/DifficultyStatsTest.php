@@ -174,7 +174,7 @@ final class DifficultyStatsTest extends TestCase
     /**
      * The atomic write must leave the directory holding ONLY the target file —
      * no temp artifact (whatever naming scheme AtomicJsonFile uses). Robust to
-     * the candy-core temp pattern `.<name>.tmp.<hex>`, unlike a `.tmp_*` glob.
+     * the sugar-core temp pattern `.<name>.tmp.<hex>`, unlike a `.tmp_*` glob.
      */
     public function testSaveLeavesNoTempArtifacts(): void
     {

@@ -1,0 +1,1906 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Core;
+
+use SugarCraft\Core\Msg\ColorProfileMsg;
+use SugarCraft\Core\Msg\EnvMsg;
+use SugarCraft\Core\Msg\ExceptionMsg;
+use SugarCraft\Core\Msg\ExecMsg;
+use SugarCraft\Core\Msg\InterruptMsg;
+use SugarCraft\Core\Msg\QuitMsg;
+use SugarCraft\Core\Msg\ResumeMsg;
+use SugarCraft\Core\Msg\ScreenStackPoppedMsg;
+use SugarCraft\Core\Msg\ScreenStackPushedMsg;
+use SugarCraft\Core\Msg\SubscriptionsMsg;
+use SugarCraft\Core\Msg\SuspendMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Tty;
+use SugarCraft\Core\Util\NullLogger;
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+
+/**
+ * The Elm-architecture runtime: ties together input, model, render,
+ * and the event loop.
+ *
+ * Lifecycle (handled internally):
+ *
+ *   1. Optionally enter alt screen + hide cursor + enable raw mode.
+ *   2. Emit an initial WindowSizeMsg.
+ *   3. Run model->init() and dispatch any returned Cmd.
+ *   4. Watch the input stream; parse bytes into Msgs and feed update().
+ *   5. Render the latest view() at the configured framerate.
+ *   6. On QuitMsg / SIGINT / SIGTERM / SIGHUP / loop stop — and on any
+ *      Throwable escaping the loop, via run()'s finally: cancel every timer
+ *      and subscription it armed on the loop, hand the signals it took back
+ *      to their previous handlers (and async delivery back to its previous
+ *      mode), tear down the terminal, and return the model.
+ */
+final class Program
+{
+    private Model $model;
+    private readonly LoopInterface $loop;
+    /** @var resource */
+    private $input;
+    /** @var resource */
+    private $output;
+    private readonly InputReader $reader;
+    private readonly Renderer $renderer;
+    private readonly Tty $tty;
+    private bool $dirty = true;
+    private bool $escapeFlushPending = false;
+    /**
+     * The armed stale-paste timer, re-armed on every read that leaves the
+     * reader inside a paste envelope ({@see schedulePasteIdleFlush()}).
+     */
+    private ?TimerInterface $pasteIdleTimer = null;
+    private bool $running = false;
+    /** @var list<Msg> */
+    private array $pending = [];
+    private ?string $lastWindowTitle = null;
+    private ?Cursor $lastCursor = null;
+    private bool $lastCursorHidden = false;
+    private ?Progress $lastProgress = null;
+    /** Signature of the image layer painted last frame, to skip redundant repaints. */
+    private string $lastImageSignature = '';
+    /** Screen rows covered by last frame's images, to surgically clear them on change. @var array<int, true> */
+    private array $lastImageRows = [];
+    /** The resolved body rendered last frame; `null` until the first render. */
+    private ?string $lastRenderedBody = null;
+    private ?Util\Color $lastForegroundColor = null;
+    private ?Util\Color $lastBackgroundColor = null;
+    private ?MouseMode $activeMouseMode = null;
+    private ?bool $activeFocusReporting = null;
+    private ?bool $activeBracketedPaste = null;
+    /**
+     * True between a {@see setupTerminal()} that acquired the terminal and
+     * the {@see teardownTerminal()} that releases it. Makes teardown
+     * idempotent: run()'s finally must be able to call it blindly — after a
+     * Throwable escaped the loop, after the normal path already tore down,
+     * or after a caller's own releaseTerminal() — without emitting the
+     * recovery bytes (cursor show, alt-screen leave, mode-offs) twice.
+     */
+    private bool $terminalAttached = false;
+    private ?Recorder $recorder = null;
+    /** @var array<string, array{0: mixed, 1: Subscription}> */
+    private array $activeSubscriptions = [];
+    /**
+     * Handlers displaced by signal subscriptions, keyed by signal number, so
+     * cancelling a signal subscription can restore whatever was installed
+     * before ours instead of leaking our handler.
+     *
+     * @var array<int, callable|int>
+     */
+    private array $prevSignalHandlers = [];
+    /**
+     * Handlers {@see installSignalHandlers()} displaced, keyed by signal
+     * number, restored by {@see restoreSignalHandlers()} when run() ends.
+     * Kept apart from {@see $prevSignalHandlers}: a signal subscription on
+     * SIGWINCH displaces OUR handler, and cancelling it must hand the signal
+     * back to us, not to whatever predated the Program.
+     *
+     * @var array<int, callable|int>
+     */
+    private array $prevProgramSignalHandlers = [];
+    /** pcntl_async_signals() as it was before installSignalHandlers() turned it on; null = untouched. */
+    private ?bool $prevAsyncSignals = null;
+    /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
+    private bool $asyncSignals = false;
+    /**
+     * One-shot loop timers armed on the model's behalf (TickRequest, the
+     * lone-ESC flush, the stale-paste flush), keyed by spl_object_id. The
+     * loop is usually the process-wide Loop::get(), so a timer still armed
+     * when run() returns
+     * would fire into a Program whose terminal is already restored — run()
+     * cancels whatever is left here on the way out.
+     *
+     * @var array<int, TimerInterface>
+     */
+    private array $oneShotTimers = [];
+    /**
+     * Bumped by {@see releaseRuntime()}. A `futureTick()` callback cannot be
+     * cancelled the way a timer can, so every one this Program queues
+     * captures the generation it was queued under and goes inert once that
+     * generation has been released — on a shared loop that spins again after
+     * run() returns, a queued Cmd, sequence step or send() never dispatches
+     * into the finished Program (nor into a later run() of the same one).
+     */
+    private int $runtimeGeneration = 0;
+    /** @var \Closure(\Throwable): void */
+    private \Closure $exceptionHandler;
+    private float $lastFrameDuration = 0.0;
+    private ?object $logger = null;
+
+    /**
+     * Wrap a {@see Model} with runtime options.
+     *
+     * The default {@see ProgramOptions} hits sane defaults: STDIN /
+     * STDOUT, alt-screen on, raw mode on, mouse off, signal handlers
+     * installed. Override per-field for inline mode, custom streams,
+     * or to wire a non-default {@see Loop}.
+     */
+    public function __construct(
+        Model $initialModel,
+        private readonly ProgramOptions $options = new ProgramOptions(),
+    ) {
+        $this->model = $initialModel;
+        $this->loop  = $options->loop ?? Loop::get();
+        $this->input  = $options->input  ?? STDIN;
+        $this->output = $options->output ?? STDOUT;
+        $this->exceptionHandler = static fn(\Throwable $t) => throw $t;
+        // openTty: if requested AND we'd otherwise be reading from a
+        // piped stdin, open /dev/tty directly so the program can still
+        // see keys. Caller-supplied resources always win — the flag
+        // only kicks in when no input/output were passed.
+        if ($options->openTty && $options->input === null && $options->output === null) {
+            $opened = Tty::openTty();
+            if ($opened !== null) {
+                [$this->input, $this->output] = $opened;
+            }
+        }
+        $this->reader = new InputReader($options->sanitizePaste);
+        $this->renderer = new Renderer(
+            $this->output,
+            inline:   $options->inlineMode,
+            cellDiff: $options->cellDiffRenderer,
+        );
+        $this->tty = new Tty($this->input, $options->termios);
+    }
+
+    /**
+     * Tee the program's input bytes, output bytes, and lifecycle events
+     * to the given {@see Recorder}. Pass null to detach.
+     *
+     * This is a SETTER, not a `with*()` builder, on purpose: the
+     * with*-returns-new rule exists so fluent callers never mutate a
+     * shared instance — but a recorder is a mutable, live sink wired BY
+     * IDENTITY into the Renderer too ({@see Renderer::setRecorder()}).
+     * Cloning the program would fork those two attachments: the clone's
+     * loop and the original's renderer would tee into different object
+     * graphs and the recording would silently desync. Mutation at
+     * construction time is the honest shape here, hence void return —
+     * call it as a statement: `$program->setRecorder($recorder);`
+     *
+     * Only one recorder per program — calling again replaces the previous
+     * one (and does NOT close it; that's the caller's responsibility).
+     * The recorder's {@see Recorder::close()} fires automatically when
+     * the program loop ends, after a final {@see Recorder::recordQuit()}
+     * if the program exited via QuitMsg.
+     */
+    public function setRecorder(?Recorder $recorder): void
+    {
+        $this->recorder = $recorder;
+        $this->renderer->setRecorder($recorder);
+    }
+
+    /**
+     * @deprecated Renamed to {@see setRecorder()} (sugar-core audit C4).
+     *             Live call sites remain inside the monorepo, all in
+     *             candy-vcr: tests/ProgramRecordingTest.php,
+     *             tests/PlayerTest.php, tests/Assert/ScreenRoundTripTest.php
+     *             and examples/record.php (plus doc cites in its
+     *             src/Recorder.php and src/Cli/RecordCommand.php). candy-vcr's
+     *             pump chains themselves ride sugar-pty's
+     *             PumpOptions::withRecorder, a different class, and
+     *             sugar-testing's ProgramSimulator never carried the name.
+     *             The delegating shim therefore stays for those in-tree
+     *             callers and for external consumers that track dev-master;
+     *             new code must call setRecorder().
+     */
+    public function withRecorder(?Recorder $recorder): self
+    {
+        $this->setRecorder($recorder);
+
+        return $this;
+    }
+
+    /**
+     * Forward a lifecycle event to the attached logger, if any.
+     *
+     * The logger contract is duck-typed PSR-3 (an object exposing
+     * info()/error()/warning()...); anything without the method is
+     * silently skipped so a partial logger cannot crash the loop.
+     */
+    private function log(string $level, string $message): void
+    {
+        if ($this->logger !== null && \method_exists($this->logger, $level)) {
+            $this->logger->{$level}($message);
+        }
+    }
+
+    /**
+     * Attach a logger to receive program lifecycle events.
+     * Returns a cloned program with the logger stored.
+     *
+     * @param object $logger Object with PSR-3 style log methods (info, error, warning, etc.)
+     */
+    public function withLogger(object $logger): self
+    {
+        $clone = clone $this;
+        $clone->logger = $logger;
+        return $clone;
+    }
+
+    /**
+     * Override the exception handler that receives any uncaught throwable
+     * during the program loop. The default re-throws.
+     *
+     * @param \Closure(\Throwable): void $handler
+     */
+    public function withExceptionHandler(\Closure $handler): self
+    {
+        $next = clone $this;
+        $next->exceptionHandler = $handler;
+        return $next;
+    }
+
+    /**
+     * Return the duration in seconds of the last rendered frame.
+     */
+    public function lastFrameDuration(): float
+    {
+        return $this->lastFrameDuration;
+    }
+
+    /**
+     * Return the current model.
+     *
+     * Exposed for use by test utilities (e.g. ProgramSimulator) that need
+     * to inspect or manipulate the model without using Reflection.
+     */
+    public function model(): Model
+    {
+        return $this->model;
+    }
+
+    /**
+     * @deprecated since the bare-accessor naming sweep — use {@see model()}.
+     *             Nothing in the monorepo calls this name any more
+     *             (sugar-testing's ProgramSimulator moved to model(), and its
+     *             DeprecatedCoreApiUsageTest keeps it there). The delegating
+     *             alias stays for external consumers that track dev-master
+     *             and may still call it; do not remove it.
+     */
+    public function getModel(): Model
+    {
+        return $this->model();
+    }
+
+    /**
+     * Run the program loop until a QuitMsg is dispatched (or the loop is
+     * stopped externally). Returns the final Model.
+     *
+     * ## Timer accuracy on a libuv-backed loop
+     *
+     * Where ext-uv is installed, `Loop::get()` autodetects and returns
+     * `ExtUvLoop`. libuv does not read the OS clock when you arm a timer: it
+     * computes the deadline against the loop's CACHED clock (`loop->time`).
+     * That cache is refreshed once per loop iteration — the moment the poll
+     * syscall returns, before any callback is dispatched. (`UV::RUN_DEFAULT`
+     * additionally refreshes at the top of the pass, but `ExtUvLoop::run()`
+     * only ever drives `RUN_ONCE` / `RUN_NOWAIT`, which do not.) **A timer's
+     * error is the wall time between the last refresh and the arm.** Armed
+     * from inside a callback, that is however long this iteration has already
+     * spent in callbacks; armed while the loop is idle between `run()` bursts,
+     * it is the idle time.
+     *
+     * So the rule is: keep callbacks short, and never arm a timer after a long
+     * stretch of blocking work inside one. Note what the rule is NOT — it is
+     * not "stay inside `uv_run()`". One `$loop->run()` is not one `uv_run()`:
+     * `ExtUvLoop::run()` is itself a PHP `while` loop of short `uv_run()`
+     * calls (`RUN_ONCE` / `RUN_NOWAIT`), and every one of them refreshes the
+     * clock when its poll returns. Burst-running the loop is a hazard only
+     * because of the idle *between* the bursts, which is a consequence of the
+     * rule above rather than the mechanism behind it.
+     *
+     * Measured here (ext-uv 0.3.0, PHP 8.3), arming a 5s timer after N seconds
+     * of synchronous work at five different sites. **This table is the single
+     * canonical copy** — sugar-testing's `LoopPin` and its README point at it
+     * rather than restating it, because the last time it was duplicated a wrong
+     * row had to be wrong in three places at once:
+     *
+     *   arming site                            N=0      N=3      N=6
+     *   inside a read-stream/timer callback    5.025s   2.010s   0.000s
+     *   idle between two run() bursts          5.025s   2.009s   0.000s
+     *   inside a futureTick, loop already run  5.024s   2.010s   0.000s
+     *   before the loop's first run(), armed
+     *     timer is the earliest deadline in
+     *     the loop — the degenerate case       5.025s   5.025s   5.026s
+     *   before the loop's first run(), with
+     *     ANY other handle due sooner — what
+     *     a real Program always looks like     4.999s   1.999s   0.016s
+     *
+     * {@see \React\EventLoop\StreamSelectLoop} is immune, though not for the
+     * reason usually given: it caches a clock too (`Timers::$time`, from
+     * `hrtime(true) * 1e-9`). What makes it safe is that `Timers::add()` calls
+     * `Timers::updateTime()` at ARM time. The same probe returns 5.000s at
+     * every N and every site.
+     *
+     * ## Which paths through this class are safe, and why
+     *
+     * **Safe: blocking inside `update()`.** Every Cmd this runtime executes is
+     * deferred through `futureTick()` (see `scheduleCmd()`), and ExtUvLoop
+     * drains that queue between `uv_run()` passes — a boundary that refreshes
+     * the clock. So work in `update()` cannot poison the timer that the Cmd it
+     * returns goes on to arm. Measured through this method: a `KeyMsg` whose
+     * `update()` blocks N seconds and returns `Cmd::tick(5.0, …)` fires at
+     * 5.001s / 5.001s / 5.000s for N = 0 / 3 / 6.
+     *
+     * **Exposed, despite appearances: timers armed before the loop's first
+     * `run()`.** It is tempting to read the fourth row above as "pre-run arms
+     * are immune". They are not, and the reason they sometimes look it is not
+     * the reason usually given. A never-run loop DOES have a baseline:
+     * `uv_loop_new()` sets `loop->time` and nothing moves it until an iteration
+     * runs, so `uv_now()` on the loop's own handle shows the cache stale by the
+     * FULL pre-run idle (6.001s after a 6s idle) at the instant of the arm —
+     * exactly as in every other row. The deadline really is computed against a
+     * stale clock, and it really is already in the past.
+     *
+     * What rescues the degenerate case is an arithmetic cancellation, not an
+     * absent baseline. Under `RUN_ONCE` libuv sizes the poll BEFORE refreshing
+     * the clock, so `uv__next_timeout()` subtracts the same stale value the
+     * deadline was built from; the two errors cancel exactly and the poll
+     * blocks for the full delay, measured from the arm. That cancellation
+     * survives only while the armed timer is the earliest deadline in the loop
+     * and nothing else ends that first poll. Add a handle that wakes sooner — a
+     * periodic render tick, an earlier one-shot timer, a stream with bytes
+     * already waiting — and the poll returns early, the post-poll
+     * `uv__update_time()` reveals the true clock, and the overdue timer fires at
+     * once, early by the whole pre-run idle like every other row.
+     *
+     * A real `Program` ALWAYS carries such handles: the stdin read watcher and
+     * the framerate tick. Measured through this method, a bail-out timer armed
+     * on a fresh loop before that loop is handed to `Program::run()` fires at
+     * 5.001s / 1.999s / 0.022s for a 5s arm after N = 0 / 3 / 6 seconds of idle
+     * — dead linear in `delay - idle`. So a test harness must not treat a
+     * pre-run arm as a safe place to put a safety net; that is precisely the
+     * flake these notes exist to prevent. For contrast, `uv_run(RUN_DEFAULT)`
+     * does refresh up front and so exposes the staleness with no other handle
+     * at all: the same 5s timer on a never-run raw libuv loop fires 2.010s
+     * after arming at N = 3.
+     *
+     * The rule the fourth row really encodes is therefore about the handles
+     * present at RUN time, not about the moment of the arm.
+     *
+     * **Exposed: blocking inside a Cmd that then arms.** `Cmd::tick()` returns
+     * a `TickRequest`, and `dispatch()` arms it in the same futureTick drain
+     * the Cmd ran in, so it loses whatever the Cmd blocked for: measured
+     * 5.001s / 2.000s / 0.012s for N = 0 / 3 / 6.
+     *
+     * **Exposed: the timers this class arms synchronously inside a
+     * callback.** The lone-ESC settling timer in `scheduleEscapeFlush()`, the
+     * stale-paste timer in `schedulePasteIdleFlush()`, and the subscription
+     * timers `startSubscription()` arms from the
+     * `reconcileWantedSubscriptions()` call at the end of `dispatch()`. A model
+     * that blocks for seconds inside `update()` shortens all of them. This is inherent
+     * to libuv, not a bug sugar-core can fix from here; the cure is the general
+     * rule — do not block in a callback.
+     *
+     * ## Consequence for test suites
+     *
+     * A PHPUnit process is the burst-and-idle shape by construction: seconds of
+     * ordinary synchronous test code between short `run()` calls. A safety
+     * timer armed to bound a wait is therefore already overdue and fires on the
+     * first tick — the safety net fires instead of the work, and the test fails
+     * having consumed no wall time. It presents as an unattributable flake.
+     * Nothing needs to change in `src/`: a suite should pin a clock-fresh loop
+     * instead of inheriting the autodetected one. sugar-testing ships
+     * `SugarCraft\Testing\LoopPin::pinStableClock()` for a one-line
+     * `tests/bootstrap.php` — named in prose rather than linked, since
+     * sugar-core cannot depend on sugar-testing.
+     */
+    public function run(): Model
+    {
+        $this->log('info', 'program starting');
+        $this->running = true;
+        $this->setupTerminal();
+        $this->installSignalHandlers();
+
+        // rv-tui-1 (crush-review-1014): every step below can raise — a model
+        // whose update() throws on the pre-loop dispatches, a Cmd that blows
+        // up, or any Throwable escaping a loop callback through loop->run().
+        // Without this finally the process died with alt-screen still entered,
+        // the cursor hidden and mouse/focus/paste capture left ON: the crash
+        // stranded the user in a broken terminal instead of merely losing the
+        // frame. The teardown calls moved here are byte-identical to the old
+        // straight-line tail; teardownTerminal() is idempotent ($terminalAttached)
+        // and releaseRuntime() clears the state it walks, so the normal return,
+        // the early-quit return and the throw path share this single exit.
+        $tickTimer = null;
+        $inputWatched = false;
+        try {
+            // Initial size + env + colour-profile + init Cmd. Each
+            // honours the matching ProgramOptions override when set —
+            // unset falls back to the live tty / getenv() / detect().
+            $size = $this->options->windowSize ?? $this->tty->size();
+            $this->dispatch(new WindowSizeMsg($size['cols'], $size['rows']));
+            $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
+            $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detect()));
+
+            $initCmd = $this->activeModel()->init();
+            if ($initCmd !== null) {
+                $this->scheduleCmd($initCmd);
+            }
+
+            // Drain any messages queued via send() before run().
+            $this->drainPending();
+
+            // Initial subscription reconciliation — start whatever the model wants.
+            $this->reconcileWantedSubscriptions();
+
+            // Pending dispatch may have already requested quit. Skip the loop.
+            if (!$this->running) {
+                return $this->model;
+            }
+
+            // Stream watcher.
+            @stream_set_blocking($this->input, false);
+            $this->loop->addReadStream($this->input, function ($stream): void {
+                $this->readInput($stream);
+            });
+            $inputWatched = true;
+
+            // Render tick.
+            $tickInterval = 1.0 / max(1.0, $this->options->framerate);
+            $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
+                // Fallback signal pump for environments where async delivery is
+                // unavailable (or was declined). When async signals are enabled,
+                // handlers already fired and nothing is pending, so skip this to
+                // avoid a redundant dispatch.
+                if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
+                    pcntl_signal_dispatch();
+                }
+                if ($this->dirty) {
+                    $this->renderFrame();
+                    $this->dirty = false;
+                }
+            });
+
+            // Paint the initial frame synchronously, before the loop starts, so the
+            // first view is on screen immediately rather than one render-tick later.
+            // This also makes startup deterministic: a program that quits almost
+            // immediately (a fast init Cmd, or a short test timer) still emits its
+            // first frame instead of racing the first periodic tick — previously a
+            // too-early quit on a slow host could write only the setup/teardown
+            // terminal escapes and no frame at all. ($this->running is guaranteed
+            // true here — the early-return guard above already handled a quit during
+            // the initial dispatches.)
+            if ($this->dirty) {
+                $this->renderFrame();
+                $this->dirty = false;
+            }
+
+            // One run() for the life of the program. Not because the process must
+            // stay inside uv_run() — ExtUvLoop::run() is itself a loop of short
+            // uv_run() calls — but because the alternative shape, repeated
+            // run()/stop() bursts, puts long synchronous stretches between the
+            // clock refreshes libuv does per iteration, and every timer armed in
+            // one of those gaps fires early by the gap. See the timer-accuracy
+            // notes on this method.
+            $this->loop->run();
+
+            return $this->model;
+        } finally {
+            if ($tickTimer !== null) {
+                $this->loop->cancelTimer($tickTimer);
+            }
+            if ($inputWatched) {
+                $this->loop->removeReadStream($this->input);
+            }
+            $this->releaseRuntime();
+            $this->teardownTerminal();
+            $this->recorder?->close();
+        }
+    }
+
+    /**
+     * Queue a Msg for dispatch. If the loop is running it is delivered on the
+     * next tick; otherwise it is buffered until run() drains pending messages.
+     */
+    public function send(Msg $msg): void
+    {
+        if (!$this->running) {
+            $this->pending[] = $msg;
+            return;
+        }
+        $this->deferTick(function () use ($msg): void {
+            $this->dispatch($msg);
+        });
+    }
+
+    /**
+     * Cooperative shutdown — enqueues a {@see QuitMsg}. The next
+     * `update()` cycle observes it; the model can react to QuitMsg
+     * before the runtime tears down. Pair with {@see kill()} when
+     * you need an immediate hard-stop with no model interaction.
+     */
+    public function quit(): void
+    {
+        $this->send(new QuitMsg());
+    }
+
+    /**
+     * Hard-stop the program. Unlike {@see quit()} (which routes through
+     * the message queue and lets the model react to {@see QuitMsg} on
+     * its next update tick), {@see kill()} stops the loop synchronously,
+     * tears down the terminal, and returns. The model is not notified.
+     */
+    public function kill(): void
+    {
+        if (!$this->running) {
+            return;
+        }
+        $this->running = false;
+        $this->loop->stop();
+    }
+
+    /**
+     * Block until the loop has stopped. Mirrors bubbletea's
+     * `Program.Wait()`. In PHP {@see run()} is itself a blocking call
+     * so this is mainly useful as a status query — it returns true if
+     * the program is no longer running.
+     */
+    public function wait(): bool
+    {
+        return !$this->running;
+    }
+
+    /**
+     * Release the terminal back to a cooked / line-buffered state so
+     * the caller can shell out to `$EDITOR`-style external commands
+     * without fighting the renderer for raw-mode keys. Pair with
+     * {@see restoreTerminal()} once the external command exits.
+     */
+    public function releaseTerminal(): void
+    {
+        $this->teardownTerminal();
+    }
+
+    /**
+     * Re-acquire the terminal after a {@see releaseTerminal()} call:
+     * re-enter alt screen / raw mode / mouse / paste / focus modes
+     * exactly as run() did at startup, then trigger a full repaint on
+     * the next tick.
+     */
+    public function restoreTerminal(): void
+    {
+        $this->setupTerminal();
+        $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
+        $this->lastImageRows = [];
+        $this->dirty = true;
+    }
+
+    /**
+     * Print a single line above the program region. Equivalent to
+     * sending `Cmd::println($text)()` directly through the message
+     * queue, but reachable as an instance method for callers that hold
+     * a {@see Program} reference (matches bubbletea's
+     * `Program.Println(...)`).
+     */
+    public function println(string ...$parts): void
+    {
+        $this->send(new PrintMsg(implode(' ', $parts)));
+    }
+
+    /**
+     * Queue a PrintMsg with a formatted string.
+     *
+     * Mirrors the existing `Cmd::printf($format, ...$args)()` factory but
+     * reachable as an instance method for callers that hold a Program
+     * reference (matches bubbletea's `Program.Printf(...)`).
+     */
+    public function printf(string $format, mixed ...$args): void
+    {
+        $this->send(new PrintMsg(sprintf($format, ...$args)));
+    }
+
+    /**
+     *
+     * @return array<string,string>
+     */
+    private function collectEnv(): array
+    {
+        $env = getenv();
+        // getenv() returns array<string,string>|false; the false case
+        // only exists on PHP < 8.1 which this project doesn't support.
+        /** @var array<string,string> */
+        return $env;
+    }
+
+    /**
+     * Enable bracketed paste mode at runtime.
+     *
+     * Writes Ansi::bracketedPasteOn() to the output and sets
+     * $activeBracketedPaste to true. Returns true on success.
+     */
+    public function enableBracketedPaste(): bool
+    {
+        $this->writeOutput(Ansi::bracketedPasteOn());
+        $this->activeBracketedPaste = true;
+        return true;
+    }
+
+    /**
+     * Disable bracketed paste mode at runtime.
+     *
+     * Writes Ansi::bracketedPasteOff() to the output and sets
+     * $activeBracketedPaste to false. Returns true on success.
+     */
+    public function disableBracketedPaste(): bool
+    {
+        $this->writeOutput(Ansi::bracketedPasteOff());
+        $this->activeBracketedPaste = false;
+        return true;
+    }
+
+    /**
+     * Return the model that should receive update/view calls.
+     * If the root model exposes screens(), route to the active screen.
+     */
+    private function activeModel(): Model
+    {
+        if ($this->model instanceof ScreenStackCapable) {
+            $screens = $this->model->screens();
+            if (!$screens->isEmpty()) {
+                return $screens->current()->model;
+            }
+        }
+        return $this->model;
+    }
+
+    private function dispatch(Msg $msg): void
+    {
+        if ($msg instanceof BatchMsg) {
+            foreach ($msg->cmds as $cmd) {
+                $this->scheduleCmd($cmd);
+            }
+            return;
+        }
+        if ($msg instanceof SequenceMsg) {
+            $this->scheduleSequence($msg->cmds);
+            return;
+        }
+        if ($msg instanceof TickRequest) {
+            $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
+                $produced = ($msg->produce)();
+                if ($produced !== null) {
+                    $this->dispatch($produced);
+                }
+            });
+            return;
+        }
+        if ($msg instanceof RawMsg) {
+            // Side-channel: write bytes verbatim, no re-render, no model
+            // notification. Caller is responsible for cursor-area effects.
+            $this->writeOutput($msg->bytes);
+            return;
+        }
+        if ($msg instanceof PrintMsg) {
+            // Print above the program region. The renderer's diff state
+            // is now stale, so reset it so the next render() repaints
+            // every visible row.
+            $this->writeOutput($msg->text . "\n");
+            $this->renderer->reset();
+            $this->lastRenderedBody = null;
+            $this->lastImageSignature = '';
+            $this->lastImageRows = [];
+            $this->dirty = true;
+            return;
+        }
+        if ($msg instanceof ExecRequest) {
+            $this->runExec($msg);
+            return;
+        }
+        if ($msg instanceof SuspendMsg) {
+            $this->suspendProgram();
+            return;
+        }
+        if ($msg instanceof InterruptMsg) {
+            $this->running = false;
+            $this->loop->stop();
+            return;
+        }
+        if ($msg instanceof QuitMsg) {
+            // Record the quit marker, but keep the recorder open so
+            // teardownTerminal()'s output bytes (alt-screen leave, mode
+            // resets, etc.) make it into the cassette. run() closes the
+            // recorder once the loop exits and teardown is complete —
+            // crucial for replay parity, since a fresh Program emits
+            // those same bytes on its way out.
+            $this->recorder?->recordQuit();
+            $this->log('info', 'quit requested');
+            $this->running = false;
+            $this->loop->stop();
+            return;
+        }
+        if ($msg instanceof WindowSizeMsg) {
+            // Recorded for both the startup dispatch and SIGWINCH-driven
+            // updates; the model still receives the Msg via update() below.
+            $this->recorder?->recordResize($msg->cols, $msg->rows);
+            // A resize invalidates the line-diff baseline: the terminal has
+            // reflowed (or dropped) the rows the renderer thinks it painted,
+            // and on a shrink diffLines() erases the vanished rows with
+            // cursorTo(row > height), which the terminal clamps onto the new
+            // LAST row — wiping the row it just painted there. Repaint from
+            // scratch instead, as Bubble Tea's renderer does on resize.
+            // Inline mode is exempt: it already repaints its whole region
+            // (cursorRestore + eraseToEnd) on every change, and a reset
+            // there would re-save the cursor BELOW the previous frame and
+            // paint a duplicate copy of the UI on every resize.
+            if (!$this->options->inlineMode) {
+                $this->renderer->reset();
+                $this->lastRenderedBody = null;
+                $this->lastImageSignature = '';
+                $this->lastImageRows = [];
+                $this->dirty = true;
+            }
+        }
+        if ($msg instanceof AsyncCmd) {
+            // Generation guard (mirrors the deferTick law): a promise may settle
+            // AFTER releaseRuntime() has torn this runtime down — the loop is
+            // gone, the terminal is restored, and dispatching would write bytes
+            // onto a recovered screen and mutate a model nobody renders again.
+            // releaseRuntime() bumps runtimeGeneration FIRST, so capturing the
+            // generation at arm-time and refusing to act on a mismatch makes
+            // post-teardown settlement a silent no-op.
+            $generation = $this->runtimeGeneration;
+            $msg->promise->then(function (?Msg $resolvedMsg) use ($generation): void {
+                if ($generation !== $this->runtimeGeneration) {
+                    return;
+                }
+                if ($resolvedMsg !== null) {
+                    $this->dispatch($resolvedMsg);
+                }
+            })->otherwise(function (\Throwable $e) use ($generation): void {
+                if ($generation !== $this->runtimeGeneration) {
+                    // Same law on the reject path: no log line, no ExceptionMsg,
+                    // and crucially no user exception handler after teardown.
+                    return;
+                }
+                // Surface the async failure as an ExceptionMsg (models can react /
+                // quit) and run the user-configured exception handler.
+                $this->log('error', 'async command failed: ' . $e->getMessage());
+                $this->dispatch(new ExceptionMsg($e));
+                // The handler may rethrow — the DEFAULT one does (fail-fast). But
+                // we're inside a promise callback, so a rethrow can't crash the
+                // program; it would only resurface as a noisy "Unhandled promise
+                // rejection". The error is already surfaced above, so swallow the
+                // rethrow here to keep that contract without the noise.
+                try {
+                    ($this->exceptionHandler)($e);
+                } catch (\Throwable) {
+                    // Swallowed: the error is already surfaced via ExceptionMsg
+                    // at line 502, so this rethrow is noise. The rationale above
+                    // (lines 500-507) explains the safety-net contract.
+                }
+            });
+            return;
+        }
+        if ($msg instanceof SubscriptionsMsg) {
+            $this->reconcileSubscriptions($msg->subscriptions);
+            return;
+        }
+
+        // WithFilter pre-processor.
+        if ($this->options->filter !== null) {
+            $filtered = ($this->options->filter)($this->model, $msg);
+            if ($filtered === null) {
+                return;
+            }
+            $msg = $filtered;
+        }
+
+        // ScreenStack infrastructure messages are always routed to the
+        // root model (which owns the ScreenStack), not to the active screen.
+        if ($msg instanceof ScreenStackPushedMsg || $msg instanceof ScreenStackPoppedMsg) {
+            if ($this->model instanceof ScreenStackCapable) {
+                [$nextModel, $cmd] = $this->model->update($msg);
+                $this->model = $nextModel;
+                $this->dirty = true;
+                if ($cmd !== null) {
+                    $this->scheduleCmd($cmd);
+                }
+            }
+            return;
+        }
+
+        $active = $this->activeModel();
+        [$nextModel, $cmd] = $active->update($msg);
+        if ($active === $this->model) {
+            // Active model is the root model (not a nested screen), so
+            // its update() returned the updated root model.
+            $this->model = $nextModel;
+        }
+        $this->dirty = true;
+        if ($cmd !== null) {
+            $this->scheduleCmd($cmd);
+        }
+
+        // Reconcile subscriptions after every update cycle.
+        $this->reconcileWantedSubscriptions();
+
+        // Reconcile component lifecycle hooks after every update cycle.
+        // Composite models accumulate mount/unmount Cmds during update();
+        // drain them here so onMount/onUnmount side-effects fire promptly.
+        if ($this->model instanceof Composite) {
+            $this->drainCompositePendingCmds();
+        }
+    }
+
+    /**
+     * Run the supplied Cmds one at a time — wait for each Cmd's Msg
+     * to be dispatched (and processed by update()) before starting
+     * the next.
+     *
+     * @param list<\Closure> $cmds
+     */
+    private function scheduleSequence(array $cmds): void
+    {
+        if ($cmds === []) {
+            return;
+        }
+        $remaining = $cmds;
+        $runNext = null;
+        $runNext = function () use (&$remaining, &$runNext): void {
+            if ($remaining === []) {
+                return;
+            }
+            $cmd = array_shift($remaining);
+            $msg = $cmd();
+            if ($msg !== null) {
+                $this->dispatch($msg);
+            }
+            // Schedule the next one on a future tick so any update()
+            // triggered by $msg has a chance to run first.
+            $this->deferTick($runNext);
+        };
+        $this->deferTick($runNext);
+    }
+
+    /**
+     * Run an external command with the TTY released. Tears down
+     * terminal state, runs the child, restores state, then dispatches
+     * the result as `ExecMsg` (and optionally a model-shaped follow-up
+     * via the `$onComplete` callback).
+     */
+    /**
+     * Resolve one entry of a {@see proc_open()} descriptor array.
+     *
+     * Preference order: the program's own handle, then the process-wide
+     * constant, then a file spec the child process opens for itself. The
+     * third step is what makes this a fallback rather than a restatement of
+     * the problem — see the block comment in {@see runExec()} and the
+     * closed-descriptor-0 family on {@see Util\TtyDetect}.
+     *
+     * Both stream arguments are typed as nullable because the caller passes
+     * a literal null for the error stream (there is no per-program stderr
+     * handle) and because `$this->input`/`$this->output` are documented as
+     * possibly-dead handles; `is_resource(null)` is false, which is the
+     * answer this method wants for every one of those cases.
+     *
+     * @param  resource|null                     $preferred
+     * @param  resource|null                     $fallback
+     * @param  array{0:string,1:string,2:string} $lastResort
+     * @return resource|array{0:string,1:string,2:string}
+     */
+    private static function childDescriptor($preferred, $fallback, array $lastResort)
+    {
+        if (is_resource($preferred)) {
+            return $preferred;
+        }
+        if (is_resource($fallback)) {
+            return $fallback;
+        }
+
+        return $lastResort;
+    }
+
+    /**
+     * Read two capture pipes concurrently until both reach EOF.
+     *
+     * WHY NOT SEQUENTIALLY: each kernel pipe holds ~64 KiB. Reading stdout to
+     * EOF first deadlocks the moment the child also overflows stderr — stdout
+     * never sees EOF because the child is parked writing stderr, and stderr
+     * is never drained because the parent is parked reading stdout (audit
+     * 2026-09-30). Interleaving through stream_select keeps both buffers
+     * moving regardless of how much either stream carries.
+     *
+     * Non-blocking + a 1s select tick mirrors the writeOutput() short-write
+     * loop's shape: select failure (signal interrupt) abandons draining with
+     * what came through rather than looping blindly.
+     *
+     * @param  resource|null $stdoutPipe
+     * @param  resource|null $stderrPipe
+     * @return array{0: string, 1: string} captured [stdout, stderr]
+     */
+    private static function drainCapturedPipes($stdoutPipe, $stderrPipe): array
+    {
+        $stdout = '';
+        $stderr = '';
+        /** @var array<int, resource> $open */
+        $open = [];
+        foreach ([$stdoutPipe, $stderrPipe] as $pipe) {
+            if (is_resource($pipe)) {
+                @stream_set_blocking($pipe, false);
+                $open[(int) $pipe] = $pipe; // resource ids are unique among live streams
+            }
+        }
+
+        while ($open !== []) {
+            $read = $open;
+            $write = $except = null;
+            if (@stream_select($read, $write, $except, 1) === false) {
+                break;
+            }
+            foreach ($read as $stream) {
+                $chunk = fread($stream, 65536);
+                if ($chunk !== false && $chunk !== '') {
+                    if ($stream === $stdoutPipe) {
+                        $stdout .= $chunk;
+                    } else {
+                        $stderr .= $chunk;
+                    }
+                    continue;
+                }
+                if (feof($stream)) {
+                    unset($open[(int) $stream]);
+                }
+            }
+        }
+
+        foreach ([$stdoutPipe, $stderrPipe] as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+
+        return [$stdout, $stderr];
+    }
+
+    private function runExec(ExecRequest $req): void
+    {
+        $this->teardownTerminal();
+        $err = null;
+        $exit = -1;
+        $stdout = '';
+        $stderr = '';
+
+        try {
+            // Use the program's configured input/output where possible.
+            //
+            // WHAT THIS COMMENT USED TO SAY: "only fall back to
+            // STDIN/STDOUT/STDERR when those resources are gone (e.g. tests
+            // that closed the streams). Mirrors upstream bubbletea PR #1680 —
+            // avoid a panic when the program was started with a null/closed
+            // input handle."
+            //
+            // WHAT IS TRUE NOW: falling back to the CONSTANTS is not a
+            // fallback at all once the process has closed descriptor 0.
+            // `defined('STDIN')` stays true after the handle is closed while
+            // `is_resource()` goes false, and the constructor already seeds
+            // `$this->input` from `$options->input ?? STDIN` — so for any
+            // program built without an explicit input, BOTH arms of the old
+            // ternary were the same dead handle, and the guard's fallback was
+            // the very thing it was guarding against. MEASURED, PHP 8.3.6:
+            // `proc_open()` with a closed resource in the descriptor array
+            // throws `TypeError: proc_open(): supplied resource is not a valid
+            // stream resource`, which the `@` below cannot suppress because it
+            // is thrown rather than raised. The surrounding try/catch turns
+            // that into `$err` plus exit -1, so the shape degrades by
+            // exception — the opposite of the guard's stated intent.
+            //
+            // WHY THE GUARD STILL EARNS ITS PLACE: the upstream intent (never
+            // fail merely because the input handle is gone) is right, and the
+            // constants are still the correct SECOND choice — they are live in
+            // every ordinary run. Only the last resort changed: a `/dev/null`
+            // file spec, which `proc_open()` opens for itself and which
+            // therefore cannot be closed out from under this call. See the
+            // closed-descriptor-0 family on {@see Util\TtyDetect}.
+            $nul      = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+            $childIn  = self::childDescriptor($this->input, STDIN, ['file', $nul, 'r']);
+            $childOut = self::childDescriptor($this->output, STDOUT, ['file', $nul, 'w']);
+            $childErr = self::childDescriptor(null, STDERR, ['file', $nul, 'w']);
+            $descriptors = $req->captureOutput
+                ? [0 => $childIn, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]
+                : [0 => $childIn, 1 => $childOut, 2 => $childErr];
+            $cmd = is_array($req->command) ? $req->command : (string) $req->command;
+            $proc = @proc_open($cmd, $descriptors, $pipes);
+            if (!is_resource($proc)) {
+                throw new \RuntimeException(Lang::t('program.proc_open_failed', [
+                    'cmd' => is_array($cmd) ? implode(' ', $cmd) : $cmd,
+                ]));
+            }
+            if ($req->captureOutput === true) {
+                [$stdout, $stderr] = self::drainCapturedPipes($pipes[1] ?? null, $pipes[2] ?? null);
+            }
+            $exit = proc_close($proc);
+        } catch (\Throwable $t) {
+            $err = $t;
+        }
+        $this->setupTerminal();
+        $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
+        $this->lastImageRows = [];
+        $this->dirty = true;
+
+        $produced = $req->onComplete !== null
+            ? ($req->onComplete)($exit, $stdout, $stderr, $err)
+            : null;
+        $this->dispatch(new ExecMsg($exit, $err, $stdout, $stderr));
+        if ($produced !== null) {
+            $this->dispatch($produced);
+        }
+    }
+
+    /**
+     * Implement Ctrl-Z semantics: tear down, deliver SuspendMsg, raise
+     * SIGTSTP on this process group with the default handler so the
+     * process actually stops, then on SIGCONT restore terminal state
+     * and dispatch ResumeMsg.
+     */
+    private function suspendProgram(): void
+    {
+        // Notify the model first so it can stash any state it cares about.
+        if ($this->options->filter === null) {
+            [$nextModel, $cmd] = $this->model->update(new SuspendMsg());
+            $this->model = $nextModel;
+            if ($cmd !== null) {
+                $this->scheduleCmd($cmd);
+            }
+        }
+
+        if (!function_exists('pcntl_signal') || !defined('SIGTSTP') || !defined('SIGCONT')) {
+            // Without pcntl we can't actually suspend; emit Resume
+            // immediately so the model knows nothing happened.
+            $this->dispatch(new ResumeMsg());
+            return;
+        }
+
+        $this->teardownTerminal();
+        // Reset SIGTSTP to default and re-raise it on this process. Remember
+        // what was installed so the resume puts THAT back: with
+        // withoutSignalHandler/catchInterrupts off nothing of ours was there,
+        // and unconditionally installing a closure here leaked a handler that
+        // no teardown knew to remove.
+        $prevTstp = function_exists('pcntl_signal_get_handler')
+            ? pcntl_signal_get_handler(SIGTSTP)
+            : null;
+        pcntl_signal(SIGTSTP, SIG_DFL);
+        if (function_exists('posix_getpid')) {
+            posix_kill(posix_getpid(), SIGTSTP);
+        }
+        // When the process resumes (SIGCONT) it picks back up here.
+        // Reinstall handlers + terminal state.
+        pcntl_signal(SIGTSTP, $prevTstp ?? function (): void {
+            $this->send(new SuspendMsg());
+        });
+        $this->setupTerminal();
+        $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
+        $this->lastImageRows = [];
+        $this->dirty = true;
+        $this->dispatch(new ResumeMsg());
+    }
+
+    /**
+     * Promote a buffered lone-ESC byte to a {@see KeyMsg} after a short
+     * settling window. If a follow-up byte arrives in time and resolves
+     * the buffer (e.g. a CSI sequence), {@see InputReader::flushPending()}
+     * returns null and nothing is dispatched.
+     */
+    private function scheduleEscapeFlush(): void
+    {
+        if ($this->escapeFlushPending) {
+            return;
+        }
+        $this->escapeFlushPending = true;
+        $this->addOneShotTimer(0.05, function (): void {
+            $this->escapeFlushPending = false;
+            $msg = $this->reader->flushPending();
+            if ($msg !== null) {
+                $this->dispatch($msg);
+            }
+        });
+    }
+
+    /**
+     * Drain one read's worth of input into the model.
+     *
+     * @param resource $stream
+     * @return bool true when bytes were read (false on EOF / nothing ready)
+     */
+    private function readInput($stream): bool
+    {
+        $bytes = @fread($stream, 4096);
+        if ($bytes === false || $bytes === '') {
+            // Real EOF: drop the watcher so the loop doesn't spin
+            // delivering readable notifications for a closed pipe.
+            if (feof($stream)) {
+                $this->loop->removeReadStream($stream);
+            }
+            return false;
+        }
+        $this->recorder?->recordInputBytes($bytes);
+        foreach ($this->reader->parse($bytes) as $msg) {
+            $this->dispatch($msg);
+            if (!$this->running) {
+                return true;
+            }
+        }
+        // A lone ESC byte is buffered for disambiguation (could be a
+        // CSI / Alt-key prefix). Promote it to a standalone Escape
+        // after a brief delay if no follow-up arrives.
+        if ($this->reader->hasPendingEscape()) {
+            $this->scheduleEscapeFlush();
+        }
+        // An open paste envelope whose end marker never arrives would
+        // swallow every later keystroke. Each read inside a paste pushes
+        // the deadline out; silence past it closes the paste.
+        if ($this->reader->isPasting()) {
+            $this->schedulePasteIdleFlush();
+        } else {
+            $this->cancelPasteIdleFlush();
+        }
+        return true;
+    }
+
+    /**
+     * (Re-)arm the stale-paste recovery: once input has been silent for
+     * {@see InputReader::PASTE_IDLE_TIMEOUT} with a paste envelope still
+     * open, its end marker is presumed lost and the reader is told to close
+     * it, which hands the keyboard back. A real paste is one burst, so every
+     * read while pasting restarts the window rather than letting an earlier
+     * deadline cut a still-arriving paste short.
+     */
+    private function schedulePasteIdleFlush(float $seconds = InputReader::PASTE_IDLE_TIMEOUT): void
+    {
+        $this->cancelPasteIdleFlush();
+        $armedAt = hrtime(true);
+        $this->pasteIdleTimer = $this->addOneShotTimer($seconds, function () use ($armedAt, $seconds): void {
+            $this->pasteIdleTimer = null;
+            if (!$this->reader->isPasting()) {
+                return;
+            }
+            // Judge staleness on the real clock, not the loop's: under
+            // ext-uv a timer armed after a blocking update() is computed
+            // against a stale cached clock and can fire at once — cutting a
+            // live paste in half and turning its newlines into Enter.
+            $elapsed = (hrtime(true) - $armedAt) / 1e9;
+            if ($elapsed < $seconds) {
+                $this->schedulePasteIdleFlush($seconds - $elapsed);
+                return;
+            }
+            // Bytes can sit unread behind a slow loop iteration even after
+            // a real-time second; that is a paste still arriving, not one
+            // that stopped. Feed them through the normal path, which re-arms
+            // (or cancels, if they closed the envelope).
+            if ($this->readInput($this->input)) {
+                return;
+            }
+            foreach ($this->reader->flushStalePaste() as $msg) {
+                $this->dispatch($msg);
+                if (!$this->running) {
+                    return;
+                }
+            }
+        });
+    }
+
+    private function cancelPasteIdleFlush(): void
+    {
+        if ($this->pasteIdleTimer !== null) {
+            $this->cancelOneShotTimer($this->pasteIdleTimer);
+            $this->pasteIdleTimer = null;
+        }
+    }
+
+    /**
+     * Arm a one-shot timer that {@see releaseRuntime()} can still cancel:
+     * tracked until it fires, forgotten the moment it does.
+     */
+    private function addOneShotTimer(float $seconds, \Closure $callback): TimerInterface
+    {
+        $id = null;
+        $timer = $this->loop->addTimer($seconds, function () use (&$id, $callback): void {
+            unset($this->oneShotTimers[$id]);
+            $callback();
+        });
+        $id = spl_object_id($timer);
+        $this->oneShotTimers[$id] = $timer;
+        return $timer;
+    }
+
+    private function cancelOneShotTimer(TimerInterface $timer): void
+    {
+        $this->loop->cancelTimer($timer);
+        unset($this->oneShotTimers[spl_object_id($timer)]);
+    }
+
+    /**
+     * Undo everything run() armed on process-wide state — the shared loop
+     * and the pcntl signal table — so that nothing of this Program outlives
+     * it: no timer fires into a torn-down terminal, and no handler closure
+     * keeps the Program graph reachable or answers a second Program's signals.
+     * Subscriptions go first so a subscription that displaced one of our
+     * signal handlers hands the signal back to us before we hand it back to
+     * whatever predated the Program.
+     */
+    private function releaseRuntime(): void
+    {
+        $this->runtimeGeneration++;
+        $this->cancelAllSubscriptions();
+        foreach ($this->oneShotTimers as $timer) {
+            $this->loop->cancelTimer($timer);
+        }
+        $this->oneShotTimers = [];
+        $this->escapeFlushPending = false;
+        $this->pasteIdleTimer = null;
+        $this->restoreSignalHandlers();
+    }
+
+    private function scheduleCmd(\Closure $cmd): void
+    {
+        $this->deferTick(function () use ($cmd): void {
+            $msg = $cmd();
+            if ($msg !== null) {
+                $this->dispatch($msg);
+            }
+        });
+    }
+
+    /**
+     * Queue `$callback` on the loop's next tick, bound to the current run:
+     * if {@see releaseRuntime()} has run by the time the tick comes round,
+     * the callback is dropped instead of reaching a torn-down Program.
+     */
+    private function deferTick(\Closure $callback): void
+    {
+        $generation = $this->runtimeGeneration;
+        $this->loop->futureTick(function () use ($generation, $callback): void {
+            if ($generation !== $this->runtimeGeneration) {
+                return;
+            }
+            $callback();
+        });
+    }
+
+    private function drainPending(): void
+    {
+        $queue = $this->pending;
+        $this->pending = [];
+        foreach ($queue as $msg) {
+            $this->dispatch($msg);
+            if (!$this->running) {
+                return;
+            }
+        }
+    }
+
+    private function setupTerminal(): void
+    {
+        if ($this->options->useAltScreen) {
+            $this->writeOutput(Ansi::altScreenEnter());
+        }
+        if ($this->options->hideCursor === true) {
+            $this->writeOutput(Ansi::cursorHide());
+        }
+        // Bubble Tea v2 enables grapheme-cluster mode (DEC 2027) by
+        // default to fix long-standing emoji-width drift. We follow.
+        if ($this->options->unicodeMode) {
+            $this->writeOutput(Ansi::unicodeOn());
+        }
+        match ($this->options->mouseMode) {
+            MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOn()),
+            MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOn()),
+            MouseMode::Off        => null,
+        };
+        $this->activeMouseMode = $this->options->mouseMode;
+        if ($this->options->reportFocus) {
+            $this->writeOutput(Ansi::focusReportingOn());
+        }
+        $this->activeFocusReporting = $this->options->reportFocus;
+        if ($this->options->bracketedPaste) {
+            $this->writeOutput(Ansi::bracketedPasteOn());
+        }
+        $this->activeBracketedPaste = $this->options->bracketedPaste;
+        $this->tty->enableRawMode();
+        $this->terminalAttached = true;
+    }
+
+    /**
+     * Hand the terminal back. Idempotent by the {@see $terminalAttached}
+     * latch: run()'s finally calls this blindly on every exit — normal,
+     * early-quit and Throwable — and a double invocation must be a byte-safe
+     * no-op rather than re-emitting cursor-show / alt-screen-leave over the
+     * caller's own terminal. The runExec and Ctrl-Z suspend paths pair this
+     * with setupTerminal(), which re-arms the latch, so their re-entry
+     * emission counts are unchanged.
+     */
+    private function teardownTerminal(): void
+    {
+        if (!$this->terminalAttached) {
+            return;
+        }
+        $this->terminalAttached = false;
+        $this->tty->restore();
+        if ($this->activeBracketedPaste) {
+            $this->writeOutput(Ansi::bracketedPasteOff());
+        }
+        if ($this->activeFocusReporting) {
+            $this->writeOutput(Ansi::focusReportingOff());
+        }
+        match ($this->activeMouseMode) {
+            MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOff()),
+            MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOff()),
+            MouseMode::Off, null  => null,
+        };
+        if ($this->options->unicodeMode) {
+            $this->writeOutput(Ansi::unicodeOff());
+        }
+        if ($this->options->hideCursor === true) {
+            $this->writeOutput(Ansi::cursorShow());
+        }
+        if ($this->options->useAltScreen) {
+            $this->writeOutput(Ansi::altScreenLeave());
+        }
+        // The mirrors describe what the TERMINAL currently has enabled; after
+        // this method nothing is. Clearing them only AFTER the emissions above
+        // (which diff against the mirrors) keeps applyViewSideEffects()'s
+        // transition logic honest if a frame ever renders while detached.
+        $this->activeMouseMode = MouseMode::Off;
+        $this->activeFocusReporting = false;
+        $this->activeBracketedPaste = false;
+    }
+
+    /**
+     * Render one frame. If the model returned a {@see View}, emit
+     * any side-effect escapes (window title, cursor shape) that
+     * differ from the previously-emitted set, then paint the body.
+     */
+    private function renderFrame(): void
+    {
+        $frameStart = microtime(true);
+
+        if ($this->options->withoutRenderer) {
+            // Headless mode: still call view() so the model's
+            // computation runs (and any errors surface) but skip
+            // emitting any output.
+            $this->activeModel()->view();
+            $this->lastFrameDuration = microtime(true) - $frameStart;
+            return;
+        }
+        $rendered = $this->activeModel()->view();
+        $images = [];
+        if ($rendered instanceof View) {
+            $this->applyViewSideEffects($rendered);
+            $body = $rendered->body;
+            $images = $rendered->images;
+        } else {
+            $body = $rendered;
+        }
+
+        // Resolved on every frame, not only when images are registered: a
+        // marker is a zero-width escape plus one cell, and a frame that
+        // carries one with an empty image layer (the layer was released, the
+        // last image scrolled off) must still lose the escape before it
+        // reaches the terminal. Bare Private-Use text — Nerd Font and
+        // Powerline glyphs in tool output — is never touched (audit 15b-17),
+        // and a frame with no marker escape takes resolve()'s fast path.
+        [$body, $paints] = ImageOverlay::resolve($body, $images);
+        $signature = ImageOverlay::signature($paints);
+        $imagesChanged = $signature !== $this->lastImageSignature;
+        $bodyChanged = $body !== $this->lastRenderedBody;
+
+        // Paint the text frame first (a normal diff — repaints only changed lines).
+        $this->renderer->render($body);
+
+        // Pixel-graphics images (sixel/kitty/iTerm2) stay on screen until the
+        // cells under them are repainted, and the text diff skips the blank cells
+        // an image's marker block leaves behind — so when the image layer changes
+        // (a scroll moves the posters, a screen push/pop swaps them), old images
+        // linger as ghosts. Rather than wipe the whole screen, surgically clear
+        // just the rows the OLD images covered (re-render those text lines, which
+        // clears the graphics on them), then repaint the current images on top.
+        if ($imagesChanged && $this->lastImageRows !== []) {
+            $this->writeOutput($this->clearImageRows($this->lastImageRows, explode("\n", $body)));
+        }
+        if (($imagesChanged || $bodyChanged) && $paints !== []) {
+            $this->writeOutput(ImageOverlay::paint($paints));
+        }
+
+        $this->lastRenderedBody = $body;
+        $this->lastImageSignature = $signature;
+        $this->lastImageRows = ImageOverlay::coveredRows($paints);
+
+        $this->lastFrameDuration = microtime(true) - $frameStart;
+    }
+
+    /**
+     * Clear the cells previously occupied by graphics images by re-rendering
+     * their text rows from the current clean frame. Erasing + rewriting each row
+     * removes any graphics lingering on it without touching the rest of the
+     * screen (no full-screen wipe / flicker).
+     *
+     * @param array<int, true> $rows        1-based row indices to repaint
+     * @param list<string>     $cleanLines  the current frame's lines (markers blanked)
+     */
+    private function clearImageRows(array $rows, array $cleanLines): string
+    {
+        $out = '';
+        foreach (array_keys($rows) as $row) {
+            $out .= Ansi::cursorTo($row, 1) . Ansi::eraseLine() . ($cleanLines[$row - 1] ?? '');
+        }
+
+        return $out;
+    }
+
+    private function applyViewSideEffects(View $view): void
+    {
+        if ($view->mouseMode !== null && $view->mouseMode !== $this->activeMouseMode) {
+            // Turn the previous mode off, then the new one on. Both
+            // pairs happily no-op when fed back to themselves.
+            match ($this->activeMouseMode) {
+                MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOff()),
+                MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOff()),
+                MouseMode::Off, null  => null,
+            };
+            match ($view->mouseMode) {
+                MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOn()),
+                MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOn()),
+                MouseMode::Off        => null,
+            };
+            $this->activeMouseMode = $view->mouseMode;
+        }
+
+        if ($view->reportFocus !== null && $view->reportFocus !== $this->activeFocusReporting) {
+            $this->writeOutput($view->reportFocus
+                ? Ansi::focusReportingOn()
+                : Ansi::focusReportingOff());
+            $this->activeFocusReporting = $view->reportFocus;
+        }
+
+        if ($view->bracketedPaste !== null && $view->bracketedPaste !== $this->activeBracketedPaste) {
+            $this->writeOutput($view->bracketedPaste
+                ? Ansi::bracketedPasteOn()
+                : Ansi::bracketedPasteOff());
+            $this->activeBracketedPaste = $view->bracketedPaste;
+        }
+
+        if ($view->windowTitle !== null && $view->windowTitle !== $this->lastWindowTitle) {
+            $this->writeOutput(Ansi::setWindowTitle($view->windowTitle));
+            $this->lastWindowTitle = $view->windowTitle;
+        }
+
+        if ($view->progressBar !== null && !$this->progressEquals($view->progressBar, $this->lastProgress)) {
+            $this->writeOutput(Ansi::setProgressBar($view->progressBar->state, $view->progressBar->percent));
+            $this->lastProgress = $view->progressBar;
+        }
+
+        if ($view->foregroundColor !== null && !$this->colorEquals($view->foregroundColor, $this->lastForegroundColor)) {
+            $c = $view->foregroundColor;
+            $this->writeOutput(Ansi::setForegroundColor($c->r, $c->g, $c->b));
+            $this->lastForegroundColor = $c;
+        }
+
+        if ($view->backgroundColor !== null && !$this->colorEquals($view->backgroundColor, $this->lastBackgroundColor)) {
+            $c = $view->backgroundColor;
+            $this->writeOutput(Ansi::setBackgroundColor($c->r, $c->g, $c->b));
+            $this->lastBackgroundColor = $c;
+        }
+
+        if ($view->cursor === null) {
+            // null cursor → hide.
+            if (!$this->lastCursorHidden) {
+                $this->writeOutput(Ansi::cursorHide());
+                $this->lastCursorHidden = true;
+            }
+            return;
+        }
+
+        // Show cursor if it was hidden.
+        if ($this->lastCursorHidden) {
+            $this->writeOutput(Ansi::cursorShow());
+            $this->lastCursorHidden = false;
+        }
+
+        $cur  = $view->cursor;
+        $prev = $this->lastCursor;
+        if ($prev === null
+            || $prev->shape !== $cur->shape
+            || $prev->blink !== $cur->blink) {
+            $this->writeOutput(Ansi::cursorShape($cur->shape, $cur->blink));
+        }
+        if ($cur->row !== null && $cur->col !== null) {
+            $this->writeOutput(Ansi::cursorTo($cur->row, $cur->col));
+        }
+        $this->lastCursor = $cur;
+    }
+
+    /**
+     * Write a chunk to the program's output stream and tee it to the
+     * recorder if one is attached. Every byte that leaves the runtime —
+     * renderer frames, RawMsg / PrintMsg, terminal-mode bytes, cursor /
+     * title / progress emitters — flows through here so cassettes
+     * reflect what the user actually saw.
+     */
+    private function writeOutput(string $bytes): void
+    {
+        // Loop over short writes: a single fwrite() to a PTY/pipe (e.g. an
+        // SSH session) with a partially full kernel buffer consumes only what
+        // fits and returns a short count. Dropping the tail left mode-setting
+        // sequences and large RawMsg/PrintMsg payloads partially emitted.
+        $len = strlen($bytes);
+        $written = 0;
+        while ($written < $len) {
+            $n = @fwrite($this->output, $written === 0 ? $bytes : substr($bytes, $written));
+            if ($n === false) {
+                break;
+            }
+            if ($n === 0) {
+                $w = [$this->output];
+                $r = $e = null;
+                if (@stream_select($r, $w, $e, 1) === false) {
+                    break;
+                }
+                continue;
+            }
+            $written += $n;
+        }
+        $this->recorder?->recordOutput($bytes);
+    }
+
+    /**
+     * Compare two progress states for equality.
+     *
+     * Null-asymmetry contract: both must be non-null to be considered
+     * equal. When a view returns null progress (field not set), the
+     * comparison returns false so no update is emitted — preserving
+     * whatever the terminal last rendered.
+     */
+    private function progressEquals(?Progress $a, ?Progress $b): bool
+    {
+        return $a !== null && $b !== null
+            && $a->state === $b->state
+            && $a->percent === $b->percent;
+    }
+
+    /**
+     * Compare two color values for equality.
+     *
+     * Null-asymmetry contract: both must be non-null to be considered
+     * equal. When a view returns null color (field not set), the
+     * comparison returns false so no update is emitted — preserving
+     * whatever the terminal last rendered.
+     */
+    private function colorEquals(?Util\Color $a, ?Util\Color $b): bool
+    {
+        return $a !== null && $b !== null
+            && $a->r === $b->r && $a->g === $b->g && $a->b === $b->b;
+    }
+
+    /**
+     * Cooperative loop stop shared by the SIGINT/SIGTERM/SIGHUP arms: mark
+     * the run finished and unblock the loop so run() unwinds into its
+     * finally, which performs the full terminal teardown.
+     */
+    private function stopProgram(): void
+    {
+        $this->running = false;
+        $this->loop->stop();
+    }
+
+    private function installSignalHandlers(): void
+    {
+        if ($this->options->withoutSignalHandler
+            || !$this->options->catchInterrupts
+            || !function_exists('pcntl_signal')
+        ) {
+            return;
+        }
+        // Deliver signals asynchronously — PHP dispatches the handler at the
+        // next safe VM point — rather than only when the render tick calls
+        // pcntl_signal_dispatch(). Without this, signal latency is bounded by
+        // the framerate: a 1fps program could sit on a SIGINT/SIGWINCH for up
+        // to a second. Once enabled nothing is left pending, so the (now
+        // fallback) timer-driven dispatch can't double-fire. Guarded for
+        // builds without this pcntl function.
+        if (function_exists('pcntl_async_signals')) {
+            $wasAsync = pcntl_async_signals(true);
+            $this->prevAsyncSignals ??= $wasAsync;
+            $this->asyncSignals = true;
+        }
+        $this->installProgramSignal(SIGINT, function (): void {
+            $this->stopProgram();
+        });
+        // rv-tui-1 (crush-review-1014): a plain `kill <pid>` (SIGTERM) and a
+        // closed terminal (SIGHUP) used to die default-style mid-frame — the
+        // exact stranded-terminal class the try/finally in run() heals for
+        // Throwables, just signal-shaped. Route them through the same stop
+        // path as SIGINT so the loop unwinds and run()'s finally restores the
+        // terminal. Same defined() guards as the existing arms: builds without
+        // these constants (Windows) simply never arm them, and
+        // restoreSignalHandlers() hands each signal back via the prev map.
+        if (defined('SIGTERM')) {
+            $this->installProgramSignal(SIGTERM, function (): void {
+                $this->stopProgram();
+            });
+        }
+        if (defined('SIGHUP')) {
+            $this->installProgramSignal(SIGHUP, function (): void {
+                $this->stopProgram();
+            });
+        }
+        if (defined('SIGWINCH')) {
+            $this->installProgramSignal(SIGWINCH, function (): void {
+                $size = $this->tty->size();
+                $this->send(new WindowSizeMsg($size['cols'], $size['rows']));
+            });
+        }
+        // Ctrl-Z (SIGTSTP) → emit SuspendMsg via send() so the
+        // dispatcher runs the actual suspend/resume cycle inside the
+        // event loop.
+        if (defined('SIGTSTP')) {
+            $this->installProgramSignal(SIGTSTP, function (): void {
+                $this->send(new SuspendMsg());
+            });
+        }
+        // SIGCONT can fire spuriously (kill -CONT $$) — turn it into a
+        // ResumeMsg so models that care can re-emit state.
+        if (defined('SIGCONT') === true) {
+            $this->installProgramSignal(SIGCONT, function (): void {
+                $this->send(new ResumeMsg());
+            });
+        }
+    }
+
+    /**
+     * Install one of the Program's own handlers, remembering the handler it
+     * displaces (the FIRST one, if run() ever installs twice) so
+     * {@see restoreSignalHandlers()} can put it back.
+     */
+    private function installProgramSignal(int $signo, \Closure $handler): void
+    {
+        if (!array_key_exists($signo, $this->prevProgramSignalHandlers)) {
+            $this->prevProgramSignalHandlers[$signo] = function_exists('pcntl_signal_get_handler')
+                ? pcntl_signal_get_handler($signo)
+                : (defined('SIG_DFL') ? SIG_DFL : 0);
+        }
+        pcntl_signal($signo, $handler);
+    }
+
+    /**
+     * Counterpart of {@see installSignalHandlers()}: hand every signal back
+     * to the handler it had before run(), and put async delivery back the
+     * way it was. Without this the handler closures (bound to `$this`) kept
+     * the whole Program reachable after run() returned, and a second Program
+     * in the same process inherited the first one's SIGINT/SIGWINCH answers.
+     */
+    private function restoreSignalHandlers(): void
+    {
+        if ($this->prevProgramSignalHandlers !== [] && function_exists('pcntl_signal')) {
+            foreach ($this->prevProgramSignalHandlers as $signo => $prev) {
+                pcntl_signal($signo, $prev);
+            }
+        }
+        $this->prevProgramSignalHandlers = [];
+        if ($this->prevAsyncSignals !== null && function_exists('pcntl_async_signals')) {
+            pcntl_async_signals($this->prevAsyncSignals);
+        }
+        $this->prevAsyncSignals = null;
+        $this->asyncSignals = false;
+    }
+
+    /**
+     * Resolve the subscription set the model currently wants.
+     *
+     * An explicit `subscriptions:` closure on ProgramOptions wins (it can wrap
+     * or override the model's own declaration). Otherwise we honor the model
+     * directly — {@see Model::subscriptions()} is a required interface method,
+     * so a model that declares a tick must get it started without every
+     * consumer having to hand-wire the closure. Models that don't subscribe
+     * use the {@see SubscriptionCapable} trait and return null → empty set.
+     */
+    private function wantedSubscriptions(): ?Subscriptions
+    {
+        return $this->options->subscriptions !== null
+            ? ($this->options->subscriptions)($this->model)
+            : $this->model->subscriptions();
+    }
+
+    /**
+     * Re-evaluate the model's wanted subscriptions and reconcile against the
+     * active set. Called every update cycle, so the hot path — a model that
+     * wants no subscriptions and has none active — must stay allocation-free:
+     * skip entirely rather than building an empty {@see Subscriptions} just to
+     * diff it against nothing.
+     */
+    private function reconcileWantedSubscriptions(): void
+    {
+        $wanted = $this->wantedSubscriptions();
+        if ($wanted === null && $this->activeSubscriptions === []) {
+            return;
+        }
+        $this->reconcileSubscriptions($wanted ?? new Subscriptions());
+    }
+
+    /**
+     * Diff the currently-active subscriptions against the wanted set
+     * and reconcile: cancel any not in $wanted, start any new ones.
+     */
+    private function reconcileSubscriptions(Subscriptions $wanted): void
+    {
+        $wantedIds = [];
+        foreach ($wanted->all() as $sub) {
+            $wantedIds[$sub->id] = true;
+            if (isset($this->activeSubscriptions[$sub->id]) === false) {
+                $this->activeSubscriptions[$sub->id] = [
+                    $this->startSubscription($sub),
+                    $sub,
+                ];
+            }
+        }
+        // Cancel subscriptions that are no longer wanted.
+        foreach ($this->activeSubscriptions as $id => [$timer, $activeSub]) {
+            if (!isset($wantedIds[$id])) {
+                if ($activeSub->kind === Kind::Signal) {
+                    $this->cancelSignalSubscription($activeSub);
+                } else {
+                    $this->loop->cancelTimer($timer);
+                }
+                unset($this->activeSubscriptions[$id]);
+            }
+        }
+    }
+
+    /**
+     * Start a subscription and return its timer handle.
+     *
+     * @return \React\EventLoop\TimerInterface
+     */
+    private function startSubscription(Subscription $sub): mixed
+    {
+        return match ($sub->kind) {
+            Kind::Tick => $this->loop->addPeriodicTimer(
+                $sub->params['seconds'],
+                function () use ($sub): void {
+                    $msg = ($sub->produce)();
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                },
+            ),
+            Kind::Key => $this->loop->addPeriodicTimer(
+                0.1,
+                function () use ($sub): void {
+                    $msg = ($sub->produce)();
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                },
+            ),
+            Kind::Signal => $this->installSignalSubscription($sub),
+            Kind::Custom => $this->loop->addPeriodicTimer(
+                $sub->params['interval'] ?? 1.0,
+                function () use ($sub): void {
+                    $msg = ($sub->produce)();
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                },
+            ),
+        };
+    }
+
+    /**
+     * Install a signal handler for the given subscription.
+     *
+     * Signal subscriptions have no loop timer — they fire via `pcntl_signal`.
+     * Before installing our handler we record whatever handler is currently
+     * registered for the signal so {@see cancelSignalSubscription()} can
+     * restore it on cancel; returns null (there is no timer handle to cancel).
+     *
+     * @return null
+     */
+    private function installSignalSubscription(Subscription $sub): mixed
+    {
+        $signo = $sub->params['signo'] ?? 0;
+        if (function_exists('pcntl_signal')) {
+            // Remember the handler we're about to displace so cancel can put it
+            // back. Guard against clobbering it if the same signo is installed
+            // again before being cancelled (keep the ORIGINAL predecessor).
+            if (function_exists('pcntl_signal_get_handler') && !isset($this->prevSignalHandlers[$signo])) {
+                $this->prevSignalHandlers[$signo] = pcntl_signal_get_handler($signo);
+            }
+            $handler = function (int $signo) use ($sub): void {
+                $msg = ($sub->produce)();
+                if ($msg !== null) {
+                    $this->dispatch($msg);
+                }
+            };
+            pcntl_signal($signo, $handler);
+        }
+        return null;
+    }
+
+    /**
+     * Cancel a signal subscription by restoring the handler that was in place
+     * before {@see installSignalSubscription()} displaced it. Without this the
+     * subscription's handler stays wired to `pcntl_signal` for the process
+     * lifetime — the leak this method fixes.
+     */
+    private function cancelSignalSubscription(Subscription $sub): void
+    {
+        if (!function_exists('pcntl_signal')) {
+            return;
+        }
+        $signo = $sub->params['signo'] ?? 0;
+        $prev = $this->prevSignalHandlers[$signo] ?? (defined('SIG_DFL') ? SIG_DFL : 0);
+        pcntl_signal($signo, $prev);
+        unset($this->prevSignalHandlers[$signo]);
+    }
+
+    /**
+     * Cancel all active subscriptions. Called during teardown.
+     */
+    private function cancelAllSubscriptions(): void
+    {
+        foreach ($this->activeSubscriptions as [$timer, $activeSub]) {
+            if ($activeSub->kind === Kind::Signal) {
+                $this->cancelSignalSubscription($activeSub);
+            } else {
+                $this->loop->cancelTimer($timer);
+            }
+        }
+        $this->activeSubscriptions = [];
+    }
+
+    /**
+     * Drain and execute any pending lifecycle Cmds accumulated in the
+     * current Composite model, then clear them for the next cycle.
+     */
+    private function drainCompositePendingCmds(): void
+    {
+        if (!$this->model instanceof Composite) {
+            return;
+        }
+        $cmds = $this->model->pendingCmds();
+        if ($cmds === []) {
+            return;
+        }
+        // Create a new Composite with the same children but no pending Cmds,
+        // so they are not re-drained on the next tick.
+        $this->model = new Composite($this->model->children());
+        foreach ($cmds as $cmd) {
+            $this->scheduleCmd($cmd);
+        }
+    }
+}

@@ -170,7 +170,7 @@ final class FfmpegDecoderReadinessTest extends TestCase
         } finally {
             // Hermetic under every outcome, including a KILLed harness that
             // never got to close its ffmpeg itself. Signal 9 literal —
-            // sugar-video does not require ext-pcntl (the deleted BoundedReaper's precedent, now candy-core BoundedShutdown's doctrine).
+            // sugar-video does not require ext-pcntl (the deleted BoundedReaper's precedent, now sugar-core BoundedShutdown's doctrine).
             $wedgedPid = (int) @file_get_contents($pidFile);
             if ($wedgedPid > 0 && \function_exists('posix_kill')) {
                 @posix_kill($wedgedPid, 9);

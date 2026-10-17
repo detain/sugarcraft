@@ -217,25 +217,25 @@
 
 ## CORE LIBRARY IMPROVEMENTS
 
-### candy-core
+### sugar-core
 
 ### [ ] Elm-Style Subscriptions
 
 - **Priority**: P1 - High
 - **Effort**: 3-5 sessions
-- **Research**: `libraries/candy-core-research.md`
+- **Research**: `libraries/sugar-core-research.md`
 
 ### [ ] Screen Stack (pushScreen/popScreen)
 
 - **Priority**: P1 - High
 - **Effort**: 4-6 sessions
-- **Research**: `libraries/candy-core-research.md`
+- **Research**: `libraries/sugar-core-research.md`
 
 ### [ ] Component Composition Framework
 
 - **Priority**: P2 - Medium
 - **Effort**: 3-4 sessions
-- **Research**: `libraries/candy-core-research.md`
+- **Research**: `libraries/sugar-core-research.md`
 
 ### sugar-style
 
@@ -432,7 +432,7 @@ All 45 research documents available at:
 
 | Library | File Size |
 |---------|-----------|
-| candy-core | 17KB |
+| sugar-core | 17KB |
 | sugar-animation | 16KB |
 | candy-codeshot | 23KB |
 | sugar-quickpick | 21KB |

@@ -377,7 +377,7 @@ Not applicable — `sugar-pty` is a terminal I/O primitive library, not a render
 
 **Source repo:** `charmbracelet/bubbletea` (Go, `View` struct with component composition)
 
-**Source discussion:** SugarCraft mapping to `candy-core` / `sugar-widgets`
+**Source discussion:** SugarCraft mapping to `sugar-core` / `sugar-widgets`
 
 **Implementation ideas:**
 
@@ -389,7 +389,7 @@ Not applicable — `sugar-pty` is a terminal I/O primitive library, not a render
 
 4. Consider `sugar-vterm` integration for escape sequence interpretation
 
-**Estimated complexity:** High — depends on `sugar-vterm` and `candy-core` rendering APIs
+**Estimated complexity:** High — depends on `sugar-vterm` and `sugar-core` rendering APIs
 
 **Expected impact:** Low — niche use case until full TUI framework exists
 

@@ -42,8 +42,8 @@ final class QuickPick
      * is STDOUT: the ioctl reached the terminal only while stdout happened to BE
      * that terminal, and silently no-op'd (rc != 0, so `$onResize` never fired)
      * as soon as stdout was redirected to a pipe or file. Same defect class
-     * candy-core addresses in `Tty\PosixBackend::descriptorForStream()` — which
-     * is documented as internal to candy-core, so it is not callable from here.
+     * sugar-core addresses in `Tty\PosixBackend::descriptorForStream()` — which
+     * is documented as internal to sugar-core, so it is not callable from here.
      *
      * The READ side was never wrong: `ttySize()` passes the `STDIN` *resource*
      * to `Tty`, which resolves the descriptor itself. This constant exists so
@@ -554,7 +554,7 @@ final class QuickPick
      * PSR-1's lowerCamelCase method rule. The rename is NOT a break for callers:
      * PHP resolves method names case-insensitively, so existing `$hermit->View()`
      * call sites and docs keep working and resolve here. A capitalised `View()`
-     * shim à la candy-core's `Program::getModel()` is therefore both unnecessary
+     * shim à la sugar-core's `Program::getModel()` is therefore both unnecessary
      * and impossible — declaring it would be a redeclare fatal.
      *
      * @param string $backgroundView  The underlying view (e.g. current app output)

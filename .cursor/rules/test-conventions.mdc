@@ -7,10 +7,10 @@ alwaysApply: false
 # PHPUnit 10 conventions
 
 - Tests at `<slug>/tests/<Class>Test.php`, namespace `<NS>\<Sub>\Tests\…`.
-- `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` (see `candy-core/phpunit.xml`). Every public method ≥1 test.
-- **Loop-pinning bootstrap** — a suite bounding waits with timers on the shared `Loop::get()` uses `bootstrap="tests/bootstrap.php"` + `\SugarCraft\Testing\LoopPin::pinStableClock()` (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `sugar-crush`). ext-uv computes deadlines against a clock refreshed once per loop iteration, so a timer armed after synchronous idle fires immediately; `StreamSelectLoop` refreshes at arm time. See `sugar-testing/src/LoopPin.php` and `candy-core/src/Program.php`.
+- `bootstrap="vendor/autoload.php"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"` (see `sugar-core/phpunit.xml`). Every public method ≥1 test.
+- **Loop-pinning bootstrap** — a suite bounding waits with timers on the shared `Loop::get()` uses `bootstrap="tests/bootstrap.php"` + `\SugarCraft\Testing\LoopPin::pinStableClock()` (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `sugar-crush`). ext-uv computes deadlines against a clock refreshed once per loop iteration, so a timer armed after synchronous idle fires immediately; `StreamSelectLoop` refreshes at arm time. See `sugar-testing/src/LoopPin.php` and `sugar-core/src/Program.php`.
 
-Patterns (`sugar-widgets/tests/`, `candy-core/tests/`, `sugar-vterm/tests/`):
+Patterns (`sugar-widgets/tests/`, `sugar-core/tests/`, `sugar-vterm/tests/`):
 - **Snapshot byte** — assert raw `\x1b[1m`-style SGR strings from `view()`. Don't abstract.
 - **Golden render** — `<slug>/tests/GoldenRenderTest.php` asserts byte-exact `view()`/`render()` output against committed `<slug>/tests/fixtures/*.golden` files via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi($path, $output)`. Needs `sugarcraft/sugar-testing` dev-dep only — CI injects the path repos (canonical `sugar-charts/tests/GoldenRenderTest.php`).
 - **Snapshot cell-grid** — drive through `SugarCraft\Vterm\Terminal\Terminal`, assert `$term->screen()->cell($r,$c)` (`$screen->cols`/`rows` are properties).
@@ -19,7 +19,7 @@ Patterns (`sugar-widgets/tests/`, `candy-core/tests/`, `sugar-vterm/tests/`):
 - **Cross-lib parity** — `candy-vcr/tests/VtParityTest.php` diffs the `candy-vcr` renderer against `sugar-vterm` and must pass against BOTH the linked monorepo `sugar-vterm` and the stale Packagist `dev-master` CI resolves. Gate version-dependent arms on a feature marker (`Scrollback::clear()`) via the `vtCarriesMarker()` helper — a literal `\method_exists()` constant-folds under PHPStan into an always-true/always-false report.
 - **Documentation drift** — `sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php` re-derive `sugar-crush/README.md` + `sugar-crush/docs/*.md` rosters from `sugar-crush/src/`. New tool/command/env var/key binding without the doc edit = red.
 
-**Stream-write gotcha**: don't `ftruncate; rewind;` between writes. Slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `candy-core/tests/RendererTest.php`).
+**Stream-write gotcha**: don't `ftruncate; rewind;` between writes. Slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `sugar-core/tests/RendererTest.php`).
 
 **FFI** (`sugar-pty/tests/`): structural tests run unconditionally; syscall round-trips call `requirePtySyscalls()` first.
 

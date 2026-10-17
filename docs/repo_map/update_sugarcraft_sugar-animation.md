@@ -530,7 +530,7 @@ Golden files for render output in both light/dark themes across different charac
 
 - `Detect::cached()` for capability detection
 
-- `AnimationDriver` as candy-core Model
+- `AnimationDriver` as sugar-core Model
 
 **Integration:** Create `sugar-animation/src/ProtocolPlayer.php` that wraps `sugar-image`'s renderers in the `Player` loop.
 

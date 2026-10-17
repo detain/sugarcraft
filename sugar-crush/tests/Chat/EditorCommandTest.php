@@ -18,7 +18,7 @@ use SugarCraft\Crush\Commands\EditorCommand;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
- * Roadmap 5.14h: `/editor` opens $VISUAL/$EDITOR through candy-core's
+ * Roadmap 5.14h: `/editor` opens $VISUAL/$EDITOR through sugar-core's
  * Cmd::exec and puts what was saved into the draft box, unsent.
  */
 final class EditorCommandTest extends TestCase

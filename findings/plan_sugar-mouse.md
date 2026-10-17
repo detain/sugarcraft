@@ -370,12 +370,12 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 
 **What is expected:**
 
-- Remove `sugar-async`, `sugar-ansi-parser`, and `sugar-input` from the `repositories` array (only `candy-core` is actually required)
+- Remove `sugar-async`, `sugar-ansi-parser`, and `sugar-input` from the `repositories` array (only `sugar-core` is actually required)
 - OR add a comment explaining why they are present (e.g., "reserved for future async integration")
 
 **Why:**
 
-- Only `candy-core` is in the `require` section
+- Only `sugar-core` is in the `require` section
 - The other three path repositories (`sugar-async`, `sugar-ansi-parser`, `sugar-input`) are listed but unused
 - This is leftover from earlier design and creates confusion
 
@@ -383,13 +383,13 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 
 **Conditions for success:**
 
-- `composer.json` only contains `candy-core` in repositories
+- `composer.json` only contains `sugar-core` in repositories
 - `composer validate` passes without errors
 
 **Related code locations:**
 
-- `composer.json:27-30` (require section — only `candy-core`)
-- `composer.json:39-58` (repositories — only `candy-core` is actually used)
+- `composer.json:27-30` (require section — only `sugar-core`)
+- `composer.json:39-58` (repositories — only `sugar-core` is actually used)
 
 **Investigation notes:**
 

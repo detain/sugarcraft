@@ -16,7 +16,7 @@ Scaffold a new port so it looks byte-identical to existing libs and passes every
 
 ## Critical
 
-- **Namespace derivation is mechanical.** Slug `sugar-panels/` → composer `sugarcraft/sugar-panels` → namespace `SugarCraft\Panels\`. The Sub is the PascalCase of the part after the prefix. **Quirk:** `candy-core` → `SugarCraft\Core\` (not `SugarCraft\Candy\Core`). Prefix picks the family, NOT the namespace root — every lib is under `SugarCraft\`.
+- **Namespace derivation is mechanical.** Slug `sugar-panels/` → composer `sugarcraft/sugar-panels` → namespace `SugarCraft\Panels\`. The Sub is the PascalCase of the part after the prefix. **Quirk:** `sugar-core` → `SugarCraft\Core\` (not `SugarCraft\Candy\Core`). Prefix picks the family, NOT the namespace root — every lib is under `SugarCraft\`.
 - **Prefix = role.** `candy-` = foundation/system, `sugar-` = components/data/apps, `honey-` = math/physics. Confirm with the user which family before naming; cross-check `PROJECT_NAMES.md`.
 - **Every `sugarcraft/*` require needs a path-repo for the FULL transitive closure**, not just direct deps. Copy the `repositories[]` block from a sibling that already depends on the same set (canonical: `sugar-charts/composer.json`). Verify with `php tools/check-path-repos.php` (add `--fix` to auto-insert).
 - **`composer validate --strict` is EXPECTED to fail** on `"@dev"` constraints — drop `--strict`.
@@ -41,13 +41,13 @@ Copy from a sibling with matching deps. Required shape (from `sugar-panels/compo
     "homepage": "https://github.com/sugarcraft/<slug>",
     "authors": [{"name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer"}],
     "support": {"issues": "https://github.com/sugarcraft/<slug>/issues", "source": "https://github.com/sugarcraft/<slug>"},
-    "require": {"php": "^8.3", "sugarcraft/candy-core": "dev-master"},
+    "require": {"php": "^8.3", "sugarcraft/sugar-core": "dev-master"},
     "require-dev": {"phpunit/phpunit": "^10.5"},
     "autoload": {"psr-4": {"SugarCraft\\<Sub>\\": "src/"}},
     "autoload-dev": {"psr-4": {"SugarCraft\\<Sub>\\Tests\\": "tests/"}},
     "minimum-stability": "dev",
     "prefer-stable": true,
-    "repositories": [{"type": "path", "url": "../candy-core", "options": {"symlink": true}}]
+    "repositories": [{"type": "path", "url": "../sugar-core", "options": {"symlink": true}}]
 }
 ```
 Add a `require` line AND a `repositories[]` path-repo for **each** sibling dep and its full transitive closure. **Verify:** `cd <slug> && composer install` then `php tools/check-path-repos.php` reports the closure clean before continuing.
@@ -69,7 +69,7 @@ Exact copy, only the testsuite `name` changes (from `sugar-panels/phpunit.xml`):
 This file's presence is the marker `scripts/affected-libs.php` uses to discover the lib. **Verify** it exists.
 
 ### Step 4 — `<slug>/src/<Class>.php`
-`declare(strict_types=1);` first line, `final` class, immutable+fluent via `mutate()` (see `sugar-style/src/Style.php`), `::new()` root factory (never `::create()`/`::make()`/`::default()`), bare accessors (no `get`). Doc-comment the class with `Mirrors <owner>/<repo>`. For a TUI Model, implement `init()` / `update(Msg): [Model, ?Cmd]` / `view()` per `candy-core/src/Model.php` — side effects go in `Cmd`, never `view()`. Add `tests/<Class>Test.php` under `SugarCraft\<Sub>\Tests\` with ≥1 test per public method. **Verify:** `cd <slug> && vendor/bin/phpunit` is green.
+`declare(strict_types=1);` first line, `final` class, immutable+fluent via `mutate()` (see `sugar-style/src/Style.php`), `::new()` root factory (never `::create()`/`::make()`/`::default()`), bare accessors (no `get`). Doc-comment the class with `Mirrors <owner>/<repo>`. For a TUI Model, implement `init()` / `update(Msg): [Model, ?Cmd]` / `view()` per `sugar-core/src/Model.php` — side effects go in `Cmd`, never `view()`. Add `tests/<Class>Test.php` under `SugarCraft\<Sub>\Tests\` with ≥1 test per public method. **Verify:** `cd <slug> && vendor/bin/phpunit` is green.
 
 ### Step 5 — `<slug>/README.md` + `<slug>/CALIBER_LEARNINGS.md`
 README: `composer require sugarcraft/<slug>` + quickstart + codecov badge (flag=`<slug>`). Copy a sibling README and swap identity. CALIBER_LEARNINGS.md may start as a stub heading.
@@ -140,8 +140,8 @@ Then ship-as-you-go on branch `ai/<slug>-scaffold`: commit → push → `unset G
 **User says:** "Port charmbracelet/gum as a new sugar- lib called sugar-gum"
 
 **Actions taken:**
-1. Identity: slug `sugar-gum`, Sub `Gum`, namespace `SugarCraft\Gum\`, class `SugarGum`, upstream `charmbracelet/gum`, deps `candy-core` + `sugar-forms`. `grep sugar-gum PROJECT_NAMES.md docs/MATCHUPS.md` → unclaimed.
-2–4. Create `sugar-gum/composer.json` (require + path-repos for candy-core, sugar-forms + their closure copied from a lib that already uses both), `sugar-gum/phpunit.xml` (testsuite name `sugar-gum`), `sugar-gum/src/SugarGum.php` (`final`, `::new()`, `mutate()`), `sugar-gum/tests/SugarGumTest.php`. `cd sugar-gum && composer install && vendor/bin/phpunit` → green.
+1. Identity: slug `sugar-gum`, Sub `Gum`, namespace `SugarCraft\Gum\`, class `SugarGum`, upstream `charmbracelet/gum`, deps `sugar-core` + `sugar-forms`. `grep sugar-gum PROJECT_NAMES.md docs/MATCHUPS.md` → unclaimed.
+2–4. Create `sugar-gum/composer.json` (require + path-repos for sugar-core, sugar-forms + their closure copied from a lib that already uses both), `sugar-gum/phpunit.xml` (testsuite name `sugar-gum`), `sugar-gum/src/SugarGum.php` (`final`, `::new()`, `mutate()`), `sugar-gum/tests/SugarGumTest.php`. `cd sugar-gum && composer install && vendor/bin/phpunit` → green.
 5–14. README + CALIBER_LEARNINGS + root composer.json + MATCHUPS row (🟡) + PROJECT_NAMES + root README row + `docs/_data/sugar-gum.json` + `docs/_data/sugar-gum.body.html` → `php tools/gen-docs.php` + docs/index.html card+strip + media/icons/sugar-gum.png + vhs.yml `all=(...)` array + codecov flag+component.
 15. All verify gates green → ship on `ai/sugar-gum-scaffold`.
 

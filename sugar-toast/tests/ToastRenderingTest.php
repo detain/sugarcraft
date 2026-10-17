@@ -178,7 +178,7 @@ final class ToastRenderingTest extends TestCase
 
     public function testAnsiColorToRgbBright(): void
     {
-        // Slot 8 = candy-core ANSI16_RGB[8] = [127,127,127] (xterm bright black).
+        // Slot 8 = sugar-core ANSI16_RGB[8] = [127,127,127] (xterm bright black).
         $rgb = $this->invokeAnsiColorToRgb(0, true);
         $this->assertSame(0x7f7f7f, $rgb);
     }
@@ -415,7 +415,7 @@ final class ToastRenderingTest extends TestCase
 
     // ------------------------------------------------------------------
     // Audit M8 — width oracle. graphemeWidth used to be a private table
-    // that forked candy-core's Width: emoji measured 1, so an emoji header
+    // that forked sugar-core's Width: emoji measured 1, so an emoji header
     // row overflowed its own box border by a cell.
     // ------------------------------------------------------------------
 
@@ -428,7 +428,7 @@ final class ToastRenderingTest extends TestCase
         yield 'emoji' => ['🎉', 2];
         yield 'box drawing' => ['─', 1];
         yield 'info glyph' => ['ℹ', 1];
-        // ✨ U+2728 is Emoji_Presentation=Yes: candy-core Width scores it 2
+        // ✨ U+2728 is Emoji_Presentation=Yes: sugar-core Width scores it 2
         // cells (r9x emoji-presentation fix); the fork row follows canonical.
         yield 'dingbat' => ['✨', 2];
     }
@@ -447,7 +447,7 @@ final class ToastRenderingTest extends TestCase
 
     public function testGraphemeWidthTabChargesOneCell(): void
     {
-        // Declared divergence: candy-core bills a tab TAB_WIDTH=4 (E69), but
+        // Declared divergence: sugar-core bills a tab TAB_WIDTH=4 (E69), but
         // a cell grid has no 4-wide Cell contract (widths are 0/1/2), so the
         // toast painter charges one cell.
         $this->assertSame(4, Width::string("\t"), 'the canonical oracle bills a tab four columns');

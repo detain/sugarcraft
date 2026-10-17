@@ -284,7 +284,7 @@ final readonly class RepoMapBlock implements PromptSection
      * whichever field turns out to carry the bytes.
      *
      * 120 leaves ~70 B for the description after a typical
-     * `- candy-core/  ->  SugarCraft\Core\  ` prefix. The prefix half of
+     * `- sugar-core/  ->  SugarCraft\Core\  ` prefix. The prefix half of
      * that budget is structural; the measurements behind the number are a
      * DATED RECORD of the 2026-08-21 revision over this repository's
      * then-58 manifests, not a live property of them. There, descriptions

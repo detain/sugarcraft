@@ -1,6 +1,6 @@
 # Overview
 
-**candy-git** is the SugarCraft monorepo's most complete application — a three-pane git TUI port of `jesseduffield/lazygit` built on the SugarCraft stack (candy-core + sugar-style). It shells out to the system `git` binary, preserving user aliases, hooks, and signing config, while implementing an Elm-architecture state machine with comprehensive git operations (stage/unstage/commit/amend/branch/merge/stash/rebase/worktrees/cherry-pick).
+**candy-git** is the SugarCraft monorepo's most complete application — a three-pane git TUI port of `jesseduffield/lazygit` built on the SugarCraft stack (sugar-core + sugar-style). It shells out to the system `git` binary, preserving user aliases, hooks, and signing config, while implementing an Elm-architecture state machine with comprehensive git operations (stage/unstage/commit/amend/branch/merge/stash/rebase/worktrees/cherry-pick).
 
 **Biggest opportunity areas:**
 
@@ -349,7 +349,7 @@
 
 **External (bubbletea):** Cell-based renderer with delta updates, only redraws changed lines, synchronized output mode (ANSI 2026).
 
-**Applicability:** Consider integrating `sugar-vterm` or candy-core's renderer improvements for partial redraws. The current approach is simpler but may flicker on some terminals.
+**Applicability:** Consider integrating `sugar-vterm` or sugar-core's renderer improvements for partial redraws. The current approach is simpler but may flicker on some terminals.
 
 ### Spring Animations: Instant vs. Spring-based
 
@@ -466,7 +466,7 @@
 
 # Notable PRs / Issues / Discussions
 
-1. **bubbletea ANSI 2026 Synchronized Output:** `charmbracelet/bubbletea` added synchronized output mode (ANSI 2026) for flicker-free rendering. Source: `docs/repo_map/charmbracelet_bubbletea.md` (lines 185-201). This is applicable to candy-git via candy-core's renderer.
+1. **bubbletea ANSI 2026 Synchronized Output:** `charmbracelet/bubbletea` added synchronized output mode (ANSI 2026) for flicker-free rendering. Source: `docs/repo_map/charmbracelet_bubbletea.md` (lines 185-201). This is applicable to candy-git via sugar-core's renderer.
 
 2. **lipgloss Layer Compositing:** `charmbracelet/lipgloss` layer system (`Layer`/`Compositor`/`Canvas`) enables overlay UIs and mouse hit-testing. Source: `docs/repo_map/charmbracelet_lipgloss.md` (lines 58-62, 217-218). SugarCraft's sugar-style could adopt this pattern.
 
@@ -537,7 +537,7 @@
 
 # Final Strategic Assessment
 
-**candy-git** is a well-architected, fully functional git TUI that implements ~60% of lazygit's features with 10x less code. The Elm-architecture port to PHP via candy-core is clean and demonstrates the SugarCraft stack's capability for building real-world applications. The pluggable `GitDriver` interface pattern is exemplary and could serve as a model for other SugarCraft apps requiring backend abstraction.
+**candy-git** is a well-architected, fully functional git TUI that implements ~60% of lazygit's features with 10x less code. The Elm-architecture port to PHP via sugar-core is clean and demonstrates the SugarCraft stack's capability for building real-world applications. The pluggable `GitDriver` interface pattern is exemplary and could serve as a model for other SugarCraft apps requiring backend abstraction.
 
 **Key strategic priorities:**
 

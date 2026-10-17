@@ -107,7 +107,7 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * WHICH RENDERER THIS DESCRIBES. Upstream charmbracelet/vhs is a TRANSITIONAL
  * dependency. `.github/workflows/vhs.yml` still renders the whole matrix with
  * the `vhs` baked into its vhs-runner image, and this repo's own `candy-vcr`
- * runs beside it as a deliberately non-blocking candy-core soak whose purpose
+ * runs beside it as a deliberately non-blocking sugar-core soak whose purpose
  * is to replace it outright — see `candy-vcr/README.md` → "CI integration".
  * So upstream is the validation authority TODAY, and every rule here is
  * written against upstream v0.11.0.

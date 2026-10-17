@@ -261,7 +261,7 @@ The method populates the array but no `solveEdit()` method exists to actually us
 
 The library is positioned as part of a TUI ecosystem but has no direct integration:
 
-- No `candy-core` dependency
+- No `sugar-core` dependency
 - No output format for brick/Terminal libraries
 - No ANSI SGR string output for rendering regions
 

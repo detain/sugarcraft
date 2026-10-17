@@ -52,7 +52,7 @@ final class Renderer
     /**
      * Get the terminal size. Once {@see setSize()} has been called with the
      * framework's WindowSizeMsg, that value is authoritative. Otherwise detection
-     * is delegated to candy-core's {@see Tty} façade, which selects the
+     * is delegated to sugar-core's {@see Tty} façade, which selects the
      * Posix/Windows backend and runs the full size ladder internally (FFI
      * TIOCGWINSZ → COLUMNS/LINES → /dev/tty → stty → default). A hard default
      * guards the unlikely case where the façade itself is unavailable.
@@ -65,7 +65,7 @@ final class Renderer
             return self::$terminalSize;
         }
 
-        // Delegate detection to candy-core's Tty façade rather than re-rolling
+        // Delegate detection to sugar-core's Tty façade rather than re-rolling
         // the FFI/env/stty ladder here — it tracks live resizes (kernel
         // TIOCGWINSZ) and falls back through /dev/tty + stty internally, picking
         // the right backend per platform. The WindowSizeMsg cache above stays

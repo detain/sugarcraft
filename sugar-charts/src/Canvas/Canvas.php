@@ -35,7 +35,7 @@ final class Canvas
      * Write a single rune into cell ($x, $y). Out-of-range
      * coordinates are silently dropped (no exception).
      *
-     * Audit F6: the rune is measured with the shared candy-core display
+     * Audit F6: the rune is measured with the shared sugar-core display
      * width. A wide (CJK / emoji) rune claims two columns — the next one
      * receives a width-0 continuation cell — and a zero-width cluster
      * claims none; ordinary single-cell runes behave exactly as before.

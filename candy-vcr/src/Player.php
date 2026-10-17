@@ -21,7 +21,7 @@ use SugarCraft\Vcr\Msg\Registry;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
- * Drive a candy-core {@see Program} through a recorded {@see Cassette},
+ * Drive a sugar-core {@see Program} through a recorded {@see Cassette},
  * then compare the program's actual output against the cassette's
  * recorded output via an {@see Assertion}.
  *
@@ -42,7 +42,7 @@ use SugarCraft\Vcr\Support\Scalars;
  * ```
  *
  * Each `resize` event becomes a `WindowSizeMsg` sent to the program.
- * Each `input` event is converted into one or more candy-core Msgs
+ * Each `input` event is converted into one or more sugar-core Msgs
  * (via {@see Registry} for `msg`-form payloads, or via
  * {@see InputReader} for `b`-form raw bytes) and sent. The `quit`
  * event triggers `program->quit()`. Recorded `output` events are

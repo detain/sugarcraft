@@ -34,7 +34,7 @@
 # runs `working-directory: ${{ matrix.lib }}`, calls the `vhs` baked into the
 # vhs-runner image, and uploads `${{ matrix.lib }}/.vhs/*.gif` as `gifs-<lib>`.
 # The `vhs-candy-vcr` job in the same file is an explicitly non-blocking soak
-# pinned to `lib: [candy-core]`, and the commit job only downloads
+# pinned to `lib: [sugar-core]`, and the commit job only downloads
 # `pattern: gifs-*` — so candy-vcr's output is never committed and never
 # reaches this lib at all.
 #

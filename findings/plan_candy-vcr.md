@@ -692,7 +692,7 @@ The PHPDoc at lines 14-29 documents:
 
 #### What is Expected
 
-Document which candy-core Msg types fall through to `JsonableSerializer`.
+Document which sugar-core Msg types fall through to `JsonableSerializer`.
 
 #### Why the Change Should Be Done
 

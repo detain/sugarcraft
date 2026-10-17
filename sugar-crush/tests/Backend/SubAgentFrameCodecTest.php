@@ -45,7 +45,7 @@ final class SubAgentFrameCodecTest extends TestCase
     public function testEveryOpRoundTripsFieldForField(): void
     {
         foreach (SubAgentActivity::OPS as $op) {
-            $original = new SubAgentActivity($op, 'subagent_4242_abc', 'coder', 'Audit candy-core', 7, '-> probe');
+            $original = new SubAgentActivity($op, 'subagent_4242_abc', 'coder', 'Audit sugar-core', 7, '-> probe');
 
             $decoded = self::decodeFrame(self::encodeFrame($original));
 
@@ -53,7 +53,7 @@ final class SubAgentFrameCodecTest extends TestCase
             $this->assertSame($op, $decoded->op);
             $this->assertSame('subagent_4242_abc', $decoded->id, 'the id is the projection key — it may not shift');
             $this->assertSame('coder', $decoded->name);
-            $this->assertSame('Audit candy-core', $decoded->task);
+            $this->assertSame('Audit sugar-core', $decoded->task);
             $this->assertSame(7, $decoded->seq);
             $this->assertSame('-> probe', $decoded->tail);
         }

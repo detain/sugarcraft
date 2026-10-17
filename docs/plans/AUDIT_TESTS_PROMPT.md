@@ -45,8 +45,8 @@ Work one phase at a time. Within a phase, one PR per lib (or bundle
 1. `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md` — test conventions
 2. `MATCHUPS.md` — lib roster
 3. `.github/workflows/ci.yml`, `.github/workflows/vhs.yml`, `.github/workflows/tests.yml`
-4. `candy-core/tests/RendererTest.php` — canonical stream-write pattern
-5. `candy-core/phpunit.xml` — canonical phpunit config
+4. `sugar-core/tests/RendererTest.php` — canonical stream-write pattern
+5. `sugar-core/phpunit.xml` — canonical phpunit config
 6. For each lib audited: `<lib>/phpunit.xml`, `<lib>/tests/`, `<lib>/composer.json`
 
 If you cannot access the repo, ASK the user to paste files.
@@ -104,7 +104,7 @@ from AGENTS.md:
   null), assert clamp/no-op matches upstream.
 
 Stream-write gotcha (canonical pattern in
-`candy-core/tests/RendererTest.php`):
+`sugar-core/tests/RendererTest.php`):
 
   Don't `ftruncate; rewind;` between writes — slice deltas with
   `ftell`, `fseek`, `stream_get_contents`. The ftruncate pattern
@@ -258,5 +258,5 @@ Then stop.
   catching the patterns AGENTS.md explicitly warns about (stream-write
   ftruncate, abstracted snapshot helpers).
 - For agents with large context (Sonnet, Opus 4.x): paste in
-  `candy-core/tests/RendererTest.php` directly so the agent has the
+  `sugar-core/tests/RendererTest.php` directly so the agent has the
   canonical pattern in front of them when writing new snapshot tests.

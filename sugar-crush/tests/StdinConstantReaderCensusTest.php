@@ -112,7 +112,7 @@ use PHPUnit\Framework\TestCase;
  *
  * WHAT THAT WAS FIRST WRITTEN DOWN AS: "it compared each string token to the
  * name for EQUALITY, and a heredoc body arrives as ONE token, so the heredoc
- * in `candy-core/src/WorkerPool.php` read as a string that was not
+ * in `sugar-core/src/WorkerPool.php` read as a string that was not
  * `php://fd/0`." That account is narrower than the defect, and it leaves a
  * reader believing a plain `fopen('php://stdin')` was covered.
  *
@@ -154,11 +154,11 @@ use PHPUnit\Framework\TestCase;
  *    ? $fd : null;` and the two consumers treat null as their no-answer case.
  *    WHY THE ROW STAYS: it still NAMES the constant, which is what this roster
  *    tracks, and it is the row a future reader will want the history of.
- *  - `candy-core/src/Util/Tty/PosixBackend.php` — one of its two sites is
+ *  - `sugar-core/src/Util/Tty/PosixBackend.php` — one of its two sites is
  *    already guarded, and says so: `TermiosFactory::open((int) STDIN)` sits in
  *    a `try`/`catch (\Throwable)` whose comment reads "STDIN closed (CI
  *    runner): silently no-op". The other is the constructor's `?? STDIN`.
- *  - `candy-core/src/WorkerPool.php` — NOT a reader of this process's fd 0 at
+ *  - `sugar-core/src/WorkerPool.php` — NOT a reader of this process's fd 0 at
  *    all. The `php://fd/0` is inside a nowdoc that is written to a temp file
  *    and run as a CHILD, whose descriptor 0 is a `proc_open()` pipe. It is in
  *    the roster because the scanner must report what it finds rather than
@@ -217,7 +217,7 @@ use PHPUnit\Framework\TestCase;
  *    check on the resolved stream and not a check at the call a reader
  *    notices first; delete the sentence and the next person to touch this
  *    method reintroduces the half-fix.
- *  - `candy-core/src/Util/Tty/EnvDetect.php` — WAS THE UNTHRESHOLDED SITE;
+ *  - `sugar-core/src/Util/Tty/EnvDetect.php` — WAS THE UNTHRESHOLDED SITE;
  *    NOW GUARDED AND STILL DORMANT IN PRODUCTION. WHAT THIS ROW SAID: "WOULD
  *    THROW, AND IS DORMANT. `isConsoleStdin()` is a bare
  *    `return stream_isatty(STDIN);` with no guard, which is the throwing
@@ -228,13 +228,13 @@ use PHPUnit\Framework\TestCase;
  *    "NO caller" half has aged: production `src` and `bin` still never call
  *    it - the `EnvDetect` uses in `Tty.php` are `isWsl()`/`isMintty()`/
  *    `isCygwin()`, a different question entirely - but
- *    `candy-core/tests/Util/closed_descriptor_zero_probe.php` now drives it
+ *    `sugar-core/tests/Util/closed_descriptor_zero_probe.php` now drives it
  *    inside a child that has closed its own descriptor 0, so the guard is
  *    exercised, not merely present. WHY THE ROW STAYS: the file still names
  *    the constant, which is what this roster tracks, and the dormancy claim
  *    is the reason the guard lives in the method rather than at a call site -
  *    there is no call site to put it at.
- *  - `candy-core/src/Util/Tty.php` and `candy-core/src/Util/RawMode.php` —
+ *  - `sugar-core/src/Util/Tty.php` and `sugar-core/src/Util/RawMode.php` —
  *    DEGRADE. Both resolve `?? STDIN` and then hand the result somewhere that
  *    tests liveness first. `RawMode::enable()`/`disable()` gate on
  *    {@see \SugarCraft\Core\Util\TtyDetect::isAtty()}, which opens with
@@ -244,14 +244,14 @@ use PHPUnit\Framework\TestCase;
  *    liveness test is the LEFT operand, so the throwing call is never made —
  *    and whose two `stream_set_blocking()` calls are each `is_resource()`
  *    guarded. Verified by symbol.
- *  - `candy-core/src/Util/Tty/WindowsBackend.php` — UNREACHABLE ON THIS BOX
+ *  - `sugar-core/src/Util/Tty/WindowsBackend.php` — UNREACHABLE ON THIS BOX
  *    AND IN CI. Its `$stream ?? STDIN` is only constructed from
  *    `Tty::backend()` behind `DIRECTORY_SEPARATOR === '\\'`, and
  *    `scripts/affected-libs.php`'s `WINDOWS_LIBS` does not list `sugar-crush`,
  *    so no Windows runner executes this suite. Unjudged for Windows on
  *    purpose: this box is Linux and PHP 8.3.6 only, and a claim about the
  *    Windows path would be reasoning rather than measurement.
- *  - `candy-core/src/Program.php` — WAS "GUARDED, BUT THE GUARD'S FALLBACK IS
+ *  - `sugar-core/src/Program.php` — WAS "GUARDED, BUT THE GUARD'S FALLBACK IS
  *    ITSELF DEAD"; THE FALLBACK IS NOW A FILE SPEC. WHAT THIS ROW SAID:
  *    "`runExec()` does `$childIn = is_resource($this->input) ? $this->input
  *    : STDIN;`", and once the suite closes the constant both arms are dead
@@ -380,13 +380,13 @@ final class StdinConstantReaderCensusTest extends TestCase
      * @var array<string, list<string>>
      */
     private const EXPECTED = [
-        'candy-core/src/Program.php' => ['STDIN'],
-        'candy-core/src/Util/RawMode.php' => ['STDIN'],
-        'candy-core/src/Util/Tty.php' => ['STDIN'],
-        'candy-core/src/Util/Tty/EnvDetect.php' => ['STDIN'],
-        'candy-core/src/Util/Tty/PosixBackend.php' => ['STDIN'],
-        'candy-core/src/Util/Tty/WindowsBackend.php' => ['STDIN'],
-        'candy-core/src/WorkerPool.php' => ['php://fd/0'],
+        'sugar-core/src/Program.php' => ['STDIN'],
+        'sugar-core/src/Util/RawMode.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty/EnvDetect.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty/PosixBackend.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty/WindowsBackend.php' => ['STDIN'],
+        'sugar-core/src/WorkerPool.php' => ['php://fd/0'],
         'sugar-image/src/Detect.php' => ['STDIN'],
         'sugar-crush/src/Agents/ProcessExecutor.php' => ['STDIN'],
         'sugar-crush/src/Cli/Acp.php' => ['STDIN'],
@@ -431,7 +431,7 @@ final class StdinConstantReaderCensusTest extends TestCase
      *
      * The nowdoc rows are not decoration: the first version of this scanner
      * compared string tokens for equality and therefore reported ZERO for
-     * every heredoc body, including a real one in candy-core. These rows are
+     * every heredoc body, including a real one in sugar-core. These rows are
      * what makes the roster above evidence rather than output.
      *
      * @param list<string> $expected
@@ -465,7 +465,7 @@ final class StdinConstantReaderCensusTest extends TestCase
         yield 'php://memory is not descriptor 0' => ["<?php \$f = fopen('php://memory', 'r+');", []];
         // THE ROW THAT CAUGHT THE SCANNER'S OWN DEFECT. A nowdoc body is one
         // token, so an equality comparison reported nothing here - which is
-        // exactly the shape of the real site in candy-core/src/WorkerPool.php.
+        // exactly the shape of the real site in sugar-core/src/WorkerPool.php.
         yield 'NOWDOC body carrying a child script that opens fd 0' => [
             "<?php \$code = <<<'X'\n<?php \$fd = fopen('php://fd/0', 'rb');\nX;\n",
             ['php://fd/0'],

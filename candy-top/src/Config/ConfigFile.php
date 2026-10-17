@@ -16,7 +16,7 @@ use SugarCraft\Top\Lang;
  *
  * Saves are atomic (temp file in the same directory + rename): btop's
  * `ofstream(trunc)` leaves a truncated file behind if it dies mid-write,
- * which then loads as all-defaults. candy-core's AtomicJsonFile carries the
+ * which then loads as all-defaults. sugar-core's AtomicJsonFile carries the
  * same contract but is JSON-only, so the text variant lives here.
  */
 final class ConfigFile

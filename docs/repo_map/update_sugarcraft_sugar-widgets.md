@@ -2,7 +2,7 @@
 
 ## Overview
 
-**sugar-widgets** is a mature PHP port of `charmbracelet/bubbles` providing 15+ pre-built TUI components for the SugarCraft monorepo. The library occupies a critical position as the primary component layer (`SugarCraft\Widgets`) built on foundational libraries (`candy-core`, `sugar-forms`, `sugar-style`). The biggest opportunity is filling the fuzzy filtering gap (ranked matches with character indices), adding a FlexBox layout system (per `76creates/stickers`), and implementing the missing half-block color blending for high-resolution progress bars. The library correctly uses a stratified alias pattern where simple wrappers re-export from `sugar-forms` while keeping original implementations for Table, Tree, Tabs, and other leaf components.
+**sugar-widgets** is a mature PHP port of `charmbracelet/bubbles` providing 15+ pre-built TUI components for the SugarCraft monorepo. The library occupies a critical position as the primary component layer (`SugarCraft\Widgets`) built on foundational libraries (`sugar-core`, `sugar-forms`, `sugar-style`). The biggest opportunity is filling the fuzzy filtering gap (ranked matches with character indices), adding a FlexBox layout system (per `76creates/stickers`), and implementing the missing half-block color blending for high-resolution progress bars. The library correctly uses a stratified alias pattern where simple wrappers re-export from `sugar-forms` while keeping original implementations for Table, Tree, Tabs, and other leaf components.
 
 ## Internal Capability Summary
 

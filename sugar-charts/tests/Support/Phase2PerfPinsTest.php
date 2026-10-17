@@ -30,7 +30,7 @@ final class Phase2PerfPinsTest extends TestCase
 {
     /**
      * E736/2.2 superseded by audit F6 (round 86+): the private ZERO_WIDTH
-     * keyed set is gone — width now delegates to the shared candy-core
+     * keyed set is gone — width now delegates to the shared sugar-core
      * table, so this pin asserts the SAME boundary answers through the
      * canon plus the documented tab flip (1 → TAB_WIDTH=4, aligning the
      * chart renderers with every other SugarCraft renderer's layout).

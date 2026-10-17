@@ -53,7 +53,7 @@ sugar-datepicker/
 
 ```
 sugar-datepicker
-└── sugarcraft/candy-core (dev-master)
+└── sugarcraft/sugar-core (dev-master)
     ├── SugarCraft\Core\Util\Ansi — ANSI SGR code helpers (DatePicker.php line 8)
     └── SugarCraft\Core\I18n\Lang — Base i18n facade (Lang.php line 7)
 ```
@@ -810,7 +810,7 @@ Translation completeness test that statically analyzes source files and verifies
 
 ## Analysis
 
-**sugar-datepicker** is a well-structured PHP port that significantly enhances its upstream Go source. The most notable innovations are the immutable + fluent architecture (every method returns clones), the date range selection system (DateRange + rangeMode + handleKey), and the i18n framework (Lang facade + LangCoverageTest). The pure ANSI renderer design is strategically sound — it decouples the calendar from any specific TUI framework, making it composable with both candy-core and standalone use.
+**sugar-datepicker** is a well-structured PHP port that significantly enhances its upstream Go source. The most notable innovations are the immutable + fluent architecture (every method returns clones), the date range selection system (DateRange + rangeMode + handleKey), and the i18n framework (Lang facade + LangCoverageTest). The pure ANSI renderer design is strategically sound — it decouples the calendar from any specific TUI framework, making it composable with both sugar-core and standalone use.
 
 **Strengths:**
 

@@ -8,7 +8,7 @@
 - **Upstream**: treilik/bubblelister (Go, 52 stars, MIT)
 - **Status**: 🟢 v1 ready
 - **PHP**: ^8.3
-- **Dependencies**: `sugarcraft/candy-core` (via `SugarCraft\Core\Util\Ansi`, `SugarCraft\Core\Util\Width`)
+- **Dependencies**: `sugarcraft/sugar-core` (via `SugarCraft\Core\Util\Ansi`, `SugarCraft\Core\Util\Width`)
 - **Test suite**: 3 test files (ModelTest, FuzzyMatchTest, FilterStateTest), 289 ModelTest lines
 
 ---
@@ -384,9 +384,9 @@ Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), 
 
 | sugar-treelist Feature | SugarCraft Library | Notes |
 |---|---|---|
-| List Model rendering | `candy-core` (Display, Buffer, Terminal) | Core TUI rendering infrastructure |
-| Word wrapping | `candy-core` (Width utility) | Width::string() for ANSI-aware width |
-| ANSI styling | `candy-core` (Ansi utility) | Ansi::CSI for SGR wrapping |
+| List Model rendering | `sugar-core` (Display, Buffer, Terminal) | Core TUI rendering infrastructure |
+| Word wrapping | `sugar-core` (Width utility) | Width::string() for ANSI-aware width |
+| ANSI styling | `sugar-core` (Ansi utility) | Ansi::CSI for SGR wrapping |
 | Prefixer/Suffixer | `sugar-treelist` itself | Core extension hooks |
 | Fuzzy matching | `sugar-widgets` (existing FuzzyMatcher) | FuzzyMatch pattern already in Prompt |
 | Filter state machine | `sugar-treelist` itself | FilterState enum + withFilterFn |
@@ -396,7 +396,7 @@ Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), 
 
 ## Analysis
 
-**sugar-treelist** is a focused PHP port of treilik/bubblelister that prioritizes rendering correctness over API compatibility. The most significant design decision is the abandonment of the tea.Model interface — in PHP, there is no BubbleTea runtime to integrate with, so the port decouples the list rendering from any specific event loop. This makes sugar-treelist a pure view library that can be embedded in any PHP TUI framework (candy-core, ratatui-php, or raw termbox).
+**sugar-treelist** is a focused PHP port of treilik/bubblelister that prioritizes rendering correctness over API compatibility. The most significant design decision is the abandonment of the tea.Model interface — in PHP, there is no BubbleTea runtime to integrate with, so the port decouples the list rendering from any specific event loop. This makes sugar-treelist a pure view library that can be embedded in any PHP TUI framework (sugar-core, ratatui-php, or raw termbox).
 
 The filter state machine and FuzzyMatch class are notable extensions beyond the Go upstream. The three-state FilterState enum makes the filter lifecycle explicit and debuggable, while the Smith-Waterman scorer can be used independently of the list model for other filtering UI (e.g., sugar-forms's fuzzy completion).
 

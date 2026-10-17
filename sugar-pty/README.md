@@ -163,7 +163,7 @@ $exit     = (new PosixPump())->run($master, STDIN, STDOUT, $child, $opts);
 $recorder->recordQuit();
 $recorder->close();
 // /tmp/session.cas can now be walked via SugarCraft\Vcr\Format\JsonlFormat
-// or driven through SugarCraft\Vcr\Player::play() against a candy-core Program.
+// or driven through SugarCraft\Vcr\Player::play() against a sugar-core Program.
 ```
 
 Resize events still need a separate `SignalForwarder` callback that

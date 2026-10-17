@@ -421,7 +421,7 @@ final class Theme
      */
     public static function dracula(): self
     {
-        // Named hex sourced from candy-core Palettes SSOT (byte-identical to
+        // Named hex sourced from sugar-core Palettes SSOT (byte-identical to
         // the former inline literals; see ThemeTest drift guard).
         $bg   = Color::hex(Palettes::DRACULA['background']);
         $fg   = Color::hex(Palettes::DRACULA['foreground']);

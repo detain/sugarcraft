@@ -22,7 +22,7 @@ SugarSpring is a pure-math PHP library providing two complementary animation pri
 
 2. **Newtonian Projectile Simulation** — Euler-integrated 3D point/vector-based projectile motion with configurable gravity
 
-Unlike UI-focused animation libraries, sugar-spring is **framework-agnostic** — it solves the physics equations and returns numbers; consumers decide how to render them. This makes it suitable for TUIs (candy-core), game physics (candy-flappy/Flappy Bird clone), particle effects, or any context requiring smooth, physically-grounded motion.
+Unlike UI-focused animation libraries, sugar-spring is **framework-agnostic** — it solves the physics equations and returns numbers; consumers decide how to render them. This makes it suitable for TUIs (sugar-core), game physics (candy-flappy/Flappy Bird clone), particle effects, or any context requiring smooth, physically-grounded motion.
 
 The library extends its upstream (harmonica) with significant ergonomic improvements: spring presets modeled after UIKit's tension/friction constants, `SpringChain` for sequenced animations, `SpringCollection` for multi-spring management, WCAG `REDUCE_MOTION` accessibility support, and a complete `Easing`/`CubicBezier` curve library for tweening.
 
@@ -251,17 +251,17 @@ private function solveCubicX(float $x): float
 
 This ensures monotonic behavior even when control point configurations would otherwise cause non-monotonic x(t).
 
-## Integration with candy-core
+## Integration with sugar-core
 
 ### Dependency Graph
 
 ```
-candy-core (TUI runtime)
+sugar-core (TUI runtime)
     └── sugar-colorprofile (color detection, Probe::reducedMotion())
             └── sugar-spring (depends on both)
 
 candy-flappy (Flappy Bird game)
-    └── candy-core
+    └── sugar-core
     └── sugar-style
     └── sugar-spring ← Bird uses Projectile for vertical motion
 ```
@@ -321,7 +321,7 @@ public function flap(): self
 }
 ```
 
-This demonstrates the clean separation between physics (sugar-spring) and rendering (candy-core's `Model::view()`).
+This demonstrates the clean separation between physics (sugar-spring) and rendering (sugar-core's `Model::view()`).
 
 ## Animation Pattern Opportunities
 
@@ -516,7 +516,7 @@ $value = $ease->evaluate($t);
 
 - Reactive state + watchers provide automatic animation triggering
 
-- **Lesson**: A `SugarCraft\Spring\Animator` wrapper that auto-hooks springs to reactive properties in candy-core could provide similar ergonomics
+- **Lesson**: A `SugarCraft\Spring\Animator` wrapper that auto-hooks springs to reactive properties in sugar-core could provide similar ergonomics
 
 ### Charmbracelet/confettysh (Go)
 

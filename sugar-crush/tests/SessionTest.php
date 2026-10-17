@@ -251,7 +251,7 @@ final class SessionTest extends TestCase
         // file and renames it into place; no temp file may survive the save.
         $this->assertSame([], glob($configDir . '/.session.json.tmp.*') ?: []);
         // Writers serialise on a STABLE `.session.json.lock` sidecar that
-        // deliberately persists (candy-core AtomicJsonFile: the sidecar stays
+        // deliberately persists (sugar-core AtomicJsonFile: the sidecar stays
         // for the next writer) and "holds no payload" — the directory is the
         // payload plus that empty lock, nothing else.
         $entries = array_values(array_diff(scandir($configDir) ?: [], ['.', '..']));

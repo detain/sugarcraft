@@ -259,7 +259,7 @@ trim_trailing_whitespace = false
 
 #### 4.1.4 Add `failOnWarning` to PHPUnit
 
-**Source:** `candy-core/phpunit.xml` pattern
+**Source:** `sugar-core/phpunit.xml` pattern
 
 ```xml
 <phpunit failOnWarning="true"

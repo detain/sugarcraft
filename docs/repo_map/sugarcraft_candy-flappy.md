@@ -18,7 +18,7 @@
 
 candy-flappy is a Flappy Bird-inspired terminal game that ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP using the SugarCraft stack. The bird's vertical motion is powered by **SugarSpring projectile physics** (gravity + upward velocity kick on flap), pipes scroll left at a fixed cell rate, and collision is per-cell. Difficulty scales with score via shrinking pipe gaps.
 
-The library demonstrates the clean separation between physics (sugar-spring) and TUI rendering (candy-core) — a Flappy Bird clone is effectively a physics consumer with ANSI output.
+The library demonstrates the clean separation between physics (sugar-spring) and TUI rendering (sugar-core) — a Flappy Bird clone is effectively a physics consumer with ANSI output.
 
 ## Architecture
 
@@ -55,7 +55,7 @@ candy-flappy/bin/
 
 - **Separation of concerns**: `Game` is pure state (no rendering), `Renderer` is pure view (no logic), `Bird` is pure physics (no game knowledge)
 
-- **TEA pattern**: Full `Model::init()/update()/view()` contract via candy-core
+- **TEA pattern**: Full `Model::init()/update()/view()` contract via sugar-core
 
 ## Feature Inventory
 
@@ -264,7 +264,7 @@ private function advance(): self
 return [$next, Cmd::tick(0.033, static fn() => new TickMsg())];
 ```
 
-The game runs **forever** via recursive `Cmd::tick` scheduling. Each `TickMsg` triggers `advance()` and schedules the next tick. This is the canonical ReactPHP/candy-core pattern for game loops.
+The game runs **forever** via recursive `Cmd::tick` scheduling. Each `TickMsg` triggers `advance()` and schedules the next tick. This is the canonical ReactPHP/sugar-core pattern for game loops.
 
 ### Note on Tick Rate vs Upstream
 
@@ -406,7 +406,7 @@ When crashed:
 
 | Aspect | flapioca (Go) | candy-flappy (PHP) | Advantage |
 |--------|--------------|-----------------|------------|
-| Framework | Bubble Tea | candy-core (ReactPHP) | Both use TEA pattern |
+| Framework | Bubble Tea | sugar-core (ReactPHP) | Both use TEA pattern |
 | Physics | Integer increment | SugarSpring Projectile | candy-flappy |
 | Bird motion | `Cursor.Y++` each tick | Projectile with gravity + flap kick | candy-flappy |
 | Gravity | None (integer stepping) | 70 cells/sec² | candy-flappy |

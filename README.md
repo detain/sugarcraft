@@ -33,7 +33,7 @@ Every package installs independently with Composer. The libraries are grouped by
 
 | | Library | Role |
 |---|---|---|
-| <img src="media/icons/candy-core.png" width="48" alt=""> | **[SugarCraft](candy-core/)** | MVC-style Model–Update–View TUI runtime — `Model` / `Msg` / `Cmd` / `Program`, plus a frame-diff renderer with an opt-in cursed cell-diff mode. |
+| <img src="media/icons/sugar-core.png" width="48" alt=""> | **[SugarCraft](sugar-core/)** | MVC-style Model–Update–View TUI runtime — `Model` / `Msg` / `Cmd` / `Program`, plus a frame-diff renderer with an opt-in cursed cell-diff mode. |
 | <img src="media/icons/sugar-ansi-parser.png" width="48" alt=""> | **[SugarAnsiParser](sugar-ansi-parser/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from sugar-vterm. |
 | <img src="media/icons/sugar-cellbuffer.png" width="48" alt=""> | **[SugarCellBuffer](sugar-cellbuffer/)** | Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (`rune`/style/link/width). Shared foundation for all rendering; `Buffer::diff()` included. |
 | <img src="media/icons/sugar-constraints.png" width="48" alt=""> | **[SugarConstraints](sugar-constraints/)** | Constraint-based layout solver — `LayoutSolver` interface with a Cassowary engine (`CassowarySolver`) and a `GreedySolver` fallback. |
@@ -46,7 +46,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-fuzzy.png" width="48" alt=""> | **[SugarFuzzy](sugar-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |
 | <img src="media/icons/sugar-widgets.png" width="48" alt=""> | **[SugarWidgets](sugar-widgets/)** | Components: TextInput, TextArea, ItemList, Table, Tabs, Tree, Scrollbar, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. |
 | <img src="media/icons/sugar-vterm.png" width="48" alt=""> | **[SugarVterm](sugar-vterm/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. |
-| <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay candy-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. |
+| <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay sugar-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. |
 | <img src="media/icons/sugar-pty.png" width="48" alt=""> | **[SugarPty](sugar-pty/)** | Pseudo-terminal primitive — `Pty::open()` master/slave round-trip via FFI to libc; spawn/resize/non-blocking I/O. Linux + macOS only. |
 | <img src="media/icons/sugar-forms.png" width="48" alt=""> | **[SugarForms](sugar-forms/)** | Form library (port of charmbracelet/huh) and shared form engine behind SugarWidgets — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, Date, Slider, Color; multi-page Groups; stock themes; validators; fuzzy / async suggestions; ActionSpinner. |
 | <img src="media/icons/sugar-focus.png" width="48" alt=""> | **[SugarFocus](sugar-focus/)** | Focus-ring state machine — ordered focusable regions with Tab/Shift-Tab traversal. |
@@ -105,7 +105,7 @@ its public API.
 
 ## Quickstart — a counter app
 
-Save as `counter.php` in a project with `composer require sugarcraft/candy-core`,
+Save as `counter.php` in a project with `composer require sugarcraft/sugar-core`,
 then run `php counter.php`:
 
 ```php

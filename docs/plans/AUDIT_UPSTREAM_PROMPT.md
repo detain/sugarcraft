@@ -147,7 +147,7 @@ that are tiny but together justify a PR.
 
 ### Charmbracelet libraries
 
-- charmbracelet/bubbletea → candy-core
+- charmbracelet/bubbletea → sugar-core
 - charmbracelet/lipgloss → sugar-style
 - charmbracelet/harmonica → sugar-spring
 - lrstanley/bubblezone → sugar-mouse

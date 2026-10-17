@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 /**
- * COMPOSITION: candy-core Program/Model  +  sugar-forms Spinner (sub-program)
+ * COMPOSITION: sugar-core Program/Model  +  sugar-forms Spinner (sub-program)
  *
- * Demonstrates the "program-within-a-program" pattern: a candy-core root
+ * Demonstrates the "program-within-a-program" pattern: a sugar-core root
  * `Model` owns two child models and routes the Model–Update–View
  * `update()`/`view()` contract down to whichever child is focused. One child
  * is a hand-written counter; the other is a sugar-forms `Spinner` — a fully
  * independent model embedded as a sub-program.
  *
- * The composition rule candy-core encodes: a parent forwards each `Msg` to
+ * The composition rule sugar-core encodes: a parent forwards each `Msg` to
  * its focused child's `update()`, threads the returned child model back into
  * itself, and stitches the children's `view()` strings into one frame. Any
  * Model nests inside any other Model this way.

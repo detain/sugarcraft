@@ -144,7 +144,7 @@ $reel = $reel->withHeaders(['Cookie' => 'session=…']);
 
 ### Embedding the player without owning the loop
 
-`Reel::play()` builds its own candy-core `Program` and blocks. To drive playback
+`Reel::play()` builds its own sugar-core `Program` and blocks. To drive playback
 from a host that already owns a `Program`/event loop, use `Reel::toPlayer()` to
 get the `Player` model **paused** and mount it yourself. Building the model
 opens the source, so its `ffmpeg` child is spawned immediately — a host that
@@ -269,7 +269,7 @@ video file (mp4/gif/avi/webm)
                     └─────────┬──────────────┘
                               │
                     ┌─────────▼──────────────┐
-                    │   Program (candy-core)  │
+                    │   Program (sugar-core)  │
                     │   raw mode + alt screen│
                     └────────────────────────┘
 ```
@@ -291,7 +291,7 @@ three terminal-video projects, credited here:
 The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 [sugar-animation](../sugar-animation) (downsampling / dithering), [sugar-colorprofile](../sugar-colorprofile)
-(color mapping), and [candy-core](../candy-core) (Model–Update–View runtime + frame pacing).
+(color mapping), and [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing).
 
 ## Known limitations
 

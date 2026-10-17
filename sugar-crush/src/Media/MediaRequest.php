@@ -33,7 +33,7 @@ use SugarCraft\Crush\Protocol\Schema\Schema;
  * - Explicit null on the wire parses to set-with-null — the None → "opts
  *   decides" semantics of restore_faces/tiling et al. round-trip exactly.
  *
- * Immutable + fluent per candy-core Mutable/XSet convention
+ * Immutable + fluent per sugar-core Mutable/XSet convention
  * (sugar-style/src/Style.php is the canonical shape).
  */
 final readonly class MediaRequest

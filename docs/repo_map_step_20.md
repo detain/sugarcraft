@@ -43,7 +43,7 @@ Reference: §387.2 (reinvention), §15.2 (UTF-8 / grapheme breakage).
 ## Scribe brief
 
 - Each affected lib's README: short note in `## Shared foundations` mentioning sugar-ansi-parser.
-- CALIBER_LEARNINGS in each: "Don't byte-index UTF-8 content — go through sugar-ansi-parser's parser or candy-core's Width utility."
+- CALIBER_LEARNINGS in each: "Don't byte-index UTF-8 content — go through sugar-ansi-parser's parser or sugar-core's Width utility."
 
 ## Ship brief
 

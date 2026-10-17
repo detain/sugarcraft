@@ -159,7 +159,7 @@ final class GraphicsRendererTest extends TestCase
         // protocol is APC-framed (xterm ctlseqs `ESC _`), followed by the
         // `c=<w>,r=<h>,f=100,m=1;` begin chunk. (The old DCS `ESC P q` pin
         // here was the DECSIXEL introducer — ANSI audit defect #10, fixed
-        // in candy-core kittyGraphicsBegin.)
+        // in sugar-core kittyGraphicsBegin.)
         $this->assertStringStartsWith("\x1b_Gc=", $output, 'Kitty output should begin with APC kitty header _Gc=');
     }
 

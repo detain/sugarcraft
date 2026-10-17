@@ -69,11 +69,11 @@ candy-gifview my-animation.gif density # luminance-density ramp
     <div class="feature-grid">
       <div class="feature"><strong>One-command viewer</strong><span><code>candy-gifview file.gif</code> — no flags to learn; an optional second argument picks the render preset.</span></div>
       <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate (descriptor 1, never the cast resource id) and reserves a row, so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
-      <div class="feature"><strong>Alternate screen</strong><span>Runs the sugar-animation <code>Player</code> inside a candy-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
+      <div class="feature"><strong>Alternate screen</strong><span>Runs the sugar-animation <code>Player</code> inside a sugar-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
       <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>` .:-=+*#%@`</code> density ramp without losing your frame position.</span></div>
       <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
       <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a two-line shim, and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
-      <div class="feature"><strong>Localized</strong><span>Usage and autoload-probe messages ship in sixteen locales via the candy-core i18n lookup.</span></div>
+      <div class="feature"><strong>Localized</strong><span>Usage and autoload-probe messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

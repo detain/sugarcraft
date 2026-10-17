@@ -463,7 +463,7 @@ final class StatusLineCommand
         ];
 
         // `@` for ScriptHook's reason: a refused exec emits a warning that
-        // lands mid-frame over whatever candy-core last painted, and under
+        // lands mid-frame over whatever sugar-core last painted, and under
         // `failOnWarning="true"` turns this suite's coverage of the refusal
         // path into a failure. A refusal is '' — the segment simply does not
         // appear — because there is no channel to report through from a

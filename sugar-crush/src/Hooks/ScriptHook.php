@@ -633,7 +633,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         // calculation. `@` because the refusal is REPORTED, below, as a deny
         // that names the sizes: the bare call emits
         // `proc_open(): posix_spawn() failed: Argument list too long`, which in
-        // the TUI lands mid-frame over whatever candy-core last painted, and
+        // the TUI lands mid-frame over whatever sugar-core last painted, and
         // under `failOnWarning="true"` turns this suite's own coverage of the
         // refusal path into a failure.
         // E672/E674: the spec and the env come from the ONE choke point —

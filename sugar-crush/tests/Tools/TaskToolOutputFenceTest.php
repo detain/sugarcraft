@@ -163,7 +163,7 @@ final class TaskToolOutputFenceTest extends TestCase
     /** @return array<string, string> */
     private static function call(): array
     {
-        return ['description' => 'Audit candy-core', 'prompt' => 'Audit candy-core', 'agent' => 'coder'];
+        return ['description' => 'Audit sugar-core', 'prompt' => 'Audit sugar-core', 'agent' => 'coder'];
     }
 
     private static function probe(): Tool

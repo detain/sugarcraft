@@ -14,13 +14,13 @@ use SugarCraft\ColorProfile\NearestColor;
  *
  * Historically three 256-color tables coexisted: NearestColor::palette256()
  * built its cube at channel levels 0,51,102,153,204,255 while
- * Color::fromAnsi256Index() and candy-core's Util\Color::ansi256() used the
+ * Color::fromAnsi256Index() and sugar-core's Util\Color::ansi256() used the
  * canonical xterm levels 0,95,135,175,215,255 — a 216-entry, 721-channel-value
  * divergence. The matcher therefore ranked colors against a palette no real
  * terminal renders, and encode→match round-trips disagreed with themselves.
  *
  * The table is now DERIVED from Color::fromAnsi256Index(), and these pins keep
- * the triangle (palette matcher table ↔ palette encoder ↔ candy-core decoder)
+ * the triangle (palette matcher table ↔ palette encoder ↔ sugar-core decoder)
  * from silently splitting again.
  *
  * @see \SugarCraft\Core\Util\Color::ansi256()
@@ -46,10 +46,10 @@ final class Ansi256TableParityTest extends TestCase
     }
 
     /**
-     * Cross-library leg: the same 240 slots must equal candy-core's canonical
-     * decoder — the table candy-core renders with.
+     * Cross-library leg: the same 240 slots must equal sugar-core's canonical
+     * decoder — the table sugar-core renders with.
      */
-    public function testMatcherTableMatchesCandyCoreAnsi256(): void
+    public function testMatcherTableMatchesSugarCoreAnsi256(): void
     {
         $table = NearestColor::palette256();
 
@@ -58,7 +58,7 @@ final class Ansi256TableParityTest extends TestCase
             self::assertSame(
                 [$core->r, $core->g, $core->b],
                 [$table[$index]->r, $table[$index]->g, $table[$index]->b],
-                "palette256()[{$index}] diverged from candy-core ansi256({$index})",
+                "palette256()[{$index}] diverged from sugar-core ansi256({$index})",
             );
         }
     }

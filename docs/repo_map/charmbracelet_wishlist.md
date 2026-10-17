@@ -203,22 +203,22 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 |---|---|---|
 | TUI Listing (`ListModel` using `bubbles/list`) | `sugar-widgets` | The list-based TUI navigation is directly analogous to `sugar-widgets` which ports `bubbles`. The `list.Model` + `ItemWrapper` pattern mirrors how SugarCraft models wrap `bubbletea` components. |
 | Server mode SSH serving (`charmbracelet/ssh` + `charmbracelet/wish`) | `candy-scriptui` | The SSH server side of wishlist heavily uses `charmbracelet/ssh` and `charmbracelet/wish`. `candy-scriptui` is the SugarCraft port of the `wish` library for SSH server middleware. |
-| Config parsing (SSH config + YAML) | `candy-core` (future `candy-sshconfig`) | Wishlist's `sshconfig.ParseFile()` is a complex SSH config parser. SugarCraft does not yet have a dedicated SSH config parsing library. A `candy-sshconfig` leaf lib would be the natural home for this. |
+| Config parsing (SSH config + YAML) | `sugar-core` (future `candy-sshconfig`) | Wishlist's `sshconfig.ParseFile()` is a complex SSH config parser. SugarCraft does not yet have a dedicated SSH config parsing library. A `candy-sshconfig` leaf lib would be the natural home for this. |
 | Endpoint discovery (Zeroconf, SRV, Tailscale) | `sugar-widgets` (service discovery) | Discovery mechanisms are service-announcement patterns. Could be a `sugar-discovery` leaf lib if more such protocols are added. |
 | PTY / TTY handling + raw terminal mode | `sugar-pty` | The local client raw terminal setup (`makeRaw`, `term.IsTerminal`, `RequestPty`) maps directly to `sugar-pty`. |
 | Terminal reset序列 (`resetPty`) | `sugar-pty` | ANSI escape sequences for terminal reset would be part of `sugar-pty`. |
 | Bubbletea TUI framework | `sugar-widgets` | `charmbracelet/bubbletea` → `sugar-widgets`. The `ListModel` is a `tea.Model` using `bubbles/list`. |
 | Lipgloss styling | `sugar-markdown` | `charmbracelet/lipgloss` → `sugar-markdown`. The `styles` struct with `lipgloss.AdaptiveColor` maps to `sugar-markdown`'s theme system. |
 | Key bindings (`key.NewBinding`) | `sugar-widgets` | `charmbracelet/bubbles/key` → `sugar-widgets`. The `copyIPAddr` and `enter` bindings are standard bubble key patterns. |
-| Logging (`charmbracelet/log`) | `candy-core` | `charmbracelet/log` → `candy-core` (the `Log` facade). Wishlist uses structured logging extensively. |
+| Logging (`charmbracelet/log`) | `sugar-core` | `charmbracelet/log` → `sugar-core` (the `Log` facade). Wishlist uses structured logging extensively. |
 | `ssh/crypto` (ProxyJump, session handling) | `candy-scriptui` | `golang.org/x/crypto/ssh` is used throughout wishlist for the actual SSH protocol. SugarCraft's `candy-scriptui` wraps the `charmbracelet/ssh` which itself wraps `crypto/ssh`. |
 | `Termenv` (clipboard, ANSI sequences) | `sugar-markdown` | `muesli/termenv` (used for `termenv.Copy` and `termenv.CSI` sequences) → `sugar-markdown`. |
 | Multiplex STDIN fork | (no direct mapping) | The `multiplex.Reader()` pattern is wishlist-specific; not a direct port candidate. |
 | Blocking EOF-suppressing reader | (no direct mapping) | The `blocking.Reader` is wishlist-specific; no SugarCraft equivalent. |
-| `broadcast` relay for endpoint updates | `candy-core` (event bus) | `teivah/broadcast` is a generic pub/sub relay; could map to an event bus in `candy-core`. |
+| `broadcast` relay for endpoint updates | `sugar-core` (event bus) | `teivah/broadcast` is a generic pub/sub relay; could map to an event bus in `sugar-core`. |
 | Tailscale API client | (no mapping yet) | Tailscale-specific HTTP client with OAuth. No SugarCraft lib for this yet. |
 | DNS SRV/TXT discovery | `sugar-widgets` (network utils) | Standard DNS lookup patterns could be in a `sugar-network` leaf lib. |
-| `keygen` for ephemeral key generation | `candy-core` (crypto utils) | `charmbracelet/keygen` for ed25519 key generation; SugarCraft has no keygen equivalent yet. |
+| `keygen` for ephemeral key generation | `sugar-core` (crypto utils) | `charmbracelet/keygen` for ed25519 key generation; SugarCraft has no keygen equivalent yet. |
 
 **Primary SugarCraft ports for wishlist dependencies**:
 
@@ -226,7 +226,7 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 - `candy-scriptui` — ports `charmbracelet/ssh`, `charmbracelet/wish`
 - `sugar-markdown` — ports `charmbracelet/lipgloss`, `muesli/termenv`
 - `sugar-pty` — ports TTY/PTY raw mode and terminal control utilities
-- `candy-core` — ports `charmbracelet/log`
+- `sugar-core` — ports `charmbracelet/log`
 
 ---
 

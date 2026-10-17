@@ -385,7 +385,7 @@ final class FfmpegDecoderTest extends TestCase
      *          own once stdout is dropped is reaped unsignalled (BoundedReaper fold pin)
      *
      * The deleted per-lib BoundedReaper gave ffmpeg a natural-exit window after the
-     * parent closed the read end before ever signalling; the fold onto candy-core's
+     * parent closed the read end before ever signalling; the fold onto sugar-core's
      * BoundedShutdown keeps that rung as hasExited(CLOSE_GRACE_SECONDS) ahead of
      * terminateAndAwaitExit(). A writer child mimicking ffmpeg's EPIPE exit (self-
      * exit 0 on the first failed fwrite) must therefore leave with code 0 — a
@@ -542,7 +542,7 @@ PHP;
      * decoder" — and ffmpeg answers the resulting write error by exiting with
      * `AVERROR(EPIPE)` (-32) truncated to a byte. The teardown was reporting
      * its own success as an error, through `error_log`, i.e. onto stderr and
-     * straight over the frame candy-core had just composed. A child that had
+     * straight over the frame sugar-core had just composed. A child that had
      * to be signalled by the reaper is the same story with `proc_close()`
      * returning -1.
      *

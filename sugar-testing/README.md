@@ -41,7 +41,7 @@ $counter = $sim->model; // CounterModel with updated count
 ## Requirements
 
 - PHP 8.3+
-- `sugarcraft/candy-core` (Program, Msg, Model, Cmd)
+- `sugarcraft/sugar-core` (Program, Msg, Model, Cmd)
 - `sugarcraft/sugar-cellbuffer` (Buffer for cell-grid assertions)
 
 ## Install
@@ -97,7 +97,7 @@ $input = ScriptedInput::new()
     ->build();
 ```
 
-Terminal-shaped input is decoded by candy-core's real `InputReader` — the parser
+Terminal-shaped input is decoded by sugar-core's real `InputReader` — the parser
 `Program` reads stdin with — so a script sees what the live runtime delivers:
 
 ```php
@@ -141,7 +141,7 @@ time** — an intermittent flake with no obvious cause.
 
 The measurements — a 5s timer armed after N seconds of synchronous work at five different
 arming sites, under ext-uv and under `StreamSelectLoop` — live in exactly one place: the
-timer-accuracy notes on `SugarCraft\Core\Program::run()` in candy-core. They are not
+timer-accuracy notes on `SugarCraft\Core\Program::run()` in sugar-core. They are not
 copied here, because a copy in three files is how one wrong row came to be wrong in three
 files.
 
@@ -170,7 +170,7 @@ Two corollaries worth spelling out, because they are easy to get backwards:
   `Timers::updateTime()` at **arm** time.
 
 `Program::run()` is not automatically immune either; see the timer-accuracy notes on that
-method for which candy-core paths are safe (blocking in `update()`, because Cmds are
+method for which sugar-core paths are safe (blocking in `update()`, because Cmds are
 deferred through `futureTick()`) and which are exposed (blocking inside a Cmd that then
 arms). Pin the loop before anything else touches it: an already-created loop may own
 watchers that do not transfer. `LoopPin` additionally calls `Loop::stop()` after installing

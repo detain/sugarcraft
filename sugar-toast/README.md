@@ -148,7 +148,7 @@ schedule a single timer for exactly that moment:
 ```php
 $delay = $toast->secondsUntilNextExpiry();   // seconds until the soonest expiry, or null
 if ($delay !== null) {
-    // e.g. in a candy-core app:
+    // e.g. in a sugar-core app:
     $cmd = Cmd::tick($delay, fn () => new ToastTickMsg());
 }
 

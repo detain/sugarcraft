@@ -59,7 +59,7 @@
 ```
 candy-mdview/
 ├── bin/candy-mdview                  # CLI entry point (20 lines)
-├── composer.json                  # deps: candy-core, sugar-markdown, sugar-widgets, symfony/console
+├── composer.json                  # deps: sugar-core, sugar-markdown, sugar-widgets, symfony/console
 ├── phpunit.xml                    # colors=true, failOnWarning=true, cacheDirectory=.phpunit.cache
 ├── README.md                      # CLI usage, library API, VHS demo links
 ├── CALIBER_LEARNINGS.md           # WidthHelper mb_strwidth, FileWatcher Generator gotcha
@@ -200,7 +200,7 @@ Uses `filemtime()` polling — no extension required. Resolution is filesystem-d
 
 | Package | Role |
 |---------|------|
-| `sugarcraft/candy-core` | `Viewport`, `Model`, `Cmd`, `Msg`, `Program`, `TtyDetect`, `Width`, `Ansi` |
+| `sugarcraft/sugar-core` | `Viewport`, `Model`, `Cmd`, `Msg`, `Program`, `TtyDetect`, `Width`, `Ansi` |
 | `sugarcraft/sugar-markdown` | `Renderer`, `Theme` (ANSI text styling engine) |
 | `sugarcraft/sugar-widgets` | Markdown parsing (League CommonMark integration) |
 | `symfony/console` | `Application`, `Command`, `InputInterface`, `OutputInterface` |
@@ -378,7 +378,7 @@ This is critical for correct visual rendering since `strlen()` counts code units
 `candy-mdview` is a **leaf library** that consumes the core TUI infrastructure:
 
 ```
-candy-core (Viewport, Model, Cmd, Program, Tty, Width, Ansi)
+sugar-core (Viewport, Model, Cmd, Program, Tty, Width, Ansi)
     ↓
 sugar-widgets (MarkdownRenderer via League\CommonMark)
     ↓
@@ -388,7 +388,7 @@ candy-mdview (RenderCommand, MdViewModel, FileWatcher, GlamourTheme)
 ```
 
 Dependencies:
-- `sugarcraft/candy-core` — Viewport, Model, Program, TtyDetect, Width, Ansi
+- `sugarcraft/sugar-core` — Viewport, Model, Program, TtyDetect, Width, Ansi
 
 - `sugarcraft/sugar-markdown` — Renderer, Theme
 
@@ -397,7 +397,7 @@ Dependencies:
 - `symfony/console` — Application, Command
 
 Path repos in `composer.json`:
-- candy-core, sugar-markdown, sugar-widgets, sugar-pty, sugar-style, sugar-forms, sugar-mouse, sugar-spring, sugar-colorprofile
+- sugar-core, sugar-markdown, sugar-widgets, sugar-pty, sugar-style, sugar-forms, sugar-mouse, sugar-spring, sugar-colorprofile
 
 ## Potential Enhancements
 

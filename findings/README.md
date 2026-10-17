@@ -24,7 +24,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **Style object allocation** — hot-render loops creating Style chains per-frame (candy-starter, candy-flappy)
 - **escapeshellarg misuse** — stripslashes after escapeshellarg breaks safety (candy-git-server, candy-scriptui)
 - **array_map over children** — double/triple iteration over same child array (sugar-panels, sugar-table)
-- **WeakMap/registry patterns** — per-project implementations instead of shared candy-core utility
+- **WeakMap/registry patterns** — per-project implementations instead of shared sugar-core utility
 - **i18n wrapper inconsistency** — Lang::t() vs SugarCraft\Core\I18n\T scattered across libs
 - **FFI cleanup** — every FFI project implements its own free() pattern instead of shared wrapper
 - **Grapheme splitting** — 3-level fallback (grapheme_str_split → mb_str_split → preg_split) repeated in 8+ libs
@@ -120,10 +120,10 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 ## Top Cross-Cutting Recommendations
 
-### 1. Extract Shared Utilities to candy-core
+### 1. Extract Shared Utilities to sugar-core
 
 - **mutate() trait** — currently reimplemented 35+ times; create a `SugarCraft\Core\Concerns\WithBuilder` trait
-- **AsyncOps class** — duplicated in sugar-async, sugar-cellbuffer, sugar-dashboard; consolidate into candy-core
+- **AsyncOps class** — duplicated in sugar-async, sugar-cellbuffer, sugar-dashboard; consolidate into sugar-core
 - **Clamping utility** — `SugarCraft\Core\clamp(int $value, int $min, int $max): int` — appears in 10+ projects
 - **Grapheme splitting** — 3-level fallback scattered across 8+ projects; extract `SugarCraft\Core\grapheme_split(string $s): array`
 - **escapeshellarg+stripslashes fix** — create `SugarCraft\Core\ safe_env_value(string $v): string` that doesn't strip escaping

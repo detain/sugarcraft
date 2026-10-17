@@ -56,7 +56,7 @@ use SugarCraft\Overlay\Veil;
  *
  * 3. **Bounded output.** Like {@see FilesPane}, this never emits more rows
  *    than the caller's height budget — an unbounded pane pushes the input
- *    line and status bar off-screen, and candy-core's absolute-cursor
+ *    line and status bar off-screen, and sugar-core's absolute-cursor
  *    repaint then collides distinct logical rows onto one physical line
  *    (see {@see \SugarCraft\Crush\Tui\Renderer::renderView()} invariant 1).
  *    Peek output is tailed by BYTE budget before it is split into lines, so
@@ -424,7 +424,7 @@ final class AgentDashboardPane
      * One dashboard row: `[N] ● name [status] operation  elapsed  usage`.
      *
      * The slot label is a plain ASCII digit on purpose. Private-Use
-     * codepoints (U+E000–U+F8FF) are where candy-core's image markers and
+     * codepoints (U+E000–U+F8FF) are where sugar-core's image markers and
      * sugar-mouse's zone sentinels both live, so a decorative glyph from that
      * block here would be mistaken for one of them by
      * {@see \SugarCraft\Crush\Renderer::maskImageMarkers()}.
@@ -703,7 +703,7 @@ final class AgentDashboardPane
      *   Losing an output line's indentation is the accepted price.
      * - The Private-Use sweep removes a block `untrusted()` leaves alone
      *   because it is printable. Without it a session could echo sugar-mouse's
-     *   zone sentinels or candy-core's image markers back at us and forge a
+     *   zone sentinels or sugar-core's image markers back at us and forge a
      *   clickable region in our own frame.
      *
      * Both halves live in {@see PaneLabel::safe()}. They used to live here, in

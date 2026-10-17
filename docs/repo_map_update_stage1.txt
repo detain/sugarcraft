@@ -1,6 +1,6 @@
 # SugarCraft Stage 1 Synthesis — 10 Package Update Files
 
-Sources: candy-core, candy-scriptui, sugar-forms, sugar-style, sugar-widgets,
+Sources: sugar-core, candy-scriptui, sugar-forms, sugar-style, sugar-widgets,
 sugar-forms, sugar-spring, sugar-colorprofile, sugar-markdown, sugar-pty
 
 ---
@@ -13,15 +13,15 @@ sugar-forms, sugar-spring, sugar-colorprofile, sugar-markdown, sugar-pty
 
 **Impact**: Every interactive filter/select UI in the ecosystem is degraded. gum users expect ranked fuzzy results with highlighted matches.
 
-### B. No True Cell-Based Buffer Model (candy-core / sugar-widgets / sugar-style)
+### B. No True Cell-Based Buffer Model (sugar-core / sugar-widgets / sugar-style)
 
-All rendering passes through string-based diffing.紫外线 (ultraviolet) and ratatui use `Buffer`/`Cell` grids where each cell has (rune, style, link, width). This enables per-cell dirty tracking, true partial line repaints at cell granularity, and SGR transition optimization (`Style.Diff()`). candy-core's cell-diff already exists but operates on tokenized strings, not logical cells. sugar-widgets has no LineInfo accounting for double-width Unicode in soft-wrap. sugar-style Canvas uses string composition with no cell-buffer diffing.
+All rendering passes through string-based diffing.紫外线 (ultraviolet) and ratatui use `Buffer`/`Cell` grids where each cell has (rune, style, link, width). This enables per-cell dirty tracking, true partial line repaints at cell granularity, and SGR transition optimization (`Style.Diff()`). sugar-core's cell-diff already exists but operates on tokenized strings, not logical cells. sugar-widgets has no LineInfo accounting for double-width Unicode in soft-wrap. sugar-style Canvas uses string composition with no cell-buffer diffing.
 
 **Impact**: Bandwidth optimization for SSH, cursor position diffing, and animation efficiency are all blocked. This is the single most impactful architectural gap vs. upstream ratatui/ultraviolet.
 
-### C. Cassowary Constraint Solver Absent or Incomplete (candy-core / sugar-style / sugar-forms / sugar-widgets)
+### C. Cassowary Constraint Solver Absent or Incomplete (sugar-core / sugar-style / sugar-forms / sugar-widgets)
 
-sugar-style has a one-pass greedy layout solver — cannot express "column A is always at least 2× column B". candy-core has no layout system at all (models manually pad strings). ratatui and ultraviolet both use Cassowary (same algorithm as Apple Auto Layout). php-tui uses `php-tui/cassowary`. sugar-spring has spring physics but the Cassowary constraint solver that enables truly responsive layouts is missing from all layout-sensitive packages.
+sugar-style has a one-pass greedy layout solver — cannot express "column A is always at least 2× column B". sugar-core has no layout system at all (models manually pad strings). ratatui and ultraviolet both use Cassowary (same algorithm as Apple Auto Layout). php-tui uses `php-tui/cassowary`. sugar-spring has spring physics but the Cassowary constraint solver that enables truly responsive layouts is missing from all layout-sensitive packages.
 
 **Impact**: Responsive dashboards that adapt to terminal resize require manual string padding. Declarative constraint specification is impossible.
 
@@ -43,28 +43,28 @@ glamour maintains a `BlockStack` that computes available width dynamically as bl
 
 ### A. Greedy Constraint Solvers / No Layout Abstraction
 
-sugar-style, candy-core, sugar-forms, and sugar-widgets all independently work around the absence of a Cassowary-style constraint solver. Each package computes positions manually. This is not a bug — it reflects that Cassowary is genuinely complex (~1000+ lines) and requires algorithmic expertise. **The weakness is structural**: no shared layout engine exists at the foundation layer, so every consumer re-implements manual sizing.
+sugar-style, sugar-core, sugar-forms, and sugar-widgets all independently work around the absence of a Cassowary-style constraint solver. Each package computes positions manually. This is not a bug — it reflects that Cassowary is genuinely complex (~1000+ lines) and requires algorithmic expertise. **The weakness is structural**: no shared layout engine exists at the foundation layer, so every consumer re-implements manual sizing.
 
 ### B. Async Concurrency Is Inconsistent Across the Ecosystem
 
-candy-core has ReactPHP integration but `exec()` blocks during external command execution. sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation mechanism. sugar-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
+sugar-core has ReactPHP integration but `exec()` blocks during external command execution. sugar-forms/sugar-forms have ReactPHP async suggestions but no cancellation mechanism. sugar-pty has no async concurrency model (Go-style goroutines vs PHP callbacks). candy-scriptui's `subscriptions()` returns null — no Bubble Tea-style concurrent commands. **The weakness**: the Elm Architecture's `Cmd` pattern is well-implemented at the core level, but async command cancellation, subscription wiring, and concurrent operations are fragmented across packages.
 
 ### C. No Consistent Buffer/Cell Abstraction for Rendering
 
-Packages that do rendering (candy-core renderer, sugar-style Canvas, sugar-markdown Renderer, sugar-widgets components, sugar-forms primitives) each maintain their own string-composition approach. No package has a shared `Buffer`/`Cell` value object hierarchy. This means: (1) cell-level diffing cannot be shared across packages, (2) canvas layering and animation are all implemented independently, (3) a future cell-based renderer would need to be implemented per-package rather than centrally. **The weakness**: rendering infrastructure is not layered — every package reinventing terminal output.
+Packages that do rendering (sugar-core renderer, sugar-style Canvas, sugar-markdown Renderer, sugar-widgets components, sugar-forms primitives) each maintain their own string-composition approach. No package has a shared `Buffer`/`Cell` value object hierarchy. This means: (1) cell-level diffing cannot be shared across packages, (2) canvas layering and animation are all implemented independently, (3) a future cell-based renderer would need to be implemented per-package rather than centrally. **The weakness**: rendering infrastructure is not layered — every package reinventing terminal output.
 
 ---
 
 ## 3. Top 5 Most Commonly Cited External Repos and Why
 
 ### 1. `charmbracelet/bubbletea` — 10 citations (CRITICAL)
-Primary TEA runtime upstream for candy-core. Cited for: Elm architecture (Model/Update/View/Msg), Cmd/Batch/Sequence pattern, subscription system, synchronized output (ANSI 2026), mouse/focus/paste handling, cell-based renderer (via ultraviolet), bubble tea-style subscriptions for concurrent async commands. Every package that implements TEA references bubbletea as the canonical reference.
+Primary TEA runtime upstream for sugar-core. Cited for: Elm architecture (Model/Update/View/Msg), Cmd/Batch/Sequence pattern, subscription system, synchronized output (ANSI 2026), mouse/focus/paste handling, cell-based renderer (via ultraviolet), bubble tea-style subscriptions for concurrent async commands. Every package that implements TEA references bubbletea as the canonical reference.
 
 ### 2. `charmbracelet/lipgloss` — 8 citations (CRITICAL)
 Primary styling upstream for sugar-style. Cited for: CSS-like shorthand properties, Style inheritance via `Inherit()`, color adaptive/darken/lighten, border gradient blends (CIELAB), Layer/Compositor system, table column width constraints, CIELAB perceptual color conversion, hyperlink OSC 8 wrapping, WrapWriter ANSI state machine.
 
 ### 3. `ratatui/ratatui` / `php-tui/php-tui` — 8 citations each (CRITICAL)
-Rust TUI benchmark and its PHP port. Cited together for: Cassowary constraint solver, buffer diffing, Widget/StatefulWidget trait pattern, immediate-mode rendering, Text/Line/Span hierarchy, flex alignment variants (SpaceBetween/SpaceAround), Layout margin support, buffer cell representation. These are the architectural targets for candy-core's rendering evolution.
+Rust TUI benchmark and its PHP port. Cited together for: Cassowary constraint solver, buffer diffing, Widget/StatefulWidget trait pattern, immediate-mode rendering, Text/Line/Span hierarchy, flex alignment variants (SpaceBetween/SpaceAround), Layout margin support, buffer cell representation. These are the architectural targets for sugar-core's rendering evolution.
 
 ### 4. `charmbracelet/gum` — 6 citations (HIGH)
 Primary CLI tool upstream for candy-scriptui. Cited for: 13-command surface with fuzzy filter (sahilm/fuzzy), 2D grid choose with paginator, external editor integration (charmbracelet/x/editor), per-element style flags (dotted form `--header.foreground=red`), shell completion generation, logfmt formatter. gum is also the reference for what candy-scriptui should achieve in shell script integration.
@@ -87,9 +87,9 @@ Both packages have zero ANSI byte assertions on `view()` output. This is the hig
 
 The `SubStyleParser` for per-element styles already exists in candy-scriptui — just needs wiring across commands. Combined with fixing `CommandScanner` autoloading (`spl_autoload_functions()` to trigger autoloading before `get_declared_classes()`), both are low-complexity wiring fixes with high impact: makes fuzzy search actually work and makes auto-discovery reliable with Composer's PSR-4.
 
-### C. Add Immediate Ergonomic APIs to candy-core (P0 — Days)
+### C. Add Immediate Ergonomic APIs to sugar-core (P0 — Days)
 
-`ProgramOptions::builder()` pattern (16 constructor params is unwieldy), `Program::withLogger()` wrapping PSR-3, `Program::withExceptionHandler()`, expose `$lastFrameDuration` for adaptive framerate, make cell-diff renderer the default. **Complexity: Low** — all are additive API improvements with no breaking changes. Impact: significantly improves DX for every candy-core consumer without touching architecture.
+`ProgramOptions::builder()` pattern (16 constructor params is unwieldy), `Program::withLogger()` wrapping PSR-3, `Program::withExceptionHandler()`, expose `$lastFrameDuration` for adaptive framerate, make cell-diff renderer the default. **Complexity: Low** — all are additive API improvements with no breaking changes. Impact: significantly improves DX for every sugar-core consumer without touching architecture.
 
 ---
 

@@ -7,7 +7,7 @@
 - **Status**: v1 ready
 - **Language**: PHP 8.3+
 - **Files**: 3 source files (Boxer.php 408L, Node.php 359L, Lang.php 22L), 26 unit tests, 3 examples
-- **Dependencies**: `candy-core` (Width::string), `sugar-style` (Border, Style, Align, VAlign)
+- **Dependencies**: `sugar-core` (Width::string), `sugar-style` (Border, Style, Align, VAlign)
 - **Key Innovation**: Recursive tree-based box-drawing layout engine with immutable Node composition and ANSI-aware width calculation
 
 ---
@@ -480,7 +480,7 @@ private function distribute(int $available, array $weights, int $totalWeight, in
 | **Diffing** | Touched-line tracking + minimal ANSI sequences | Full re-render on each `render()` call |
 | **Layout** | Cassowary constraint solver (`layout.Layout`) | Tree-based recursive distribution |
 | **Borders** | `Border()` functions (Normal, Rounded, etc.) | Delegates to `sugar-style` Border |
-| **Width measurement** | `WcWidth()`, `GraphemeWidth()` | Delegates to `candy-core` Width |
+| **Width measurement** | `WcWidth()`, `GraphemeWidth()` | Delegates to `sugar-core` Width |
 | **Output** | Optimized ANSI escape sequences | Raw box-drawing strings |
 
 **Relationship**: ultraviolet is the **foundational rendering layer** that powers Bubble Tea v2 and Lip Gloss v2. It provides:
@@ -492,7 +492,7 @@ private function distribute(int $available, array $weights, int $totalWeight, in
 
 sugar-panels sits **above** this layer. It uses ultraviolet's border character sets (via sugar-style) and its width measurement utilities, but implements its own tree-based layout algorithm rather than the Cassowary constraint solver.
 
-**SugarCraft architectural note**: In SugarCraft, `candy-core` provides the termbox-cell model and width utilities that ultraviolet provides in Go. sugar-panels depends on `candy-core` for `Width::string()`.
+**SugarCraft architectural note**: In SugarCraft, `sugar-core` provides the termbox-cell model and width utilities that ultraviolet provides in Go. sugar-panels depends on `sugar-core` for `Width::string()`.
 
 ### 2.5 textualize/textual
 
@@ -612,7 +612,7 @@ sugar-panels sits **above** this layer. It uses ultraviolet's border character s
 
 ```
 sugar-panels
-  └─ candy-core (Width::string for ANSI-aware width)
+  └─ sugar-core (Width::string for ANSI-aware width)
   └─ sugar-style (Border, Style, Align, VAlign types)
 ```
 
@@ -625,7 +625,7 @@ sugar-panels is a **foundational layout primitive** used by other SugarCraft lib
 - Clean separation of layout from rendering
 - Immutable nodes enable safe sharing across the monorepo
 - Delegates to canonical sugar-style types (Border, Style)
-- ANSI-aware width calculation via candy-core
+- ANSI-aware width calculation via sugar-core
 - Zero external dependencies beyond the monorepo
 - 26 unit tests covering core functionality
 

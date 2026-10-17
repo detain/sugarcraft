@@ -11,7 +11,7 @@ use SugarCraft\Toast\Toast;
 
 /**
  * Tripwire pinning sugar-toast's SGR→RGB decode (Toast::ansiColorToRgb())
- * to candy-core's canonical xterm ANSI-16 table.
+ * to sugar-core's canonical xterm ANSI-16 table.
  *
  * Historically the method carried its own private 8-entry table plus a
  * `+96 per channel` bright formula, which forked slot 4 to #000080 (the
@@ -49,7 +49,7 @@ final class Ansi16TableParityTest extends TestCase
             self::assertSame(
                 [$r, $g, $b],
                 [($packed >> 16) & 0xff, ($packed >> 8) & 0xff, $packed & 0xff],
-                "slot {$slot} diverged from candy-core Color::ANSI16_RGB",
+                "slot {$slot} diverged from sugar-core Color::ANSI16_RGB",
             );
         }
     }

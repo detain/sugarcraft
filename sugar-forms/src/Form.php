@@ -136,7 +136,7 @@ final class Form implements Model
     /**
      * Cmd returned the first time the runtime polls — typically the
      * focused field's focus-Cmd (cursor blink, autocomplete preload).
-     * Mirrors candy-core's {@see Model::init()}.
+     * Mirrors sugar-core's {@see Model::init()}.
      */
     public function init(): ?\Closure
     {

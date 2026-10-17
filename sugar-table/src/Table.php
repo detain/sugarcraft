@@ -2065,7 +2065,7 @@ final class Table
 
     /**
      * Center one label in a display-width budget (floor bias to the left),
-     * truncating with candy-core Width first when it overflows. Shared by the
+     * truncating with sugar-core Width first when it overflows. Shared by the
      * footer and the empty-state row — the footer used to center by BYTE count
      * (strlen/substr), which skewed anything non-ASCII out of the middle.
      */
@@ -2116,7 +2116,7 @@ final class Table
             if ($col >= $bufWidth) {
                 break; // never write past the buffer (defensive: too-narrow width)
             }
-            // Candy-core Width is the single EAW oracle for the whole monorepo
+            // Sugar-core Width is the single EAW oracle for the whole monorepo
             // (audit finding #10 — this file used to carry its own codepoint
             // range tables, which silently drifted from the canonical one).
             // A zero-width cluster (combining mark, ZWJ, variation selector)
@@ -2347,7 +2347,7 @@ final class Table
 
     /**
      * Map an SGR colour index (0-7, bright variant when {@see $bright}) to a
-     * packed 24-bit RGB int. The triples come from candy-core's canonical
+     * packed 24-bit RGB int. The triples come from sugar-core's canonical
      * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
      * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
      * {@see Color::ANSI16_RGB} so this decode can never fork its own blues
@@ -2409,7 +2409,7 @@ final class Table
         }
         // grapheme_str_split is PHP 8.4+; cascade to codepoint-level splitters on
         // 8.3 so multi-byte text (box-drawing chars, etc.) renders identically
-        // across PHP versions. Mirrors candy-core Util\Width::graphemes().
+        // across PHP versions. Mirrors sugar-core Util\Width::graphemes().
         if (\function_exists('grapheme_str_split')) {
             $result = @grapheme_str_split($text);
             if (\is_array($result)) {

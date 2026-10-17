@@ -127,7 +127,7 @@ final class ImportExportTest extends TestCase
     }
 
     /**
-     * A non-array top-level JSON must be rejected loudly via candy-core's
+     * A non-array top-level JSON must be rejected loudly via sugar-core's
      * guarded Json::decodeArray() rather than silently iterating a scalar as
      * an empty foreach (which previously masqueraded as a 0-entry import).
      *

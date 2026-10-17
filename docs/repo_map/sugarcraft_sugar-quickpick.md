@@ -8,7 +8,7 @@
 - **PHP:** ^8.3
 - **Namespace:** `SugarCraft\QuickPick`
 - **Composer:** `sugarcraft/sugar-quickpick`
-- **Depends on:** `sugarcraft/candy-core` (Ansi, SignalForwarder), `sugarcraft/sugar-style` (Border, Style, Align, VAlign), `sugarcraft/sugar-pty` (SignalForwarder)
+- **Depends on:** `sugarcraft/sugar-core` (Ansi, SignalForwarder), `sugarcraft/sugar-style` (Border, Style, Align, VAlign), `sugarcraft/sugar-pty` (SignalForwarder)
 - **Test suite:** 4 test files (HermitTest, FilteredItemTest, ItemInterfaceTest, History/FileHistoryTest), ~47 test methods
 
 ---

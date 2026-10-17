@@ -39,7 +39,7 @@ jobs:
   # Parallel candy-vcr render job (Phase 7 — seed lib soak).
   #
   # This runs in parallel with the legacy `vhs` job below on a narrow seed
-  # lib (candy-core) so we can compare candy-vcr's pure-PHP renderer output
+  # lib (sugar-core) so we can compare candy-vcr's pure-PHP renderer output
   # against the upstream charmbracelet/vhs binary. The job is non-blocking
   # (`continue-on-error: true`) — failures or visual drift do NOT fail the
   # existing CI during the soak. The actual cutover (removing the upstream
@@ -61,7 +61,7 @@ jobs:
       matrix:
         # Narrow seed list — expand to more libs in a follow-up PR after
         # the soak window passes without visual drift.
-        lib: [candy-core]
+        lib: [sugar-core]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
@@ -141,7 +141,7 @@ jobs:
         run: |
           set -euo pipefail
           all=(
-            candy-core sugar-style sugar-forms sugar-focus sugar-pty sugar-spring
+            sugar-core sugar-style sugar-forms sugar-focus sugar-pty sugar-spring
             sugar-widgets sugar-charts sugar-gallery
             candy-scriptui sugar-markdown sugar-cli candy-codeshot
             candy-mdview candy-ansi-inspect candy-ssh-launcher
@@ -222,7 +222,7 @@ jobs:
         # sugar-dashboard is excluded here and rendered by the dedicated
         # render-sugar-dashboard job below; it has 153 tapes (~10× the next
         # biggest lib) and gets parallelized into 4 batches.
-        lib: [candy-core, sugar-style, sugar-forms, sugar-focus, sugar-pty, candy-vcr, sugar-spring, sugar-widgets, sugar-charts, sugar-gallery, candy-scriptui, sugar-markdown, sugar-cli, candy-codeshot, candy-mdview, candy-ansi-inspect, candy-ssh-launcher, candy-starter, candy-tetris, candy-files, sugar-crush, sugar-vterm, candy-git, candy-sql, candy-codetime, candy-minesweeper, sugar-image, sugar-animation, candy-gifview, sugar-video, candy-flappy, sugar-quickpick, sugar-treelist, sugar-log, sugar-metrics, sugar-colorprofile, candy-git-server, sugar-ssh-server, sugar-mouse, sugar-panels, sugar-datepicker, sugar-navstack, candy-mail, sugar-readline, candy-kv, sugar-flexbox, sugar-table, sugar-toast, sugar-overlay, candy-top]
+        lib: [sugar-core, sugar-style, sugar-forms, sugar-focus, sugar-pty, candy-vcr, sugar-spring, sugar-widgets, sugar-charts, sugar-gallery, candy-scriptui, sugar-markdown, sugar-cli, candy-codeshot, candy-mdview, candy-ansi-inspect, candy-ssh-launcher, candy-starter, candy-tetris, candy-files, sugar-crush, sugar-vterm, candy-git, candy-sql, candy-codetime, candy-minesweeper, sugar-image, sugar-animation, candy-gifview, sugar-video, candy-flappy, sugar-quickpick, sugar-treelist, sugar-log, sugar-metrics, sugar-colorprofile, candy-git-server, sugar-ssh-server, sugar-mouse, sugar-panels, sugar-datepicker, sugar-navstack, candy-mail, sugar-readline, candy-kv, sugar-flexbox, sugar-table, sugar-toast, sugar-overlay, candy-top]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 

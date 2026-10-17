@@ -60,7 +60,7 @@
 
 - 75-line single-file app demonstrating TEA pattern — serves as reference, not source to port
 
-- SugarCraft already has `candy-core` implementing the TEA contract in PHP
+- SugarCraft already has `sugar-core` implementing the TEA contract in PHP
 
 **Valuable Ideas:**
 
@@ -78,7 +78,7 @@
 
 **Redundancy Check:**
 
-- `candy-core` already implements TEA runner with `Model::init()`/`update()`/`view()` contract
+- `sugar-core` already implements TEA runner with `Model::init()`/`update()`/`view()` contract
 
 - `sugar-widgets` provides component library equivalent to `bubbles`
 
@@ -88,7 +88,7 @@
 
 - Could serve as inspiration for a SugarCraft `examples/` directory structure
 
-**Verdict:** Informational — TEA reference implementation, SugarCraft has equivalent `candy-core` patterns
+**Verdict:** Informational — TEA reference implementation, SugarCraft has equivalent `sugar-core` patterns
 
 ---
 
@@ -308,7 +308,7 @@
 
 **Redundancy Check:**
 
-- No equivalent SugarCraft lib — `candy-core` has buffered I/O but not LFS protocol
+- No equivalent SugarCraft lib — `sugar-core` has buffered I/O but not LFS protocol
 
 **Strategic Value:**
 
@@ -803,7 +803,7 @@
 | Repo | Verdict | Rationale |
 |------|---------|-----------|
 | charmbracelet/meta | Informational | CI/CD infrastructure, not applicable to PHP |
-| charmbracelet/bubbletea-app-template | Informational | Reference template, SugarCraft has equivalent `candy-core` patterns |
+| charmbracelet/bubbletea-app-template | Informational | Reference template, SugarCraft has equivalent `sugar-core` patterns |
 | charmbracelet/vhs-action | Informational | CI infrastructure for VHS, SugarCraft has `record-vhs-demo` skill |
 | charmbracelet/soft-serve-action | Informational | Server-side Git sync, outside TUI scope |
 | charmbracelet/scoop-bucket | Informational | Windows package manifests, not applicable to PHP |

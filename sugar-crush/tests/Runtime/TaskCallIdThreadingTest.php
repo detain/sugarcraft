@@ -64,8 +64,8 @@ final class TaskCallIdThreadingTest extends TestCase
         );
 
         $messages = $this->dispatch([new ToolCall('call_task_7', 'Task', [
-            'description' => 'Audit candy-core',
-            'prompt' => 'Audit candy-core and report the findings',
+            'description' => 'Audit sugar-core',
+            'prompt' => 'Audit sugar-core and report the findings',
             'agent' => 'coder',
         ])], [$task]);
 

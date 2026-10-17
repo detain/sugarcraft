@@ -7,7 +7,7 @@
 - **Composer**: `sugarcraft/sugar-toast`
 - **Namespace**: `SugarCraft\Toast`
 - **PHP**: `^8.3`
-- **Dependencies**: `sugarcraft/candy-core` (dev-master)
+- **Dependencies**: `sugarcraft/sugar-core` (dev-master)
 - **Status**: 🟢 v1 ready
 - **Upstream Primary**: [daltonsw/bubbleup](https://github.com/daltonsw/bubbleup) (Go, ~43 stars, MIT)
 - **Upstream Secondary**: [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) (progress bar reference)
@@ -250,7 +250,7 @@ The `charmbracelet/bubbles` library provides a `Progress` component used as a re
 
 | Library | Relationship |
 |---------|-------------|
-| `candy-core` | Provides `SugarCraft\Core\Util\Width` (display-cell measurement) and `SugarCraft\Core\Util\Ansi` (SGR helpers) — both used heavily |
+| `sugar-core` | Provides `SugarCraft\Core\Util\Width` (display-cell measurement) and `SugarCraft\Core\Util\Ansi` (SGR helpers) — both used heavily |
 | `sugar-overlay` | General-purpose floating overlay compositor; sugar-toast uses similar overlay pattern |
 | `sugar-spring` | Animation easing library; referenced in CALIBER_LEARNINGS.md for future CubicBezier fade animation |
 

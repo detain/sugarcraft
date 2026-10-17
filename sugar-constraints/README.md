@@ -82,7 +82,7 @@ full base sizes instead (the layout runs off-grid).
 
 ## Dock layout
 
-`SugarCraft\Constraints\Dock\*` is an original SugarCraft primitive (no upstream mirror) for the classic IDE/TUI dock: a primary center pane with optional left and right stacks, each stack holding zero or more pane slots split vertically by rational weights. Everything is immutable — mutators return new instances via a hand-rolled `mutate()` (the package is dependency-free, so no candy-core `Mutable` trait).
+`SugarCraft\Constraints\Dock\*` is an original SugarCraft primitive (no upstream mirror) for the classic IDE/TUI dock: a primary center pane with optional left and right stacks, each stack holding zero or more pane slots split vertically by rational weights. Everything is immutable — mutators return new instances via a hand-rolled `mutate()` (the package is dependency-free, so no sugar-core `Mutable` trait).
 
 ```php
 use SugarCraft\Constraints\Dock\{DockLayout, Side};

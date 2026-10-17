@@ -303,7 +303,7 @@ final class WorkflowCommand implements HostCommand
      *
      * ## The invariant this exists to hold
      *
-     * BETWEEN two resumes the loop is free. That is the entire point: candy-core's
+     * BETWEEN two resumes the loop is free. That is the entire point: sugar-core's
      * `Program` repaints from its own periodic timer on this same loop, so a
      * frame lands in every gap, and `Renderer::renderView()` reads
      * `AgentManager::liveOutputs()` at that moment — the sub-agents the
@@ -317,7 +317,7 @@ final class WorkflowCommand implements HostCommand
      * ## Failure and cancellation
      *
      * The promise RESOLVES on a throwing fiber rather than rejecting. A
-     * rejection dispatches candy-core's `ExceptionMsg`, which this model does
+     * rejection dispatches sugar-core's `ExceptionMsg`, which this model does
      * not handle, so a workflow that died would have cleared nothing and left
      * `inFlight` latched on forever with no message to explain it. An error
      * notice through the ordinary AssistantMsg arm both tells the user and

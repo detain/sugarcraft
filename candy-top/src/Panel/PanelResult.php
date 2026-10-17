@@ -15,7 +15,7 @@ use SugarCraft\Top\Overlay\Overlay;
  * (btop_input.cpp:303-391): the App applies each entry in order through
  * {@see \SugarCraft\Top\Config\Config::with()} (a value btop would reject is
  * dropped silently, the others still apply) and then
- * {@see \SugarCraft\Top\App::applyConfig()}. Because candy-core's Program
+ * {@see \SugarCraft\Top\App::applyConfig()}. Because sugar-core's Program
  * dispatches every key of one terminal read before any Cmd runs, a write
  * routed through a Cmd would land one round-trip late — two `a` presses in
  * one read would both toggle net_auto from the same stale value. Use `$set`

@@ -634,7 +634,7 @@ Some components (e.g., progress bars, tables) may need forms for configuration. 
 
 ## 3. candy-scriptui Integration
 
-TTY initialization (raw mode, alternate screen) happens in `candy-core` runtime. sugar-forms should work seamlessly with `candy-scriptui` TTY setup.
+TTY initialization (raw mode, alternate screen) happens in `sugar-core` runtime. sugar-forms should work seamlessly with `candy-scriptui` TTY setup.
 
 ## 4. Third-party Validator Library
 

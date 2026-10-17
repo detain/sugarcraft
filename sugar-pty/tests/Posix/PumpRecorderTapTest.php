@@ -20,7 +20,7 @@ use SugarCraft\Vcr\Recorder;
  * the strings the child wrote.
  *
  * Uses cassette readback (not {@see \SugarCraft\Vcr\Player::play()})
- * because Player drives a candy-core Program, not a raw byte stream —
+ * because Player drives a sugar-core Program, not a raw byte stream —
  * the assertion here is that the tap recorded faithfully, which a
  * direct cassette walk proves without coupling to Program semantics.
  */

@@ -255,7 +255,7 @@ final class ColdResumeFinishedAgentTest extends TestCase
         $registry = AgentLiveRegistry::new();
         $first = $task->withEngine($engine, null, static function (SubAgentActivity $a) use ($registry): void {
             $registry->apply($a);
-        })->execute(['id' => 'call_1', 'agent' => 'coder', 'prompt' => 'audit candy-core', 'description' => 'audit']);
+        })->execute(['id' => 'call_1', 'agent' => 'coder', 'prompt' => 'audit sugar-core', 'description' => 'audit']);
         $this->assertFalse($first->isError(), $first->content());
 
         return [$engine, $registry, $manager];

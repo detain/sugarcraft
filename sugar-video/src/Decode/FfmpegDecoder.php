@@ -137,7 +137,7 @@ final class FfmpegDecoder implements Decoder
      * error delivers once close() has dropped the stdout read end — before
      * the canonical ladder escalates to SIGTERM. The budget is a decoder
      * fact (how fast ffmpeg answers a closed pipe), so it lives with the
-     * caller, per candy-core `BoundedShutdown`'s "budgets stay with the
+     * caller, per sugar-core `BoundedShutdown`'s "budgets stay with the
      * callers" doctrine; the rungs themselves do not.
      */
     private const CLOSE_GRACE_SECONDS = 1.5;
@@ -580,7 +580,7 @@ final class FfmpegDecoder implements Decoder
      * {@see isTeardownExit()}. Closing the pipe to make ffmpeg leave and then
      * logging the resulting EPIPE as a decoder error meant every quit, seek,
      * resize and mode change printed `ffmpeg exited with code 224` to stderr,
-     * i.e. over the frame candy-core had just composed.
+     * i.e. over the frame sugar-core had just composed.
      */
     public function close(): void
     {
@@ -591,7 +591,7 @@ final class FfmpegDecoder implements Decoder
 
         if ($this->process !== null && is_resource($this->process)) {
             // Grace first, escalation second — the fold of the deleted
-            // per-lib BoundedReaper onto candy-core's canonical ladder,
+            // per-lib BoundedReaper onto sugar-core's canonical ladder,
             // which deliberately has no pre-TERM natural-exit rung: that
             // budget is exactly what "stays with the caller".
             if (!BoundedShutdown::hasExited($this->process, self::CLOSE_GRACE_SECONDS)) {

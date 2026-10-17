@@ -31,7 +31,7 @@ Address all 32 findings from the sugar-treelist code review, organized into 8 ph
 |----------|-----------|--------|
 | Fix exception swallowing before adding features | Silent failures are more dangerous than loud ones — callers cannot distinguish success from failure when `View()` returns a string on error | findings/sugar-treelist.md (#1, #4) |
 | Remove `FilterState::filtered` dead case | A documented state transition that never occurs is actively misleading; removing it simplifies the enum | findings/sugar-treelist.md (#2) |
-| Use `Width::string()` for grapheme-aware splitting | `candy-core`'s `Width` class already handles CJK/emoji/grapheme boundaries correctly; `splitOverWidth()` should use it | findings/sugar-treelist.md (#6, #33) |
+| Use `Width::string()` for grapheme-aware splitting | `sugar-core`'s `Width` class already handles CJK/emoji/grapheme boundaries correctly; `splitOverWidth()` should use it | findings/sugar-treelist.md (#6, #33) |
 | Use `mutate()` consistently across all state-changing methods | The immutable fluent pattern is established throughout the codebase; deviations cause unpredictable behavior | findings/sugar-treelist.md (#10, #11, #14) |
 | Add `setLineOffset()` instead of removing the property | `lineOffset` has semantic meaning (passed to prefixer/suffixer init); removing it would be a breaking change | findings/sugar-treelist.md (#3) |
 | Add `cursorPageUp/Down/ToStart/ToEnd` for keyboard navigation | Upstream `bubblelister` defines key constants; missing navigation is a significant usability gap | findings/sugar-treelist.md (#16) |
@@ -146,7 +146,7 @@ Replace byte-level `strlen()`/`substr()` with grapheme-aware splitting. Use `Wid
 
 - `src/Model.php:593-600` — uses `\strlen($word)` and `\substr($word, $i, $maxWidth)` — byte-level
 - `src/Model.php:552-586` — `hardWrap()` uses `preg_split('/\s+/u', ...)` with `u` flag (UTF-8 aware)
-- `candy-core/src/Util/Width.php:19-52` — `Width::string()` uses `grapheme_extract()` for proper grapheme handling
+- `sugar-core/src/Util/Width.php:19-52` — `Width::string()` uses `grapheme_extract()` for proper grapheme handling
 
 **Investigation notes:**
 `Width::truncate()` at lines 72-88 of `Width.php` shows the pattern: iterate graphemes using `grapheme_extract()`, accumulate width using `graphemeWidth()`, break when over budget. `splitOverWidth()` should use a similar approach — iterate graphemes, accumulate display width, split when over `$maxWidth` display width.
@@ -236,10 +236,10 @@ Add a `Sanitizer` interface or helper method that strips dangerous ANSI sequence
 **Related code:**
 
 - `src/Model.php:513` — `$rawLines = $this->hardWrap((string) $item->value, $contentWidth);`
-- `candy-core/src/Util/Ansi.php` — likely already has ANSI stripping utilities
+- `sugar-core/src/Util/Ansi.php` — likely already has ANSI stripping utilities
 
 **Investigation notes:**
-Dangerous sequences to strip: `\x1b[2J` (clear screen), `\x1b[?1049h` (alt buffer), `\x1b[3J` (clear saved lines), BEL/7 (bell). The `Ansi::strip()` function in `candy-core` is already used by `Width::string()` — verify if it handles these dangerous sequences or if additional filtering is needed.
+Dangerous sequences to strip: `\x1b[2J` (clear screen), `\x1b[?1049h` (alt buffer), `\x1b[3J` (clear saved lines), BEL/7 (bell). The `Ansi::strip()` function in `sugar-core` is already used by `Width::string()` — verify if it handles these dangerous sequences or if additional filtering is needed.
 
 ---
 
@@ -895,7 +895,7 @@ cd /home/sites/sugarcraft && php tools/check-path-repos.php
 
 ## Notes
 
-- **2026-06-30:** Plan created from code review findings (`findings/sugar-treelist.md`). Investigation covered: `src/Model.php`, `src/FilterState.php`, `src/FuzzyMatch.php`, `src/DefaultPrefixer.php`, `src/DefaultSuffixer.php`, `src/Item.php`, `src/StringItem.php`, `src/Prefixer.php`, `src/Suffixer.php`, `src/Lang.php`, `tests/ModelTest.php`, `composer.json`, `CALIBER_LEARNINGS.md`, `candy-core/src/Util/Width.php`, `sugar-async/src/CancellationToken.php`, `lang/en.php`.
+- **2026-06-30:** Plan created from code review findings (`findings/sugar-treelist.md`). Investigation covered: `src/Model.php`, `src/FilterState.php`, `src/FuzzyMatch.php`, `src/DefaultPrefixer.php`, `src/DefaultSuffixer.php`, `src/Item.php`, `src/StringItem.php`, `src/Prefixer.php`, `src/Suffixer.php`, `src/Lang.php`, `tests/ModelTest.php`, `composer.json`, `CALIBER_LEARNINGS.md`, `sugar-core/src/Util/Width.php`, `sugar-async/src/CancellationToken.php`, `lang/en.php`.
 - **Finding #17 (no mouse interaction)** is tracked as a `sugar-mouse` integration concern per CALIBER_LEARNINGS.md: "Mouse hit-testing self-contained via sugar-mouse. Don't pass Managers around for new code." This is a separate library integration, not an in-lib implementation item.
 - **Finding #4 is a duplicate of finding #1** (both about exception handling in `View()`). They are consolidated in Phase 1, task 1.1.
 - **Finding #33 is a duplicate of finding #6** (`splitOverWidth()` UTF-8). They are consolidated in Phase 1, task 1.4.

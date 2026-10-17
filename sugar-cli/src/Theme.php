@@ -61,7 +61,7 @@ final class Theme
      * output stream — the fallback every presenter uses when no theme is
      * passed.
      *
-     * The capability comes from candy-core's {@see ColorProfile::detect()},
+     * The capability comes from sugar-core's {@see ColorProfile::detect()},
      * which owns the whole convention order (non-tty output, TERM=dumb,
      * NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, COLORTERM, TERM, ...), and is
      * applied via
@@ -109,7 +109,7 @@ final class Theme
      * workers that log elsewhere) still has the constant defined but no
      * terminal behind it — that is "output is not a tty", so it is detected
      * exactly as any non-tty stream would be, against a throwaway in-memory
-     * stream. That keeps candy-core the sole owner of the convention order
+     * stream. That keeps sugar-core the sole owner of the convention order
      * (tty-ness, TERM=dumb, NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, ...)
      * instead of copying it.
      *
@@ -249,7 +249,7 @@ final class Theme
     }
 
     /**
-     * Dracula palette — hex literals re-sourced from candy-core's
+     * Dracula palette — hex literals re-sourced from sugar-core's
      * {@see Palettes::DRACULA} single-source-of-truth so they no longer
      * drift as they are hand-copied around the monorepo.
      *

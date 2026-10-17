@@ -16,7 +16,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * crush_feat.md §9 E3 — image-bearing tool results reach the terminal through
- * sugar-image + candy-core's ImageOverlay compositor.
+ * sugar-image + sugar-core's ImageOverlay compositor.
  *
  * Every assertion here fails against the pre-E3 renderer, which had no
  * {@see Renderer::renderView()} at all: a ToolResult's `imageBytes` were
@@ -33,7 +33,7 @@ final class RendererImageTest extends TestCase
     /**
      * The Private-Use cell image id 0's marker ends in (U+E000/U+E001 belong to
      * the zone sentinels). Only half a marker: the zero-width authenticating
-     * escape before it is what makes candy-core paint (audit 15b-17).
+     * escape before it is what makes sugar-core paint (audit 15b-17).
      */
     private const MARKER = "\u{E002}";
 
@@ -96,7 +96,7 @@ final class RendererImageTest extends TestCase
 
     /**
      * The step-defining behaviour: a pixel-graphics protocol's blob must NOT be
-     * concatenated into the text frame (it would corrupt candy-core's line
+     * concatenated into the text frame (it would corrupt sugar-core's line
      * diff) — it is parked on the View's image layer and represented in the
      * frame by a one-cell PUA marker.
      */
@@ -285,7 +285,7 @@ final class RendererImageTest extends TestCase
         $this->assertCount(1, $view->images);
     }
 
-    /** Text-only sessions keep the plain-string simple case candy-core documents. */
+    /** Text-only sessions keep the plain-string simple case sugar-core documents. */
     public function testChatViewStaysAPlainStringWithoutImages(): void
     {
         $chat = new Chat(history: [Message::user('hello')], rows: 40, cols: 80, mosaic: Mosaic::sixel());
@@ -298,7 +298,7 @@ final class RendererImageTest extends TestCase
      * copy of the frame's first picture wherever the text put it, and every
      * Private-Use glyph on screen (Powerline separators, Nerd Font icons from
      * `eza --icons` or a starship prompt) was blanked to a space. Driven through
-     * Chat::view(), the exact View candy-core's Program resolves, for each row
+     * Chat::view(), the exact View sugar-core's Program resolves, for each row
      * kind and for both the bare cell and a whole forged marker (escape
      * included, which the untrusted-text boundary must strip).
      *

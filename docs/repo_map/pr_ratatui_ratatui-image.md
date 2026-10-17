@@ -33,11 +33,11 @@ From `repo_map/ratatui_ratatui-image.md`:
 | iTerm2 protocol | N/A | No sugar-something yet |
 | Halfblocks (ASCII) | `sugar-widgets` | Could be CharacterCell renderer |
 | Image widget | `sugar-widgets` | Base widget infrastructure |
-| Picker/cap detection | `candy-core` | Terminal capability detection |
+| Picker/cap detection | `sugar-core` | Terminal capability detection |
 | StatefulImage | `sugar-charts`? | Dynamic resize behavior |
-| ThreadProtocol | `candy-core` | Async/thread messaging |
+| ThreadProtocol | `sugar-core` | Async/thread messaging |
 | Resize algorithm | `sugar-spring`? | Image transformation math |
-| FontSize detection | `candy-core` | Terminal geometry |
+| FontSize detection | `sugar-core` | Terminal geometry |
 
 **Gap**: No SugarCraft equivalent for the terminal graphics protocols themselves (Sixel/Kitty/iTerm2). These would require new `sugar-*` or `honey-*` libraries.
 

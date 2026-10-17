@@ -9,19 +9,19 @@ use SugarCraft\Core\Program;
 
 /**
  * sugar-testing is the harness every other lib drives its Programs through,
- * so it must not lean on a candy-core name that candy-core only keeps alive
+ * so it must not lean on a sugar-core name that sugar-core only keeps alive
  * as a delegating alias. The aliases stay (external consumers use them), but
- * a harness call is what pins them in place: candy-core's
+ * a harness call is what pins them in place: sugar-core's
  * `Program::getModel()` docblock cited "sugar-testing's ProgramSimulator still
  * calls this name" as its reason to exist.
  *
- * The deprecated roster is re-derived from candy-core's own `@deprecated`
+ * The deprecated roster is re-derived from sugar-core's own `@deprecated`
  * docblocks on every run, so a newly deprecated method is covered without
  * editing this test.
  */
 final class DeprecatedCoreApiUsageTest extends TestCase
 {
-    public function testSourceCallsNoDeprecatedCandyCoreMethod(): void
+    public function testSourceCallsNoDeprecatedSugarCoreMethod(): void
     {
         $deprecated = [];
         foreach (self::phpFiles(\dirname((string) (new \ReflectionClass(Program::class))->getFileName())) as $file) {

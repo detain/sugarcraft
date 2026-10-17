@@ -28,7 +28,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
       <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localised day and month names, today and the cursor highlighted, and optional ISO week numbers.</span></div>
       <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last cell, Enter and Esc drive range mode.</span></div>
       <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
-      <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a candy-core Model with an optional event store.</span></div>
+      <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -51,7 +51,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
 <tr><td>DatePicker</td><td>withRangeMode(bool) / rangeStart() / rangeEnd() / isRangeMode()</td><td>Range selection</td></tr>
 <tr><td>DatePicker</td><td>View(int $width = 21, bool $showWeekNumbers = false)</td><td>Render the month grid</td></tr>
 <tr><td>DatePicker</td><td>WithHeaderStyle() / WithTodayStyle() / WithSelectedStyle() / WithCursorStyle() / WithRangeStyle()</td><td>Styling (SGR strings)</td></tr>
-<tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / picker()</td><td>candy-core Model wrapping the picker</td></tr>
+<tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / picker()</td><td>sugar-core Model wrapping the picker</td></tr>
 </table>
   </div>
 </section>

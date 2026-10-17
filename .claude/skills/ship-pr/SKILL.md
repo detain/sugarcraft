@@ -27,7 +27,7 @@ git status
 git diff --stat
 ```
 
-List the libs touched (top-level dirs like `candy-core/`, `sugar-widgets/`). Hold this list — Step 2 reuses it. Confirm the bundle is 2–4 related items. If it sprawls across unrelated libs, STOP and split into separate PRs (run this skill once per coherent slice). Verify: `git status` shows changes only in the intended files.
+List the libs touched (top-level dirs like `sugar-core/`, `sugar-widgets/`). Hold this list — Step 2 reuses it. Confirm the bundle is 2–4 related items. If it sprawls across unrelated libs, STOP and split into separate PRs (run this skill once per coherent slice). Verify: `git status` shows changes only in the intended files.
 
 ### Step 2 — Run the test suite for every touched lib
 
@@ -37,7 +37,7 @@ For each lib `<slug>` from Step 1:
 cd <slug> && composer install --quiet && composer test
 ```
 
-Also run reverse-dependents if a foundation lib (`candy-core`, `sugar-style`, `candy-scriptui`) changed — at minimum re-run `sugar-widgets`, `sugar-charts`, `sugar-markdown`.
+Also run reverse-dependents if a foundation lib (`sugar-core`, `sugar-style`, `candy-scriptui`) changed — at minimum re-run `sugar-widgets`, `sugar-charts`, `sugar-markdown`.
 
 Verify: every suite ends with `OK (...)`. If ANY suite fails or shows warnings (PHPUnit configs use `failOnWarning="true"`), STOP. Do not proceed to commit.
 
@@ -180,13 +180,13 @@ Result: PR #421 merged, master at new HEAD, ready for next change-set.
 
 ### Example 2 — foundation lib change requires reverse-dep tests
 
-User says: "ship the candy-core Width util fix"
+User says: "ship the sugar-core Width util fix"
 
 Actions taken:
 
-1. `git status` shows changes under `candy-core/src/` + tests. Touches foundation → reverse-dep test required.
-2. `composer test` in `candy-core`, `sugar-widgets`, `sugar-charts`, `sugar-markdown` → all green ✓
-3. Branch `ai/candy-core-width-emoji`, commit `candy-core: fix Width on multi-codepoint emoji`, body lists all 4 suites in `## Test plan`.
+1. `git status` shows changes under `sugar-core/src/` + tests. Touches foundation → reverse-dep test required.
+2. `composer test` in `sugar-core`, `sugar-widgets`, `sugar-charts`, `sugar-markdown` → all green ✓
+3. Branch `ai/sugar-core-width-emoji`, commit `sugar-core: fix Width on multi-codepoint emoji`, body lists all 4 suites in `## Test plan`.
 4. Steps 8–11 proceed normally. Result: PR #422 merged.
 
 ## Common Issues

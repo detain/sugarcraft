@@ -128,7 +128,7 @@ final class WorkflowIdentifierTest extends TestCase
         // resume() has to hand `workflowPath` back to the registry, and one
         // canonical file is what lets both spellings find the same state.
         $this->assertFileExists($this->pauseDir() . '/safe.json');
-        // candy-core e4c36bff8 made AtomicJsonFile serialise writes on a stable
+        // sugar-core e4c36bff8 made AtomicJsonFile serialise writes on a stable
         // `.safe.json.lock` sidecar that lives beside the payload and is never
         // unlinked. That is not a second pause file — the defect this census
         // hunts is one per SPELLING (a `safe.json` and an `<id>.json`), so the

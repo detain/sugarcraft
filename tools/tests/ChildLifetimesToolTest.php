@@ -18,14 +18,14 @@ declare(strict_types=1);
  *
  * WHY THE GREEN POLARITIES CALL derive() RATHER THAN THE CLI: the default
  * roster describes THIS repository. A throwaway fixture tree under /tmp can
- * never satisfy it — every sugar-pty/candy-core/sugar-dashboard/sugar-video row
+ * never satisfy it — every sugar-pty/sugar-core/sugar-dashboard/sugar-video row
  * would read STALE there — so asserting exit 0 on a fixture would be
  * asserting the wrong contract. The red polarities still go through the CLI,
  * because what they prove is the wiring from scanner to exit code, and the
  * planted UNACCOUNTED lines are what they grep, stale rows alongside.
  *
  * HOW TO RUN: `phpunit --no-configuration tools/tests/` (CI), or locally
- * `candy-core/vendor/bin/phpunit --no-configuration tools/tests/` — see the
+ * `sugar-core/vendor/bin/phpunit --no-configuration tools/tests/` — see the
  * long note at the top of CheckPathReposTest.php about which of these two
  * has actually been exercised on a dev box.
  */

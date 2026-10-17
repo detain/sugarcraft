@@ -213,7 +213,7 @@
 **CLIFramework maps directly to `candy-scriptui`** — both are the umbrella TUI/console application foundation layer. `candy-scriptui` is SugarCraft's system/framework tier (per `PROJECT_NAMES.md` naming: `Candy-` prefix for foundation/system/framework).
 
 - **Similar to:** `charmbracelet/bubbletea` (Go) — hierarchical command model, option parsing, lifecycle hooks
-- **Comparable SugarCraft libs:** `candy-scriptui` (if it exists), `candy-core` for base abstractions
+- **Comparable SugarCraft libs:** `candy-scriptui` (if it exists), `sugar-core` for base abstractions
 
 ### Secondary Mapping: `sugar-forms`
 
@@ -240,7 +240,7 @@ Application                        (candy-scriptui root)
 CommandBase                        Base classes
 Command                            Per-command classes
 ServiceContainer                   DI / service provision
-GetOptionKit (external)             (candy-core option parsing)
+GetOptionKit (external)             (sugar-core option parsing)
 Formatter                          sugar-markdown (ANSI styling)
 Logger                             sugar-markdown / sugar-widgets
 Prompter / Chooser                 sugar-forms

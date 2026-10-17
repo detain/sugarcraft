@@ -80,7 +80,7 @@ Insert in alphabetical order by upstream name within the appropriate section.
 
 If the lib uses a new prefix:
 ```
-candy  foundation/system   candy-core, sugar-style
+candy  foundation/system   sugar-core, sugar-style
 sugar  components/data     sugar-widgets, sugar-charts
 honey  math/physics        sugar-spring, honey-fizz
 ```

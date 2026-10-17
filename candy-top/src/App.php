@@ -76,7 +76,7 @@ use SugarCraft\Top\View\Surface;
  * Cadence (btop main loop, src/btop.cpp): a data tick every `update_ms`
  * (default 2000) asks each shown panel to sample; a clock tick lands on
  * every wall-clock second for the border clock. Both are one-shot
- * candy-core ticks re-armed inside update() — never via subscriptions(),
+ * sugar-core ticks re-armed inside update() — never via subscriptions(),
  * whose tick ids lock the first closure installed. A `+`/`-` period change
  * bumps {@see $generation} and arms a fresh tick; the stale one is ignored
  * when it fires. Holding `+`/`-` steps 1000 ms instead of 100 once btop's
@@ -310,7 +310,7 @@ final class App implements Model
     /**
      * The Program options bin/candy-top runs with: alt screen, 20 fps and
      * btop's mouse reporting — `?1002h` button-event tracking + `?1006h`
-     * SGR (Term::mouse_on, candy-core CellMotion) unless disable_mouse.
+     * SGR (Term::mouse_on, sugar-core CellMotion) unless disable_mouse.
      * Runtime flips of disable_mouse answer with the matching Cmd
      * ({@see applyConfig()}).
      */
@@ -369,7 +369,7 @@ final class App implements Model
             $next = $this->mutate(now: $msg->time, uptime: $msg->uptime);
             $cmd = Cmd::tick($delay, $this->clock);
             // Logo animation lives only while a logo overlay is open, and
-            // candy-core cannot cancel an armed tick — so the 1 Hz clock tick
+            // sugar-core cannot cancel an armed tick — so the 1 Hz clock tick
             // is the single sweep that (re-)arms the 0.1 s chain after the
             // menu opened, instead of threading a Cmd through every open path.
             if ($next->logoAnimating() && !$next->logoArmed && $next->logoOverlayOpen()) {
@@ -1257,7 +1257,7 @@ final class App implements Model
     /** btop "mouse_click": a bare left-button press (`[<0;...M`). */
     private static function isClick(MouseMsg $msg): bool
     {
-        // candy-core emits MouseClickMsg for EVERY press (right, middle, with
+        // sugar-core emits MouseClickMsg for EVERY press (right, middle, with
         // modifiers), so the class alone is not btop's click.
         return $msg->action === MouseAction::Press
             && $msg->button === MouseButton::Left && !$msg->shift && !$msg->alt && !$msg->ctrl;

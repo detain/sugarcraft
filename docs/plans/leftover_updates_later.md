@@ -55,8 +55,8 @@ Today:
 | Primitive | Canonical (intended) | Duplicates found |
 |---|---|---|
 | `Style` | `sugar-style/src/Style.php` (Lipgloss-style) | `sugar-dashboard/src/Foundation/Style.php` (~100 LOC bespoke) |
-| `Color` | `candy-core/src/Util/Color.php` | `sugar-dashboard/src/Foundation/Color.php` (thin alias that re-exposes every method) |
-| `Rect` | `candy-core/src/Rect.php` | `sugar-dashboard/src/Foundation/Rect.php` (62 LOC bespoke) |
+| `Color` | `sugar-core/src/Util/Color.php` | `sugar-dashboard/src/Foundation/Color.php` (thin alias that re-exposes every method) |
+| `Rect` | `sugar-core/src/Rect.php` | `sugar-dashboard/src/Foundation/Rect.php` (62 LOC bespoke) |
 | `Buffer` | `sugar-vterm/src/Buffer/Buffer.php` | `sugar-dashboard/src/Foundation/Buffer.php` (288 LOC) + `sugar-dashboard/src/Grid/Buffer.php` (legacy) |
 | `Cell` | `sugar-vterm/src/Cell/Cell.php` | `sugar-dashboard/src/Foundation/Cell.php` |
 | `Theme` | (none yet — gap) | `sugar-dashboard/src/Foundation/Theme.php` (349 LOC) |
@@ -94,7 +94,7 @@ Today:
   `sugar-style/src/StyleParser.php` (no logic change). Add a one-line
   alias in sugar-dashboard if call-site count is high.
 - SSOT-01h — Add `sugar-style` to `sugar-dashboard/composer.json` `require`
-  (it already requires `candy-core` + `sugar-style` per audit, so
+  (it already requires `sugar-core` + `sugar-style` per audit, so
   verify; if missing, add).
 
 **Acceptance:** `grep -rn "class Style\|class Color\|class Theme\|class Rect\|class Buffer\|class Cell\|class StyleParser" /home/sites/sugarcraft/*/src` shows exactly one canonical file per primitive; sugar-dashboard test suite green; `composer validate` clean per lib.
@@ -105,7 +105,7 @@ sugar-panels research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hi
 
 **Action:**
 
-- SSOT-02 — Refactor sugar-panels to accept `Style` and `Border` from sugar-style. Delete any internal `Border*`. Adds sugar-style to require (transitive via candy-core OK; verify path-repo per `tools/check-path-repos.php`).
+- SSOT-02 — Refactor sugar-panels to accept `Style` and `Border` from sugar-style. Delete any internal `Border*`. Adds sugar-style to require (transitive via sugar-core OK; verify path-repo per `tools/check-path-repos.php`).
 
 ### SSOT-03 — sugar-flexbox composes sugar-widgets
 
@@ -141,9 +141,9 @@ Found in `sugar-image/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contr
 
 **Action:** see `plans/leftover_updates.md` CC-LO-06.
 
-### SSOT-07 — `proc_open` direct calls in candy-core utilities
+### SSOT-07 — `proc_open` direct calls in sugar-core utilities
 
-`candy-core/src/Util/Editor.php` and `candy-core/src/Util/Open.php` shell out directly. Canonical: `\SugarCraft\Pty\Posix\PosixProcess`.
+`sugar-core/src/Util/Editor.php` and `sugar-core/src/Util/Open.php` shell out directly. Canonical: `\SugarCraft\Pty\Posix\PosixProcess`.
 
 **Action:** see `plans/leftover_updates.md` CC-LO-07.
 
@@ -157,9 +157,9 @@ Found in `sugar-image/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contr
 - SSOT-08b — `sugar-log`, `sugar-image`, `candy-codeshot` (themes), `sugar-vterm` (truecolor accept) all consume it.
 - SSOT-08c — Implement the missing sugar-colorprofile items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
 
-### SSOT-09 — `Module\Module` contract aligns with candy-core `Model`
+### SSOT-09 — `Module\Module` contract aligns with sugar-core `Model`
 
-sugar-dashboard's `Module/Module.php` uses `array<string,mixed>` state. candy-core's `\SugarCraft\Core\Model` is the established Elm-style contract (`update(Msg): [Model, ?Cmd]`). Two incompatible contracts in one monorepo.
+sugar-dashboard's `Module/Module.php` uses `array<string,mixed>` state. sugar-core's `\SugarCraft\Core\Model` is the established Elm-style contract (`update(Msg): [Model, ?Cmd]`). Two incompatible contracts in one monorepo.
 
 **Action:**
 
@@ -200,7 +200,7 @@ Distilled from the research-doc audit. Items already shipped are stripped;
 PTY-related items go to `plans/leftover_updates.md`. Each lib's row is a
 short bullet list; treat them as backlog items, not sequenced steps.
 
-### candy-core
+### sugar-core
 
 - Elm-style **Subscriptions** with reconciliation (research §3.1).
 - **Screen Stack** primitive (§3.2) — modals/sub-screens need a canonical home.
@@ -654,11 +654,11 @@ homes. The `src/Foundation/` directory shrinks to just `Drawable.php`,
 `Item.php`, `Sizer.php` (sugar-dashboard-specific interfaces).
 
 **Acceptance:** `wc -l sugar-dashboard/src/Foundation/*.php` shows < 200 LOC
-total. Composer require lists `sugar-vterm` + `sugar-style` + `candy-core`.
+total. Composer require lists `sugar-vterm` + `sugar-style` + `sugar-core`.
 
 **Size:** 1 PR (combines a–h since they touch the same lib).
 
-### Dash-04 — `Module\Module` aligns with candy-core `Model`
+### Dash-04 — `Module\Module` aligns with sugar-core `Model`
 
 Apply SSOT-09 from §1. Rewrite the five built-in modules
 (Clock/System/Greeting/Uptime/Generic) to return `[Module, ?Cmd]` from

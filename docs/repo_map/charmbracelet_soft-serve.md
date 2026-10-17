@@ -360,7 +360,7 @@ Soft Serve is a comprehensive Go application that doesn't map directly to a sing
 | **Lipgloss styling** | `candy-lipgloss` | Terminal styling library - perfect match for `candy-lipgloss` |
 | **Keygen** | `candy-keygen` | SSH key generation - could map to `candy-keygen` |
 | **HTTP server** | `sugar-http` | HTTP server using gorilla/mux - could map to `sugar-http` |
-| **Config management** | `candy-core` (partial) | YAML config parsing - `candy-core` area |
+| **Config management** | `sugar-core` (partial) | YAML config parsing - `sugar-core` area |
 | **Prometheus metrics** | N/A | No SugarCraft equivalent yet |
 
 ### Key Mapping Insights

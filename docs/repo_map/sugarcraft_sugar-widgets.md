@@ -56,7 +56,7 @@ sugar-widgets employs a **stratified alias pattern** where many components are r
 
 ```json
 {
-  "sugarcraft/candy-core": "dev-master",      // TUI framework foundation
+  "sugarcraft/sugar-core": "dev-master",      // TUI framework foundation
   "sugarcraft/sugar-forms": "dev-master",        // Form primitives (most aliases)
   "sugarcraft/sugar-style": "dev-master",   // Styling system
   "sugarcraft/sugar-mouse": "dev-master",          // Zone/mouse handling

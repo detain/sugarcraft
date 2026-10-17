@@ -204,10 +204,10 @@ The charmbracelet/log library maps to several SugarCraft libraries for TUI/loggi
 | Text formatting with ANSI colors | `sugar-markdown` | ANSI/SGR rendering via Lip Gloss |
 | JSON/Logfmt formatters | `sugar-widgets` | Structured output formatting |
 | Color/profile detection | `sugar-markdown` | TTY color profile detection |
-| Context propagation | `candy-core` | Context utilities |
+| Context propagation | `sugar-core` | Context utilities |
 | slog.Handler interface | `sugar-widgets` | Handler pattern implementation |
 | Sub-loggers with fields | `sugar-widgets` | Immutable builder pattern |
-| Standard log adapter | `candy-core` | Adapter/wrapper patterns |
+| Standard log adapter | `sugar-core` | Adapter/wrapper patterns |
 
 ### Direct Port Candidates
 
@@ -219,7 +219,7 @@ The charmbracelet/log library maps to several SugarCraft libraries for TUI/loggi
 
 - **sugar-widgets**: Core output/rendering — shares concepts of buffered output, formatting
 - **sugar-markdown**: ANSI styling — directly ports Lip Gloss styling concepts
-- **candy-core**: Utilities and patterns — context, adapter patterns
+- **sugar-core**: Utilities and patterns — context, adapter patterns
 
 ## Analysis
 

@@ -33,7 +33,7 @@ use SugarCraft\Testing\Lang;
  *       ->build();
  *
  * Terminal-shaped input — {@see paste()} and {@see bytes()} — is not
- * re-implemented here: the bytes are fed through candy-core's real
+ * re-implemented here: the bytes are fed through sugar-core's real
  * {@see InputReader}, the same parser {@see \SugarCraft\Core\Program}
  * reads stdin with, so a script sees exactly the message sequence the live
  * runtime would deliver (bracketed-paste envelope, chunking past

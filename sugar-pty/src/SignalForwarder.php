@@ -106,7 +106,7 @@ final class SignalForwarder
      * `$pty->resize()`.
      *
      * `$sizeProvider` returns `array{cols:int, rows:int}` — typically
-     * a thin wrapper over candy-core's `Util\Tty::size()`. Any
+     * a thin wrapper over sugar-core's `Util\Tty::size()`. Any
      * exception it throws is swallowed (signal handlers must not
      * propagate exceptions across the runtime).
      *

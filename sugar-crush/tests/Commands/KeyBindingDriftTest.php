@@ -1156,7 +1156,7 @@ final class KeyBindingDriftTest extends TestCase
             // "any text" — the printable-Char arm AND the separate
             // KeyType::Space arm beside it, which no other row reaches. Space
             // arriving as its own key type rather than as Char ' ' is how
-            // candy-core reports it, so an unbound Space arm would leave the
+            // sugar-core reports it, so an unbound Space arm would leave the
             // filter unable to hold a two-word query.
             'palette.filter' => function (): void {
                 [$typed] = $this->chatWithPalette()->update(new KeyMsg(KeyType::Char, 'x'));
@@ -2978,7 +2978,7 @@ final class KeyBindingDriftTest extends TestCase
 
     /**
      * The one entry of {@see MODIFIABLE_NAMED} that arrives with a rune as well
-     * as a type. Measured through candy-core's decoder, not assumed:
+     * as a type. Measured through sugar-core's decoder, not assumed:
      * `InputReader::parse("\x1b[32;5u")` yields `KeyMsg(Space, ctrl)` with rune
      * `" "`, while `parse("\x1b[127;5u")` yields `KeyMsg(Backspace, ctrl)` with
      * rune `""`. Anything absent here is pressed with an empty rune.
