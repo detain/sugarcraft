@@ -1600,13 +1600,19 @@ final class ClaudeCodeMcpClient
     /**
      * Create a ClaudeCodeMcpClient with default settings for Claude Code.
      *
+     * ISS-043 (review fix): the argv matches {@see
+     * \SugarCraft\Code\MCP\ClaudeCodeMcpServer::DEFAULT_ARGS} — the subcommand
+     * `claude mcp serve` is how the CLI serves MCP over stdio; the legacy
+     * `['--mcp']` was a flag the CLI never accepted, so this factory's
+     * "default settings" could only ever spawn a usage print and an exit.
+     *
      * @param array<string, mixed>|null $options capability options to send in handshake
      */
     public static function forClaudeCode(?array $options = null): self
     {
         return new self(
             command: 'claude',
-            args: ['--mcp'],
+            args: ['mcp', 'serve'],
             initialOptions: $options,
         );
     }

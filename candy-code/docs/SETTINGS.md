@@ -628,7 +628,8 @@ and the backend consults the live set per turn rather than freezing it at launch
 trusted repository's `.mcp.json` may declare a `claude-mcp` entry — but the
 entry carries the type and nothing else, and the spawn it requests comes
 from this file: `claudeMcpBinary`, an absolute path to an existing,
-executable program, plus optional `claudeMcpArgs` (default `--mcp`) and
+executable program, plus optional `claudeMcpArgs` (default `mcp serve`,
+the documented stdio subcommand — ISS-043) and
 `claudeMcpEnv` (literal strings, no `${VAR}` interpolation). A project's
 `.candy-code/settings.json` naming them changes nothing: the reader
 consults the user files only. The grant is frozen for the process at the

@@ -272,7 +272,7 @@ final class ClaudeCodeMcpClientTest extends TestCase
         $client = ClaudeCodeMcpClient::forClaudeCode();
 
         $this->assertSame('claude', $client->command);
-        $this->assertSame(['--mcp'], $client->args);
+        $this->assertSame(['mcp', 'serve'], $client->args, 'ISS-043: the shipped subcommand default');
         $this->assertFalse($client->isConnected());
     }
 
@@ -341,8 +341,10 @@ final class ClaudeCodeMcpClientTest extends TestCase
         $client = ClaudeCodeMcpClient::forClaudeCode(['protocolVersion' => '2024-11-05']);
 
         $this->assertSame('claude', $client->command);
-        $this->assertCount(1, $client->args);
-        $this->assertSame('--mcp', $client->args[0]);
+        // ISS-043 (review fix): the shipped subcommand default, and the
+        // never-accepted legacy flag named explicitly on the false side.
+        $this->assertSame(['mcp', 'serve'], $client->args);
+        $this->assertFalse(\in_array('--mcp', $client->args, true), 'the flag the Claude CLI never accepted');
         $this->assertNotNull($client->initialOptions);
         $this->assertSame('2024-11-05', $client->initialOptions['protocolVersion']);
     }
