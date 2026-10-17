@@ -9,7 +9,7 @@ _Items deferred from step-37 catch-all (PR #917). These libs were audited but no
 | Lib | Deferred rationale |
 |-----|-------------------|
 | **candy-metrics** | AsyncCounter/AsyncGauge use synchronous \Closure callbacks at observe() time — no manual Deferred to replace. Backend is pull-based with synchronous writers (InMemory, Prometheus, StatsD, JSON) with no string-rendering loop for Buffer. No minimal adoption found; revisit if async metric collection patterns are introduced. |
-| **candy-log** | Async hook dispatch (M effort) requires redesigning Hook interface to return futures and wrapping all backends. Buffer adoption touches all formatters. Both are larger than "minimal"; revisit in dedicated async-logging refactor. |
+| **sugar-log** | Async hook dispatch (M effort) requires redesigning Hook interface to return futures and wrapping all backends. Buffer adoption touches all formatters. Both are larger than "minimal"; revisit in dedicated async-logging refactor. |
 | **sugar-mouse** | Uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting sugar-mouse for hit-testing is not a drop-in (incompatible Zone abstractions, different MouseMsg types). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored. |
 | **candy-starter** | TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project. |
 
@@ -41,7 +41,7 @@ The 8 shared packages:
 | Step 34 | sugar-datepicker, sugar-toast | candy-buffer, candy-layout, candy-testing |
 | Step 35 | candy-codetime, candy-mail, candy-git-server | candy-buffer, candy-async, candy-testing |
 | Step 36 | sugar-animation, sugar-cli, sugar-spring, candy-flappy | candy-buffer, candy-layout, candy-input, candy-async, candy-testing |
-| Step 37 | candy-metrics, candy-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing |
+| Step 37 | candy-metrics, sugar-log, sugar-mouse, candy-starter | candy-async, sugar-mouse, candy-buffer, candy-testing |
 
 ---
 
@@ -268,14 +268,14 @@ The 8 shared packages:
 
 ---
 
-### candy-log
+### sugar-log
 
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-async | Hook.php + HookRegistry.php dispatch logs synchronously — async hook dispatch via candy-async would improve throughput | M |
 | candy-buffer | Logger.php renders log lines via string — Buffer would give structured log-line composition | S |
 
-**Notes:** candy-log is a logging library. Async hook dispatch is the primary opportunity — non-blocking log delivery to multiple hooks (especially network-based ones like StatsdBackend). Buffer adoption is lower priority.
+**Notes:** sugar-log is a logging library. Async hook dispatch is the primary opportunity — non-blocking log delivery to multiple hooks (especially network-based ones like StatsdBackend). Buffer adoption is lower priority.
 
 **Step 37 status:** ⚠️ DEFERRED — async hook dispatch (M effort) requires redesigning Hook interface to return futures and wrapping all backends; Buffer adoption touches all formatters. Both are larger than "minimal". Revisit in dedicated async-logging refactor.
 
@@ -299,7 +299,7 @@ The 8 shared packages:
 | Effort | libs |
 |--------|------|
 | **S** (1 shared pkg, straightforward) | candy-tetris, candy-minesweeper, sugar-cli (buffer+layout), sugar-mouse, candy-kv, candy-ssh-launcher (fuzzy), candy-git (fuzzy), sugar-toast (buffer+layout), sugar-datepicker (testing), candy-codetime (testing), candy-starter, sugar-animation (buffer+async), candy-flappy (all 3) |
-| **M** (multiple pkgs or larger surface) | candy-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, candy-metrics, candy-log |
+| **M** (multiple pkgs or larger surface) | candy-pty, sugar-animation, candy-git (buffer+mouse), sugar-datepicker (buffer+layout), candy-codetime (buffer+async), candy-mail, candy-git-server, sugar-spring, candy-metrics, sugar-log |
 
 ---
 

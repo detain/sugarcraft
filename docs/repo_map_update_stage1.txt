@@ -138,7 +138,7 @@ The `SubStyleParser` for per-element styles already exists in candy-scriptui —
 
 ## Stage 2 Findings (packages 11-19)
 
-Sources: sugar-mouse, sugar-charts, sugar-table, candy-wish, sugar-image, candy-mdview, candy-log, candy-vt, candy-vcr
+Sources: sugar-mouse, sugar-charts, sugar-table, candy-wish, sugar-image, candy-mdview, sugar-log, candy-vt, candy-vcr
 
 ### 1. Top 3 Most Critical Feature Gaps
 

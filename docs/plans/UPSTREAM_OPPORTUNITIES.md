@@ -215,7 +215,7 @@ No high-comment open issues.
 | Upstream | Title | Status in candy-metrics | Notes |
 |---|---|:--:|---|
 | [#38](https://github.com/charmbracelet/promwish/pull/38) (2024-03-01) | feat: New, Start, Shutdown | 🟡 | Lifecycle methods — verify matches PHP pattern |
-| [#32](https://github.com/charmbracelet/promwish/pull/32) (2024-01-30) | Improve Logging | 🟡 | Logging improvements — review against candy-log |
+| [#32](https://github.com/charmbracelet/promwish/pull/32) (2024-01-30) | Improve Logging | 🟡 | Logging improvements — review against sugar-log |
 
 ### High-comment open issues
 
@@ -223,11 +223,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/log → candy-log
+## charmbracelet/log → sugar-log
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-log | Notes |
+| Upstream | Title | Status in sugar-log | Notes |
 |---|---|:--:|---|
 | [#207](https://github.com/charmbracelet/log/pull/207) (2026-04-20) | chore(deps): bump lipgloss/v2 | ⚪ | Dependency only |
 | [#143](https://github.com/charmbracelet/log/pull/143) (2026-03-09) | (v2) use v2 of libraries | ⚪ | v2 work — deferred |

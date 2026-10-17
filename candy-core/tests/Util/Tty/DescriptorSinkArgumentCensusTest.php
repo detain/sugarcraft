@@ -558,7 +558,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         // merely tolerated -- it is the shape the whole family should be
         // moving toward, and the reason it cannot everywhere is that the
         // ioctl and termios sinks take `int` only.
-        'candy-log/src/Log.php::posix_isatty(\STDERR)' => [
+        'sugar-log/src/Log.php::posix_isatty(\STDERR)' => [
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT. The resource, not a cast of it. Not named in E368\'s carve-out list -- '
             . 'found by re-deriving the population with the corrected instrument.',

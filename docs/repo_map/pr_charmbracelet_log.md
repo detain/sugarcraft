@@ -26,7 +26,7 @@ Based on the first-stage analysis, charmbracelet/log maps to:
 | Sub-loggers with fields | `sugar-widgets` | Existing |
 | Standard log adapter | `candy-core` | Partial |
 
-**No dedicated `sugar-log` or `candy-log` library exists yet.** This represents a gap.
+**No dedicated `sugar-log` or `candy-log` library exists yet.** This represents a gap. <!-- @rename-keep historical provenance -->
 
 ## 3. Previously Identified Gaps
 

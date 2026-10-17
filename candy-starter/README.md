@@ -82,7 +82,7 @@ The included `tests/CounterTest.php` shows how to test `update()` deterministica
 SugarCraft supports an opt-in panic handler that catches uncaught exceptions and displays a styled backtrace when the app crashes. To enable it:
 
 ```sh
-composer require sugarcraft/candy-log
+composer require sugarcraft/sugar-log
 ```
 
 Then uncomment the panic handler block in `bin/start`:
@@ -94,7 +94,7 @@ Then uncomment the panic handler block in `bin/start`:
 
 > **Note:** In a monorepo development setup, add a path-repo to `composer.json` `repositories[]` first:
 > ```json
-> { "type": "path", "url": "../candy-log", "options": { "symlink": true } }
+> { "type": "path", "url": "../sugar-log", "options": { "symlink": true } }
 > ```
 
 ## License

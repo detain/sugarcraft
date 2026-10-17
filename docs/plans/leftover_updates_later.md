@@ -149,12 +149,12 @@ Found in `sugar-image/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contr
 
 ### SSOT-08 — ColorProfile + env detection consolidate in sugar-colorprofile
 
-`candy-log` research items M5/M6 (`NO_COLOR`/`FORCE_COLOR` detection + downsampling) and `sugar-colorprofile` itself need `CLICOLOR_FORCE`/`CLICOLOR`/`COLORTERM` precedence, tmux/screen detection, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, terminfo `Tc`/`RGB` parsing. All these env probes belong in **one** place: `sugar-colorprofile`.
+`sugar-log` research items M5/M6 (`NO_COLOR`/`FORCE_COLOR` detection + downsampling) and `sugar-colorprofile` itself need `CLICOLOR_FORCE`/`CLICOLOR`/`COLORTERM` precedence, tmux/screen detection, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, terminfo `Tc`/`RGB` parsing. All these env probes belong in **one** place: `sugar-colorprofile`.
 
 **Actions:**
 
 - SSOT-08a — Pull all env-var probes into `sugar-colorprofile/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
-- SSOT-08b — `candy-log`, `sugar-image`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
+- SSOT-08b — `sugar-log`, `sugar-image`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
 - SSOT-08c — Implement the missing sugar-colorprofile items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
 
 ### SSOT-09 — `Module\Module` contract aligns with candy-core `Model`
@@ -406,7 +406,7 @@ handled by the monorepo.) Skip until someone uses it as a template.
 - `FuzzyMatch` class with Smith-Waterman scoring (Priority 2).
 - Filter states/transitions (unfiltered/filtering/filtered).
 
-### candy-log
+### sugar-log
 
 - `NO_COLOR` / `FORCE_COLOR` env detection — consume `sugar-colorprofile/Probe`.
 - `PadLevelText` for level-label alignment.

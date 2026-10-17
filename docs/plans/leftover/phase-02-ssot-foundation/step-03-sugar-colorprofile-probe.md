@@ -2,14 +2,14 @@
 
 **Source:** `leftover_updates_later.md` SSOT-08 + sugar-colorprofile research H1-H5 + M1-M3
 **Branch:** `ai/palette-probe`
-**Bundle hint:** standalone (foundational; later phase-09 candy-log step depends on it)
+**Bundle hint:** standalone (foundational; later phase-09 sugar-log step depends on it)
 
 ## Deliverable
 
 Today multiple libs probe environment variables independently
 (`NO_COLOR` / `FORCE_COLOR` / `COLORTERM` / `WT_SESSION` / etc.).
 Consolidate every probe into `sugar-colorprofile/src/Probe.php` so that
-`candy-log`, `sugar-image`, `candy-codeshot`, `candy-vt` (truecolor
+`sugar-log`, `sugar-image`, `candy-codeshot`, `candy-vt` (truecolor
 accept), and future consumers all call a single API.
 
 ## Files
@@ -60,7 +60,7 @@ accept), and future consumers all call a single API.
 
 ## Notes
 
-- candy-log adoption is step 09.11 — that's a separate phase. For
+- sugar-log adoption is step 09.11 — that's a separate phase. For
   now this lib lands the surface; downstream picks it up later.
 - Document the precedence rule order in the class docblock — it's
   load-bearing knowledge.

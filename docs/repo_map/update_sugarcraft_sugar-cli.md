@@ -534,7 +534,7 @@ Show how to:
 Show sugar-cli integration with:
 - `candy-scriptui` (CLI application framework)
 
-- `candy-log` (logging integration)
+- `sugar-log` (logging integration)
 
 - `candy-sprinkles` (advanced styling)
 
@@ -629,13 +629,13 @@ class MyApp extends Application {
 }
 ```
 
-## 2. candy-log Integration
+## 2. sugar-log Integration
 
 sugar-cli's StatusLine is visually similar to log levels but lacks log semantics. Document when to use which:
 
 - **StatusLine:** User-facing single messages, one-shot output
 
-- **candy-log:** Time-stamped, leveled, potentially high-volume logging
+- **sugar-log:** Time-stamped, leveled, potentially high-volume logging
 
 ## 3. sugar-widgets Progress Integration
 

@@ -45,7 +45,7 @@ called out in the table below.
 | **SugarCli** (`sugar-cli/`) | 🟢 ready | CLI presentation helpers (StatusLine / Banner / Section / Stage / HelpText). |
 | **CandyWish** (`candy-wish/`) | 🟢 ready | SSH-server middleware framework (leans on host `sshd`); pluggable Transport: InProcessTransport (default — candy-pty supervisor + Spawn middleware) or HostSshdTransport (legacy, opt-in — inline middleware, including running SugarCraft apps in SSH sessions). |
 | **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + CandyWish session middleware. |
-| **CandyLog** (`candy-log/`) | 🟢 ready | Minimal, colorful logging library. |
+| **SugarLog** (`sugar-log/`) | 🟢 ready | Minimal, colorful logging library. |
 | **SugarColorprofile** (`sugar-colorprofile/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
 | **SugarAnimation** (`sugar-animation/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
@@ -164,7 +164,7 @@ reference projects supplied the ideas, not the code.
 | SugarCli (sugar-cli/) | [fang](https://github.com/charmbracelet/fang) |
 | CandyLayout (candy-layout/) | [ratatui](https://github.com/ratatui/ratatui) |
 | SugarTreelist (sugar-treelist/) | [bubblelister](https://github.com/treilik/bubblelister) |
-| CandyLog (candy-log/) | [log](https://github.com/charmbracelet/log) |
+| SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
 | CandyMetrics (candy-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
 | CandyStarter (candy-starter/) | none — first-party |

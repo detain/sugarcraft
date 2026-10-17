@@ -21,7 +21,7 @@ From the prior analysis (`repo_map/charmbracelet_catwalk.md`):
 |---|---|---|
 | `sugar-widgets` | Potential consumer | Model picker/selector TUI component using catwalk metadata |
 | `sugar-charts` | Potential consumer | Pricing comparison visualizations |
-| `candy-log` | Potential consumer | Improved observability vs `log.Printf` |
+| `sugar-log` | Potential consumer | Improved observability vs `log.Printf` |
 | `candy-metrics` | Already aligned | Same Prometheus metrics pattern |
 | `candy-core` | Reference architecture | Elm-style `Model/Update/View` similar to catwalk's state organization |
 

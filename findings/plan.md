@@ -115,7 +115,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 |-----|-------|-------|---------|
 | candy-mail | P1 | 3 | Attachment silent failure; unchecked fwrite(); @ suppression on fgets() |
 | sugar-forms | P1 | 2 | `$pid` uninitialized on fork failure in Spinner.php |
-| candy-log | P1 | 2 | Log level filtering; Handler interface consistency |
+| sugar-log | P1 | 2 | Log level filtering; Handler interface consistency |
 | candy-git | P1 | 2 | Path-repo closure check (verify sugar-fuzzy is clean) |
 | candy-testing | P1 | 2 | TapeRecorder Dracula theme test bug (`' Dracula'` with leading space) |
 | candy-codeshot | P1 | 2 | WeakMap for allocateColor cache (memory leak fix) |
@@ -181,7 +181,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 - `findings/plan_candy-mail.md` — Phase 1 (Attachment silent failure, unchecked fwrite)
 - `findings/plan_sugar-forms-huh.md` — Phase 1 ($pid uninitialized on fork failure)
-- `findings/plan_candy-log.md` — Phase 1 (log level filtering, handler consistency)
+- `findings/plan_sugar-log.md` — Phase 1 (log level filtering, handler consistency)
 - `findings/plan_candy-git.md` — Phase 1 (path-repo closure verification)
 - `findings/plan_candy-testing.md` — Phase 1 (TapeRecorder Dracula theme bug)
 - `findings/plan_candy-codeshot.md` — Phase 1 (WeakMap allocateColor cache)

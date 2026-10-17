@@ -168,7 +168,7 @@ if (Probe::reducedMotion()) {
 
 ## ColorProfile Enum
 
-`ColorProfile` is the SSOT enum for environment-driven color capability. It is used by `Probe` and consumed by libs that need the raw profile value (candy-log, sugar-image, candy-codeshot, candy-vt).
+`ColorProfile` is the SSOT enum for environment-driven color capability. It is used by `Probe` and consumed by libs that need the raw profile value (sugar-log, sugar-image, candy-codeshot, candy-vt).
 
 ```php
 use SugarCraft\ColorProfile\ColorProfile;

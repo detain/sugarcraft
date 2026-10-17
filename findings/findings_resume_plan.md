@@ -328,22 +328,22 @@ For each phase:
 
 ### Group 0-D (2 agents — remaining Phase 0)
 
-#### 0.29 🔴 candy-log: Phive-style directory detection (Item 1.1)
+#### 0.29 🔴 sugar-log: Phive-style directory detection (Item 1.1)
 
-**Plan:** `findings/plan_candy-log.md` — Item 1.1
+**Plan:** `findings/plan_sugar-log.md` — Item 1.1
 **Issue:** `Manager.php:__construct` checks for `.phive/phars/` but never actually resolves `.phive/`
 
 ---
 **Fix:** Either implement the resolution or remove the unused code path
-**Files:** `candy-log/src/Manager.php`
+**Files:** `sugar-log/src/Manager.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.30 🔴 candy-log: PSR-3 $context array type (Item 1.2)
+#### 0.30 🔴 sugar-log: PSR-3 $context array type (Item 1.2)
 
-**Plan:** `findings/plan_candy-log.md` — Item 1.2
+**Plan:** `findings/plan_sugar-log.md` — Item 1.2
 **Issue:** `$context` parameter typed as `array` but downstream formatters expect `string[]`
 **Fix:** Add proper type annotation or coerce to `string[]`
-**Files:** `candy-log/src/Manager.php`, `candy-log/src/Formatter/JsonFormatter.php`
+**Files:** `sugar-log/src/Manager.php`, `sugar-log/src/Formatter/JsonFormatter.php`
 **Agent:** Same coder agent as 0.29 (grouped — same lib)
 
 ### Phase 0 Verification
@@ -1038,41 +1038,41 @@ Same branch/PR check as Phase 0/1.
 **Fix:** (Deferred — marked as future work)
 **Agent:** ⏭️ SKIP — deferred, not blocking
 
-#### 3.26 🟢 candy-log: StreamHandler resource type hint (Item 1.1)
+#### 3.26 🟢 sugar-log: StreamHandler resource type hint (Item 1.1)
 
-**Plan:** `findings/plan_candy-log.md` — Item 1.1
+**Plan:** `findings/plan_sugar-log.md` — Item 1.1
 **Fix:** Add `resource` type hint to `$stream` in `StreamHandler::__construct()`
-**Files:** `candy-log/src/Handler/StreamHandler.php`
+**Files:** `sugar-log/src/Handler/StreamHandler.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.27 🟢 candy-log: HookRegistry::fire() return type (Item 2.1)
+#### 3.27 🟢 sugar-log: HookRegistry::fire() return type (Item 2.1)
 
-**Plan:** `findings/plan_candy-log.md` — Item 2.1
+**Plan:** `findings/plan_sugar-log.md` — Item 2.1
 **Fix:** Document or fix `HookRegistry::fire()` — it always returns `null` but `Manager::fire()` checks return value
-**Files:** `candy-log/src/HookRegistry.php`, `candy-log/src/Manager.php`
+**Files:** `sugar-log/src/HookRegistry.php`, `sugar-log/src/Manager.php`
 **Agent:** Same coder agent as 3.26 (grouped — same lib)
 
 ---
 
-#### 3.28 🟢 candy-log: JsonFormatter coercion (Item 2.4)
+#### 3.28 🟢 sugar-log: JsonFormatter coercion (Item 2.4)
 
-**Plan:** `findings/plan_candy-log.md` — Item 2.4
+**Plan:** `findings/plan_sugar-log.md` — Item 2.4
 **Fix:** Ensure `JsonFormatter::format()` coerces all values to strings per PSR-3
-**Files:** `candy-log/src/Formatter/JsonFormatter.php`
+**Files:** `sugar-log/src/Formatter/JsonFormatter.php`
 **Agent:** Same coder agent as 3.26 (grouped — same lib)
 
-#### 3.29 🟢 candy-log: RemoveHandler::handle() void (Item 2.5)
+#### 3.29 🟢 sugar-log: RemoveHandler::handle() void (Item 2.5)
 
-**Plan:** `findings/plan_candy-log.md` — Item 2.5
+**Plan:** `findings/plan_sugar-log.md` — Item 2.5
 **Fix:** `RemoveHandler::handle()` should return `void` not `false`
-**Files:** `candy-log/src/Handler/RemoveHandler.php`
+**Files:** `sugar-log/src/Handler/RemoveHandler.php`
 **Agent:** Same coder agent as 3.26 (grouped — same lib)
 
-#### 3.30 🟢 candy-log: Styles::getDefault() return type (Item 3.3)
+#### 3.30 🟢 sugar-log: Styles::getDefault() return type (Item 3.3)
 
-**Plan:** `findings/plan_candy-log.md` — Item 3.3
+**Plan:** `findings/plan_sugar-log.md` — Item 3.3
 **Fix:** `Styles::getDefault()` should return `string[]` not `array`
-**Files:** `candy-log/src/Styles.php`
+**Files:** `sugar-log/src/Styles.php`
 **Agent:** Same coder agent as 3.26 (grouped — same lib)
 
 ---
@@ -1281,7 +1281,7 @@ Same verification as previous phases.
 | `plan_sugar-fuzzy.md` | 2.1-2.3, 4.1-4.3 | Documentation, scoring config, Closure type, alignment constraint |
 | `plan_sugar-quickpick.md` | 3.4-3.6, 4.1-4.5, 5.1, 5.3, 6.1-6.5 | ASCII fast-path, backgroundView validation, cursorBottom, filter length, constants, Visible trait, tests || `plan_sugar-cli.md` | 2.4, 3.2-3.3, 3.5-3.8, 4.1-4.5 | Snapshot tests, Theme null checks, logo color separation, Frame truncation, unused repos |
 | `plan_sugar-treelist.md` | 4.1-4.7, 5.2-5.3, 6.1-6.3, 7.1-7.6, 8.1-8.4 | Fluent setters, mutate pattern, navigation methods, async patterns, code quality |
-| `plan_candy-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
+| `plan_sugar-log.md` | 1.2-1.3, 2.2-2.3, 2.6-2.9, 3.1-3.2, 3.4 | resource type hints, hook registry, JsonFormatter coercion, remove() method, styles default cache |
 | `plan_candy-metrics.md` | 2.1-2.8, 3.1-3.10, 4.1-4.2 | DRY extractions, InMemoryBackend key format, bucket config, reset/remove, phpunit.xml |
 | `plan_sugar-image.md` | 2.1-2.2 | SixelRenderer stripe-processing (memory), strided iteration (perf) — 2.3 ✅, 4.1-4.5 ✅, 5.1-5.5 ✅, 6.1 ✅ |
 | `plan_sugar-mouse.md` | 3.1-3.3, 4.1-4.3 | Button constants, nextGrapheme docs, ScanIterator design, sentinel extraction |

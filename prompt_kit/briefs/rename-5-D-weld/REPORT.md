@@ -21,7 +21,7 @@ Take-both per-line union each merge (repin against markers, compact one-line-per
 ## Post-weld
 - **Lock refresh** `01c87e172`: exactly ONE `composer update` of the 7 new slugs `--no-install`; lock contains zero `sugarcraft/{candy-mosaic,candy-shine,sugar-reel,candy-flip,candy-kit,honey-bounce,candy-palette}` entries. (refresh-deps `--root` afterward re-resolved third-party dev refs — that drift reverted to keep the committed targeted-refresh lock authoritative.) <!-- @rename-keep -->
 - **Husk cleanup**: `rm -rf candy-mosaic candy-shine sugar-reel candy-flip candy-kit honey-bounce candy-palette` (each verified 0 tracked files first — vendor/.phpunit.cache/composer.lock husks only). <!-- @rename-keep -->
-- **Dangling vendor links**: 37 stale `*/vendor/sugarcraft/<old>` symlinks pruned repo-wide (refresh-deps does not prune — d3 lesson): consumers candy-sql, sugar-crush, root vendor, sugar-widgets, sugar-flexbox, candy-mdview, candy-gifview, candy-flappy, sugar-gallery, candy-top, candy-log, candy-scriptui, sugar-overlay.
+- **Dangling vendor links**: 37 stale `*/vendor/sugarcraft/<old>` symlinks pruned repo-wide (refresh-deps does not prune — d3 lesson): consumers candy-sql, sugar-crush, root vendor, sugar-widgets, sugar-flexbox, candy-mdview, candy-gifview, candy-flappy, sugar-gallery, candy-top, candy-log, candy-scriptui, sugar-overlay. <!-- @rename-keep historical provenance -->
 - **Re-link**: `php scripts/refresh-deps.php --libs=<7>,sugar-crush --root --mode=linked` → 8/8 linked, escaping=0, root rc=0, committed-tree guard rc=0, tree clean after (scratch manifests discarded).
 
 ## Keep-tag commit `05d5ed31f`

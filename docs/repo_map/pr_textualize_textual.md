@@ -57,7 +57,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | command.CommandPalette, Provider | `sugar-cli/` | ✅ Mapped |
 | binding.Binding | `candy-scriptui/` | ✅ Mapped |
 | Pilot (testing) | `candy-vcr/` | ✅ Mapped |
-| Logger + log() | `candy-log/` | ✅ Mapped |
+| Logger + log() | `sugar-log/` | ✅ Mapped |
 | Web driver/rendering | _no equivalent_ | 🔴 Gap |
 | Signal | _partial in candy-core_ | 🟡 Partial |
 

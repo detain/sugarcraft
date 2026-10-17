@@ -1,0 +1,49 @@
+{
+    "name": "sugarcraft/sugar-log",
+    "description": "PHP port of charmbracelet/log \u2014 minimal, colorful leveled logging with structured human-readable output, text/JSON/logfmt formatters, and stdlog adapter.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "logging",
+        "cli",
+        "console",
+        "colorful",
+        "structured",
+        "log",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-log",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-log/issues",
+        "source": "https://github.com/sugarcraft/sugar-log"
+    },
+    "require": {
+        "php": "^8.3",
+        "psr/log": "^3.0",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-colorprofile": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Log\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Log\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -69,22 +69,22 @@
 
 ## QUICK WINS (Low Effort, High Impact)
 
-### candy-log
+### sugar-log
 
 ### [ ] NO_COLOR / FORCE_COLOR environment support
 
 - **Effort**: 1-2 hours
-- **Research**: `libraries/candy-log-research.md`
+- **Research**: `libraries/sugar-log-research.md`
 
 ### [ ] PadLevelText (align level labels)
 
 - **Effort**: 1 hour
-- **Research**: `libraries/candy-log-research.md`
+- **Research**: `libraries/sugar-log-research.md`
 
 ### [ ] Fix Level Values to match upstream (-4, 0, 4, 8, 12)
 
 - **Effort**: 30 minutes
-- **Research**: `libraries/candy-log-research.md`
+- **Research**: `libraries/sugar-log-research.md`
 
 ### sugar-colorprofile
 
@@ -437,7 +437,7 @@ All 45 research documents available at:
 | candy-codeshot | 23KB |
 | sugar-quickpick | 21KB |
 | sugar-treelist | 15KB |
-| candy-log | 17KB |
+| sugar-log | 17KB |
 | candy-metrics | 20KB |
 | candy-minesweeper | 15KB |
 | candy-starter | 18KB |

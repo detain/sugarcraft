@@ -37,7 +37,7 @@ The project exemplifies the "batteries included" philosophy — instead of writi
 | `gum style` | `sugar-markdown` | 🟡 | Lipgloss wrapper for styling |
 | `gum format` | `sugar-format` (planned) | 🔴 | Markdown/code/template/emoji via glamour |
 | `gum table` | `sugar-table` | 🟢 | Table with row selection |
-| `gum log` | `candy-log` | 🟢 | Structured logging |
+| `gum log` | `sugar-log` | 🟢 | Structured logging |
 | `gum join` | `sugar-markdown` | 🟡 | Layout joining via lipgloss |
 | Bubbles dep | `candy-sprinkles` + `sugar-widgets` | 🟢 / 🟡 | TUI component primitives |
 | Lipgloss dep | `sugar-markdown` | 🟡 | Styling/rendering engine |

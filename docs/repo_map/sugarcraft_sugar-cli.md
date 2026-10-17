@@ -297,7 +297,7 @@ The design decision to style only the glyph (not the message) keeps output scann
 ▸ 4/5 Done
 ```
 
-This is distinguishable from a progress bar (which would use `sugar-widgets` progress components) and from a log (which would use `candy-log`). Stage is specifically for visual sequencing of multi-step operations where the user needs to see which step they're on.
+This is distinguishable from a progress bar (which would use `sugar-widgets` progress components) and from a log (which would use `sugar-log`). Stage is specifically for visual sequencing of multi-step operations where the user needs to see which step they're on.
 
 ### Help Page Pattern
 
@@ -306,7 +306,7 @@ This is distinguishable from a progress bar (which would use `sugar-widgets` pro
 - Optional description paragraph
 - Sectioned flag/command tables with two-column alignment
 
-This is distinct from `sugar-markdown` (markdown rendering) and `candy-log` (time-stamped log entries). HelpText is specifically for the `--help` output of a CLI command.
+This is distinct from `sugar-markdown` (markdown rendering) and `sugar-log` (time-stamped log entries). HelpText is specifically for the `--help` output of a CLI command.
 
 ---
 
@@ -474,24 +474,24 @@ Sections are rendered in the order supplied in the `$sections` associative array
 | Feature | gum | sugar-cli | Gap |
 |---------|-----|----------|-----|
 | `gum style` (colors/borders/padding) | ✅ | ❌ (use candy-sprinkles) | Different abstraction level |
-| `gum log` (structured logging) | ✅ | ❌ (use candy-log) | Different abstraction level |
+| `gum log` (structured logging) | ✅ | ❌ (use sugar-log) | Different abstraction level |
 | `gum format` (markdown/code) | ✅ | ❌ (use sugar-markdown) | Different abstraction level |
 | `gum join` (layout composition) | ✅ | ❌ (use candy-sprinkles Layout) | Different abstraction level |
 | `gum spin` (spinner + command) | ✅ | ❌ | Different abstraction level |
 | `gum confirm` / `gum choose` | ✅ | ❌ | Interactive TUI, not presentation |
 
-**Verdict:** No direct feature overlap. Gum's `style` command wraps lipgloss, which is mapped to `candy-sprinkles`. Gum's `log` command wraps `charmbracelet/log`, which is mapped to `candy-log`. Candy-kit fills the gap for the static presentation helpers (StatusLine, Banner, etc.) that Gum doesn't have as standalone commands.
+**Verdict:** No direct feature overlap. Gum's `style` command wraps lipgloss, which is mapped to `candy-sprinkles`. Gum's `log` command wraps `charmbracelet/log`, which is mapped to `sugar-log`. Candy-kit fills the gap for the static presentation helpers (StatusLine, Banner, etc.) that Gum doesn't have as standalone commands.
 
 ### charmbracelet/log (colored output)
 
 | Feature | log | sugar-cli | Gap |
 |---------|-----|----------|-----|
-| Leveled logging (debug/info/warn/error) | ✅ | ❌ | candy-log, not sugar-cli |
-| Structured key/value pairs | ✅ | ❌ | candy-log |
-| Text/JSON/Logfmt formatters | ✅ | ❌ | candy-log |
-| Sub-logger with context | ✅ | ❌ | candy-log |
-| slog handler | ✅ | ❌ | candy-log |
-| Timestamp formatting | ✅ | ❌ | candy-log |
+| Leveled logging (debug/info/warn/error) | ✅ | ❌ | sugar-log, not sugar-cli |
+| Structured key/value pairs | ✅ | ❌ | sugar-log |
+| Text/JSON/Logfmt formatters | ✅ | ❌ | sugar-log |
+| Sub-logger with context | ✅ | ❌ | sugar-log |
+| slog handler | ✅ | ❌ | sugar-log |
+| Timestamp formatting | ✅ | ❌ | sugar-log |
 | Styled level prefixes | ✅ | ✅ (via Theme) | Comparable |
 | Global logger | ✅ | ❌ | sugar-cli is stateless helpers |
 

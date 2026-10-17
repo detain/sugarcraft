@@ -106,7 +106,7 @@
 |---|---|---|
 | **SugarCli** (`sugar-cli/`) | **Direct port** | `sugar-cli` is SugarCraft's fang equivalent — `StatusLine`, `Banner`, `Section`, `Stage`, `HelpText` helpers |
 | **SugarMarkdown** (`sugar-markdown/`) | **Thematic cousin** | Both deal with terminal styling; fang for CLI help/errors, Glamour port for markdown rendering |
-| **CandyLog** (`candy-log/`) | **Indirect complement** | Both produce styled terminal output; fang styles CLI framework output, CandyLog is a logging library |
+| **SugarLog** (`sugar-log/`) | **Indirect complement** | Both produce styled terminal output; fang styles CLI framework output, SugarLog is a logging library |
 | **SugarColorprofile** (`sugar-colorprofile/`) | **Dependency** | fang uses `colorprofile` for terminal color detection; both handle terminal capability detection |
 | **CandySprinkles** (`candy-sprinkles/`) | **Thematic relation** | Both build on lipgloss for terminal styling; fang applies it to help/error rendering |
 

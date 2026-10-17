@@ -295,7 +295,7 @@ DEBUG=false
 
 LOG_PATH=
 
-# Optional: Panic handler enabled (requires candy-log)
+# Optional: Panic handler enabled (requires sugar-log)
 
 PANIC_HANDLER=false
 ```

@@ -13589,7 +13589,7 @@ no count is load-bearing.* Of the 13:
   - **3 were the sites fixed this round** (E368 sites 3, 5, 6), now `VARIABLE` off a real descriptor,
     `LITERAL_INT` and `LITERAL_INT`.
   - **8 were already correct.** Five match E368's carve-out list. **Two do not appear in it at all** —
-    `candy-log/src/Log.php`'s `posix_isatty(\STDERR)` and `candy-vcr/src/Cli/RecordCommand.php`'s
+    `candy-log/src/Log.php`'s `posix_isatty(\STDERR)` and `candy-vcr/src/Cli/RecordCommand.php`'s <!-- @rename-keep historical provenance -->
     `posix_ttyname(\STDIN)`. Both pass the STREAM uncast, which `posix_isatty()` and `posix_ttyname()`
     accept, so both are correct — but the carve-out list was a hand-read snapshot and it was incomplete,
     which is the fourth time in this family that a hand-maintained roster of "the ones we know about"

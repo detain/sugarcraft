@@ -300,7 +300,7 @@ Folded into the relevant lib's first step (composer changes) or Phase 0 (global 
 | `react/event-loop` | `^1.6` | `^1.6` | 1.x supports 7.1+ — no change |
 | `react/promise` | `^3.3` | `^3.3` (fallback `^2.11`) | 3.x min is 7.1; keep, pin down only if resolution fails |
 | `react/promise-timer` | `^1.9` | `^1.9` | no change |
-| `psr/log` | `^3.0` | `^1.1` | 3.x needs PHP 8; **drop param types** in any `LoggerInterface` impl (candy‑log) |
+| `psr/log` | `^3.0` | `^1.1` | 3.x needs PHP 8; **drop param types** in any `LoggerInterface` impl (sugar‑log) |
 | `symfony/console` | `^6.4 \|\| ^7.0` | `^5.4` | 6.4 needs 8.1 (candy‑shell, candy‑vcr, sugar‑glow) |
 | `symfony/process` | `^6.4 \|\| ^7.0` | `^5.4` | candy‑vcr |
 | `symfony/yaml` (dev) | `^6.4 \|\| ^7.0` | `^5.4` | candy‑vcr |
@@ -382,7 +382,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.4** `candy-testing`(8,med) — deps core+buffer; **Fiber** + attributes + first‑class‑callable
   + intersection. *(High‑touch; extra review per §4.11.)*
 - **3.5** `candy-git-server`(14,med, deps core+async), `candy-sql`(14,high, core+sprinkles),
-  `candy-log`(16,high, core+palette+sprinkles; psr/log→^1.1 + drop param types).
+  `sugar-log`(16,high, core+palette+sprinkles; psr/log→^1.1 + drop param types).
 - **3.6** `sugar-image`(25,high, core+palette+sprinkles) → **3.6a** `Renderer/` (7), **3.6b**
   root (≈10), **3.6c** remainder; ext‑gd/mbstring.
 - **3.7** `candy-shine`(9,high, buffer+core+sprinkles; attributes, league/commonmark pin). <!-- @rename-keep historical provenance -->
@@ -460,7 +460,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | **`match`→`switch` strictness drift** (`==` vs `===`) | 43 libs | `switch (true)`+`case $v === X`; Reviewer explicitly checks each |
 | **Enum identity / `cases()` order / `from()`** | 35 libs | candy‑core `BackedEnum` singletons; Tester adds identity+order+from tests per enum |
 | **Enum `::Case` → `::Case()` ripple across lib boundaries** | enum producers→consumers | Strict topo order; consumer steps update call sites; CI catches misses |
-| **psr/log 1.1 typed‑signature mismatch** | candy‑log | Drop param types from LoggerInterface impls |
+| **psr/log 1.1 typed‑signature mismatch** | sugar‑log | Drop param types from LoggerInterface impls |
 | **Symfony 5.4 API gaps vs 6.x** | candy‑shell, candy‑vcr, sugar‑glow | Pin `^5.4`; Tester runs console/process paths; adjust any 6‑only call |
 | **league/commonmark 2.5 auto‑upgrade to PHP 8.1** | candy‑shine | Pin `~2.4.0` | <!-- @rename-keep historical provenance -->
 | **sugar‑dash size (345 files)** | Phase 5.6 | ~20 small subtree steps; longest pole — start its phase early in parallel‑safe ordering once deps done |
@@ -479,7 +479,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-core | high | 118 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args, readonly |
 | candy-codeshot | high | 10 | ctor-promotion, enum, match, mixed, new-in-init, php8-strfn |
 | candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union |
-| candy-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
+| sugar-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
 | candy-minesweeper | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |
 | sugar-image | high | 25 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, php8-strfn; gd/mbstring |
 | candy-pty | high | 42 | FFI, ctor-promotion, match, mixed, new-in-init, nullsafe |
