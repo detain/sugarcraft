@@ -190,6 +190,18 @@ final class AiCommentWatcherTest extends TestCase
         self::assertTrue(AiCommentWatcher::enabled(['watchFiles' => true]));
     }
 
+    public function testTheHelpTextNamesTheTerminalOnlyBoundary(): void
+    {
+        // ISS-115: `settings.schema` ships this help verbatim to the web
+        // Settings form, and the form's promise is the truth — served
+        // sessions never poll. The sentence is the marking; keep it honest
+        // until a server-side watcher lands (then the sentence goes with it).
+        $help = SettingsSchema::byKey(AiCommentWatcher::SETTINGS_KEY)->help;
+
+        self::assertStringContainsString('Terminal sessions only', $help);
+        self::assertStringContainsString('candy-code serve', $help);
+    }
+
     public function testTheKeyIsLayeredUserOnlyAndOffByDefault(): void
     {
         $definition = SettingsSchema::byKey(AiCommentWatcher::SETTINGS_KEY);

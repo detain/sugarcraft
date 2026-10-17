@@ -102,7 +102,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Prompt)
                 ->withLayered()
                 ->withLabel(Lang::t('settings.watchFiles.label'))
-                ->withHelp('Send a prompt when a saved file holds a comment ending in AI! (make a change) or AI? (answer a question); plain AI comments ride along as context. Polled while the chat is idle; only comments saved after launch fire, each once.')
+                ->withHelp('Send a prompt when a saved file holds a comment ending in AI! (make a change) or AI? (answer a question); plain AI comments ride along as context. Polled while the chat is idle; only comments saved after launch fire, each once. Terminal sessions only: the watcher runs in the terminal process, so a session hosted by `candy-code serve` does not watch files.')
                 ->withReaderSymbol(AiCommentWatcher::class . '::enabled')
                 ->withReadBy('`Chat::subscriptions()` → `AiCommentWatcher::enabled()`'),
             SettingDefinition::new('queueMode', SettingType::Enum, QueueMode::Steer->value)
