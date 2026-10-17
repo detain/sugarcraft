@@ -90,16 +90,25 @@ final class SessionPromptMemoTest extends TestCase
         $this->assertTrue($memo->observeTurn('s1', []), 'an emptied history refreshes');
     }
 
-    public function testObserveTurnTreatsASessionSwitchAsARefreshPoint(): void
+    public function testSessionSwitchesAreNotARefreshPoint(): void
     {
+        // ISS-054: a serve-mode hub alternates sessions over one shared
+        // backend; every hop refreshing the loader re-walked the repo each
+        // turn. Layers are bucketed per session, so switching changes
+        // nothing about their freshness.
         $memo = SessionPromptMemo::new();
         $memo->remember('A', 'a', static fn (): int => 1);
+        $memo->remember('B', 'b', static fn (): int => 2);
         $memo->observeTurn('A', ['u:a']);
 
-        $this->assertTrue($memo->observeTurn('B', ['u:b']), 'a different session than the last turn\'s');
-        $this->assertTrue($memo->has('A', 'a'), 'a switch forgets only the session switched TO');
-        $this->assertTrue($memo->observeTurn('A', ['u:a', 'u:more']), 'switching back re-reads, even though A only grew');
+        $this->assertFalse($memo->observeTurn('B', ['u:b']), 'a first turn of another session is no refresh point');
+        $this->assertFalse($memo->observeTurn('A', ['u:a', 'u:more']), 'switching back while A only grew is no refresh point');
+        $this->assertTrue($memo->has('A', 'a'), 'A\'s layers survive the alternation');
+        $this->assertTrue($memo->has('B', 'b'), 'B\'s layers survive it too');
+
+        $this->assertTrue($memo->observeTurn('A', ['u:cut']), 'a rewritten history still refreshes even after a switch');
         $this->assertFalse($memo->has('A', 'a'));
+        $this->assertTrue($memo->has('B', 'b'), 'rewriting A forgets only A');
     }
 
     public function testSessionsAreEvictedLeastRecentlyUsedFirst(): void

@@ -32,8 +32,8 @@ namespace SugarCraft\Code\Context;
  * Instruction files (CLAUDE.md, AGENTS.md, `@import`s, forced globs), rules
  * and rulebooks, project memory, the repo map and the static `<env>` lines are
  * read ONCE per session, at the first prompt build, and stay frozen until the
- * session's entries are dropped with {@see forget()} — on `/clear`, after a
- * compaction, or when a different session id arrives. The owner does not
+ * session's entries are dropped with {@see forget()} — on `/clear`, or after
+ * a compaction or `/rewind` rewrote the history. The owner does not
  * have to be told which of those happened: {@see observeTurn()} sees each of
  * them in the history the next turn runs on. An edit to CLAUDE.md
  * made mid-session therefore takes effect at the next of those points, not on
@@ -76,9 +76,6 @@ final class SessionPromptMemo
      * @var array<string, array{int, string}>
      */
     private array $histories = [];
-
-    /** The session the last observed turn belonged to, or null before any. */
-    private ?string $lastSession = null;
 
     /**
      * Public so an owner can default a promoted constructor field to a fresh
@@ -141,7 +138,7 @@ final class SessionPromptMemo
 
     /**
      * Drop every layer memoised for one session — the refresh point of the
-     * freshness policy (`/clear`, compaction, a session switch).
+     * freshness policy (`/clear`, compaction, a rewritten history).
      */
     public function forget(?string $sessionId): void
     {
@@ -153,7 +150,6 @@ final class SessionPromptMemo
     {
         $this->entries = [];
         $this->histories = [];
-        $this->lastSession = null;
     }
 
     /**
@@ -163,25 +159,29 @@ final class SessionPromptMemo
      * whatever ELSE caches the same files (the shared instruction loader),
      * even when this memo held nothing yet for the session.
      *
-     * A refresh point is either of:
-     *  - A SESSION SWITCH: the previous observed turn belonged to another
-     *    session (`/resume`, `/branch`, Ctrl+Tab). Switching back to a
-     *    session this memo still holds would otherwise reuse layers frozen
-     *    before the switch.
-     *  - A REWRITTEN HISTORY: this session's history no longer starts with
-     *    every row its previous turn ran on — `/clear` emptied it, a
-     *    compaction replaced the old rows with a summary, `/rewind` cut it.
-     *    An ordinary turn only ever APPENDS (the reply, its transcript rows,
-     *    the next prompt), so that prefix test is the whole signal.
+     * THE ONE refresh point is a REWRITTEN HISTORY: this session's history
+     * no longer starts with every row its previous turn ran on — `/clear`
+     * emptied it, a compaction replaced the old rows with a summary,
+     * `/rewind` cut it. An ordinary turn only ever APPENDS (the reply, its
+     * transcript rows, the next prompt), so that prefix test is the whole
+     * signal.
      *
-     * WHY DETECT RATHER THAN BE TOLD: the three events live in three places
-     * in Chat, each owned by a different feature, and a missed call site
-     * would freeze CLAUDE.md for the rest of the session with no symptom.
-     * The history the turn is handed is the one thing all three must change.
-     * A false positive costs one re-read of layers whose bytes, unchanged on
-     * disk, come back identical — the prefix cache does not notice; a false
-     * negative is the frozen state the policy already accepts until the next
-     * refresh point.
+     * A SESSION SWITCH IS DELIBERATELY NOT a refresh point (ISS-054): every
+     * layer is already bucketed per session id, so two sessions sharing one
+     * long-lived backend cannot corrupt each other's entries, and alternating
+     * turns between them (a serve-mode hub over one workspace) must not pay a
+     * loader refresh — a full repo re-walk on the event loop — every hop.
+     * Sessions this memo stops serving are bounded by the LRU, not by the
+     * freshness rule.
+     *
+     * WHY DETECT RATHER THAN BE TOLD: the rewrite events live in several
+     * places in Chat, each owned by a different feature, and a missed call
+     * site would freeze CLAUDE.md for the rest of the session with no
+     * symptom. The history the turn is handed is the one thing all of them
+     * must change. A false positive costs one re-read of layers whose bytes,
+     * unchanged on disk, come back identical — the prefix cache does not
+     * notice; a false negative is the frozen state the policy already
+     * accepts until the next refresh point.
      *
      * @param list<string> $rowKeys one stable key per agent-visible history row,
      *                              in order (EngineBackend hashes role + content)
@@ -191,16 +191,14 @@ final class SessionPromptMemo
         $session = $sessionId ?? '';
 
         $previous = $this->histories[$session] ?? null;
-        $switched = $this->lastSession !== null && $this->lastSession !== $session;
         $rewritten = $previous !== null
             && (\count($rowKeys) < $previous[0] || self::hashRows(\array_slice($rowKeys, 0, $previous[0])) !== $previous[1]);
 
-        if ($switched || $rewritten) {
+        if ($rewritten) {
             $this->forget($sessionId);
         }
 
         $this->histories[$session] = [\count($rowKeys), self::hashRows($rowKeys)];
-        $this->lastSession = $session;
 
         // Bounded with the entries: a session evicted from those needs no
         // history either, and a long-lived daemon must not grow this map.
@@ -208,7 +206,7 @@ final class SessionPromptMemo
             unset($this->histories[array_key_first($this->histories)]);
         }
 
-        return $switched || $rewritten;
+        return $rewritten;
     }
 
     /** @param list<string> $rowKeys */

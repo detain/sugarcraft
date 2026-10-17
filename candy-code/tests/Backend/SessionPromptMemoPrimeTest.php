@@ -19,7 +19,9 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  * for the session, primed in the PARENT before a turn's fork, and refreshed —
  * memo forgotten, instruction loader re-read — only at a refresh point the
  * history itself shows: `/clear`, a compaction or rewind (the history no
- * longer extends the last turn's), or a session switch.
+ * longer extends the last turn's). A session SWITCH is not a refresh point
+ * (ISS-054): layers are bucketed per session, and a hub alternating sessions
+ * over one shared backend must not re-walk the repository on every hop.
  */
 final class SessionPromptMemoPrimeTest extends TestCase
 {
@@ -77,13 +79,18 @@ final class SessionPromptMemoPrimeTest extends TestCase
         $this->assertStringNotContainsString('RULE-ONE', (string) $provider->requests[2]->systemPrompt);
     }
 
-    public function testASessionSwitchIsARefreshPoint(): void
+    public function testSessionAlternationOverOneBackendIsNotARefreshPoint(): void
     {
+        // ISS-054: a serve-mode hub clones this backend per turn with
+        // different session ids. Every hop used to forget and re-read the
+        // standing layers — a full repo re-walk on the event loop — even
+        // though each session's prompt had not changed shape at all.
         $root = $this->project('RULE-ONE');
         $provider = new ScriptedProvider([
             new CompleteResponse(content: 'one'),
             new CompleteResponse(content: 'other'),
             new CompleteResponse(content: 'two'),
+            new CompleteResponse(content: 'reborn'),
         ]);
         $backend = $this->backend($provider, $root);
 
@@ -91,11 +98,18 @@ final class SessionPromptMemoPrimeTest extends TestCase
         file_put_contents($root . '/CLAUDE.md', "RULE-TWO\n");
         $backend->withSessionId('B')->complete([Message::user('b')]);
 
-        // Back to A with A's own history extended — only the switch says refresh.
+        // Back to A with A's own history extended: nothing moved, so the
+        // layers stay frozen — the switch alone no longer refreshes.
         $backend->withSessionId('A')->complete([Message::user('a'), Message::assistant('one'), Message::user('again')]);
 
-        $this->assertStringContainsString('RULE-TWO', (string) $provider->requests[1]->systemPrompt);
-        $this->assertStringContainsString('RULE-TWO', (string) $provider->requests[2]->systemPrompt, 'switching back re-reads, never reuses what A froze before the switch');
+        $this->assertStringContainsString('RULE-ONE', (string) $provider->requests[1]->systemPrompt, 'B\'s first turn reuses the shared loader\'s read, it is not a refresh point');
+        $this->assertStringContainsString('RULE-ONE', (string) $provider->requests[2]->systemPrompt, 'A keeps the layers it froze before the switch');
+        $this->assertStringNotContainsString('RULE-TWO', (string) $provider->requests[2]->systemPrompt);
+
+        // The mechanism is not disabled: a rewritten history refreshes even
+        // after alternation, and it refreshes the SHARED loader.
+        $backend->withSessionId('B')->complete([Message::user('fresh')]);
+        $this->assertStringContainsString('RULE-TWO', (string) $provider->requests[3]->systemPrompt, 'B rewriting its history is a refresh point again');
     }
 
     private function backend(ScriptedProvider $provider, string $root): EngineBackend

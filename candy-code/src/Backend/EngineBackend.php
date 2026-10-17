@@ -2701,12 +2701,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * Step 1.A-2, in the PARENT before a turn runs: decide whether this turn
      * is a prompt refresh point, then prime the session's prompt memo.
      *
-     * A refresh point — `/clear`, a compaction, a rewind, a session switch —
-     * is read off the history itself ({@see SessionPromptMemo::observeTurn()}):
+     * A refresh point — `/clear`, a compaction, a rewind — is read off the
+     * history itself ({@see SessionPromptMemo::observeTurn()}):
      * the memo forgets the session's layers and the shared instruction loader
      * drops what it read ({@see InstructionFileLoader::refresh()}), so an
      * edited CLAUDE.md, a new memory note or a changed repository layout
-     * reaches the prompt there and not on any ordinary step.
+     * reaches the prompt there and not on any ordinary step. A session
+     * SWITCH is not one (ISS-054): layers are bucketed per session, and a
+     * serve-mode hub alternating turns between sessions over one shared
+     * workspace must not re-walk the repository on every hop.
      *
      * Then the layers are read HERE, where they outlive the turn: a forked
      * child inherits them warm, where before every turn's child re-walked the
