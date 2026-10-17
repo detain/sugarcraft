@@ -149,8 +149,8 @@ flag_management:
     - name: sugar-quickpick
       paths: ["sugar-quickpick/src/**"]
       carryforward: true
-    - name: candy-input
-      paths: ["candy-input/src/**"]
+    - name: sugar-input
+      paths: ["sugar-input/src/**"]
       carryforward: true
     - name: sugar-treelist
       paths: ["sugar-treelist/src/**"]
@@ -451,12 +451,12 @@ component_management:
         - "sugar-quickpick/src/**"
       flag_regexes:
         - "^sugar-quickpick$"
-    - component_id: candy-input
-      name: candy-input
+    - component_id: sugar-input
+      name: sugar-input
       paths:
-        - "candy-input/src/**"
+        - "sugar-input/src/**"
       flag_regexes:
-        - "^candy-input$"
+        - "^sugar-input$"
     - component_id: sugar-treelist
       name: sugar-treelist
       paths:

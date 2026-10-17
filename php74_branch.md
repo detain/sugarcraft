@@ -356,7 +356,7 @@ keystone, so they come first within the phase.
   `Cell/Style/Position/Hyperlink/...`; heavy `readonly`+promotion, 8 nullsafe.
 - **1.4** `candy-fuzzy` (6 src, low). <!-- @rename-keep historical provenance -->
 - **1.5** `candy-layout` (13 src, low) — 1 enum, `readonly class`.
-- **1.6** `candy-input` (11 src, high) — union types, `readonly class`, mixed; no deps so safe early.
+- **1.6** `candy-input` (11 src, high) — union types, `readonly class`, mixed; no deps so safe early. <!-- @rename-keep historical provenance -->
 
 ### Phase 2 — Keystone: candy‑core (+ candy‑pty, cyclic)
 `candy-core` (118 src, high) split by subdir; **2.1 must ship the polyfills first.**
@@ -478,7 +478,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 |---|---|---:|---|
 | candy-core | high | 118 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args, readonly |
 | candy-codeshot | high | 10 | ctor-promotion, enum, match, mixed, new-in-init, php8-strfn |
-| candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union |
+| candy-input | high | 11 | ctor-promotion, mixed, php8-strfn, readonly-class, readonly, union | <!-- @rename-keep historical provenance -->
 | sugar-log | high | 16 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, readonly; psr/log |
 | candy-minesweeper | high | 9 | ctor-promotion, enum-with-methods, match, named-args, readonly |
 | sugar-image | high | 25 | backed-enum, enum-with-methods, ctor-promotion, match, named-args, php8-strfn; gd/mbstring |
@@ -538,7 +538,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 ## 9. Appendix B — Dependency tiers (topological)
 
 - **Level 0 (no sugarcraft deps):** candy-ansi, candy-async, candy-buffer, candy-fuzzy, <!-- @rename-keep historical provenance -->
-  candy-input, candy-layout.
+  candy-input, candy-layout. <!-- @rename-keep historical provenance -->
 - **Keystone (cyclic):** candy-core ↔ candy-pty (+ candy-sprinkles right after).
 - **Level 1 (everything else):** depends on core/buffer/sprinkles/etc.; backport strictly after
   its listed deps. Full per‑lib dep lists are in the audit (see `plans/PHP74_BACKPORT.md`).

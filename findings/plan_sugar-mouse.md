@@ -10,7 +10,7 @@ updated: 2026-10-06
 
 ## Goal
 
-Address all findings from the sugar-mouse code review, fixing the critical state machine bug in `ZoneClickTracker`, improving code quality across `Scan`, `Scanner`, `MouseAction`, and `Mark`, and aligning with existing SugarCraft conventions (e.g., button constants from `candy-input`).
+Address all findings from the sugar-mouse code review, fixing the critical state machine bug in `ZoneClickTracker`, improving code quality across `Scan`, `Scanner`, `MouseAction`, and `Mark`, and aligning with existing SugarCraft conventions (e.g., button constants from `sugar-input`).
 
 ## Context & Decisions
 
@@ -19,7 +19,7 @@ Address all findings from the sugar-mouse code review, fixing the critical state
 | Fix ZoneClickTracker state machine bug by adding `unset($this->pending[$btn])` before `return null` | The documented state machine says "Release on different zone → clear state, idle" but code returns null without clearing, causing phantom clicks | `ref:sugar-mouse:80-84` |
 | Update test `testPressOnDifferentZonesEmitsNoClick` to expect null from first release (documented behavior) | The test currently validates buggy behavior; fixing the bug requires updating the test | `ZoneClickTrackerTest.php:79-96` |
 | Add explicit `$j + 1 < $len` guard in OSC terminator check | Prevents fragile reliance on PHP's `??` string offset semantics | `Scan.php:133` |
-| Add button constants to `MouseAction` as class constants, matching `candy-input` convention | `candy-input` already defines `BUTTON_LEFT=0`, `BUTTON_MIDDLE=1`, `BUTTON_RIGHT=2` | `candy-input/src/Event/MouseEvent.php:21-23` |
+| Add button constants to `MouseAction` as class constants, matching `sugar-input` convention | `sugar-input` already defines `BUTTON_LEFT=0`, `BUTTON_MIDDLE=1`, `BUTTON_RIGHT=2` | `sugar-input/src/Event/MouseEvent.php:21-23` |
 | Add `$j + 1 < $len` guard before the OSC escape sequence terminator check | Current code uses `($rendered[$j + 1] ?? '')` which works but is fragile | `Scan.php:133` |
 | Normalize sentinel constants to use UTF-8 bytes in both Mark and Scan | Scan.php uses UTF-8 bytes (`\xEE\x80\x80`); Mark.php uses Unicode escape (`\u{E000}`) — both are valid but inconsistent | `Mark.php:28-31` vs `Scan.php:24-25` |
 | Add `unset($this->pending[$btn])` in the "different zone" release branch | Makes implementation match documented state machine | `ZoneClickTracker.php:82-83` |
@@ -222,7 +222,7 @@ public const BUTTON_RIGHT  = 2;
 **Why:**
 
 - Button values (0, 1, 2) are hardcoded throughout the codebase without symbolic constants
-- `candy-input` already defines these constants in `MouseEvent` — consistency across the SugarCraft ecosystem
+- `sugar-input` already defines these constants in `MouseEvent` — consistency across the SugarCraft ecosystem
 - Consumers must currently know the convention or hardcode integers
 
 **Severity:** Medium
@@ -236,7 +236,7 @@ public const BUTTON_RIGHT  = 2;
 **Related code locations:**
 
 - `src/MouseAction.php:13-26` (current enum definition)
-- `candy-input/src/Event/MouseEvent.php:21-23` (existing button constants pattern)
+- `sugar-input/src/Event/MouseEvent.php:21-23` (existing button constants pattern)
 - `tests/ZoneClickTrackerTest.php:41` (hardcoded `0` for button)
 - `tests/ZoneClickTrackerTest.php:44` (hardcoded `0` for button)
 - `tests/ScannerTest.php:264, 279, 292` (hardcoded button values in MouseEvent::press calls)
@@ -370,13 +370,13 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 
 **What is expected:**
 
-- Remove `sugar-async`, `candy-ansi`, and `candy-input` from the `repositories` array (only `candy-core` is actually required)
+- Remove `sugar-async`, `candy-ansi`, and `sugar-input` from the `repositories` array (only `candy-core` is actually required)
 - OR add a comment explaining why they are present (e.g., "reserved for future async integration")
 
 **Why:**
 
 - Only `candy-core` is in the `require` section
-- The other three path repositories (`sugar-async`, `candy-ansi`, `candy-input`) are listed but unused
+- The other three path repositories (`sugar-async`, `candy-ansi`, `sugar-input`) are listed but unused
 - This is leftover from earlier design and creates confusion
 
 **Severity:** Low
@@ -475,5 +475,5 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 - 2026-06-30: Implementation plan created based on sugar-mouse code review findings
 - Phase ordering follows severity: Critical (Phase 1) → High (Phase 2) → Medium (Phase 3) → Low (Phase 4) → Design notes (Phase 5) → Integration (Phase 6)
 - The ZoneClickTracker state machine bug is the most pressing issue — fix first
-- Button constants in MouseAction should follow the established pattern in `candy-input`
+- Button constants in MouseAction should follow the established pattern in `sugar-input`
 - Sentinel extraction (4.2) is optional but improves code organization; consider for a separate PR

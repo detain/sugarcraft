@@ -24,7 +24,7 @@ The 8 shared packages:
 - **candy-buffer** — cell-grid rendering & string composition (Buffer, Cell, DiffOp, Style, Hyperlink)
 - **candy-layout** — constraint-based sizing (LayoutSolver, Region, Direction, Constraint*)
 - **sugar-mouse** — mouse hit-testing & decode (MouseMsg, Zone, Manager)
-- **candy-input** — input decode & KeyEvent (InputDriver, KeyEvent, SymbolicKey)
+- **sugar-input** — input decode & KeyEvent (InputDriver, KeyEvent, SymbolicKey)
 - **sugar-fuzzy** — filter/search via Smith-Waterman (Matcher, MatchResult)
 - **candy-async** — ReactPHP helpers (AsyncOps, CancellationSource, CancellationToken) <!-- @rename-keep historical provenance -->
 - **sugar-testing** — golden-file snapshot tests (assertGoldenAnsi, GoldenRenderTest)
@@ -53,7 +53,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-async | PtyPool/MultiPump use manual Deferred/Timer loops — AsyncOps::withTimeout() + CancellationToken would simplify cancellation | M | <!-- @rename-keep historical provenance -->
-| candy-input | Pty read/write dispatches raw bytes — StreamInputDriver/KeyEvent decode would standardize input path | M |
+| sugar-input | Pty read/write dispatches raw bytes — StreamInputDriver/KeyEvent decode would standardize input path | M |
 
 **Notes:** candy-pty is the most foundational async PTY lib. It predates candy-async and manually wires Loop + Deferred for timeout/cancellation. Adopting candy-async would reduce boilerplate in MultiPump and PtyPool. Input decoding is currently raw byte-oriented; candy-input would provide symbolic key decode. <!-- @rename-keep historical provenance -->
 
@@ -64,7 +64,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Board.php renders 10×20 cell grid via string concatenation — Buffer::Cell would give per-cell style + diff-friendly rendering | S |
-| candy-input | Input/Computer use raw key bytes — SymbolicKey decode would standardize key handling | S |
+| sugar-input | Input/Computer use raw key bytes — SymbolicKey decode would standardize key handling | S |
 | candy-async | Game loop uses manual Timer loops — AsyncOps::raf() or CancellationToken would simplify tick loop | S | <!-- @rename-keep historical provenance -->
 
 **Notes:** Tetromino rendering is currently string-based; Buffer-based rendering would enable diff-optimized redraws and per-cell ANSI styling. The game loop is a natural fit for candy-async's cancellation model. <!-- @rename-keep historical provenance -->
@@ -76,7 +76,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Board.php + Renderer.php render cell grid via string concat — Buffer would give diff-optimized redraw | S |
-| candy-input | Game input uses raw coordinates — SymbolicKey/mouse decode via candy-input would standardize | S |
+| sugar-input | Game input uses raw coordinates — SymbolicKey/mouse decode via sugar-input would standardize | S |
 
 **Notes:** Minesweeper board is a classic cell-grid use case. Adopting candy-buffer would allow per-cell styles (revealed/hidden/flagged) and frame diffing. Mouse click coordinates currently handled manually.
 
@@ -249,7 +249,7 @@ The 8 shared packages:
 | Package | Benefit | Effort |
 |---------|---------|--------|
 | candy-buffer | Bird.php + Pipe.php + Renderer.php render via string — Buffer would give per-cell bird/pipe rendering + diff | S |
-| candy-input | Game.php uses raw key bytes — SymbolicKey decode via candy-input would standardize controls | S |
+| sugar-input | Game.php uses raw key bytes — SymbolicKey decode via sugar-input would standardize controls | S |
 | candy-async | Game loop uses Timer for gravity/collision ticks — CancellationToken would simplify pause/restart | S | <!-- @rename-keep historical provenance -->
 
 **Notes:** candy-flappy is a Flappy Bird clone. Classic cell-grid game — Buffer would replace string-based rendering. Game loop uses manual tick timing, well-suited for candy-async cancellation. <!-- @rename-keep historical provenance -->

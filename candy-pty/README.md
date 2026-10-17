@@ -480,7 +480,7 @@ reason (not just the first one per process), and
 
 candy-pty builds on two sibling libraries for input/output escape-sequence handling:
 
-- **[candy-input](https://github.com/detain/sugarcraft/tree/master/candy-input)** — `EscapeDecoder` consumes raw bytes from the PTY master and emits keyboard/mouse/osc events. The pty-read loop feeds `Pty::read()` chunks directly into `EscapeDecoder`; no private arrow-key or Ctrl-key buffering.
+- **[sugar-input](https://github.com/detain/sugarcraft/tree/master/sugar-input)** — `EscapeDecoder` consumes raw bytes from the PTY master and emits keyboard/mouse/osc events. The pty-read loop feeds `Pty::read()` chunks directly into `EscapeDecoder`; no private arrow-key or Ctrl-key buffering.
 - **[candy-ansi](https://github.com/detain/sugarcraft/tree/master/candy-ansi)** — `Parser` handles ANSI escape sequences in PTY output when inspection is needed (cursor-position reports, SGR state, OSC strings). PTY output that only needs pass-through to the terminal skips this layer entirely.
 
 ## Known limitations

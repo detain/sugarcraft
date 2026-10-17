@@ -181,7 +181,7 @@
         },
         {
             "type": "path",
-            "url": "candy-input",
+            "url": "sugar-input",
             "options": {
                 "symlink": true
             }

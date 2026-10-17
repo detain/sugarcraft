@@ -16,7 +16,7 @@ The table has `withScrollY()` and `withViewportHeight()` for viewport scrolling,
 
 1. Add a method `withKeyboardNavigation(bool $enable = true): self` to enable/disable
 2. Consider adding an `onKeyPress(callable $handler): self` callback for custom handling
-3. Document that keyboard navigation requires integration with an input library (candy-input or similar)
+3. Document that keyboard navigation requires integration with an input library (sugar-input or similar)
 4. OR provide a simple static method that processes key events and returns updated table
 
 ## Key Concept

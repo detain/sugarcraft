@@ -1,4 +1,4 @@
-# Implementation Plan: candy-input Code Audit Fixes
+# Implementation Plan: sugar-input Code Audit Fixes
 
 **Status:** not-started  
 **Phase:** 1  
@@ -8,7 +8,7 @@
 
 ## Goal
 
-Address all actionable findings from the candy-input code audit, implementing bug fixes, performance improvements, documentation corrections, and refactoring while respecting the library's architectural constraints.
+Address all actionable findings from the sugar-input code audit, implementing bug fixes, performance improvements, documentation corrections, and refactoring while respecting the library's architectural constraints.
 
 ---
 
@@ -16,11 +16,11 @@ Address all actionable findings from the candy-input code audit, implementing bu
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| Fix scroll event modifiers at source | Scroll events with modifiers (Shift+scroll) are silently downgraded - this is a correctness bug | `candy-input.md:20-61` |
-| Move stream_set_blocking to constructor | stream_set_blocking is a syscall that modifies kernel state; calling it on every read is unnecessary and wasteful | `candy-input.md:64-90` |
-| Clarify comment not change behavior | Tests expect lowercase output; changing formula would break tests and change established API behavior | `candy-input.md:93-116` |
+| Fix scroll event modifiers at source | Scroll events with modifiers (Shift+scroll) are silently downgraded - this is a correctness bug | `sugar-input.md:20-61` |
+| Move stream_set_blocking to constructor | stream_set_blocking is a syscall that modifies kernel state; calling it on every read is unnecessary and wasteful | `sugar-input.md:64-90` |
+| Clarify comment not change behavior | Tests expect lowercase output; changing formula would break tests and change established API behavior | `sugar-input.md:93-116` |
 | Keep equals() method | KeyModifierTest.php lines 40-72 show equals() IS tested; audit claim of "never called" was incorrect | `KeyModifierTest.php:40-72` |
-| ResizeEvent is architectural gap, not a bug | SIGWINCH is a signal, not stream input; EscapeDecoder correctly does not generate it | `candy-input.md:176-186` |
+| ResizeEvent is architectural gap, not a bug | SIGWINCH is a signal, not stream input; EscapeDecoder correctly does not generate it | `sugar-input.md:176-186` |
 
 ---
 
@@ -597,7 +597,7 @@ $modifierBits = ($button >> 2) & 0x07;  // Extract bits 2-4 as 0-5 range
 
 **Severity:** Compatibility  
 **File:** `README.md`  
-**What is expected:** Explain relationship between candy-input and future sugar-readline
+**What is expected:** Explain relationship between sugar-input and future sugar-readline
 
 **Current state:** README says "Unblocks sugar-readline migration to real-TTY input" but no sugar-readline library exists yet.
 
@@ -605,9 +605,9 @@ $modifierBits = ($button >> 2) & 0x07;  // Extract bits 2-4 as 0-5 range
 ```markdown
 ## Integration with sugar-readline
 
-candy-input provides the low-level TTY input decoding layer. When sugar-readline is 
-available, it will use candy-input as its input source, providing line editing 
-capabilities built on top of candy-input's event stream.
+sugar-input provides the low-level TTY input decoding layer. When sugar-readline is 
+available, it will use sugar-input as its input source, providing line editing 
+capabilities built on top of sugar-input's event stream.
 
 See [sugar-readline](./sugar-readline/README.md) for the readline integration.
 ```
@@ -627,7 +627,7 @@ See [sugar-readline](./sugar-readline/README.md) for the readline integration.
 
 **Severity:** Compatibility  
 **File:** `README.md`  
-**What is expected:** Show example of using candy-input with sugar-widgets TUI components
+**What is expected:** Show example of using sugar-input with sugar-widgets TUI components
 
 **Why the change should be done:** sugar-widgets (component library) likely needs keyboard/mouse input but there's no integration example.
 
@@ -635,7 +635,7 @@ See [sugar-readline](./sugar-readline/README.md) for the readline integration.
 
 **Related code locations:**
 
-- candy-bits library (not yet integrated with candy-input per audit)
+- candy-bits library (not yet integrated with sugar-input per audit)
 
 ---
 

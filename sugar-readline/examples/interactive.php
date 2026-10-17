@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SugarReadline — interactive TTY demo via candy-input.
+ * SugarReadline — interactive TTY demo via sugar-input.
  *
  * Demonstrates real TTY keypress handling: arrow keys, Ctrl+chars,
  * Escape, F-keys, and bracketed paste.

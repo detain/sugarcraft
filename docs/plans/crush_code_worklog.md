@@ -6274,7 +6274,7 @@ does not exist. That third case is why they had to go.
 56 requires, 54 path repos. `candy-focus` carried a stale `vcs` entry (the only <!-- @rename-keep -->
 non-path repository in the file) and `sugar-gallery` had none, so
 `vendor/sugarcraft/` held **56 symlinks and 4 real directories** — those two plus
-transitive-only `candy-input`/`candy-layout`, each locked `dist=zip src=git`.
+transitive-only `candy-input`/`candy-layout`, each locked `dist=zip src=git`. <!-- @rename-keep historical provenance -->
 Local edits to those four never reached the root autoloader. Now 58 symlinks,
 0 real dirs, 0 dangling (two orphans from earlier removals, `candy-crush` and
 `super-candy`, swept).

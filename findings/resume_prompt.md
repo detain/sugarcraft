@@ -108,8 +108,8 @@ Begin spawning agents in groups of 3, starting with the next incomplete group in
 | 3-B | 3.4–3.6 | candy-focus (enabledCount, disabledCount, IteratorAggregate, JsonSerializable)  <!-- @rename-keep historical provenance --> |
 | 3-C | 3.7–3.9 | candy-kit (Theme getters, Banner cache), sugar-table (column accessor, visible column pre-compute) | <!-- @rename-keep historical provenance -->
 | 3-D | 3.10–3.12 | sugar-toast (timer control API, action buttons), sugar-treelist (navigation methods, setLineOffset fluent, sort O(n) cursor) |
-| 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) | <!-- @rename-keep -->
-| 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), sugar-colorprofile (AsyncProbe), sugar-spring (reducedMotionOverride, Vector methods, EasingFunction interface) |
+| 3-E | 3.13–3.18 | sugar-treelist (navigation, fluent, sort), candy-testing (TemporaryDirectoryTrait), candy-input (EscapeDecoderOptions, ReactInputDriver) | <!-- @rename-keep historical provenance -->
+| 3-F | 3.19–3.23 | candy-input (SignalResizeDriver), sugar-colorprofile (AsyncProbe), sugar-spring (reducedMotionOverride, Vector methods, EasingFunction interface) | <!-- @rename-keep historical provenance -->
 | 3-G | 3.24–3.30 | candy-git-server (Async GitDaemon — deferred ⏭️), sugar-reel (Seeking callback — deferred ⏭️), candy-log (StreamHandler type, HookRegistry return, JsonFormatter coercion, RemoveHandler void, Styles return) | <!-- @rename-keep -->
 
 ### Phase 4: Documentation and CALIBER_LEARNINGS

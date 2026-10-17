@@ -1,10 +1,12 @@
-# CandyInput
+# SugarInput
+
+> Formerly published as `sugarcraft/candy-input` (renamed 2026-10). <!-- @rename-keep -->
 
 Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboard protocol + xterm modifyOtherKeys) and mouse (SGR 1006/1016, urxvt 1015, X10). Provides the `InputDriver` interface and `EscapeDecoder` implementation.
 
 ## Overview
 
-`candy-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
+`sugar-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
 - **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Backtab (`CSI Z`)
@@ -47,7 +49,7 @@ while (true) {
 ## Installation
 
 ```sh
-composer require sugarcraft/candy-input
+composer require sugarcraft/sugar-input
 ```
 
 ## API

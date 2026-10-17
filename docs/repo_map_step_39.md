@@ -41,7 +41,7 @@ This is doc-heavy; Scribe does most of the work. Coder ensures HTML validity + p
    - sugar-testing ✅ step-04
    - candy-ansi ✅ step-01
    - sugar-mouse ✅ step-05
-   - candy-input ✅ step-06
+   - sugar-input ✅ step-06
 
    ### §344 Shared Components/Abstractions
    - ... (one line per item with its step ref)

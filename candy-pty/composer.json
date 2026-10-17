@@ -34,7 +34,7 @@
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-input": "dev-master",
+        "sugarcraft/sugar-input": "dev-master",
         "sugarcraft/candy-ansi": "dev-master"
     },
     "require-dev": {
