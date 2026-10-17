@@ -1,0 +1,879 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Tools\BuiltIn;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\InstructionFileLoader;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Support\ToolOutputSpill;
+use SugarCraft\Code\Tools\BuiltIn\Grep;
+use SugarCraft\Code\Tools\BuiltIn\Read;
+use SugarCraft\Code\Tools\CarriesSessionState;
+use SugarCraft\Code\Tools\ParallelSafe;
+
+/**
+ * P8.9: `Grep` was the one path-resolving built-in constructed without the
+ * announce-once pair, so a `CLAUDE.md` governing a matched file stayed
+ * unannounced when a search was what surfaced it, and a `paths:`-scoped skill
+ * stayed silent on a search naming every file it covers.
+ *
+ * Every test here except {@see
+ * testAGrepWithNoCollaboratorsIsByteIdenticalToBeforeTheWiring()} fails
+ * against `new Grep($root)` as `Bootstrap::tools()` built it at 82b8ee3e —
+ * that one is the regression guard for the unwired shape and passes both
+ * before and after, deliberately.
+ *
+ * @see Grep::isParallelSafe() for the concurrency verdict this wiring forced a
+ *      re-justification of
+ */
+final class GrepInstructionWiringTest extends TestCase
+{
+    /** Filler bytes padding the clipped-but-announced probe's target line. */
+    private const CLIP_PROBE_PAD = 2000;
+
+    private string $dir = '';
+
+    protected function setUp(): void
+    {
+        $this->dir = sys_get_temp_dir() . '/crush-grep-wiring-' . bin2hex(random_bytes(6));
+        mkdir($this->dir . '/sub', 0o777, true);
+    }
+
+    protected function tearDown(): void
+    {
+        exec('rm -rf ' . escapeshellarg($this->dir));
+    }
+
+    // =========================================================================
+    // The instruction loader
+    // =========================================================================
+
+    public function testAHitSurfacesTheInstructionFileGoverningItsDirectory(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        $content = $this->grep(new Grep($this->dir, instructionLoader: new InstructionFileLoader($this->dir)));
+
+        self::assertStringContainsString('/sub/a.php:1:', $content, 'the hit itself must still be there');
+        self::assertStringContainsString('SUBDIR-RULE-ALPHA', $content);
+    }
+
+    /**
+     * The block is labelled where {@see Read} and
+     * {@see \SugarCraft\Code\Tools\BuiltIn\Glob} emit the body raw: it lands
+     * at the end of a `path:line:text` record stream, after a run of
+     * `... [note]` lines, and an unlabelled markdown body in that position is
+     * indistinguishable from output that failed to parse.
+     */
+    public function testTheSurfacedInstructionBlockIsLabelledAndCounted(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        $content = $this->grep(new Grep($this->dir, instructionLoader: new InstructionFileLoader($this->dir)));
+
+        self::assertStringContainsString('... [instructions: 1 file(s) govern the matched paths', $content);
+        self::assertTrue(
+            strpos($content, '... [instructions:') < strpos($content, 'SUBDIR-RULE-ALPHA'),
+            'the label must precede the body it labels',
+        );
+    }
+
+    public function testAGrepWithNoCollaboratorsIsByteIdenticalToBeforeTheWiring(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        $content = $this->grep(new Grep($this->dir));
+
+        self::assertStringContainsString('/sub/a.php:1:', $content);
+        self::assertStringNotContainsString('SUBDIR-RULE-ALPHA', $content);
+        self::assertStringNotContainsString('... [instructions:', $content);
+    }
+
+    public function testTheSameInstructionFileIsSurfacedOnlyOncePerSession(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        $tool = new Grep($this->dir, instructionLoader: new InstructionFileLoader($this->dir));
+
+        self::assertStringContainsString('SUBDIR-RULE-ALPHA', $this->grep($tool));
+        self::assertStringNotContainsString('SUBDIR-RULE-ALPHA', $this->grep($tool));
+    }
+
+    /**
+     * The dedup is per LOADER, and `Bootstrap::tools()` hands every wired tool
+     * the same one — so a rule Grep surfaced is not re-sent when the model goes
+     * on to read the file. This is the property that makes wiring Grep a net
+     * addition rather than a duplicate: the body reaches the model once, from
+     * whichever tool touched the path first.
+     */
+    public function testARuleGrepSurfacedIsNotRepeatedByALaterReadOnTheSharedLoader(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        $loader = new InstructionFileLoader($this->dir);
+
+        self::assertStringContainsString('SUBDIR-RULE-ALPHA', $this->grep(new Grep($this->dir, instructionLoader: $loader)));
+
+        $read = (new Read($this->dir, instructionLoader: $loader))
+            ->execute(['id' => 'r', 'file_path' => $this->dir . '/sub/a.php'])
+            ->content();
+
+        self::assertStringNotContainsString('SUBDIR-RULE-ALPHA', $read);
+    }
+
+    // =========================================================================
+    // Placement relative to the byte cap
+    // =========================================================================
+
+    /**
+     * THE DOCBLOCK THIS REPLACES WAS TRUE WHEN WRITTEN AND IS NOT NOW. It said
+     * Grep "appends after the clip instead", contrasted with a `Glob` that
+     * "prepends instruction bodies BEFORE its clip", and cited a 200-byte cap
+     * over a 500-line `sub/CLAUDE.md`. Both tools have since been given a
+     * split budget — the instruction section takes at most a quarter, the
+     * answer keeps the rest — so neither the contrast nor the mechanism it
+     * named survives, even though this test's assertions are unchanged and
+     * still pass.
+     *
+     * What it pins now is the outcome rather than the mechanism: an
+     * instruction file an order of magnitude larger than the cap does not cost
+     * the hit list its answer. `ToolOutputBudgetTest` measures the budget
+     * itself, in both tools, at several caps.
+     */
+    public function testAnOversizeInstructionFileDoesNotDisplaceTheHits(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "BIG-RULE\n" . str_repeat("padding line\n", 500));
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        $content = $this->grep(new Grep($this->dir, 400, new InstructionFileLoader($this->dir)));
+
+        self::assertStringContainsString('/sub/a.php:1:', $content, 'the hit must survive an oversize CLAUDE.md');
+        self::assertStringContainsString('BIG-RULE', $content);
+    }
+
+    /**
+     * The other half of the same choice, and the one that needed a real
+     * measurement rather than a plausible fixture.
+     *
+     * The announce-once mark is spent against the CLIPPED hit list, not
+     * against grep's raw stdout. Reading the raw list instead looks harmless —
+     * the capture is bounded by the same `maxOutputBytes` — but the two bounds
+     * are NOT the same point: the capture stops at exactly the cap, while
+     * {@see \SugarCraft\Code\Tools\Concerns\TruncatesOutput} additionally
+     * reserves room for the truncation marker, reserves a quarter of the cap
+     * for the rules, and drops the partial line the cut landed in. Whole hits
+     * live in that gap, and their rules would be retired for the session
+     * without ever being shown to anyone.
+     *
+     * THE FIXTURE IS SIXTY DIRECTORIES BECAUSE SIX MADE THIS TEST PASS UNDER
+     * ITS OWN REGRESSION.
+     *
+     * At six directories and the cap this test used to ship with, the
+     * raw-stdout variant is BYTE-IDENTICAL to the correct one, and the reason
+     * is structural rather than a near miss. The reserve at that cap holds
+     * exactly ONE entry; the first hit is the same line in the probe and in
+     * the raw capture; so a variant that reads a strictly LARGER set still
+     * announces the identical rule. MEASURED on the six-directory fixture this
+     * replaces, at this file's own 35-byte temp root, sweeping the cap one
+     * byte at a time: the two are BYTE-IDENTICAL from 900 to 1,375, and at the
+     * shipped 1,024 both return 898 bytes with `visible=[aaa,bbb,fff]
+     * announced=[bbb]`. The window where the containment assertion below fails
+     * at all is caps 1,416 to 1,462 — FORTY-SEVEN caps, and the test shipped
+     * pointed 392 below the bottom of it. A guard whose sensitivity depends on
+     * a 2% band of one parameter is the defect it exists to catch, in a new
+     * place.
+     *
+     * A difference is observable only where the reserve holds MORE entries
+     * than the probe holds hits, and that regime is bounded on both sides by
+     * the fixture: below it the reserve holds one entry, above it the probe
+     * holds every hit and there is no unseen path left to announce. Sixty
+     * directories moves the upper bound out by an order of magnitude, because
+     * it is `directories × line length ÷ ¾` and nothing else. RE-MEASURED on
+     * this fixture with the read point moved to `$filtered['run']['stdout']`,
+     * sweeping every cap from 1 to 19,218: the mutation is caught at 13,445 of
+     * them, including 12,859 CONSECUTIVE caps from 1,860 to 14,718. The
+     * correct code violates containment at none of the 19,218.
+     *
+     * The four caps below sit inside that band with at least 640 bytes of
+     * margin at the low end and 3,700 at the high end, so neither a shorter
+     * `sys_get_temp_dir()` (which shortens every hit line) nor readdir order
+     * can walk the fixture out of the window. At each of them the mutation
+     * announces between 4 and 16 directories the model cannot see.
+     *
+     * The names are illustrative and the assertions below do NOT depend on
+     * them: `grep -rn` walks in readdir order, and the numbers additionally
+     * move with the length of the temp root, since that prefix is repeated on
+     * every hit line.
+     *
+     * THIS ASSERTED SET EQUALITY AND NOW ASSERTS CONTAINMENT, WHICH IS A
+     * WEAKER RELATION AND THE ONLY ONE THAT WAS EVER A LAW. Equality held
+     * because the section happened to be large enough to pull the final clip
+     * down onto the probe; it was an artifact of one fixture's arithmetic, not
+     * a property of the code. The section is bounded in COUNT as well as in
+     * bytes, so a call can legitimately show more paths than it announces.
+     * What must never happen is the reverse, and that is what containment
+     * forbids. The two assertions after it close the gap equality used to
+     * cover — the shortfall is COUNTED in the result, and every unannounced
+     * rule is still unspent, which is the thing that actually matters about a
+     * file that was not shown.
+     *
+     * @dataProvider capsInsideTheDetectionWindow
+     */
+    public function testTheAnnouncedRulesAreExactlyTheOnesWhoseHitsSurvivedTheClip(int $cap): void
+    {
+        $dirs = [];
+        for ($i = 0; $i < 60; $i++) {
+            $dirs[] = sprintf('d%03d', $i);
+        }
+
+        foreach ($dirs as $d) {
+            mkdir($this->dir . '/' . $d, 0o777, true);
+            file_put_contents($this->dir . '/' . $d . '/CLAUDE.md', 'RULE-' . strtoupper($d) . "\n");
+            file_put_contents($this->dir . '/' . $d . '/' . self::hitFileName($d), "<?php // needle\n");
+        }
+
+        $loader = new InstructionFileLoader($this->dir);
+        $content = $this->grep(new Grep($this->dir, $cap, $loader));
+
+        $visible = [];
+        $announced = [];
+        foreach ($dirs as $d) {
+            if (str_contains($content, '/' . $d . '/' . self::hitFileName($d) . ':')) {
+                $visible[] = $d;
+            }
+            if (str_contains($content, 'RULE-' . strtoupper($d))) {
+                $announced[] = $d;
+            }
+        }
+
+        // `grep -rn` walks in readdir order, so WHICH directories survive the
+        // clip is not asserted — only that the clip bit and that something got
+        // through, which is what makes the containment below meaningful.
+        self::assertNotSame([], $visible, 'fixture must leave at least one hit visible');
+        self::assertNotSame($dirs, $visible, 'fixture must leave at least one hit clipped away');
+
+        self::assertNotSame([], $announced, 'the fixture must actually announce something');
+        self::assertSame(
+            [],
+            array_values(array_diff($announced, $visible)),
+            "cap $cap: a rule may be announced only for a file whose hits the model can actually see",
+        );
+
+        // The shortfall equality used to cover is not silent: what was not
+        // looked at is counted in the result the model reads.
+        if ($announced !== $visible) {
+            self::assertStringContainsString('further path(s) not examined', $content);
+        }
+
+        // And every rule not announced — whether its file was shown or not —
+        // is still unspent for whoever touches it next.
+        foreach (array_diff($dirs, $announced) as $d) {
+            $read = (new Read($this->dir, instructionLoader: $loader))
+                ->execute(['id' => 'r', 'file_path' => $this->dir . '/' . $d . '/' . self::hitFileName($d)])
+                ->content();
+
+            self::assertStringContainsString('RULE-' . strtoupper($d), $read, "{$d}'s rule was retired unseen");
+        }
+    }
+
+    /**
+     * Four caps spread across the 12,859-cap band in which the raw-stdout
+     * regression is observable at all — see the test's own docblock for how
+     * that band was measured and why it has the width it has.
+     *
+     * @return array<string, array{int}>
+     */
+    public static function capsInsideTheDetectionWindow(): array
+    {
+        return [
+            'cap 2500' => [2500],
+            'cap 5000' => [5000],
+            'cap 8000' => [8000],
+            'cap 11000' => [11000],
+        ];
+    }
+
+    /**
+     * A 120-byte name, so one hit line is long enough that a cap in the
+     * thousands still clips the list — the fixture's whole job.
+     */
+    private static function hitFileName(string $dir): string
+    {
+        return str_repeat(substr($dir, 1), 40) . '.php';
+    }
+
+    // =========================================================================
+    // The skill nudge
+    // =========================================================================
+
+    /**
+     * THE NUDGE IS SCOPED TO EVERY HIT, NOT TO THE HITS THAT SURVIVED THE
+     * CLIP — the same rule {@see \SugarCraft\Code\Tools\BuiltIn\Glob} follows
+     * for `$files` versus `$shown`, and the two tools must not disagree about
+     * it.
+     *
+     * {@see SkillPathNudge::forPaths()} answers "does a skill claim this area
+     * of the tree", which a byte cap does not change the truth of, and the
+     * line it emits names the SKILL rather than the path. So a nudge earned by
+     * a path the cap dropped is still true and still actionable, where an
+     * instruction BODY shown for an unseen path is neither — which is why the
+     * two are read off different text.
+     *
+     * Scoping it to the probe instead broke the containment in the direction
+     * that costs the model something. The probe is the three-quarter floor;
+     * the result is the FULL cap whenever no rule was surfaced, which under
+     * announce-once is almost every call. A hit landing between the two cuts
+     * was therefore VISIBLE while its skill went unannounced.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY: "and announce-once means unannounced
+     * for the rest of the session".
+     * WHAT IS TRUE NOW: that half was wrong and E70 caught it.
+     * {@see SkillPathNudge::forPaths()} marks ONLY the entries it actually
+     * emits, so a nudge that is never built spends nothing. DRIVEN at
+     * ae30fee5 over the one-hit fixture: two Grep calls at cap 1,000 both came
+     * back silent with `announced() === []`, and a third at cap 4,000
+     * announced. Unannounced is DEFERRED, not retired.
+     * WHY THIS STILL EARNS ITS PLACE: deferral is cheap but not free — the
+     * model is looking at a hit whose skill it has not been told about, and
+     * whether it is ever told depends on a later call arriving with more room.
+     * Building the nudge off the full stdout rather than off the probe is what
+     * removes that dependence, and it is still the right call.
+     *
+     * MEASURED with the 201-hit fixture, one cap at a time from 200 to 12,000,
+     * counting the caps where `target.zzz.php` is in the result and
+     * `zzz-audit` is not: 0 at d7919902, 1,745 at 6569891f (caps 5,233 to
+     * 6,977), 0 now. The band moves with the length of `sys_get_temp_dir()`,
+     * since that prefix is repeated on every hit line, so the sweep below
+     * steps in 250s across a range an order of magnitude wider than the band
+     * rather than naming caps inside it.
+     *
+     * A COARSE STEP IS THE RIGHT TOOL FOR THAT BAND AND THE WRONG ONE FOR THE
+     * DIVISOR, and the bracket at the foot of this test exists because the two
+     * were confused. The caps at which "an eighth affords the entry" and "a
+     * ninth does not" disagree are 8*$floor .. 9*$floor - 1 — 1,328 to 1,493
+     * with the 166-byte $floor MEASURED at f8272f8f on PHP 8.3.6 — and a
+     * 250-byte step lands on 1,250 and then 1,500, stepping clean over the
+     * whole window. MEASURED at f8272f8f: changing Grep's
+     * `intdiv($this->maxOutputBytes, 8)` to `9` left this entire file green.
+     * So the boundary is bracketed at plus and minus one byte AFTER the sweep,
+     * the way {@see SkillPathScopingTest::testReadSpendsExactlyAnEighthOfMaxBytesOnTheSkillNudge()}
+     * already does for Read.
+     *
+     * WHAT THIS TEST ASSERTED: `!$visible || $announced` at every cap — "a
+     * skill is announced for every hit the model can see" — with the failure
+     * message "announce-once means it will not be announced again this
+     * session".
+     *
+     * WHAT IS TRUE NOW: the law is VIOLABLE and the message was wrong, both
+     * MEASURED at ae30fee5 (E70). The nudge is given an eighth of the cap, and
+     * an eighth of a small cap cannot hold even the header, footer and one
+     * entry. Over a fixture of ONE hit — `sub/target.zzz.php`, whose result is
+     * a single hit line and so moves with the root's length: 75 bytes MEASURED
+     * at f8272f8f under the 38-byte root this fixture builds on this box
+     * (`sys_get_temp_dir()` + `/crush-grep-wiring-` + 12 hex digits + `/r0`).
+     * With the shipped 19-byte description the hit is in the result
+     * and `zzz-audit` is silent at caps 1,000 and 1,250, flipping at 1,500;
+     * with a 400-byte description the dead band runs 1,000 to 3,250 and flips
+     * at 3,500.
+     *
+     * The old fixture never reached that band. Its 200 competing hits kept
+     * `target.zzz.php` out of the capture and out of the result until roughly
+     * cap 5,000, by which point the entry had been affordable for thousands of
+     * bytes — so the two regimes it swept, "hit visible" and "entry
+     * affordable", did not overlap and the law was never evaluated at its own
+     * boundary. Passing on a fixture that cannot reach the boundary is not
+     * evidence.
+     *
+     * WHY A LAW STILL EARNS ITS PLACE HERE: two of them do, and neither is
+     * fixture luck.
+     *
+     * 1. The mark is spent EXACTLY when an entry is emitted — never on a call
+     *    that says nothing. That is what makes silence recoverable, and it is
+     *    the claim the old failure message denied.
+     * 2. Whenever the eighth CAN afford the entry, a visible hit is announced.
+     *    The threshold is derived from the tracker rather than named, so this
+     *    is the qualified form of the old law: true where it is true, and
+     *    asserted from BOTH sides AT the boundary — the two caps one byte
+     *    apart that straddle it — rather than only at whichever caps the
+     *    sweep's step happens to land on.
+     *
+     * Both are swept over two fixtures, because no single one produces all
+     * three regimes: without competing hits the target is visible at every cap
+     * and the dead band is reachable; with 200 of them the clip drops it and
+     * the clipped-but-announced regime is reachable.
+     *
+     * WHAT THIS SWEEP ASSUMED, AND WHERE IT WAS FALSE: the clipped-but-
+     * announced leg used to be accumulated from the sweep on the belief that
+     * the target "sorts last among the hits". GNU grep -r walks its directory
+     * in readdir order, and ext4's dir_index hashes the name — measured
+     * 2026-10-01, a fresh 201-file tree on this box's ext4 placed
+     * target.zzz.php at position 25/201, and the hash seed varies per
+     * filesystem, so a runner that hashes it near the front puts the target's
+     * bytes under any cap the affordability floor still allows, and the sweep
+     * never sees that regime there. That is the intermittent :468 red. The
+     * sweep keeps its two laws for EVERY position; the regime it could not
+     * guarantee is now PROBED once at a cap derived from where the walk
+     * actually put the target, for any position it lands in.
+     */
+    public function testTheAnnounceOnceMarkIsSpentOnlyOnAHitTheModelWasToldAbout(): void
+    {
+        $floor = $this->smallestNudgeBudget();
+
+        $seenVisibleAnnounced = false;
+        $seenVisibleDeferred = false;
+
+        foreach ([0, 200] as $competing) {
+            $root = $this->fixture($competing);
+
+            for ($cap = 1000; $cap <= 12000; $cap += 250) {
+                $nudge = $this->zzzNudge();
+                $content = $this->grepIn($root, new Grep($root, $cap, skillNudge: $nudge));
+
+                $visible = str_contains($content, '/sub/target.zzz.php:');
+                $announced = str_contains($content, 'zzz-audit');
+                $affordable = intdiv($cap, 8) >= $floor;
+
+                // Law 1. Nothing may be retired that the model was not shown,
+                // and nothing shown may be left unmarked (it would re-announce
+                // on every later call and burn context saying the same thing).
+                self::assertSame(
+                    $announced ? ['zzz-audit'] : [],
+                    $nudge->announced(),
+                    "$competing competing hits, cap $cap: the announce-once mark and the emitted entry disagree",
+                );
+
+                // Law 2, and its complement one step down. $floor is the
+                // tracker's own price for one entry, so this brackets the
+                // boundary instead of sitting safely to one side of it.
+                if ($affordable && $visible) {
+                    self::assertTrue(
+                        $announced,
+                        "$competing competing hits, cap $cap: an eighth ("
+                        . intdiv($cap, 8) . ") covers the {$floor}-byte entry and the hit is in the "
+                        . 'result, so the skill must be announced',
+                    );
+                }
+                if (!$affordable) {
+                    self::assertFalse(
+                        $announced,
+                        "$competing competing hits, cap $cap: an eighth ("
+                        . intdiv($cap, 8) . ") is under the {$floor}-byte floor, so nothing may be emitted",
+                    );
+                }
+
+                $seenVisibleAnnounced = $seenVisibleAnnounced || ($visible && $announced);
+                $seenVisibleDeferred = $seenVisibleDeferred || ($visible && !$announced);
+            }
+        }
+
+        // The sweep has to REACH the two regimes the laws speak about, or the
+        // laws above are being asserted over a fixture that cannot test them
+        // — which is exactly the defect this test was rewritten for. (The
+        // third regime, clipped-but-announced, is probed deterministically
+        // below rather than swept — see the doc-block.)
+        self::assertTrue($seenVisibleAnnounced, 'the sweep must include caps where the hit survives and is announced');
+        self::assertTrue($seenVisibleDeferred, 'the sweep must include the dead band: the hit is visible and the entry does not fit');
+
+        // THE DIVISOR ITSELF, bracketed at the byte. The sweep above steps in
+        // 250s while the window where an eighth and a ninth disagree is
+        // 8*$floor .. 9*$floor - 1, so the sweep alone can never see the
+        // divisor change — see this method's doc-block for that measurement.
+        // $floor is the tracker's own price for one entry, so these two probes
+        // move with SkillPathNudge's pricing and pin only Grep's share.
+        $oneHit = $this->fixture(0);
+        $threshold = 8 * $floor;
+
+        self::assertStringContainsString(
+            'zzz-audit',
+            $this->grepIn($oneHit, new Grep($oneHit, $threshold, skillNudge: $this->zzzNudge())),
+            "cap {$threshold}: an eighth is exactly the {$floor}-byte floor, so the entry fits and must be announced",
+        );
+        self::assertStringNotContainsString(
+            'zzz-audit',
+            $this->grepIn($oneHit, new Grep($oneHit, $threshold - 1, skillNudge: $this->zzzNudge())),
+            'one byte lower an eighth is one byte short of the floor, so nothing may be emitted — without this '
+            . 'half of the bracket every divisor larger than 8 passes too',
+        );
+
+        // THE CLIPPED-BUT-ANNOUNCED REGIME, order-independently. The padded
+        // fixture makes the target's own line long enough to park the cut
+        // inside it, so the cap that drops the target is derived from where
+        // the walk actually placed the target instead of hoping readdir
+        // hashes it last. Body cap = cap - floor - 1 (the nudge's emitted
+        // bytes plus the reserved separator); at + floor + 1 + pad/2 puts
+        // that cut pad/2 bytes into the padding for ANY position `at`, and
+        // the max() keeps the eighth affordable so the announce side of the
+        // regime is demanded, not excused. Visibility is read as ":2:" —
+        // the short second hit line — because a clip whose window holds no
+        // newline legitimately keeps a partial ":1:" (clipToLine), while
+        // ":2:" can only survive if the whole padded line did.
+        //
+        // The probe pins the PLAIN line clip, so the spill store is refused
+        // for it. Over a spill-sized cap (>= ToolOutputSpill::minCapBytes())
+        // the clip keeps a head AND a tail window and saves the rest (roadmap
+        // 2.8), and whether the target lands in that tail is readdir order
+        // again: green on one filesystem, red on CI's, in the very file that
+        // set out to be order-independent.
+        $padRoot = $this->fixture(200, self::CLIP_PROBE_PAD);
+        $refusedStore = $this->dir . '/spill-store-is-a-file';
+        file_put_contents($refusedStore, '');
+        ToolOutputSpill::useDirectoryForTesting($refusedStore);
+        try {
+            $stream = $this->grepIn($padRoot, new Grep($padRoot, 0)); // uncapped: raw hit list, offsets align with the clipped body
+            $at = strpos($stream, $padRoot . '/sub/target.zzz.php:1:');
+            self::assertNotFalse($at, 'the padded fixture must produce a target hit line');
+
+            $cap = max(8 * $floor, $at + $floor + 1 + intdiv(self::CLIP_PROBE_PAD, 2));
+            $probeNudge = $this->zzzNudge();
+            $clipped = $this->grepIn($padRoot, new Grep($padRoot, $cap, skillNudge: $probeNudge));
+        } finally {
+            ToolOutputSpill::useDirectoryForTesting(null);
+        }
+        self::assertStringNotContainsString('[saved:', $clipped, 'the probe must clip without spilling');
+
+        self::assertStringNotContainsString(
+            '/sub/target.zzz.php:2:',
+            $clipped,
+            "cap $cap with the target at byte $at: the body cut falls inside the padded line, so the target's "
+            . 'second hit line must not survive — this is the regime the sweep could not guarantee on every readdir hash',
+        );
+        self::assertStringContainsString(
+            'zzz-audit',
+            $clipped,
+            "cap $cap with the target at byte $at: the hit line-start is inside the captured output and an eighth "
+            . 'covers the entry, so the skill is announced even though the clip dropped the hit',
+        );
+        self::assertSame(
+            ['zzz-audit'],
+            $probeNudge->announced(),
+            'the clipped-but-announced probe spent its mark on a hit it told about — Law 1 at the regime the sweep no longer covers',
+        );
+    }
+
+    /**
+     * A cap too tight for the nudge DEFERS the skill; it does not retire it.
+     * This is the claim the rewritten test's old failure message got backwards,
+     * pinned on its own so a regression in {@see SkillPathNudge::forPaths()}'s
+     * mark-after-emit ordering fails something that names it.
+     */
+    public function testACapTooTightForTheNudgeDefersTheSkillRatherThanRetiringIt(): void
+    {
+        $root = $this->fixture(0);
+        $nudge = $this->zzzNudge();
+        $tight = 8 * $this->smallestNudgeBudget() - 1;
+
+        $first = $this->grepIn($root, new Grep($root, $tight, skillNudge: $nudge));
+        self::assertStringContainsString('/sub/target.zzz.php:', $first, 'the hit itself is well inside the cap');
+        self::assertStringNotContainsString('zzz-audit', $first);
+        self::assertSame([], $nudge->announced(), 'a nudge that was never emitted must spend no mark');
+
+        self::assertStringNotContainsString('zzz-audit', $this->grepIn($root, new Grep($root, $tight, skillNudge: $nudge)));
+        self::assertSame([], $nudge->announced());
+
+        $roomy = $this->grepIn($root, new Grep($root, 12000, skillNudge: $nudge));
+        self::assertStringContainsString('zzz-audit', $roomy, 'the deferred skill announces on the next call with room');
+        self::assertSame(['zzz-audit'], $nudge->announced());
+    }
+
+    /**
+     * The `+ 1` in {@see Grep::execute()}'s
+     * `$nudgeCost = $nudge === null ? 0 : strlen($nudge) + 1;` reserves the
+     * newline `separated()` puts between the hit list and the nudge, and it is
+     * LOAD-BEARING rather than the spare byte it was described as one file
+     * over.
+     *
+     * `separated()` emits nothing when the content already ends on a newline,
+     * so the reservation is EXACT wherever the cap's cut lands mid-line and
+     * spare only where it lands on one — and a hit list cut by a byte cap
+     * lands mid-line at most caps. That is why {@see
+     * \SugarCraft\Code\Tools\BuiltIn\Glob}'s comment on its own
+     * identically-shaped reservation had to stop calling this one "an
+     * over-reservation by a byte". MEASURED at f8272f8f on PHP 8.3.6 over a
+     * 41-hit `*.zzz.php` fixture, caps 200 to 6,000 one at a time: Grep as
+     * shipped over-ran no cap; with the `+ 1` dropped, cap 3,037 returned
+     * 3,038 bytes.
+     *
+     * One over-running cap out of the 5,801 swept, so the cap is DERIVED here
+     * and not sampled. It is one byte under the length of the UNCAPPED result:
+     * at that cap $bodyCap is exactly the whole hit list, and the separator is
+     * then the only byte nothing has paid for. Both sides are swept because
+     * the unmutated saturation and the mutated over-run are one byte apart and
+     * a probe at either one misses the other. The figure moves with
+     * `sys_get_temp_dir()`, which is why it is measured rather than written
+     * down.
+     */
+    public function testGrepsNudgeReservationHoldsTheResultInsideTheCapAtSaturation(): void
+    {
+        $root = $this->fixture(200);
+
+        $uncapped = $this->grepIn($root, new Grep($root, 0, skillNudge: $this->zzzNudge()));
+        self::assertStringContainsString(
+            '<system-reminder>',
+            $uncapped,
+            'the fixture must produce a nudge, or there is no reservation under test',
+        );
+        $exact = strlen($uncapped);
+
+        $sawSaturation = false;
+        for ($cap = $exact - 8; $cap <= $exact + 8; $cap++) {
+            $length = strlen($this->grepIn($root, new Grep($root, $cap, skillNudge: $this->zzzNudge())));
+            self::assertLessThanOrEqual(
+                $cap,
+                $length,
+                "cap {$cap}: the result overran its own cap by " . ($length - $cap) . ' byte(s)',
+            );
+            $sawSaturation = $sawSaturation || $length === $cap;
+        }
+
+        self::assertTrue(
+            $sawSaturation,
+            'the window must contain the cap the hit list saturates exactly, or the sweep never reached the '
+            . 'boundary the reserved byte exists for',
+        );
+    }
+
+    /**
+     * A fresh root holding one `target.zzz.php` hit plus $competing others.
+     *
+     * Separate roots per regime, and not one shared tree, because the number
+     * of competing hits is what decides which regime a cap lands in.
+     *
+     * With $pad the target's hit line carries that many filler bytes after
+     * `needle-`, so the clip cut can be parked INSIDE the target's own line
+     * at a distance the caller controls — the walk still lands the target
+     * wherever readdir hashes it, and the pad makes "where the bytes run out"
+     * a function of the cap rather than of the hash.
+     */
+    private function fixture(int $competing, int $pad = 0): string
+    {
+        $root = $this->dir . '/r' . $competing . ($pad > 0 ? '-pad' . $pad : '');
+        if (is_dir($root)) {
+            return $root;
+        }
+
+        mkdir($root . '/sub', 0o777, true);
+        for ($i = 0; $i < $competing; $i++) {
+            file_put_contents(sprintf('%s/sub/f%03d.php', $root, $i), "<?php // needle\n");
+        }
+        if ($pad > 0) {
+            // Line 1 matches and is padded; line 2 matches short. Dropping
+            // ":2:" from the result is then unambiguous proof the cut fell
+            // inside line 1 — a partial ":1:" can legally survive a clip
+            // whose window holds no newline (TruncatesOutput::clipToLine).
+            file_put_contents(
+                $root . '/sub/target.zzz.php',
+                "<?php // needle-" . str_repeat('p', $pad) . "\n// needle-second-line\n",
+            );
+
+            return $root;
+        }
+        // Where the walk places this file among the hits is readdir's hash,
+        // not its name (see the clipped-but-announced probe for why the
+        // ordering claim that used to live here was false).
+        file_put_contents($root . '/sub/target.zzz.php', "<?php // needle\n");
+
+        return $root;
+    }
+
+    /**
+     * The smallest budget {@see SkillPathNudge::forPaths()} will spend on the
+     * `zzz-audit` entry, asked of the tracker rather than recomputed here — a
+     * recomputation is a second copy of its pricing that agrees with it only
+     * until one of them changes.
+     */
+    private function smallestNudgeBudget(): int
+    {
+        for ($budget = 1; $budget <= SkillPathNudge::maxBytes(); $budget++) {
+            if ($this->zzzNudge()->forPath('/anything/target.zzz.php', $budget) !== null) {
+                return $budget;
+            }
+        }
+
+        self::fail('no budget up to the class ceiling produced a nudge');
+    }
+
+    private function grepIn(string $root, Grep $tool): string
+    {
+        return $tool->execute([
+            'id' => 'c1',
+            'pattern' => 'needle',
+            'path' => $root,
+            'description' => 'find the needle',
+        ])->content();
+    }
+
+    /** A skill scoped to a suffix only ONE fixture file carries. */
+    private function zzzNudge(): SkillPathNudge
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            'zzz-audit' => Skill::parse(
+                <<<SKILL
+                ---
+                description: Audit for zzz files
+                paths:
+                  - "*.zzz.php"
+                ---
+                body
+                SKILL,
+                'zzz-audit'
+            ),
+        ]);
+
+        return SkillPathNudge::new($registry);
+    }
+
+    public function testAHitAnnouncesAPathScopedSkillOnce(): void
+    {
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+        $tool = new Grep($this->dir, skillNudge: $this->nudge());
+
+        $first = $this->grep($tool);
+        self::assertSame(1, substr_count($first, '<system-reminder>'));
+        self::assertStringContainsString('php-audit', $first);
+
+        self::assertStringNotContainsString('<system-reminder>', $this->grep($tool));
+    }
+
+    public function testASharedTrackerAnnouncesASkillOnlyOnceAcrossReadAndGrep(): void
+    {
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+        $nudge = $this->nudge();
+
+        $read = (new Read($this->dir, skillNudge: $nudge))
+            ->execute(['id' => 'r', 'file_path' => $this->dir . '/sub/a.php'])
+            ->content();
+
+        self::assertStringContainsString('<system-reminder>', $read);
+        self::assertStringNotContainsString('<system-reminder>', $this->grep(new Grep($this->dir, skillNudge: $nudge)));
+        self::assertSame(['php-audit'], $nudge->announced());
+    }
+
+    public function testASearchThatMatchesNothingAnnouncesNothing(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php\n");
+
+        $loader = new InstructionFileLoader($this->dir);
+        $content = $this->grep(new Grep($this->dir, instructionLoader: $loader, skillNudge: $this->nudge()));
+
+        self::assertStringNotContainsString('SUBDIR-RULE-ALPHA', $content);
+        self::assertStringNotContainsString('<system-reminder>', $content);
+        self::assertSame([], $loader->emittedPaths(), 'nothing was touched, so nothing may be marked emitted');
+    }
+
+    // =========================================================================
+    // What the concurrency verdict now rests on
+    // =========================================================================
+
+    /**
+     * `isParallelSafe()` used to be justified by "this tool holds no
+     * session-scoped state for a fork to strand". It now holds exactly that
+     * state, and {@see ParallelSafe} point 2 permits it ONLY because the state
+     * crosses the fork via {@see CarriesSessionState}. The verdict and the seam
+     * are therefore pinned TOGETHER: `true` on its own is not the claim.
+     */
+    public function testTheParallelSafeVerdictIsPairedWithTheSessionStateSeam(): void
+    {
+        $tool = new Grep($this->dir);
+
+        self::assertInstanceOf(ParallelSafe::class, $tool);
+        self::assertTrue($tool->isParallelSafe());
+        self::assertInstanceOf(
+            CarriesSessionState::class,
+            $tool,
+            'a parallel-safe Grep that carries the announce-once collaborators MUST export them',
+        );
+    }
+
+    /**
+     * What a forked child hands back. Without the merge, a `CLAUDE.md` a forked
+     * Grep surfaced re-surfaces on the next call for the rest of the session —
+     * the exact failure {@see CarriesSessionState} exists to prevent, and one
+     * that is invisible to a same-process test.
+     */
+    public function testTheExportedMarksMergeBackAcrossAForkBoundary(): void
+    {
+        file_put_contents($this->dir . '/sub/CLAUDE.md', "SUBDIR-RULE-ALPHA\n");
+        file_put_contents($this->dir . '/sub/a.php', "<?php // needle\n");
+
+        // The child's copy-on-write collaborators, as a fork would leave them.
+        $childLoader = new InstructionFileLoader($this->dir);
+        $childNudge = $this->nudge();
+        self::assertStringContainsString(
+            'SUBDIR-RULE-ALPHA',
+            $this->grep(new Grep($this->dir, instructionLoader: $childLoader, skillNudge: $childNudge)),
+        );
+
+        $exported = (new Grep($this->dir, instructionLoader: $childLoader, skillNudge: $childNudge))
+            ->exportSessionState();
+
+        self::assertNotSame([], $exported['emittedInstructionPaths']);
+        self::assertSame(['php-audit'], $exported['announcedSkills']);
+
+        // The parent, which never ran the search itself.
+        $parentLoader = new InstructionFileLoader($this->dir);
+        $parentNudge = $this->nudge();
+        $parent = new Grep($this->dir, instructionLoader: $parentLoader, skillNudge: $parentNudge);
+
+        // Serialised exactly as Runtime carries it: scalars only, no objects.
+        $parent->mergeSessionState(unserialize(serialize($exported), ['allowed_classes' => false]));
+
+        $after = $this->grep($parent);
+        self::assertStringNotContainsString('SUBDIR-RULE-ALPHA', $after, 'the emitted mark must have crossed the fork');
+        self::assertStringNotContainsString('<system-reminder>', $after, 'the announced mark must have crossed too');
+    }
+
+    public function testMergingIsAUnionAndAnUnknownKeyIsIgnored(): void
+    {
+        $loader = new InstructionFileLoader($this->dir);
+        $tool = new Grep($this->dir, instructionLoader: $loader, skillNudge: $this->nudge());
+
+        $tool->mergeSessionState(['emittedInstructionPaths' => ['/a'], 'somethingFromAnOlderBuild' => 1]);
+        $tool->mergeSessionState(['emittedInstructionPaths' => ['/b'], 'announcedSkills' => 'not-an-array']);
+        $tool->mergeSessionState(['emittedInstructionPaths' => ['/a']]);
+
+        self::assertSame(['/a', '/b'], $loader->emittedPaths());
+    }
+
+    // =========================================================================
+
+    private function grep(Grep $tool): string
+    {
+        return $tool->execute([
+            'id' => 'c1',
+            'pattern' => 'needle',
+            'path' => $this->dir,
+            'description' => 'find the needle',
+        ])->content();
+    }
+
+    private function nudge(): SkillPathNudge
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            'php-audit' => Skill::parse(
+                <<<SKILL
+                ---
+                description: Security audit for PHP code
+                paths:
+                  - "*.php"
+                ---
+                body
+                SKILL,
+                'php-audit'
+            ),
+        ]);
+
+        return SkillPathNudge::new($registry);
+    }
+}

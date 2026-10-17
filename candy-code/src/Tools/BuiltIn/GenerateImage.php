@@ -1,0 +1,728 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tools\BuiltIn;
+
+use SugarCraft\Code\Providers\ProviderFactory;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Media\BatchResults;
+use SugarCraft\Code\Media\Capability\EndpointFamily;
+use SugarCraft\Code\Events\MediaProgress;
+use SugarCraft\Code\Media\Infotext;
+use SugarCraft\Code\Media\MediaArtifact;
+use SugarCraft\Code\Media\MediaRequest;
+use SugarCraft\Code\Media\Png;
+use SugarCraft\Code\Media\Sd\Client;
+use SugarCraft\Code\Media\Sd\ProgressLoop;
+use SugarCraft\Code\Media\Sd\ProgressState;
+use SugarCraft\Code\Media\Sd\Response;
+use SugarCraft\Code\Media\Sd\SdException;
+use SugarCraft\Code\Media\Sd\SdTransport;
+use SugarCraft\Code\Media\Sd\SdTransportResult;
+use SugarCraft\Code\Protocol\Schema\Schema;
+use SugarCraft\Code\Support\MediaStore;
+use SugarCraft\Code\Support\ToolCancelRequests;
+use SugarCraft\Code\ToolResult as BootProbe;
+use SugarCraft\Code\Tools\AcceptsHeartbeat;
+use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
+use SugarCraft\Code\Tools\Catalog\BuiltInTool;
+use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
+use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
+use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Code\Tools\DelegatesToEngine;
+use SugarCraft\Code\Tools\TakesToolCallId;
+use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolResult;
+
+/**
+ * Render a still image from a text prompt against a configured Stable
+ * Diffusion (A1111 sdapi) server — the first production consumer of the
+ * Wave-1 media core (plan W2.1).
+ *
+ * SHAPE. The prompt and the A1111 knob subset arrive as tool args, flow
+ * through {@see MediaRequest} (unknown knobs ride `withUnknown` so
+ * forward-compatible extras survive), go out as one `POST /sdapi/v1/txt2img`
+ * — or, when the request carries `init_images` from an attached source
+ * (plan W4.1), `POST /sdapi/v1/img2img` — on the {@see Client}, come back
+ * through the {@see Response} decoder (which
+ * applies the grid-prepend and infotext-shift laws), and fan out through
+ * {@see BatchResults} — the sole consumer-side pairing of each `n_iter ×
+ * batch_size` sample with its own raw infotext row and save-name tokens
+ * (plan W4.5). EVERY artifact — samples and any batch grid — is saved through
+ * {@see MediaStore} under the session's media directory with the save-name
+ * pattern from `sd.savePattern`, the grid taking the same pattern plus its
+ * `-grid` marker. Each PNG carries its infotext re-embedded verbatim when the
+ * server sent one (the replay loop the A1111 UI itself uses), else the
+ * canonical {@see Infotext::emit()} rendering of what we actually asked for.
+ * When `save_to_disk` set, the server kept its own outdir copy too — the
+ * result says so, honestly, because the wire enumerates nothing back (§4.2).
+ *
+ * CAPABILITY GATE FIRST (binding ruling C-1, sdapi-implemented-first, W7
+ * widened). Before any dial: a configured `mediaFamily` outside the
+ * implemented set (e.g. `comfyui`, which discovery can detect but generation
+ * does not yet speak) is refused by name, a `mediaKinds` roster that names
+ * kinds but omits `image` is refused, and an unresolvable base URL (no
+ * `sd.baseUrl`, no env override, no `mediaBaseUrl`) is refused by
+ * {@see Client::configured()}'s protocol error — all three produce a plain
+ * error result and ZERO requests.
+ *
+ * SGLANG DIALECT (W7, the C-1 flip). With `mediaFamily=sglang-diffusion` the
+ * draft travels the OpenAI-style `/v1/images` wire instead: sdapi-only knobs
+ * are refused pre-dial by name ({@see Client::sglangImageRefusals}), cfg_scale
+ * rides `guidance_scale`, steps ride `num_inference_steps`, and a draft with
+ * init_images takes the multipart edits route. This dialect exposes no
+ * progress route, so NO ProgressLoop poll runs here — a first-poll 404 on
+ * /sdapi/v1/progress would kill the render before its POST lands — beats fire
+ * around the single blocking POST and mid-render previews are honestly absent.
+ *
+ * HEARTBEAT TOPOLOGY. The A1111 generation wire is synchronous: the POST
+ * returns only when the batch is done, and a built-in tool may not fork (the
+ * repo-wide child-lifetime census owns every spawn site). So this tool beats
+ * EngineBackend's idle ceiling through {@see ProgressLoop} — the W1.5 shape
+ * its own docblock names — with the single blocking POST issued from the
+ * done-sentinel's first pass: one poll beats, the render, one poll beats,
+ * done. Honest residual: a render LONGER than the idle ceiling still starves
+ * between the pre-render and post-render beats; `n_iter`/`batch_size` narrow
+ * the window per iteration. W2.4 landed the preview/beat PIPELINE (the loop's
+ * `$onPreviewFrame` now emits MediaProgress frames to the turn's event
+ * channel), but on THIS synchronous wire no poll can run while the single
+ * POST blocks — mid-render beats and frames need the async/queue transport
+ * mode, which is W5 surface.
+ *
+ * CANCELLATION. The done-sentinel checks {@see ToolCancelRequests} (the turn
+ * child's latched view of the user's Esc) BEFORE issuing the POST, so a call
+ * cancelled while queued never dials. Once the render itself is in flight the
+ * synchronous wire cannot be interrupted from this process; the server-side
+ * `POST /sdapi/v1/interrupt` passthrough is W5 surface.
+ *
+ * PERMISSION CLASS: ask. This renders pixels on a machine the model does not
+ * own, costs real GPU time, and dials an external host — the user approves
+ * each launch of it.
+ */
+#[BuiltInTool(name: 'GenerateImage', permission: ToolPermissionClass::Ask, position: 33, gloss: 'render a still image from a text prompt on the configured Stable Diffusion server (sdapi or sglang-diffusion)')]
+final readonly class GenerateImage implements Tool, BuildsFromCatalog, DelegatesToEngine, AcceptsHeartbeat, TakesToolCallId
+{
+    use TruncatesOutput;
+
+    public const NAME = 'GenerateImage';
+
+    /** Tool arg -> sdapi wire key, when the two spellings differ. */
+    private const ARG_WIRE_ALIASES = ['save_to_disk' => 'save_images'];
+
+    /** Session folder for MediaStore when the bound engine has no session id. */
+    private const FALLBACK_SESSION = 'main';
+
+    /**
+     * Every non-null field below is a test seam overriding live behaviour:
+     * `$transport`/`$baseUrl`/`$settings` replace the configured dial, the
+     * env/config base-URL resolution, and the `Bootstrap::readUserConfig()`
+     * read; `$mediaRoot` relocates the artifact tree; the pacing pair keeps
+     * the progress loop off real time. Production builds carry only nulls.
+     */
+    private function __construct(
+        private ?EngineBackend $engine = null,
+        private ?SdTransport $transport = null,
+        private ?string $baseUrl = null,
+        private ?array $settings = null,
+        private ?string $mediaRoot = null,
+        private ?float $pollIntervalSeconds = null,
+        private ?\Closure $pollSleeper = null,
+        // Production wiring, not a test seam: the turn's tool-event channel
+        // (withEngine's emitter), used to push live MediaProgress preview
+        // frames to the parent while the render is in flight (W2.4).
+        private ?\Closure $eventEmitter = null,
+        // Production wiring for callers without an engine to bind: the serve
+        // RPC's `generate.submit` runs this tool outside any turn, so the
+        // session whose media folder receives the artifacts arrives here
+        // instead of through `withEngine` (plan W6.2).
+        private ?string $storeSession = null,
+    ) {
+    }
+
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    public static function fromCatalog(ToolBuildContext $context): self
+    {
+        return new self();
+    }
+
+    public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null, ?\Closure $subAgentEmitter = null): self
+    {
+        return new self(
+            $engine,
+            $this->transport,
+            $this->baseUrl,
+            $this->settings,
+            $this->mediaRoot,
+            $this->pollIntervalSeconds,
+            $this->pollSleeper,
+            $subAgentEmitter,
+            $this->storeSession,
+        );
+    }
+
+    /** The same tool dialling through $transport at $base (a test seam). */
+    public function withFakeDial(SdTransport $transport, ?string $base = null, array $settings = []): self
+    {
+        return new self(
+            $this->engine,
+            $transport,
+            $base,
+            $settings,
+            $this->mediaRoot,
+            $this->pollIntervalSeconds,
+            $this->pollSleeper,
+            $this->eventEmitter,
+            $this->storeSession,
+        );
+    }
+
+    /** The same tool saving artifacts under $root instead of the home tree. */
+    public function withMediaRoot(?string $root): self
+    {
+        return new self(
+            $this->engine,
+            $this->transport,
+            $this->baseUrl,
+            $this->settings,
+            $root,
+            $this->pollIntervalSeconds,
+            $this->pollSleeper,
+            $this->eventEmitter,
+            $this->storeSession,
+        );
+    }
+
+    /** The same tool pacing its progress loop without real sleeps. */
+    public function withLoopPacing(?float $intervalSeconds, ?\Closure $sleeper): self
+    {
+        return new self(
+            $this->engine,
+            $this->transport,
+            $this->baseUrl,
+            $this->settings,
+            $this->mediaRoot,
+            $intervalSeconds,
+            $sleeper,
+            $this->eventEmitter,
+            $this->storeSession,
+        );
+    }
+
+    /**
+     * The same tool saving artifacts into $session's media folder with no
+     * engine bound — the serve RPC's `generate.submit` channel (plan W6.2),
+     * where the render answers an out-of-turn request, not a model turn.
+     */
+    public function withStoreSession(?string $session): self
+    {
+        return new self(
+            $this->engine,
+            $this->transport,
+            $this->baseUrl,
+            $this->settings,
+            $this->mediaRoot,
+            $this->pollIntervalSeconds,
+            $this->pollSleeper,
+            $this->eventEmitter,
+            $session,
+        );
+    }
+
+    public function name(): string
+    {
+        return self::NAME;
+    }
+
+    public function description(): string
+    {
+        return 'Render a still image from a text prompt using the Stable Diffusion server this launch is'
+            . ' configured for (the sdapi endpoint family, or sglang-diffusion when that family is'
+            . ' configured — see its `/v1/images` dialect, which refuses sdapi-only knobs by name).'
+            . ' `prompt` is required; the server knobs'
+            . ' `negative_prompt`, `width`, `height`, `steps`, `cfg_scale`, `seed` (pass -1 for a random'
+            . ' draw), `sampler_name`, `scheduler`, `batch_size` and `n_iter` are optional and forwarded'
+            . ' when set — any other knob you pass rides through to the server untouched. Every finished'
+            . ' image, and the batch grid when the server sends one, is saved to the session media folder'
+            . ' with its infotext embedded, and the paths come back in the result; `save_to_disk` also'
+            . ' asks the server to keep its own copy. Long renders beat the watchdog through the progress'
+            . ' route and stop early if the user cancels the call before the render starts.';
+    }
+
+    /**
+     * The model-facing view of the shared v1 submit vocabulary —
+     * {@see MediaRequest::paramSchema()} rendered, not a second hand-written
+     * copy (plan W6.2: one map, two doors, no drift). The serve RPC's
+     * `generate.submit` params embed the same map, so anything the model may
+     * ask for here is exactly what the RPC door accepts there.
+     *
+     * @return array<string, mixed>
+     */
+    public function inputSchema(): array
+    {
+        return Schema::object(MediaRequest::paramSchema(), ['prompt'])->toArray();
+    }
+
+    public function execute(array $args): ToolResult
+    {
+        return $this->run($args, null);
+    }
+
+    public function executeWithHeartbeat(array $args, \Closure $heartbeat): ToolResult
+    {
+        return $this->run($args, $heartbeat);
+    }
+
+    private function run(array $args, ?\Closure $heartbeat): ToolResult
+    {
+        $callId = (string) ($args['id'] ?? '');
+        try {
+            return $this->generate($args, $heartbeat, $callId);
+        } catch (\Throwable $e) {
+            return new ToolResult($callId, 'image generation failed: ' . $e->getMessage(), true);
+        }
+    }
+
+    private function generate(array $args, ?\Closure $heartbeat, string $callId): ToolResult
+    {
+        $settings = $this->settings ?? $this->liveSettings();
+
+        $refusal = $this->capabilityRefusal($settings);
+        if ($refusal !== null) {
+            return new ToolResult($callId, $refusal, true);
+        }
+
+        $prompt = \is_string($args['prompt'] ?? null) ? trim($args['prompt']) : '';
+        if ($prompt === '') {
+            return new ToolResult($callId, 'GenerateImage needs a non-empty `prompt`', true);
+        }
+
+        $request = $this->requestFrom($args, $prompt);
+        if ($request instanceof ToolResult) {
+            return $request; // DTO refusal (api-owned or v1-unsupported key) surfaced verbatim
+        }
+
+        // crush-media W4.1: sdapi treats an img2img call with no init_images
+        // as a hard 400-class server error; refuse it client-side, before
+        // any dial, with the same words every surface can echo (plan W4.1
+        // microstep 5). `isSet` distinguishes the deliberate img2img draft
+        // (key present, e.g. emptied by a clear) from a plain txt2img call
+        // that never names the field.
+        if ($request->isSet('init_images') && ($request->initImages() ?? []) === []) {
+            return new ToolResult($callId, 'an img2img request carries no init images; attach a source or drop the field', true);
+        }
+
+        // crush-media R10-m4: a mask without init_images rides a txt2img body
+        // where sdapi ignores the field entirely — the caller believes it
+        // inpainted while the server silently degrades. Refuse the dead-mask
+        // shape pre-dial, mirroring the set-but-empty refusal above.
+        if ($request->isSet('mask') && !$request->isSet('init_images')) {
+            return new ToolResult($callId, 'a mask needs init images to inpaint; attach a source or drop the mask', true);
+        }
+
+        // crush-media W7 (C-1 flip): on the sglang dialect, a draft naming
+        // sdapi-only knobs is refused by name BEFORE any client build or dial
+        // — the adapter accepts the honest subset, never a silently-dropped
+        // parameter the caller meant. Pure static consult; zero requests.
+        $sglang = $this->isSglang($settings);
+        if ($sglang) {
+            $unspeakable = Client::sglangImageRefusals($request);
+            if ($unspeakable !== []) {
+                return new ToolResult($callId, 'sglang-diffusion does not speak these sdapi-only knobs: '
+                    . implode(', ', $unspeakable) . ' — none were sent; drop them or switch mediaFamily to sdapi', true);
+            }
+        }
+
+        $apiKey = \is_string($settings['sd.apiKey'] ?? null) && $settings['sd.apiKey'] !== ''
+            ? $settings['sd.apiKey']
+            : null;
+        try {
+            $client = Client::configured($this->transport, $this->baseUrl, $apiKey);
+        } catch (SdException $e) {
+            // resolveBaseUrl answers from settings/env alone: this branch is
+            // the unconfigured-host refusal and it has dialed nothing.
+            return new ToolResult($callId, 'image generation is not available on this launch: ' . $e->getMessage(), true);
+        }
+
+        if ($sglang) {
+            $rendered = $this->awaitSglangRender($client, $request, $heartbeat, $callId);
+            if ($rendered instanceof ToolResult) {
+                return $rendered;
+            }
+
+            return $this->collectSglang($rendered, $client, $request, $settings, $callId);
+        }
+
+        $rendered = $this->awaitRender($client, $request, $heartbeat, $callId);
+        if ($rendered instanceof ToolResult) {
+            return $rendered; // cancelled, or died waiting, before the bytes arrived
+        }
+
+        return $this->collect($rendered, $request, $settings, $callId);
+    }
+
+    /** @param array<array-key, mixed> $settings */
+    private function capabilityRefusal(array $settings): ?string
+    {
+        // C-1: the sdapi family is the only one generation speaks. A family
+        // that merely fails to parse is not this gate's business (discovery
+        // diagnoses it); one that parses to a DETECTABLE-BUT-UNIMPLEMENTATED
+        // family is refused here, by name, so no dial is ever attempted.
+        $familyRaw = $settings['mediaFamily'] ?? null;
+        if (\is_string($familyRaw) && trim($familyRaw) !== '') {
+            $family = EndpointFamily::tryFrom(trim($familyRaw));
+            if ($family !== null && !$family->isImplemented()) {
+                return 'the media endpoint family "' . $familyRaw . '" is recognised but generation over it'
+                    . ' is not implemented yet; only the A1111 sdapi and sglang-diffusion families are, so no request was sent';
+            }
+        }
+
+        // An absent mediaKinds roster means "everything the host can do" —
+        // the config-authority fail-open from W1.8. A present roster that
+        // names kinds without naming image means image generation is off.
+        if (\array_key_exists('mediaKinds', $settings)) {
+            $kinds = ProviderFactory::configuredMediaKinds($settings['mediaKinds']);
+            if ($kinds !== [] && !\in_array('image', $kinds, true)) {
+                return 'this launch is configured for media kinds (' . implode(', ', $kinds)
+                    . ') that do not include image, so no request was sent';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Args -> wire map (machinery key `id` never rides; aliases apply) -> DTO.
+     * Unknown knobs are MediaRequest's tolerated-extra path by construction.
+     *
+     * @return MediaRequest|ToolResult  ToolResult on a DTO refusal
+     */
+    private function requestFrom(array $args, string $prompt): MediaRequest|ToolResult
+    {
+        $wire = [];
+        foreach ($args as $key => $value) {
+            if (!\is_string($key) || $key === 'id' || $key === 'prompt') {
+                continue;
+            }
+            $wire[self::ARG_WIRE_ALIASES[$key] ?? $key] = $value;
+        }
+        $wire['prompt'] = $prompt;
+
+        try {
+            return MediaRequest::fromArray($wire);
+        } catch (\InvalidArgumentException $e) {
+            return new ToolResult((string) ($args['id'] ?? ''), 'the generation request was refused: ' . $e->getMessage(), true);
+        }
+    }
+
+    /**
+     * The heartbeat-bracketed wait (see class docblock topology): the loop
+     * beats per progress poll, the sentinel issues the one blocking POST on
+     * its first pass and reports done once the bytes are back. A POST failure
+     * propagates untouched; a readout-only failure after a completed render
+     * still returns the bytes.
+     */
+    private function awaitRender(Client $client, MediaRequest $request, ?\Closure $heartbeat, string $callId): SdTransportResult|ToolResult
+    {
+        $awaited = null;
+        $sentinel = function () use (&$awaited, $client, $request, $callId): bool {
+            if ($awaited !== null) {
+                return true;
+            }
+            if ($callId !== '' && ToolCancelRequests::isRequested($callId)) {
+                return true;
+            }
+            // crush-media W4.1 routing: a draft carrying init_images is an
+            // img2img call — the sibling endpoint, same body. The empty-
+            // field case is refused in generate() before this closure ever
+            // runs, so a non-empty list is the only image shape here.
+            $awaited = ($request->initImages() ?? []) !== []
+                ? $client->img2img($request)
+                : $client->txt2img($request);
+
+            return false;
+        };
+
+        $beat = $heartbeat ?? static function (): void {
+        };
+        // Queued-then-cancelled calls never reach the loop's first poll: the
+        // pre-check is what keeps the zero-dial promise of the class docblock.
+        if ($callId !== '' && ToolCancelRequests::isRequested($callId)) {
+            return new ToolResult($callId, ToolCancelRequests::CANCELLED, true);
+        }
+        try {
+            // W2.4 live preview: when the turn handed us its event channel,
+            // each poll's current_image becomes a MediaProgress frame for the
+            // parent's running row. Progress/eta ride the SAME poll's state —
+            // onFrame fires before onPreviewFrame inside the loop, so reading
+            // the captured state here is the fresh one, never a stale beat.
+            $latest = null;
+            $onFrame = $this->eventEmitter !== null && $callId !== ''
+                ? static function (ProgressState $state) use (&$latest): void {
+                    $latest = $state;
+                }
+                : null;
+            $onPreviewFrame = $onFrame === null
+                ? null
+                : function (string $frameB64) use (&$latest, $callId): void {
+                    ($this->eventEmitter)(new MediaProgress(
+                        $callId,
+                        $frameB64,
+                        $latest?->progress,
+                        $latest?->etaRelative,
+                    ));
+                };
+            ProgressLoop::run(
+                $client,
+                $beat,
+                $sentinel,
+                $onPreviewFrame,
+                $this->pollIntervalSeconds ?? ProgressLoop::DEFAULT_INTERVAL_SECONDS,
+                $this->pollSleeper,
+                $onFrame,
+            );
+        } catch (SdException $e) {
+            if (!$awaited instanceof SdTransportResult) {
+                throw $e; // the render itself never completed: honest failure
+            }
+            // The readout route gave up after the render returned; the bytes
+            // are real, the loop's job (beats) is done. Fall through.
+        }
+
+        if (!$awaited instanceof SdTransportResult) {
+            return new ToolResult($callId, ToolCancelRequests::CANCELLED, true);
+        }
+
+        return $awaited;
+    }
+
+    /**
+     * Declared-family check for the W7 dialect branch: only an explicit
+     * `mediaFamily=sglang-diffusion` setting selects it; an absent or
+     * unparsable family stays sdapi, the config-authority default of the
+     * whole media layer.
+     *
+     * @param array<array-key, mixed> $settings
+     */
+    private function isSglang(array $settings): bool
+    {
+        $raw = $settings['mediaFamily'] ?? null;
+
+        return \is_string($raw) && EndpointFamily::tryFrom(trim($raw)) === EndpointFamily::SglangDiffusion;
+    }
+
+    /**
+     * The waiting room of a dialect with no progress route: beat, the single
+     * blocking POST (edits when the draft carries init_images — the
+     * set-but-empty shape was refused upstream, so a non-empty list is the
+     * only image shape here — generations otherwise), beat. The pre-cancel
+     * door mirrors awaitRender, so a call cancelled while queued never
+     * dials. Honest residual: no mid-render beats or preview frames exist
+     * on this wire; the idle ceiling rides the two beats bracketing the POST.
+     */
+    private function awaitSglangRender(Client $client, MediaRequest $request, ?\Closure $heartbeat, string $callId): SdTransportResult|ToolResult
+    {
+        if ($callId !== '' && ToolCancelRequests::isRequested($callId)) {
+            return new ToolResult($callId, ToolCancelRequests::CANCELLED, true);
+        }
+        $beat = $heartbeat ?? static function (): void {
+        };
+        $beat();
+        $rendered = ($request->initImages() ?? []) !== []
+            ? $client->sglangImageEdit($request)
+            : $client->sglangImageGenerate($request);
+        $beat();
+
+        return $rendered;
+    }
+
+    /**
+     * ImageResponse envelope -> decode, embed OUR infotext (this dialect
+     * sends no per-image infotext rows back), save every PNG through
+     * MediaStore with the sdapi collect's token vocabulary (seed/steps/
+     * width/height/cfg), report. A url/file_path carry refuses the whole
+     * batch by name — the adapter requests b64_json, so a carry row means
+     * the draft overrode response_format into shapes this v1 adapter does
+     * not fetch. No batch grid exists on this wire (grid pairing is an
+     * sdapi concept), so every row is a sample.
+     *
+     * @param array<array-key, mixed> $settings
+     */
+    private function collectSglang(SdTransportResult $rendered, Client $client, MediaRequest $request, array $settings, string $callId): ToolResult
+    {
+        $envelope = $client->sglangImagesDecode($rendered);
+
+        $carries = [];
+        foreach ($envelope['items'] as $item) {
+            if (!isset($item['bytes'])) {
+                $carries[] = isset($item['url']) ? 'url' : 'file_path';
+            }
+        }
+        if ($carries !== []) {
+            return new ToolResult($callId, 'the sglang image response carried ' . implode(', ', $carries)
+                . ' references instead of inline bytes; the adapter requests response_format=b64_json'
+                . ' and does not fetch carries in v1, so nothing was saved', true);
+        }
+
+        $pattern = \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
+            ? $settings['sd.savePattern']
+            : null;
+        $session = $this->storeSession ?? $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
+        $store = MediaStore::forSession($session, $this->mediaRoot, $pattern);
+
+        $tokens = [];
+        foreach (['seed' => $request->seed(), 'steps' => $request->steps(), 'width' => $request->width(),
+            'height' => $request->height(), 'cfg' => $request->cfgScale()] as $name => $value) {
+            if (\is_int($value) || \is_float($value)) {
+                $tokens[$name] = $value;
+            }
+        }
+
+        /** @var list<string> $lines */
+        $lines = [];
+        $headBytes = null;
+        $headPath = null;
+        $count = \count($envelope['items']);
+        foreach ($envelope['items'] as $index => $item) {
+            $bytes = (string) ($item['bytes'] ?? '');
+            if (Png::isPng($bytes)) {
+                $text = Infotext::emit($request, [], $request->prompt());
+                if (trim($text) !== '') {
+                    $bytes = Png::setInfotext($bytes, $text);
+                }
+            }
+            $saved = $store->put($bytes, 'png', $tokens);
+            if ($index === 0) {
+                $headBytes = $bytes;
+                $headPath = $saved->path();
+            }
+            $lines[] = 'image ' . ($index + 1) . ': ' . (string) $saved->path();
+        }
+
+        $content = 'Generated ' . $count . ' image' . ($count === 1 ? '' : 's')
+            . " on the sglang-diffusion server:\n" . implode("\n", $lines);
+
+        return new ToolResult(
+            toolCallId: $callId,
+            content: $content,
+            imageBytes: $headBytes,
+            imagePath: $headPath,
+            imageProtocol: BootProbe::mosaic()->protocol(),
+        );
+    }
+
+    /**
+     * Decode (grid law), fan out the batch pairing through BatchResults,
+     * re-embed each artifact's OWN infotext, save every artifact through
+     * MediaStore (the grid under the pattern plus its `-grid` marker),
+     * report. imageBytes/imagePath ride the first SAMPLE — the grid heads the
+     * pair only as the degenerate carry when the batch yielded no samples at
+     * all (grids cheaply exceed the display ceilings, §8.6-4), matching the
+     * display contract.
+     *
+     * @param array<array-key, mixed> $settings
+     */
+    private function collect(SdTransportResult $rendered, MediaRequest $request, array $settings, string $callId): ToolResult
+    {
+        $decoded = Response::generation($rendered);
+        $results = BatchResults::fromResponse($decoded, $request);
+        if ($results->isEmpty()) {
+            return new ToolResult($callId, 'the server returned a generation response with no images in it', true);
+        }
+
+        $pattern = \is_string($settings['sd.savePattern'] ?? null) && trim($settings['sd.savePattern']) !== ''
+            ? $settings['sd.savePattern']
+            : null;
+        $session = $this->storeSession ?? $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
+        $store = MediaStore::forSession($session, $this->mediaRoot, $pattern);
+
+        /** @var list<string> $lines */
+        $lines = [];
+        $headBytes = null;
+        $headPath = null;
+
+        foreach ($results->samples as $slot => $entry) {
+            $bytes = $this->embed($entry['artifact'], $request, $entry['infotext']);
+            $saved = $store->put($bytes, 'png', $entry['tokens']);
+            if ($slot === 0) {
+                $headBytes = $bytes;
+                $headPath = $saved->path();
+            }
+            $lines[] = 'image ' . ($slot + 1) . ': ' . (string) $saved->path();
+        }
+        $grid = $results->grid;
+        if ($grid !== null) {
+            // A store of the suffixed pattern: same session directory, same
+            // collision tick, and every grid it publishes reads as a grid.
+            $gridStore = MediaStore::forSession($session, $this->mediaRoot, BatchResults::gridPattern($pattern));
+            $gridBytes = $this->embed($grid['artifact'], $request, $grid['infotext']);
+            $savedGrid = $gridStore->put($gridBytes, 'png', $grid['tokens']);
+            array_unshift($lines, 'batch grid: ' . (string) $savedGrid->path());
+            if ($headBytes === null) {
+                $headBytes = $gridBytes;
+                $headPath = $savedGrid->path();
+            }
+        }
+
+        $content = 'Generated ' . \count($results->samples) . ' image' . (\count($results->samples) === 1 ? '' : 's')
+            . ($grid !== null ? ' plus the batch grid' : '') . " on the SD server:\n"
+            . implode("\n", $lines);
+        if ($request->saveImages() === true) {
+            // The dual-save honesty law (plan W4.5 step 3): save_images made
+            // the server archive under its own outdir/pattern, and the wire
+            // enumerates NONE of those paths back — say exactly that.
+            $content .= "\nsaved to server store (outdir) + crush media store"
+                . ' — the server does not report its own copy paths back, so only the files above are enumerated';
+        }
+
+        return new ToolResult(
+            toolCallId: $callId,
+            content: $content,
+            imageBytes: $headBytes,
+            imagePath: $headPath,
+            imageProtocol: BootProbe::mosaic()->protocol(),
+        );
+    }
+
+    /**
+     * Re-embed verbatim server infotext, else emit ours; non-PNG rides raw.
+     * The verbatim replay is forfeited whole when the row carries a
+     * secret-shaped key (plan :902, R21 MAJOR-1) — the scrubbed emit() takes
+     * over, because surgically repairing pairs inside an unbounded raw replay
+     * would leave the rogue server a verbatim-write channel into every PNG.
+     */
+    private function embed(MediaArtifact $artifact, MediaRequest $request, ?string $rawText): string
+    {
+        $bytes = (string) $artifact->bytes();
+        if (!Png::isPng($bytes)) {
+            return $bytes;
+        }
+        $text = $rawText;
+        if ($text !== null && Infotext::containsSecretKey($text)) {
+            $text = null;
+        }
+        if ($text === null || trim($text) === '') {
+            $parsed = $artifact->infotext();
+            $text = \is_array($parsed) && $parsed !== []
+                ? Infotext::emit($request, $parsed)
+                : Infotext::emit($request, [], $request->prompt());
+        }
+
+        return trim($text) === '' ? $bytes : Png::setInfotext($bytes, $text);
+    }
+
+    /** @return array<array-key, mixed> */
+    private function liveSettings(): array
+    {
+        try {
+            return Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+}

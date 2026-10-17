@@ -1,6 +1,6 @@
 # crush_code.md — RESUME HERE
 
-**Single entry point for continuing the `sugar-crush` audit plan.** Read this file
+**Single entry point for continuing the `candy-code` audit plan.** Read this file
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
@@ -15,7 +15,7 @@ Nothing here depends on a prior conversation's context.
 | field | value |
 |---|---|
 | master | tip **`b89059713`** + this closeout's docs commits — chain atop `0c83384df`: y6 pick `82aec515c` → y5 picks `4e04ec035` `e25a8b564` → re-pin `cf456a306` → ledger stamps `b89059713`; wave-1 CLOSED @ `064430d85`; NEVER pushed |
-| floor | **12,061T / 170,810A / 0F / 0E / 1S (McpClientTest canary) / exit0** — serial plain-pipe linked cwd=sugar-crush; K=8 CONSERVATION +0/+0; re-pinned at `cf456a306` (first crush-move weld since r86u — +34T = relay 10 + widget 13 + mouse 6 + invariant 4 + guard-wheel 1) |
+| floor | **12,061T / 170,810A / 0F / 0E / 1S (McpClientTest canary) / exit0** — serial plain-pipe linked cwd=candy-code; K=8 CONSERVATION +0/+0; re-pinned at `cf456a306` (first crush-move weld since r86u — +34T = relay 10 + widget 13 + mouse 6 + invariant 4 + guard-wheel 1) |
 | reviews | r89-rv-y5 APPROVE 0C/0M/3min (reviewer re-ran the full serial EXACT at tip; builder 5/5 + reviewer 4/4 mutations discriminating) · r89-rv-y6 APPROVE 0C/0M/3min (duplicate-key scan clean, 18/18 Unicode-exact spot-checks, 3/3 mutations) |
 | libs | shine **587/1,119** (7.2 map) · glow 122/313 · shell 334/694 · vt 949/12,773 + render-dump baseline `6f9dc048b4cbc2e321a18698e1069b7c` · forms 2,182/3,945 · bits 519/1,097 · prompt 158/314/2S · layout 157/882 · vcr 948/4,082/14S · pty 663/1,862/17S · stickers 221/476 | <!-- @rename-keep historical provenance -->
 | crush windows | re-derived from `closeout-r89-w2/serial1.xml` by classname grep at this weld: `Form\|Input\|Select\|Cursor` **712/4,516** (633/3,943 was pre-y5); `Vt\|Terminal\|Buffer` **305/21,034** held; `Shine\|Glamour\|Style` **24/813** held |
@@ -46,7 +46,7 @@ CallbackAuthoredRefusalTest in-shard flake (~1-in-3; re-run before declaring); c
 
 ### RESTART INSTRUCTIONS — campaign closed
 
-**DO NOT auto-open any round.** The plan is complete (census 0). If the operator directs new work: `git -C /home/sites/sugarcraft log --oneline -1` for the live tip; preflight `php scripts/refresh-deps.php --mode=linked` + 19/19 + 8/8 link census + config md5 above; serials PLAIN PIPE cwd=sugar-crush; K=8 gate; five-guard 45T/4,768A (era-corrected); builders commit-EARLY; welds re-derive SHAs from `git log`; ledger law per-section re.split+assert-1+numstat+far-canary; NEVER push; author `Joe Huss <detain@interserver.net>`; no composer/caliber; foreign `sugarcraft-cc` untouched. All lane worktrees/branches removed at this closeout (`git cherry` verified every pick '-'). Full-sweep chronology: worklog `## ROUND 89` (both waves) + §0-NOW-90…93 below + the 89 rounds of ledger history in `docs/plans/`.
+**DO NOT auto-open any round.** The plan is complete (census 0). If the operator directs new work: `git -C /home/sites/sugarcraft log --oneline -1` for the live tip; preflight `php scripts/refresh-deps.php --mode=linked` + 19/19 + 8/8 link census + config md5 above; serials PLAIN PIPE cwd=candy-code; K=8 gate; five-guard 45T/4,768A (era-corrected); builders commit-EARLY; welds re-derive SHAs from `git log`; ledger law per-section re.split+assert-1+numstat+far-canary; NEVER push; author `Joe Huss <detain@interserver.net>`; no composer/caliber; foreign `sugarcraft-cc` untouched. All lane worktrees/branches removed at this closeout (`git cherry` verified every pick '-'). Full-sweep chronology: worklog `## ROUND 89` (both waves) + §0-NOW-90…93 below + the 89 rounds of ledger history in `docs/plans/`.
 
 
 
@@ -59,7 +59,7 @@ CallbackAuthoredRefusalTest in-shard flake (~1-in-3; re-run before declaring); c
 | field | value |
 |---|---|
 | master | `eea60561a` (r88 filemap) → 20 picks `9bc98d6b8`…`06f658684` → stamps → filemap regen = ROUND-89-W1-TIP @ /home/sites/sugarcraft; CURRENT TIP = **`064430d85`** — branch new lanes off exactly this SHA — NEVER pushed |
-| floor | **12,027T / 170,514A / 0F / 0E / 1S / exit0** serial plain-pipe linked cwd=sugar-crush — tests EXACT-CARRY 6th round (zero crush files → NO re-pin; suite-figure.json untouched per doctrine, green-serial figure is the reading, +92 wobble = live-derivation tree-scan family) |
+| floor | **12,027T / 170,514A / 0F / 0E / 1S / exit0** serial plain-pipe linked cwd=candy-code — tests EXACT-CARRY 6th round (zero crush files → NO re-pin; suite-figure.json untouched per doctrine, green-serial figure is the reading, +92 wobble = live-derivation tree-scan family) |
 | libs | vt 949/12,773 + render-dump `6f9dc048b4cbc2e321a18698e1069b7c` (VALUE flip, 12 theme rows, intended); forms 2182/3945 ×2 byte-identical; bits 519/1,097; layout 157/882; shine 573/1,075 ×2; glow 122/313; prompt 158/314/2S; shell 334/694; query 1,483/4,203; vcr 948/4,082/14S; pty 663/1,862/17S; stickers 221/476 | <!-- @rename-keep historical provenance -->
 | crush windows | `Form|Input|Select|Cursor` 633/3,943; `Vt|Terminal|Buffer` 305/21,034; `Shine|Glamour|Style` **24/813** (era-correction: the 921/59,234 figure was stale — measured truth at this weld); five-guard 125/7,362; DocFigure alone 83/2,685 |
 | infra | child-lifetimes + path-repos rc=0; durations **532 HELD** (no new crush test files); config at-rest truth `d96e124ee7967eb34ef479ef824231ad` start==end; links 19/19 + 8/8 |
@@ -89,14 +89,14 @@ Both branches off master tip `064430d85` (re-verify with `git -C /home/sites/sug
 
 **y5 — E744 crush-host widget adoption** (branch `lane/y5`, worktree `/home/sites/crush-lane-y5`, artifacts `/home/sites/crush-r61-artifacts/y5/`). Full authoritative scope = backlog §E744 (`docs/plans/crush_code_hardening_backlog.md:20832-20834`) + triage row :208. Six workstreams; brief the builder to commit-EARLY one WIP commit per workstream:
 
-1. **Cmd plumbing:** `Chat::delegateToInput` (sugar-crush/src/Chat.php:12123) currently DROPS the widget's returned Cmds. Consume `SetClipboard` via an OSC52 frame writer (CSI 52;p;b64 ST) on the frame channel with a size cap (lane picks N; over-cap = truncate + RuntimeNoticeSink notice, not silent). Any other widget Cmd arriving undealt MUST NOT silently vanish — lane rules between visible-notice vs pinned-discard-with-log, documents the decision in design.md.
+1. **Cmd plumbing:** `Chat::delegateToInput` (candy-code/src/Chat.php:12123) currently DROPS the widget's returned Cmds. Consume `SetClipboard` via an OSC52 frame writer (CSI 52;p;b64 ST) on the frame channel with a size cap (lane picks N; over-cap = truncate + RuntimeNoticeSink notice, not silent). Any other widget Cmd arriving undealt MUST NOT silently vanish — lane rules between visible-notice vs pinned-discard-with-log, documents the decision in design.md.
 2. **Key precedence:** Ctrl+C today intercepts into the quit flow BEFORE delegation. New rule: focused widget reports a selection → copy (TextArea copy arms shipped in r88 x5); no selection → EXISTING quit pins byte-unchanged. Pin BOTH polarities.
 3. **PasteMsg routing:** consumed at Chat.php:1586 via `Chat::insertString` (E704 no-pre-trim law stays) — route to the focused widget when one owns input; else legacy path byte-identical.
 4. **MouseMsg forwarding:** crush zone logic never forwards to ItemList; wire list-pane zone hit-test → widget y→row mapping (x5 proved the shape on candy-scriptui's WriteModel wire); document click precedence vs palette/menu bindings.
 5. **LoadMoreMsg consumption:** y3's ItemList emits it when the cursor arrives on the last of visibleItems(); implement at least ONE real crush consumer pane + pin (source-of-next-page seam = lane's documented choice).
 6. **View convergence:** crush paints its input box from Renderer (Chat.php:4231 comment), not `TextArea::view()`. Smallest honest step ONLY: adopt `TextArea::view()` at the delegated surface behind pins, or flag-gated; do NOT rewrite the renderer; document the ruling in lane design.md.
 
-OWNERSHIP: sugar-crush/src/Chat.php + src/Renderer.php (+ src/Tui/** as needed). FORBIDDEN: src/Cli/Bootstrap.php (census-trio minefield — STOP-REPORT if it seems needed). This lane RE-PINS: new test files MUST get `scripts/parallel-tests-durations.tsv` rows IN-STEP (unlisted = zero shards); DocFigure arms + README/KeyBinding/Env/TrustKey doc rosters edited IN-STEP (guards live in sugar-crush/tests/Config + tests/Commands/KeyBindingDriftTest); OSC52 raw-ANSI writer must conform to the NoRawAnsiInTranscript derived census (flip IN-STEP with its own write site — study the existing writer roster first); prefer RuntimeNoticeSink over new stderr sites (StderrEmitterCensus five-file set). beginTurn wiring: E199 seam at Chat.php:8266 scheduleBackendCompletion (per fn-seam record). Gates: targeted families + five-guard 125/7,362 + Config window (read live count) + FULL SERIAL with +ΔT reported for the merge agent (floor 12,027 + new tests EXACT), K=8 shardcheck, tools rc=0, config md5 d96e124ee7967eb34ef479ef824231ad start==end, keystones on plain pipe (TerminalSizeFallbackIsolationTest reddens under a PTY ctty; CallbackAuthoredRefusalTest known ~1-in-3 in-shard flake — re-run that one before declaring). No shared-loop timers without LoopPin (crush bootstrap already pins it).
+OWNERSHIP: candy-code/src/Chat.php + src/Renderer.php (+ src/Tui/** as needed). FORBIDDEN: src/Cli/Bootstrap.php (census-trio minefield — STOP-REPORT if it seems needed). This lane RE-PINS: new test files MUST get `scripts/parallel-tests-durations.tsv` rows IN-STEP (unlisted = zero shards); DocFigure arms + README/KeyBinding/Env/TrustKey doc rosters edited IN-STEP (guards live in candy-code/tests/Config + tests/Commands/KeyBindingDriftTest); OSC52 raw-ANSI writer must conform to the NoRawAnsiInTranscript derived census (flip IN-STEP with its own write site — study the existing writer roster first); prefer RuntimeNoticeSink over new stderr sites (StderrEmitterCensus five-file set). beginTurn wiring: E199 seam at Chat.php:8266 scheduleBackendCompletion (per fn-seam record). Gates: targeted families + five-guard 125/7,362 + Config window (read live count) + FULL SERIAL with +ΔT reported for the merge agent (floor 12,027 + new tests EXACT), K=8 shardcheck, tools rc=0, config md5 d96e124ee7967eb34ef479ef824231ad start==end, keystones on plain pipe (TerminalSizeFallbackIsolationTest reddens under a PTY ctty; CallbackAuthoredRefusalTest known ~1-in-3 in-shard flake — re-run that one before declaring). No shared-loop timers without LoopPin (crush bootstrap already pins it).
 
 **y6 — shine 7.2 emoji-shortcode map** (branch `lane/y6`, worktree `/home/sites/crush-lane-y6`, artifacts `/home/sites/crush-r61-artifacts/y6/`). Row: `findings/plan_candy-shine.md:672` “| 7.2 | Limited emoji map | MEDIUM | PENDING |”. Build the map to upstream-glamour parity; vocabulary DUPLICATED per the r89 no-glow-require cycle ruling (reference copy: candy-mdview's GlamourTheme emoji table; composer.json STAYS UNTOUCHED). Fold row 8.1 (emoji regex compiled every call — same file region) if natural; else stamp 8.1 with why-not. Tests: byte-identity of representative docs through render() before/after map-widening on known-shortcode fixtures, unknown shortcodes pass through verbatim, multi-codepoint sequences preserved. Figures: shine 573/1,075 baseline (lib-local; no crush re-pin if zero crush files — verify), glow 122/313 UNMOVED, crush `Shine|Glamour|Style` window 24/813 unchanged. Stamp row 7.2 (+8.1 if folded) ✅ IN-PLACE (audit-walkthrough law; original text preserved with Was: line). Alternative ONLY on new operator ruling: ⏭ decline-with-why (then E736 closes ruling-only) — default is BUILD. <!-- @rename-keep historical provenance -->
 
@@ -122,10 +122,10 @@ ROUND-89 closeout commit(s): worklog `## ROUND 89` wave-2 addition (keep wave-1 
 
 | figure | value | domain |
 |---|---|---|
-| **ANCHOR (carried)** | **12,027 / 170,392 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — serial green x2 at r86u `988696aea`, PLAIN PIPE, linked, cwd = sugar-crush; r85 both waves, the r86 weld AND the r87 weld moved ZERO sugar-crush files → carried EXACT, no re-pin; K=8 conservation +0 | **UNCHANGED since r86u absorption — link-domain; ±32A cold/warm `ensureFixtureRepo()` wobble band still the assertions truth** |
+| **ANCHOR (carried)** | **12,027 / 170,392 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — serial green x2 at r86u `988696aea`, PLAIN PIPE, linked, cwd = candy-code; r85 both waves, the r86 weld AND the r87 weld moved ZERO candy-code files → carried EXACT, no re-pin; K=8 conservation +0 | **UNCHANGED since r86u absorption — link-domain; ±32A cold/warm `ensureFixtureRepo()` wobble band still the assertions truth** |
 | lib figures at close | candy-vt **926 / 12,689** (+14T/+46A w1, render-dump md5-identical `dccc5c4857103432105e314a0fcc1209`) - sugar-bits **514 / 1,085** (+5T w2; TabsTest 60/108; sweep committed md5 `c6cf5817`) - sugar-charts **577 / 1,453** (+1T/+8A w3) - consumers UNMOVED: pty 663/1862/17S · vcr 948/4082/14S · forms 1891/3164 · prompt 158/310/2S · glow 122/313 · stickers 221/476 · query 1483/4203 · tick 144/349 · boxer 187/375 · sprinkles 751/2629 · shell 334/694 · layout 157/882 · crush window `Vt|Terminal|Buffer` **305 / 21,034** · five-guard **125 / 7,362** | lib-local; every touched lib gated FULL + both repo tools rc=0 at the weld | <!-- @rename-keep historical provenance -->
 | chain | `b26b9989f` (r85 filemap) → r86 weld `cfb26f8f2` (floor exact-carry) → picks `f48537daf` `c37486747` `848f1fbb0` `232686276` `66debe01c` `971c0fa96` → companion `7988f2305` (E742 MINT + folds) → stamps + worklog + `§0-NOW-90` + pointer → filemap regen = ROUND-87-TIP | NEVER pushed |
-| durations | **532 rows HELD** — no new sugar-crush test files (sibling-lib files never belong in the tsv) | shared infra |
+| durations | **532 rows HELD** — no new candy-code test files (sibling-lib files never belong in the tsv) | shared infra |
 | config | at-rest truth `d96e124ee7967eb34ef479ef824231ad`, start==end at the weld | linked-domain |
 
 ### 2. DECISION POINT — CAMPAIGN MECHANICALLY COMPLETE (operator call m0225); ROUND 88 ONLY ON OPERATOR DIRECTION
@@ -156,9 +156,9 @@ $   # 2 survivors: E736 (umbrella — ALL remaining shape is ruling/feature, eve
 
 1. Read this §0-NOW-90, the worklog `## ROUND 87` section, and `docs/plans/crush_code_filemap.md` (2 rows = census: E736 + E742).
 2. Preflight in any fresh sandbox: `git -C /home/sites/sugarcraft status --porcelain` shows ONLY ignorable operator dirt at the tip; `php scripts/refresh-deps.php --mode=linked` FULL then EXPLICIT census **sugar-crush 19/19 + candy-pty 8/8**; config at-rest truth `d96e124ee7967eb34ef479ef824231ad`; floor gate if doubted: K=8 `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv --out <fresh>` (~85s) or plain-pipe serial (cwd=sugar-crush). <!-- @rename-keep historical provenance -->
-3. **DO NOT auto-open round 88** — the campaign is mechanically complete per the operator (m0225). If directed: the §2 menu is E742-ruling-first (one small lane either way), then trigger-gated E736 tails only with real demand. NEVER push; author `Joe Huss <[EMAIL]>`; no composer, no caliber, no touch of `.mcp.json`/`.sugar-crush/config*` operator files or foreign `sugarcraft-cc`.
+3. **DO NOT auto-open round 88** — the campaign is mechanically complete per the operator (m0225). If directed: the §2 menu is E742-ruling-first (one small lane either way), then trigger-gated E736 tails only with real demand. NEVER push; author `Joe Huss <[EMAIL]>`; no composer, no caliber, no touch of `.mcp.json`/`.candy-code/config*` operator files or foreign `sugarcraft-cc`.
 4. Per-lane loop unchanged (task+coder implement → SHA/worktree verify → task+coder review → fix round → weld; blank/fragment reports → RESUME same task_id ≤10x with disk-probes, salvage-first before any redo).
-5. If a future round welds: close as rounds 83–87 did — worklog + stamps + `§0-NOW-91` + pointer + filemap regen; re-pin crush figures ONLY when sugar-crush files move (four rounds now proven on the zero-move EXACT-carry shape).
+5. If a future round welds: close as rounds 83–87 did — worklog + stamps + `§0-NOW-91` + pointer + filemap regen; re-pin crush figures ONLY when candy-code files move (four rounds now proven on the zero-move EXACT-carry shape).
 
 ## APPENDIX I — STANDING ORDERS (the surviving rule set, consolidated 2026-09-12)
 
@@ -228,11 +228,11 @@ unless you cannot proceed further without a decision from me or i told you to pa
 ### NEW STANDING RULES
 
 - **59 — name the cwd with every suite figure, and the skip count with it.** The prompt plan spent
-  five days on a CI red nobody saw because its figures were measured from `sugar-crush/` without
+  five days on a CI red nobody saw because its figures were measured from `candy-code/` without
   saying so. This plan's own skip canary carries the same unstated precondition. A figure without a
   cwd is not a measurement.
 - **60 — a plan's own checkmarks are a claim, not a state.** `crush_code.md` under-stated its
-  progress by twelve items and `.sugar-crush-build/feat-plan-progress.json` over-stated its remaining
+  progress by twelve items and `.candy-code-build/feat-plan-progress.json` over-stated its remaining
   work by two whole waves, in the same tree, on the same day. Both were settled in minutes by
   grepping the source. Re-derive before scheduling; never schedule from a marker.
 - **61 — a parked plan rots in its ENVIRONMENT, not only in its prose.** §0-NOW-61 correctly
@@ -349,7 +349,7 @@ rule (full suites through a plain pipe, never a ctty-bearing harness) and MEASUR
 
 ```sh
 bash scripts/parallel-tests.sh [K] --durations scripts/parallel-tests-durations.tsv \
-  --against-json sugar-crush/tests/Config/Support/suite-figure.json
+  --against-json candy-code/tests/Config/Support/suite-figure.json
 ```
 
 Default K=min(nproc,8); conservation-vs-`suite-figure.json` is FAIL-CLOSED for tests/skips/errors/failures
@@ -452,7 +452,7 @@ the 2026-09-12 adjudication.
 
 ### 3. 🔴 THE VENDOR CLOSURE WAS SILENTLY BROKEN, AND IT COST THIS SESSION A WHOLE SUITE RUN
 
-**MEASURED 2026-09-10, before any of the figures above were trusted.** `sugar-crush/vendor/sugarcraft/`
+**MEASURED 2026-09-10, before any of the figures above were trusted.** `candy-code/vendor/sugarcraft/`
 held **14 entries where the manifest's closure needs 18**. `sugar-forms`, `candy-focus` and <!-- @rename-keep -->
 `candy-kit` — all three named directly in `sugar-crush/composer.json`'s `require` — were **absent <!-- @rename-keep historical provenance -->
 from vendor entirely**, and four more (`candy-fuzzy`, `candy-mouse`, `honey-bounce`, `sugar-veil`) <!-- @rename-keep historical provenance -->
@@ -497,7 +497,7 @@ directories, and the skip count is a function of which one you use.**
 
 - The rule every round-45..60 lane brief hardcodes — *"the skip count must stay exactly 1"*, the one
   skip being `tests/MCP/McpClientTest.php`, and *"a 2 means the vendor closure is gone and every
-  figure since is void"* — was always **cwd `sugar-crush/`**. It never said so.
+  figure since is void"* — was always **cwd `candy-code/`**. It never said so.
 - `prompt_plan.md` measures **MASTER-DIRECT from the checkout root** and records **2 skipped** as its
   steady state across sixty-five steps. That plan's own hard-won rule is: **EVERY SUITE FIGURE MUST
   NAME THE CWD IT WAS MEASURED FROM** — it went five days on a red CI nobody saw for exactly this.
@@ -508,7 +508,7 @@ directories, and the skip count is a function of which one you use.**
   packages were missing. **A skip count is a canary for one specific vendor fault, not a closure
   check.** `refresh-deps.php --status` is the closure check.
 - So: **state the cwd, the vendor mode, and the expected skip count for that pair, in every round-61
-  lane brief.** A brief that says "exactly 1" without naming `sugar-crush/` will send three lanes to
+  lane brief.** A brief that says "exactly 1" without naming `candy-code/` will send three lanes to
   conclude their sandbox is broken when it is not. Confirm all three at your own base before writing
   them.
 
@@ -523,7 +523,7 @@ before launch:
 
 ```sh
 php scripts/refresh-deps.php --status | grep -E 'sugar-crush|candy-pty'   # RUN THIS FIRST, see section 3 <!-- @rename-keep historical provenance -->
-php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/sugar-crush/vendor/sugarcraft/*"),"is_link"))."\n";'  # expect 18
+php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-code/vendor/sugarcraft/*"),"is_link"))."\n";'  # expect 18
 php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-pty/vendor/sugarcraft/*"),"is_link"))."\n";'     # expect 7 <!-- @rename-keep historical provenance -->
 ```
 
@@ -532,13 +532,13 @@ ZERO symlinks that passes a naive count.** Assert both halves — eighteen entri
 or the check passes on a `published` tree. Do NOT settle it with `ls`: `ls -l | grep -c '^l'` has
 printed a correct-looking 18 twice while every entry was a real directory. **Never run
 `composer install`/`update` in a lane root.** Re-derive the two expected counts if a sibling dep was
-added; they are carried from §0-NOW-61 and the sugar-crush one is now independently confirmed at 18.
+added; they are carried from §0-NOW-61 and the candy-code one is now independently confirmed at 18.
 
 
 ## ⚠️ VENDOR STATE IS NOW A THING TO CHECK, and it silently changes what "green" means
 
 The mid-round 2026-08-19 incident is landed history; the durable fact survives verbatim — something
-ran `composer update` and swapped `sugar-crush/vendor/sugarcraft/*`'s symlinks for published copies,
+ran `composer update` and swapped `candy-code/vendor/sugarcraft/*`'s symlinks for published copies,
 with no signal except a skip count moving 1 → 2 (`GitignoreAwarenessTest` self-skips when there are
 no symlinks). **A 2-skip run means you are not testing the monorepo.**
 
@@ -546,7 +546,7 @@ Restore local wiring with the documented loop, and note it is `sugarcraft/*` sco
 versions do not move:
 
     php tools/check-path-repos.php --fix --strict-closure
-    cd sugar-crush && composer update 'sugarcraft/*' --quiet
+    cd candy-code && composer update 'sugarcraft/*' --quiet
     cd .. && git checkout -- '*/composer.json'      # NEVER commit these
     php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 
@@ -623,7 +623,7 @@ Both need a human at a real terminal; neither blocks (a) or (b).
   deferred to the end. **Defer the FIX, never the FINDING** — record every deferred
   item in `docs/plans/crush_code_hardening_backlog.md` with its probe, in the
   What/Where/Severity/Evidence/Step/Blocked-on format. The user's goal is to
-  daily-drive sugar-crush while the security pass is still being worked.
+  daily-drive candy-code while the security pass is still being worked.
 - **Counts as functionality, fix it now:** frame-corruption bugs (over-wide rows —
   the diff renderer paints one line per row), automatic data loss, a confirmed RCE
   path.
@@ -692,14 +692,14 @@ clause false while keeping its keywords intact.** So:
   behaviourally or name it as an honest gap — never add a presence check that looks
   like coverage.
 - **Changing a fact falsifies every place that described the old one.** Sweep `src/`,
-  `tests/`, `README.md` and `sugar-crush/docs/` — a past round's sweep missed `tests/`
+  `tests/`, `README.md` and `candy-code/docs/` — a past round's sweep missed `tests/`
   and shipped a stale claim.
 
 ## 6. Files that must not be touched by agents
 
-`sugar-crush/phpunit.xml` (the supervisor's) · `/home/sites/sugarcraft/.sugar-crush/config.json`
+`candy-code/phpunit.xml` (the supervisor's) · `/home/sites/sugarcraft/.candy-code/config.json`
 (git-tracked; md5 must stay `05480c743aff302fd6c06c5a4a4c2210`) ·
-`docs/plans/plans_cleaning.md` and `sugar-crush/python_port/` (the user's own work —
+`docs/plans/plans_cleaning.md` and `candy-code/python_port/` (the user's own work —
 both are **git-TRACKED**, 18 files under `python_port/`; an earlier revision of this
 line said "untracked", which was a wrong reason for a right rule and invited the
 reading that edits there are invisible) · `docs/plans/crush_code_worklog.md` and this
@@ -714,7 +714,7 @@ tracked, contrary to an earlier belief.
 that then dangle into a phantom `Interface "SugarCraft\Core\Model" not found`.
 Re-point each relative symlink **explicitly** at `/home/sites/sugarcraft/<lib>`;
 naive "absolutising" produced self-referential links for three separate agents. Copy
-`.sugar-crush/`, `.vhs/`, `examples/`, `bin/`, `workflows/` too or ~10 fixture tests
+`.candy-code/`, `.vhs/`, `examples/`, `bin/`, `workflows/` too or ~10 fixture tests
 fail. Assert `ReflectionClass::getFileName()` is inside the sandbox before believing
 a run. Judge a mutation by whether the **targeted test file** flips green→red via
 `$?` — never by suite totals.
@@ -901,7 +901,7 @@ it — re-run before diagnosing anything else.**
 Every round of this plan quotes `tests / assertions` as its health figure. **PHPUnit 10 counts
 `assertLessThanOrEqual()` and `assertGreaterThanOrEqual()` as TWO assertions each** (they are
 composite `LogicalOr` constraints). Supervisor-verified directly, with a four-method probe run
-against `sugar-crush/vendor/bin/phpunit`:
+against `candy-code/vendor/bin/phpunit`:
 
 ```
 assertSame              -> OK (1 test, 1 assertion)
@@ -912,7 +912,7 @@ assertLessThan          -> 1 assertion   (plain comparisons are NOT doubled)
 
 **Scale, stated as two different things because they ARE two different things:**
 - **Repo-wide the distortion is small.** `grep -rho "assert\(Less\|Greater\)ThanOrEqual("` over
-  `sugar-crush/tests/` finds **142 static call sites**. If each ran exactly once that is +142 on
+  `candy-code/tests/` finds **142 static call sites**. If each ran exactly once that is +142 on
   92,144, i.e. **0.15%**. ⚠️ **That is a FLOOR, not the answer** — a static count cannot see loop
   iterations, and one such call inside a 281-iteration sweep contributes **562**.
 - **Per-bundle it can be enormous.** P8.4 reported **+1488 assertions** for +23 tests; the real
@@ -942,7 +942,7 @@ running lane a's three census files in both trees — same 93 tests, 21,747 asse
 **So: predict tests from the deltas as before. Predict assertions as a LOWER BOUND whenever any lane's
 diff contains a guard that enumerates files or paragraphs — and say so when you state the prediction.**
 The two round-43 rules still hold and still work (re-measure after the fix stage; run and reconcile
-`git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'` in writing).
+`git diff <base>..HEAD -- 'candy-code/tests/**' | grep -c '^+ *public function test'` in writing).
 
 
 

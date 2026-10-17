@@ -327,7 +327,7 @@ Badge says `php-≥8.1` (composer requires `^8.3`); packagist badge links `sugar
 
 No stream-write (`ftruncate;rewind`) anti-patterns — the lib has no stream-capture tests (CLI E2E
 uses `proc_open` pipes, correctly closed and `proc_close`-reaped, though `CliSmokeTest::runSkate` has
-no wall-clock bound — a hang wedges the suite; house precedent: bounded-child traits from candy-*/sugar-crush).
+no wall-clock bound — a hang wedges the suite; house precedent: bounded-child traits from candy-*/candy-code).
 Coverage per public method: **good** — Store/Database/Entry/ArgParser/Importers/Commands are all
 exercised, including traversal guards and sanitizeForTty. Gaps to close (beyond the bugs above,
 which each lack a failing-first test): (a) round-trip with `\n`/tab values; (b) backslash-in-glob;

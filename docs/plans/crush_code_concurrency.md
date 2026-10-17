@@ -1,6 +1,6 @@
 # crush_code — CONCURRENCY MAP
 
-**What this file is for.** The `sugar-crush` audit plan (`crush_code.md`, 75 items) is executed by a
+**What this file is for.** The `candy-code` audit plan (`crush_code.md`, 75 items) is executed by a
 supervisor who spawns agents. Until now that has been **one agent at a time in the live tree at
 `/home/sites/sugarcraft`**. The user wants to be able to flip that to **N agents in N isolated copies
 of the repo, all on `master`, each committing and pushing to `master`** — and to flip back — depending
@@ -38,9 +38,9 @@ without its domain*), and a concurrency map is exactly the kind of document that
   available, 1008 GB disk free, load 4.57 (supervisor-measured 2026-08-19). Six full-repo lanes cost
   ~11 GB of 1008 GB and six single-process phpunit runs against 48 cores. If you cap N, cap it for
   conflict reasons or for the user's own session/API limits — and say which.
-- **Isolation granularity: copy the WHOLE repo (`cp -a sugarcraft <lane>`), not just `sugar-crush/`.**
+- **Isolation granularity: copy the WHOLE repo (`cp -a sugarcraft <lane>`), not just `candy-code/`.**
   Measured, and this is the strongest single argument in the file: in a whole-repo copy all 16
-  `sugar-crush/vendor/sugarcraft/*` symlinks resolve *inside the copy* with **zero** repointing, the
+  `candy-code/vendor/sugarcraft/*` symlinks resolve *inside the copy* with **zero** repointing, the
   copy is a real git repo that can push, and a lane can safely edit a sibling lib. See §5.
 - **`git worktree` is the wrong tool here** and I verified the refusal by hand rather than quoting it:
   `git worktree add /tmp/wt-probe-master master` → `fatal: 'master' is already used by worktree at
@@ -57,9 +57,9 @@ without its domain*), and a concurrency map is exactly the kind of document that
 - Everything in `docs/plans/crush_agent_rules.md` still applies to every agent in every mode. Hand
   agents that **path**, never an inlined copy — RESUME §"AGENT CONTEXT BUDGET" records that a ~6,000
   word inlined preamble is one of the four causes of an agent hitting 360k context.
-- RESUME §6's forbidden-files list still applies **inside every lane copy**: `sugar-crush/phpunit.xml`,
-  `.sugar-crush/config.json` (md5 must stay `05480c743aff302fd6c06c5a4a4c2210` — verified unchanged
-  2026-08-19), `docs/plans/plans_cleaning.md`, `sugar-crush/python_port/`,
+- RESUME §6's forbidden-files list still applies **inside every lane copy**: `candy-code/phpunit.xml`,
+  `.candy-code/config.json` (md5 must stay `05480c743aff302fd6c06c5a4a4c2210` — verified unchanged
+  2026-08-19), `docs/plans/plans_cleaning.md`, `candy-code/python_port/`,
   `docs/plans/crush_code_worklog.md`, `docs/plans/crush_code_RESUME.md`.
   **Correction to RESUME §6, measured:** it calls `plans_cleaning.md` and `python_port/` "the user's own
   *untracked* work". Both are **git-tracked** (`git ls-files` returns them). The don't-touch rule stands;
@@ -109,7 +109,7 @@ agent that pattern-matches on those paths will edit the supervisor's tree from i
 cd /home/sites/sugarcraft
 git pull --ff-only                        # picks up every lane's pushed commits
 git status --porcelain                    # must be empty
-vendor/bin/phpunit  # (from sugar-crush/) — the supervisor's own verification run
+vendor/bin/phpunit  # (from candy-code/) — the supervisor's own verification run
 rm -rf /home/sites/crush-lane-w /home/sites/crush-lane-u /home/sites/crush-lane-s
 ```
 
@@ -147,8 +147,8 @@ Then **verify before deleting the lane**: run the full suite in the live tree, c
 is a *stop*, not a puzzle to solve at speed — keep the lane directory until it is resolved. Deleting a
 lane is the only irreversible step in this whole document.
 
-**Never drain by copying files over the top of the live tree.** `cp -a <lane>/sugar-crush/src
-/home/sites/sugarcraft/sugar-crush/` silently reverts anything the live tree gained since the lane was
+**Never drain by copying files over the top of the live tree.** `cp -a <lane>/candy-code/src
+/home/sites/sugarcraft/candy-code/` silently reverts anything the live tree gained since the lane was
 made, and the lane was made from a snapshot.
 
 ### 1.5 SWITCHING BACK ON LATER
@@ -164,8 +164,8 @@ fresh `cp -a` from a clean, pulled `master`. That is 7-10 seconds (§5.1).
 ### 2.1 What the columns mean
 
 - **id** — `P<phase>.<item>` in `crush_code.md`. The plan's own numbering.
-- **BS?** — does the item have to edit `sugar-crush/src/Cli/Bootstrap.php`? (the primary bottleneck)
-- **Chat?** — does it have to edit `sugar-crush/src/Chat.php`?
+- **BS?** — does the item have to edit `candy-code/src/Cli/Bootstrap.php`? (the primary bottleneck)
+- **Chat?** — does it have to edit `candy-code/src/Chat.php`?
 - **+src?** — does it add a `src/**.php` file, i.e. does it move the five censuses (§6.5)?
 - **size** — S/M/L. **This column is an estimate, not a measurement.** It is my judgement from the
   item's file fan-out and text; treat it as a hint for batching, never as a schedule.
@@ -181,7 +181,7 @@ modified files). They map to two plan items:
 | bundle | plan item | primary files | BS? | Chat? | +src? |
 |---|---|---|---|---|---|
 | C5a | P4.6 (part) | `src/Cli/ArgvParser.php`, `src/Cli/NonInteractive.php`, `src/Cli/Bootstrap.php` | ✅ | — | — |
-| C5b | P4.6 (part) | `src/Cli/Subcommands.php` (new), `bin/sugarcrush`, `src/Cli/Help.php` | ✅ | — | ✅ |
+| C5b | P4.6 (part) | `src/Cli/Subcommands.php` (new), `bin/candy-code`, `src/Cli/Help.php` | ✅ | — | ✅ |
 | C4a | P2.4 (part 1) | `src/Chat.php`, `src/Commands/CommandLoader.php`, `src/Cli/Bootstrap.php` | ✅ | ✅ | — |
 
 **All three are lane-W-and-U work.** Concurrency cannot be switched on cleanly until they are committed
@@ -212,18 +212,18 @@ by phase: 2→3, 3→4, 4→1, 6→6, 7→4, 8→9 = **27**. ✅
 | **P3.5** | (a) cell-width-aware padding in `SplitLayout.php:238` / `AgentViewPane.php:112`; (b) restyle `Cli\Help::screen()` with `candy-kit` | (a) `src/Tui/SplitLayout.php`, `src/Tui/AgentViewPane.php` → **S**; (b) `src/Cli/Help.php` → **W** | **split S+W** | (b) **`sugarcraft/candy-kit` is NOT a dependency — §2.4** | S | (b) — | — | — | <!-- @rename-keep historical provenance -->
 | **P4.6** | subcommands, `--config`, exit codes, `--output-format` validation | see §2.2 | **W** | **IN FLIGHT** | M | ✅ | — | ✅ |
 | **P6.1** | `WorktreeConfig`'s project-config path is `__DIR__`-relative, should be `$root`-relative | `src/Agents/WorktreeConfig.php:106` | **C** | nothing | S | — | — | — |
-| **P6.2** | layered settings: `.sugar-crush/settings.json` + `.local.json` + `~/.sugar-crush/settings.json`, merged | new `src/Config/*`, `src/Cli/Bootstrap.php` (it owns every config read: `readUserConfig`, `writeUserConfig`, `userConfigPath`, `configDirPath`, `trustedConfigDirPath`, `permissionConfig`, `permissionRules`) | **W** | nothing, and **it is the prerequisite for P6.3/P6.4/P6.5/P6.6** | L | ✅ | — | ✅ |
+| **P6.2** | layered settings: `.candy-code/settings.json` + `.local.json` + `~/.candy-code/settings.json`, merged | new `src/Config/*`, `src/Cli/Bootstrap.php` (it owns every config read: `readUserConfig`, `writeUserConfig`, `userConfigPath`, `configDirPath`, `trustedConfigDirPath`, `permissionConfig`, `permissionRules`) | **W** | nothing, and **it is the prerequisite for P6.3/P6.4/P6.5/P6.6** | L | ✅ | — | ✅ |
 | **P6.3** | `tools.allow`/`tools.deny` filter over `Bootstrap::tools()`'s returned list | `src/Cli/Bootstrap.php` | **W** | **P6.2** — there is no merged-settings object to read the keys off until it exists | S | ✅ | — | — |
 | **P6.4** | a `permission`/`permissionMode` settings block | `src/Cli/Bootstrap.php` (`permissionConfig()` ~2491, `permissionRules()` ~2659) | **W** | **P6.2**; the plan's other stated prerequisite (Phase 1 item 2, `PermissionGate` in the main loop) **is already satisfied** — Phase 1 is complete | M | ✅ | — | — |
 | **P6.5** | `keybindings` remap + `statusLine` command config | `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php` (the config read) | **W** | **P6.2** for the config half. The plan says this "can land independently at any point" — **that is true of the TUI half only**; the config half cannot precede the settings loader | M | ✅ | — | — |
-| **P6.6** | `--model` / `--permission-mode` CLI flags as the top precedence tier | `src/Cli/ArgvParser.php` (grep: **zero** `--model`/`--permission-mode` tokens today), `bin/sugarcrush`, `src/Cli/Bootstrap.php` | **W** | **P6.2** — "highest-precedence override tier" is meaningless without the tiers below it | M | ✅ | — | — |
-| **P7.3** | `docs/SKILLS.md`, `docs/AGENTS_AUTHORING.md`, `docs/MCP.md`, `docs/PERMISSIONS.md` | new files under `sugar-crush/docs/` | **D** | describes shipped behaviour — genuinely unblocked | M | — | — | — |
-| **P7.4** | `docs/HOOKS.md`, `docs/MEMORY.md`, `docs/WORKFLOWS.md`; fix README's built-in-hooks list (omits `BashEscapeDenyHook`) | new files under `sugar-crush/docs/`, `sugar-crush/README.md` | **D** | nothing | M | — | — | — |
-| **P7.5** | `docs/TROUBLESHOOTING.md` from `CALIBER_LEARNINGS.md`'s solved incidents | new file under `sugar-crush/docs/` | **D** | nothing | S | — | — | — |
-| **P7.6** | `docs/ARCHITECTURE.md`, incl. the "`App` wears two hats, do not retire it" warning | new file under `sugar-crush/docs/` | **D** | nothing | M | — | — | — |
+| **P6.6** | `--model` / `--permission-mode` CLI flags as the top precedence tier | `src/Cli/ArgvParser.php` (grep: **zero** `--model`/`--permission-mode` tokens today), `bin/candy-code`, `src/Cli/Bootstrap.php` | **W** | **P6.2** — "highest-precedence override tier" is meaningless without the tiers below it | M | ✅ | — | — |
+| **P7.3** | `docs/SKILLS.md`, `docs/AGENTS_AUTHORING.md`, `docs/MCP.md`, `docs/PERMISSIONS.md` | new files under `candy-code/docs/` | **D** | describes shipped behaviour — genuinely unblocked | M | — | — | — |
+| **P7.4** | `docs/HOOKS.md`, `docs/MEMORY.md`, `docs/WORKFLOWS.md`; fix README's built-in-hooks list (omits `BashEscapeDenyHook`) | new files under `candy-code/docs/`, `candy-code/README.md` | **D** | nothing | M | — | — | — |
+| **P7.5** | `docs/TROUBLESHOOTING.md` from `CALIBER_LEARNINGS.md`'s solved incidents | new file under `candy-code/docs/` | **D** | nothing | S | — | — | — |
+| **P7.6** | `docs/ARCHITECTURE.md`, incl. the "`App` wears two hats, do not retire it" warning | new file under `candy-code/docs/` | **D** | nothing | M | — | — | — |
 | **P8.3** | `StallDetector` → the agent dashboard | `src/Tui/Components/AgentDashboardPane.php` (`agentEntry()` ~343, `sessionEntry()` ~369) | **S** | nothing — **and the plan is wrong about which half is missing; see §2.5** | S | — | ⚠ read-only | — |
 | **P8.4** | decide the split-pane compositor's fate: wire it, or document it as deferred | `src/Tui/SplitLayout.php`, `src/Tui/MultiplexerSplitPane.php`, `src/Tui/Renderer.php` | **S** | wiring needs `AgentManager::liveOutput()` — which **exists** (cited in `AgentDashboardPane.php:357`), so the item is a decision, not a blocked task | M | — | — | — |
-| **P8.6** | record VHS demos for the permission modal, an Edit/Write diff, the agent dashboard | `sugar-crush/.vhs/*.tape` | **D** | nothing — **and it is very probably already DONE; see §2.5** | S | — | — | — |
+| **P8.6** | record VHS demos for the permission modal, an Edit/Write diff, the agent dashboard | `candy-code/.vhs/*.tape` | **D** | nothing — **and it is very probably already DONE; see §2.5** | S | — | — | — |
 | **P8.8** | a PHP-feasible repo-map block injected once per session like `<env>` | new `src/Context/RepoMap.php` (name mine), `src/Context/EnvironmentBlock.php` or `src/Runtime.php:1424` | **C** | nothing | M | — | — | ✅ |
 | **P8.9** | give `Grep` the `InstructionFileLoader` wiring `Read`/`Edit`/`Glob` already have | `src/Tools/BuiltIn/Grep.php` (measured: **0** `InstructionFileLoader` hits; ctor is `(?string $root, int $maxOutputBytes)`), `src/Cli/Bootstrap.php` (the `new Grep($root)` line) | **W** | nothing | S | ✅ | — | — |
 | **P8.10** | a size-capped `git diff` in `EnvironmentBlock` alongside status/log | `src/Context/EnvironmentBlock.php` (measured: **0** `git diff` hits) | **C** | nothing | S | — | — | — |
@@ -248,18 +248,18 @@ only signal is the skip count going 1 → 2 and every figure the agent reports a
 
 ```sh
 cd /home/sites/crush-lane-s
-#  add the require line to sugar-crush/composer.json by hand, then:
+#  add the require line to candy-code/composer.json by hand, then:
 php tools/check-path-repos.php --fix --strict-closure     # scratch only, never committed
-cd sugar-crush && composer update 'sugarcraft/*' --quiet  # sugarcraft/* scoped: 3rd-party stays put
+cd candy-code && composer update 'sugarcraft/*' --quiet  # sugarcraft/* scoped: 3rd-party stays put
 cd .. && git checkout -- '*/composer.json'                # throw the injected repos[] away
 #  now re-add ONLY the require line (the checkout above reverted it too), then:
 php tools/check-path-repos.php --no-lib-path-repos        # must exit 0
-ls -la sugar-crush/vendor/sugarcraft/ | wc -l             # 16 → 17
-cd sugar-crush && vendor/bin/phpunit tests/Tools/BuiltIn/GitignoreAwarenessTest.php
+ls -la candy-code/vendor/sugarcraft/ | wc -l             # 16 → 17
+cd candy-code && vendor/bin/phpunit tests/Tools/BuiltIn/GitignoreAwarenessTest.php
 #  the symlink-awareness test must PASS (not skip) — a skip means the symlinks are gone
 ```
 
-This also makes `sugar-crush/composer.json` a **cross-lane shared file** (§6.4).
+This also makes `candy-code/composer.json` a **cross-lane shared file** (§6.4).
 
 ### 2.5 THREE ITEMS WHERE MY GREP DISAGREES WITH THE PLAN
 
@@ -288,9 +288,9 @@ which is painted by `src/Tui/`. Same defect, in the tracker, about the defect-pr
 
 **(b) P8.6 — its premise is false at HEAD.**
 The item says *"currently only one tape exists (plain markdown reply)"* and asks for three: the
-permission modal, an Edit/Write diff, the agent dashboard. Measured, `sugar-crush/.vhs/` contains
+permission modal, an Edit/Write diff, the agent dashboard. Measured, `candy-code/.vhs/` contains
 **5 tapes and 5 gifs**: `agents`, `chat`, `cli`, `diff`, `permission` — i.e. **exactly the three the
-item asks for, plus two**. `sugar-crush/examples/` carries their drivers: `permission-prompt.php`,
+item asks for, plus two**. `candy-code/examples/` carries their drivers: `permission-prompt.php`,
 `edit-diff.php`, `agent-dashboard.php`. `permission.tape`'s own header comments explain the `n`-answer
 choice. And `origin/master` is one commit ahead of local with `2f51b1a3 "vhs: regenerate demo GIFs"`,
 which re-rendered all five. **Expect P8.6 to close as a no-op like B4 did** — but confirm by opening
@@ -302,7 +302,7 @@ Measured: `src/Agents/WorktreeConfig.php:106` is still
 `public static function defaultConfigDir(): string { return \dirname(__DIR__, 3); }` — i.e. still
 `__DIR__`-relative, which is the exact defect the item names. What *was* fixed is testability: the
 docblock at `:94-104` says the expression became "a named seam" specifically so the test can drive a
-temporary tree instead of mutating the repo's own tracked `.sugar-crush/config.json`, and it says in as
+temporary tree instead of mutating the repo's own tracked `.candy-code/config.json`, and it says in as
 many words that *"changing where a shipped library reads its settings from is not this change-set's
 call"* — a deliberate deferral, not a fix. So the item is **open**, and the previous work is a reason
 it is now cheap rather than a reason to skip it.
@@ -311,11 +311,11 @@ it is now cheap rather than a reason to skip it.
 
 | lane | owns (primary) | items | in flight |
 |---|---|---|---|
-| **W** — wiring / CLI / config | `src/Cli/**`, `bin/sugarcrush`, `src/Commands/CommandLoader.php`, new `src/Tools/BuiltIn/*`, new `src/Plugins/*`, new `src/Config/*` | P2.4, P2.7, P2.9, P3.5b, P4.6, P6.2, P6.3, P6.4, P6.5, P6.6, P8.9, P8.13 | C5a, C5b, C4a |
+| **W** — wiring / CLI / config | `src/Cli/**`, `bin/candy-code`, `src/Commands/CommandLoader.php`, new `src/Tools/BuiltIn/*`, new `src/Plugins/*`, new `src/Config/*` | P2.4, P2.7, P2.9, P3.5b, P4.6, P6.2, P6.3, P6.4, P6.5, P6.6, P8.9, P8.13 | C5a, C5b, C4a |
 | **U** — transcript / input | `src/Chat.php`, `src/Renderer.php` | P3.3, P3.4 | (C4a also touches `Chat.php` — see §3.3) |
 | **S** — shell / panes | `src/Tui/**` | P3.2, P3.5a, P8.3, P8.4 | — |
 | **C** — context / instruction loading | `src/Context/**`, `src/Agents/WorktreeConfig.php` | P6.1, P8.8, P8.10, P8.11 | — |
-| **D** — docs / media | `sugar-crush/docs/**`, `sugar-crush/.vhs/**`, `sugar-crush/examples/**` | P7.3, P7.4, P7.5, P7.6, P8.6, P8.15 | — |
+| **D** — docs / media | `candy-code/docs/**`, `candy-code/.vhs/**`, `candy-code/examples/**` | P7.3, P7.4, P7.5, P7.6, P8.6, P8.15 | — |
 
 Item counts: W = 11 distinct plan items (12 rows, because P3.5 is split), U = 2, S = 4 (incl. P3.5a),
 C = 4, D = 6. **11 + 2 + 4 + 4 + 6 = 27.** ✅
@@ -335,7 +335,7 @@ would be exhaustive and unread; these five statements are what actually governs 
   `src/Config/`.
 - S touches `src/Tui/**` only.
 - C touches `src/Context/**` and `src/Agents/WorktreeConfig.php` only.
-- D touches `sugar-crush/docs/**`, `.vhs/**`, `examples/**` only.
+- D touches `candy-code/docs/**`, `.vhs/**`, `examples/**` only.
 
 No file appears in two of those four sets. **The three carve-outs that break it are §3.2, §3.4 and
 §6.5** — read those before trusting this line.
@@ -380,10 +380,10 @@ then two lanes' `candy-core` commits rebase against each other with no lane-owne
 them.
 
 > **The rule: a sibling lib is claimed by NAME, by one lane at a time, from the supervisor.** Before a
-> lane may edit `candy-*`/`sugar-*`/`honey-*` outside `sugar-crush/`, it asks. The supervisor keeps the
+> lane may edit `candy-*`/`sugar-*`/`honey-*` outside `candy-code/`, it asks. The supervisor keeps the
 > claim list — there are only ever a handful. A lane that finds it needs an unclaimed sibling edit
 > mid-item **stops and reports** rather than taking it; RESUME §3's "record the finding, defer the fix"
-> discipline already covers exactly this case (E46 and E49 are both "W1 was scoped to sugar-crush, so
+> discipline already covers exactly this case (E46 and E49 are both "W1 was scoped to candy-code, so
 > this was deferred").
 
 ### 3.5 The concurrency arithmetic, stated honestly
@@ -409,10 +409,10 @@ lines:
 
 | primary file | E-items | count |
 |---|---|---|
-| `sugar-crush/src/Chat.php` | E2, E3, E4, E7, E8, E17, E20, E21, E22, E31, E32, E33 | **12** |
-| `sugar-crush/src/Renderer.php` | E5, E6, E43, E47, E48 | **5** |
-| `sugar-crush/src/Context/ContextCompactor.php` | E18, E23, E38 | **3** |
-| `sugar-crush/src/Cli/Bootstrap.php` | E40, E45 | **2** |
+| `candy-code/src/Chat.php` | E2, E3, E4, E7, E8, E17, E20, E21, E22, E31, E32, E33 | **12** |
+| `candy-code/src/Renderer.php` | E5, E6, E43, E47, E48 | **5** |
+| `candy-code/src/Context/ContextCompactor.php` | E18, E23, E38 | **3** |
+| `candy-code/src/Cli/Bootstrap.php` | E40, E45 | **2** |
 | sibling libs | E15, E46, E49, E50 | **4** |
 | everything else (one file each, or no single file) | E1, E9-E14, E16, E19, E24-E30, E34-E37, E39, E41, E42, E44 | 24 |
 
@@ -459,7 +459,7 @@ confirmed RCE counting as functionality and jumping the queue whenever a user re
     standalone commit with **nothing else in flight**, because the figure has been invalidated three
     times in one session. In N-agent mode that means: **it is the last thing done before switching
     concurrency off, or the first thing done after** — never while a lane is live.
-    Measured 2026-08-19: `sugar-crush/README.md:629` says "7,276 tests / 76,239 assertions"; HEAD's
+    Measured 2026-08-19: `candy-code/README.md:629` says "7,276 tests / 76,239 assertions"; HEAD's
     baseline is 7,637 / 89,596. `README.md:651` says "all 10 built-in" tools — that one is **live** and
     moves with P2.7/P8.13. `README.md:649`'s "4,337/12,587" is a **deliberate historical citation**
     ("For scale rather than for accuracy…") and **must not be touched**.
@@ -475,12 +475,12 @@ confirmed RCE counting as functionality and jumping the queue whenever a user re
 ### 5.1 The decision: full-repo copy
 
 **Recommendation: `cp -a /home/sites/sugarcraft /home/sites/crush-lane-<x>` — the whole monorepo, not
-just `sugar-crush/`.** Four reasons, all measured 2026-08-19:
+just `candy-code/`.** Four reasons, all measured 2026-08-19:
 
-| | full-repo `cp -a sugarcraft` | lib-only `cp -a sugar-crush` |
+| | full-repo `cp -a sugarcraft` | lib-only `cp -a candy-code` |
 |---|---|---|
 | `vendor/sugarcraft/*` symlinks | **all 16 resolve inside the copy, zero repointing.** Verified: `readlink -f <copy>/sugar-crush/vendor/sugarcraft/candy-core` → `<copy>/candy-core`; `find -xtype l` over that dir → **0** broken | **all 16 escape the sandbox.** They are relative `../../../<lib>/`, which from `<lane>/vendor/sugarcraft/` resolves to `<parent-of-lane>/<lib>` — the wrong place, or the live tree. This is RESUME §7's repointing chore *and* an isolation leak | <!-- @rename-keep historical provenance -->
-| git | **a real repo.** Verified in the copy: branch `master`, HEAD `1c78cc7a`, `origin git@github.com:detain/sugarcraft.git`. It can commit and push with no extra wiring | **no `.git` at all** — `sugar-crush/` is a subdirectory of one repo, not a repo. Cannot commit, which the user's model requires |
+| git | **a real repo.** Verified in the copy: branch `master`, HEAD `1c78cc7a`, `origin git@github.com:detain/sugarcraft.git`. It can commit and push with no extra wiring | **no `.git` at all** — `candy-code/` is a subdirectory of one repo, not a repo. Cannot commit, which the user's model requires |
 | sibling-lib edits | possible and isolated — the lane edits its own `candy-core/` | impossible without reaching into the live tree | <!-- @rename-keep historical provenance -->
 | disk | 1.9 GB per lane (`du -sh`), 1008 GB free. 6 lanes ≈ 11 GB | 124 MB per lane (109 MB of it `vendor/`) |
 | copy time | **6.7 s** (supervisor-measured) / **9.7 s** (mine, same 1.9 GB source, warm-ish cache — two runs, two numbers, both fine) | not measured |
@@ -596,7 +596,7 @@ can be committed to `master` by an agent following its brief exactly, and the ag
 right to do it.
 
 The LSP lane happened to stage selectively and its commit came out clean (12 files, all under
-`sugar-crush/`). That was luck, not design, and luck is not a control.
+`candy-code/`). That was luck, not design, and luck is not a control.
 
 **Fix, applied to every lane at creation time — local-only, never a tracked `.gitignore`:**
 
@@ -623,39 +623,39 @@ that probe's actual output, not a prediction.
 LANE=/home/sites/crush-lane-w
 
 # (1) No broken symlinks, and they point INSIDE the lane.
-find $LANE/sugar-crush/vendor/sugarcraft -maxdepth 1 -xtype l | wc -l        # must be 0
+find $LANE/candy-code/vendor/sugarcraft -maxdepth 1 -xtype l | wc -l        # must be 0
 readlink -f $LANE/sugar-crush/vendor/sugarcraft/candy-core                    # must start with $LANE <!-- @rename-keep historical provenance -->
 
 # (2) THE CHECK THAT MATTERS (RESUME §7): reflection must resolve inside the lane.
 #     A lane can look right and still load the live tree's classes.
-cd $LANE/sugar-crush && php -r 'require "vendor/autoload.php";
+cd $LANE/candy-code && php -r 'require "vendor/autoload.php";
   echo (new ReflectionClass(SugarCraft\Core\Model::class))->getFileName(), "\n";
-  echo (new ReflectionClass(SugarCraft\Crush\Theme::class))->getFileName(), "\n";'
+  echo (new ReflectionClass(SugarCraft\Code\Theme::class))->getFileName(), "\n";'
 #   probe output was:
 #     /home/sites/crush-lane-probe/candy-core/src/Model.php     <- the SIBLING, inside the lane <!-- @rename-keep historical provenance -->
-#     /home/sites/crush-lane-probe/sugar-crush/src/Theme.php
+#     /home/sites/crush-lane-probe/candy-code/src/Theme.php
 #   If either path says /home/sites/sugarcraft, the lane is fake. Delete it and start over.
 
 # (3) The 1-skip invariant, cheaply. The single legitimate skip lives in tests/MCP/McpClientTest.php
 #     (NOT tests/McpClientTest.php — two files share the basename, cite the path).
-cd $LANE/sugar-crush && vendor/bin/phpunit tests/MCP/McpClientTest.php
+cd $LANE/candy-code && vendor/bin/phpunit tests/MCP/McpClientTest.php
 #   probe output: OK, but some tests were skipped! Tests: 40, Assertions: 69, Skipped: 1.  rc=0
 
 # (4) The symlinks are seen AS symlinks — the test that self-skips when they are gone must PASS.
-cd $LANE/sugar-crush && vendor/bin/phpunit \
+cd $LANE/candy-code && vendor/bin/phpunit \
   --filter testTheMonorepoPathRepoSymlinksAreNotFollowed tests/Tools/BuiltIn/GitignoreAwarenessTest.php
 #   probe output: OK (1 test, 2 assertions), rc=0.  A SKIP here means vendor/sugarcraft is real
 #   directories, the lane is testing Packagist, and every figure it will ever report is void.
 
 # (4b) THE STRONGEST PROOF, if you can spend 3 minutes: the FULL suite, in the lane.
-cd $LANE/sugar-crush && vendor/bin/phpunit > /tmp/lane-full.txt 2>&1; echo "rc=$?"; tail -4 /tmp/lane-full.txt
+cd $LANE/candy-code && vendor/bin/phpunit > /tmp/lane-full.txt 2>&1; echo "rc=$?"; tail -4 /tmp/lane-full.txt
 #   Measured on the probe copy 2026-08-19 (a copy of the CURRENT dirty tree, i.e. WITH C5a/C5b/C4a):
 #     Tests: 7741, Assertions: 90040, Skipped: 1.   rc=0   Time: 03:11.497, Memory: 245.90 MB
 #   A full-repo `cp -a` sandbox reproduces a fully green suite with the 1 load-bearing skip and
 #   needs no symlink work at all. REDIRECT, never pipe. Needs a 600000 ms Bash timeout.
 
 # (5) The tracked config must be byte-identical (RESUME §6).
-md5sum $LANE/.sugar-crush/config.json      # must be 05480c743aff302fd6c06c5a4a4c2210
+md5sum $LANE/.candy-code/config.json      # must be 05480c743aff302fd6c06c5a4a4c2210
 
 # (6) git identity.
 git -C $LANE rev-parse --abbrev-ref HEAD   # master
@@ -666,7 +666,7 @@ git -C $LANE status --porcelain            # empty, unless you deliberately copi
 **This supersedes RESUME §7 for full-repo lanes.** §7's instruction — *"re-point each relative symlink
 explicitly at `/home/sites/sugarcraft/<lib>`; naive absolutising produced self-referential links for
 three separate agents"* — is correct **for the lib-only sandbox it was written about** (mutation
-testing on a `cp -a sugar-crush`), where the links genuinely escape. For a whole-repo lane, repointing
+testing on a `cp -a candy-code`), where the links genuinely escape. For a whole-repo lane, repointing
 is not merely unnecessary, **it is the bug**: pointing a lane's `vendor/sugarcraft/candy-core` at <!-- @rename-keep historical provenance -->
 `/home/sites/sugarcraft/candy-core` breaks the isolation on purpose and makes lane suites load the <!-- @rename-keep historical provenance -->
 supervisor's files. Do not do it. Check (2) is what catches it either way.
@@ -703,7 +703,7 @@ Three independent reasons, any one of which is fatal for this use:
 ```
 
 Measured 2026-08-19: four `php -S` servers left behind by **candy-mosaic's** SSRF tests, 3h18m old, <!-- @rename-keep historical provenance -->
-0.0% CPU each. They are not sugar-crush's and sugar-crush's suite does not start them.
+0.0% CPU each. They are not candy-code's and candy-code's suite does not start them.
 
 **Why they belong in a concurrency document.** They are the standing proof that the "never run a global
 `pkill`" rule (RESUME §4, and every agent-rules file) is load-bearing *and gets sharper with N lanes*.
@@ -712,8 +712,8 @@ and each of them reports a red suite it cannot explain. **Kill only PIDs you sta
 four ever need cleaning, the supervisor kills them by the PIDs above, in the live tree, with no lane
 running.
 
-They hold 4 loopback ports. sugar-crush's own suite binds ephemeral ports in some fixtures; **I did not
-measure port-collision risk across N concurrent sugar-crush suites** and I am not going to guess at it.
+They hold 4 loopback ports. candy-code's own suite binds ephemeral ports in some fixtures; **I did not
+measure port-collision risk across N concurrent candy-code suites** and I am not going to guess at it.
 If two lanes' suites ever fail simultaneously in a network-shaped test, this is the first hypothesis.
 
 ---
@@ -741,7 +741,7 @@ failures. Serialise the runs, not just the writes."*
 
 **In isolated directories that hazard is gone**, because a lane's suite loads only its own copy's files
 — which is exactly what §5.3 check (2) proves (`ReflectionClass::getFileName()` inside the lane, for
-both a sibling lib and sugar-crush itself). **So: lanes may run their suites concurrently.** This is my
+both a sibling lib and candy-code itself). **So: lanes may run their suites concurrently.** This is my
 reading of §3's mechanism plus a direct measurement of the isolation, not something §3 says. If phantom
 failures ever appear anyway, re-serialise the runs and tell the supervisor — but do not serialise them
 pre-emptively, because a serialised test queue would remove most of the value of running 4 lanes.
@@ -762,7 +762,7 @@ git push origin master                        # if rejected: pull --rebase again
 own: at the moment of writing, local `master` is **1 ahead / 1 behind** `origin/master`, and the
 upstream commit is `2f51b1a3 "vhs: regenerate demo GIFs"` — the `.github/workflows/vhs.yml` job
 re-rendering and pushing autonomously. It touched **7 binary `.gif` files** under `candy-core/.vhs/` <!-- @rename-keep historical provenance -->
-and `sugar-crush/.vhs/`. So drift on `master` arrives from a non-human writer that no lane coordination
+and `candy-code/.vhs/`. So drift on `master` arrives from a non-human writer that no lane coordination
 can see.
 
 **Which produces a hard rule: no lane ever commits a `.vhs/*.gif`.** A rebase conflict on a binary file
@@ -796,18 +796,18 @@ N=4 it is a conflict on every single item. The rule that removes it:
 | `docs/plans/crush_code_hardening_backlog.md` | **supervisor only** | RESUME §3 requires *every* bundle to record deferred findings here, so at N=4 it is guaranteed to be four-way contended. Lanes put deferred findings **in their agent report**, in the What/Where/Severity/Evidence/Step/Blocked-on format, and the supervisor appends. |
 | `docs/plans/crush_code_RESUME.md`, `crush_code_worklog.md` | **supervisor only** | already the rule (RESUME §6) |
 | `docs/plans/crush_code_concurrency.md` (this file) | **supervisor only** | it is the map; a lane editing the map is a lane redrawing its own boundary |
-| `sugar-crush/README.md` | **lane D**, with one carve-out | README is the most-contended non-plan file. Give it to D. **Carve-out:** the suite figure at `:629` and the "all 10 built-in" at `:651` are supervisor-only (Tier 4 / §6.5). |
-| `sugar-crush/docs/**` | **lane D** | |
-| `sugar-crush/composer.json` | **supervisor only** | §2.4 — a `require` bump needs a `composer update` that agents may not run |
+| `candy-code/README.md` | **lane D**, with one carve-out | README is the most-contended non-plan file. Give it to D. **Carve-out:** the suite figure at `:629` and the "all 10 built-in" at `:651` are supervisor-only (Tier 4 / §6.5). |
+| `candy-code/docs/**` | **lane D** | |
+| `candy-code/composer.json` | **supervisor only** | §2.4 — a `require` bump needs a `composer update` that agents may not run |
 | `.github/workflows/vhs.yml` | **supervisor only** | hand-maintained `all=(…)` array; only moves if lane D adds a tape |
-| `docs/_data/sugar-crush.{json,body.html}` + `docs/lib/sugar-crush.html` | **lane D** | and the `.html` is **generated** — edit the `_data` sources, run `php tools/gen-docs.php`, never hand-edit the page |
+| `docs/_data/candy-code.{json,body.html}` + `docs/lib/candy-code.html` | **lane D** | and the `.html` is **generated** — edit the `_data` sources, run `php tools/gen-docs.php`, never hand-edit the page |
 
 **A lane's deliverable is a commit plus a report. It is never a plan edit.** That single sentence
 removes most of the cross-lane conflict surface.
 
 ### 6.5 The census token — the collision that merges CLEANLY and is silently wrong
 
-Adding any `src/**.php` file to `sugar-crush` moves five counters, and RESUME requires all five in the
+Adding any `src/**.php` file to `candy-code` moves five counters, and RESUME requires all five in the
 same diff:
 
 1. `tests/Tools/BuiltInToolCorpusTest.php` — file count. **At `HEAD` (`1c78cc7a`): `assertSame(276, …,
@@ -828,8 +828,8 @@ same diff:
 **Plus, for a new TOOL specifically** (P2.7 LspTool, P8.13 Task) — two prose figures that are not in
 RESUME's list of five and that I found by grep:
 
-6. `sugar-crush/README.md:651` — *"all 10 built-in"*.
-7. `sugar-crush/src/Cli/Bootstrap.php:3304` and `:3309` — *"the ten built-ins keep the wire order"* and
+6. `candy-code/README.md:651` — *"all 10 built-in"*.
+7. `candy-code/src/Cli/Bootstrap.php:3304` and `:3309` — *"the ten built-ins keep the wire order"* and
    *"The doc-block above deliberately still says TEN"*. That second comment is the trap: it explains
    that TEN is correct **for the built-in set** even though `tools()` returns more, so a naive
    count-bump is wrong and a naive leave-alone is also wrong. Read the comment before touching it.
@@ -899,7 +899,7 @@ const LANES = {
   W: { dir: '/home/sites/crush-lane-w', owns: 'src/Cli/**, bin/, new src/Tools/BuiltIn/*, new src/Config/*' },
   C: { dir: '/home/sites/crush-lane-c', owns: 'src/Context/**, src/Agents/WorktreeConfig.php' },
   S: { dir: '/home/sites/crush-lane-s', owns: 'src/Tui/**' },
-  D: { dir: '/home/sites/crush-lane-d', owns: 'sugar-crush/docs/**, .vhs/**, examples/**' },
+  D: { dir: '/home/sites/crush-lane-d', owns: 'candy-code/docs/**, .vhs/**, examples/**' },
 }
 
 const pre = (lane) => `Your repo root is ${LANES[lane].dir}. Read ${LANES[lane].dir}/${RULES} and follow
@@ -984,7 +984,7 @@ Stated explicitly so nobody reads an estimate as a measurement (RESUME §5).
   bundles' measure steps must settle it, and if either does need `Chat.php`, §3.2's U/W carve-out
   applies to it too.
 - **The S/M/L size column.** Judgement, not measurement.
-- **Port-collision risk across N concurrent sugar-crush suites.** §5.5.
+- **Port-collision risk across N concurrent candy-code suites.** §5.5.
 - **Whether N concurrent full suites slow each other down.** One full suite in a probe copy took
   **3m11.497s** against the ~2m20s figure RESUME records for the live tree. Three confounds make that
   gap uninterpretable: the machine was at load ~4.5 with other work running, the probe carried the

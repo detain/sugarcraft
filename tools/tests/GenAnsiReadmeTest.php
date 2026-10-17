@@ -179,7 +179,7 @@ final class GenAnsiReadmeTest extends TestCase
         return <<<'MD'
             # Fixture ANSI art
 
-            **1 pieces** across 1 categories. 0 come from the original run — 0 in `sugarcraft/`, 0 in `sugar-crush/`. The other 0 are the per-library slot series. By depth: 0 16-color · 0 256-color · 0 truecolor.
+            **1 pieces** across 1 categories. 0 come from the original run — 0 in `sugarcraft/`, 0 in `candy-code/`. The other 0 are the per-library slot series. By depth: 0 16-color · 0 256-color · 0 truecolor.
 
             Prose the generator must not touch.
 
@@ -329,7 +329,7 @@ final class GenAnsiReadmeTest extends TestCase
         $readme = $this->readme($this->makeFixtureRoot());
 
         $this->assertStringContainsString('**5 pieces** across 2 categories', $readme);
-        $this->assertStringContainsString('2 come from the original run — 2 in `sugarcraft/`, 0 in `sugar-crush/`', $readme);
+        $this->assertStringContainsString('2 come from the original run — 2 in `sugarcraft/`, 0 in `candy-code/`', $readme);
         $this->assertStringContainsString('The other 3 are the per-library slot series', $readme);
         $this->assertStringContainsString('By depth: 2 16-color · 2 256-color · 1 truecolor.', $readme);
         $this->assertStringNotContainsString('**1 pieces**', $readme);

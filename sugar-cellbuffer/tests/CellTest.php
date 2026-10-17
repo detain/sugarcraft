@@ -115,7 +115,7 @@ final class CellTest extends TestCase
      * stored and returned VERBATIM, so callers rendering untrusted text
      * must sanitize before building cells. A hard reject in Cell::new()/
      * the constructor was evaluated but deferred because foundation
-     * consumers (sugar-treelist, sugar-crush, sugar-table) splat pre-rendered
+     * consumers (sugar-treelist, candy-code, sugar-table) splat pre-rendered
      * strings char-by-char into runes and rely on this pass-through. If the
      * pass-through is ever swapped for a hard reject, this test fails —
      * forcing that decision (and its dependents' sanitization) to be

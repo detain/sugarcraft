@@ -13,7 +13,7 @@ use SugarCraft\Constraints\Region;
  *
  * Original SugarCraft design (no upstream mirror). Column and stack shares are
  * rationals (numerator/denominator) so they survive arbitrary resizes without
- * floating-point drift — the same discipline sugar-crush's `Tui\SplitLayout`
+ * floating-point drift — the same discipline candy-code's `Tui\SplitLayout`
  * applies to its two-pane split (prose reference only; this package stays a
  * dependency-free leaf).
  *

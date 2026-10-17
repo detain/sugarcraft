@@ -6,7 +6,7 @@ Base: 6709f44bd. Worktree /home/sites/sugarcraft-e2, branch rename/e2. Never mas
 
 - ns `SugarCraft\Metrics\` UNCHANGED (Metrics→Metrics). bins {} (none). composer name only + dirs.
 - Zero external composer consumers: root composer.json (:58 require, :219 repo url) + lib self only.
-- Zero code refs `SugarCraft\Metrics\` outside lib (sugar-dashboard `MetricsGrid` = generic word, NOT a rename token; sugar-crush has zero Metrics tests → the briefed crush `--filter Metrics` gate is vacuous, disclosed).
+- Zero code refs `SugarCraft\Metrics\` outside lib (sugar-dashboard `MetricsGrid` = generic word, NOT a rename token; candy-code has zero Metrics tests → the briefed crush `--filter Metrics` gate is vacuous, disclosed).
 - Zero env reads (no CANDY_METRICS_*/CANDYMETRICS_*), zero `candy_metrics`, zero compact `candymetrics` → honest none: NO LegacyEnv/LegacyPaths entries; R6 `Lang::NAMESPACE='metrics'` stays. <!-- @rename-keep -->
 - No ansi/candy-metrics/ wordmark dir. ansi/sugarcraft/*.ansi art CONTENT lists lib names — C.3-excluded (residue never counts .ansi) → followups note. <!-- @rename-keep -->
 - Base suite (R0, re-measured in-lane + rename-baseline.md:46 agrees): 174T/464A/0F/0E/0S exit0.

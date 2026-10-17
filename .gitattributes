@@ -15,4 +15,4 @@
 # `git diff --check` must not report them as trailing whitespace. Added by
 # the Phase 2 close (3d7c7e420), which OVERWROTE this file instead of
 # appending and so deleted every rule above it; restored 2026-08-29.
-sugar-crush/tests/fixtures/prompt/** whitespace=-trailing-space
+candy-code/tests/fixtures/prompt/** whitespace=-trailing-space

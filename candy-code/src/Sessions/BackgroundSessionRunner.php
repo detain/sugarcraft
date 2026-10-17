@@ -1,0 +1,1263 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Sessions;
+
+use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Chat;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\PermissionConfigException;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Permissions\ToolRefusal;
+use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\SessionLock;
+use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Usage;
+
+/**
+ * The agent loop that a `/bg` background session actually runs.
+ *
+ * {@see BackgroundSupervisor::spawnSession()} double-forks a detached PHP
+ * process; that process requires the composer autoloader and hands control
+ * straight to {@see self::main()}. Everything the daemon does after
+ * daemonizing lives here rather than inside the `php -r` bootstrap string so
+ * it is ordinary, unit-testable repository code — the previous inline daemon
+ * only answered HEARTBEAT/RESUME/STOP and never executed the task it was
+ * spawned with, which made "Backgrounded as <id>" a message about work that
+ * never happened (crush_feat.md section 5 E3).
+ *
+ * Process shape, and why:
+ *
+ *  - The daemon connects back to the supervisor's Unix socket and sends
+ *    `HELLO:<sessionId>:<pid>`. The PID matters: `spawnSession()` otherwise
+ *    only knows the PID of the short-lived `php -r` launcher, which exits
+ *    during the double fork, so {@see BackgroundSupervisor::reconnect()}
+ *    would see a dead process and declare every session Completed the
+ *    instant it was spawned.
+ *  - The task runs in a forked worker so a multi-minute agent turn cannot
+ *    block heartbeat/RESUME/STOP servicing. The daemon keeps that command
+ *    loop, re-binding the same socket path as a *server* once the spawn
+ *    connection closes — the supervisor's `reconnect()` connects to exactly
+ *    that path, so RESUME reaches a live daemon instead of a closed socket.
+ *  - The daemon exits as soon as the task settles. That exit is the
+ *    completion signal `reconnect()` already looks for (`isProcessRunning()`
+ *    false → Completed), and by then the worker has appended the assistant's
+ *    answer to the buffer file `reconnect()` restores output from.
+ *
+ * Buffer writes are single `FILE_APPEND` calls of whole lines: the worker and
+ * the daemon append to the same file concurrently, and O_APPEND makes each
+ * such write atomic, so a heartbeat record can never land inside a line of
+ * model output. Lines prefixed `[session:` are internal and are skipped by
+ * {@see BackgroundSupervisor::reconnect()}; everything else is the answer.
+ *
+ * ## Command trust model (audit M5)
+ *
+ * Once the daemon re-binds the socket path it is a SERVER on a filesystem
+ * name any local user could previously reach, and its `STOP` command kills
+ * the session — before this fix, any same-host process that connected first
+ * could stop sessions it never owned. Defence in depth, matching
+ * {@see BackgroundSupervisor}'s handshake side:
+ *
+ * - The daemon (and everything it creates, including the re-bound socket)
+ *   runs under `umask(0o077)` set in the spawn bootstrap, so the socket node
+ *   itself is owner-only connectable.
+ * - Every accepted connection must open with `AUTH <token>` where `<token>`
+ *   equals the CURRENT contents of the per-spawn 0600 token file
+ *   ({@see self::$tokenPath}), compared with `hash_equals`. It is re-read per
+ *   connection so the file, not a cached copy, is the single source of truth.
+ * - Missing or empty token file at connect time is a REFUSAL, not a
+ *   fall-back to trusting the peer — a deleted/garbled secret narrows
+ *   availability, never widens it.
+ *
+ * The legitimate supervisor already knows the token: it minted the file and
+ * hands the daemon only its PATH, so possession of the 0600 file (uid-owned,
+ * 0700 directory) is the capability. `STOP` is only reachable post-AUTH, and
+ * the pid it acts on is the daemon's own fork-local worker — never a
+ * peer-supplied number.
+ */
+final class BackgroundSessionRunner
+{
+    /** Handshake prefix the supervisor authenticates on spawn (audit M5). */
+    public const HANDSHAKE_PREFIX = 'HELLO:';
+
+    /**
+     * Command-line auth prefix (audit M5).
+     *
+     * Sent by {@see BackgroundSupervisor::reconnect()} and required by
+     * {@see self::serveClient()} as the FIRST line of every accepted
+     * connection on the daemon-rebound socket: `AUTH <token>` where `<token>`
+     * is the current contents of the per-spawn 0600 token file. The trailing
+     * space is part of the wire constant — both sides reference THIS instead
+     * of spelling `'AUTH '` separately, so a respelling can never desync the
+     * greeter from the gate.
+     */
+    public const AUTH_PREFIX = 'AUTH ';
+
+    /**
+     * Record prefix for a tool call this session was not allowed to make
+     * (E241).
+     *
+     * `[session:` FIRST, and that is load-bearing rather than cosmetic:
+     * {@see BackgroundSupervisor::restoreOutput()} treats every line with that
+     * opening as the daemon's own bookkeeping and drops it, so a refusal
+     * record cannot be quoted back to the user as if the MODEL had written it.
+     * `tool:` AND NOT `task:`, and the honest version of why. WHAT IS TRUE:
+     * {@see BackgroundSupervisor::bufferReportsFailure()} reads the LAST
+     * `[session:task:` line in the buffer and settles the session on the word
+     * it finds there, and `refused` is not one of the two completion words.
+     * WHAT IS NOT TRUE, and was written here first: that naming this record
+     * `[session:task:refused]` would therefore fail every such session.
+     * MEASURED — the record renamed into the `task:` namespace leaves the
+     * whole suite green, because {@see self::executeTask()} always writes its
+     * outcome line AFTER any event the turn raised, so the outcome line is
+     * still the last one. WHY THE SEPARATION STILL EARNS ITS PLACE: ordering
+     * is the ONLY thing holding those two apart, and ordering is what a future
+     * edit changes — a refusal delivered late (a replayed event, a second turn
+     * in one session, an observer that fires on the way out) lands after the
+     * outcome and silently converts a completed session into a failed one.
+     * Keeping the record out of the namespace the outcome parser reads makes
+     * that unreachable rather than merely unlikely, and
+     * {@see \SugarCraft\Code\Tests\Sessions\BackgroundSessionRunnerTest}
+     * pins the separation directly rather than through an ordering that
+     * happens to hide it.
+     */
+    public const REFUSAL_RECORD = '[session:tool:refused]';
+
+    /**
+     * Record prefix for what a completed turn cost:
+     * `[session:usage] tokens=<int> cost=<usd>`, written once, just before
+     * the completion record.
+     *
+     * {@see BackgroundSupervisor} reads the last one when it reaps the
+     * session, which is what puts tokens and cost on the `/bg` result's stats
+     * line ({@see BackgroundSession::announcement()}); before it nothing ever
+     * set them. `[session:` first for the reason {@see REFUSAL_RECORD} gives:
+     * the line is bookkeeping, never restored as model output. `usage` and
+     * not `task:`, so it can never become the outcome the supervisor settles
+     * on.
+     */
+    public const USAGE_RECORD = '[session:usage]';
+
+    /**
+     * How often the daemon stamps a heartbeat record into the buffer file.
+     * Must stay comfortably under
+     * {@see BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS} or a healthy
+     * session would be reported as stalled.
+     */
+    public const HEARTBEAT_INTERVAL_SECS = 5;
+
+    /** Seconds a single accept() may block before the worker is re-checked. */
+    private const ACCEPT_TIMEOUT_SECS = 0.5;
+
+    /**
+     * How long {@see stopWorker()} gives SIGTERM before it sends signal 9.
+     *
+     * The point of asking first is to let the worker finish the buffer line it
+     * is mid-write on: a SIGKILLed worker leaves the answer truncated, and a
+     * `/stop` is a user deciding they have seen enough, not a user asking for
+     * the transcript to be corrupted.
+     *
+     * Two seconds and not more, because in practice this grace is never spent:
+     * the worker is {@see run()}'s `exit($this->executeTask($backend))` fork
+     * and installs no SIGTERM handler at all, so it dies on the default
+     * disposition immediately. The window is defensive — it covers a backend
+     * or a tool that has installed one — and on the `/stop` path there is a
+     * user watching, for whom every second of it is a stall.
+     *
+     * Public for the same reason {@see HEARTBEAT_INTERVAL_SECS} is: a test
+     * asserts that the ordinary worker is reaped INSIDE this window rather
+     * than paying it, and a literal on the test side would stop tracking the
+     * constant the first time it moved.
+     */
+    public const TERMINATE_GRACE_SECONDS = 2.0;
+
+    /** How long signal 9 gets before the daemon exits without having reaped. */
+    private const KILL_GRACE_SECONDS = 2.0;
+
+    /**
+     * How long the initial connect to the supervisor's spawn listener may be
+     * retried before the daemon gives up (audit M5 follow-up).
+     *
+     * The supervisor binds that socket just AFTER `proc_open()`, so a daemon
+     * that starts fast can legitimately find no path yet — MEASURED, the
+     * launcher reached the connect before the bind under load. The window must
+     * stay inside {@see BackgroundSupervisor::SPAWN_AUTH_TIMEOUT_SECS} so the
+     * supervisor's own auth budget, not this one, decides when a spawn is
+     * declared stillborn.
+     */
+    public const CONNECT_WAIT_SECONDS = 3.0;
+
+    /**
+     * Set by the SIGTERM handler {@see trapTerminate()} installs; read once
+     * per {@see supervise()} iteration.
+     */
+    private bool $terminateRequested = false;
+
+    public function __construct(
+        public readonly string $sessionId,
+        public readonly string $socketPath,
+        public readonly string $bufferPath,
+        public readonly string $task,
+        public readonly string $workingDirectory = '',
+        public readonly string $provider = '',
+        public readonly string $model = '',
+        public readonly int $timeoutSeconds = 3600,
+        public readonly string $tokenPath = '',
+        public readonly string $forkedSessionId = '',
+        /**
+         * Set for a background `Task` (roadmap 4.3-2): the roster agent to
+         * run and how — see {@see BackgroundSupervisor::spawnSession()}. Empty
+         * for a plain `/bg` or `/fork` session.
+         *
+         * @var array<string, string>
+         */
+        public readonly array $delegation = [],
+    ) {}
+
+    /**
+     * Build a runner from the JSON config the spawn bootstrap passes in.
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function fromConfig(array $config): self
+    {
+        return new self(
+            sessionId: (string) ($config['sessionId'] ?? ''),
+            socketPath: (string) ($config['socketPath'] ?? ''),
+            bufferPath: (string) ($config['bufferPath'] ?? ''),
+            task: (string) ($config['task'] ?? ''),
+            workingDirectory: (string) ($config['workingDirectory'] ?? ''),
+            provider: (string) ($config['provider'] ?? ''),
+            model: (string) ($config['model'] ?? ''),
+            timeoutSeconds: (int) ($config['timeoutSeconds'] ?? 3600),
+            tokenPath: (string) ($config['tokenPath'] ?? ''),
+            forkedSessionId: (string) ($config['forkedSessionId'] ?? ''),
+            delegation: self::delegationFrom($config['delegation'] ?? null),
+        );
+    }
+
+    /**
+     * The `delegation` block of a spawn config, string values only — it came
+     * through argv, so anything else is dropped rather than trusted.
+     *
+     * @return array<string, string>
+     */
+    private static function delegationFrom(mixed $delegation): array
+    {
+        if (!\is_array($delegation)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach (['agent', 'description', 'model', 'resume', 'permissionMode', 'scope'] as $key) {
+            if (\is_string($delegation[$key] ?? null) && $delegation[$key] !== '') {
+                $clean[$key] = $delegation[$key];
+            }
+        }
+
+        return isset($clean['agent']) ? $clean : [];
+    }
+
+    /**
+     * Daemon entry point — the one call the `php -r` bootstrap makes.
+     *
+     * @param array<string, mixed>|null $config decoded spawn config
+     * @return int process exit code
+     */
+    public static function main(?array $config): int
+    {
+        if ($config === null || !isset($config['bufferPath'], $config['socketPath'])) {
+            return 1;
+        }
+
+        return self::fromConfig($config)->run();
+    }
+
+    /**
+     * Connect back to the supervisor, run the task, and supervise it.
+     *
+     * $backend is injectable so a test can drive the whole lifecycle without
+     * an LLM; production passes null and the worker resolves the backend
+     * itself via {@see self::backend()}.
+     */
+    public function run(?Backend $backend = null): int
+    {
+        // Bounded retry against the post-fork bind (see CONNECT_WAIT_SECONDS);
+        // a supervisor that never binds costs the daemon its deadline and then
+        // the same honest [session:connect:error] record as before.
+        $deadline = \microtime(true) + self::CONNECT_WAIT_SECONDS;
+        $supervisor = false;
+        while (true) {
+            $supervisor = @\stream_socket_client('unix://' . $this->socketPath, $errno, $errstr, 2);
+            if ($supervisor !== false) {
+                break;
+            }
+            if (\microtime(true) >= $deadline) {
+                $this->log('[session:connect:error] ' . $this->oneLine((string) $errstr));
+
+                return 1;
+            }
+            \usleep(50_000);
+        }
+
+        \stream_set_timeout($supervisor, 1);
+        // Audit M5: the handshake carries the per-spawn secret as a fourth
+        // field. The token bytes live only in the 0600 file the supervisor
+        // minted — never in argv, which every local user can read through
+        // /proc for the daemon's whole life. An unreadable/empty token file
+        // still sends the (empty) field rather than the legacy 3-field form:
+        // the supervisor's parse rejects both shapes identically, so a lost
+        // secret costs this spawn its registration instead of silently
+        // downgrading it to un-authenticated trust.
+        $token = $this->tokenPath === '' ? '' : \trim((string) @file_get_contents($this->tokenPath));
+        if ($token === '') {
+            $this->log('[session:auth:no-token] handshake will be refused');
+        }
+        \fwrite($supervisor, self::HANDSHAKE_PREFIX . $this->sessionId . ':' . \getmypid() . ':' . $token . "\n");
+        \fflush($supervisor);
+        // The supervisor reads the handshake and drops this connection; the
+        // daemon owns the socket path from here on (see class docblock).
+        \fclose($supervisor);
+
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            // Honest degradation rather than a session that reports success
+            // and never runs: the task still executes, but commands are not
+            // serviced while it does.
+            $this->log('[session:daemon:degraded] pcntl unavailable - running task without command servicing');
+
+            return $this->executeTask($backend);
+        }
+
+        $worker = \pcntl_fork();
+        if ($worker === 0) {
+            $this->exitWorker($this->executeTask($backend));
+        }
+        if ($worker < 0) {
+            $this->log('[session:fork:error] could not fork task worker');
+
+            return 1;
+        }
+
+        return $this->supervise($worker);
+    }
+
+    /**
+     * Leave the forked worker with $code, and without republishing whatever
+     * the parent had buffered (E229).
+     *
+     * WHY NOT {@see \SugarCraft\Code\Support\ForkedChild::exitNow()},
+     * WHICH IS THIS CODEBASE'S ANSWER FOR EVERY OTHER FORKED CHILD. Because
+     * the exit CODE is this fork's whole protocol and `exitNow()` throws it
+     * away: it leaves through `posix_kill(getmypid(), SIGKILL)`, so the
+     * worker is SIGNALLED rather than exited, `pcntl_wifexited()` in
+     * {@see self::supervise()} is false, and `$result` becomes `failed`.
+     *
+     * MEASURED rather than reasoned about, PHP 8.3.6, driving the real
+     * `run()` against a real unix socket server in a plain `php` subprocess
+     * with an `ob_start()` open in the parent:
+     *
+     *  - plain `exit($code)` — the parent's buffered marker is printed TWICE,
+     *    and `run()` returns 0 (the session settles Completed);
+     *  - `ForkedChild::exitNow($code)` — the marker is printed ONCE, and
+     *    `run()` returns 1. A turn that succeeded is reported as a failed
+     *    session, on every background session there is.
+     *
+     * So the obvious conversion is not a fix here, it is a swap of a
+     * harness-only defect for a user-visible one. What IS safe is to drop the
+     * inherited buffers and keep the ordinary exit: the code survives, and the
+     * one consequence of a plain exit that nothing else in this tree defuses
+     * goes away. (The other two are defused already, and neither is reachable
+     * from this particular fork anyway: sugar-core's `PosixBackend::restore()`
+     * is PID-aware, and the daemon parent has built no backend — hence no MCP
+     * client, no loop watcher — at the moment it forks, because
+     * {@see self::executeTask()} builds all of that in the CHILD.)
+     *
+     * A NO-OP IN PRODUCTION, deliberately. The daemon runs no output
+     * buffering, so `ob_get_level()` is 0 and this is one function call. It
+     * earns its place in-process: the moment anything drives `run()` past the
+     * handshake inside PHPUnit — which
+     * {@see \SugarCraft\Code\Tests\Sessions\BackgroundSessionRunnerTest}
+     * now does, in a subprocess — `TestCase::runBare()`'s open buffer is
+     * inherited by this worker and flushed a second time at its shutdown.
+     *
+     * The loop breaks on a buffer that refuses to close rather than spinning
+     * on it: an unremovable handler is a reason to leave anyway, not a reason
+     * never to leave.
+     */
+    private function exitWorker(int $code): never
+    {
+        while (\ob_get_level() > 0) {
+            if (!@\ob_end_clean()) {
+                break;
+            }
+        }
+
+        exit($code);
+    }
+
+    /**
+     * Run one agent turn for this session's task, appending the answer to the
+     * buffer file the supervisor restores output from.
+     *
+     * Streamed tokens are flushed a whole line at a time so a reconnecting
+     * TUI sees partial output while the turn is still running.
+     *
+     * THE THIRD ARGUMENT IS THE ONE E241 EXISTS FOR. Without it a hook DENY
+     * inside a background session reached the operator on no channel at all —
+     * the same gap E219 closed for `-p`, on the surface where it is worst.
+     * {@see self::noticeRefusal()} carries the measurement of where the line
+     * had to go.
+     *
+     * A `/fork` session ({@see self::$forkedSessionId} set) CONTINUES the
+     * transcript `/fork` copied rather than starting from nothing (Part II
+     * #30): the copy's agent-visible rows go to the backend ahead of the task,
+     * and the task plus the reply are written back into the copy, so the fork
+     * is a real session `/sessions` can open and continue. The copy is read
+     * from the store by id — the daemon config is argv, which is world-readable,
+     * so the transcript bytes never travel through it. A copy that cannot be
+     * read fails the task loudly: running the prompt against an empty history
+     * is exactly the silent bug this replaced. $store is injectable for the
+     * same reason $backend is; production opens the launch's own store.
+     *
+     * A background `Task` ({@see self::$delegation} set) runs the roster
+     * agent through {@see self::executeDelegation()} instead of one bare
+     * completion; $agents is injectable like $backend.
+     *
+     * @return int 0 when the turn completed, 1 when it failed
+     */
+    public function executeTask(?Backend $backend = null, ?EnhancedSessionStore $store = null, ?\SugarCraft\Code\Agents\AgentManager $agents = null): int
+    {
+        if ($this->workingDirectory !== '' && \is_dir($this->workingDirectory)) {
+            @\chdir($this->workingDirectory);
+        }
+
+        $this->log('[session:task:start]');
+
+        $fork = null;
+        if ($this->forkedSessionId !== '') {
+            try {
+                $fork = $this->openFork($store ?? Bootstrap::sessionStore(false));
+            } catch (\Throwable $e) {
+                $this->log('[session:task:failed] could not load forked session '
+                    . $this->oneLine($this->forkedSessionId) . ': ' . $this->oneLine($e->getMessage()));
+
+                return 1;
+            }
+        }
+        $prior = $fork === null ? [] : Message::agentVisible($fork['history']);
+
+        if ($backend === null) {
+            try {
+                $backend = $this->backend();
+            } catch (\Throwable $e) {
+                $this->log('[session:task:failed] ' . $this->oneLine($e->getMessage()));
+
+                return 1;
+            }
+        }
+
+        // The engine runs this turn AS a session (roadmap 0.13-a, background
+        // half): the `/fork` copy it continues, else this background session's
+        // own id — so a session-scoped hook, grant or ledger sees one id for
+        // the whole turn instead of none. Each billed step is summed on the
+        // way, because the reply's own usage covers only its last step.
+        if ($this->delegation !== []) {
+            return $this->executeDelegation($backend, $agents);
+        }
+
+        $steps = null;
+        if ($backend instanceof EngineBackend) {
+            $backend = $backend
+                ->withSessionId($this->forkedSessionId !== '' ? $this->forkedSessionId : $this->sessionId)
+                ->withStepUsageObserver(static function (?Usage $usage) use (&$steps): void {
+                    if ($usage !== null) {
+                        $steps = $steps === null ? $usage : $steps->plus($usage);
+                    }
+                });
+        }
+
+        $pending = '';
+        $streamed = '';
+        $onToken = function (string $token) use (&$pending, &$streamed): void {
+            $streamed .= $token;
+            $pending .= $token;
+            $lastNewline = \strrpos($pending, "\n");
+            if ($lastNewline === false) {
+                return;
+            }
+            $this->append(\substr($pending, 0, $lastNewline + 1));
+            $pending = \substr($pending, $lastNewline + 1);
+        };
+
+        $user = Message::user($this->task);
+        try {
+            $message = $backend->complete(
+                [...$prior, $user],
+                $onToken,
+                function (object $event): void {
+                    $this->noticeRefusal($event);
+                },
+            );
+        } catch (\Throwable $e) {
+            if ($pending !== '') {
+                $this->append($pending . "\n");
+            }
+            $this->log('[session:task:failed] ' . $this->oneLine($e->getMessage()));
+            $this->saveFork($fork, [$user, Message::notice('Background task failed: ' . $this->oneLine($e->getMessage()))]);
+
+            return 1;
+        }
+
+        if ($streamed === '') {
+            // Backend answered in one shot; nothing has been written yet.
+            $this->append(\rtrim($message->content, "\n") . "\n");
+        } elseif ($pending !== '') {
+            $this->append($pending . "\n");
+        }
+
+        $this->saveFork($fork, [$user, $message]);
+        $usage = $steps ?? $message->usage;
+        if ($usage !== null) {
+            $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+        }
+        $this->log('[session:task:complete]');
+
+        return 0;
+    }
+
+    /**
+     * Run a background `Task` (roadmap 4.3-2): the roster agent
+     * {@see self::$delegation} names, on {@see self::$task}, through
+     * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} — the same path a
+     * foreground delegation takes, so the preset's tool grant (argument
+     * halves included), model, effort and step cap hold, its transcript is
+     * logged, and the run is saved for a later `Task(resume: …)`.
+     *
+     * The tool's result is the session's output: the fenced report and the
+     * sentence naming the resume id, or the refusal with the run's partial
+     * output. Its usage becomes the usage record, and the outcome record
+     * follows the result — a refused or failed run settles the session
+     * Failed with the first line of the reason.
+     *
+     * NEVER WIDER THAN THE SESSION THAT ASKED. A daemon's gate is the
+     * launch's headless one (`-p`'s, `bypass-permissions` unless configured
+     * otherwise), and the delegating session may have been stricter: the
+     * stricter of the two governs. With no one at a terminal an ASK is
+     * refused ({@see self::backend()}'s console approver), and the run reads
+     * that refusal like any other.
+     *
+     * AMENDMENT (owner ruling 2026-10-06, mirroring
+     * {@see \SugarCraft\Code\Agents\AgentManager::createSubAgent()}):
+     * `bypass-permissions` inherits. The delegation payload carries the
+     * delegating session's real mode, so a session that asked in bypass is
+     * stating the operator waived the prompts for this spawn's whole tree —
+     * the child runs bypass even when the daemon's own launch configured a
+     * stricter gate. The session's Deny rules ride the new gate unchanged;
+     * only the mode is replaced.
+     */
+    private function executeDelegation(Backend $backend, ?\SugarCraft\Code\Agents\AgentManager $agents): int
+    {
+        $agentName = $this->delegation['agent'];
+        if (!$backend instanceof EngineBackend) {
+            $this->log('[session:task:failed] background agent ' . $this->oneLine($agentName)
+                . ' needs the engine backend, and this provider has none');
+
+            return 1;
+        }
+
+        try {
+            $agents ??= Bootstrap::agentManager($this->workingDirectory !== '' ? $this->workingDirectory : null);
+        } catch (\Throwable $e) {
+            $this->log('[session:task:failed] could not load the agent roster: ' . $this->oneLine($e->getMessage()));
+
+            return 1;
+        }
+
+        $backend = $backend->withSessionId($this->sessionId);
+        $gate = $backend->permissionGate();
+        $asked = \SugarCraft\Code\Permissions\PermissionMode::tryFrom($this->delegation['permissionMode'] ?? '');
+        if ($gate !== null && $asked !== null) {
+            if ($asked->isBypass() && !$gate->mode()->isBypass()) {
+                // Bypass inheritance, see the doc-block amendment: the session
+                // that asked runs prompt-free, so this spawn does too, even on
+                // a daemon launched with a stricter configured mode.
+                $backend = $backend->withPermissionGate(new \SugarCraft\Code\Permissions\PermissionGate(
+                    \SugarCraft\Code\Permissions\PermissionMode::BypassPermissions,
+                    $gate->rules(),
+                    null,
+                    'bypass-permissions inherited from the session that started this background agent',
+                ));
+            } elseif ($asked->isStricterThan($gate->mode())) {
+                $backend = $backend->withPermissionGate(new \SugarCraft\Code\Permissions\PermissionGate(
+                    $asked,
+                    $gate->rules(),
+                    null,
+                    'the session that started this background agent',
+                ));
+            }
+        }
+
+        // Its seat (roadmap 4.7-3) is counted against the session that
+        // started it, not against this daemon's own id.
+        //
+        // Roadmap 4.9: and an `isolation: worktree` preset gets its git
+        // worktree here exactly as the launch's own Task would — of the tree
+        // the daemon was spawned to work in (the launch's root,
+        // BackgroundSupervisor's `workingDirectory`), so the trees land in the
+        // same `.candy-code/worktrees/` registry the launch sweeps. Without
+        // it every background Task for such a preset was refused for want of
+        // a manager.
+        $tool = (new \SugarCraft\Code\Tools\BuiltIn\TaskTool($agents))
+            ->withEngine($backend)
+            ->withDelegationScope($this->delegation['scope'] ?? null)
+            ->withWorktreeManager(\SugarCraft\Code\Agents\WorktreeManager::new(
+                $this->workingDirectory !== '' ? $this->workingDirectory : (getcwd() ?: '.'),
+            ));
+        $result = $tool->execute(\array_filter([
+            'id' => 'bg_' . $this->sessionId,
+            'agent' => $agentName,
+            'prompt' => $this->task,
+            'description' => $this->delegation['description'] ?? '',
+            'model' => $this->delegation['model'] ?? '',
+            'resume' => $this->delegation['resume'] ?? '',
+            'background' => false,
+        ], static fn (mixed $value): bool => $value !== ''));
+
+        $content = \rtrim($result->content(), "\n");
+        if ($content !== '') {
+            $this->append($content . "\n");
+        }
+        $usage = $result->usage();
+        if ($usage !== null) {
+            $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+        }
+        if ($result->isError()) {
+            $reason = \preg_replace('/^Error: Task refused — /u', '', \strtok($content, "\n") ?: $content);
+            $this->log('[session:task:failed] ' . $this->oneLine(\mb_strimwidth((string) $reason, 0, 400, '…', 'UTF-8')));
+
+            return 1;
+        }
+        $this->log('[session:task:complete]');
+
+        return 0;
+    }
+
+    /**
+     * Load the `/fork` copy this session continues and take its single-writer
+     * lock for the life of the turn.
+     *
+     * The lock is what keeps a TUI that opens the copy mid-turn read-only
+     * instead of letting it and this worker each rewrite the whole transcript
+     * ({@see \SugarCraft\Code\Session\SessionLock}). It dies with this
+     * worker's descriptor. Nobody should hold it — the copy was minted a moment
+     * ago for this session alone — so a held lock still runs the turn on the
+     * copy's history, but leaves the stored transcript to its holder and says
+     * so in the buffer.
+     *
+     * @return array{store: EnhancedSessionStore, lock: ?SessionLock, history: list<Message>}
+     * @throws \RuntimeException when the copy no longer exists
+     */
+    private function openFork(EnhancedSessionStore $store): array
+    {
+        if ($store->getSession($this->forkedSessionId) === null) {
+            throw new \RuntimeException('it is not in the session store');
+        }
+
+        $lock = $store->lockSession($this->forkedSessionId);
+        if ($lock === null) {
+            $this->log('[session:fork:locked] another process has the forked session open; its transcript is left unchanged');
+        }
+
+        $rows = $store->loadTranscript($this->forkedSessionId) ?? [];
+
+        return [
+            'store' => $store,
+            'lock' => $lock,
+            'history' => \array_map(static fn(array $row): Message => Chat::reviveTranscriptMessage($row), $rows),
+        ];
+    }
+
+    /**
+     * Append $turn to the `/fork` copy's stored transcript, so the fork reads
+     * as the conversation it continued. A no-op for a plain `/bg` session or
+     * when another process holds the copy. A write failure is recorded but does
+     * not fail the task: the answer is already in the buffer.
+     *
+     * @param array{store: EnhancedSessionStore, lock: ?SessionLock, history: list<Message>}|null $fork
+     * @param list<Message> $turn
+     */
+    private function saveFork(?array $fork, array $turn): void
+    {
+        if ($fork === null || $fork['lock'] === null) {
+            return;
+        }
+
+        try {
+            $fork['store']->saveTranscript($this->forkedSessionId, [...$fork['history'], ...$turn]);
+        } catch (\Throwable $e) {
+            $this->log('[session:fork:save-failed] ' . $this->oneLine($e->getMessage()));
+        }
+    }
+
+    /**
+     * Record, in the session buffer, that a tool call was stopped (E241).
+     *
+     * THE GAP. {@see \SugarCraft\Code\Cli\NonInteractive::noticeRefusal()}
+     * closed this for the `-p` one-shot path in round 48. The daemon is the
+     * OTHER headless caller and it was left out: `executeTask()` called
+     * `complete()` with a token callback and no `$onEvent` at all, so a hook
+     * DENY here produced the answer the model wrote around the missing tool
+     * and nothing, anywhere, saying a call had been stopped. It is the worse
+     * of the two surfaces, because a background session has no operator
+     * watching it happen — the buffer file IS the whole record.
+     *
+     * WHY NOT `fwrite(\STDERR, …)`, WHICH IS THE SHAPE E219 USED AND WHICH
+     * E241 EXPECTED TO WORK HERE. It would in fact land somewhere readable —
+     * but somewhere ELSE, and that is the objection. MEASURED at
+     * {@see BackgroundSupervisor::spawnSession()}: the daemon is opened with
+     * `[['file', '/dev/null', 'r'], ['file', $logPath, 'a'],
+     * ['file', $logPath, 'a']]` where `$logPath` is `$bufferPath . '.log'` — a
+     * SIDECAR, deliberately not the buffer, so a stray provider warning is
+     * never quoted back as model output. Descriptor 2 is therefore a second
+     * file, and a refusal written there would sit in one place while every
+     * other thing this class says about the turn — `[session:task:start]`,
+     * `[session:provider:fallback]`, `[session:task:failed]` — sits in the
+     * buffer. Two files to read to reconstruct one turn is the observability
+     * gap re-opened at a different address.
+     *
+     * WHAT IS ON STDERR ANYWAY, said plainly so this reads as a choice rather
+     * than an oversight — and CORRECTED, because the first version of this
+     * paragraph named the wrong branch and the wrong bytes. WHAT IT SAID: "an
+     * ASK refused with no terminal already writes `candy-code: refused <tool>.`
+     * from {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt::__invoke()}".
+     * WHAT IS TRUE: that string is the branch where a person WAS asked, on a
+     * terminal, and answered no — which is not a shape a daemon has. The
+     * no-terminal branch writes `HeadlessPermissionPrompt::refusal()` instead:
+     * a six-line block opening "candy-code: a tool call needs your permission,
+     * and stdin is not a terminal, so there is nobody to ask — refusing it."
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: what it is FOR is the channel,
+     * not the wording. That block goes to the prompt's `$err`, which defaults
+     * to `\STDERR`, which for a spawned daemon IS the sidecar — so the ASK
+     * case does produce two records in two files, and the DENY case, which
+     * reaches no approver at all, produces exactly this one. Suppressing
+     * either would need this class to know what some approver built four
+     * frames away inside {@see Bootstrap::backend()} had already announced,
+     * which is a coupling that does not exist.
+     *
+     * `oneLine()` IS NOT COSMETIC HERE. The buffer is a line protocol:
+     * {@see BackgroundSupervisor::restoreOutput()} decides line by line, and
+     * only a line that STARTS with `[session:` is dropped. A refusal reason
+     * carrying a newline would therefore have its first line skipped and every
+     * continuation line restored as model output — a hook author's error text
+     * injected into the transcript. The same collapse is applied to every
+     * other free text this class logs, for the same reason.
+     *
+     * THE CLASSIFIER WAS DUPLICATED AND THE DEFENCE OF THAT WAS HALF WRONG
+     * (E292, E300). WHAT THIS SAID: that the roster is read rather than
+     * copied — `Chat::DENIED_ERROR_PREFIXES` — so this daemon, the `-p` path
+     * and the TUI's struck-through refusal state cannot disagree about what a
+     * refusal IS; and that the twelve lines of `str_starts_with` duplicated
+     * from `NonInteractive::refusalFrom()` were tolerable because "a shared
+     * classifier reading a shared roster and two classifiers reading one
+     * shared roster fail in the same way — which is to say they do not".
+     *
+     * WHAT IS TRUE NOW, and it is the half that sentence could not see: the
+     * two copies read the roster through DIFFERENT DOORS, and one of the doors
+     * moved. E239 lifted the roster off `Chat` onto
+     * {@see \SugarCraft\Code\Permissions\DenialKind}, a leaf enum with no
+     * dependencies, precisely so a headless path need not load the TUI model
+     * to classify an error; `NonInteractive` was re-pointed at the enum and
+     * this copy was not, so from that commit until E300 the daemon was the one
+     * surface still paying for a whole `Chat` on every errored tool result —
+     * the exact cost the move existed to remove, re-created in the file whose
+     * doc-block was arguing the copies were equivalent. Both callers now ask
+     * {@see ToolRefusal::fromEvent()}, which owns the shape and reads the enum.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: "one roster, however many
+     * readers" is the right invariant and is why the duplicate was survivable
+     * for as long as it was. What it got wrong is that a reader is not free —
+     * a second classifier is a second decision about WHERE the roster is read
+     * FROM, and that is the half that drifted.
+     *
+     * THE LAZINESS NOTE IS OBSOLETE AND IS REWRITTEN RATHER THAN DROPPED.
+     * WHAT IT SAID: `Chat` is touched lazily, on purpose and for the same
+     * reason the `-p` path does it — a class constant is still a class load,
+     * and the guard is "an errored tool result", so a turn that errors nothing
+     * never loads it. WHAT IS TRUE NOW: `Chat` is not touched at all from
+     * here. The guard survives unchanged inside
+     * {@see ToolRefusal::fromEvent()} and the load it defers is now one leaf
+     * enum rather than the TUI model. WHY IT STILL EARNS ITS PLACE: it records
+     * that the `isError()` guard is load-bearing rather than a tidy early
+     * return, which is the fact that would be lost if someone hoisted the
+     * classification above it.
+     *
+     * THE RECORD NAMES THE KIND (E307, reopened as E346). WHAT THE TREE SAID
+     * WHEN E307 WAS DECLARED CLOSED: that `ToolRefusal::fromEvent()`'s
+     * `DenialKind` had gained a second consumer, so E307's headline "exactly
+     * one consumer" was no longer accurate. WHAT IS TRUE: the arithmetic
+     * changed and the SURFACE did not — this method still took `->tool` and
+     * `->reason` and threw `->kind` away, and it is the surface with NO
+     * OPERATOR WATCHING, where "which of the three" is hardest to reconstruct
+     * after the fact. The token now sits between the record marker and the
+     * tool name, matching
+     * {@see \SugarCraft\Code\Cli\NonInteractive::refusalNotice()}'s
+     * `candy-code: [<kind>] <tool> was not run - <reason>`, so the daemon's
+     * sidecar and the `-p` console spell one thing one way.
+     *
+     * AFTER THE MARKER RATHER THAN BEFORE IT, AND THAT IS THE LINE PROTOCOL
+     * TALKING. {@see BackgroundSupervisor::restoreOutput()} drops a line only
+     * when THE LINE ITSELF starts with `[session:`, so a token in front of the
+     * marker would make every refusal line fail that test and be restored into
+     * the transcript as model output. {@see \SugarCraft\Code\Permissions\DenialKind::token()}
+     * and not the enum's value, for the same reason `NonInteractive` uses it:
+     * the value is a human-facing PREFIX and this is a machine key.
+     *
+     * NO ROSTER IS READ ANY MORE, AND THAT IS A SECURITY PROPERTY (audit F-P8).
+     * The paragraphs above speak of "classifying an error" against the roster;
+     * {@see ToolRefusal::fromEvent()} no longer does — it reads the kind the
+     * refusing party stamped on the result. Text classification let a tool
+     * that RAN write a `Permission denied:` line here by printing one, which
+     * on a surface with no operator watching is exactly where a hostile script
+     * would hide its side effects. A failed call is no longer logged as
+     * refused, whatever its output says.
+     */
+    private function noticeRefusal(object $event): void
+    {
+        $refusal = ToolRefusal::fromEvent($event);
+        if ($refusal === null) {
+            return;
+        }
+
+        $this->log(
+            self::REFUSAL_RECORD . ' [' . $refusal->kind->token() . '] ' . $this->oneLine($refusal->tool)
+            . ' was not run - ' . $this->oneLine($refusal->reason),
+        );
+    }
+
+    /**
+     * Resolve the backend this session's agent should run on.
+     *
+     * Falls back to {@see Bootstrap::backend()}'s own env-driven selection
+     * when the agent names a provider that cannot be constructed, so an
+     * unknown provider degrades to the offline engine rather than killing
+     * the session.
+     *
+     * BOTH ROUTES ASK FOR THE CONSOLE APPROVER
+     * ({@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}), and the
+     * reason is the opposite of the one it reads like. This is a daemon with
+     * no user in front of it, so the point is not to PROMPT — it is that the
+     * approver's no-terminal branch produces a refusal naming the tool, the
+     * mode and the two things that change the outcome, written to the
+     * session's sidecar log, where a no-approver refusal would say only
+     * "permission required and no approver is attached to this run"
+     * ({@see \SugarCraft\Code\Runtime::settleAsk()}). Same verdict, a
+     * reader who can act on it.
+     *
+     * IT CANNOT STEAL KEYSTROKES, and that is a property of the spawn rather
+     * than of this class: {@see BackgroundSupervisor::spawnSession()} opens the
+     * daemon with `['file', '/dev/null', 'r']` as descriptor 0, so fd 0 is
+     * `/dev/null` BEFORE `buildSessionDaemonCode()`'s double fork ever runs
+     * and `stream_isatty(STDIN)` in here is false (measured:
+     * `php -r 'var_dump(stream_isatty(STDIN));' < /dev/null` => `bool(false)`).
+     * The `posix_setsid()` in the daemon bootstrap is NOT what decides this —
+     * detaching from a controlling terminal does not change the `isatty`
+     * answer for an already-open descriptor — the redirection at the spawn
+     * site is. Attach the same prompt to a run whose stdin IS a terminal and
+     * it asks there, which is the behaviour that path wants anyway; the probe
+     * is the single source of truth either way.
+     *
+     * @throws PermissionConfigException when the launch's permission policy is
+     *         present and unusable — the one failure the fallback cannot help
+     *         with, reported by {@see self::executeTask()} as a task failure
+     *         with the real reason rather than as a provider fallback
+     */
+    public function backend(): Backend
+    {
+        $root = $this->workingDirectory !== '' ? $this->workingDirectory : null;
+
+        if ($this->model !== '' && $this->model !== 'unknown') {
+            \putenv('CANDY_CODE_MODEL=' . $this->model);
+        }
+
+        // Roadmap 5.7-2: nobody sits at a daemon's keyboard (fd 0 is
+        // /dev/null), so `AskUser` and `PlanExit` say so instead of reading
+        // the console approver's `false` as "the user declined".
+        if ($this->provider !== '') {
+            try {
+                return \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backendFor($this->provider, $root, null, null, true));
+            } catch (PermissionConfigException $e) {
+                // Same arm {@see \SugarCraft\Code\Cli\NonInteractive::run()}
+                // and {@see Bootstrap::backend()} carry: an unusable permission
+                // policy is not this provider's fault and is not survivable by
+                // degrading. Bootstrap::backend() below builds the very same
+                // gate from the very same config, so the old catch-all logged
+                // a misleading "[session:provider:fallback]" line naming the
+                // permission error as a provider problem, and then hit the
+                // identical exception one line later. That second throw was
+                // never uncaught — {@see self::executeTask()} wraps this call
+                // in its own `catch (\Throwable)` and reports
+                // "[session:task:failed]" — so what this fixes is the
+                // misleading line, not a killed session.
+                throw $e;
+            } catch (\Throwable $e) {
+                $this->log('[session:provider:fallback] ' . $this->oneLine($e->getMessage()));
+            }
+        }
+
+        return \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backend($root, null, null, true));
+    }
+
+    /**
+     * Answer one supervisor connection, after it authenticates.
+     *
+     * The first line must be `AUTH <token>` ({@see self::authenticate()},
+     * audit M5); HEARTBEAT/RESUME/STOP are only processed afterwards.
+     *
+     * Keeps the wire words the previous inline daemon used — HEARTBEAT,
+     * RESUME and STOP — and adds a single `STATUS:` line so a RESUME can
+     * tell a running turn from a settled one. {@see
+     * BackgroundSupervisor::reconnect()} skips `OK:` lines and ignores the
+     * rest, so the extra line is backward compatible.
+     *
+     * @param resource $client
+     * @param string|null $result null while the task is still running
+     * @return bool true when the supervisor asked the session to stop
+     */
+    public function serveClient($client, ?string $result): bool
+    {
+        \stream_set_timeout($client, 1);
+
+        // Audit M5: nothing below — least of all STOP — is reachable until
+        // the peer proves it holds the per-spawn secret.
+        if (!$this->authenticate($client)) {
+            return false;
+        }
+
+        while (!\feof($client)) {
+            $line = @\fgets($client);
+            if ($line === false) {
+                break;
+            }
+            $command = \trim($line);
+            if ($command === '') {
+                continue;
+            }
+
+            if ($command === 'HEARTBEAT' || $command === 'RESUME') {
+                \fwrite($client, 'OK:session=' . $this->sessionId . "\n");
+                if ($command === 'RESUME') {
+                    \fwrite($client, 'STATUS:' . ($result ?? 'running') . "\n");
+                }
+                \fflush($client);
+                $this->log('[session:heartbeat] pid=' . \getmypid());
+            } elseif ($command === 'STOP') {
+                \fwrite($client, "OK:stopping\n");
+                \fflush($client);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Require `AUTH <token>` as the first line, matching the per-spawn secret
+     * currently in {@see self::$tokenPath} (audit M5).
+     *
+     * Fail-safe on every degenerate shape: no token path, an unreadable or
+     * empty token file, a closed or non-AUTH first line — each is a refusal
+     * recorded in the session buffer, never a fall-back to serving commands
+     * un-authenticated. Refusals deliberately echo nothing back, so a probing
+     * peer learns only that the connection closes.
+     *
+     * @param resource $client
+     */
+    private function authenticate($client): bool
+    {
+        $expected = $this->tokenPath === ''
+            ? ''
+            : \trim((string) @file_get_contents($this->tokenPath));
+
+        if ($expected === '') {
+            // The secret is gone (never issued, deleted, or zeroed). Trusting
+            // an unauthenticated peer instead would be the exact bug M5
+            // reports, so availability narrows to a refused connection.
+            $this->log('[session:auth:refused] token-unavailable');
+
+            return false;
+        }
+
+        $line = @\fgets($client);
+        if ($line === false) {
+            $this->log('[session:auth:refused] no-credentials');
+
+            return false;
+        }
+
+        $presented = \trim($line);
+        if (!\str_starts_with($presented, self::AUTH_PREFIX)) {
+            $this->log('[session:auth:refused] missing-prefix');
+
+            return false;
+        }
+
+        if (!\hash_equals($expected, \substr($presented, \strlen(self::AUTH_PREFIX)))) {
+            $this->log('[session:auth:refused] token-mismatch');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Append a raw chunk to the session buffer.
+     *
+     * A single FILE_APPEND write per record is deliberate: the worker and
+     * the daemon both append here, and O_APPEND keeps each write atomic.
+     */
+    public function append(string $text): void
+    {
+        if ($text === '') {
+            return;
+        }
+
+        @\file_put_contents($this->bufferPath, $text, \FILE_APPEND);
+    }
+
+    /** Append one internal `[session:...]` record. */
+    public function log(string $line): void
+    {
+        $this->append($line . "\n");
+    }
+
+    /**
+     * Serve supervisor commands until the worker settles, then exit.
+     *
+     * Exiting on completion is what tells the supervisor the session is
+     * finished — it has no other completion channel once the spawn
+     * connection is gone.
+     */
+    private function supervise(int $worker): int
+    {
+        @\unlink($this->socketPath);
+        $server = @\stream_socket_server('unix://' . $this->socketPath, $errno, $errstr);
+
+        $deadline = \time() + $this->timeoutSeconds;
+        $lastHeartbeat = \time();
+        $result = null;
+        $stopped = false;
+        $this->trapTerminate();
+
+        while (true) {
+            $status = 0;
+            $reaped = \pcntl_waitpid($worker, $status, \WNOHANG);
+            if ($reaped === $worker) {
+                $exited = \pcntl_wifexited($status) && \pcntl_wexitstatus($status) === 0;
+                $result = $exited ? 'completed' : 'failed';
+                $this->log('[session:task:' . $result . ']');
+                break;
+            }
+
+            if (\time() > $deadline) {
+                $this->stopWorker($worker);
+                $result = 'timeout';
+                $this->log('[session:task:timeout]');
+                break;
+            }
+
+            if ($server !== false) {
+                $client = @\stream_socket_accept($server, self::ACCEPT_TIMEOUT_SECS);
+                if ($client !== false) {
+                    $stopped = $this->serveClient($client, $result);
+                    \fclose($client);
+                }
+            } else {
+                \usleep(200_000);
+            }
+
+            if ($stopped) {
+                $this->stopWorker($worker);
+                $result = 'stopped';
+                $this->log('[session:task:stopped]');
+                break;
+            }
+
+            if ($this->terminateRequested) {
+                // The supervisor's fallback when the socket is unusable
+                // (audit BG-1): same teardown as STOP, so the worker is never
+                // orphaned by a signal that only reached this process.
+                $this->stopWorker($worker);
+                $result = 'stopped';
+                $this->log('[session:task:stopped] via=SIGTERM');
+                break;
+            }
+
+            if (\time() - $lastHeartbeat >= self::HEARTBEAT_INTERVAL_SECS) {
+                $this->log('[session:heartbeat] pid=' . \getmypid());
+                $lastHeartbeat = \time();
+            }
+        }
+
+        if ($server !== false) {
+            \fclose($server);
+            @\unlink($this->socketPath);
+        }
+
+        $this->log('[session:daemon:exit]');
+
+        return $result === 'completed' ? 0 : 1;
+    }
+
+    /**
+     * Turn SIGTERM into the same orderly stop as an authenticated `STOP`
+     * (audit BG-1).
+     *
+     * {@see BackgroundSupervisor::stopSession()} falls back to signalling the
+     * daemon pid when the socket path is gone. On the default disposition that
+     * signal would kill THIS process only: the worker — the fork actually
+     * running the agent turn, and the thing spending tokens — would be
+     * reparented to init and keep going until its turn ended, with no
+     * `[session:task:...]` record saying the session had been stopped. The
+     * handler only raises a flag; {@see supervise()} acts on it between
+     * accepts, so the teardown runs on the main path, not in signal context.
+     *
+     * Installed here, after the worker fork and in the daemon only: pcntl
+     * dispositions are inherited across `pcntl_fork()`, and the worker should
+     * keep dying on SIGTERM's default, which is what {@see stopWorker()}'s
+     * first rung relies on. Async signals so a SIGTERM that lands during the
+     * blocking accept is seen within one iteration rather than at the next
+     * tick. Without ext-pcntl's signal functions this is a no-op and the
+     * supervisor's last rung (a tree kill) still covers the worker.
+     */
+    private function trapTerminate(): void
+    {
+        if (!\function_exists('pcntl_signal') || !\function_exists('pcntl_async_signals')) {
+            return;
+        }
+
+        \pcntl_async_signals(true);
+        \pcntl_signal(\SIGTERM, function (): void {
+            $this->terminateRequested = true;
+        });
+    }
+
+    /**
+     * Ask the worker to stop, then MAKE it stop.
+     *
+     * Both callers used to be `posix_kill(SIGTERM)` followed by an unflagged
+     * `pcntl_waitpid()`, and a worker that traps or ignores TERM parks the
+     * supervisor in that wait for good. MEASURED on this host: a forked child
+     * that installs an empty `SIGTERM` handler and then loops leaves
+     * `pcntl_waitpid($pid, $status)` unreturned — `timeout 5 php` exited 124.
+     *
+     * The damage is not confined to the daemon. The supervisor's completion
+     * signal is a DEAD PID
+     * ({@see BackgroundSupervisor::reapFinishedDaemon()}), so a supervise()
+     * that never returns means the session reports "running" forever, the unix
+     * socket at {@see $socketPath} is never unlinked by the tail of that
+     * method, and both processes leak for the life of the machine. A `/stop`
+     * that leaves the session running is the whole feature failing at the one
+     * thing the user asked it to do.
+     *
+     * Escalation, not force: SIGTERM, a bounded `WNOHANG` window, then signal
+     * 9. SIGNAL 9 AS AN INTEGER LITERAL, never the `SIGKILL` constant — that
+     * constant is ext-pcntl's, and while this method is only reached from
+     * inside the `function_exists('pcntl_fork')` gate in {@see run()}, naming
+     * the constant here would make the shape wrong to copy. Same literal, and
+     * the same reason, as
+     * {@see \SugarCraft\Code\MCP\StdioMcpServer::stop()} and
+     * {@see \SugarCraft\Code\Backend\StreamingCommandBackend::terminateAndReap()}.
+     *
+     * `\SIGTERM` IS NAMED PLAINLY, and that is the one story this file tells
+     * about ext-pcntl rather than two. It was written `\defined('SIGTERM') ?
+     * \SIGTERM : 15`, two lines above a `\pcntl_waitpid(..., \WNOHANG)` that is
+     * not guarded at all — and the two cannot both be right. The gate at
+     * {@see run()} requires `pcntl_fork` AND `pcntl_waitpid` before anything
+     * here is reachable, and `SIGTERM` comes from the same extension as both,
+     * so either the gate holds and the ternary is unreachable, or it does not
+     * and `\WNOHANG` fatals first. The gate holds; the ternary was decoration
+     * that made the file look as if it doubted its own precondition. What is
+     * genuinely uncertain is ext-POSIX, which is separately compilable — and
+     * that doubt is expressed once, where it is real, in
+     * {@see signalWorker()}.
+     *
+     * E676: the rung SEQUENCE (term, bounded window, kill, bounded window)
+     * is {@see \SugarCraft\Code\Support\ProcessReaper::escalate()} now —
+     * one ladder for every family; what stays HERE are this family's means
+     * ({@see signalWorker()} + {@see workerGone()}), its pinned 2.0 s
+     * budgets, and its post-mortem log lines. The literal 15 escalate()
+     * sends is the same rung as `\SIGTERM` — integer signals are the
+     * ladder's ext-pcntl-free contract.
+     *
+     * If signal 9 is also unreaped — an uninterruptible kernel wait, or a
+     * build with no ext-posix to signal with at all — the daemon EXITS ANYWAY
+     * and records that it did. That leaves an orphan, which is worse than a
+     * reap and much better than the alternative: the supervisor sees the dead
+     * daemon, settles the session, and unlinks nothing it did not create.
+     */
+    private function stopWorker(int $worker): void
+    {
+        $reaped = ProcessReaper::escalate(
+            function (int $signal) use ($worker): void {
+                $this->signalWorker($worker, $signal);
+            },
+            function () use ($worker): bool {
+                return $this->workerGone($worker);
+            },
+            self::TERMINATE_GRACE_SECONDS,
+            self::KILL_GRACE_SECONDS,
+            function () use ($worker): void {
+                $this->log('[session:task:escalate] worker did not stop on SIGTERM pid=' . $worker);
+            },
+        );
+
+        if (!$reaped) {
+            $this->log('[session:task:unreaped] worker survived signal 9 pid=' . $worker);
+        }
+    }
+
+    /**
+     * Send one signal to the worker, or do nothing at all.
+     *
+     * `posix_kill()` is ext-posix while the fork above is ext-pcntl, and the
+     * two are separately compilable. In a build with only the latter there is
+     * nothing to signal the worker WITH — which is exactly the build in which
+     * an unflagged wait would hang forever, so the guard and the bounded reap
+     * are the same fix seen from two sides.
+     */
+    private function signalWorker(int $worker, int $signal): void
+    {
+        if (\function_exists('posix_kill')) {
+            @\posix_kill($worker, $signal);
+        }
+    }
+
+    /**
+     * ONE bounded `WNOHANG` poll — true when the worker is reaped or gone.
+     *
+     * The window that used to loop here is a rung budget of
+     * {@see ProcessReaper::escalate()} since E676; this answers a single poll
+     * and never waits. Never an unflagged `pcntl_waitpid()`, for the reason
+     * {@see \SugarCraft\Code\Runtime::reapKilled()} gives at its own call
+     * site: the wait is only bounded if the signal landed, and whether it
+     * landed is not something this process can assume. 0 is "still running";
+     * the pid is "reaped"; -1 is "not ours any more" — only the first of
+     * those is worth polling again.
+     */
+    private function workerGone(int $worker): bool
+    {
+        $status = 0;
+
+        return \pcntl_waitpid($worker, $status, \WNOHANG) !== 0;
+    }
+
+    /** Collapse a message to one line so it cannot corrupt the buffer's line protocol. */
+    private function oneLine(string $text): string
+    {
+        return \trim(\preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+}

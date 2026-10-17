@@ -1,9 +1,9 @@
 # Live checks (synthesis Part V) — results
 
-Run on 2026-10-05 from the W10-i worktree with `sugar-crush/scripts/provider-cache-live-probe.php`:
+Run on 2026-10-05 from the W10-i worktree with `candy-code/scripts/provider-cache-live-probe.php`:
 
 ```sh
-cd sugar-crush && php scripts/provider-cache-live-probe.php --check=all
+cd candy-code && php scripts/provider-cache-live-probe.php --check=all
 ```
 
 Verdicts: **PASS**, **FAIL** (the endpoint answered and contradicted the claim), or **BLOCKED** (no credentials, or the credentials may not call the model, so nothing was learned about the claim). The script exits 0 when every requested check passes, 1 on any FAIL and 3 when nothing failed but something was blocked. It never prints a key, token or account id: credentials are only tested for presence, and every provider error is redacted (ARNs, 12-digit account ids, `sk-ant-` keys, bearer tokens) before it is shown.
@@ -48,7 +48,7 @@ So roadmap 0.1 holds on the live server. Replaying `reasoning_content` keeps the
 
 ## LIVE-X31b: tool-calling `anthropic` request
 
-This check is blocked for lack of a key: no `ANTHROPIC_API_KEY` in the environment, and none in `.sugar-crush/config*.json`.
+This check is blocked for lack of a key: no `ANTHROPIC_API_KEY` in the environment, and none in `.candy-code/config*.json`.
 
 The probe was also run with a deliberately invalid key, which proved the wiring without spending anything. The request went to `POST https://api.anthropic.com/v1/chat/completions` and was answered `401 authentication_error`, **not** `404`. So the X-31b `/v1` base fix reaches a real endpoint. The tool-calling half (`tool_calls` coming back for `get_weather`) still needs a real key.
 

@@ -1,0 +1,1143 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Skills;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Skills\ForeignSkillDiscovery;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Skills\SkillManager;
+use SugarCraft\Code\Skills\SkillMatcher;
+use SugarCraft\Code\Skills\SkillOrigin;
+use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Skills\SkillSource;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+
+/**
+ * @see SkillManager
+ *
+ * NOTE: SkillLoader is 'final' so we cannot mock it. We use a real SkillLoader
+ * pointed at a non-existent directory to simulate an empty loader.
+ *
+ * KNOWN BUG: App::withEnabledSkills() uses a buggy mutate() method that tries
+ * to modify readonly properties on a cloned instance. PHP 8.1+ does not allow
+ * this. Methods that call withEnabledSkills() (applyToApp, enable, disable when
+ * skill exists) cannot be fully tested until the App bug is fixed.
+ */
+final class SkillManagerTest extends TestCase
+{
+    use HomeSandboxTrait;
+
+    private SkillManager $manager;
+    private SkillRegistry $registry;
+    private ProviderInterface $provider;
+    private string $sandboxHome;
+
+    protected function setUp(): void
+    {
+        // loadAll() now walks the user's foreign-skill trees as well
+        // (~/.claude/skills, ~/.config/opencode/skills — crush_code.md Phase 2
+        // item 6), so HOME is redirected at an empty sandbox for the whole
+        // class. Without it every assertion here would depend on what the
+        // developer running the suite happens to have installed for another
+        // CLI, and `getSkillsForTask('...PHP...')` in particular would start
+        // matching their skills instead of this test's fixtures.
+        $this->sandboxHome = $this->useHomeSandbox(
+            sys_get_temp_dir() . '/candy-code-manager-home-' . uniqid('', true),
+        );
+
+        $this->registry = new SkillRegistry();
+        // Use a real SkillLoader - it's final so we can't mock
+        $loader = new SkillLoader();
+        $this->manager = new SkillManager($loader, $this->registry);
+        $this->provider = $this->createMock(ProviderInterface::class);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+
+        $this->removeTestProject($this->sandboxHome);
+
+        parent::tearDown();
+    }
+
+    private function createSkill(string $name, string $description = 'Test skill'): Skill
+    {
+        $content = <<<SKILL
+---
+description: $description
+user-invocable: true
+paths: []
+---
+
+Skill content for $name.
+SKILL;
+        return Skill::parse($content, $name, "/path/to/$name/SKILL.md");
+    }
+
+    // =========================================================================
+    // loadAll() - registers Stage-1 manifests only, never the eager full
+    // body (crush_feat.md section 7.E3)
+    // =========================================================================
+
+    /**
+     * Regression test for the fix in crush_feat.md section 7.E3: before
+     * this fix, SkillManager::loadAll() called SkillLoader::loadAll(),
+     * which reads every SKILL.md's full body off disk (via
+     * Skill::fromFile()) and registers it verbatim -- so the registered
+     * Skill's ->content held the entire body text after loadAll() ran.
+     * That defeated the whole point of the three-stage progressive
+     * disclosure design: every session paid the full I/O + YAML-parse cost
+     * up front regardless of whether any skill was ever invoked.
+     *
+     * Against the OLD SkillManager::loadAll() implementation this test
+     * fails, because $registry->get('marker-skill')->content would equal
+     * the marker body text instead of the empty string a manifest-only
+     * registration produces.
+     */
+    public function testLoadAllRegistersManifestOnlyNotFullBody(): void
+    {
+        // Arrange
+        $projectRoot = sys_get_temp_dir() . '/candy-code-manager-test-' . uniqid((string) getmypid(), true);
+        $bodyMarker = 'MANAGER_LOAD_ALL_BODY_SHOULD_STAY_UNREAD_' . uniqid((string) getmypid(), true);
+        mkdir($projectRoot . '/.candy-code/skills/marker-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.candy-code/skills/marker-skill/SKILL.md',
+            "---\ndescription: Marker skill\n---\n\n{$bodyMarker}"
+        );
+
+        try {
+            // Act
+            $this->manager->loadAll($projectRoot);
+
+            // Assert -- skill is registered (manifest reached the registry)...
+            $skill = $this->registry->get('marker-skill');
+            $this->assertNotNull($skill);
+            $this->assertSame('Marker skill', $skill->description);
+
+            // ...but its body was never read off disk.
+            $this->assertSame('', $skill->content);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Regression test: SkillManager::loadAll() (the production loading path
+     * -- SkillLoader::loadAllManifests() -> SkillRegistry::registerFromManifest())
+     * must preserve a skill's `paths` frontmatter so path-based auto-scoping
+     * (getSkillsForPaths() / SkillRegistry::getForPaths()) keeps matching it.
+     * Before this fix, loadSkillManifest() never returned a `paths` key and
+     * registerFromManifest() hardcoded `paths: []`, so this always returned
+     * empty despite the pattern matching exactly.
+     */
+    public function testLoadAllPreservesPathsForPathBasedScoping(): void
+    {
+        // Arrange
+        $projectRoot = sys_get_temp_dir() . '/candy-code-manager-test-' . uniqid((string) getmypid(), true);
+        mkdir($projectRoot . '/.candy-code/skills/path-scoped-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.candy-code/skills/path-scoped-skill/SKILL.md',
+            "---\ndescription: Path scoped skill\npaths:\n  - /src/**/*.php\n---\n\nBody."
+        );
+
+        try {
+            // Act
+            $this->manager->loadAll($projectRoot);
+            $result = $this->manager->getSkillsForPaths(['/src/App.php']);
+
+            // Assert -- built-in skills with their own **/*.php patterns also
+            // legitimately match /src/App.php now that paths flow through, so
+            // assert our project skill is among the matches rather than the
+            // only one.
+            $names = array_map(fn($skill) => $skill->name, $result);
+            $this->assertContains('path-scoped-skill', $names);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testLoadAllProjectSkillOverridesRegistrySafely(): void
+    {
+        // Arrange
+        $projectRoot = sys_get_temp_dir() . '/candy-code-manager-test-' . uniqid((string) getmypid(), true);
+        mkdir($projectRoot . '/.candy-code/skills/override-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.candy-code/skills/override-skill/SKILL.md',
+            "---\ndescription: Overridden by project\n---\n\nBody."
+        );
+
+        try {
+            // Act
+            $this->manager->loadAll($projectRoot);
+            $result = $this->manager->getSkillsForTask('Overridden by project');
+
+            // Assert
+            $this->assertNotEmpty($result);
+            $this->assertSame('override-skill', $result[0]->name);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    // =========================================================================
+    // loadAll() - mistyped frontmatter (audit 15d-01)
+    //
+    // A project skill's raw YAML values used to reach the typed Skill
+    // constructor outside every catch, so one `paths: src/**` in a cloned
+    // repository was an uncaught TypeError at launch.
+    // =========================================================================
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function mistypedFrontmatterProvider(): iterable
+    {
+        yield 'description is an int' => ["description: 42", 'description'];
+        yield 'description is an unquoted date' => ["description: 2024-01-01", 'description'];
+        yield 'context is a list' => ["description: x\ncontext: [a]", 'context'];
+        // The flow list is concatenated on rather than written inline after
+        // the key because GlobDialectDifferentialTest harvests every inline
+        // `paths:` flow list in src/ and tests/ into its glob corpus (whose
+        // size PathGlob's doc-block pins), and an unquoted integer entry there
+        // becomes an int array key it cannot take. This comment avoids the
+        // literal shape for the same reason.
+        yield 'paths entry is an int' => ["description: x\npaths: " . '[1]', 'paths[0]'];
+        yield 'paths has a non-string entry after a glob' => ["description: x\npaths: " . '[src/**, 2024]', 'paths[1]'];
+        yield 'user-invocable is not a boolean word' => ["description: x\nuser-invocable: maybe", 'user-invocable'];
+        yield 'frontmatter is a bare scalar' => ["just words", 'mapping'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('mistypedFrontmatterProvider')]
+    public function testAMistypedProjectSkillIsSkippedNotFatal(string $frontmatter, string $field): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.candy-code/skills/good', 'A valid sibling');
+        $badDir = $projectRoot . '/.candy-code/skills/bad';
+        mkdir($badDir, 0777, true);
+        file_put_contents($badDir . '/SKILL.md', "---\n{$frontmatter}\n---\n\nBody.\n");
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNull($this->registry->get('bad'), 'the mistyped skill must not register');
+            $this->assertNotNull($this->registry->get('good'), 'a valid sibling must still register');
+
+            $reasons = array_filter(
+                $this->manager->skipped(),
+                static fn(string $path): bool => str_contains($path, '/bad/'),
+                ARRAY_FILTER_USE_KEY,
+            );
+            $this->assertCount(1, $reasons, 'the skip must be recorded so the launch notice reports it');
+            $this->assertStringContainsString($field, (string) reset($reasons));
+
+            // Built-in skills legitimately match src/a.php; what matters is that
+            // the nudge returns at all and never names the refused skill.
+            $nudge = (new SkillPathNudge($this->registry))->forPath('src/a.php');
+            $this->assertStringNotContainsString('- bad:', (string) $nudge);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testAScalarPathsValueIsReadAsAOneElementList(): void
+    {
+        $projectRoot = $this->makeProject();
+        $dir = $projectRoot . '/.candy-code/skills/linter';
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/SKILL.md', "---\ndescription: Lint PHP\npaths: x\n---\n\nBody.\n");
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame(['x'], $this->registry->get('linter')?->paths);
+            $this->assertSame([], array_filter(
+                $this->manager->skipped(),
+                static fn(string $path): bool => str_contains($path, '/linter/'),
+                ARRAY_FILTER_USE_KEY,
+            ));
+            $this->assertStringContainsString('linter', (string) (new SkillPathNudge($this->registry))->forPath('x'));
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testUserInvocableNoHidesAProjectSkillFromThePicker(): void
+    {
+        $projectRoot = $this->makeProject();
+        $dir = $projectRoot . '/.candy-code/skills/hidden';
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/SKILL.md', "---\ndescription: Hidden\nuser-invocable: no\n---\n\nBody.\n");
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertFalse($this->registry->get('hidden')?->userInvocable);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testANonStringPathsEntryOnADirectlyRegisteredSkillNeverThrowsFromTheNudge(): void
+    {
+        // Skill's constructor takes any array; a skill built in code and
+        // register()ed bypasses both loaders' validation. (A variable, not an
+        // inline literal, for the harvest reason given in the provider above.)
+        $mixedPaths = [2024, 'src/**'];
+        $skill = new Skill(
+            name: 'direct',
+            description: 'Direct',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'thread',
+            paths: $mixedPaths,
+            content: '',
+            sourcePath: '',
+        );
+        $this->registry->register(['direct' => $skill]);
+
+        $this->assertSame([$skill], $this->manager->getSkillsForPaths(['src/a.php']));
+        $this->assertStringContainsString('direct', (string) (new SkillPathNudge($this->registry))->forPath('src/a.php'));
+    }
+
+    // =========================================================================
+    // loadAll() - foreign imports (crush_code.md Phase 2 item 6)
+    //
+    // ForeignSkillDiscovery, its SkillSource tagging and its own tests all
+    // existed; nothing called it, so a skill under .claude/skills or
+    // .opencode/skills was invisible to every consumer of this registry.
+    // =========================================================================
+
+    public function testLoadAllDiscoversProjectClaudeSkills(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.claude/skills/claude-only', 'A Claude Code skill');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('claude-only');
+            $this->assertNotNull($skill, 'a .claude/skills tree must reach the registry');
+            $this->assertSame(SkillSource::Claude, $skill->source, 'the provenance tag must survive the merge');
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testLoadAllDiscoversProjectOpencodeSkills(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.opencode/skills/opencode-only', 'An opencode skill');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('opencode-only');
+            $this->assertNotNull($skill);
+            $this->assertSame(SkillSource::Opencode, $skill->source);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testLoadAllDiscoversForeignSkillsInTheUsersHome(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/home-claude', 'A home Claude skill');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNotNull($this->registry->get('home-claude'));
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Audit 15d-02, fix step 3: every registered skill carries the tier its
+     * walker found it in, so the system-prompt listing can badge the line —
+     * and a cloned checkout's description can no longer pass for one the
+     * operator or the harness shipped. All five routes a real launch takes,
+     * through the real SkillManager, read back off the registry AND off the
+     * listing the prompt is built from.
+     */
+    public function testLoadAllStampsEachSkillWithTheTierItWasFoundIn(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.candy-code/skills/repo-native', 'Native, shipped in the repo');
+        $this->writeSkill($projectRoot . '/.claude/skills/repo-claude', 'Claude format, shipped in the repo');
+        $this->writeSkill($this->sandboxHome . '/.candy-code/skills/home-native', 'Native, the operator\'s own');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/home-opencode', 'opencode format, the operator\'s own');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $expected = [
+                'repo-native' => [SkillOrigin::Project, '[project]'],
+                'repo-claude' => [SkillOrigin::Project, '[project, foreign: claude]'],
+                'home-native' => [SkillOrigin::User, '[user]'],
+                'home-opencode' => [SkillOrigin::User, '[user, foreign: opencode]'],
+                'api-design' => [SkillOrigin::BuiltIn, '[built-in]'],
+            ];
+            $listing = (new SkillMatcher())->listForPrompt($this->registry);
+
+            foreach ($expected as $name => [$origin, $badge]) {
+                $skill = $this->registry->get($name);
+                $this->assertNotNull($skill, "{$name} must be registered");
+                $this->assertSame($origin, $skill->origin, "{$name} must carry the tier it was read from");
+                $this->assertStringContainsString("\n- {$badge} {$name}: ", $listing, "{$name}'s listing line must open with {$badge}");
+            }
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * INSIDE ONE TIER, native wins. Wiring a new discovery source in must not
+     * silently re-point a name that already resolved — a repository carrying
+     * both a `.claude/skills/deploy` and a `.candy-code/skills/deploy` gets
+     * the native one. (Across tiers the tier decides first — see
+     * testTheTierDecidesFirstAndTheFormatBreaksTiesInsideATier().)
+     */
+    public function testANativeSkillWinsANameCollisionWithAForeignOne(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.claude/skills/deploy', 'Foreign deploy');
+        $this->writeSkill($projectRoot . '/.candy-code/skills/deploy', 'Native deploy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('deploy');
+            $this->assertNotNull($skill);
+            $this->assertSame('Native deploy', $skill->description);
+            $this->assertSame(SkillSource::Native, $skill->source);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The rule is a COLLISION rule, not a precedence-by-source one: a foreign
+     * skill whose name nothing else claims is registered normally.
+     */
+    public function testAForeignSkillWithNoCollisionIsKept(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.claude/skills/deploy', 'Foreign deploy');
+        $this->writeSkill($projectRoot . '/.candy-code/skills/release', 'Native release');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNotNull($this->registry->get('deploy'));
+            $this->assertNotNull($this->registry->get('release'));
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The foreign discovery is injectable, so a caller that wants a different
+     * one (or none of the disk walking at all) can supply it — the seam the
+     * default `new ForeignSkillDiscovery($loader)` fills.
+     */
+    public function testTheForeignDiscoveryIsInjectable(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.claude/skills/claude-only', 'A Claude Code skill');
+
+        $registry = new SkillRegistry();
+        $manager = new SkillManager(new SkillLoader(), $registry, new ForeignSkillDiscovery(new SkillLoader()));
+
+        try {
+            $manager->loadAll($projectRoot);
+
+            $this->assertNotNull($registry->get('claude-only'));
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * THE CROSS-TREE COLLISION HAD NO TEST AT ALL. Swapping the two
+     * `discover*()` calls in {@see SkillManager::loadAll()} used to be a
+     * mutation the whole suite survived, which meant the documented "opencode
+     * wins over Claude" was an unenforced comment.
+     */
+    public function testOpencodeWinsANameCollisionWithClaudeAcrossTheUsersTrees(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude copy');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/db-query', 'The opencode copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill);
+            $this->assertSame('The opencode copy', $skill->description);
+            $this->assertSame(SkillSource::Opencode, $skill->source);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The same collision through the layout that actually broke it: a skill
+     * directory that is a SYMLINK. The walk used to skip those silently, so on
+     * a machine where the opencode tree is linked in from a shared checkout
+     * — 8 of 14 entries on the box this was found on — the Claude copy won,
+     * and which tree won depended on filesystem shape rather than on the
+     * documented order.
+     */
+    public function testOpencodeStillWinsWhenItsSkillDirectoryIsASymlink(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude copy');
+
+        $realSkill = $this->sandboxHome . '/shared-checkout/db-query';
+        $this->writeSkill($realSkill, 'The opencode copy');
+        mkdir($this->sandboxHome . '/.config/opencode/skills', 0777, true);
+        if (!@symlink($realSkill, $this->sandboxHome . '/.config/opencode/skills/db-query')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill, 'a symlinked skill directory must still be discovered');
+            $this->assertSame('The opencode copy', $skill->description);
+            $this->assertSame(SkillSource::Opencode, $skill->source);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The user's own imported skill outranks one that arrived with a cloned
+     * repository — a clone may ADD a skill, never re-point one you rely on.
+     */
+    public function testAClonedRepositoryCannotRePointTheUsersOwnImportedSkill(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The copy I wrote');
+        $this->writeSkill($projectRoot . '/.claude/skills/db-query', 'The copy the repo shipped');
+        $this->writeSkill($projectRoot . '/.claude/skills/repo-only', 'Something new the repo adds');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill);
+            $this->assertSame('The copy I wrote', $skill->description);
+            $this->assertNotNull($this->registry->get('repo-only'), 'a non-colliding project skill is still imported');
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    // =========================================================================
+    // loadAll() - who wins, and every shadowing is REPORTED (audit 15d-03)
+    //
+    // The tier decides first — built-in < project < user, the user beats the
+    // project (15d-03(b)) — and the format only breaks a tie inside one tier
+    // (claude < opencode < native). The loser is never dropped silently: it
+    // lands in skipped() under its own path, with a reason naming the file
+    // that took its name.
+    // =========================================================================
+
+    /**
+     * Audit 15d-03(b), the finding's own scenario: the user's
+     * `~/.candy-code/skills/deploy` and a cloned repository's
+     * `.candy-code/skills/deploy`. The repository's copy used to win, and
+     * nothing pinned that order as intended.
+     */
+    public function testAProjectSkillCannotShadowAUserSkillOfTheSameName(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.candy-code/skills/deploy', 'The copy I wrote');
+        $this->writeSkill($projectRoot . '/.candy-code/skills/deploy', 'The copy the repo shipped');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('deploy');
+            $this->assertNotNull($skill);
+            $this->assertSame('The copy I wrote', $skill->description, 'the user beats the project');
+            $this->assertSame(SkillOrigin::User, $skill->origin);
+
+            $this->assertShadowed(
+                $projectRoot . '/.candy-code/skills/deploy/SKILL.md',
+                'user',
+                $this->sandboxHome . '/.candy-code/skills/deploy/SKILL.md',
+                'deploy',
+                'project',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The other half of the finding's scenario: the user's own IMPORTED
+     * skill (`~/.claude/skills/db-query`) against a repository's NATIVE one.
+     * "Native always wins" used to decide this for the repository; the tier
+     * decides it now.
+     */
+    public function testAProjectsNativeSkillCannotRePointTheUsersImportedSkill(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude Code copy I installed');
+        $this->writeSkill($projectRoot . '/.candy-code/skills/db-query', 'The native copy the repo shipped');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill);
+            $this->assertSame('The Claude Code copy I installed', $skill->description);
+            $this->assertSame(SkillSource::Claude, $skill->source);
+            $this->assertShadowed(
+                (string) realpath($projectRoot . '/.candy-code/skills/db-query/SKILL.md'),
+                'user, foreign: claude',
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'db-query',
+                'project',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The whole order, one step at a time: one name in all six user/project
+     * locations, and each round deletes the current winner, so every adjacent
+     * pair of the order is decided by a real collision rather than inferred.
+     */
+    public function testTheTierDecidesFirstAndTheFormatBreaksTiesInsideATier(): void
+    {
+        $projectRoot = $this->makeProject();
+        // Highest precedence first — the order each round expects to win.
+        $locations = [
+            'user, native' => $this->sandboxHome . '/.candy-code/skills/dup',
+            'user, opencode' => $this->sandboxHome . '/.config/opencode/skills/dup',
+            'user, claude' => $this->sandboxHome . '/.claude/skills/dup',
+            'project, native' => $projectRoot . '/.candy-code/skills/dup',
+            'project, opencode' => $projectRoot . '/.opencode/skills/dup',
+            'project, claude' => $projectRoot . '/.claude/skills/dup',
+        ];
+        foreach ($locations as $label => $dir) {
+            $this->writeSkill($dir, $label);
+        }
+
+        try {
+            $remaining = count($locations);
+            foreach ($locations as $label => $dir) {
+                $registry = new SkillRegistry();
+                $loader = new SkillLoader(reportSkips: false);
+                (new SkillManager($loader, $registry))->loadAll($projectRoot);
+
+                $this->assertSame($label, $registry->get('dup')?->description, "with {$remaining} copies left, {$label} must win");
+                $shadowed = array_filter(
+                    $loader->skipped(),
+                    static fn(string $reason): bool => str_contains($reason, "same name 'dup'"),
+                );
+                $this->assertCount($remaining - 1, $shadowed, "every copy {$label} beat is reported");
+
+                $this->removeTestProject($dir);
+                $remaining--;
+            }
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Below the project sits only the built-in tier, and a project's foreign
+     * skill outranks it as a native project skill does — the tier decides,
+     * whatever the format. Reported like every other shadowing.
+     */
+    public function testAProjectsImportedSkillShadowingABuiltInIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.claude/skills/security-audit', 'A repository security audit, Claude format');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('A repository security audit, Claude format', $this->registry->get('security-audit')?->description);
+            $this->assertShadowed(
+                self::builtInSkillFile('security-audit'),
+                'project, foreign: claude',
+                $projectRoot . '/.claude/skills/security-audit/SKILL.md',
+                'security-audit',
+                'built-in',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Audit 15d-03 (the remaining ForeignSkillDiscovery half): inside one
+     * foreign convention the user's copy already won, but the repository's
+     * copy was dropped with nothing recorded — the one shadowing still silent
+     * after every other merge reported its own.
+     */
+    public function testAProjectsImportedSkillShadowedByTheUsersImportedSkillIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The copy I wrote');
+        $this->writeSkill($projectRoot . '/.claude/skills/db-query', 'The copy the repo shipped');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('The copy I wrote', $this->registry->get('db-query')?->description);
+            $this->assertShadowed(
+                $projectRoot . '/.claude/skills/db-query/SKILL.md',
+                'user, foreign: claude',
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'db-query',
+                'project, foreign: claude',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testAProjectSkillShadowingABuiltInIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($projectRoot . '/.candy-code/skills/security-audit', 'A repository security audit');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('A repository security audit', $this->registry->get('security-audit')?->description);
+            $this->assertShadowed(
+                self::builtInSkillFile('security-audit'),
+                'project',
+                $projectRoot . '/.candy-code/skills/security-audit/SKILL.md',
+                'security-audit',
+                'built-in',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testAUserSkillShadowingABuiltInIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.candy-code/skills/security-audit', 'My own security audit');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame('My own security audit', $this->registry->get('security-audit')?->description);
+            $this->assertShadowed(
+                self::builtInSkillFile('security-audit'),
+                'user',
+                $this->sandboxHome . '/.candy-code/skills/security-audit/SKILL.md',
+                'security-audit',
+                'built-in',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testANativeSkillShadowingAForeignOneInTheSameTierIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude Code copy');
+        $this->writeSkill($this->sandboxHome . '/.candy-code/skills/db-query', 'The native copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $skill = $this->registry->get('db-query');
+            $this->assertNotNull($skill);
+            $this->assertSame(SkillSource::Native, $skill->source, 'inside one tier native still wins the collision');
+            $this->assertShadowed(
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'user',
+                $this->sandboxHome . '/.candy-code/skills/db-query/SKILL.md',
+                'db-query',
+                'user, foreign: claude',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testOpencodeShadowingClaudeAcrossTheForeignTreesIsReportedInSkipped(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'The Claude copy');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/db-query', 'The opencode copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame(SkillSource::Opencode, $this->registry->get('db-query')?->source);
+            $this->assertShadowed(
+                $this->sandboxHome . '/.claude/skills/db-query/SKILL.md',
+                'user, foreign: opencode',
+                $this->sandboxHome . '/.config/opencode/skills/db-query/SKILL.md',
+                'db-query',
+                'user, foreign: claude',
+            );
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The control: distinct names in every tier shadow nothing, so a normal
+     * launch's skipped() — and the launch notice built off it — stays empty.
+     */
+    public function testSkillsWithNoNameCollisionLeaveSkippedEmpty(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.candy-code/skills/user-only', 'A user skill');
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/claude-only', 'A Claude Code skill');
+        $this->writeSkill($projectRoot . '/.candy-code/skills/project-only', 'A project skill');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNotNull($this->registry->get('user-only'));
+            $this->assertNotNull($this->registry->get('claude-only'));
+            $this->assertNotNull($this->registry->get('project-only'));
+            $this->assertSame([], $this->manager->skipped());
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * A collision that loses nothing is not a shadowing worth a notice: the
+     * same SKILL.md synced into two tools' trees (skillshare's layout) loads
+     * the content the user expected whichever copy wins.
+     */
+    public function testAByteIdenticalCopyIsNotReportedAsShadowed(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/.claude/skills/db-query', 'One shared copy');
+        $this->writeSkill($this->sandboxHome . '/.config/opencode/skills/db-query', 'One shared copy');
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertSame(SkillSource::Opencode, $this->registry->get('db-query')?->source);
+            $this->assertSame([], $this->manager->skipped());
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * The loser's path is the skipped() key — its spelling is whichever the
+     * walk recorded (Stage-1 manifests carry a realpath, eager/foreign Skills
+     * the walked path), so the key is looked up under both.
+     */
+    private function assertShadowed(
+        string $loserFile,
+        string $winnerTier,
+        string $winnerFile,
+        string $name,
+        string $loserTier,
+    ): void {
+        $skipped = $this->manager->skipped();
+        $key = array_key_exists($loserFile, $skipped) ? $loserFile : (string) realpath($loserFile);
+        $this->assertArrayHasKey($key, $skipped, 'the shadowed skill must be reported, not dropped silently');
+
+        $reason = $skipped[$key];
+        $this->assertStringContainsString("shadowed by [{$winnerTier}] skill ", $reason);
+        $this->assertTrue(
+            str_contains($reason, $winnerFile) || str_contains($reason, (string) realpath($winnerFile)),
+            "the reason must name the winning file; got: {$reason}",
+        );
+        $this->assertStringContainsString("same name '{$name}'", $reason);
+        $this->assertStringContainsString("this [{$loserTier}] skill was not loaded", $reason);
+    }
+
+    private static function builtInSkillFile(string $name): string
+    {
+        $path = realpath(dirname(__DIR__, 2) . "/src/Skills/BuiltIn/{$name}/SKILL.md");
+        self::assertNotFalse($path, "built-in skill {$name} must exist for this test to mean anything");
+
+        return $path;
+    }
+
+    /**
+     * THE END-TO-END ESCAPE, at the layer a real launch enters through. A
+     * cloned repository carrying `.claude/skills/escape -> $HOME` had
+     * loadAll() register a skill whose BODY was a file out of the user's home
+     * directory -- and a skill body is prompt context the model reads.
+     */
+    public function testAClonedRepositorysSymlinkCannotReadTheHomeDirectoryIntoASkillBody(): void
+    {
+        $projectRoot = $this->makeProject();
+        $this->writeSkill($this->sandboxHome . '/private', 'Not a skill at all');
+        file_put_contents(
+            $this->sandboxHome . '/private/SKILL.md',
+            "---\ndescription: leaked\n---\n\nAPI_KEY=hunter2\n",
+        );
+
+        mkdir($projectRoot . '/.claude/skills', 0777, true);
+        if (!@symlink($this->sandboxHome, $projectRoot . '/.claude/skills/escape')) {
+            $this->markTestSkipped('this filesystem does not support symlinks');
+        }
+
+        try {
+            $this->manager->loadAll($projectRoot);
+
+            $this->assertNull($this->registry->get('escape/private'));
+            foreach ($this->registry->all() as $skill) {
+                $this->assertStringNotContainsString('hunter2', $skill->content);
+            }
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * ONE LOADER FOR BOTH WALKS. The default ForeignSkillDiscovery shares the
+     * loader it was handed rather than building its own, so a caller that
+     * configured a loader gets it used for the foreign tree too -- and the
+     * skip diagnostics from both walks land in ONE place.
+     */
+    public function testTheForeignWalkSharesTheLoaderItWasConstructedWith(): void
+    {
+        $projectRoot = $this->makeProject();
+        mkdir($projectRoot . '/.claude/skills/broken', 0777, true);
+        file_put_contents($projectRoot . '/.claude/skills/broken/SKILL.md', "---\n: : not: yaml: [\n---\n\nBody.");
+
+        $loader = new SkillLoader(reportSkips: false);
+        $manager = new SkillManager($loader, new SkillRegistry());
+
+        try {
+            $manager->loadAll($projectRoot);
+
+            $this->assertArrayHasKey($projectRoot . '/.claude/skills/broken/SKILL.md', $loader->skipped());
+            $this->assertSame($loader->skipped(), $manager->skipped());
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    private function makeProject(): string
+    {
+        $dir = sys_get_temp_dir() . '/candy-code-manager-test-' . uniqid('', true);
+        mkdir($dir, 0777, true);
+
+        return $dir;
+    }
+
+    private function writeSkill(string $skillDir, string $description): void
+    {
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', "---\ndescription: {$description}\n---\n\nBody.\n");
+    }
+
+    private function removeTestProject(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            // isLink() first: a symlink to a directory answers true to isDir()
+            // and cannot be rmdir()'d.
+            $item->isLink() || !$item->isDir()
+                ? unlink($item->getPathname())
+                : rmdir($item->getPathname());
+        }
+        rmdir($dir);
+    }
+
+    // =========================================================================
+    // getSkillsForTask() - delegates to registry.findForPrompt()
+    // =========================================================================
+
+    public function testGetSkillsForTask(): void
+    {
+        // Arrange
+        $skill = $this->createSkill('php-dev', 'PHP Laravel developer');
+        $this->registry->register(['php-dev' => $skill]);
+
+        // Act
+        $result = $this->manager->getSkillsForTask('I need a Laravel developer');
+
+        // Assert
+        $this->assertNotEmpty($result);
+        $this->assertSame('php-dev', $result[0]->name);
+    }
+
+    public function testGetSkillsForTaskNoMatch(): void
+    {
+        // Arrange
+        $skill = $this->createSkill('php-dev', 'PHP developer');
+        $this->registry->register(['php-dev' => $skill]);
+
+        // Act
+        $result = $this->manager->getSkillsForTask('I need Ruby expertise');
+
+        // Assert
+        $this->assertEmpty($result);
+    }
+
+    // =========================================================================
+    // getSkillsForPaths() - delegates to registry.getForPaths()
+    // =========================================================================
+
+    public function testGetSkillsForPaths(): void
+    {
+        // Arrange
+        $phpSkill = Skill::parse(
+            <<<SKILL
+---
+description: PHP skill
+paths:
+  - /src/**/*.php
+---
+PHP content
+SKILL,
+            'php-skill'
+        );
+        $this->registry->register(['php-skill' => $phpSkill]);
+
+        // Act
+        $result = $this->manager->getSkillsForPaths(['/src/App.php']);
+
+        // Assert
+        $this->assertCount(1, $result);
+        $this->assertSame('php-skill', $result[0]->name);
+    }
+
+    public function testGetSkillsForPathsNoMatch(): void
+    {
+        // Arrange
+        $phpSkill = Skill::parse(
+            <<<SKILL
+---
+description: PHP skill
+paths:
+  - /src/**/*.php
+---
+PHP content
+SKILL,
+            'php-skill'
+        );
+        $this->registry->register(['php-skill' => $phpSkill]);
+
+        // Act
+        $result = $this->manager->getSkillsForPaths(['/var/log/system.log']);
+
+        // Assert
+        $this->assertEmpty($result);
+    }
+
+    // =========================================================================
+    // getUserInvocable() - delegates to registry.getUserInvocable()
+    // =========================================================================
+
+    public function testGetUserInvocable(): void
+    {
+        // Arrange
+        $userSkill = $this->createSkill('user-skill', 'User invocable skill');
+        $nonUserSkill = Skill::parse(
+            <<<SKILL
+---
+description: System only skill
+user-invocable: false
+paths: []
+---
+System content
+SKILL,
+            'system-skill'
+        );
+        $this->registry->register(['user-skill' => $userSkill, 'system-skill' => $nonUserSkill]);
+
+        // Act
+        $result = $this->manager->getUserInvocable();
+
+        // Assert
+        $this->assertCount(1, $result);
+        $this->assertSame('user-skill', $result[0]->name);
+    }
+
+    public function testGetUserInvocableEmpty(): void
+    {
+        // Arrange - no skills registered
+
+        // Act
+        $result = $this->manager->getUserInvocable();
+
+        // Assert
+        $this->assertEmpty($result);
+    }
+
+    // =========================================================================
+    // disableFromConfig() - delegates to registry.disableMultiple()
+    // =========================================================================
+
+    public function testDisableFromConfig(): void
+    {
+        // Arrange
+        $skill1 = $this->createSkill('skill-one', 'First skill');
+        $skill2 = $this->createSkill('skill-two', 'Second skill');
+        $this->registry->register(['skill-one' => $skill1, 'skill-two' => $skill2]);
+
+        // Act
+        $this->manager->disableFromConfig(['skill-one']);
+
+        // Assert
+        $this->assertTrue($this->registry->isDisabled('skill-one'));
+        $this->assertFalse($this->registry->isDisabled('skill-two'));
+    }
+
+    // =========================================================================
+    // Methods blocked by App::withEnabledSkills() bug
+    // =========================================================================
+
+    /**
+     * NOTE: The following methods cannot be fully tested due to App bug:
+     * - applyToApp() - calls withEnabledSkills()
+     * - enable() - calls withEnabledSkills() when skill exists
+     * - disable() - calls withEnabledSkills()
+     *
+     * Only the early-return cases can be tested:
+     * - enable() with non-existent skill returns same app (WORKS)
+     */
+    public function testEnableNonexistentSkillReturnsSameApp(): void
+    {
+        // Arrange
+        $app = App::new($this->provider, 'gpt-4');
+
+        // Act
+        $result = $this->manager->enable($app, 'non-existent-skill');
+
+        // Assert - same instance because skill doesn't exist (early return)
+        $this->assertSame($app, $result);
+    }
+}

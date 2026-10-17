@@ -1,8 +1,8 @@
-# OpenClaw vs sugar-crush: competitor deep-dive
+# OpenClaw vs candy-code: competitor deep-dive
 
 Feeds steps: 0.3, 0.4-a, 0.4-b, 0.5, 0.10, 0.11, 0.12, 0.15, 0.16, 1.A-1, 1.A-2, 1.C-1, 1.C-2, 1.C-3, 2.1, 2.2-1, 2.4-1, 2.5, 2.7-1, 2.7-3, 2.8, 2.10, 2.11, 2.12, 3.C, 3.I-1, 4.1-1, 4.3-1, 4.3-2, 4.4, 4.6-2, 4.7-1, 4.7-3, 4.9, 5.1-1, 5.1-2, 5.3-1, 5.3-2, 5.4-3, 5.6, 5.7-2, 5.10, 5.11-2, 5.13b, 5.14b, 5.14g, 5.14k, 5.14l
 
-**Competitor:** OpenClaw (`openclaw/openclaw`), version `2026.9.7`, clone at `/home/sites/crush-research-repos/openclaw` @ `04fbf17d6`. A path with no repo prefix is an OpenClaw path; sugar-crush paths are prefixed `sugar-crush/` or name a class/method (current anchors live in `impact/*.md`).
+**Competitor:** OpenClaw (`openclaw/openclaw`), version `2026.9.7`, clone at `/home/sites/crush-research-repos/openclaw` @ `04fbf17d6`. A path with no repo prefix is an OpenClaw path; candy-code paths are prefixed `candy-code/` or name a class/method (current anchors live in `impact/*.md`).
 
 ---
 
@@ -441,7 +441,7 @@ Defaults from `src/agents/memory-search.ts:62-63`, `:116-122`, `:214`:
 
 ### 6.3 Shell timeout (→ 0.4-a, 0.4-b)
 
-`exec` `timeoutSeconds`: per-call total lifetime (0 means none); expiry kills even backgrounded processes. Host exec rejects `env.PATH` and `LD_*`/`DYLD_*` overrides. (OpenClaw also auto-backgrounds after `yieldMs` 10 s so a turn never blocks on a long command; sugar-crush's equivalent is the sequential-tool heartbeat.)
+`exec` `timeoutSeconds`: per-call total lifetime (0 means none); expiry kills even backgrounded processes. Host exec rejects `env.PATH` and `LD_*`/`DYLD_*` overrides. (OpenClaw also auto-backgrounds after `yieldMs` 10 s so a turn never blocks on a long command; candy-code's equivalent is the sequential-tool heartbeat.)
 
 ---
 
@@ -530,7 +530,7 @@ Inventory vs readiness vs visibility is a documented three-way distinction; `ope
 
 **P2 rows still on the roadmap:**
 
-| Idea | Step | OpenClaw source | sugar-crush hook |
+| Idea | Step | OpenClaw source | candy-code hook |
 |---|---|---|---|
 | Todo (`progress_card`: ≤50 steps, one `in_progress`, full replace) + one completion self-check when a saved plan is unfinished | 3.C | `docs/tools/progress-card.md` | New tool; dock pane; self-check in `runTurn()` |
 | `ask_user` structured 1-3 questions | 5.7-2 | `docs/tools/ask-user.md` | Veil modal + 1.C back-channel |

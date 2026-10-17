@@ -1,7 +1,7 @@
 import type { MediaRef, MethodName, MethodParams, MethodResult } from '../protocol/generated'
 
 /**
- * The typed RPC call, shaped exactly like `SugarCrushClient.request` (and the
+ * The typed RPC call, shaped exactly like `CandyCodeClient.request` (and the
  * connection store's wrapper of the same name), so either can be handed to
  * {@see fetchArtifact} without an adapter.
  */

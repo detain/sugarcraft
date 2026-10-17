@@ -1,6 +1,6 @@
 # Impact: wave4-subagents
 
-Scope: 99-synthesis Part III Wave 4 (4.1–4.10) plus Part II #30 (`/fork` ignores history), given ID **X-30**. Checked against `sugar-crush` master @ `574e4cccb`. Every `:line` below is current.
+Scope: 99-synthesis Part III Wave 4 (4.1–4.10) plus Part II #30 (`/fork` ignores history), given ID **X-30**. Checked against `candy-code` master @ `574e4cccb`. Every `:line` below is current.
 
 ## Summary table
 

@@ -104,8 +104,8 @@ flag_management:
     - name: candy-files
       paths: ["candy-files/src/**"]
       carryforward: true
-    - name: sugar-crush
-      paths: ["sugar-crush/src/**"]
+    - name: candy-code
+      paths: ["candy-code/src/**"]
       carryforward: true
     - name: sugar-crush-web
       paths: ["sugar-crush-web/src/**"]
@@ -361,12 +361,12 @@ component_management:
         - "candy-files/src/**"
       flag_regexes:
         - "^candy-files$"
-    - component_id: sugar-crush
-      name: sugar-crush
+    - component_id: candy-code
+      name: candy-code
       paths:
-        - "sugar-crush/src/**"
+        - "candy-code/src/**"
       flag_regexes:
-        - "^sugar-crush$"
+        - "^candy-code$"
     - component_id: sugar-crush-web
       name: sugar-crush-web
       paths:

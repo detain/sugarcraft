@@ -1,6 +1,6 @@
 # 15a — Defect audit: agent engine, fork protocol, Runtime, providers, messages, support
 
-Scope: `sugar-crush/src/Backend/`, `src/Runtime.php`, `src/Providers/` (all providers, ProviderFactory, TransientFailure, usage parsing, SSE parsing, ToolCallParser/*), `src/Messages/`, `src/Support/`, `src/Usage.php`.
+Scope: `candy-code/src/Backend/`, `src/Runtime.php`, `src/Providers/` (all providers, ProviderFactory, TransientFailure, usage parsing, SSE parsing, ToolCallParser/*), `src/Messages/`, `src/Support/`, `src/Usage.php`.
 Method: read every file in scope with comments stripped (line numbers preserved), then wrote throwaway repro scripts for each candidate under `/home/sites/crush-research-repos/_audit-scratch/15a/`, using mocked Guzzle handlers, real forks and a fake MCP server. Known items from `99-synthesis.md` Part II are not repeated.
 
 **No finding from this audit remains open.** Fixed findings have been removed from this appendix. Live checks still owed are listed once, in `99-synthesis.md` Part IX.

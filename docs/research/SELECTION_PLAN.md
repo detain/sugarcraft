@@ -460,7 +460,7 @@ All 45 research documents available at:
 | sugar-datepicker | 19KB |
 | sugar-charts | 23KB |
 | sugar-navstack | 14KB |
-| sugar-crush | 15KB |
+| candy-code | 15KB |
 | sugar-dashboard | 25KB |
 | candy-mdview | 17KB |
 | candy-mail | 25KB |

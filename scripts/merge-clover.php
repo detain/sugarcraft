@@ -11,7 +11,7 @@ declare(strict_types=1);
  *
  * Reads <outDir>/clover-0.xml .. clover-<K-1>.xml as written by
  * `scripts/parallel-tests.sh --clover` and unions them into one report so the
- * sharded sugar-crush coverage job can hand Codecov/Codacy exactly the same
+ * sharded candy-code coverage job can hand Codecov/Codacy exactly the same
  * artifact shape the serial run produced — the destination path is what the
  * downstream upload steps reference, nothing below this script changes.
  *
@@ -31,7 +31,7 @@ declare(strict_types=1);
  *    elements. Static attributes (loc/ncloc/classes/complexity) are
  *    engine-invariant and carried across (max).
  *  * <class> metrics: a single-class file has class metrics == file metrics
- *    (PSR-4 norm, 317/324 sugar-crush src files), so its covered* values are
+ *    (PSR-4 norm, 317/324 candy-code src files), so its covered* values are
  *    recomputed exactly. Multi-class files fall back to a conservative
  *    max-across-shards floor on covered* — never inflated; no consumer in
  *    this pipeline reads class granularity from clover.

@@ -9,7 +9,7 @@ CONCURRENCY: lanes b10/b11/b12 run in parallel on other packages; stop after R7+
 - Baseline suite (rename-baseline.md:90): 257T/1160A/0F/0E/0S/0W — keep shape EXACT.
 - Collision check: `SshLauncher`/`ssh-launcher`/`ssh_launcher` appear ONLY in plan_rename.md + tools/renames.json (the entry itself) — clear.
 - Consumers of `sugarcraft/sugar-wishlist`: root composer.json (+ own manifest) ONLY. Zero PHP consumers of `SugarCraft\Wishlist\` outside the lib. <!-- @rename-keep -->
-- sugar-crush single docblock hit src/Cli/NonInteractive.php:192 (`candy-mail`/`candy-ssh-launcher` provenance prose) — mechanical R3 rewrite, no test pins; run consumer guards filter at R6 (B8 precedent 276T set).
+- candy-code single docblock hit src/Cli/NonInteractive.php:192 (`candy-mail`/`candy-ssh-launcher` provenance prose) — mechanical R3 rewrite, no test pins; run consumer guards filter at R6 (B8 precedent 276T set).
 - CALIBER_LEARNINGS cross-refs sugar-toast ×2 / sugar-table ×1 / candy-git ×2 (pattern citations incl `candy-ssh-launcher/src/Lang.php` path) — mechanical, stay accurate.
 - ENV: ZERO user env reads (only getenv('HOME') in bin + SshConfigParser). Plan R4.5 LegacyEnv = honest none. R5 derived prefixes SUGAR_WISHLIST_/SUGARWISHLIST_ = tool no-ops.
 - DATA PATHS: `~/.config/wishlist.{yml,yaml,json}` + CWD `wishlist.{yml,yaml,json}` = UPSTREAM-COMPATIBLE (charmbracelet/wishlist config names) — plan:823/:951 KEEP exception. Not slug-derived → tool leaves; keep, README must explain. No LegacyPaths. <!-- @rename-keep -->

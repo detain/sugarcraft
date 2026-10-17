@@ -20,7 +20,7 @@ Date: 2026-10-15. Base: master @ 545540f73 (clean). NEVER pushed (brief override
 - `src/Manager.php:519` trash prefix `candyfiles-trash-` + test globs (ManagerDeleteTest :39/:193) and `candyfiles-tab-` tmp prefix (ManagerTest :531): runtime temp-path namespaces, not bin references; out of 1.4 scope; behavior-unchanged.
 - composer.json keyword `"candyfiles"` (Packagist search discoverability; residue checker does not police unchanged-name libs).
 - findings/candy-files.md + findings/plan_candy-files.md: audit-history quotes of the unchanged trash path.
-- No .github workflow references either bin (verified) — vhs.yml/ci.yml cite lib slugs only (unchanged). No shell completions in scope (plan names none for 1.4). sugar-crush has zero refs to old bins (verified) → no crush filter run needed. candy-gifview already ships `bin/candy-gifview`.
+- No .github workflow references either bin (verified) — vhs.yml/ci.yml cite lib slugs only (unchanged). No shell completions in scope (plan names none for 1.4). candy-code has zero refs to old bins (verified) → no crush filter run needed. candy-gifview already ships `bin/candy-gifview`.
 
 ## Figures (watchdog + </dev/null, cwd=lib, linked vendors)
 | gate | before | after |

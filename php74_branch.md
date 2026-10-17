@@ -488,7 +488,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-vt | high | 40 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args | <!-- @rename-keep historical provenance -->
 | honey-bounce | high | 12 | enum-with-methods, ctor-promotion, match, named-args, readonly | <!-- @rename-keep historical provenance -->
 | sugar-bits | high | 49 | enum, enum-with-methods, ctor-promotion, match, mixed, named-args, new-in-init | <!-- @rename-keep historical provenance -->
-| sugar-crush | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
+| candy-code | high | 20 | attribute, enum (backed+pure), ctor-promotion, match, named-args, non-capturing-catch |
 | sugar-dash | high | 345 | backed-enum, enum-with-methods, ctor-promotion, match, mixed, named-args (everything) | <!-- @rename-keep -->
 | candy-mail | high | 7 | ctor-promotion, mixed, named-args, php8-strfn, readonly |
 | sugar-reel | high | 19 | backed-enum, enum-with-methods, ctor-promotion, first-class-callable, match — **in progress** | <!-- @rename-keep -->

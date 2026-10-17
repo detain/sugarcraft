@@ -1,11 +1,11 @@
-# Kilo Code vs sugar-crush: competitor deep-dive
+# Kilo Code vs candy-code: competitor deep-dive
 
 Feeds steps: 0.3, 0.4-b, 0.6, 0.11, 0.12, 0.15, 1.A-1, 1.B-3, 1.C-3, 2.1, 2.2-1, 2.4-1, 2.5, 2.8, 2.9, 3.A-1, 3.A-2, 3.B-4, 3.C, 3.D-3, 3.F, 3.G, 3.I-1, 3.I-2, 4.1-1, 4.2, 4.3-1, 4.3-2, 4.4, 4.5, 4.7-1, 5.1-1, 5.1-2, 5.2, 5.7-1, 5.7-2, 5.12, 5.14
 
 **Competitor:** Kilo Code. Two codebases, cloned 2026-10-01:
 - **[K]** current Kilo, `/home/sites/crush-research-repos/kilocode` (HEAD `622ed1f`): an **opencode fork** (pins upstream v1.18.26); Kilo-only code lives in `packages/opencode/src/kilocode/`. Paths `[K] …` are under `kilocode/packages/`.
 - **[L]** legacy Kilo, `/home/sites/crush-research-repos/kilocode-legacy` (HEAD `ae046ac`, v5.16.2, end of life 2026-07-31): a VS Code extension, fork of Roo Code (itself a Cline fork). Paths `[L] …` are under `kilocode-legacy/`.
-- **[SC]** sugar-crush: `sugar-crush/src/...`.
+- **[SC]** candy-code: `candy-code/src/...`.
 
 ---
 
@@ -233,7 +233,7 @@ effective: [first, summary, msg9, msg10, msg11]   // getEffectiveApiHistory (:60
 
 ---
 
-## 13. Recommended improvements for sugar-crush
+## 13. Recommended improvements for candy-code
 
 **Prune old tool outputs before every request, mid-turn included (→ 2.2-1).** Kilo `prune()` numbers: skip the last 2 turns, protect the newest 40k tokens, commit only when >20k is freed, protect `skill`; force it when the payload exceeds 1.25 MB. Implemented as DCP's `ToolOutputAgeStrategy` over the ledger/projector (Appendix D §13.2 D).
 
@@ -254,7 +254,7 @@ effective: [first, summary, msg9, msg10, msg11]   // getEffectiveApiHistory (:60
 - In `Runtime::settle()`, append the board notice when `getUnreadCount()` grew during the call.
 - Copy Kilo's instruction block (§3.4) into `TaskTool::promptGuidance()`.
 
-**Shadow-git file checkpoints (→ 3.A-1, 3.A-2).** For non-repos, a shadow git dir `~/.sugar-crush/checkpoints/<sha1(root)>` with `core.worktree`, scrubbed `GIT_DIR`/`GIT_WORK_TREE`, build/media excludes plus `.gitignore`, `commit.gpgSign false`. Snapshot at turn dispatch next to `EnhancedSessionStore::saveCheckpoint` (store the hash in the checkpoint row) and in the child before the first write-class tool (`Runtime::stepRequestedAWrite()` detects it). Disable on failure instead of failing the turn. `/rewind [n] --files|--chat|--both`.
+**Shadow-git file checkpoints (→ 3.A-1, 3.A-2).** For non-repos, a shadow git dir `~/.candy-code/checkpoints/<sha1(root)>` with `core.worktree`, scrubbed `GIT_DIR`/`GIT_WORK_TREE`, build/media excludes plus `.gitignore`, `commit.gpgSign false`. Snapshot at turn dispatch next to `EnhancedSessionStore::saveCheckpoint` (store the hash in the checkpoint row) and in the child before the first write-class tool (`Runtime::stepRequestedAWrite()` detects it). Disable on failure instead of failing the turn. `/rewind [n] --files|--chat|--both`.
 
 **Background Task with result injection and extend (→ 4.3-1, 4.3-2, 4.4).** `background` arg spawning through `BackgroundSupervisor`; return at once with Kilo's "DO NOT sleep, poll…" text; on completion append a user-role `<task id state="completed">…` row and auto-dispatch a turn if the chat is idle (also fixes `/bg` results never landing). Re-calling with the same id while it runs extends it (4.4 `SendMessage` steer). Propagate child cost to the parent.
 

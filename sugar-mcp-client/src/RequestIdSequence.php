@@ -7,7 +7,7 @@ namespace SugarCraft\McpClient;
 /**
  * JSON-RPC request ids that stay unique across pcntl_fork().
  *
- * WHY THIS EXISTS (audit B1 / AG-1): an embedder like sugar-crush starts its
+ * WHY THIS EXISTS (audit B1 / AG-1): an embedder like candy-code starts its
  * MCP servers once, in the long-lived parent, and then runs every turn — and
  * every parallel sub-agent — in a forked child. A plain `$nextId++` counter is
  * COPIED into each child, so every child sends the same next id. Two children

@@ -1,0 +1,1581 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Support;
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Known-answer controls for {@see ChildLifetimeScanner}, in BOTH directions.
+ *
+ * WHY THIS FILE EXISTS AND NOT JUST THE GUARD. Round 48 graded this scanner's
+ * older sibling by reading its findings rather than running it, and missed
+ * that `classifySpec()` answered `inherited` for EVERY positional descriptor
+ * spec regardless of truth - wrong in both polarities at once. A findings list
+ * is not evidence about the instrument that produced it. So every rule this
+ * scanner implements is pinned here against a source whose answer is known
+ * before the scanner is asked, and pinned in the direction that must FLAG as
+ * well as the direction that must NOT: a scanner that flags nothing is
+ * indistinguishable from a scanner that is dead unless something proves it
+ * still fires.
+ *
+ * THE FIXTURES ARE SYNTHETIC ON PURPOSE. Pinning against real files in `src/`
+ * would make this file red whenever another lane edits a spawn site, which is
+ * the guard's job and not this one's. Here the source IS the expectation.
+ * THE ONE MEASURED EXCEPTION is {@see self::testEveryRosterKeyNamesAMethodThatExistsInSrc()}
+ * (E424): it reads real `src/` files, but it asks about NAMES, not spawn
+ * sites - and a roster key whose method has been renamed out from under it is
+ * exactly the drift that must turn this file red, wherever it lives.
+ */
+final class ChildLifetimeScannerFixtureTest extends TestCase
+{
+    use SourceFileWalkTrait;
+    /**
+     * A long-lived child whose spec says nothing about fd 3 and above.
+     *
+     * THE POSITIVE CONTROL. If this stops flagging, every "nothing to report"
+     * elsewhere in the guard is worthless, because that is exactly what a dead
+     * scanner returns.
+     */
+    public function testAPropertyStoredHandleWithNoHighFdsIsFlagged(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Server {
+                private $process;
+                public function start(): void {
+                    $pipes = [];
+                    $this->process = @proc_open(['srv'], [
+                        0 => ['pipe', 'r'],
+                        1 => ['pipe', 'w'],
+                        2 => ['pipe', 'w'],
+                    ], $pipes);
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+        self::assertSame([0, 1, 2], $sites[0]['fds']);
+        self::assertSame([], $sites[0]['highFds']);
+        self::assertSame('start', $sites[0]['function']);
+    }
+
+    /**
+     * The same child, with fd 3 named.
+     *
+     * THE NEGATIVE CONTROL FOR THE FD HALF. Without it the guard could be
+     * satisfied by a scanner that reports `highFds` as empty unconditionally,
+     * which would flag the whole tree and read as thoroughness.
+     */
+    public function testAPropertyStoredHandleThatNamesFdThreeIsNotFlagged(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Server {
+                private $process;
+                public function start(): void {
+                    $pipes = [];
+                    $this->process = @proc_open(['srv'], [
+                        0 => ['pipe', 'r'],
+                        1 => ['pipe', 'w'],
+                        2 => ['pipe', 'w'],
+                        3 => ['file', '/dev/null', 'r'],
+                    ], $pipes);
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+        self::assertSame([3], $sites[0]['highFds']);
+    }
+
+    /**
+     * THE NEGATIVE CONTROL FOR THE LIFETIME HALF: a child drained and closed
+     * where it was spawned inherits descriptors for microseconds and is not
+     * a finding.
+     */
+    public function testAHandleClosedInTheSameFunctionIsShortLived(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Runner {
+                public function run(): string {
+                    $pipes = [];
+                    $process = @proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+                    $out = stream_get_contents($pipes[1]);
+                    proc_close($process);
+                    return $out;
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertSame([1], $sites[0]['fds']);
+    }
+
+    /**
+     * A `proc_close()` reached on some paths and not others does not make the
+     * child short-lived.
+     *
+     * THE LIVE CASE IS `Sessions/BackgroundSupervisor.php::spawnSession()`,
+     * whose only `proc_close()` is inside the branch taken when the IPC
+     * handshake times out. On the happy path nothing reaps the child at all -
+     * which is what E366 recorded by hand - and a scanner that counted the
+     * textual presence of the call said "short", the polarity that reports a
+     * leak as fine.
+     */
+    public function testACloseOnlyOnAFailureBranchIsNotAShortLife(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Supervisor {
+                public function spawn(): void {
+                    $pipes = [];
+                    $proc = proc_open('daemon', [1 => ['pipe', 'w']], $pipes);
+                    if (!is_resource($proc)) {
+                        throw new \RuntimeException('no');
+                    }
+                    $client = @stream_socket_accept($this->server, 5);
+                    if ($client === false) {
+                        proc_close($proc);
+                        throw new \RuntimeException('timeout');
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('nested block', $sites[0]['reason']);
+    }
+
+    /**
+     * A spawn inside a branch, closed at the function's own level, IS short.
+     *
+     * THE GUARD AGAINST OVER-CORRECTING, and it is not hypothetical: the first
+     * version of the depth rule compared against a fixed zero, and the second
+     * spawn in `Hooks/ScriptHook.php::executeStaged()` - a retry inside an
+     * `if`, closed once at the bottom of the method - came back unclassified.
+     * Reddening correct code is how the next real offender buys its exemption,
+     * so the shape that was wrongly flagged is pinned here in its own right.
+     */
+    public function testASpawnInsideABranchClosedAtFunctionLevelIsShortLived(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Retry {
+                public function run(): int {
+                    $pipes = [];
+                    $process = @proc_open('a', [1 => ['pipe', 'w']], $pipes);
+                    if (!is_resource($process)) {
+                        $process = @proc_open('b', [1 => ['pipe', 'w']], $pipes);
+                    }
+                    return proc_close($process);
+                }
+            }
+            PHP);
+
+        self::assertCount(2, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[1]['lifetime']);
+    }
+
+    /**
+     * A close inside a LATER block is still conditional.
+     *
+     * Leaving the spawn's own block lowers the floor; entering a new one
+     * raises the depth above it again. Without that second half the running
+     * minimum would wave through any close that happened to follow a closed
+     * brace.
+     */
+    public function testACloseInsideAnUnrelatedLaterBranchIsStillConditional(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Later {
+                public function run(bool $tidy): void {
+                    $pipes = [];
+                    if (true) {
+                        $process = @proc_open('a', [1 => ['pipe', 'w']], $pipes);
+                    }
+                    if ($tidy) {
+                        proc_close($process);
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('nested block', $sites[0]['reason']);
+    }
+
+    /**
+     * A handle that leaves the function inside a returned array literal.
+     *
+     * `return [$proc, $pipes];` is the commonest escape spelling in this tree,
+     * and a bare `return $proc` check would miss every one of them - a miss in
+     * the polarity that reports a leaked child as fine.
+     */
+    public function testAHandleReturnedInsideAnArrayIsLongLived(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Runner {
+                public function spawn(): array {
+                    $pipes = [];
+                    $proc = @proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+                    return [$proc, $pipes];
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+    }
+
+    public function testAHandleReturnedDirectlyIsLongLived(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function spawn(array &$pipes) {
+                return proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+        self::assertSame('spawn', $sites[0]['function']);
+    }
+
+    public function testAHandleAppendedToAPropertyArrayIsLongLived(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Pool {
+                private array $children = [];
+                public function add(string $id): void {
+                    $pipes = [];
+                    $proc = @proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+                    $this->children[$id] = $proc;
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+    }
+
+    /**
+     * A function that both STORES the handle and closes it is LONG.
+     *
+     * The assignment escape beats the close, because a child reachable from
+     * `$this` can outlive the call on any path that does not reach the
+     * `proc_close()`, and reading the close as proof of a short life is the
+     * polarity that hides a leak.
+     *
+     * ⚠️ THE CALL SPELLING IS THE OTHER WAY ROUND, pinned in
+     * {@see testAnUnconditionalCloseBeatsACallEscape()} beside this one so the
+     * asymmetry cannot be read as an accident. It is not "escape wins"; it is
+     * "an assignment escape wins", and the reason the two differ is in
+     * {@see ChildLifetimeScanner::classifyLifetime()}'s doc-block.
+     */
+    public function testEscapeBeatsCloseWhenAFunctionDoesBoth(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Both {
+                private $handle;
+                public function go(bool $keep): void {
+                    $pipes = [];
+                    $proc = @proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+                    $this->handle = $proc;
+                    if (!$keep) {
+                        proc_close($proc);
+                    }
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+    }
+
+    /**
+     * A function that HANDS the handle somewhere and then closes it is SHORT.
+     *
+     * THE HALF OF "ESCAPE WINS" THAT DOES NOT WIN, and it is correct that it
+     * does not. The question this scanner asks is whether the CHILD outlives
+     * the call; an unconditional `proc_close()` ends it whatever some other
+     * function did with the handle beforehand. A stored handle is different
+     * because it stays reachable from a path that never reaches the close.
+     *
+     * Pinned so that a reader who takes the doc-block's ordering literally and
+     * "fixes" the call spelling to match reds here and finds the argument.
+     */
+    public function testAnUnconditionalCloseBeatsACallEscape(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Both {
+                public function go(): void {
+                    $pipes = [];
+                    $proc = @proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+                    $this->register($proc);
+                    proc_close($proc);
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+    }
+
+    /**
+     * Shapes the scanner cannot follow are FAILURES, not silent passes.
+     *
+     * @dataProvider unfollowableHandles
+     */
+    public function testAnUnfollowableHandleIsUnclassifiedRatherThanShort(string $body): void
+    {
+        $sites = $this->sitesIn("<?php\nclass C {\n    public function m(array \$pipes) {\n{$body}\n    }\n}\n");
+
+        self::assertCount(1, $sites);
+        self::assertSame(
+            ChildLifetimeScanner::LIFETIME_UNCLASSIFIED,
+            $sites[0]['lifetime'],
+            'A handle this scanner cannot follow must be reported, not assumed short-lived: ' . $sites[0]['reason'],
+        );
+    }
+
+    /** @return iterable<string, array{0:string}> */
+    public static function unfollowableHandles(): iterable
+    {
+        yield 'result discarded' => ['        @proc_open("ls", [1 => ["pipe", "w"]], $pipes);'];
+        yield 'passed straight into a call' => ['        $this->register(@proc_open("ls", [1 => ["pipe", "w"]], $pipes));'];
+        yield 'handed to a local nothing does anything with' => [
+            '        $p = @proc_open("ls", [1 => ["pipe", "w"]], $pipes);' . "\n" . '        return 1;',
+        ];
+        yield 'destructured' => ['        [$a, $b] = [@proc_open("ls", [1 => ["pipe", "w"]], $pipes), 1];'];
+    }
+
+    /**
+     * Descriptor specs the scanner can resolve, and specs it must refuse.
+     *
+     * A REFUSAL IS `null`, NOT AN EMPTY LIST, and the difference is the whole
+     * point: `[]` says "the spec names no fds", which is a claim, and `null`
+     * says "I cannot tell", which is a failure the guard reds on.
+     *
+     * @param list<int>|null $expected
+     * @dataProvider descriptorSpecs
+     */
+    public function testTheFdSetIsReadOrRefused(string $source, ?array $expected): void
+    {
+        $sites = $this->sitesIn($source);
+
+        self::assertCount(1, $sites);
+        self::assertSame($expected, $sites[0]['fds']);
+    }
+
+    /** @return iterable<string, array{0:string,1:list<int>|null}> */
+    public static function descriptorSpecs(): iterable
+    {
+        $wrap = static fn (string $spec): string => "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$this->h = @proc_open('x', {$spec}, \$pipes);\n    }\n}\n";
+
+        yield 'inline keyed' => [$wrap("[0 => ['pipe','r'], 2 => ['pipe','w']]"), [0, 2]];
+        yield 'inline positional' => [$wrap("[['pipe','r'], ['pipe','w'], ['pipe','w']]"), [0, 1, 2]];
+        yield 'long array syntax' => [$wrap("array(1 => array('pipe','w'))"), [1]];
+        yield 'empty spec' => [$wrap('[]'), []];
+        yield 'high fd named' => [$wrap("[2 => ['pipe','w'], 7 => ['file','/dev/null','w']]"), [2, 7]];
+
+        // Mixed keyed/positional: PHP gives a positional element ONE GREATER
+        // THAN THE LARGEST INTEGER KEY SO FAR, so position no longer tells you
+        // the fd. (Not "the next free key", which this comment used to say and
+        // which is a different rule: measured on PHP 8.3.6, `[5 => 'a',
+        // 0 => 'b', 'c']` has keys 5, 0 and 6, where "next free" predicts 1.)
+        yield 'mixed keyed and positional' => [$wrap("[['pipe','r'], 2 => ['pipe','w']]"), null];
+
+        // A key that is not an integer literal names an fd this scanner cannot
+        // evaluate.
+        yield 'constant key' => [$wrap("[self::FD_ERR => ['pipe','w']]"), null];
+
+        // A STRING-SPELLED INTEGER KEY IS AN INTEGER KEY. Measured on PHP
+        // 8.3.6: `["0" => x]` has the int key 0. Reading it as unknowable
+        // would make the guard red an ordinary spec while telling its author
+        // not to add an exemption - a red on correct code, which is where the
+        // next real offender buys its row.
+        yield 'double-quoted integer keys' => [
+            $wrap('["0" => [\'pipe\',\'r\'], "1" => [\'pipe\',\'w\'], "2" => [\'pipe\',\'w\']]'),
+            [0, 1, 2],
+        ];
+        yield 'single-quoted integer key' => [$wrap("['3' => ['file','/dev/null','w']]"), [3]];
+
+        // ...but only the CANONICAL spelling converts. `"01"` stays a string
+        // key naming no fd at all, so the honest answer is that the spec is
+        // unreadable, not that fd 1 is covered.
+        yield 'non-canonical quoted key' => [$wrap('["01" => [\'pipe\',\'r\']]'), null];
+
+        // Not an array literal at all.
+        yield 'method call' => [$wrap('$this->descriptors()'), null];
+
+        yield 'local variable' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [2 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            [2],
+        ];
+
+        yield 'class constant in the same file' => [
+            "<?php\nclass C {\n    private const DESCRIPTOR = [0 => ['pipe','r'], 1 => ['pipe','w']];\n"
+            . "    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$this->h = @proc_open('x', self::DESCRIPTOR, \$pipes);\n    }\n}\n",
+            [0, 1],
+        ];
+
+        // E447. A TERNARY WHOSE ARMS AGREE. `sugar-core/src/Program.php::runExec()`
+        // spells its spec `$req->captureOutput ? [0 => $childIn, 1 => ['pipe','w'],
+        // 2 => ['pipe','w']] : [0 => $childIn, 1 => $childOut, 2 => $childErr]`
+        // - copied from the source rather than paraphrased, because a quotation
+        // a reader cannot find by searching for it is worse than a summary -
+        // and it was
+        // the ONE unreadable spec in the whole reachable closure. The refusal
+        // was correct and the diagnosis was not: both arms carry the integer
+        // keys 0, 1 and 2, so which fds the spec names does not depend on the
+        // condition at all. Only the VALUES do, and this instrument reads
+        // keys.
+        $ternary = static fn (string $a, string $b): string => "<?php\nclass C {\n    private \$h;\n"
+            . "    public function m(array \$pipes) {\n        \$d = \$c ? {$a} : {$b};\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n";
+
+        yield 'ternary whose arms name the same fds' => [
+            $ternary("[0 => \$in, 1 => ['pipe','w'], 2 => ['pipe','w']]", "[0 => \$in, 1 => \$out, 2 => \$err]"),
+            [0, 1, 2],
+        ];
+
+        // ORDER IS NOT PART OF THE ANSWER. The arms name a SET of fds; a
+        // branch that happens to spell them in a different order names the
+        // same set, and refusing it would red correct code.
+        yield 'ternary whose arms agree out of order' => [
+            $ternary("[1 => ['pipe','w'], 0 => ['pipe','r']]", "[0 => ['pipe','r'], 1 => ['pipe','w']]"),
+            [0, 1],
+        ];
+
+        // THE POLARITY THAT MATTERS MOST. If the branches name DIFFERENT fds
+        // then which fds the spec names is a runtime fact, and answering with
+        // either arm - or with their union - would be the confident wrong
+        // answer this instrument exists to avoid.
+        yield 'ternary whose arms disagree' => [
+            $ternary("[0 => ['pipe','r']]", "[0 => ['pipe','r'], 3 => ['pipe','w']]"),
+            null,
+        ];
+
+        // The line is drawn at exactly one top-level `?` and one top-level
+        // `:`; everything past that is an expression evaluator this is not.
+        yield 'nested ternary' => [$ternary("(\$e ? [0 => 1] : [0 => 1])", '[0 => 1]'), null];
+
+        // WITHOUT the parentheses, which is a different code path and the one
+        // the "exactly one top-level `?`" rule is about. Asserted as a
+        // REFUSAL, deliberately not as a claim about which clause performs it:
+        // a differential oracle showed the multi-`?` clause and the trailing
+        // `:` clause currently refuse the same set, so a fixture naming one of
+        // them would pin an implementation detail instead of the contract.
+        yield 'nested ternary without parentheses' => [
+            $ternary('[0 => 1]', "\$e ? [0 => 2] : [0 => 3]"),
+            null,
+        ];
+
+        // AN ARRAY LITERAL FOLLOWED BY ANYTHING IS NOT AN ARRAY LITERAL, and
+        // this used to be answered WRONG rather than refused: measured on PHP
+        // 8.3.6, `[0 => ['pipe','r']] + [1 => ['pipe','w']]` reported fds
+        // `[0]`, having read the first operand and dropped the union that adds
+        // fd 1. A half-read spec reported as complete passes the guard's
+        // readability arm as an ordinary two-fd spec, which is the polarity
+        // this scanner exists to avoid.
+        yield 'array union' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [0 => ['pipe','r']] + [1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array literal with an elvis tail' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [0 => ['pipe','r']] ?: [1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'ternary arm that is not an array' => [$ternary('$x', '[0 => 1]'), null];
+
+        // `?:` and `??` lex as their own tokens on PHP 8.3.6 (T_COALESCE, and
+        // a short ternary has no `?` followed by a separate `:` to pair), so
+        // neither is mistaken for the conditional this reads. Pinned rather
+        // than reasoned about: both are one character from the shape above.
+        yield 'short ternary' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = \$c ?: [0 => ['pipe','r']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'null coalesce' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = \$c ?? [0 => ['pipe','r'], 1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // A RETURN TYPE'S `:` IS AT DEPTH 0, WHICH ternaryArms()' DOC-BLOCK
+        // USED TO DENY. Measured on PHP 8.3.6: `fn(): array => ...` puts the
+        // `:` at depth 0 and `fn(): ?array => ...` puts a bare `?` there too,
+        // so the parenthesis-depth argument that comment made was inverted.
+        // The refusal is real and comes from the ORDERING rule instead - a
+        // return type's `:` arrives before any conditional `?` and meets
+        // `$question === null`. Pinned here so the real reason is a test
+        // rather than a sentence, and so loosening that rule reds.
+        yield 'arrow fn with a return type' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = (fn(): array => [0 => ['pipe','r']])();\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'arrow fn with a nullable return type' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = (fn(): ?array => [0 => ['pipe','r']])();\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // NAMED ARGUMENTS. The spec is a perfectly readable literal and this
+        // scanner reads the SECOND POSITIONAL argument, so it must refuse
+        // rather than read whatever happens to sit in position two. Rule 14:
+        // the site is still reported - a refused spec is a finding, and a
+        // dropped call site is not.
+        yield 'named arguments' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$this->h = @proc_open(command: 'x', "
+            . "descriptor_spec: [0 => ['pipe','r'], 1 => ['pipe','w']], pipes: \$pipes);\n"
+            . "    }\n}\n",
+            null,
+        ];
+
+        // Two more shapes the ternary reader is one character away from, and
+        // one it is not: a `match` is not a conditional expression this parses,
+        // and an array literal that is immediately dereferenced is the same
+        // trailing-content defect the array-union case above records.
+        yield 'match expression' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = match(\$c) { true => [0 => 1], default => [0 => 1] };\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array dereference tail' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [[0 => 1]][0];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array() long-form union' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = array(0 => 1) + array(1 => 2);\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'spread' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [...\$base, 2 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // THE REFUSALS ABOVE NEED A COMPANION THAT IS NOT ONE (rule 25). A
+        // provider made entirely of `null` expectations is satisfied by a
+        // keysOf() that returns null unconditionally, and these two are the
+        // nearest neighbours of shapes it must refuse: a trailing comma is one
+        // token from the union case, and a comment between ternary arms is one
+        // token from the nested-ternary case. Both must still be READ.
+        yield 'trailing comma in a keyed spec' => [
+            $wrap("[0 => ['pipe','r'], 1 => ['pipe','w'],]"),
+            [0, 1],
+        ];
+        yield 'comment between ternary arms' => [$ternary('[0 => 1] /* pick */', '[0 => 1]'), [0]];
+
+        // The scope floor: a spec assigned in an EARLIER method is not this
+        // call's spec, and borrowing it would be an answer from another
+        // function's body.
+        yield 'variable assigned in a different method' => [
+            "<?php\nclass C {\n    private \$h;\n"
+            . "    public function other(): void { \$d = [2 => ['pipe','w']]; }\n"
+            . "    public function m(array \$pipes) {\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+    }
+
+    /**
+     * `proc_open` appearing as something other than a direct global call.
+     *
+     * `intval()` is not a cast and `$this->proc_open()` is not the launcher;
+     * an alphabet written to match only the cases already known has a hole
+     * shaped exactly like the next defect. These are not sites, and they are
+     * not silence either.
+     *
+     * @dataProvider appearancesThatAreNotCalls
+     */
+    public function testAnAppearanceThatIsNotACallIsReportedRatherThanDropped(string $source, string $kind): void
+    {
+        $scanned = ChildLifetimeScanner::scan($source);
+
+        self::assertSame([], $scanned['sites'], 'This is not a spawn site.');
+        self::assertCount(1, $scanned['unresolved']);
+        self::assertSame($kind, $scanned['unresolved'][0]['kind']);
+    }
+
+    /** @return iterable<string, array{0:string,1:string}> */
+    public static function appearancesThatAreNotCalls(): iterable
+    {
+        yield 'method call' => [
+            "<?php\nclass C { public function m() { \$this->proc_open('x'); } }\n",
+            ChildLifetimeScanner::REF_METHOD,
+        ];
+        yield 'nullsafe method call' => [
+            "<?php\nclass C { public function m(\$o) { \$o?->proc_open('x'); } }\n",
+            ChildLifetimeScanner::REF_METHOD,
+        ];
+        yield 'static call' => [
+            "<?php\nclass C { public function m() { Shell::proc_open('x'); } }\n",
+            ChildLifetimeScanner::REF_STATIC,
+        ];
+        yield 'declaration' => [
+            "<?php\nfunction proc_open(\$c) { return null; }\n",
+            ChildLifetimeScanner::REF_DECLARATION,
+        ];
+
+        // Built by concatenation rather than spelled out, so a future textual
+        // sweep over the name cannot quietly rewrite the fixture that proves
+        // this branch fires.
+        yield 'string reference' => [
+            "<?php\nfunction m() { return function_exists('" . 'proc_' . "open'); }\n",
+            ChildLifetimeScanner::REF_STRING,
+        ];
+    }
+
+    /**
+     * A doc-block is source text, and a doc-block that spells a descriptor
+     * spec sits in the token stream exactly where the code would.
+     *
+     * PAIRED WITH ITS OWN POSITIVE, in this test rather than a neighbouring
+     * one. "Zero sites" is also what a deleted scanner returns, so a fixture
+     * whose whole expectation is a zero proves nothing on its own; the second
+     * half runs the SAME scanner over the SAME text with the comment markers
+     * gone and requires a site to appear.
+     */
+    public function testProseAboutASpawnIsNotASpawn(): void
+    {
+        $code = "\$this->h = @proc_open('x', [2 => ['pipe','w']], \$pipes);";
+
+        $commented = "<?php\nclass C {\n    /**\n     * {$code}\n     */\n    public function m() {}\n}\n";
+        $live = "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n        {$code}\n    }\n}\n";
+
+        self::assertSame([], ChildLifetimeScanner::scan($commented)['sites']);
+        self::assertSame([], ChildLifetimeScanner::scan($commented)['unresolved']);
+        self::assertCount(1, ChildLifetimeScanner::scan($live)['sites']);
+    }
+
+    public function testTheFullyQualifiedSpellingIsSeen(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            namespace App;
+            class C {
+                private $h;
+                public function m(array $pipes) {
+                    $this->h = \proc_open('x', [2 => ['pipe','w']], $pipes);
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+    }
+
+    /**
+     * A tree that grows a reaping helper stops spelling `proc_close()`.
+     *
+     * NOT A HYPOTHETICAL. Scanning a concurrent lane's `src/` with this class
+     * found `Providers/ClaudeCodeProvider.php` reaping through
+     * `ProcessReaper::terminateAndClose($process)` where this tree still
+     * spells `proc_close($process)`; the site read as short-lived here and as
+     * "nothing returns, stores or proc_close()s it" there, on a change that
+     * ADDED a bounded SIGTERM->SIGKILL ladder. A guard that reds the stricter
+     * version of the code earns an exemption row written for correct code,
+     * and that row is where the next real offender hides.
+     */
+    public function testARosteredReapingHelperClosesTheChild(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Code\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::terminateAndClose($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertStringContainsString(
+            'ProcessReaper::terminateAndClose($h)',
+            $sites[0]['reason'],
+            'the reason must name the call that actually reaps; a message that always says '
+                . 'proc_close describes a line the reader will not find at the site',
+        );
+    }
+
+    /**
+     * The roster is keyed on `Class::method`, and the class half is load-bearing.
+     *
+     * ⚠️ THE DANGEROUS POLARITY, which is why it is pinned beside the useful
+     * one. A roster matched on the method name alone would let ANY class with
+     * a `terminateAndClose()` reap a handle as far as this scanner is
+     * concerned - and a wrongly-short child is the reading that waves a real
+     * leak through, the one direction this class exists to refuse.
+     */
+    public function testARosteredMethodNameOnAnotherClassIsNotAClose(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                Bookkeeping::terminateAndClose($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+    }
+
+    /**
+     * An empty roster is a dead roster, and every row above would still pass.
+     *
+     * Rule 25's shape: the assertions in the two tests above are about what
+     * the roster DOES, so they cannot notice a roster that has been emptied to
+     * make something else green.
+     */
+    public function testTheClosingHelperRosterIsNotEmpty(): void
+    {
+        self::assertNotSame([], ChildLifetimeScanner::CLOSING_HELPERS);
+        self::assertNotSame([], ChildLifetimeScanner::BEST_EFFORT_REAPERS);
+
+        $rosters = [
+            'CLOSING_HELPERS' => ChildLifetimeScanner::CLOSING_HELPERS,
+            'BEST_EFFORT_REAPERS' => ChildLifetimeScanner::BEST_EFFORT_REAPERS,
+        ];
+
+        foreach ($rosters as $name => $roster) {
+            foreach ($roster as $helper => $why) {
+                self::assertSame(
+                    \strtolower($helper),
+                    $helper,
+                    "{$name} rows are compared lowercased, so a row with capitals can never "
+                        . 'match: ' . $helper,
+                );
+                self::assertStringContainsString(
+                    '::',
+                    $helper,
+                    "a bare method name in {$name} would let any class of that name count: "
+                        . $helper . '. This row carries a SECOND load its name does not hint '
+                        . 'at, so do not weaken it to get a bare function rostered: it is what '
+                        . 'keeps every CLOSING_HELPERS key shaped like the callee that matches '
+                        . 'it, and the closedBy receipt is only distinguishable from the '
+                        . "callee's own spelling while that holds "
+                        . '(see testAnUnrosteredCloserBuysNoVerdictAndLeavesNoReceipt).',
+                );
+                self::assertNotSame(
+                    '',
+                    \trim($why),
+                    "{$name}[{$helper}] carries no reason. The reason is the only thing that "
+                        . 'distinguishes a measured row from a guess about a method in another '
+                        . 'package, read off its name.',
+                );
+            }
+        }
+
+        self::assertSame(
+            [],
+            \array_intersect_key(
+                ChildLifetimeScanner::CLOSING_HELPERS,
+                ChildLifetimeScanner::BEST_EFFORT_REAPERS,
+            ),
+            'a helper cannot both close on every path and close on only some of them; the two '
+                . 'rosters produce opposite verdicts, so an overlap makes the answer depend on '
+                . 'which branch runs first',
+        );
+    }
+
+    /**
+     * EVERY ROSTERED ROW IS SPENT, one synthetic site per row.
+     *
+     * WHAT THIS EXISTS TO CATCH, measured rather than assumed. Before it,
+     * deleting `processreaper::reapifexited` from the roster SURVIVED the whole
+     * of this file plus {@see DescriptorInheritanceGuardTest} - 41 tests, 99
+     * assertions, rc 0 - because the only rows any fixture spelled were
+     * `terminateAndClose` and a deliberately-unrostered `Bookkeeping::`. A
+     * roster whose rows are individually free to be wrong is a roster whose
+     * contract is decorative, and this one's rows can DELETE a finding.
+     *
+     * WHAT IT DOES NOT PROVE, said out loud so the next reader does not take
+     * more from it than it offers: that the named helper really closes. That
+     * is a fact about a method in `src/` - in another lane's package, at that -
+     * and it cannot be settled from a synthetic string. What it does prove is
+     * that the row is wired, that its polarity is the one the roster claims,
+     * and that removing it costs a red. The residual it recorded - that the
+     * NAME points at no real code - is closed by E424's
+     * {@see self::testEveryRosterKeyNamesAMethodThatExistsInSrc()}; what still
+     * rests on human measurement is the behaviour claim in the row's reason,
+     * which no token walk can make.
+     *
+     * @dataProvider rosteredHelpers
+     */
+    public function testEveryRosteredHelperProducesItsRostersVerdict(
+        string $helper,
+        string $expected,
+        ?string $expectedClosedBy,
+    ): void {
+        // Rebuilt from the lowercased roster key, so the fixture cannot drift
+        // away from the row it is spending: `processreaper::terminateandclose`
+        // becomes `Processreaper::terminateandclose($h)`, which matches
+        // case-insensitively exactly as the roster promises.
+        [$class, $method] = \explode('::', $helper, 2);
+        $call = \ucfirst($class) . '::' . $method;
+
+        $sites = $this->sitesIn(<<<PHP
+            <?php
+            function m(array \$pipes) {
+                \$h = proc_open('x', [2 => ['pipe','w']], \$pipes);
+                {$call}(\$h);
+            }
+            PHP);
+
+        self::assertCount(1, $sites, 'the fixture for ' . $helper . ' produced no site');
+        self::assertSame(
+            $expected,
+            $sites[0]['lifetime'],
+            $helper . ' is rostered but the scanner does not give it that roster\'s verdict. A '
+                . 'row nothing exercises is a row that can be wrong for free.',
+        );
+        self::assertStringContainsString(
+            $method,
+            \strtolower($sites[0]['reason']),
+            'the reason must name the call that was actually found, not a generic proc_close()',
+        );
+
+        // THE RECEIPT, EXPECTED FROM THE ROSTER KEY RATHER THAN FROM A LITERAL,
+        // which is the only reason this row is here and not beside the two
+        // hand-written closedBy fixtures below. Those spell one key out; this
+        // spends every row the roster has, in the roster's own polarity - a
+        // CLOSING_HELPERS row must receipt itself, a BEST_EFFORT_REAPERS row
+        // must receipt nothing, because it bought no verdict to receipt.
+        self::assertSame(
+            $expectedClosedBy,
+            $sites[0]['closedBy'],
+            $helper . ' does not receipt itself the way its roster says. A promotion bought by '
+                . 'a row must name the row, or the receipt roster in '
+                . 'DescriptorInheritanceGuardTest has nothing to count and E425 reopens.',
+        );
+    }
+
+    /** @return iterable<string, array{0:string,1:string,2:?string}> */
+    public static function rosteredHelpers(): iterable
+    {
+        foreach (ChildLifetimeScanner::CLOSING_HELPERS as $helper => $_) {
+            yield 'closes: ' . $helper => [$helper, ChildLifetimeScanner::LIFETIME_SHORT, $helper];
+        }
+        foreach (ChildLifetimeScanner::BEST_EFFORT_REAPERS as $helper => $_) {
+            yield 'best effort: ' . $helper
+                => [$helper, ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, null];
+        }
+    }
+
+    /**
+     * Every roster key names a class and method that EXIST in this package's
+     * `src/` (E424).
+     *
+     * WHY EXISTENCE IS ITS OWN GUARD. A roster row is a claim about somebody
+     * else's method: the scanner spends it at call sites, the guard believes
+     * the verdict, and if the method was renamed, moved, or was mis-typed on
+     * the day the row was written, every spawn that matches the key is closed
+     * by a name that answers to no code. {@see self::testEveryRosteredHelperProducesItsRostersVerdict()}
+     * spends the row through a SYNTHETIC call - which proves the wiring
+     * matches the key and proves nothing about `src/`. This arm is the half
+     * that reads the real tree.
+     *
+     * WHAT IT DELIBERATELY DOES NOT CLAIM: scope. The resolver asks "does ANY
+     * class named this, in ANY src file, declare a method named this", not
+     * "does the callee's import resolve there" - the roster itself matches
+     * only the trailing `Class::method` pair for exactly that reason (a
+     * `use` can rewrite everything left of it), and pinning import resolution
+     * would ask a token walk to be the PHP compiler. The behavioural promise
+     * - that the method really closes on every path - stays what the row's
+     * own reason text says it is: a measurement a human took.
+     *
+     * Rule 15 keeps its pair: the two ghost keys below run the same resolver
+     * and must resolve to nothing, or this arm is reporting a green that a
+     * dead resolver would report too.
+     */
+    public function testEveryRosterKeyNamesAMethodThatExistsInSrc(): void
+    {
+        $sourceFiles = self::everySourceFileIn(\dirname(__DIR__, 2), ['src']);
+        self::assertNotSame(
+            [],
+            $sourceFiles,
+            'the src/ walk returned nothing, so every resolution below is vacuous - a census of '
+                . 'no files passes by construction',
+        );
+
+        $rosters = [
+            'CLOSING_HELPERS' => ChildLifetimeScanner::CLOSING_HELPERS,
+            'BEST_EFFORT_REAPERS' => ChildLifetimeScanner::BEST_EFFORT_REAPERS,
+        ];
+
+        foreach ($rosters as $rosterName => $roster) {
+            foreach (\array_keys($roster) as $helper) {
+                self::assertTrue(
+                    self::rosterKeyResolvesInSrc($helper, $sourceFiles),
+                    "{$rosterName}[{$helper}] names no class+method anywhere in src/. The "
+                        . 'scanner spends this row at real call sites and the guard believes '
+                        . 'the verdict: a key nobody implements closes children by wishful '
+                        . 'typing. Rename the row to what exists, or delete it and let the '
+                        . 'site be accounted for.',
+                );
+            }
+        }
+
+        self::assertFalse(
+            self::rosterKeyResolvesInSrc('processreaper::methodThatWasNeverTyped', $sourceFiles),
+            'the resolver matched a method that does not exist - it is answering yes to '
+                . 'everything and the rows above prove nothing',
+        );
+        self::assertFalse(
+            self::rosterKeyResolvesInSrc('classThatWasNeverTyped::terminateandclose', $sourceFiles),
+            'the resolver matched a class that does not exist on the strength of the method '
+                . 'name alone - pairing, not membership, is the claim',
+        );
+    }
+
+    /**
+     * Whether `class::method` names a method declared by a class of that name
+     * in the same src file.
+     *
+     * Coarse on purpose, per the doc-block above the arm: declaration-position
+     * names only (`T_CLASS`/`T_INTERFACE`/`T_TRAIT`/`T_ENUM` then a bare
+     * `T_STRING`, `T_FUNCTION` then a bare `T_STRING`), case-insensitively,
+     * per file. `::class` resolves to T_CLASS followed by something that is
+     * not a name, which the state machine drops on its next token.
+     *
+     * @param array<string,string> $sourceFiles package-relative => absolute
+     */
+    private static function rosterKeyResolvesInSrc(string $helper, array $sourceFiles): bool
+    {
+        [$class, $method] = \explode('::', $helper, 2);
+
+        foreach ($sourceFiles as $path) {
+            $classSeen = false;
+            $methodSeen = false;
+            $expect = null;
+
+            foreach (\PhpToken::tokenize(\file_get_contents($path)) as $token) {
+                if ($token->id === \T_WHITESPACE) {
+                    continue;
+                }
+
+                if ($token->is([\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM])) {
+                    $expect = 'class';
+                    continue;
+                }
+
+                if ($token->id === \T_FUNCTION) {
+                    $expect = 'function';
+                    continue;
+                }
+
+                if ($expect !== null && $token->id === \T_STRING) {
+                    $lower = \strtolower($token->text);
+                    if ($expect === 'class' && $lower === $class) {
+                        $classSeen = true;
+                    } elseif ($expect === 'function' && $lower === $method) {
+                        $methodSeen = true;
+                    }
+                    $expect = null;
+                    continue;
+                }
+
+                $expect = null;
+            }
+
+            if ($classSeen && $methodSeen) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A BEST-EFFORT REAP IS NOT A CLOSE, and this is the row that was wrong.
+     *
+     * `ProcessReaper::reapIfExited()` was rostered in
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} under a doc-block warning
+     * that a row there "is a claim that the helper really closes". Read off
+     * that method's own source rather than its name: it waits WITHOUT
+     * signalling, and on the branch where the child is still running at the
+     * end of the budget it `return null`s with the handle untouched. So it
+     * reaps sometimes.
+     *
+     * WHY THAT MATTERED RATHER THAN BEING A WORDING QUIBBLE. With the row in
+     * place the scanner answered {@see ChildLifetimeScanner::LIFETIME_SHORT}
+     * for `Sessions/BackgroundSupervisor::spawnSession` - and
+     * {@see DescriptorInheritanceGuardTest::exposedIn()} `continue`s past every
+     * short site, so E366's own HIGH finding would have vanished from the
+     * guard entirely on the merge that introduced the helper. Not reported and
+     * exempted: gone.
+     */
+    public function testABestEffortReaperIsNotAClose(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Code\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::reapIfExited($h);
+            }
+            PHP);
+
+        self::assertNotSame(
+            ChildLifetimeScanner::LIFETIME_SHORT,
+            $sites[0]['lifetime'],
+            'a helper that returns without closing when the child is still running does not end '
+                . "the child's life, and reading it as short DELETES the site from the guard",
+        );
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('BEST-EFFORT', $sites[0]['reason']);
+    }
+
+    /**
+     * The unfollowable-call sentence must not PRESCRIBE the defect above.
+     *
+     * A handle handed to an unrostered call is unclassified with advice
+     * attached, and the advice used to be "if one of those reaps the child,
+     * roster it in CLOSING_HELPERS" - which is precisely the edit that hid
+     * `spawnSession`. The advice now names both rosters.
+     */
+    public function testTheUnfollowableCallAdviceNamesBothRosters(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $this->registry->adopt($h);
+            }
+            PHP);
+
+        self::assertStringContainsString('CLOSING_HELPERS', $sites[0]['reason']);
+        self::assertStringContainsString('BEST_EFFORT_REAPERS', $sites[0]['reason']);
+    }
+
+    /**
+     * The reason names the close that ACTUALLY covered every path.
+     *
+     * A single overwritten `$closer` reported whichever reaping call came
+     * last, so a function with an unconditional `proc_close()` followed by a
+     * conditional helper said the CONDITIONAL one "runs unconditionally". The
+     * verdict was right and the sentence sent the reader to the wrong line -
+     * the same defect the named-closer change existed to remove.
+     */
+    public function testTheNamedCloserIsTheOneThatCoveredEveryPath(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Code\Support\ProcessReaper;
+            function m(array $pipes, bool $extra) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                proc_close($h);
+                if ($extra) {
+                    ProcessReaper::terminateAndClose($h);
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertStringContainsString('proc_close($h) runs unconditionally', $sites[0]['reason']);
+        self::assertStringNotContainsString(
+            'terminateAndClose($h) runs unconditionally',
+            $sites[0]['reason'],
+            'the conditional call is inside an if; naming it as the unconditional one describes '
+                . 'a line the reader will not find where the message says it is',
+        );
+    }
+
+    /**
+     * A handle inside an array literal is FOLLOWED ONE LEVEL (E419).
+     *
+     * `$bundle = ['p' => $h]; return $bundle;` used to answer "appears again
+     * in a shape with no callee to name" about a function whose very next
+     * line returned the array - the false-absence this fixture existed to
+     * catch, surviving one level of indirection. `ProcessExecutor::spawnWorker`
+     * is that exact shape in production, and the guard's exemption row had to
+     * document that the scanner could not see what the code plainly did. The
+     * carrier's return is now the handle's return, and the sentence names
+     * both ends. The untouched polarity below keeps the absence sentence
+     * alive for the function that really does nothing.
+     */
+    public function testAHandleInsideAnArrayLiteralIsFollowedOneLevel(): void
+    {
+        $member = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                return $bundle;
+            }
+            PHP);
+        $untouched = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $member[0]['lifetime']);
+        self::assertStringContainsString('the handle in $h is returned in $bundle', $member[0]['reason']);
+        self::assertStringNotContainsString('nothing in this function', $member[0]['reason']);
+
+        // The other polarity, in the same test: a function that really does
+        // nothing with the handle must still get the absence sentence, or the
+        // fix above has simply replaced one always-wrong message with another.
+        self::assertStringContainsString('nothing in this function', $untouched[0]['reason']);
+    }
+
+    /**
+     * A property that receives the literal receives the handle (E419).
+     *
+     * `$this->pool = ['process' => $h];` is the storage the handle-into-a-
+     * literal rule most needs to catch - it outlives the function through
+     * the object - and it returns LONG at the store, before any close can be
+     * weighed, on the same hidden-leak polarity as the direct property store.
+     */
+    public function testAHandleStoredThroughAnArrayMemberIsLong(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $this->pool = ['process' => $h];
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+        self::assertStringContainsString('stored through an array member in $this->pool', $sites[0]['reason']);
+    }
+
+    /**
+     * Handing the CARRIER to something is handing the handle to it (E419).
+     *
+     * The escape sentence names both ends - `$h is handed to ->adopt through
+     * $bundle` - because "which this scanner cannot follow" must point the
+     * reviewer at the exact call AND the exact indirection.
+     */
+    public function testACarrierHandedToAnUnknownCallEscapesThroughIt(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                $this->registry->adopt($bundle);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('->adopt through $bundle', $sites[0]['reason']);
+    }
+
+    /**
+     * A close invoked on the CARRIER is not a close of the handle (E419).
+     *
+     * `proc_close($bundle)` hands an ARRAY to the language's closer; whether
+     * anything digs the handle out is exactly the question a roster-free
+     * "runs unconditionally" sentence would answer with false confidence.
+     * The site lands in the escape sentence instead, naming the indirection.
+     * This is the polarity that keeps the membership walk from MANUFACTURING
+     * short lifetimes one level removed from the real ones.
+     */
+    public function testACloseOnTheCarrierIsNotClaimedAsAReap(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                proc_close($bundle);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('proc_close through $bundle', $sites[0]['reason']);
+        self::assertStringNotContainsString('runs unconditionally', $sites[0]['reason']);
+    }
+
+    /**
+     * Two levels of membership is where the walk stops, and it says so (E419).
+     *
+     * `$outer = ['worker' => $bundle];` puts the carrier inside ANOTHER
+     * literal. Following that recursively turns a scanner into an alias chase
+     * with no decidable answer; the honest endpoint names the carrier and the
+     * level it stopped at.
+     */
+    public function testSecondLevelMembershipStopsAndNamesTheCarrier(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                $outer = ['worker' => $bundle];
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('as a member of another literal', $sites[0]['reason']);
+        self::assertStringContainsString('one level and no further', $sites[0]['reason']);
+    }
+
+    /**
+     * A carrier with no fate at all still cannot be reported as an absence.
+     *
+     * The handle went INTO a literal on a named line; the array went nowhere.
+     * That is "I followed it one level and it stopped", not "nothing happens
+     * to it" - rule 14 again, one level in (E419).
+     */
+    public function testADeadCarrierSaysWhereTheHandleWasPlaced(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('was placed in an array literal on line', $sites[0]['reason']);
+        self::assertStringNotContainsString('nothing in this function', $sites[0]['reason']);
+    }
+
+    /**
+     * The membership walk stops at every non-literal user of `=>` (E419).
+     *
+     * `fn() => $h` shares the arrow token with array members but has no
+     * literal behind it: the backward walk must die at the parameter list's
+     * `(` and the site must land in the unfollowed-shape sentence, NOT in a
+     * fabricated return or store. The second shape is the one that makes this
+     * pin bite rather than vacuate: when an EARLIER literal shares the
+     * statement, a walk without the parenthesis stop would walk through the
+     * arrow function's parameter list, find that literal, and register a
+     * carrier for a handle the array never actually holds - a closure is what
+     * captured it.
+     */
+    public function testAnArrowFunctionDoesNotReadAsAnArrayMember(): void
+    {
+        $bare = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $delayed = fn() => $h;
+            }
+            PHP);
+        $embedded = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['idle' => 1, 'wake' => fn() => $h];
+            }
+            PHP);
+
+        foreach ([$bare, $embedded] as $sites) {
+            self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+            self::assertStringContainsString('in a shape with no callee to name', $sites[0]['reason']);
+            self::assertStringNotContainsString('was placed in an array literal', $sites[0]['reason']);
+        }
+    }
+
+    /**
+     * "Handed to something I cannot follow" is not "nothing happens to it".
+     *
+     * Both are {@see ChildLifetimeScanner::LIFETIME_UNCLASSIFIED}, and the
+     * REASON is the whole difference: one tells a reviewer where to look and
+     * the other is a confident false statement about a function that plainly
+     * does something with the handle. Rule 14 one level in - a scanner that
+     * cannot follow a call must say so rather than report an absence.
+     */
+    public function testAHandleHandedToAnUnknownCallSaysSoRatherThanClaimingNothingHappens(): void
+    {
+        $handed = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $this->registry->adopt($h);
+            }
+            PHP);
+        $untouched = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $handed[0]['lifetime']);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $untouched[0]['lifetime']);
+
+        self::assertStringContainsString('->adopt', $handed[0]['reason']);
+        self::assertStringContainsString('nothing in this function', $untouched[0]['reason']);
+        self::assertNotSame(
+            $untouched[0]['reason'],
+            $handed[0]['reason'],
+            'the two must not share a sentence: a reviewer can act on the name of a call and '
+                . 'cannot act on a false absence',
+        );
+    }
+
+    /**
+     * A closer inside `finally` runs on EVERY path out, so it is SHORT.
+     *
+     * THE POSITIVE CONTROL FOR THE `finally` RULE. Before this, the scanner
+     * classified `Providers/ClaudeCodeProvider.php::completeStream` as
+     * unclassified with the reason "runs only inside a nested block, so it
+     * does not cover every path out of this function" - a sentence that is
+     * flatly false about `finally`, and one that reddened correct code at the
+     * round-53 merge. An exemption row for correct code is where the next real
+     * offender hides, so the classifier learned the rule instead.
+     */
+    public function testACloserInsideFinallyRunsOnEveryPathAndIsShort(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class C {
+                public function m(array $pipes) {
+                    $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                    try {
+                        $this->pump($h);
+                    } finally {
+                        proc_close($h);
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+    }
+
+    /**
+     * THE NEGATIVE HALF, and the reason the rule is keyed by depth rather than
+     * by a bare "saw a finally" flag: an `if` INSIDE a `finally` is still
+     * conditional. A flag would have called this short and licensed exactly
+     * the shape the guard exists to catch.
+     */
+    public function testACloserInsideAnIfInsideFinallyIsStillUnclassified(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class C {
+                public function m(array $pipes, bool $tidy) {
+                    $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                    try {
+                        $this->pump($h);
+                    } finally {
+                        if ($tidy) {
+                            proc_close($h);
+                        }
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+    }
+
+    /**
+     * And the other half of the same trap: a `finally` the spawn is NOT inside
+     * still has to leave the block the spawn opened. A `finally` nested in a
+     * `foreach` runs on every path out of the LOOP BODY, not out of the
+     * function.
+     */
+    public function testAFinallyInsideALoopDoesNotCoverEveryPathOutOfTheFunction(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class C {
+                public function m(array $pipes, array $jobs) {
+                    $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                    foreach ($jobs as $job) {
+                        try {
+                            $this->pump($h, $job);
+                        } finally {
+                            proc_close($h);
+                        }
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+    }
+
+    /**
+     * `closedBy` names the roster row a short verdict rests on, or nothing.
+     *
+     * THE FIELD HAS NO PIN OF ITS OWN IN THIS FILE, which is the gap this
+     * closes. It was added so E425 - a promotion bought by a
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} row, with nothing written
+     * down anywhere a reviewer reads - leaves a receipt. Every assertion about
+     * it so far lives in a CONSUMER of the scanner. That is the wrong place
+     * for the only test of a field on this class's public contract: a consumer
+     * can be rewritten, retargeted or deleted for reasons that have nothing to
+     * do with the scanner, and the field would then be unpinned without a
+     * single test changing colour.
+     *
+     * ⚠️ BOTH POLARITIES, and the second is the dangerous one. Stamping too
+     * LITTLE loses the receipt and reopens E425. Stamping too MUCH - marking a
+     * literal `proc_close()` as helper-closed - inflates the receipt roster
+     * with sites that need no provenance, and a roster full of noise is one
+     * nobody reads. `proc_close()` is the language ending the child and is
+     * nobody's claim about another file; only a roster key is.
+     */
+    public function testAShortVerdictRecordsWhetherARosterRowBoughtIt(): void
+    {
+        $viaHelper = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Code\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::terminateAndClose($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaHelper[0]['lifetime']);
+        self::assertSame(
+            'processreaper::terminateandclose',
+            $viaHelper[0]['closedBy'],
+            'a short verdict bought by a CLOSING_HELPERS row must name the row that bought it. '
+                . 'Unstamped, the promotion is indistinguishable from a literal proc_close() and '
+                . 'the receipt roster that exists to catch a wrong row has nothing to count.',
+        );
+        self::assertArrayHasKey(
+            (string) $viaHelper[0]['closedBy'],
+            ChildLifetimeScanner::CLOSING_HELPERS,
+            'closedBy must be a key INTO the roster, not prose about it. A consumer looks the '
+                . 'value up; a value that does not resolve is a receipt for a row nobody can find.',
+        );
+
+        $viaLanguage = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                proc_close($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaLanguage[0]['lifetime']);
+        self::assertNull(
+            $viaLanguage[0]['closedBy'],
+            'proc_close() is the language closing the child, not a claim about a method in '
+                . 'another file. Stamping it would put every ordinary short-lived spawn on the '
+                . 'receipt roster, and a roster that lists everything distinguishes nothing.',
+        );
+    }
+
+    /**
+     * An unrostered method on a rostered class buys nothing and receipts nothing.
+     *
+     * WHAT THIS DOC-BLOCK CLAIMED WHEN IT WAS WRITTEN, an hour before the
+     * measurement that refuted it: that this test is the rule-25 control for
+     * the pair above - that it leaves "a stamp that is really a hard-coded
+     * constant nowhere to hide". WHAT IS TRUE NOW, MEASURED: it does not. The
+     * stamping line was mutated to ignore
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} entirely and derive the key
+     * from the closer's SHAPE instead - stamp it if the callee is spelled
+     * `Class::method`, null otherwise - and this whole file stayed green at 51
+     * tests, 130 assertions, rc 0. It survives because that mutant is
+     * EQUIVALENT on today's roster: every CLOSING_HELPERS key contains `::`,
+     * the only other thing that reaches the stamping line is a literal
+     * `proc_close()`, and a BEST_EFFORT row never reaches it at all.
+     *
+     * AND THE ESCAPE CLAUSE THAT PARAGRAPH ENDED ON IS ITSELF WRONG, which is
+     * the same defect one turn later and is why it is corrected here rather
+     * than quietly dropped. WHAT IT SAID: the mutant "stops being equivalent
+     * the day a bare function - not a `Class::method` - is rostered as a
+     * closer, and on that day the receipt goes wrong silently". WHAT IS TRUE,
+     * MEASURED by rostering exactly that - a bare `r54c`-named key appended to
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} - and running this file:
+     * rc 1, 52 tests, TWO failures, neither of them quiet.
+     * {@see testTheClosingHelperRosterIsNotEmpty()} refuses the row outright
+     * ("a bare method name in CLOSING_HELPERS would let any class of that name
+     * count"), and {@see testEveryRosteredHelperProducesItsRostersVerdict()}
+     * reds a second time because the scanner gives the row no verdict. So the
+     * day the paragraph tells the reader to watch for cannot arrive: the
+     * roster cannot HOLD such a key without a red that names it.
+     *
+     * WHY THAT MATTERS MORE THAN A CORRECTED SENTENCE. The mutant is not
+     * equivalent by an accident of today's data that time will erode - it is
+     * equivalent under an invariant this file ENFORCES, and there is no future
+     * day to wait for. The receipt's correctness therefore rests on the `::`
+     * assertion in {@see testTheClosingHelperRosterIsNotEmpty()} as much as on
+     * the stamping line, which is not something its name would lead anyone to
+     * guess. Weaken that assertion and the stamping line becomes free to be
+     * wrong; that is the real dependency, and it is now written at both ends.
+     *
+     * WHERE THE ROSTER-TRACKING CHECK ACTUALLY LIVES, since it is not here:
+     * {@see testEveryRosteredHelperProducesItsRostersVerdict()}, whose expected
+     * receipt IS the roster key rather than a literal, spent once per row. Its
+     * strength is bounded by the roster's cardinality, which is one row today -
+     * so it too cannot currently separate "reads the roster" from "reproduces
+     * the roster's one answer". That is a property of a one-row roster, not a
+     * defect in either test, and it is written down here so the next reader
+     * does not have to re-derive it from a green run.
+     *
+     * WHY THIS TEST STILL EARNS ITS PLACE. It pins the dangerous polarity of
+     * the pair rather than the roster wiring: the class half of a
+     * `Class::method` key is load-bearing, and a scanner that let any class
+     * with the right method name close a handle would read a real leak as
+     * short-lived. It asserts that no verdict is bought AND that nothing is
+     * receipted, which is the shape a reader checking the receipt roster needs.
+     */
+    public function testAnUnrosteredCloserBuysNoVerdictAndLeavesNoReceipt(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Code\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::tidyUpEventually($h);
+            }
+            PHP);
+
+        self::assertSame(
+            ChildLifetimeScanner::LIFETIME_UNCLASSIFIED,
+            $sites[0]['lifetime'],
+            'an unrostered method on a rostered class must not close a child. The roster is '
+                . 'keyed Class::method precisely so the class half cannot vouch for the rest.',
+        );
+        self::assertNull(
+            $sites[0]['closedBy'],
+            'no roster row bought this verdict, so there is nothing to receipt.',
+        );
+    }
+
+    /**
+     * @return list<array{line:int,function:string,lifetime:string,reason:string,fds:list<int>|null,highFds:list<int>}>
+     */
+    private function sitesIn(string $source): array
+    {
+        return ChildLifetimeScanner::scan($source)['sites'];
+    }
+}

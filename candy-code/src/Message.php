@@ -1,0 +1,1089 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code;
+
+use SugarCraft\Code\Permissions\DenialKind;
+
+/**
+ * One turn in a chat conversation. Immutable, role-tagged,
+ * timestamped. The chat history is a `list<Message>` carried
+ * on the {@see Chat} model.
+ *
+ * Content stays as a plain string here — Markdown is rendered
+ * lazily at view time via SugarMarkdown. That keeps `Message`
+ * cheap to build (every keystroke updates the in-flight user
+ * message) and keeps the backend adapter API ASCII-only.
+ */
+final class Message implements \JsonSerializable
+{
+    /**
+     * WHICH ROW THIS IS, across withers (roadmap O-2b, the W1-b/W2-a live
+     * identity handoff). Chat is immutable and every wither returns a new
+     * instance - a placeholder finished by {@see withToolResults()}, a shown
+     * tool row stamped by {@see withStepId()} - so the store, which gives a
+     * live row its id/ref at its first save, cannot key that memo by
+     * instance: each copy would read as a new row and burn a fresh ref. It
+     * keys it by this token instead, minted once per constructed row and
+     * carried by every wither. See {@see rowKey()}.
+     */
+    private readonly object $rowKey;
+
+    /**
+     * @param list<Attachment> $attachments
+     * @param list<ToolCall> $toolCalls
+     * @param list<ToolResult> $toolResults
+     */
+    public function __construct(
+        public readonly Role  $role,
+        public readonly string $content,
+        public readonly int   $createdAt,
+        public readonly array $attachments = [],
+        public readonly array $toolCalls = [],
+        public readonly array $toolResults = [],
+        /**
+         * Set only on a transient "tool X is running" placeholder (see
+         * {@see toolRunning()}) - the ToolCall::$id it stands in for, so
+         * {@see Chat}'s ToolResultsMsg handler can find and replace it with
+         * the real result once execution finishes. Null on every other
+         * message, including the finished result itself.
+         */
+        public readonly ?string $pendingToolCallId = null,
+        /**
+         * Model "thinking" text split out by {@see
+         * \SugarCraft\Code\Providers\Concerns\ReasoningExtractor} (§12 D3),
+         * carried across the engine seam from {@see
+         * \SugarCraft\Code\Messages\AssistantMessage::reasoning()} so
+         * {@see Renderer} can surface it instead of silently dropping it at
+         * the {@see \SugarCraft\Code\Backend\EngineBackend} conversion
+         * boundary. Null on every non-assistant turn and on any assistant
+         * turn whose provider/parser didn't produce reasoning.
+         */
+        public readonly ?string $reasoning = null,
+        /**
+         * Image bytes carried across the {@see
+         * \SugarCraft\Code\Backend\EngineBackend} conversion boundary from
+         * an image-bearing tool result (e.g. {@see
+         * \SugarCraft\Code\Tools\BuiltIn\Doctor}'s capability swatch, see
+         * {@see \SugarCraft\Code\Messages\ToolResultMessage}) - W1.G2
+         * reachability fix. Null on every message with no such tool result.
+         */
+        public readonly ?string $imageBytes = null,
+        /**
+         * The sugar-image protocol ({@see
+         * \SugarCraft\Image\Mosaic::protocol()}) detected when
+         * $imageBytes was captured. Null whenever $imageBytes is null.
+         */
+        public readonly ?string $imageProtocol = null,
+        /**
+         * What this assistant turn cost in PROVIDER-COUNTED tokens and
+         * dollars, summed over every step of the agentic loop that produced
+         * it, or null when nothing was reported (crush_code.md Phase 5 item
+         * 7). Carried across the {@see
+         * \SugarCraft\Code\Backend\EngineBackend} conversion boundary for
+         * the same reason $reasoning and $imageBytes are: every provider
+         * already returned it on
+         * {@see \SugarCraft\Code\Providers\CompleteResponse}, and this DTO
+         * was where it stopped, so {@see \SugarCraft\Code\Util\TokenTracker}
+         * had nothing to accumulate and could not be constructed anywhere.
+         *
+         * Null on every non-assistant turn, and on any assistant turn whose
+         * provider reported neither a token count nor a cost - which is the
+         * usual answer for a streamed turn. Null is NOT "$0.00 spent"; see
+         * {@see Usage}.
+         */
+        public readonly ?Usage $usage = null,
+        /**
+         * Whether the provider stopped this assistant turn at its OUTPUT
+         * ceiling rather than letting the reply finish - E707 (round 81).
+         * Carried across the {@see
+         * \SugarCraft\Code\Backend\EngineBackend} conversion boundary like
+         * $reasoning, $imageBytes and $usage before it: the verdict exists on
+         * {@see \SugarCraft\Code\Providers\CompleteResponse::$truncated} and
+         * this DTO is where Chat learns it, so the settle arm can append one
+         * transcript notice instead of letting a cut-off reply look complete.
+         *
+         * False means a clean end OR a provider whose wire could not report
+         * the stop - it is not a proof of cleanliness (same contract as the
+         * carrier field it comes from). EngineBackend ORs it across the steps
+         * of one agentic turn: any step that hit the ceiling marks the turn.
+         */
+        public readonly bool $lengthStopped = false,
+        /**
+         * Whether the app's OWN step ceiling ended this turn while tool
+         * results were still pending - F2 (spawn-latency plan). The sibling
+         * of $lengthStopped one seam further in: that one is the provider's
+         * wire verdict about its output budget, this one is this harness's
+         * verdict about `maxSteps` — the EngineBackend loop ran out before
+         * the model produced a tool-free reply, which until F2 exited the
+         * turn SILENTLY. Carried on the DTO for the same reason: the settle
+         * arm in {@see \SugarCraft\Code\Chat} turns it into one loud
+         * transcript notice instead of a half-finished turn reading as done.
+         *
+         * False on every clean end and on both explicit breaks (a reply with
+         * no tool calls; the spend cap, which writes its own notice) — it
+         * names loop exhaustion alone.
+         */
+        public readonly bool $stepsTruncated = false,
+        /**
+         * The model's raw arguments for the call a "running" placeholder
+         * stands in for - set only alongside {@see $pendingToolCallId}.
+         * {@see $content} carries just {@see describeToolCall()}'s bounded
+         * one-liner, which for a tool whose call carries a `description`
+         * never mentions the command at all; this is what lets
+         * {@see \SugarCraft\Code\Chat} hand the finished
+         * {@see ToolResult} the full invocation, so an expanded row can show
+         * WHAT ran (`$ ls -la`) and not only its output. Display-only: never
+         * part of {@see toWire()}.
+         *
+         * @var array<string, mixed>
+         */
+        public readonly array $pendingToolArguments = [],
+        /**
+         * Whether this row exists for the person at the terminal ONLY and
+         * must never reach a model (audit 15b-03): a slash command's echo and
+         * its output, `/help`, a queued-prompt or mid-turn refusal notice, a
+         * background or runtime notice, a backend error string. Chat keeps
+         * every one of these in the same `list<Message>` the transcript is
+         * painted from, so without the flag each was replayed to the provider
+         * as a real turn - the model was told it had said `/help`'s listing
+         * and its own error strings, and on SGLang every System notice was
+         * hoisted into the system prompt, breaking the cache prefix.
+         *
+         * Filtered at every boundary where history becomes a request (see
+         * {@see agentVisible()}); persisted by {@see jsonSerialize()} so a
+         * resumed session keeps the distinction. Never part of {@see toWire()}.
+         */
+        public readonly bool $uiOnly = false,
+        /**
+         * The tool whose identical repeats made the repeat-call loop guard
+         * END this turn ({@see \SugarCraft\Code\Backend\ToolCallLoopGuard::END_TURN_AT}),
+         * or null on every other turn. The third harness-side stop beside
+         * $lengthStopped and $stepsTruncated, and deliberately not folded into
+         * the latter: the step-ceiling notice tells the operator to raise
+         * `maxToolSteps`, which is the wrong remedy for a model stuck in a
+         * loop. Carried so the settle arm in {@see \SugarCraft\Code\Chat}
+         * can say the turn was stopped and why, instead of leaving it to the
+         * model's no-tools summary to mention. Never part of {@see toWire()}.
+         */
+        public readonly ?string $loopGuardStoppedBy = null,
+        /**
+         * Audit 15b-15: what happened to an attachment of the turn's own
+         * prompt that could NOT reach the model as attached - an image sent to
+         * a provider without vision went as a text placeholder - or null when
+         * every attachment went out as attached. Decided where the request is
+         * built ({@see \SugarCraft\Code\Backend\EngineBackend::toTypedMessages()},
+         * in the forked turn child), carried across the fork result frame on
+         * the same rule as $loopGuardStoppedBy, and turned into ONE transcript
+         * notice by the settle arm in {@see \SugarCraft\Code\Chat}, so a
+         * degraded attachment is never a silent drop. Transport only: never
+         * part of {@see toWire()} and not persisted (the notice row it becomes
+         * is).
+         */
+        public readonly ?string $attachmentNotice = null,
+        /**
+         * The tool a "running" placeholder stands in for — set only alongside
+         * {@see $pendingToolCallId}. Lets a surface tell a still-running call
+         * apart by kind before its result names it: the tools sidebar leaves
+         * `Task` delegations to the Agents pane, which lists each run itself.
+         * Display-only: never part of {@see toWire()}.
+         */
+        public readonly ?string $pendingToolName = null,
+        /**
+         * This row's storage id, `m_<session>_<ref>` ({@see
+         * \SugarCraft\Code\Support\MessageIdAllocator}), or null on a row
+         * that has not been persisted yet (roadmap 1.B-1). Stable once given:
+         * {@see \SugarCraft\Code\Session\EnhancedSessionStore::saveTranscript()}
+         * records it the first time the row is saved, the row carries it from
+         * the next {@see \SugarCraft\Code\Session\EnhancedSessionStore::loadTranscript()}
+         * on, and every later save keeps it. Until that reload a live row's
+         * field stays null and its identity is read through
+         * {@see \SugarCraft\Code\Host\TranscriptStore::identityOf()}, which
+         * follows the row across withers by {@see rowKey()} - so checkpoints, `/rewind`, server
+         * events and pruning ledgers can name one row without counting
+         * positions, which shift as soon as anything is compacted, inserted or
+         * rewound.
+         */
+        public readonly ?string $id = null,
+        /**
+         * The short, model-facing number of this row - monotonic per session
+         * and never reused, even after the row is gone (roadmap 1.B-1, the
+         * `r17` a pruning tool names). Assigned with $id; null until then.
+         */
+        public readonly ?int $ref = null,
+        /**
+         * The engine step that produced this row: the assistant step's text
+         * and every tool result that step's calls returned share it (roadmap
+         * 1.B-1; written by {@see \SugarCraft\Code\Backend\EngineBackend}
+         * and folded into the history by {@see settleTurnTranscript()}, 1.B-2).
+         * Null on a user or notice row, and on every row of a transcript
+         * written before steps were recorded - which is how
+         * {@see \SugarCraft\Code\Backend\EngineBackend::toTypedMessages()}
+         * tells a legacy tool row (replayed as prose) from one it rebuilds
+         * into a `tool_calls`/`tool` pair.
+         */
+        public readonly ?string $stepId = null,
+        /**
+         * Whether the transcript shows this row (Goose's `userVisible`,
+         * roadmap 1.B-1). The twin of $uiOnly, which hides a row from the
+         * MODEL: a row with this false still reaches the model but is not
+         * painted - the structured per-step rows 1.B-2 stores beside the
+         * display rows the user reads. True on every row written before the
+         * flag existed.
+         */
+        public readonly bool $userVisible = true,
+        /**
+         * The rows a finished engine turn adds to the conversation, step by
+         * step (roadmap 1.B-2): each step's assistant row with its tool calls,
+         * its interim narration and its reasoning, each tool result under its
+         * call id, and any harness-written user row (a nudge, the stopped-turn
+         * summary request). Every row carries its {@see $stepId}, and every
+         * row except a tool result is {@see $userVisible} false.
+         *
+         * Set only on the reply {@see \SugarCraft\Code\Backend\EngineBackend}
+         * returns, and carried across the fork result frame as arrays. It
+         * ends at {@see settleTurnTranscript()}, which folds it into the
+         * history; the stored reply does not keep it. Transport only: never
+         * part of {@see toWire()} and never persisted.
+         *
+         * @var list<Message>
+         */
+        public readonly array $turnTranscript = [],
+        /**
+         * The session's {@see \SugarCraft\Code\Context\Pruning\ContextLedger}
+         * as the turn that produced this reply left it (roadmap 2.2-2): what
+         * the turn pruned or summarised out of the model's view, and the refs
+         * its tool results keep. Set only on the reply
+         * {@see \SugarCraft\Code\Backend\EngineBackend} returns for a turn
+         * it was handed a ledger for, carried across the fork result frame as
+         * an array, and taken off by the host that keeps the session's ledger
+         * ({@see \SugarCraft\Code\Host\TurnRunner}). Transport only, like
+         * {@see $turnTranscript}: never part of {@see toWire()} and never
+         * persisted with the row.
+         */
+        public readonly ?\SugarCraft\Code\Context\Pruning\ContextLedger $contextLedger = null,
+        /**
+         * The row-identity token {@see rowKey()} returns. Never pass one:
+         * null mints a fresh token, which is what a new row is, and
+         * {@see mutate()} passes the original's on so a wither's copy stays
+         * the same row. Not a promoted property, so it is not public state.
+         */
+        ?object $rowKey = null,
+    ) {
+        $this->rowKey = $rowKey ?? new \stdClass();
+    }
+
+    public static function user(string $content, ?int $now = null): self
+    {
+        return new self(Role::User, $content, $now ?? time());
+    }
+
+    public static function assistant(string $content, ?int $now = null, ?string $reasoning = null): self
+    {
+        return new self(Role::Assistant, $content, $now ?? time(), reasoning: $reasoning);
+    }
+
+    public static function system(string $content, ?int $now = null): self
+    {
+        return new self(Role::System, $content, $now ?? time());
+    }
+
+    /**
+     * A {@see Role::System} row written for the user's eyes only - the
+     * app reporting on itself (a refusal, a queued prompt, a background
+     * status change). Shorthand for `system()->withUiOnly(true)`; see
+     * $uiOnly's docblock for why such a row must stay off the model wire.
+     */
+    public static function notice(string $content, ?int $now = null): self
+    {
+        return new self(Role::System, $content, $now ?? time(), uiOnly: true);
+    }
+
+    /**
+     * The row that records a message the user sent a delegated run from the
+     * Agent View (roadmap P-D2, Appendix P §5.3): `you → explore · also
+     * check the cookie   ⧗ queued`. A {@see notice()}: the parent model is
+     * never shown it — what the run did with the message reaches the parent
+     * through the Task result's trailer, or not at all for a follow-up the
+     * user keeps to themselves. $text is folded to one line; $badge says
+     * where the message is.
+     */
+    public static function toAgent(string $agentName, string $text, string $badge = '', ?int $now = null): self
+    {
+        $line = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        return self::notice('you → ' . $agentName . ' · ' . $line . ($badge === '' ? '' : '   ' . $badge), $now);
+    }
+
+    /**
+     * $history without its {@see $uiOnly} rows - what a backend may be shown.
+     *
+     * ONE filter for every boundary (Chat's turn, title, suggestion and
+     * summary calls; {@see \SugarCraft\Code\Backend\EngineBackend} and
+     * the command backends' encoders) so no two request builders can
+     * disagree about what counts as a turn. Re-indexed: callers hand the
+     * result on as a `list`.
+     *
+     * @param array<int, Message> $history
+     * @return list<Message>
+     */
+    public static function agentVisible(array $history): array
+    {
+        return array_values(array_filter(
+            $history,
+            static fn(Message $message): bool => !$message->uiOnly,
+        ));
+    }
+
+    /**
+     * A transient placeholder shown the moment a tool call is dispatched,
+     * before it finishes - see this class's $pendingToolCallId docblock and
+     * {@see \SugarCraft\Code\Renderer::renderToolResults()} for how it's
+     * displayed distinctly from a finished result. $call->id must be
+     * non-null and unique per in-flight turn for the later replace-by-id
+     * lookup to find the right placeholder; {@see \SugarCraft\Code\Chat}
+     * only ever calls this with backend-issued tool calls, which always
+     * carry an id.
+     */
+    public static function toolRunning(ToolCall $call, ?int $now = null): self
+    {
+        return new self(
+            role: Role::System,
+            content: self::describeToolCall($call),
+            createdAt: $now ?? time(),
+            pendingToolCallId: $call->id ?? $call->name,
+            pendingToolArguments: $call->arguments,
+            pendingToolName: $call->name,
+        );
+    }
+
+    /**
+     * Longest single argument value (or model-authored description) rendered
+     * into a tool-call one-liner before it is elided. The label is drawn on a
+     * single terminal row, so an unbounded value would push the row past the
+     * viewport width.
+     */
+    private const DESCRIPTION_MAX = 80;
+
+    /**
+     * Human-readable one-liner for a tool invocation.
+     *
+     * crush_feat.md §3 E2: the same model turn that emits a tool call also
+     * emits a `description` argument (every built-in tool's `inputSchema()`
+     * marks it required), so no extra LLM round-trip is needed to get a
+     * Claude-Code-Bash-style "List files in current directory" label. That
+     * model-authored summary wins when present; otherwise this falls back to
+     * the mechanical `bash(command: "ls -la")` argument dump so older
+     * backends/models that don't populate it don't regress.
+     *
+     * Used both for the running placeholder and (via Renderer) the finished
+     * marker's label.
+     */
+    public static function describeToolCall(ToolCall $call): string
+    {
+        $described = $call->arguments['description'] ?? null;
+        if (is_string($described)) {
+            $described = self::singleLine($described);
+            if ($described !== '') {
+                return $described;
+            }
+        }
+
+        if ($call->arguments === []) {
+            return $call->name . '()';
+        }
+
+        $parts = [];
+        foreach ($call->arguments as $key => $value) {
+            if (is_string($value)) {
+                $rendered = $value;
+            } else {
+                // Compared with false, not `?:` — `0` encodes to "0", which
+                // `?:` would have thrown away as falsy.
+                $encoded = json_encode($value, self::ARGUMENT_JSON_FLAGS | JSON_PARTIAL_OUTPUT_ON_ERROR);
+                $rendered = $encoded === false ? get_debug_type($value) : $encoded;
+            }
+            if (mb_strlen($rendered) > self::DESCRIPTION_MAX) {
+                $rendered = mb_substr($rendered, 0, self::DESCRIPTION_MAX) . '…';
+            }
+            $parts[] = is_int($key) ? $rendered : "{$key}: " . self::encodeArgument($rendered);
+        }
+
+        return $call->name . '(' . implode(', ', $parts) . ')';
+    }
+
+    /**
+     * Readable unicode, and invalid UTF-8 substituted with U+FFFD instead of
+     * failing the whole encode (audit 15b-27). Slashes unescaped: nearly
+     * every argument worth showing is a path, and `src\/Foo.php` is noise —
+     * `/` is not a character any sink here interprets.
+     */
+    private const ARGUMENT_JSON_FLAGS = JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
+    /**
+     * One argument value as a JSON string literal for the one-liner.
+     *
+     * Audit 15b-27: this used to be a bare `json_encode()`, which returns
+     * `false` on a single invalid byte (a Latin-1 `caf\xe9` in a Bash
+     * command) — and `false` concatenates as '', so the call was described as
+     * `Bash(command: )` and a permission prompt built from it asked the user to
+     * approve a command it did not show. `JSON_INVALID_UTF8_SUBSTITUTE` keeps
+     * every valid byte and marks the bad ones with U+FFFD; should the encode
+     * still fail, the value is shown through
+     * {@see \SugarCraft\Core\Util\Sanitize::visibleControls()} rather than
+     * blanked.
+     *
+     * `JSON_UNESCAPED_UNICODE` makes a CJK or accented command readable, but
+     * it would also emit the C1 controls (U+0080–U+009F) and the invisible
+     * bidi/zero-width format characters raw, where the old escaped output
+     * spelled them `\u009b` / `\u202e`. Those are re-escaped here, so the
+     * label stays valid JSON and carries nothing a terminal would execute or
+     * silently reorder, whichever sink paints it.
+     */
+    private static function encodeArgument(string $value): string
+    {
+        $json = json_encode($value, self::ARGUMENT_JSON_FLAGS);
+        if ($json === false) {
+            return '"' . \SugarCraft\Core\Util\Sanitize::visibleControls($value, false) . '"';
+        }
+
+        return preg_replace_callback(
+            '/\xC2[\x80-\x9F]|\xD8\x9C|\xE2\x80[\x8B-\x8F\xAA-\xAE]|\xE2\x81[\xA0\xA6-\xA9]|\xEF\xBB\xBF/',
+            static fn (array $m): string => sprintf('\\u%04x', mb_ord($m[0], 'UTF-8')),
+            $json,
+        ) ?? $json;
+    }
+
+    /**
+     * Flatten model-controlled text into one bounded, control-byte-free line.
+     *
+     * A tool call's arguments come straight from the model, and the resulting
+     * label is written into a single row of the TUI frame: a newline would
+     * desynchronise the renderer's line accounting and a raw ESC would let the
+     * model inject its own SGR/cursor sequences into the chrome.
+     */
+    private static function singleLine(string $text): string
+    {
+        // \p{C} covers C0/C1 controls (incl. ESC, CR, LF, TAB) plus unassigned
+        // and format code points such as bidi overrides.
+        $flattened = preg_replace('/[\p{C}\s]+/u', ' ', $text);
+        if ($flattened === null) {
+            // Invalid UTF-8 makes the /u pattern bail; strip byte-wise instead
+            // so malformed input can never smuggle control bytes into a frame.
+            $flattened = preg_replace('/[[:cntrl:]\s]+/', ' ', $text) ?? '';
+        }
+        $flattened = trim($flattened);
+        if (mb_strlen($flattened) > self::DESCRIPTION_MAX) {
+            $flattened = mb_substr($flattened, 0, self::DESCRIPTION_MAX) . '…';
+        }
+
+        return $flattened;
+    }
+
+    /**
+     * Attach a file. `$contents` is the snapshot {@see Attachment::$data} the
+     * wire inlines; see {@see Attachment} for why it is captured once.
+     * `$skill` (lane B) names the skill when the attachment IS a mentioned
+     * skill's body, so the transcript chip can say which SKILL.md it is.
+     */
+    public function attachFile(string $path, ?string $contents = null, ?string $skill = null): self
+    {
+        return $this->mutate([
+            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::File, $contents, skill: $skill)],
+        ]);
+    }
+
+    /**
+     * Attach an image. `$bytes`/`$mimeType` are the snapshot a vision-capable
+     * provider is sent ({@see \SugarCraft\Code\Providers\AttachmentEncoding}).
+     */
+    public function attachImage(string $path, ?string $bytes = null, ?string $mimeType = null): self
+    {
+        return $this->mutate([
+            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::Image, $bytes, $mimeType)],
+        ]);
+    }
+
+    /**
+     * Create a message with tool calls (for assistant responses that invoke tools).
+     *
+     * @param list<ToolCall> $toolCalls
+     */
+    public function withToolCalls(array $toolCalls): self
+    {
+        return $this->mutate(['toolCalls' => $toolCalls]);
+    }
+
+    /**
+     * Attach the tool result(s) this message reports, keeping its existing
+     * content/role/attachments/toolCalls untouched - {@see Renderer} uses a
+     * non-empty $toolResults to render a distinct "tool call" marker instead
+     * of a plain assistant bubble.
+     *
+     * The row stops being a "running" placeholder: the pending-call fields are
+     * cleared, everything else - identity included - is kept.
+     *
+     * @param list<ToolResult> $toolResults
+     */
+    public function withToolResults(array $toolResults): self
+    {
+        return $this->mutate([
+            'toolResults' => $toolResults,
+            'pendingToolCallId' => null,
+            'pendingToolArguments' => [],
+            'pendingToolName' => null,
+        ]);
+    }
+
+    /**
+     * Attach (or clear, via null) the model's extracted reasoning/thinking
+     * text — see this class's $reasoning docblock. Used at the {@see
+     * \SugarCraft\Code\Backend\EngineBackend} conversion seam so the value
+     * {@see \SugarCraft\Code\Messages\AssistantMessage::reasoning()} already
+     * computed isn't thrown away when crossing into the root {@see Message}
+     * DTO the TUI actually renders.
+     */
+    public function withReasoning(?string $reasoning): self
+    {
+        return $this->mutate(['reasoning' => $reasoning]);
+    }
+
+    /**
+     * Attach image bytes captured by a tool result during this turn (e.g.
+     * {@see \SugarCraft\Code\Tools\BuiltIn\Doctor}'s capability swatch) -
+     * W1.G2 reachability fix. Used at the {@see
+     * \SugarCraft\Code\Backend\EngineBackend} conversion seam, mirroring
+     * {@see withReasoning()}'s role for the parallel `reasoning` field.
+     */
+    public function withImage(?string $imageBytes, ?string $imageProtocol): self
+    {
+        return $this->mutate(['imageBytes' => $imageBytes, 'imageProtocol' => $imageProtocol]);
+    }
+
+    /**
+     * Attach (or clear, via null) what the turn cost - see $usage's docblock.
+     * Used at the {@see \SugarCraft\Code\Backend\EngineBackend} conversion
+     * seam, where the per-step figures {@see
+     * \SugarCraft\Code\Messages\AssistantMessage::usage()} carries have just
+     * been summed over the whole bounded loop, mirroring {@see
+     * withReasoning()}'s role for the parallel `reasoning` field.
+     */
+    public function withUsage(?Usage $usage): self
+    {
+        return $this->mutate(['usage' => $usage]);
+    }
+
+    /**
+     * Attach (or clear, via false) the provider's "stopped at the output
+     * ceiling" verdict - see $lengthStopped's docblock. Used at the {@see
+     * \SugarCraft\Code\Backend\EngineBackend} conversion seam alongside
+     * {@see withUsage()}'s, so the turn the fold judged is the turn the
+     * transcript labels.
+     */
+    public function withLengthStopped(bool $lengthStopped): self
+    {
+        return $this->mutate(['lengthStopped' => $lengthStopped]);
+    }
+
+    /**
+     * Attach (or clear, via false) the harness's own "step ceiling exhausted
+     * mid-turn" verdict - see $stepsTruncated's docblock. Written at
+     * {@see \SugarCraft\Code\Backend\EngineBackend::runTurn()}'s loop-exit
+     * seam and carried across the fork result frame like the flag it shadows.
+     */
+    public function withStepsTruncated(bool $stepsTruncated): self
+    {
+        return $this->mutate(['stepsTruncated' => $stepsTruncated]);
+    }
+
+    /**
+     * Mark (or clear, via false) this row as for the user's eyes only - see
+     * $uiOnly's docblock. A command echo and its output are built with the
+     * ordinary {@see user()}/{@see assistant()} factories, because that is
+     * how the transcript renders them, and flagged here.
+     */
+    public function withUiOnly(bool $uiOnly = true): self
+    {
+        return $this->mutate(['uiOnly' => $uiOnly]);
+    }
+
+    /**
+     * Attach (or clear, via null) the loop guard's "this turn was ended"
+     * verdict — see $loopGuardStoppedBy's docblock. Written at
+     * {@see \SugarCraft\Code\Backend\EngineBackend}'s loop-exit seam
+     * beside {@see withStepsTruncated()} and carried across the fork result
+     * frame the same way.
+     */
+    public function withLoopGuardStoppedBy(?string $toolName): self
+    {
+        return $this->mutate(['loopGuardStoppedBy' => $toolName === '' ? null : $toolName]);
+    }
+
+    /**
+     * Attach (or clear, via null) the attachment-degradation report - see
+     * $attachmentNotice's docblock (audit 15b-15). Written by
+     * {@see \SugarCraft\Code\Backend\EngineBackend::complete()} and
+     * carried across the fork result frame beside $loopGuardStoppedBy.
+     */
+    public function withAttachmentNotice(?string $notice): self
+    {
+        return $this->mutate(['attachmentNotice' => $notice === '' ? null : $notice]);
+    }
+
+    /**
+     * Give this row its storage id and model-facing ref - see $id's and
+     * $ref's docblocks. Written by
+     * {@see \SugarCraft\Code\Session\EnhancedSessionStore::loadTranscript()}'s
+     * rows (through {@see fromArray()}). A row minted in this process gets
+     * its identity from the store's first save of it instead, keyed by its
+     * {@see rowKey()} so a wither's copy is the same row to it, and read back
+     * live through {@see \SugarCraft\Code\Host\TranscriptStore::identityOf()}.
+     * An empty id clears it; a ref below 1 clears it.
+     */
+    public function withIdentity(?string $id, ?int $ref): self
+    {
+        return $this->mutate([
+            'id' => $id === '' ? null : $id,
+            'ref' => $ref !== null && $ref >= 1 ? $ref : null,
+        ]);
+    }
+
+    /**
+     * Tag (or clear, via null) the engine step that produced this row - see
+     * $stepId's docblock.
+     */
+    public function withStepId(?string $stepId): self
+    {
+        return $this->mutate(['stepId' => $stepId === '' ? null : $stepId]);
+    }
+
+    /**
+     * Show (true) or hide (false) this row in the transcript the user reads -
+     * see $userVisible's docblock. The agent-side twin is {@see withUiOnly()}.
+     */
+    public function withUserVisible(bool $userVisible = true): self
+    {
+        return $this->mutate(['userVisible' => $userVisible]);
+    }
+
+    /**
+     * Attach (or clear, via []) the rows the turn added - see
+     * $turnTranscript's docblock. Anything that is not a Message is dropped.
+     *
+     * @param array<array-key, mixed> $rows
+     */
+    public function withTurnTranscript(array $rows): self
+    {
+        return $this->mutate(['turnTranscript' => array_values(array_filter(
+            $rows,
+            static fn(mixed $row): bool => $row instanceof self,
+        ))]);
+    }
+
+    /**
+     * Attach (or clear, via null) the ledger the turn ended with - see
+     * $contextLedger's docblock.
+     */
+    public function withContextLedger(?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger): self
+    {
+        return $this->mutate(['contextLedger' => $ledger]);
+    }
+
+    /**
+     * Fold a settled engine reply's {@see $turnTranscript} into the history
+     * the turn ran over (roadmap 1.B-2), so the next request replays the turn
+     * as it happened - each step's assistant row with its `tool_calls`, its
+     * narration and its reasoning, each result paired to its call - instead
+     * of every tool result read back as something the assistant said.
+     *
+     * THE TRANSCRIPT THE USER READS DOES NOT CHANGE. The tool rows the live
+     * events already put on screen ARE the turn's tool results: each is
+     * matched to its result by call id (in order, inside the turn's window -
+     * every row after its prompt) and only stamped with its step id. The rows
+     * with no such counterpart - each step's assistant row and any
+     * harness-written user row - go in hidden ({@see $userVisible} false),
+     * immediately before the first tool row of their step, so the model reads
+     * every call before its result. A tool result with no tool row on screen
+     * goes in as the child sent it, shown, rather than dropped.
+     *
+     * The reply itself keeps its place as the turn's last row. When it IS the
+     * turn's last step (a reply with no tool calls) the engine gave it that
+     * step's id and it stays as it is. When it is not - a turn the spend cap or
+     * the step ceiling stopped, whose reply is the last tool-calling step's
+     * prose - that step's hidden row already carries those words to the
+     * model, so the reply becomes {@see $uiOnly}: shown, never sent twice.
+     *
+     * A reply with no transcript (any non-engine backend, an error notice) is
+     * returned as it came, over the history as it was.
+     *
+     * @param array<int, Message> $history the history as the turn left it
+     *
+     * @return array{0: list<Message>, 1: Message} the history to append the reply to, and the reply
+     */
+    public static function settleTurnTranscript(array $history, Message $reply): array
+    {
+        $history = array_values($history);
+        $rows = $reply->turnTranscript;
+        if ($rows === []) {
+            return [$history, $reply];
+        }
+        $reply = $reply->withTurnTranscript([]);
+
+        // The turn's window opens after its prompt: the newest row the user
+        // typed and the model was sent. A hidden harness row is not one.
+        $start = 0;
+        for ($i = \count($history) - 1; $i >= 0; $i--) {
+            $row = $history[$i];
+            if ($row->role === Role::User && !$row->uiOnly && $row->userVisible && $row->stepId === null) {
+                $start = $i + 1;
+                break;
+            }
+        }
+
+        // The window's finished tool rows, oldest first per call id.
+        $shown = [];
+        for ($i = $start, $n = \count($history); $i < $n; $i++) {
+            $row = $history[$i];
+            $result = $row->toolResults[0] ?? null;
+            if (\count($row->toolResults) === 1 && $result instanceof ToolResult
+                && $row->stepId === null && !$row->uiOnly && $row->pendingToolCallId === null
+            ) {
+                $shown[$result->id ?? $result->name][] = $i;
+            }
+        }
+
+        /** @var array<int, int> $shownAt turn row => history index */
+        $shownAt = [];
+        /** @var array<int, int> $turnRowAt history index => turn row */
+        $turnRowAt = [];
+        foreach ($rows as $j => $row) {
+            $result = $row->toolResults[0] ?? null;
+            if (!$result instanceof ToolResult || $row->stepId === null) {
+                continue;
+            }
+            $key = $result->id ?? $result->name;
+            $at = isset($shown[$key]) ? array_shift($shown[$key]) : null;
+            if ($at !== null) {
+                $shownAt[$j] = $at;
+                $turnRowAt[$at] = $j;
+            }
+        }
+
+        $out = \array_slice($history, 0, $start);
+        $next = 0;
+        $count = \count($rows);
+        for ($i = $start, $n = \count($history); $i < $n; $i++) {
+            if (!isset($turnRowAt[$i])) {
+                $out[] = $history[$i];
+
+                continue;
+            }
+            $j = $turnRowAt[$i];
+            for (; $next < $j; $next++) {
+                if (!isset($shownAt[$next])) {
+                    $out[] = $rows[$next];
+                }
+            }
+            $next = max($next, $j + 1);
+            $out[] = $history[$i]->withStepId($rows[$j]->stepId);
+        }
+        for (; $next < $count; $next++) {
+            if (!isset($shownAt[$next])) {
+                $out[] = $rows[$next];
+            }
+        }
+
+        return [$out, $reply->stepId === null ? $reply->withUiOnly() : $reply];
+    }
+
+    /**
+     * The one copier every wither goes through: this row's fields with
+     * $changes laid over them, by constructor parameter name. One list means a
+     * field added to the constructor cannot be silently dropped by a wither
+     * that forgot it - which is exactly how $uiOnly and $pendingToolName used
+     * to need a line in each of eleven hand-written copies.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_replace([
+            'role' => $this->role,
+            'content' => $this->content,
+            'createdAt' => $this->createdAt,
+            'attachments' => $this->attachments,
+            'toolCalls' => $this->toolCalls,
+            'toolResults' => $this->toolResults,
+            'pendingToolCallId' => $this->pendingToolCallId,
+            'reasoning' => $this->reasoning,
+            'imageBytes' => $this->imageBytes,
+            'imageProtocol' => $this->imageProtocol,
+            'usage' => $this->usage,
+            'lengthStopped' => $this->lengthStopped,
+            'stepsTruncated' => $this->stepsTruncated,
+            'pendingToolArguments' => $this->pendingToolArguments,
+            'uiOnly' => $this->uiOnly,
+            'loopGuardStoppedBy' => $this->loopGuardStoppedBy,
+            'attachmentNotice' => $this->attachmentNotice,
+            'pendingToolName' => $this->pendingToolName,
+            'id' => $this->id,
+            'ref' => $this->ref,
+            'stepId' => $this->stepId,
+            'userVisible' => $this->userVisible,
+            'turnTranscript' => $this->turnTranscript,
+            'contextLedger' => $this->contextLedger,
+            'rowKey' => $this->rowKey,
+        ], $changes));
+    }
+
+    /**
+     * An opaque token naming this logical row: the same object on every copy
+     * a wither makes of it, a different one on every row built afresh
+     * (including a {@see fromArray()} revival, which carries its identity in
+     * $id/$ref instead). {@see \SugarCraft\Code\Session\EnhancedSessionStore}
+     * keys the identity it gives a not-yet-reloaded row by it, which is what
+     * keeps a live row's id stable across saves
+     * ({@see \SugarCraft\Code\Host\TranscriptStore::identityOf()}).
+     * Compare it by identity only; it carries no data.
+     */
+    public function rowKey(): object
+    {
+        return $this->rowKey;
+    }
+
+    /**
+     * True when this message carries image bytes captured by a tool result
+     * during this turn - see $imageBytes's docblock.
+     */
+    public function hasImage(): bool
+    {
+        return $this->imageBytes !== null;
+    }
+
+    /**
+     * Wire-format dict used by every HTTP backend adapter. Caller
+     * decides whether to filter system messages out (some APIs
+     * don't accept them in the messages list).
+     *
+     * @return array{role:string,content:string,attachments?:list<array{type:string,path:string}>,tool_calls?:list<array{name:string,arguments:array<string,mixed>,id?:string}>}
+     */
+    public function toWire(): array
+    {
+        $wire = ['role' => $this->role->value, 'content' => $this->content];
+        if ($this->attachments !== []) {
+            $wire['attachments'] = array_map(
+                static fn(Attachment $a) => ['type' => $a->type->name, 'path' => $a->path],
+                $this->attachments,
+            );
+        }
+        if ($this->toolCalls !== []) {
+            $wire['tool_calls'] = array_map(
+                static fn(ToolCall $tc) => $tc->toArray(),
+                $this->toolCalls,
+            );
+        }
+        return $wire;
+    }
+
+    /**
+     * The persisted shape: every field, keyed by its property name, so a saved
+     * transcript row resumes as the message it was ({@see fromArray()}).
+     *
+     * EXPLICIT rather than json_encode()'s default walk of the public
+     * properties, which is what checkpoints used to get and which lost data
+     * two ways: {@see AttachmentType} is a pure enum, so any message holding an
+     * attachment made the encode THROW and the whole checkpoint was skipped;
+     * and raw image bytes are binary, so `JSON_INVALID_UTF8_SUBSTITUTE` turned
+     * them into U+FFFD soup. Attachments now travel by case name, and image
+     * bytes as base64 under `imageBytesBase64` - the raw `imageBytes` key is
+     * never written. The keys `role`, `content` and `pendingToolCallId` keep
+     * their old spelling, which is all the `/rewind` reviver reads.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return [
+            'role' => $this->role->value,
+            'content' => $this->content,
+            'createdAt' => $this->createdAt,
+            // A foreign element (the arrays are typed by docblock only) is
+            // handed to json_encode() as it is rather than refused: it may be
+            // JsonSerializable itself, and a checkpoint is no place to throw.
+            'attachments' => array_map(
+                static fn(mixed $a): mixed => $a instanceof Attachment
+                    ? [
+                        'path' => $a->path,
+                        'type' => $a->type->name,
+                        // Audit 15b-15: the snapshot the wire is built from.
+                        // base64 for the same reason imageBytesBase64 is - an
+                        // image is binary, and a file snapshot may hold bytes
+                        // json_encode() would refuse - and only when present,
+                        // so a path-only row persists exactly as it always did.
+                        ...($a->data === null ? [] : ['dataBase64' => base64_encode($a->data)]),
+                        ...($a->mimeType === null ? [] : ['mimeType' => $a->mimeType]),
+                        ...($a->skill === null ? [] : ['skill' => $a->skill]),
+                    ]
+                    : $a,
+                $this->attachments,
+            ),
+            'toolCalls' => array_map(
+                static fn(mixed $c): mixed => $c instanceof ToolCall
+                    ? ['name' => $c->name, 'arguments' => $c->arguments, 'id' => $c->id]
+                    : $c,
+                $this->toolCalls,
+            ),
+            'toolResults' => array_map(
+                static fn(mixed $r): mixed => !$r instanceof ToolResult ? $r : [
+                    'name' => $r->name,
+                    'result' => $r->result,
+                    'error' => $r->error,
+                    'id' => $r->id,
+                    'imageBytesBase64' => $r->imageBytes === null ? null : base64_encode($r->imageBytes),
+                    'imagePath' => $r->imagePath,
+                    'imageProtocol' => $r->imageProtocol,
+                    'diff' => $r->diff,
+                    'durationMs' => $r->durationMs,
+                    'description' => $r->description,
+                    'arguments' => $r->arguments,
+                    // Audit F-P8: a refusal is recognised by this field, not
+                    // its text, so a resumed transcript must keep it or every
+                    // real refusal comes back as an ordinary error row.
+                    'denial' => $r->denial?->value,
+                ],
+                $this->toolResults,
+            ),
+            'pendingToolCallId' => $this->pendingToolCallId,
+            'reasoning' => $this->reasoning,
+            'imageBytesBase64' => $this->imageBytes === null ? null : base64_encode($this->imageBytes),
+            'imageProtocol' => $this->imageProtocol,
+            'usage' => $this->usage,
+            'lengthStopped' => $this->lengthStopped,
+            'stepsTruncated' => $this->stepsTruncated,
+            'loopGuardStoppedBy' => $this->loopGuardStoppedBy,
+            'pendingToolArguments' => $this->pendingToolArguments,
+            // Only when set, so every agent-visible row - i.e. every row a
+            // pre-flag transcript holds - serialises byte-for-byte as before.
+            ...($this->uiOnly ? ['uiOnly' => true] : []),
+            ...($this->pendingToolName !== null ? ['pendingToolName' => $this->pendingToolName] : []),
+            // Identity (1.B-1) on the same only-when-set rule: an id-less row
+            // encodes exactly as it did before, so the checkpoint blobs it
+            // shares with older saves keep their hash.
+            ...($this->id !== null ? ['id' => $this->id] : []),
+            ...($this->ref !== null ? ['ref' => $this->ref] : []),
+            ...($this->stepId !== null ? ['stepId' => $this->stepId] : []),
+            ...($this->userVisible ? [] : ['userVisible' => false]),
+        ];
+    }
+
+    /**
+     * Rebuild a message from {@see jsonSerialize()}'s shape - or from any
+     * older row that carries a subset of it.
+     *
+     * Tolerant field by field, because the rows come off disk: a missing or
+     * mistyped field takes its default rather than failing the whole
+     * transcript, an unknown role is read as `user` (what the `/rewind`
+     * reviver has always done), and an attachment, tool call or tool result
+     * without its required parts is dropped. A pending placeholder is returned
+     * AS a placeholder; whether it should be healed into an "interrupted" row
+     * is the caller's decision, see {@see Chat::reviveTranscriptMessage()}.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function fromArray(array $row): self
+    {
+        $string = static fn(mixed $v): ?string => \is_string($v) ? $v : null;
+        $bytes = static function (mixed $v): ?string {
+            if (!\is_string($v)) {
+                return null;
+            }
+            $decoded = base64_decode($v, true);
+
+            return $decoded === false ? null : $decoded;
+        };
+
+        $attachments = [];
+        foreach (\is_array($row['attachments'] ?? null) ? $row['attachments'] : [] as $a) {
+            if (!\is_array($a) || !\is_string($a['path'] ?? null)) {
+                continue;
+            }
+            $type = match ($a['type'] ?? null) {
+                'Image' => AttachmentType::Image,
+                'File' => AttachmentType::File,
+                default => null,
+            };
+            if ($type !== null) {
+                $attachments[] = new Attachment(
+                    $a['path'],
+                    $type,
+                    $bytes($a['dataBase64'] ?? null),
+                    $string($a['mimeType'] ?? null),
+                    // Snapshots written before lane B carry no key: null, and
+                    // the chip falls back to the basename exactly as it did.
+                    $string($a['skill'] ?? null),
+                );
+            }
+        }
+
+        $toolCalls = [];
+        foreach (\is_array($row['toolCalls'] ?? null) ? $row['toolCalls'] : [] as $c) {
+            if (\is_array($c) && \is_string($c['name'] ?? null)) {
+                $toolCalls[] = new ToolCall(
+                    $c['name'],
+                    \is_array($c['arguments'] ?? null) ? $c['arguments'] : [],
+                    $string($c['id'] ?? null),
+                );
+            }
+        }
+
+        $toolResults = [];
+        foreach (\is_array($row['toolResults'] ?? null) ? $row['toolResults'] : [] as $r) {
+            if (!\is_array($r) || !\is_string($r['name'] ?? null)) {
+                continue;
+            }
+            $toolResults[] = new ToolResult(
+                name: $r['name'],
+                result: $string($r['result'] ?? null) ?? '',
+                error: $string($r['error'] ?? null),
+                id: $string($r['id'] ?? null),
+                imageBytes: $bytes($r['imageBytesBase64'] ?? null),
+                imagePath: $string($r['imagePath'] ?? null),
+                imageProtocol: $string($r['imageProtocol'] ?? null),
+                diff: $string($r['diff'] ?? null),
+                durationMs: \is_int($r['durationMs'] ?? null) ? $r['durationMs'] : null,
+                description: $string($r['description'] ?? null),
+                arguments: \is_array($r['arguments'] ?? null) ? $r['arguments'] : [],
+                // Absent on a checkpoint written before F-P8: such a row
+                // revives as a plain error, never re-derived from its text.
+                denial: \is_string($r['denial'] ?? null) ? DenialKind::tryFrom($r['denial']) : null,
+            );
+        }
+
+        return new self(
+            role: Role::tryFrom(\is_string($row['role'] ?? null) ? $row['role'] : '') ?? Role::User,
+            content: $string($row['content'] ?? null) ?? '',
+            createdAt: \is_int($row['createdAt'] ?? null) ? $row['createdAt'] : time(),
+            attachments: $attachments,
+            toolCalls: $toolCalls,
+            toolResults: $toolResults,
+            pendingToolCallId: $string($row['pendingToolCallId'] ?? null),
+            reasoning: $string($row['reasoning'] ?? null),
+            imageBytes: $bytes($row['imageBytesBase64'] ?? null),
+            imageProtocol: $string($row['imageProtocol'] ?? null),
+            usage: Usage::fromArray($row['usage'] ?? null),
+            lengthStopped: ($row['lengthStopped'] ?? false) === true,
+            stepsTruncated: ($row['stepsTruncated'] ?? false) === true,
+            pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
+            pendingToolName: $string($row['pendingToolName'] ?? null),
+            uiOnly: ($row['uiOnly'] ?? false) === true,
+            loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
+            id: ($string($row['id'] ?? null) ?? '') === '' ? null : $row['id'],
+            ref: \is_int($row['ref'] ?? null) && $row['ref'] >= 1 ? $row['ref'] : null,
+            stepId: ($string($row['stepId'] ?? null) ?? '') === '' ? null : $row['stepId'],
+            // Strictly `false` hides: a missing or mistyped value is the
+            // pre-flag default, shown.
+            userVisible: ($row['userVisible'] ?? true) !== false,
+        );
+    }
+}

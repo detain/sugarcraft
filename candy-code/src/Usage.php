@@ -1,0 +1,604 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code;
+
+/**
+ * What one provider call — or a whole turn's worth of them summed — actually
+ * cost, in PROVIDER-COUNTED tokens and dollars (crush_code.md Phase 5 item 7).
+ * Since prompt_plan.md P4.S1 (backlog E17) it also carries the provider's own
+ * token BUCKETS — input/output, the two cache sides, and (since qwen.md §Q6)
+ * the completion-side reasoning side — null until a provider
+ * reports each one, and never defaulted to a number a provider did not say.
+ *
+ * Read the unit before using this. Everything the status bar's *context*
+ * readout shows ({@see Chat::contextTokens()}, {@see Renderer::contextIndicator()})
+ * is an ESTIMATE — script-weighted per codepoint by {@see Util\TokenEstimate}
+ * (¼ token for ASCII, so chars/4 there, up to 1-2 for CJK and emoji; audit
+ * 15b-13) — and is deliberately printed with a leading `~`. The
+ * numbers here are the provider's own count, arriving on
+ * {@see Providers\CompleteResponse::$tokensUsed} / `$costUsd`. The two are
+ * different units measuring different things: an estimate of what was SENT
+ * versus a count of what was BILLED. They must never be summed, compared, or
+ * shown as one figure.
+ *
+ * ## The split now lives here — parsed at the providers, still uncrossed at the carrier
+ *
+ * CORRECTED IN PLACE, prompt_plan.md P4.S1 (backlog E17), in the three parts
+ * §16.8 rule 42 demands. WHAT IT SAID: this section was titled "Why there is no
+ * input/output split here" and argued the class "cannot honestly supply" one.
+ * WHAT IS TRUE NOW: the split and its two cache buckets are fields on this
+ * class — `inputTokens`, `outputTokens`, `cacheReadTokens`,
+ * `cacheCreationTokens`, with {@see promptTokens()} carrying the prompt-side
+ * identity `total = cacheRead + cacheCreation + input`. The claim it was built
+ * on was half right, and the half that held has now moved: `CompleteResponse`
+ * still carries a single `$tokensUsed` and nothing else — that stays true —
+ * but "every live construction path in `src/` leaves the buckets null" was
+ * P4.S1's truth and is no longer this branch's: prompt_plan.md P4.S2 routed
+ * all five split-reading providers' usage documents through these buckets at
+ * their `parseUsage` seams. Each parsed instance now ends its life at the
+ * provider's own `tokensUsed`/`costUsd` projection, so no Usage that REACHES
+ * `Runtime` or `Chat` from a live call carries buckets yet. What remains is
+ * widening `CompleteResponse` alone — a later seam, and it is why the
+ * enumeration below is kept: it is the record of which provider reads which
+ * usage key, the work-list the carrier change plugs into.
+ * WHY IT EARNS ITS PLACE: delete the reasoning and the next reader deletes the
+ * buckets as vestigial; the reasoning is what marks them load-bearing-ahead.
+ *
+ * {@see Util\TokenTracker::addUsage()} wants input and output separately, and
+ * until the carrier lands this class still cannot honestly SUPPLY them to a
+ * live TURN: providers parse the buckets, but `CompleteResponse` carries a
+ * single `$tokensUsed` and nothing else, so what arrives across it is a total.
+ *
+ * SIX of the seven providers know the split — read the count with its
+ * domain, because stale literals of it are what drifted before.
+ * {@see Providers\BedrockProvider} reads `usage.inputTokens` /
+ * `usage.outputTokens`, {@see Providers\VertexProvider} reads
+ * `usage.input_tokens` / `usage.output_tokens`,
+ * {@see Providers\OpenAIProvider} reads `usage.prompt_tokens` /
+ * `usage.completion_tokens` and prices each side at its own rate in
+ * `calculateCost()`, and — since prompt_plan.md P4.S2 routed its family read
+ * through the parse seam — {@see Providers\SglangProvider} reads
+ * `usage.prompt_tokens` / `usage.completion_tokens`, the same pair
+ * {@see Providers\CustomProvider} reads. Since audit A25
+ * {@see Providers\ClaudeCodeProvider} reads the CLI's Anthropic-shaped
+ * `usage.input_tokens` / `usage.output_tokens` and both cache sides too, and
+ * totals all four, because the measured CLI prints no `total_tokens` and a
+ * total-only read reported every real turn as 0. All six now PARSE the split
+ * into the buckets above and hand it whole to
+ * {@see Providers\CompleteResponse::$usage}, which `Runtime`'s fold prefers;
+ * `tokensUsed` stays beside it as the one-number projection. The
+ * remaining one ({@see Providers\EchoProvider}) never had a split to lose: it
+ * reports 0.
+ *
+ * That collapse happens at the provider's `CompleteResponse` boundary on every
+ * UNARY path — and on Bedrock's and OpenAI's streaming paths too. Vertex's
+ * Anthropic stream is the one exception and it matters: it emits input tokens
+ * on `message_start` and output tokens on the terminal `message_delta`, as two
+ * separate `CompleteResponse`s with `tokensUsed: $usage->inputTokens` and
+ * `tokensUsed: $usage->outputTokens` ({@see Providers\VertexProvider::parseAnthropicChunk()}).
+ * {@see Runtime}'s streaming path documents that and SUMS them, which is why the
+ * figure arriving here is still a total. So the split survives one layer lower
+ * than this seam in exactly one case, and is recoverable there without touching
+ * any provider — see `Runtime`.
+ *
+ * Passing `addUsage($total, 0, $cost)` would fabricate a split —
+ * `outputTokens()` reporting 0 for a real completion — so the tracker gained
+ * {@see Util\TokenTracker::addTotalUsage()} for exactly this shape instead, and
+ * it still earns its keep: what crosses that seam today is still a total with
+ * null buckets beside it, not a split — the buckets are filled INSIDE each
+ * split-reading provider and stop at its carrier. Recovering the real split
+ * for callers now means only widening `CompleteResponse`; prompt_plan.md
+ * P4.S2 already routed the five providers that know the split through these
+ * buckets, and the carrier change is a separate step, not pretended to here.
+ *
+ * ## Zero is not the same as unknown
+ *
+ * A streamed turn commonly reports NO usage at all: `Runtime::runStreaming()`'s
+ * docblock and {@see Providers\OpenAIProvider}'s both state that chunks carry
+ * `tokensUsed=0`, and a self-hosted provider's `costPer1kTokens()` is a
+ * genuine 0.0. So `0 tokens / $0.00` is the answer for "nothing was reported"
+ * AND for "this really was free", and a readout that prints `$0.0000` cannot
+ * tell a user which. This class resolves that by never existing in the first
+ * case: {@see reported()} returns null when the provider offered neither a
+ * token count nor a cost, and a null `Usage` on a {@see Message} means
+ * "nothing reported", not "nothing spent". A cost of exactly 0.0 alongside a
+ * positive token count is therefore meaningful — it is a real, free call.
+ *
+ * The buckets keep the same contract one level down: `cacheReadTokens = 0`
+ * means the provider measured zero cache reads, and `cacheReadTokens = null`
+ * means it said nothing about cache reads. "Unreported" is therefore exactly
+ * `null` for each bucket — there is no third state, and no arithmetic on this
+ * class ever turns a null bucket into a zero: {@see promptTokens()} refuses to
+ * total across an unreported bucket, {@see plus()} carries a reported bucket
+ * through a merge that never measured one, and {@see fromArray()} decodes a
+ * frame written before the buckets existed — which simply lacks those keys —
+ * to unreported buckets rather than to measured zeroes. That last one is why a
+ * bucket must be added to BOTH halves of the array pair: the fork boundary's
+ * parent cannot receive the object, so a key dropped from `toArray()` makes
+ * the async path read that bucket UNREPORTED forever — accounting lost on
+ * one side only, with sync mode staying green — while the mirror error,
+ * `fromArray()` coercing an absent key to a number, fabricates a measured
+ * zero. Both are silent; both are the async side; the pair must stay
+ * symmetric.
+ */
+final readonly class Usage
+{
+    private function __construct(
+        /** Provider-counted tokens, input and output together. Never negative. */
+        public int $totalTokens,
+        /**
+         * Dollars, as the provider reported or as its own `costPer1kTokens()`
+         * table computed. Exactly 0.0 is legitimate for a self-hosted or
+         * shell-out provider; see the class docblock on why that is
+         * distinguishable from "unknown" only by this object's existence.
+         */
+        public float $costUsd,
+        /**
+         * Prompt tokens the provider counted AFTER the last cache breakpoint —
+         * the Anthropic-shaped `input_tokens`, deliberately NOT the whole
+         * prompt. Null until a provider reports it; 0 means it reported zero.
+         * Never negative (a negative is a provider bug, accounted as zero).
+         */
+        public ?int $inputTokens = null,
+        /** Completion tokens. Never part of {@see promptTokens()} — see it. */
+        public ?int $outputTokens = null,
+        /** Tokens read from the provider's prompt cache. */
+        public ?int $cacheReadTokens = null,
+        /** Tokens written to the provider's prompt cache. */
+        public ?int $cacheCreationTokens = null,
+        /**
+         * Reasoning tokens on the completion side — the OpenAI-compatible
+         * family's flat `usage.reasoning_tokens` (qwen.md E-31; carried since
+         * §Q6, which the P4.S2 parse seam explicitly deferred to this one).
+         * A SUBSET of {@see $outputTokens}, the same relationship
+         * `cached_tokens` has to {@see $inputTokens}: never added to
+         * {@see $totalTokens} (the server's own total already counts it —
+         * measured `prompt 57 + completion 28 = total 85` beside
+         * `reasoning 25`), never part of {@see promptTokens()} (this is
+         * output-side thinking, not prompt), and never re-summed into the
+         * completion either. Null = unreported; 0 = the provider measured
+         * non-thinking output. WHY IT EARNS ITS PLACE: the skynet2
+         * deployments report this key on EVERY usage document (batch and the
+         * §Q6 streamed terminal chunk), and a reader that deleted the bucket
+         * would silently drop the only signal separating "thought 25 of 28"
+         * from "answered 28" — the exact distinction reasoning-effort tuning
+         * (qwen.md Q1-Q4) is measured against.
+         */
+        public ?int $reasoningTokens = null,
+        /**
+         * The model name whose price this app does not know - set by a paid
+         * provider's parse seam when the tokens arrived but NO rate did, and
+         * null on every priced or genuinely-free call.
+         *
+         * WHY IT EXISTS: a missing rate used to be papered over with a
+         * fabricated $0.01/1k fallback, which invented a bill the provider
+         * never sent. Dropping the fallback without a carrier would have made
+         * the same hole merely silent - `0.0` is BOTH "free" and "unpriced"
+         * (see the "Zero is not the same as unknown" section above), so a
+         * spend-cap readout built on summed dollars cannot tell an honest free
+         * call from an unpriceable one. This field is the difference: the
+         * accounting stays 0.0 (nothing was measured, and 0 is the lower
+         * bound), while {@see Chat}'s notice and {@see Util\TokenTracker}'s
+         * disclosure say WHICH 0 it was. It is a SIGNAL, not a measurement:
+         * it never enters {@see promptTokens()}, never makes a frame
+         * {@see reported()} on its own (an empty usage document naming a model
+         * is still an empty usage document), and a merge keeps the first name
+         * it saw because the blindness - not the name - is what downstream
+         * readers act on.
+         */
+        public ?string $unpricedModel = null,
+        /**
+         * The SHARE of {@see $totalTokens} that a delegated run billed — a
+         * Task sub-agent's tokens folded into the calling turn
+         * ({@see Backend\EngineBackend}'s `delegatedSpend()`, audit B4-rem).
+         * Always within `0..totalTokens`, and 0 on every usage a provider
+         * reported directly.
+         *
+         * WHY IT EXISTS: since B4 a turn's {@see $totalTokens} includes its
+         * sub-agents' tokens, which is right for SPEND and wrong for anything
+         * that reads the total as the size of THIS conversation — Chat's
+         * context calibration falls back to the total when a provider reports
+         * no prompt buckets, and a sub-agent's fifty steps would inflate it.
+         * {@see ownTokens()} is the total without them. Unlike the buckets this
+         * is never "unreported": the engine that folded a delegated run knows
+         * exactly how much it folded, so 0 is a measurement, not a default.
+         */
+        public int $delegatedTokens = 0,
+    ) {}
+
+    public static function new(
+        int $totalTokens = 0,
+        float $costUsd = 0.0,
+        ?int $inputTokens = null,
+        ?int $outputTokens = null,
+        ?int $cacheReadTokens = null,
+        ?int $cacheCreationTokens = null,
+        ?int $reasoningTokens = null,
+        ?string $unpricedModel = null,
+        int $delegatedTokens = 0,
+    ): self {
+        $totalTokens = max(0, $totalTokens);
+
+        return new self(
+            $totalTokens,
+            max(0.0, $costUsd),
+            self::clampBucket($inputTokens),
+            self::clampBucket($outputTokens),
+            self::clampBucket($cacheReadTokens),
+            self::clampBucket($cacheCreationTokens),
+            self::clampBucket($reasoningTokens),
+            $unpricedModel,
+            // A share cannot be negative or exceed what it is a share of.
+            min(max(0, $delegatedTokens), $totalTokens),
+        );
+    }
+
+    /**
+     * The usage a provider call actually reported, or null when it reported
+     * nothing measurable.
+     *
+     * Null rather than a zero-valued instance, because the whole point of the
+     * distinction is that a caller can tell the two apart — see the class
+     * docblock. Non-positive inputs are clamped rather than rejected: a
+     * negative count is a provider bug, and failing a turn over it would be
+     * worse than accounting it as zero.
+     *
+     * The buckets widen the SAME question, not a new one: a frame whose total
+     * and cost are both zero but which reports a bucket HAS said something
+     * measurable — a free self-hosted call that still counted cache reads is
+     * as real as a free call that counted tokens — so it returns a Usage.
+     * Callers that only know a total pass only a total, and every bucket
+     * arrives null (unreported), never a fabricated zero.
+     */
+    public static function reported(
+        int $totalTokens,
+        float $costUsd,
+        ?int $inputTokens = null,
+        ?int $outputTokens = null,
+        ?int $cacheReadTokens = null,
+        ?int $cacheCreationTokens = null,
+        ?int $reasoningTokens = null,
+        ?string $unpricedModel = null,
+        int $delegatedTokens = 0,
+    ): ?self {
+        if (
+            $totalTokens <= 0
+            && $costUsd <= 0.0
+            && $inputTokens === null
+            && $outputTokens === null
+            && $cacheReadTokens === null
+            && $cacheCreationTokens === null
+            && $reasoningTokens === null
+        ) {
+            // The unpriced signal deliberately does NOT appear in this test:
+            // "reported" asks whether the provider MEASURED anything, and a
+            // model name is not a measurement. A frame with no counts and no
+            // cost stays null here even when a name rides it - the name only
+            // earns its carry on frames that DID count tokens, which is every
+            // real unpriced turn (the usage document arrived; only the rate
+            // did not).
+            return null;
+        }
+
+        return self::new(
+            $totalTokens,
+            $costUsd,
+            $inputTokens,
+            $outputTokens,
+            $cacheReadTokens,
+            $cacheCreationTokens,
+            $reasoningTokens,
+            $unpricedModel,
+            $delegatedTokens,
+        );
+    }
+
+    /**
+     * This usage plus $other's — the operation an agentic TURN needs, because
+     * one turn is N provider calls, not one.
+     *
+     * {@see Backend\EngineBackend::complete()} runs a bounded loop of up to
+     * `$maxSteps` provider calls, each with its own usage, and a readout
+     * showing the LAST step's figure while calling it the turn's would
+     * under-report every turn that used a tool. This is what makes the turn
+     * total a sum over steps.
+     */
+    public function plus(self $other): self
+    {
+        return new self(
+            $this->totalTokens + $other->totalTokens,
+            $this->costUsd + $other->costUsd,
+            self::plusBucket($this->inputTokens, $other->inputTokens),
+            self::plusBucket($this->outputTokens, $other->outputTokens),
+            self::plusBucket($this->cacheReadTokens, $other->cacheReadTokens),
+            self::plusBucket($this->cacheCreationTokens, $other->cacheCreationTokens),
+            self::plusBucket($this->reasoningTokens, $other->reasoningTokens),
+            // Carry-first, not concat: the question every downstream reader
+            // asks of a merged turn is "was ANY step blind?", and one
+            // surviving name answers it. Two different unpriced models in one
+            // turn keep the first — the notice is per-turn and the blindness
+            // is the finding, not the spelling.
+            $this->unpricedModel ?? $other->unpricedModel,
+            $this->delegatedTokens + $other->delegatedTokens,
+        );
+    }
+
+    /**
+     * {@see $totalTokens} without the share delegated runs billed into it —
+     * the tokens THIS conversation's own provider calls counted. What a reader
+     * that treats the total as a conversation size must use (audit B4-rem).
+     */
+    public function ownTokens(): int
+    {
+        return $this->totalTokens - $this->delegatedTokens;
+    }
+
+    /**
+     * One bucket of {@see plus()}: two reported buckets sum; one reported and
+     * one not keeps the reported figure; two unreported stay unreported.
+     *
+     * A half-known sum carried as a number is the same choice the turn-total
+     * machinery already makes for a step that reported nothing — {@see sum()}
+     * skips nulls rather than nulling the total, "preserving the 'nothing
+     * reported' answer" only when NO step reported. The surviving figure is a
+     * lower bound for the merge (the unreported step may have read more from
+     * cache, and said nothing); collapsing a measured 300 to null would throw
+     * away the 300 the provider DID measure, which is the failure this class's
+     * whole docblock argues against. What must never happen is the third
+     * option — treating the unreported half as a zero *claim*: that is what
+     * `promptTokens()` refuses across a null bucket.
+     */
+    private static function plusBucket(?int $own, ?int $theirs): ?int
+    {
+        if ($own === null) {
+            return $theirs;
+        }
+
+        if ($theirs === null) {
+            return $own;
+        }
+
+        return $own + $theirs;
+    }
+
+    /**
+     * The prompt-side total, the identity the cache-bucket split exists to make
+     * computable: `promptTokens = cacheRead + cacheCreation + input`
+     * (prompt_plan.md P4.S1, backlog E17; prompt_expand.md §9.14).
+     *
+     * TWO DELIBERATE OMISSIONS, each pinned by a test so the next reader
+     * does not "fix" them.
+     *
+     * 1. `outputTokens` is NOT in here. This is the count of what was SENT and
+     *    billed as prompt — what the 95% context tier must stop estimating
+     *    from text length ({@see Util\TokenEstimate}'s script-weighted proxy)
+     *    — and what the model wrote is not part of what was sent.
+     *    {@see $totalTokens} remains the provider's own billable total and is a
+     *    different figure measured over a different span; this accessor derives
+     *    nothing from it and it derives nothing from this accessor.
+     * 2. `inputTokens` alone is NOT the prompt either — that is the flip side of
+     *    the same fact. On an Anthropic-shaped usage object `input_tokens`
+     *    counts only the tokens AFTER the last cache breakpoint, so anything
+     *    that was cache-read or cache-created has to be added back for the sum
+     *    to be the prompt.
+     *
+     * Null unless ALL THREE member buckets were reported: a missing bucket does
+     * not silently become 0 where null is the truth, so a provider that said
+     * nothing about one bucket voids the total that bucket would have fed —
+     * see the class docblock's "Zero is not the same as unknown".
+     */
+    public function promptTokens(): ?int
+    {
+        if ($this->inputTokens === null || $this->cacheReadTokens === null || $this->cacheCreationTokens === null) {
+            return null;
+        }
+
+        return $this->inputTokens + $this->cacheReadTokens + $this->cacheCreationTokens;
+    }
+
+    /**
+     * The usage with a reported/unreported input bucket set. Passing null
+     * clears it back to unreported; the other buckets ride along untouched —
+     * that is what the paired `bool $xSet` sentinels on {@see mutate()} are
+     * for (repo convention; canonical `sugar-style/src/Style.php`).
+     */
+    public function withInputTokens(?int $tokens): self
+    {
+        return $this->mutate(inputTokens: $tokens, inputTokensSet: true);
+    }
+
+    /** As {@see withInputTokens()}, for the completion side. */
+    public function withOutputTokens(?int $tokens): self
+    {
+        return $this->mutate(outputTokens: $tokens, outputTokensSet: true);
+    }
+
+    /** As {@see withInputTokens()}, for the cache-read bucket. */
+    public function withCacheReadTokens(?int $tokens): self
+    {
+        return $this->mutate(cacheReadTokens: $tokens, cacheReadTokensSet: true);
+    }
+
+    /** As {@see withInputTokens()}, for the cache-creation bucket. */
+    public function withCacheCreationTokens(?int $tokens): self
+    {
+        return $this->mutate(cacheCreationTokens: $tokens, cacheCreationTokensSet: true);
+    }
+
+    /** As {@see withInputTokens()}, for the completion-side reasoning bucket. */
+    public function withReasoningTokens(?int $tokens): self
+    {
+        return $this->mutate(reasoningTokens: $tokens, reasoningTokensSet: true);
+    }
+
+    /**
+     * Immutable fluent base — every `with*()` returns a new instance through
+     * here, changing only the buckets whose sentinel says "the caller passed
+     * this one". Values are clamped on the way in exactly as {@see new()}
+     * clamps: a negative count is a provider bug accounted as zero, but null
+     * (unreported) is NOT a negative and must survive as null.
+     */
+    private function mutate(
+        ?int $inputTokens = null,
+        bool $inputTokensSet = false,
+        ?int $outputTokens = null,
+        bool $outputTokensSet = false,
+        ?int $cacheReadTokens = null,
+        bool $cacheReadTokensSet = false,
+        ?int $cacheCreationTokens = null,
+        bool $cacheCreationTokensSet = false,
+        ?int $reasoningTokens = null,
+        bool $reasoningTokensSet = false,
+    ): self {
+        return new self(
+            $this->totalTokens,
+            $this->costUsd,
+            $inputTokensSet ? self::clampBucket($inputTokens) : $this->inputTokens,
+            $outputTokensSet ? self::clampBucket($outputTokens) : $this->outputTokens,
+            $cacheReadTokensSet ? self::clampBucket($cacheReadTokens) : $this->cacheReadTokens,
+            $cacheCreationTokensSet ? self::clampBucket($cacheCreationTokens) : $this->cacheCreationTokens,
+            $reasoningTokensSet ? self::clampBucket($reasoningTokens) : $this->reasoningTokens,
+            // No withUnpricedModel(): the signal is set once at the parse
+            // seam by the provider that priced (or failed to price) the call,
+            // and a wither would let a reader clear a blindness it did not
+            // measure away. It ride-alongs every bucket mutate, always.
+            $this->unpricedModel,
+            $this->delegatedTokens,
+        );
+    }
+
+    /** A negative bucket is a provider bug accounted as zero; null is "unreported" and is not a number to clamp. */
+    private static function clampBucket(?int $tokens): ?int
+    {
+        return $tokens === null ? null : max(0, $tokens);
+    }
+
+    /**
+     * Sum of a list of per-call usages, or null when the list is empty or
+     * holds only nulls — preserving the "nothing reported" answer rather than
+     * turning it into a zero.
+     *
+     * @param list<?self> $usages
+     */
+    public static function sum(array $usages): ?self
+    {
+        $total = null;
+        foreach ($usages as $usage) {
+            if ($usage === null) {
+                continue;
+            }
+            $total = $total === null ? $usage : $total->plus($usage);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Plain-array form for the {@see Backend\EngineBackend::completeAsync()}
+     * fork boundary, whose parent unserializes with `allowed_classes => false`
+     * and so cannot receive the object itself — same rule
+     * {@see Backend\EngineBackend::encodeEvent()} follows for tool events.
+     *
+     * EVERY field of the object is on the wire, including all five buckets and
+     * their null-ness: a bucket carried across here as null must come back as
+     * UNREPORTED, not as zero, or the fork path silently rewrites the one
+     * distinction this class exists to keep.
+     *
+     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int,unpricedModel:?string,delegatedTokens:int}
+     */
+    public function toArray(): array
+    {
+        return [
+            'totalTokens' => $this->totalTokens,
+            'costUsd' => $this->costUsd,
+            'inputTokens' => $this->inputTokens,
+            'outputTokens' => $this->outputTokens,
+            'cacheReadTokens' => $this->cacheReadTokens,
+            'cacheCreationTokens' => $this->cacheCreationTokens,
+            'reasoningTokens' => $this->reasoningTokens,
+            // The pair law above applies verbatim: dropped here, a forked
+            // turn's blindness never reaches the parent's notice; coerced
+            // there, an old frame would invent one.
+            'unpricedModel' => $this->unpricedModel,
+            // The same pair law: dropped here, a forked turn's sub-agent share
+            // reads 0 parent-side and the calibration it exists for inflates
+            // again on the async path only.
+            'delegatedTokens' => $this->delegatedTokens,
+        ];
+    }
+
+    /**
+     * Rebuild from {@see toArray()}, tolerating anything that is not the shape
+     * it wrote: the payload has crossed a socket, and a corrupt frame must
+     * cost the turn its accounting, not the turn itself.
+     *
+     * Tolerating a shape it did not write includes the shape it wrote BEFORE
+     * the buckets existed: missing bucket keys decode to unreported (`null`),
+     * never to zeroes. A value under a bucket key that is neither `null` nor
+     * an int is not a frame this method's counterpart emits — the whole frame
+     * is refused, on the same doctrine as the malformed `totalTokens` beside it.
+     *
+     * @param mixed $raw
+     */
+    public static function fromArray(mixed $raw): ?self
+    {
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $tokens = $raw['totalTokens'] ?? null;
+        $cost = $raw['costUsd'] ?? null;
+        if (!is_int($tokens) || !(is_float($cost) || is_int($cost))) {
+            return null;
+        }
+
+        $buckets = [];
+        foreach (['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens', 'reasoningTokens'] as $key) {
+            $value = $raw[$key] ?? null;
+            // Absent or null decodes to UNREPORTED. That is the whole tolerance
+            // rule, and the shape it tolerates is not hypothetical: a frame
+            // written before the buckets existed simply lacks the keys, and
+            // reading that as measured zeroes would cross the socket turning "the
+            // provider said nothing" into "the cache was never read".
+            // Anything else that is not a plain int is a frame this method did
+            // not write — refused whole, per the docblock above.
+            if ($value !== null && !is_int($value)) {
+                return null;
+            }
+
+            $buckets[$key] = $value;
+        }
+
+        // Same doctrine for the unpriced signal: absent or null decodes to
+        // "priced, or genuinely free" — never to an invented model name — and
+        // anything that is neither null nor a string is a frame this method
+        // did not write.
+        $unpriced = $raw['unpricedModel'] ?? null;
+        if ($unpriced !== null && !is_string($unpriced)) {
+            return null;
+        }
+
+        // Absent decodes to 0: a frame from before the share existed carries
+        // no figure for it, and 0 keeps the whole total as the turn's own,
+        // which is what every reader saw then. Anything that is not an int is
+        // a frame this method did not write.
+        $delegated = $raw['delegatedTokens'] ?? 0;
+        if (!is_int($delegated)) {
+            return null;
+        }
+
+        return self::reported(
+            $tokens,
+            (float) $cost,
+            $buckets['inputTokens'],
+            $buckets['outputTokens'],
+            $buckets['cacheReadTokens'],
+            $buckets['cacheCreationTokens'],
+            $buckets['reasoningTokens'],
+            is_string($unpriced) && $unpriced !== '' ? $unpriced : null,
+            $delegated,
+        );
+    }
+}

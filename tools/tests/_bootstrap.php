@@ -132,7 +132,7 @@ trait TmpTree
  *
  * WHY THIS IS SHARED RATHER THAN COPIED A THIRD TIME. `tools/tests/` now
  * carries TWO drift pins of the same shape — `StackedDocCommentTest` pins its
- * copy of `sugar-crush`'s stacked-doc-comment scanner, and `ToolsEnvRosterTest`
+ * copy of `candy-code`'s stacked-doc-comment scanner, and `ToolsEnvRosterTest`
  * pins `sugar-pty`'s copy of the environment scanner. Both answer "have these
  * two implementations diverged" by comparing token streams, and a divergence
  * detector that itself existed in two copies would be the joke writing itself.

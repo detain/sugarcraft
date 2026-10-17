@@ -11,7 +11,7 @@ use SugarCraft\McpClient\StdioMcpServer;
 /**
  * One server, many processes (audit B1 / AG-1): the embedder starts the server
  * and then uses the SAME object from pcntl_fork()ed children, exactly as
- * sugar-crush's forked turns and parallel sub-agents do.
+ * candy-code's forked turns and parallel sub-agents do.
  *
  * Every child reports through its own temp file and ends with SIGKILL — never
  * exit(), which would run PHPUnit's shutdown machinery in the copy. Every wait

@@ -1,0 +1,716 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tui\Components;
+
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Sessions\BackgroundSession;
+use SugarCraft\Code\Sessions\BackgroundSessionStatus;
+use SugarCraft\Code\Tui\AgentDisplayState;
+use SugarCraft\Code\Tui\AgentLabelFolding;
+use SugarCraft\Code\Tui\AgentOutputPane;
+use SugarCraft\Code\Tui\AgentOutputState;
+use SugarCraft\Code\Tui\AgentStatusBar;
+use SugarCraft\Code\Tui\AgentViewMode;
+use SugarCraft\Code\Tui\AgentViewPane;
+use SugarCraft\Code\Tui\Mode;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\Tui\StallWarning;
+use SugarCraft\Code\Theme;
+use SugarCraft\Style\Border;
+use SugarCraft\Style\Style;
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
+
+/**
+ * The full-pane agent dashboard — candy-code's answer to `claude agents`
+ * (crush_feat.md §5 E5).
+ *
+ * Renders every live worker in ONE ordered list: each run of the {@see Agent}s
+ * registered on {@see \SugarCraft\Code\Agents\AgentManager} followed by the
+ * {@see BackgroundSession}s owned by
+ * {@see \SugarCraft\Code\Sessions\BackgroundSupervisor}, grouped for display
+ * into Working / Needs input / Ready / Completed.
+ *
+ * Three design constraints this class exists to satisfy:
+ *
+ * 1. **Reuse, don't reinvent.** Rows are drawn by
+ *    {@see AgentStatusBar::renderAgentLine()}, the empty state by
+ *    {@see AgentViewPane::render()}, and the Space peek overlay by
+ *    {@see AgentOutputPane::render()} composited through {@see Veil} — the
+ *    same overlay mechanism the Ctrl+P palette and the permission modal use.
+ *    `Tui\Components\AgentsPane`, the sidebar-sized widget, reads THIS class's
+ *    {@see entries()} as its row source rather than maintaining a second one:
+ *    one ordering authority, two budgets.
+ *
+ * 2. **Stable indices.** {@see entries()} is the single ordering authority.
+ *    Position N in that list is slot N+1 on screen and the target of
+ *    `Alt+<N+1>` ({@see indexForSlot()}), and the slot label is printed on the
+ *    row so the mapping is visible rather than guessed. Display grouping
+ *    reorders the ROWS, never the slots.
+ *
+ * 3. **Bounded output.** Like {@see FilesPane}, this never emits more rows
+ *    than the caller's height budget — an unbounded pane pushes the input
+ *    line and status bar off-screen, and sugar-core's absolute-cursor
+ *    repaint then collides distinct logical rows onto one physical line
+ *    (see {@see \SugarCraft\Code\Tui\Renderer::renderView()} invariant 1).
+ *    Peek output is tailed by BYTE budget before it is split into lines, so
+ *    the per-frame cost is constant no matter how long a session has been
+ *    streaming.
+ *
+ * 4. **Untrusted in, one clean row out.** Every string this pane draws is
+ *    attacker-influenced, and the shell reaches it without passing through
+ *    {@see \SugarCraft\Code\Renderer}'s sanitiser — so {@see safe()} is the
+ *    boundary, applied to each value as its display state is built.
+ */
+final class AgentDashboardPane
+{
+    /** Jump slots `Alt+1`..`Alt+9` address; entries past this have no chord. */
+    public const MAX_JUMP_SLOTS = 9;
+
+    /**
+     * Click-zone prefix of a run's row: `agent:<runId>`, the strip's own
+     * ({@see \SugarCraft\Code\Tui\AgentStrip::ZONE_PREFIX}) — the dashboard
+     * frame never paints the strip, so the two never share a frame, and a
+     * click on either opens that run's Agent View
+     * ({@see \SugarCraft\Code\App\App::openAgentView()}).
+     */
+    public const ZONE_PREFIX = \SugarCraft\Code\Tui\AgentStrip::ZONE_PREFIX;
+
+    /**
+     * Bytes of a session's output the peek overlay reads, counted from the
+     * END. Splitting the whole buffer every frame would make repaint cost
+     * grow with session length — the exact per-frame-work-proportional-to-
+     * history trap W3.M4 fixed in {@see FilesPane}.
+     */
+    private const PEEK_TAIL_BYTES = 4096;
+
+    /** Output lines carried on a peek entry (the pane itself shows fewer). */
+    private const PEEK_MAX_LINES = 8;
+
+    /**
+     * Display groups, in render order, keyed by the group id
+     * {@see group()} returns.
+     */
+    private const GROUP_LABELS = [
+        'working'     => 'tui.dashboard.group.working',
+        'needs-input' => 'tui.dashboard.group.needs_input',
+        'ready'       => 'tui.dashboard.group.ready',
+        'completed'   => 'tui.dashboard.group.completed',
+    ];
+
+    /**
+     * Every live worker as a display state, in stable slot order.
+     *
+     * Registered agents' runs come first (agent registration order, then run
+     * creation order — one row per run, see
+     * {@see \SugarCraft\Code\Agents\AgentManager::visibleRunsOf()}), then
+     * background sessions (spawn order). The index into this list IS the
+     * stable index:
+     * a session keeps its slot for as long as it stays in the supervisor's
+     * active set, so `Alt+3` means the same session between two frames.
+     *
+     * Returns `[]` when the App hosts no Chat, or the Chat has neither an
+     * AgentManager nor a BackgroundSupervisor — an honest empty dashboard,
+     * not a fabricated one.
+     *
+     * Disclosure about the Completed group: it holds the delegated runs that
+     * finished this turn (projected mirrors, cleared at the next dispatch)
+     * and timed-out sessions, which the supervisor still counts as active.
+     * Every other finished worker drops out — local runs once terminal, and
+     * `BackgroundSupervisor::getActiveSessions()` skips Completed/Failed/
+     * Stopped sessions. A finished-session history would need a retention
+     * list on the supervisor.
+     *
+     * @return list<AgentOutputState>
+     */
+    public static function entries(App $a): array
+    {
+        $chat = $a->chat;
+        if ($chat === null) {
+            return [];
+        }
+
+        $manager = $chat->agentManager();
+        $entries = $manager !== null ? self::managerEntries($manager) : [];
+
+        $supervisor = $chat->backgroundSupervisor();
+        if ($supervisor !== null) {
+            // Once per frame, not once per session: getStallWarnings() walks
+            // every tracked agent, so calling it inside the loop would make
+            // the dashboard quadratic in session count for one identical map.
+            // It is pure in-memory arithmetic over StallDetector's snapshots
+            // (no I/O, no query), which is what makes it safe on a render path.
+            $warnings = $supervisor->getStallWarnings();
+
+            foreach ($supervisor->getActiveSessions() as $session) {
+                // Keyed by session id because that is the key
+                // BackgroundSupervisor::onSessionStreaming() tracks under.
+                $entries[] = self::sessionEntry($session, $warnings[$session->id] ?? null);
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * The manager's half of {@see entries()}: one row per RUN, in agent
+     * registration order then run creation order.
+     *
+     * Per run, not per agent, because a batch of Task calls is typically
+     * several runs of one roster agent, and a per-agent row folded them all
+     * into a single line. An agent flagged active with no run of its own
+     * keeps the per-agent row it always had. Public because the
+     * in-transcript strip ({@see \SugarCraft\Code\Renderer}) lists the same
+     * rows, and two builders are how the two surfaces came to disagree.
+     *
+     * @return list<AgentOutputState>
+     */
+    public static function managerEntries(\SugarCraft\Code\Agents\AgentManager $manager): array
+    {
+        $entries = [];
+        foreach ($manager->all() as $agent) {
+            $runs = $manager->visibleRunsOf($agent->name);
+            if ($runs !== []) {
+                foreach ($runs as $run) {
+                    $entries[] = self::runEntry($run);
+                }
+
+                continue;
+            }
+            if ($agent->isActive) {
+                $entries[] = self::agentEntry($agent, $manager);
+            }
+        }
+
+        // CL-2 FIX 4: colliding prompt prefixes fold to show their
+        // difference inside the clip window. Fresh states, whole set in
+        // hand — the only two places the fold may run (sibling seam:
+        // AgentSplitColumn::renderRuns).
+        return AgentLabelFolding::apply($entries);
+    }
+
+    /**
+     * The entries index a `Alt+<slot>` chord addresses, or -1 when the slot
+     * is out of range (no such agent, or beyond {@see MAX_JUMP_SLOTS}).
+     *
+     * Slots are 1-based because that is how they are labelled on screen.
+     */
+    public static function indexForSlot(App $a, int $slot): int
+    {
+        if ($slot < 1 || $slot > self::MAX_JUMP_SLOTS) {
+            return -1;
+        }
+
+        return $slot <= count(self::entries($a)) ? $slot - 1 : -1;
+    }
+
+    /**
+     * The display group a status keyword belongs to.
+     *
+     * The keyword vocabulary is {@see AgentStatusBar}'s, so an unrecognised
+     * status lands in Completed for the same reason it renders gray there:
+     * "not something the user is waiting on".
+     *
+     * @return 'working'|'needs-input'|'ready'|'completed'
+     */
+    public static function group(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'working', 'streaming' => 'working',
+            'waiting'              => 'needs-input',
+            'pending'              => 'ready',
+            default                => 'completed',
+        };
+    }
+
+    /**
+     * Render the dashboard, peek overlay included.
+     *
+     * @param int $width Total columns the pane may occupy, borders included.
+     * @param int $rows  Total rows the pane may occupy, borders included.
+     */
+    public static function render(App $a, int $width, int $rows): string
+    {
+        // Four columns go to the box's border AND its padding(0, 1), not two.
+        // This used to subtract 2 -- the border alone -- and so over-ran its
+        // caller's budget by exactly the padding on BOTH paths: the empty-list
+        // AgentViewPane::render() call below and the box() frame, which draws
+        // the same border-plus-padding geometry around a populated list. Pane
+        // width 30 came back 32, 60 came back 62, 100 came back 102. Nothing
+        // showed, because the shell renderer clips every frame to $cols before
+        // the diff renderer sees it; a backstop is not a budget, and the
+        // arithmetic is now AgentViewPane's to get right for both callers.
+        $inner = AgentViewPane::contentWidth($width, 20);
+        // Two rows go to the box's own top and bottom border.
+        $budget = max(1, $rows - 2);
+
+        $theme = $a->theme();
+        $entries = self::entries($a);
+        if ($entries === []) {
+            // AgentViewPane already owns the styled "(no active agents)" box.
+            return AgentViewPane::render([], -1, $inner, $budget, $theme);
+        }
+
+        $frame = self::box(self::body($a, $entries, $inner, $budget, $theme), $a, $inner, $theme);
+
+        $overlay = self::peekOverlay($a, $width, $rows);
+        if ($overlay === '') {
+            return $frame;
+        }
+
+        // Veil clips the overlay to the BACKDROP's canvas, and box() hugs
+        // its list: a short dashboard (one session = four rows) would
+        // amputate a taller peek tile below the backdrop's last row, its
+        // content and its own border alike — which is how a peek's newest
+        // output line could vanish from the frame. Fill the canvas out to
+        // the rows the caller budgeted first; the shell (Renderer's
+        // clipHead) never gives this pane more than $rows, so the filled
+        // rows are blank on screen either way.
+        return Veil::new()->withBackdrop(50)->composite(
+            $overlay,
+            self::padCanvas($frame, $rows),
+            Position::CENTER,
+            Position::CENTER,
+        );
+    }
+
+    /**
+     * Extend a content-hugging frame down to $canvasRows with full-width
+     * blanks, so an overlay composite has the whole pane as its canvas.
+     */
+    private static function padCanvas(string $frame, int $canvasRows): string
+    {
+        $lines = explode("\n", $frame);
+        $missing = $canvasRows - count($lines);
+        if ($missing <= 0) {
+            return $frame;
+        }
+
+        $blank = str_repeat(' ', max(array_map(
+            static fn (string $line): int => Width::of($line),
+            $lines,
+        )));
+
+        return $frame . str_repeat("\n" . $blank, $missing);
+    }
+
+    /**
+     * The Space-triggered peek: a non-committing look at the selected
+     * worker's latest output, without leaving the dashboard.
+     *
+     * Returns '' unless the shell is in {@see AgentViewMode::Peek} with a
+     * selection that still resolves — a stale selection (the session ended
+     * between frames) draws nothing rather than an empty box for an agent
+     * that is gone.
+     */
+    public static function peekOverlay(App $a, int $width, int $rows): string
+    {
+        if ($a->agentViewMode !== AgentViewMode::Peek) {
+            return '';
+        }
+
+        $entries = self::entries($a);
+        $selected = $a->selectedAgentIndex;
+        if ($selected < 0 || $selected >= count($entries)) {
+            return '';
+        }
+
+        // Held well inside the backdrop: Veil clips the overlay to the
+        // backdrop's widest line, and a peek as wide as the pane would lose
+        // its right border.
+        $overlayWidth = max(20, min($width - 8, 72));
+        $overlayRows = max(3, min($rows - 4, 12));
+
+        return AgentOutputPane::render($entries[$selected], $overlayWidth, $overlayRows, $a->theme(), Mode::Peek);
+    }
+
+    /**
+     * Group headings + slot-labelled rows, clipped to the height budget.
+     *
+     * @param list<AgentOutputState> $entries
+     */
+    private static function body(App $a, array $entries, int $inner, int $budget, Theme $theme): string
+    {
+        $lines = [];
+        foreach (self::grouped($entries) as $groupId => $members) {
+            $lines[] = Style::new()
+                ->bold()
+                ->foreground(AgentViewPane::statusColor($members[0][1]->status, $theme))
+                ->render(Lang::t(self::GROUP_LABELS[$groupId]) . ' (' . count($members) . ')');
+
+            foreach ($members as [$index, $entry]) {
+                $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner, $theme);
+            }
+        }
+
+        return implode("\n", self::clip($lines, $budget, $inner, $theme));
+    }
+
+    /**
+     * $entries by display group, in render order: group id => list of
+     * [entries index, entry]. {@see body()} draws it; {@see zones()} reads
+     * the same order, so a zone sits on the row it names.
+     *
+     * @param list<AgentOutputState> $entries
+     * @return array<string, non-empty-list<array{0: int, 1: AgentOutputState}>>
+     */
+    private static function grouped(array $entries): array
+    {
+        $grouped = [];
+        foreach ($entries as $index => $entry) {
+            $grouped[self::group($entry->status)][] = [$index, $entry];
+        }
+
+        $ordered = [];
+        foreach (array_keys(self::GROUP_LABELS) as $groupId) {
+            if (isset($grouped[$groupId])) {
+                $ordered[$groupId] = $grouped[$groupId];
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * The click zones of {@see render()}'s frame at the same size: one
+     * `agent:<runId>` span per delegated run's row that survived the height
+     * clip, as [row, from column, to column, zone id] in the pane's own
+     * coordinates (row 0 is the box's top border). None under the peek
+     * overlay, which covers the rows, and none for a background session's
+     * row, which has no run to open.
+     *
+     * @return list<array{0: int, 1: int, 2: int, 3: string}>
+     */
+    public static function zones(App $a, int $width, int $rows): array
+    {
+        $entries = self::entries($a);
+        if ($entries === [] || $a->agentViewMode === AgentViewMode::Peek) {
+            return [];
+        }
+
+        $inner = AgentViewPane::contentWidth($width, 20);
+        $budget = max(1, $rows - 2);
+
+        $keys = [];
+        foreach (self::grouped($entries) as $members) {
+            $keys[] = null;
+            foreach ($members as [, $entry]) {
+                $keys[] = $entry->key;
+            }
+        }
+        // clip() trades the last kept row for its "N more" trailer.
+        if (count($keys) > $budget) {
+            $keys = array_slice($keys, 0, max(0, $budget - 1));
+        }
+
+        $zones = [];
+        foreach ($keys as $line => $key) {
+            if ($key !== null && $key !== '') {
+                // One column of border, one of padding, then the row.
+                $zones[] = [1 + $line, 2, 2 + $inner, self::ZONE_PREFIX . $key];
+            }
+        }
+
+        return $zones;
+    }
+
+    /**
+     * One dashboard row: `[N] ● name [status] operation  elapsed  usage`.
+     *
+     * The slot label is a plain ASCII digit on purpose. Private-Use
+     * codepoints (U+E000–U+F8FF) are where sugar-core's image markers and
+     * sugar-mouse's zone sentinels both live, so a decorative glyph from that
+     * block here would be mistaken for one of them by
+     * {@see \SugarCraft\Code\Renderer::maskImageMarkers()}.
+     */
+    private static function row(int $index, AgentOutputState $entry, bool $selected, int $inner, Theme $theme): string
+    {
+        $slot = $index < self::MAX_JUMP_SLOTS ? '[' . ($index + 1) . ']' : '   ';
+        $label = Style::new()
+            ->foreground($selected ? $theme->shellWarning : $theme->shellMuted)
+            ->render($slot);
+
+        $line = $label . ' ' . AgentStatusBar::renderAgentLine($entry, $theme);
+
+        // The LIST row has to carry this too, not just the peek overlay. The
+        // parameter above used to be typed as the PARENT AgentDisplayState,
+        // which does not declare `stallWarning` at all — so the field was
+        // invisible here even though `entries()` has only ever produced
+        // AgentOutputState. That type was the whole reason a stalled session
+        // could reach the dashboard and still look ordinary in the list.
+        //
+        // `shellWarning` duplicates AgentOutputPane::STALL_TOKEN's value,
+        // which is private; the two must stay in step or one widget will
+        // colour a stall differently from the other.
+        if ($entry->stallWarning !== null) {
+            $line .= Style::new()
+                ->foreground($theme->shellWarning)
+                ->bold()
+                ->render("  \u{26A0} " . Lang::t('tui.agents.stalled'));
+        }
+
+        return Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
+    }
+
+    /**
+     * Hold $lines to $budget rows, trading the last row for an "N more"
+     * trailer when there is anything left over.
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private static function clip(array $lines, int $budget, int $inner, Theme $theme): array
+    {
+        if (count($lines) <= $budget) {
+            return $lines;
+        }
+
+        $kept = array_slice($lines, 0, max(0, $budget - 1));
+        $hidden = count($lines) - count($kept);
+        $trailer = Style::new()
+            ->foreground($theme->shellMuted)
+            ->render(Lang::t('tui.agents.more_hidden', ['count' => $hidden]));
+
+        $kept[] = Width::string($trailer) > $inner ? Width::truncateAnsi($trailer, $inner) : $trailer;
+
+        return $kept;
+    }
+
+    /**
+     * Wrap the body in the pane box, focus-coloured the same way
+     * {@see AgentsPane} colours the sidebar version so the two read as one
+     * widget family.
+     */
+    private static function box(string $body, App $a, int $inner, Theme $theme): string
+    {
+        // Same rounded border + padding(0, 1) + width($inner) geometry as
+        // {@see AgentViewPane::render()}, so this frame is
+        // `$inner + AgentViewPane::CHROME_WIDTH` cells wide too. That is why
+        // one subtraction in render() covers both of this pane's paths.
+        $style = Style::new()
+            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.pane.title.agents') . ' '))
+            ->padding(0, 1)
+            ->width($inner);
+
+        $style = $a->pane === Pane::Agents
+            ? $style->borderForeground($theme->shellPrimary)
+            : $style->borderForeground($theme->border);
+
+        return $style->render($body);
+    }
+
+    /**
+     * A registered agent's display state, sourced from the manager's real
+     * telemetry (W3.F2) rather than the placeholder zeros this pane's
+     * predecessor reported.
+     *
+     * NO STALL WARNING HERE, AND THAT IS NOT AN OVERSIGHT. Stall detection is
+     * fed from exactly one place — {@see
+     * \SugarCraft\Code\Sessions\BackgroundSupervisor::onSessionStreaming()}
+     * calls `track()` as a background session's chunks arrive — so a background
+     * session is the only thing the detector has ever observed a token rate
+     * for. A registered agent reaches this pane through `AgentManager`, whose
+     * telemetry is cumulative totals with no per-chunk timing, so there is no
+     * rate to judge and no threshold to cross. Passing a warning here would
+     * mean inventing one. To give these rows a real stall signal, the
+     * measurement has to come first: something on the AgentManager path has to
+     * call `track()`.
+     */
+    private static function agentEntry(Agent $agent, \SugarCraft\Code\Agents\AgentManager $manager): AgentOutputState
+    {
+        return AgentOutputState::fromDisplayState(
+            AgentDisplayState::new(
+                name: self::safe($agent->name),
+                status: $agent->isActive ? 'working' : 'stopped',
+                operation: self::safe($agent->description),
+                // Telemetry lookups key off the RAW name — sanitising is a
+                // display concern, and a sanitised key would miss the map.
+                elapsedSeconds: $manager->elapsedSeconds($agent->name),
+                tokensUsed: $manager->tokensUsed($agent->name),
+                costUsd: $manager->costUsd($agent->name),
+            ),
+            model: self::safe($agent->model),
+            // A registered agent has no output buffer of its own — its
+            // sub-agents do, and {@see
+            // \SugarCraft\Code\Agents\AgentManager::liveOutput()} is the
+            // accessor that rolls theirs up as it is produced (crush_code.md
+            // Phase 1 item 1). Before it existed this was necessarily `[]`,
+            // so a delegating agent's row was a header with no body while a
+            // background session's row showed a live tail.
+            outputBuffer: self::outputTail($live = $manager->liveOutput($agent->name)),
+            totalLines: self::lineCount($live),
+        );
+    }
+
+    /**
+     * One delegated run's display state: named after its roster agent, with
+     * the run's own task, telemetry and output — never the agent-wide
+     * roll-ups {@see agentEntry()} reports, which would show every sibling's
+     * tokens on each row.
+     */
+    private static function runEntry(SubAgent $run): AgentOutputState
+    {
+        return AgentOutputState::fromDisplayState(
+            AgentDisplayState::new(
+                name: self::safe($run->agent->name),
+                status: self::runStatus($run->status),
+                operation: self::safe($run->task),
+                elapsedSeconds: $run->elapsedSeconds(),
+                tokensUsed: $run->tokensUsed,
+                costUsd: $run->costUsd,
+                contextTokens: $run->contextTokens,
+            ),
+            model: self::safe($run->model()),
+            outputBuffer: self::outputTail($run->output),
+            totalLines: $run->outputLineCount(),
+            key: $run->id,
+        );
+    }
+
+    /**
+     * Map a run's lifecycle status onto {@see AgentStatusBar}'s vocabulary,
+     * so a run and a background session in the same state colour alike.
+     */
+    private static function runStatus(string $status): string
+    {
+        return match ($status) {
+            SubAgent::STATUS_PENDING   => 'pending',
+            SubAgent::STATUS_RUNNING   => 'working',
+            SubAgent::STATUS_STREAMING => 'streaming',
+            SubAgent::STATUS_FAILED    => 'failed',
+            SubAgent::STATUS_STOPPED   => 'stopped',
+            default                    => 'completed',
+        };
+    }
+
+    /**
+     * A background session's display state, with a byte-bounded output tail.
+     *
+     * $stall is the session's entry from {@see
+     * \SugarCraft\Code\Sessions\BackgroundSupervisor::getStallWarnings()},
+     * or null when it is not stalling. Passing it is what makes
+     * {@see AgentOutputPane}'s stall branch reachable at all: that pane has
+     * always rendered an amber border and a warning line for a non-null
+     * `stallWarning`, and this builder has always defaulted the parameter,
+     * so the producer and the renderer were both complete while nothing
+     * joined them (crush_code.md Phase 8 item 3).
+     */
+    private static function sessionEntry(BackgroundSession $session, ?StallWarning $stall = null): AgentOutputState
+    {
+        return AgentOutputState::fromDisplayState(
+            AgentDisplayState::new(
+                name: self::safe($session->name),
+                status: self::sessionStatus($session->status),
+                operation: self::safe($session->task),
+                elapsedSeconds: $session->elapsedSeconds(),
+                tokensUsed: $session->tokensUsed,
+                costUsd: $session->costUsd,
+            ),
+            model: self::safe($session->agent->model),
+            outputBuffer: self::outputTail($session->output),
+            stallWarning: $stall,
+            totalLines: self::lineCount($session->output),
+        );
+    }
+
+    /**
+     * Map a session's lifecycle status onto {@see AgentStatusBar}'s status
+     * vocabulary, so both widgets colour the same state the same way.
+     *
+     * `Stalled` reads as `waiting` because a stalled session is precisely one
+     * the user has to look at — the "Needs input" group.
+     */
+    private static function sessionStatus(BackgroundSessionStatus $status): string
+    {
+        return match ($status) {
+            BackgroundSessionStatus::Running   => 'working',
+            BackgroundSessionStatus::Streaming => 'streaming',
+            BackgroundSessionStatus::Stalled   => 'waiting',
+            BackgroundSessionStatus::Pending   => 'pending',
+            BackgroundSessionStatus::Completed => 'completed',
+            BackgroundSessionStatus::Stopped   => 'stopped',
+            BackgroundSessionStatus::Failed,
+            BackgroundSessionStatus::TimedOut  => 'failed',
+        };
+    }
+
+    /** Lines in a whole buffer — the figure its byte-bounded tail cannot give. */
+    private static function lineCount(string $output): int
+    {
+        return $output === '' ? 0 : substr_count(rtrim($output, "\n"), "\n") + 1;
+    }
+
+    /**
+     * The last few lines of a session's output.
+     *
+     * The byte tail is taken FIRST: `explode()` on a multi-megabyte buffer
+     * allocates the whole thing every frame, and only the tail is ever shown.
+     * A cut mid-line drops that partial first line rather than showing a
+     * fragment that starts mid-word.
+     *
+     * Sanitising happens LAST, on the ≤{@see PEEK_MAX_LINES} lines that
+     * actually reach the overlay, so the per-frame cost stays bounded no
+     * matter how much a session has streamed.
+     *
+     * @return list<string>
+     */
+    private static function outputTail(string $output): array
+    {
+        if ($output === '') {
+            return [];
+        }
+
+        $tail = strlen($output) > self::PEEK_TAIL_BYTES
+            ? substr($output, -self::PEEK_TAIL_BYTES)
+            : $output;
+
+        $lines = explode("\n", rtrim($tail, "\n"));
+        if (strlen($output) > self::PEEK_TAIL_BYTES && count($lines) > 1) {
+            array_shift($lines);
+        }
+
+        return array_map(
+            self::safe(...),
+            array_values(array_slice($lines, -self::PEEK_MAX_LINES)),
+        );
+    }
+
+    /**
+     * This pane's untrusted-text boundary.
+     *
+     * Everything the dashboard draws — a session's `output` (byte-for-byte
+     * what {@see \SugarCraft\Code\Sessions\BackgroundSupervisor} read off the
+     * daemonised child's IPC socket, i.e. raw model and tool output), its
+     * name/task, and an agent's name/description/model — is attacker-
+     * influenced text going straight to a terminal. The chat path holds this
+     * boundary in {@see \SugarCraft\Code\Renderer}; the shell reaches this
+     * pane WITHOUT passing through it ({@see \SugarCraft\Code\Tui\Renderer}
+     * only clips the finished frame), so the boundary has to live here.
+     *
+     * Two halves, both required:
+     *
+     * - {@see PaneLabel::of()} runs `Sanitize::untrusted()` (kills OSC title
+     *   sets, `\x1b[2J` erases, SGR forgeries) and then collapses the
+     *   control/whitespace `untrusted()` deliberately preserves, which is what
+     *   keeps one entry to one row — an LF costs a row the height budget never
+     *   reserved, and a lone CR lets session output overwrite the pane border.
+     *   Losing an output line's indentation is the accepted price.
+     * - The Private-Use sweep removes a block `untrusted()` leaves alone
+     *   because it is printable. Without it a session could echo sugar-mouse's
+     *   zone sentinels or sugar-core's image markers back at us and forge a
+     *   clickable region in our own frame.
+     *
+     * Both halves live in {@see PaneLabel::safe()}. They used to live here, in
+     * a copy {@see AgentSplitColumn} then made a second copy of.
+     */
+    private static function safe(string $raw): string
+    {
+        return PaneLabel::safe($raw);
+    }
+}

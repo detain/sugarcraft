@@ -16,7 +16,7 @@ Three lanes, nine agents, zero errors, ~2.8 hours wall clock.
 
 | package | base | closed |
 |---|---|---|
-| sugar-crush | 9994 / 144819 / 1 | **10059 / 148589 / 1** |
+| candy-code | 9994 / 144819 / 1 | **10059 / 148589 / 1** |
 | candy-core | 842 / 7573 / 25 | **842 / 7587 / 24** | <!-- @rename-keep historical provenance -->
 | candy-flip | 83 / 227 / 2 | 83 / 227 / 2 | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 | 459 / 7753 / 6 | <!-- @rename-keep historical provenance -->
@@ -181,7 +181,7 @@ every sibling directory (Composer ignores unused ones), then a single `composer 
 manifests, then verify with `is_link()` + `realpath()`. That reached 18/18 · 3/3 · 6/6 · 7/7 in one go.
 
 Also filed: **E453** — CI's path-repo policy job is RED on `master` over a dead `sugarcraft/candy-kit` <!-- @rename-keep historical provenance -->
-require in `sugar-crush`, while the local `--no-lib-path-repos` guard exits 0 at the same commit. The
+require in `candy-code`, while the local `--no-lib-path-repos` guard exits 0 at the same commit. The
 more important half is that **the merge checklist has been passing a check CI fails.** The report
 recommends pruning; the standing rule says dormant code gets wired or documented, never deleted, and
 `candy-kit` is a foundation lib — so it went to lane c as a decision to make with evidence, not a prune. <!-- @rename-keep historical provenance -->
@@ -196,7 +196,7 @@ interruptions landed in the fix stage. It still closed on an exact prediction.
 
 | package | floor | delta |
 |---|---|---|
-| sugar-crush | **9994 / 144819 / 1 skipped / rc 0** | +48 tests, +550 assertions |
+| candy-code | **9994 / 144819 / 1 skipped / rc 0** | +48 tests, +550 assertions |
 | candy-core | **842 / 7573 / 25 / rc 0** | +23 tests, +183 assertions | <!-- @rename-keep historical provenance -->
 | candy-flip | **83 / 227 / 2 / rc 0** | unchanged | <!-- @rename-keep -->
 | backlog | **428 → 452** | 21 lane ids (E429-E449) + 3 supervisor (E450-E452) |
@@ -289,7 +289,7 @@ closes the fd 3+ inheritance the round-53 guard proves (E417/E418/E425/E426). La
   `tests/Sessions/` to a lane that was not running. Rewritten for the actual three lanes.
 - **Three brief paths did not exist (E334, caught pre-launch).** `SizeIoctl` and `TermiosFactory` live in
   **candy-pty**, not `candy-core/src/Util/Tty/` — which materially changes lane a's brief, since closing <!-- @rename-keep historical provenance -->
-  E396 may mean editing a third library and owing its figures. `McpMessage.php` sits at `sugar-crush/src/`,
+  E396 may mean editing a third library and owing its figures. `McpMessage.php` sits at `candy-code/src/`,
   not under `src/MCP/`.
 - **Per-round scratchpads `r54{lane}` (E427).** Rounds 49–53 all shared `r49{lane}`.
 
@@ -349,13 +349,13 @@ candy-flip **80 / 186 / 2**, all rc 0. <!-- @rename-keep -->
 Lanes were refreshed by `git fetch` + `reset --hard`, **not re-copied** — a fresh `cp -a` would repoint the
 vendor symlinks out of the lane. Closure re-verified per lane per package: 18/18, 3/3, 6/6.
 
-**Lane a — the descriptor family, entirely outside sugar-crush.** The two worst instances of E368 are
+**Lane a — the descriptor family, entirely outside candy-code.** The two worst instances of E368 are
 still open, left over because round 52's lane a had them out of its file list. `PosixBackend::size()`'s
 `/dev/tty` arm is wrong on every run rather than latent; `restoreLast()` reads descriptor 1 while its
 comment says STDIN. `candy-flip/src/Renderer.php` is the sixth instance, and the brief explicitly permits <!-- @rename-keep -->
 refuting it with a measurement rather than fixing it.
 
-**Lane b — child reaping.** The sugar-crush HIGHs from E366, with `MCP/StdioMcpServer` named as the
+**Lane b — child reaping.** The candy-code HIGHs from E366, with `MCP/StdioMcpServer` named as the
 already-correct reference so the lane matches an existing pattern instead of inventing a fourth. Includes
 E367. `BackgroundSupervisor`'s double-fork is flagged as possibly an intentional seam (rule 6).
 
@@ -380,7 +380,7 @@ c measurement hygiene.** Merges `3e67a995` a, `ddc343f6` b, `dba03fa4` c; renumb
 
 | package | floor at `cb0a7c69` |
 |---|---|
-| sugar-crush | **9860 / 143784 / 1 / rc 0** |
+| candy-code | **9860 / 143784 / 1 / rc 0** |
 | candy-core | **807 / 7288 / 25 / rc 0** | <!-- @rename-keep historical provenance -->
 | candy-mosaic | **459 / 7753 / 6 / rc 0** | <!-- @rename-keep historical provenance -->
 
@@ -390,7 +390,7 @@ E368–E392 the lane ids, E393/E394 this round's process findings). Round 53 fil
 
 ### The prediction, and the first exactly-tight assertion bound
 
-Written before the merge, from lane figures only: sugar-crush 9781 (master) + 35 (b) + 44 (c) = **9860
+Written before the merge, from lane figures only: candy-code 9781 (master) + 35 (b) + 44 (c) = **9860
 exact**, assertions ≥ 143427 + 231 + 126 = **143784**. Measured: 9860 / 143784. **Tenth consecutive exact
 test prediction, and the first time the assertion bound landed exactly on itself.**
 
@@ -461,13 +461,13 @@ Two fixes landed on `master` while round 52's three lanes were running, both fro
 rather than from the plan. Recorded here because they shift the round-52 merge arithmetic: the lanes are
 based at `b9abd2fb`, these sit on top of it, and the merged floor is base + lane deltas + these.
 
-### `a921b834` — sugar-crush reads third-party frontmatter the way the ecosystem writes it
+### `a921b834` — candy-code reads third-party frontmatter the way the ecosystem writes it
 
-`SUGARCRUSH_DEBUG_SKILLS=1` showed six SKILL.md files skipped at launch, every one with
+`CANDY_CODE_DEBUG_SKILLS=1` showed six SKILL.md files skipped at launch, every one with
 `A colon cannot be used in an unquoted mapping value at line 2`. The files were not at fault: a
 `description:` whose prose contains `: ` is what agent-tool frontmatter looks like, Claude Code reads
 these exact files, and two of the six live under `/home/my/.claude/skills/` where "fix your SKILL.md" is
-not advice a sugar-crush user can act on. The loader's own `recordSkip()` doc-comment already argued that
+not advice a candy-code user can act on. The loader's own `recordSkip()` doc-comment already argued that
 these are other tools' files; it just never fixed the parse underneath.
 
 Seven `Yaml::parse()` frontmatter sites shared the defect. All now route through
@@ -483,7 +483,7 @@ sites were ever broken, so they were kept per-site and reported individually.
 
 Second defect found in the same pass and fixed: `AgentPresetRegistry::parsePermissionMode()` matched
 kebab-case only, with a `default =>` catch-all, so `acceptEdits`/`bypassPermissions`/`dontAsk` all
-silently became `PermissionMode::Default`. `.sugar-crush/agents/coder.md` — tracked, one of three presets
+silently became `PermissionMode::Default`. `.candy-code/agents/coder.md` — tracked, one of three presets
 we ship — says `permissionMode: acceptEdits` and was losing it. The sibling `ForeignAgentPresetRegistry`
 already had a documented camel→kebab retry and argued that a silent fallback here "would be an unreported
 loss"; the native path never got it. Extracted to `src/Support/EnumSpelling.php`, now shared. **The data
@@ -521,7 +521,7 @@ must SEE the server running (`[] → [pid] → []`) before its zeroes count. **4
 Thirteen libs' suites run individually with an orphan census before and after: **all 0**. The six
 reporting `OK (…)` had zero skips, so their spawning tests genuinely ran — that is what makes it evidence
 rather than an absence. candy-mosaic's own row is void (the fix landed mid-sweep). **candy-pty and <!-- @rename-keep historical provenance -->
-sugar-crush were NOT covered** — the first because a hung PTY child does not die to `timeout` and a
+candy-code were NOT covered** — the first because a hung PTY child does not die to `timeout` and a
 pattern kill was unacceptable with three lanes live, the second because it is lane-owned and its suite is
 five minutes of load during a measurement window.
 
@@ -584,7 +584,7 @@ acceptable outcome. Build tests out as you go.
 
 ## Verification baseline
 
-- Full suite: `cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit`
+- Full suite: `cd /home/sites/sugarcraft/candy-code && vendor/bin/phpunit`
 - **Current: 5196 tests / 16091 assertions / 1 skipped / 0 failures**, ~2:22.
 - Test-count arithmetic: `BinSugarcrushWiringTest::crushSourceFiles()` is a
   `@dataProvider` scanning all of `src/`, so **each new `src/` file adds exactly
@@ -616,7 +616,7 @@ acceptable outcome. Build tests out as you go.
 | 44 | P8.12 `Write` tool (**not yet registered**) | `9dbc5f8e` |
 | 24a | P4.4 `SUGAR_CRUSH_*` rename + shim | `ff6debba` |
 | 24b/48 | P4.3 `--version` + flag-shaped prompt value | `7590ae0d` |
-| 52 | Team tests leaking into the real `~/.sugar-crush` | `91467884` |
+| 52 | Team tests leaking into the real `~/.candy-code` | `91467884` |
 | 53 | `ChatTest` leaking IPC payloads into the real `/tmp` | `00b3e963` |
 | 50 | `BedrockProvider` control plane → runtime plane | `a01b62b9` |
 | 41 | P8.7 `.gitignore`-aware `Glob`/`Grep` | `c4a90a12` |
@@ -713,7 +713,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
 | **T** tools | `Tools/`, `Tools/BuiltIn/`, `LSP/` | #17 #41 #44 #45 #46 + #43's Grep half |
 | **P** prompt/context | `Runtime.php`, `Context/EnvironmentBlock.php`, `Context/InstructionFileLoader.php`, `App/App.php` | #27 #30 #42 + #43's loadRoot half |
 | **X** CLI + isolated + cross-lib | `Cli/ArgvParser.php`, `Cli/NonInteractive.php`, `bin/sugarcrush`, `Cli/Help.php`, `Providers/`, `Agents/WorktreeManager.php`, `Commands/ShareCommand.php`, **candy-core**, **candy-testing** | #24 #26 #48 #50 #54 #55 #56 | <!-- @rename-keep -->
-| **D** docs | `README.md`, `sugar-crush/docs/`, repo `docs/_data/`, `docs/lib/` | #34 #35 #36 |
+| **D** docs | `README.md`, `candy-code/docs/`, repo `docs/_data/`, `docs/lib/` | #34 #35 #36 |
 
 ### Hard sequencing (real, not stylistic)
 
@@ -728,7 +728,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
 - #24 (`SUGAR_CRUSH_*` → `SUGARCRUSH_*`) → D's ENVIRONMENT.md, or the table
   documents names that are about to change.
 - #55: its **candy-core build phase is fully parallel** (different lib), but its <!-- @rename-keep historical provenance -->
-  **sugar-crush adapter phase needs an exclusive lane-W window** — it rewrites
+  **candy-code adapter phase needs an exclusive lane-W window** — it rewrites
   fork sites in `Chat.php`, `Runtime.php`, `EngineBackend.php`.
 
 ### Shared-file collisions and their rules
@@ -751,7 +751,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
 **Sixth hazard, found the hard way (2026-08-14): reads cross lanes even though
 writes do not.** Lane D documents behaviour by reading source, and in wave 1 it
 read lane W's *uncommitted, unreviewed* P1.2 work mid-flight — then documented
-`PermissionGateHook`, `ScriptHook` exit codes and `SUGARCRUSH_PERMISSION_MODE`
+`PermissionGateHook`, `ScriptHook` exit codes and `CANDY_CODE_PERMISSION_MODE`
 as shipped fact. Ownership stops lanes clobbering each other; it does **not**
 stop a docs lane from describing code that has not passed review and may still
 change. Rule: **lane D's pages covering an in-flight lane's subject matter are
@@ -899,7 +899,7 @@ introduced by P1.1. `PermissionGate` is now reachable for the first time.
 
 ### #55 scope (user-confirmed: candy-core, consolidate broadly) <!-- @rename-keep historical provenance -->
 
-Seven hand-rolled `pcntl_fork` sites in sugar-crush (`Chat`, `Runtime`,
+Seven hand-rolled `pcntl_fork` sites in candy-code (`Chat`, `Runtime`,
 `EngineBackend`, `WorkflowEngine`, `AgentWorkerPool`, `BackgroundSessionRunner`,
 `BackgroundSupervisor`, plus `Support/ForkedChild`). Bugs found in three — the
 same class each time.
@@ -922,7 +922,7 @@ age sweep); the "a forked child must not inherit the parent's loop" contract +
 detach helper; fd hygiene/CLOEXEC (inherited socketpair delays parent EOF by a
 measured 3.21s).
 
-Stays in sugar-crush: `Tools\ParallelSafe` segmentation policy, permission
+Stays in candy-code: `Tools\ParallelSafe` segmentation policy, permission
 gating order, `CarriesSessionState` announce-once merge.
 
 Approach: survey the seven call sites first so the API is derived from them;
@@ -949,7 +949,7 @@ the docblock's own promise — an unreadable **file** hard-fails, an unreadable
 
 1. **Unreadable config directory.** `permissionConfig()` gates on `is_file()`,
    which is `false` when the *parent dir* is unsearchable, so it takes the
-   "nothing configured" branch. `chmod 000 ~/.sugar-crush` turns `plan` into
+   "nothing configured" branch. `chmod 000 ~/.candy-code` turns `plan` into
    `bypass-permissions`, exit 0, nothing on stderr. Reachable via a different
    euid, `sudo` without `-E`, or an NFS/autofs blip.
 2. **Top-level JSON list.** `is_array($data)` cannot tell `{}` from `[]` — the
@@ -988,7 +988,7 @@ establishes a recipe, grep the whole change-set for the pattern.
   *verdict*, wrong for the *arguments*.
 - **`backendFor()`'s gate wiring is untested** — deleting the
   `withPermissionGate()` line leaves `tests/Cli/` green at 260/260. That is the
-  path for every `SUGARCRUSH_PROVIDER` run and every one-shot `-p`.
+  path for every `CANDY_CODE_PROVIDER` run and every one-shot `-p`.
 
 ### Confirmed resolved by sabotage
 
@@ -1014,7 +1014,7 @@ residuals.
 
 Back to 3 lanes. Lanes chosen for **file-disjointness from P1.2**, not plan
 order: most of the queue blocks on `Bootstrap.php` (registration) or
-`NonInteractive.php`/`bin/sugarcrush` (both modified by P1.2).
+`NonInteractive.php`/`bin/candy-code` (both modified by P1.2).
 
 New agents are fenced out of `src/Tools/BuiltIn/*.php` while any review lane is
 running tests: `ToolSchemaEncodingTest`'s data provider autoloads every built-in
@@ -1074,7 +1074,7 @@ disabling **all** config persistence (a regression from the atomic-write fix).
 2. symlink fail-open + non-canonical HOME + BOM message — `Cli/Bootstrap.php` + its test
 3. PostToolUse sees what ran — `Runtime.php` + `Chat.php` + both tests
 4. HookDispatcher re-scan — `Hooks/HookDispatcher.php` + new test
-5. two comment corrections — `Sessions/BackgroundSessionRunner.php` + `bin/sugarcrush`
+5. two comment corrections — `Sessions/BackgroundSessionRunner.php` + `bin/candy-code`
 
 `README.md` carries hunks from **three** lanes — use `git add -p`, never a
 whole-file add.
@@ -1143,7 +1143,7 @@ over-wide rows in every markdown code fence.
 ### State at pause
 
 Working tree carries **only P1.2** (plus the pre-existing untracked
-`docs/plans/plans_cleaning.md`, `sugar-crush/docs/`, `sugar-crush/python_port/`
+`docs/plans/plans_cleaning.md`, `candy-code/docs/`, `candy-code/python_port/`
 and the lane-D docs edits). P1.2 is green at **944 / 2214** in its own scope and
 awaits **review round 4**, focused on `HookDispatcher`'s second re-scan loop and
 `Runtime::gate()`'s third return element.
@@ -1155,18 +1155,18 @@ awaits **review round 4**, focused on `HookDispatcher`'s second re-scan loop and
 ### Lane-D docs (#34) — reviewed by the supervisor, NOT ready to commit
 
 Reviewed directly rather than delegated: it is 140 lines of `ENVIRONMENT.md`
-plus the `docs/_data/sugar-crush.{json,body.html}` pair, small enough that a
+plus the `docs/_data/candy-code.{json,body.html}` pair, small enough that a
 round trip would have cost more than it bought.
 
 **What checks out:**
 
 - `php tools/gen-docs.php --check` → *ok: all 58 pages + index.html counts match
-  generated output*. So `docs/lib/sugar-crush.html` really is generated from the
+  generated output*. So `docs/lib/candy-code.html` really is generated from the
   data store, not hand-edited — the one structural rule for that file.
 - Every environment variable named in `ENVIRONMENT.md` exists in `src/` or
   `bin/`. Cross-checked by extracting `(SUGARCRUSH|SUGAR_CRUSH|CRUSH)_[A-Z0-9_]+`
   from both sides and diffing: **zero documented-but-nonexistent** variables.
-- "Seven providers" and the `SUGARCRUSH_PROVIDER` accepted-value list match
+- "Seven providers" and the `CANDY_CODE_PROVIDER` accepted-value list match
   `ProviderFactory::available()` exactly (`src/Providers/ProviderFactory.php:203`).
 - "12 built-ins" matches `ls src/Skills/BuiltIn | wc -l` → 12.
 - "Nine built-in tools" matches what `Bootstrap` actually registers. `Write.php`
@@ -1180,7 +1180,7 @@ same chain" — and `ScriptHook` selecting allow/deny/modify/ask by exit code.
 Both are **P1.2 deliverables and P1.2 is still uncommitted**:
 
 ```
-$ git cat-file -e HEAD:sugar-crush/src/Hooks/BuiltIn/PermissionGateHook.php
+$ git cat-file -e HEAD:candy-code/src/Hooks/BuiltIn/PermissionGateHook.php
 fatal: path ... exists on disk, but not in 'HEAD'
 ```
 
@@ -1189,15 +1189,15 @@ in the repository. So lane-D lands **with or after P1.2**, not before. This is
 ordering, not a defect in the docs — the prose is accurate about the tree it was
 written against.
 
-**One real gap to close before it lands:** `SUGARCRUSH_BACKGROUND`
+**One real gap to close before it lands:** `CANDY_CODE_BACKGROUND`
 (`src/Tui/TerminalBackground.php:45`, `ENV_OVERRIDE`) is a user-settable knob
 with **zero** mentions in `ENVIRONMENT.md`. It arrived with the UI lane
 (`4e10360b`) after lane-D was written, so this is drift rather than an
-oversight. The three `SUGARCRUSH_DISABLE_*` flags are all documented.
+oversight. The three `CANDY_CODE_DISABLE_*` flags are all documented.
 
 Deliberately **not** a gap: `CRUSH_TOOL_NAME` / `CRUSH_TOOL_INPUT` /
 `CRUSH_TOOL_OUTPUT` / `CRUSH_SESSION_ID` / `CRUSH_MODEL` / `CRUSH_PROVIDER` are
-undocumented, but they are variables sugar-crush **exports into hook scripts**,
+undocumented, but they are variables candy-code **exports into hook scripts**,
 not ones a user sets. They belong in the HOOKS authoring guide (#35), which is
 blocked on #11 anyway. Filed rather than silently folded in.
 
@@ -1336,7 +1336,7 @@ Dropping to **one agent at a time** once the two in flight (#54 fix, #56 fix
 round 2) land. The shared worktree has been costing real signal: cross-lane
 `pkill -f phpunit` and `pkill -f 'php -r'` killing each other's runs (one lane
 disclosed ~13 such windows), and `candy-core/src/Program.php` sabotage windows <!-- @rename-keep historical provenance -->
-visible to sugar-crush through its `vendor/` path symlink. Serial lanes mean a
+visible to candy-code through its `vendor/` path symlink. Serial lanes mean a
 failing test means what it says.
 
 ---
@@ -1403,7 +1403,7 @@ the structural option instead. That judgement is what ended the chain.
 Ran at 3 lanes, then 2, now 1–2 by request. The shared worktree cost real
 signal: cross-lane `pkill -f phpunit` and `pkill -f 'php -r'` (one lane disclosed
 ~13 such windows), and `candy-core/src/Program.php` sabotage windows visible to <!-- @rename-keep historical provenance -->
-sugar-crush through its `vendor/` path symlink. Every agent brief now bans
+candy-code through its `vendor/` path symlink. Every agent brief now bans
 pattern-matched kills and requires PID-targeted bounds.
 
 ### Open
@@ -1453,7 +1453,7 @@ are done and, importantly, **which are only partly done despite carrying a ✅**
   the one legitimate skip.
 - This lib is **not** `php-cs-fixer`-clean repo-wide; don't normalize unrelated
   files.
-- `docs/plans/plans_cleaning.md` and `sugar-crush/python_port/` are untracked
+- `docs/plans/plans_cleaning.md` and `candy-code/python_port/` are untracked
   user work.
 - The working tree may carry real uncommitted work: **never** `git checkout .`,
   `git reset`, `git stash`, or `git clean`.
@@ -1472,7 +1472,7 @@ These cost real signal and are not obvious. Put them in every agent brief.
   the call blocks forever on a pipe phpunit already released. Write to a file.
 - **`candy-core/src/Program.php` sabotage is visible to `sugar-crush`** through <!-- @rename-keep historical provenance -->
   its `vendor/` path symlink. Keep cross-lib sabotage windows short.
-- **`sugar-crush/phpunit.xml` sets no `enforceTimeLimit`** (task #63), so an
+- **`candy-code/phpunit.xml` sets no `enforceTimeLimit`** (task #63), so an
   unbounded test wedges the whole suite instead of failing it.
 - Treat any run that dies 143/144, or fails outside the lane's own files, as
   **signal-free** — re-run narrower before concluding anything.
@@ -1518,7 +1518,7 @@ These cost real signal and are not obvious. Put them in every agent brief.
 
 The drivers used across P1.2 rounds 3-7 lived in `/tmp` (`sabotage.py`,
 `/tmp/r6/sabotage6.py`, `/tmp/r7/sabotage7.py`, `/tmp/r7/sabotage8.py`) and
-`sugar-crush/.r3-sabotage/` (deleted after #54 landed). **None survive a
+`candy-code/.r3-sabotage/` (deleted after #54 landed). **None survive a
 reboot.** If a P1.2 regression is ever suspected, re-derive labels from the
 findings recorded in this worklog rather than trusting those paths.
 
@@ -1537,8 +1537,8 @@ single review round across all three lanes, nine times in total.**
 
 | commit | what |
 |---|---|
-| `c0ae2fdc` | sugar-crush: OSC 11 terminal background query; precedence is override → OSC 11 → `COLORFGBG` → dark |
-| `d1e0f2b1` | sugar-crush: wire the hooks + skills subsystems into the live runtime (63 files, +6084/−263) — closes **#15/#16** |
+| `c0ae2fdc` | candy-code: OSC 11 terminal background query; precedence is override → OSC 11 → `COLORFGBG` → dark |
+| `d1e0f2b1` | candy-code: wire the hooks + skills subsystems into the live runtime (63 files, +6084/−263) — closes **#15/#16** |
 | `76f34813` | candy-pty/candy-mosaic/candy-async: pin the loop in the test bootstraps (16 files) — closes **#62** | <!-- @rename-keep historical provenance -->
 
 ## Lane C (#15/#16, hooks + skills wiring) — 6 rounds, landed as `d1e0f2b1`
@@ -1546,7 +1546,7 @@ single review round across all three lanes, nine times in total.**
 Rounds 1-3 are recorded above. Rounds 4-6 this session:
 
 **Round 3 closed four HIGHs, all independently re-exploited and confirmed by
-round 4's reviewer**: C1 `/tmp/.sugar-crush/hooks.yaml` loaded ungated (`/tmp`
+round 4's reviewer**: C1 `/tmp/.candy-code/hooks.yaml` loaded ungated (`/tmp`
 is 1777 → any local user plants arbitrary command execution); C2 a symlink in a
 project skill tree (`{repo}/.claude/skills/escape -> $HOME`) putting home files
 into model-reachable prompt context; C3 `trustedProjectHooks: ["."]` trusting
@@ -1554,9 +1554,9 @@ every repo; C4 Ctrl+P dropping the project hook chain mid-session.
 
 **Round 4 found the real hole, one layer up — B1, the trust gate was
 self-grantable by the agent it gates.** `trustedProjectHooks` lives in
-`~/.sugar-crush/config.json`; default mode is `bypass-permissions`; `Bash` is
+`~/.candy-code/config.json`; default mode is `bypass-permissions`; `Bash` is
 deliberately not path-jailed; and `ProtectFilesHook` covered `.env` /
-`composer.json` / `.git/config` but **not** `.sugar-crush/hooks.yaml` or
+`composer.json` / `.git/config` but **not** `.candy-code/hooks.yaml` or
 `config.json`. One prompt-injected `Bash` call appends the repo's own path to
 the allowlist, and because C4's fix (correctly) made Ctrl+P re-read both files,
 the repo's shell runs mid-session with no relaunch and no prompt. Created by
@@ -1614,7 +1614,7 @@ before, not `BLOCK`) — prose error, not code.
 fail-closed arm creates a failure with nowhere else to go, since the registry's
 log is private and only written from a path a dispatch never calls.
 
-**Real workflow consequence**: this repo's three tracked `.sugar-crush/agents/*.md`
+**Real workflow consequence**: this repo's three tracked `.candy-code/agents/*.md`
 presets are now un-editable by the agent through Edit/Write, same as
 `composer.json` already was. Intended — presets carry `permissionMode` — but it
 will be felt by anyone developing presets through the CLI.
@@ -1674,7 +1674,7 @@ is durable — it makes the argument stronger, not weaker.
 
 **The premise inverted early.** I had reported the tapes as "inert in CI" —
 false. `.github/workflows/vhs.yml`'s `render` job carries a ~49-lib matrix
-**including `sugar-crush`**, runs upstream `vhs` from the lib's own directory,
+**including `candy-code`**, runs upstream `vhs` from the lib's own directory,
 and its output is what the commit job stages (`git add */.vhs/*.gif`). The
 `vhs-candy-vcr` job is `lib: [candy-core]` **only**, a non-blocking soak whose <!-- @rename-keep historical provenance -->
 output is never committed. So: locally render with candy-vcr (user's standing
@@ -1757,7 +1757,7 @@ per-test `PreparedSubscriber` produces failures **under the pin too**).
 **#75** candy-mosaic hangs when stdout is a **pipe** (pre-existing, reproduces <!-- @rename-keep historical provenance -->
 under the old bootstrap) — and that is exactly how GitHub Actions runs it.
 **#76** `config.dev.json` is provider policy sitting **inside** the Edit jail
-(`vendor/sugarcraft/sugar-crush/`), reachable with no Bash at all — the
+(`vendor/sugarcraft/candy-code/`), reachable with no Bash at all — the
 shortest-reach of the four policy files.
 **#77** policy-file guards are case-sensitive (APFS/Windows); `sudo -E` now
 hard-fails (right direction, bad message).
@@ -1768,7 +1768,7 @@ immediately** (`/bin/true`, `echo`) as their fake MCP server, then write the
 pipe` notice at `src/McpClient.php:170`, then `$written === false` throws at
 :173. Three back-to-back runs of the untouched file went OK → error → OK, and it
 reproduces in a standalone `php -r` with `proc_open('true')` and **zero
-sugar-crush code loaded**. Fix is a child that stays alive (`cat`, `sleep`).
+candy-code code loaded**. Fix is a child that stays alive (`cat`, `sleep`).
 **#79** `/workflow run` **freezes the TUI**. `Chat.php:3727` calls
 `WorkflowEngine::run()` synchronously inside `Chat::update()`, i.e. on the
 ReactPHP loop, and `executeStage()` → `AgentWorkerPool::executeOne()` →
@@ -1836,7 +1836,7 @@ A reachability test proves the door opens, not that the room is habitable.
   round-trip and the reviewer had already supplied the measured replacement.
 - **A sandbox with a symlinked `vendor/` tests the ORIGINAL code.** Lane E's
   reviewer sabotaged a label and got 52/52 green — because composer's PSR-4 map
-  in the symlinked `vendor/` resolved `SugarCraft\Crush\*` back to the **real
+  in the symlinked `vendor/` resolved `SugarCraft\Code\*` back to the **real
   repo `src`**, so the mutation was never loaded. It only caught this because
   the green looked wrong. Two guards, both now mandatory for sabotage work:
   prepend a sandbox autoloader and assert the class file resolves inside the
@@ -1893,7 +1893,7 @@ skipped, exit 0**.
 
 **Open work order from here:** finish #37 (lane B) → #13/#38 (lanes D/E) → #63
 `enforceTimeLimit` (small, protects every future lane; hold until no lane is
-running the sugar-crush suite) → #12/#14/#17 rest of Phase 2 → #64 → the P3-P8
+running the candy-code suite) → #12/#14/#17 rest of Phase 2 → #64 → the P3-P8
 body → #58/#59/#60/#61, #49, #51, #55, and the new #74-#78.
 
 ## Client kill, 2026-08-17 ~01:50 — nothing lost
@@ -2161,7 +2161,7 @@ weakened, nothing removed. See **#81**.
   inference lost to a Go module cache nobody looked in.
 - **A sandbox with a symlinked `vendor/` tests the ORIGINAL code.** Lane E's
   reviewer sabotaged a label and got 52/52 green because composer's PSR-4 map in
-  the symlinked `vendor/` resolved `SugarCraft\Crush\*` back to the real repo
+  the symlinked `vendor/` resolved `SugarCraft\Code\*` back to the real repo
   `src`. Mandatory now: prepend a sandbox autoloader and assert
   `ReflectionClass::getFileName()` resolves inside the sandbox.
 - **md5/`cmp`-guard every mutation for having actually changed bytes.** Paid
@@ -2196,7 +2196,7 @@ weakened, nothing removed. See **#81**.
 handshake to its stdin — a kernel race. Lost: `fwrite(): … errno=32 Broken pipe`
 notice at `src/McpClient.php:170`, then `$written === false` throws at :173.
 Three back-to-back runs of the untouched file went OK → error → OK, and it
-reproduces in a standalone `php -r` with `proc_open('true')` and zero sugar-crush
+reproduces in a standalone `php -r` with `proc_open('true')` and zero candy-code
 code loaded. Fix: a child that stays alive (`cat`, `sleep`).
 
 **#79** `/workflow run` **freezes the TUI**. `Chat.php` calls
@@ -2331,8 +2331,8 @@ Every extension gap is closed. Confirmed present: `dom` `xmlwriter` `simplexml`
 are live rather than inert — the stale-clock reasoning in those three
 `tests/bootstrap.php` files applies on this box after all. `swoole 6.2.1` is also
 enabled, though **nothing in the repo uses it**: no `composer.json` requires it
-and there is not one `Swoole\` reference under `sugar-crush/src` or
-`sugar-crush/tests`. This stack is ReactPHP; swoole is inert here.
+and there is not one `Swoole\` reference under `candy-code/src` or
+`candy-code/tests`. This stack is ReactPHP; swoole is inert here.
 
 **Baseline on this host, measured twice independently (coordinator + lane E's
 reviewer, identical):**
@@ -2386,13 +2386,13 @@ review proved it rather than sampling it:
   hard** — the same proof shows the classifier cannot judge a bare name.
 
 **The one real finding, and its framing is the point.** A repository can commit
-`.sugar-crush/workflows` as a **symlink to a victim directory**. `containedIn()`
+`.candy-code/workflows` as a **symlink to a victim directory**. `containedIn()`
 resolves *both* sides with `realpath()`, so when the workflows directory is itself
 the link the boundary moves with it and nothing is ever outside:
 
 ```php
-symlink('/tmp/c4/victim', '/tmp/c4/repo/.sugar-crush-workflows');
-new WorkflowRegistry($userDir, '/tmp/c4/repo/.sugar-crush-workflows');
+symlink('/tmp/c4/victim', '/tmp/c4/repo/.candy-code-workflows');
+new WorkflowRegistry($userDir, '/tmp/c4/repo/.candy-code-workflows');
 // list() -> ["broken","creds"];  load('creds') -> LOADED, description='SENTINEL-VICTIM-CONTENT'
 ```
 
@@ -2720,7 +2720,7 @@ the harder of the two options offered.
 
 `containedIn()` resolves both sides of the comparison, so a boundary directory that
 is *itself* a symlink moves with the link and the check passes by construction. The
-exposure is reachable from a plain `git clone`: git stores `.sugar-crush/workflows`
+exposure is reachable from a plain `git clone`: git stores `.candy-code/workflows`
 as a symlink happily, and `Bootstrap::workflowEngine()` builds exactly that path.
 The option to merely re-word the guarantee was rejected — it would have left a live
 escape behind a more careful sentence.
@@ -2743,7 +2743,7 @@ checkout.
 - A dangling directory link stays readable: nothing is behind it, and keeping it
   preserves `loadYaml()`'s not-found message for a fresh checkout.
 - Docblocks and the README Workflows bullet now state **two** boundaries and name
-  the weaker fallback's exact limit (`.sugar-crush -> /elsewhere` is not caught
+  the weaker fallback's exact limit (`.candy-code -> /elsewhere` is not caught
   without a root). `containedIn()`'s `SkillLoader` cross-reference now says the
   resemblance stops at the prefix idiom and that the skills side is **not** closed.
 
@@ -2752,7 +2752,7 @@ Six layouts probed against the final code — plain link out, relative chain
 `proj → ../projevil/x.yaml`, and a TOCTOU swap between `list()` and `load()` — all
 refused, none leaking the sentinel. The user tier still follows its own link out
 (deliberate), the legit project entry still loads, and a new in-checkout control
-(`.sugar-crush/workflows -> tools/workflows`) still loads.
+(`.candy-code/workflows -> tools/workflows`) still loads.
 
 **The admitted weakness, reported rather than buried:** the wiring test's first form
 did not bite. A link *out of the checkout* is also out of the `dirname()` fallback
@@ -3082,12 +3082,12 @@ Nothing else owns that tree.
 `.yaml`"*. A checkout is not the same set as repository content: it also holds untracked,
 gitignored, developer-local files.
 
-A repository committing exactly one line — `.sugar-crush/workflows -> ..` — gets:
+A repository committing exactly one line — `.candy-code/workflows -> ..` — gets:
 
 ```
 checkout/kubeconfig.yaml        (developer-local, gitignored)
 checkout/local-secrets.yaml     (name: + description: TOKEN=sk-live-DEADBEEF)
-checkout/.sugar-crush/workflows -> ..
+checkout/.candy-code/workflows -> ..
 
 list():  ["kubeconfig","local-secrets"]
 load(local-secrets).description:  TOKEN=sk-live-DEADBEEF
@@ -3129,7 +3129,7 @@ numbers stages 1-based (0 grep hits).
 1. **The tier-drop is silent and two user-facing messages disagree.** With the directory
    resolving outside the checkout, `loadYaml()`'s `$searched` omits it — while a *dangling*
    link **is** named. `Chat.php:3924` meanwhile hard-codes a message claiming
-   `.sugar-crush/workflows/*.yaml` was searched, and `projectWorkflowsPath()` still reports
+   `.candy-code/workflows/*.yaml` was searched, and `projectWorkflowsPath()` still reports
    it. Nothing tells the user their repo's workflows directory was rejected. The codebase
    already has the pattern: `SkillLoader::recordSkip()` → `Bootstrap::skillSkips()` → one
    line at launch.
@@ -3386,7 +3386,7 @@ is the real protection, and the review confirms the cue works.
   regression and it escapes today.
 - **N-f** `KEY_HELP_OVER_PROMPT` is hardcoded English against the `Lang::t()` rule — but
   `grep -rl 'Lang::t' src/` → **0 PHP files in this lib**. Lib-wide pre-existing deviation,
-  recorded rather than fixed; if sugar-crush ever adopts `Lang::t()`, the 35-vs-36 margin
+  recorded rather than fixed; if candy-code ever adopts `Lang::t()`, the 35-vs-36 margin
   becomes a translation-time trap.
 
 ### Two claims the review confirmed, one of them mine being wrong
@@ -3432,7 +3432,7 @@ usable. Recovery is now **one agent at a time** until the usage window resets.
 
 ### Measured tree state at recovery
 
-- **No stray `.bak`/`.orig`/`.sabbak`/`.snap` anywhere** under `sugar-crush/` (excluding
+- **No stray `.bak`/`.orig`/`.sabbak`/`.snap` anywhere** under `candy-code/` (excluding
   `vendor/`), and all eleven lane source/test files lint clean. Every sabotage had been
   restored before termination.
 - `.vhs/` holds the five tapes + `chat.gif`.
@@ -3514,7 +3514,7 @@ So the commit was built by filtering the `-U3` patch on the hunk header's
 new-start line and `git apply --cached`ing the result. Two checks before
 committing, because a partial-file commit can be syntactically valid and still
 reference symbols that only exist in the *other* lane's uncommitted work:
-`php -l` on `git show :sugar-crush/src/Chat.php`, and a grep of the staged blob
+`php -l` on `git show :candy-code/src/Chat.php`, and a grep of the staged blob
 for `firstFailure|isFailure` — both clean, so the committed intermediate state
 stands on its own.
 
@@ -3620,7 +3620,7 @@ I flagged the four new tapes' missing GIFs as a gap. **It is not a gap.** GIFs a
 rendered and committed **by CI**; never render or commit one by hand (user
 instruction, 2026-08-17). `vhs.yml`'s render step globs `for tape in .vhs/*.tape`
 and the push trigger watches `*/.vhs/*.tape`, so a new tape needs **no** workflow
-edit — the hand-maintained `all=(...)` array is per-LIB, and `sugar-crush` is
+edit — the hand-maintained `all=(...)` array is per-LIB, and `candy-code` is
 already in it (`:148`) and in the matrix (`:225`). The commit job ends
 `git add */.vhs/*.gif` → `git commit -m "vhs: regenerate demo GIFs"` → push.
 `AGENTS.md`'s "don't commit GIFs" and `CLAUDE.md`'s "GIFs are committed" are not in
@@ -3660,7 +3660,7 @@ literal `?` before this commit), and the named escape hatch addresses a differen
 problem.
 
 **F-4 (MEDIUM)** — this round's user-facing documentation **is not in the commit**.
-`git show 98bee793:sugar-crush/README.md | grep -E '/keys|/help'` → nothing. The
+`git show 98bee793:candy-code/README.md | grep -E '/keys|/help'` → nothing. The
 README row exists only in the working tree (`README.md:157`, uncommitted). This is
 my own lane-assignment error: I gave `README.md` to lane D, so lane E's doc row is
 stranded in a file another lane owns — and the commit's own new comment in
@@ -3795,8 +3795,8 @@ CI green on `76c506fc`, first pass since 2026-08-13.
 
 ## The GIF pipeline was dropping everything on single-lib pushes — `de15ee6d`
 
-sugar-crush's four new tapes rendered and were never committed, and the job
-reported **success**. Render uploaded 5 GIFs as `gifs-sugar-crush`; commit
+candy-code's four new tapes rendered and were never committed, and the job
+reported **success**. Render uploaded 5 GIFs as `gifs-candy-code`; commit
 downloaded them; `git add */.vhs/*.gif` staged **0**; the step printed "skipping
 commit" and went green.
 
@@ -3884,15 +3884,15 @@ remove it every single time. Both briefs make that an explicit attack line.
 
 ### Where the tree is
 
-All sugar-crush work is pushed. The last code commit is **`165f5874`**, and CI is
+All candy-code work is pushed. The last code commit is **`165f5874`**, and CI is
 **GREEN** on it — `CI`, `VHS demos`, `VHS smoke test` and `Sync to sugarcraft org`
 all succeeded. Working tree is CLEAN except two untracked paths that are the user's
 own work and must never be touched: `docs/plans/plans_cleaning.md` and
-`sugar-crush/python_port/`.
+`candy-code/python_port/`.
 
 Note for anyone reconciling history: CI pushes its own commits, so `master` goes
 behind on its own. `1800152e` (211 GIFs, the full re-render) and `5aa7edfc` (the 5
-sugar-crush GIFs) are both CI's. `5aa7edfc`'s parent is `165f5874`, which is how it
+candy-code GIFs) are both CI's. `5aa7edfc`'s parent is `165f5874`, which is how it
 became clear the worklog commits above it had NOT been pushed — a `git pull
 --ff-only` refused as diverged, and the fix was to rebase the docs commits onto
 CI's, not to merge. Expect that shape after every push that touches a lib's
@@ -3992,7 +3992,7 @@ Still open, with their REAL tracker numbers:
 - **#83** — `Ctrl+P`/`Ctrl+K` opens a hosted-Chat palette the shell's agent
   dashboard never paints and never drives.
 - **#84** — the containment residual: a repo can still commit
-  `.sugar-crush/workflows -> <another directory inside the checkout>` and disclose
+  `.candy-code/workflows -> <another directory inside the checkout>` and disclose
   that directory's `*.yaml` basenames. Closing it would refuse the ordinary
   `-> tools/workflows` layout. Documented as a reduction, not an elimination.
 
@@ -4133,7 +4133,7 @@ class is real and complete, only its description is short.
   differential 0/0, "198 clean" = 192+6. Only F-2 and F-3 fail.
 - **All four new examples actually RUN** under a PTY at 117×40, rendering real
   frames with no fatal/uncaught/warning (exit 124 = the expected timeout of an
-  interactive TEA loop). `bin/sugarcrush --help` is 66 lines / 85 cols and
+  interactive TEA loop). `bin/candy-code --help` is 66 lines / 85 cols and
   `cli.tape` pipes it through `head -20`, so it fits.
 
 ### `de15ee6d`'s header edit — verified accurate, no finding
@@ -4146,7 +4146,7 @@ AND by the commit job's `git add */.vhs/*.gif`. Nothing in the test is defended 
 a mechanism that no longer exists.
 
 **Independent corroboration landed mid-review**: CI rendered and committed all
-five sugar-crush GIFs (`1800152e`, `5aa7edfc`), which proves the tapes render, the
+five candy-code GIFs (`1800152e`, `5aa7edfc`), which proves the tapes render, the
 examples run under the real renderer, and the staging fix works in production.
 
 ### No round-14 verdict was wrong
@@ -4305,10 +4305,10 @@ break both containment tiers for real, drove `/workflow` end-to-end through a re
 `src/Agents/AgentPresetRegistry.php:28-37` (`load()`) and `:69-81` (`list()`) each
 spell the "realpath both sides, prefix-compare with a trailing separator" idiom by
 hand, **per-ENTRY, with no directory-level anchor**. `src/Cli/Bootstrap.php:606-612`
-makes `<root>/.sugar-crush/agents` the FIRST search path and calls `list()` on every
+makes `<root>/.candy-code/agents` the FIRST search path and calls `list()` on every
 launch (`agentPresets()` ← `agentManager()` ← `chat()`).
 
-CONFIRMED. A repo commits one line — `.sugar-crush/agents -> /home/you/notes` — and
+CONFIRMED. A repo commits one line — `.candy-code/agents -> /home/you/notes` — and
 every frontmatter-bearing `*.md` in the target is parsed as a preset:
 
     preset=notes  desc=PRIVATE NOTE DESCRIPTION  mode=bypass-permissions
@@ -4392,8 +4392,8 @@ concurrent round.
 ### F-6 [LOW] — "the only spelling of 'does not resolve' a repository can commit" is false
 
 `WorkflowRegistry.php:528-540`. MEASURED: with the link one component higher —
-`.sugar-crush -> <a dir that exists but has no workflows/ in it>` —
-`realpath('<root>/.sugar-crush/workflows')` is `false` AND `is_link(...)` is `false`,
+`.candy-code -> <a dir that exists but has no workflows/ in it>` —
+`realpath('<root>/.candy-code/workflows')` is `false` AND `is_link(...)` is `false`,
 so the dangling-link refusal does not fire and the directory is granted. The doc then
 argues the residual window costs "write access to the checkout"; in that layout the
 path that must appear is OUTSIDE the checkout (`/tmp/pwn/workflows`) — i.e. write
@@ -4415,7 +4415,7 @@ exists the directory is refused. A claim defect, not a live escape.
   built-ins. Fail-closed and defensible — but the corpus cannot show it, and a stage
   declaring the Skill tool is simply unrunnable under `dont-ask`.
 - **N4** `Commands/CommandLoader.php:76` is a dormant FOURTH copy of the idiom, no
-  directory anchor for the repo-chosen `<root>/.sugar-crush/commands`. Unwired (0
+  directory anchor for the repo-chosen `<root>/.candy-code/commands`. Unwired (0
   constructions in `src/`/`bin/`). Anchor it, do not delete it — step #14 wires it.
 
 ### What HELD — do not re-litigate
@@ -4826,21 +4826,21 @@ CONSTRUCTION, so all 6459 tests cannot even enumerate.
 ### F-E [LOW-MED] — "the USER tier stays unanchored" holds only while `$root !== $HOME`
 
 `Bootstrap.php:632-641` keys `anchors` by the path as SPELLED. When the launch root IS
-the home directory, `rtrim($root,'/').'/.sugar-crush/agents'` and
+the home directory, `rtrim($root,'/').'/.candy-code/agents'` and
 `trustedConfigDirPath().'/agents'` are the same string, so the project anchor applies
-to the user tier. CONFIRMED with `~/.sugar-crush/agents -> <a dir outside $HOME>`:
+to the user tier. CONFIRMED with `~/.candy-code/agents -> <a dir outside $HOME>`:
 
     agentPresets(<a project>) -> presets=[mine]  refusals=[]
     agentPresets($HOME)       -> presets=[]      refusals=["…a repository chooses where…"]
 
-`chat()` defaults `$root` to `getcwd()`, so `cd ~ && sugarcrush` silently drops the
+`chat()` defaults `$root` to `getcwd()`, so `cd ~ && candy-code` silently drops the
 user's own roster and blames "a repository" for the user's own layout. A link to
 `~/.claude/agents` survives (inside `$HOME`); a link out of `$HOME` does not.
 
 ### F-F [LOW] — the anchors map fails OPEN on a one-byte key difference
 
 `AgentPresetRegistry:185` is `$this->anchors[$path] ?? null` → unanchored. CONFIRMED:
-search path spelled `<root>/.sugar-crush/agents/` with the anchor keyed without the
+search path spelled `<root>/.candy-code/agents/` with the anchor keyed without the
 trailing slash gives `list=[notes] refusals=0` — the full HIGH escape. `Bootstrap`
 cannot reach it today (one variable, as its comment says), but `AgentPresetRegistry`
 is public `final` API in a published lib and nothing pins the mismatch.
@@ -4849,12 +4849,12 @@ is public `final` API in a published lib and nothing pins the mismatch.
 
 `Bootstrap.php:150-158` says "**Both** subsystems that hold a repository-chosen
 directory feed it" and names two — this commit made it three. `Bootstrap.php:414-416`
-enumerates four paths and omits `.sugar-crush/agents`, which this commit added.
+enumerates four paths and omits `.candy-code/agents`, which this commit added.
 `WorkflowRegistry.php:627-637` says "Three subsystems feed one collector; they say it
 the same way" — they do not: workflows prints NO path, agents prints the anchor, and
 `CommandLoader` does not feed the collector at all (it `error_log()`s `$dir`,
 `$realDir` AND `$anchoredIn`). The `assertStringNotContainsString` pin passes for
-agents only because the map key is `<root>/.sugar-crush/agents` while the reason
+agents only because the map key is `<root>/.candy-code/agents` while the reason
 contains `<root>`.
 
 ### F-H [LOW] — 3 of the ten "different contract" entries are the same predicate
@@ -4883,9 +4883,9 @@ including `SkillTool`, so only `BuiltInToolTest`'s corpus was actually short.
 Refused: `-> ../../outside`, `-> ..` (so `below()` not `within()` is load-bearing),
 `-> /`, `-> <sibling checkout>`, `-> ~/.claude/agents`, a symlink CHAIN, a symlinked
 checkout root plus `agents -> outside`, anchors with trailing `/`, `//`, `/./`, `''`,
-non-existent, relative `$root` + relative search path, `.sugar-crush -> <outside>`
+non-existent, relative `$root` + relative search path, `.candy-code -> <outside>`
 with `agents/` present (the F-6 shape one component higher), and
-`.sugar-crush -> <existing dir, no agents yet>` dropped silently then refused the
+`.candy-code -> <existing dir, no agents yet>` dropped silently then refused the
 moment the target appears. Correctly allowed: real dir, `agents -> tools/agents`,
 `agents -> .`, `$root` spelled through a symlink, and a legit dir containing
 `leak.md -> outside/notes.md` (entry refused, `legit` kept). **All four claimed
@@ -4990,7 +4990,7 @@ First time in the chain that happened, so worth recording:
   `in_array(['ms','s','m'])` check as a WHOLE while keeping `kind === 'ident'` left
   everything green, because every existing row puts a quoted STRING there so the kind
   gate answered for all of them. Killed by `Type@100 abc`; the realistic spelling
-  `Type@100 ./bin/sugarcrush` silently drops a typed path.
+  `Type@100 ./bin/candy-code` silently drops a typed path.
 
 ### Two structural improvements to carry forward
 
@@ -5085,7 +5085,7 @@ Per the standing instruction, no further agents were spawned after these commits
 This is the item that had been waiting for "a window with no agent running the
 suite". That window opened, so it went first, before any agent was spawned.
 
-`sugar-crush/phpunit.xml` now carries `enforceTimeLimit="true"`,
+`candy-code/phpunit.xml` now carries `enforceTimeLimit="true"`,
 `defaultTimeLimit="60"` and `failOnRisky="true"`.
 
 **Why 60, with the domain in the file rather than only here.** A JUnit-logged run
@@ -5316,7 +5316,7 @@ all**: `ForeignAgentPresetRegistry` on `{projectRoot}/.claude/agents` and
 ```
 FOREIGN discoverClaude: presets=["leak"] initialPrompt='SIXTH-ESCAPE-BODY sk-live-CAFEBABE'
                         permissionMode=bypass-permissions
-NATIVE  agentPresets(same repo): presets=[] refusals={"…/.sugar-crush/agents":"resolves to …/outside…"}
+NATIVE  agentPresets(same repo): presets=[] refusals={"…/.candy-code/agents":"resolves to …/outside…"}
 ```
 
 The native tier refuses the byte-identical shape **with a message describing
@@ -5433,7 +5433,7 @@ closed, since the read still follows whatever the resolved path names.
    round moves it. True value at `f8b37f63` is **6603 / 68722**.
 4. Plan steps **#14** → **#12** → **#17**. #90 is fixed, so #17 is unblocked.
 5. Reported but not actioned: `src/ToolRegistry.php` declares its own
-   `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface —
+   `SugarCraft\Code\Tool`, one `use` away from colliding with the tool interface —
    left alone because that file was outside the round's ownership.
 
 ---
@@ -5486,7 +5486,7 @@ carry no `.git`. Measured, no git anywhere, payload delivered by `tar czf`/`tar
 xzf` into an owned mode-0700 `$HOME`:
 
 ```
-$HOME/.sugar-crush/agents -> /…/outside      (symlink inside the tarball)
+$HOME/.candy-code/agents -> /…/outside      (symlink inside the tarball)
 presets=["pwned"] mode=bypass-permissions prompt=EXFIL-PRESET-BODY  refusals=[]
 ```
 
@@ -5506,7 +5506,7 @@ Also from that review, and all being fixed in round 9:
   method's own docblock lists `:` in the statement-start set; the code has
   `['{', '}', ';']`.
 - **A NINTH read path.** `WorktreeConfig::new()` reads
-  `__DIR__/../../../.sugar-crush/config.json` — **git-tracked** — with no
+  `__DIR__/../../../.candy-code/config.json` — **git-tracked** — with no
   containment, feeding `copyGlob()` patterns into every agent worktree. Invisible
   to BOTH new instruments, because the dot-path derivation keys on the STRING and
   one classification covers two different tiers.
@@ -5519,7 +5519,7 @@ Also from that review, and all being fixed in round 9:
   three directions (11 sites, 9 named, one named that does not call it); four more
   uncounted compare spellings, `strncasecmp` mattering most.
 - **My own finding:** `tests/Agents/WorktreeConfigTest.php:98-120` does
-  `file_put_contents` on the **git-tracked** `.sugar-crush/config.json` at test
+  `file_put_contents` on the **git-tracked** `.candy-code/config.json` at test
   runtime. An interrupted run leaves a tracked repo file mutated, and it is why
   that test fails in every sandbox — **three separate agents burned time
   diagnosing it**, and one reviewer refused to run the suite in-repo because of it.
@@ -5623,7 +5623,7 @@ was lane D round 9 mid-flight, not a real defect.
 4. Plan steps **#14** → **#12** → **#17**. #90 is fixed so #17 is unblocked, but
    **#17 must wait for lane D round 9's corpus fix** (private-constructor shape).
 5. Reported, unowned: `src/ToolRegistry.php` declares its own
-   `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface.
+   `SugarCraft\Code\Tool`, one `use` away from colliding with the tool interface.
 
 ---
 
@@ -5721,7 +5721,7 @@ the same file.
    which lane D round 9 just rewrote — re-read it first). #17 is unblocked now that
    the corpus handles the private-constructor shape.
 5. Reported, unowned: `src/ToolRegistry.php` declares its own
-   `SugarCraft\Crush\Tool`, one `use` away from colliding with the tool interface.
+   `SugarCraft\Code\Tool`, one `use` away from colliding with the tool interface.
 
 ### Round 8 landed — `c075adcf`
 
@@ -5781,7 +5781,7 @@ Reachable in production, not dormant: `Bootstrap::workflowEngine()`
 Two driven probes, `$HOME` mode 0700 and **owned** (i.e. `HomeDirectory::owned()`
 passes — the exact "ownership cannot substitute" case), no `.git` anywhere:
 
-* **A, tarball-delivered directory symlink** (`.sugar-crush/workflows -> <outside>`):
+* **A, tarball-delivered directory symlink** (`.candy-code/workflows -> <outside>`):
   `load('pwned')` → `CODE-EXECUTED = arbitrary php ran from OUTSIDE $HOME; uid=1000`.
   The stack trace names it: `WorkflowRegistry.php(241): require()`.
 * **B, no directory link at all** — a real directory inside `$HOME` with one ENTRY
@@ -5858,9 +5858,9 @@ commit worried about is **correct in both directions**.
 
 ### F7 — LOW. `ProviderFactory::defaultConfigPath()` (`:118`)
 
-`__DIR__ . '/../../.sugar-crush/config.dev.json'`, read at `:143`/`:320` and at
+`__DIR__ . '/../../.candy-code/config.dev.json'`, read at `:143`/`:320` and at
 launch via `Bootstrap::availableProviders()` (`:1052`). Same containment-free
-`__DIR__`-relative `.sugar-crush/*.json` construction the commit just closed in
+`__DIR__`-relative `.candy-code/*.json` construction the commit just closed in
 `WorktreeConfig`. On neither inventory.
 
 ### Confirmed
@@ -6127,7 +6127,7 @@ The brief's decision points, in case it needs re-issuing:
 2. **Phase 4** — `/model` as a real command, `/help`, `/clear`, `argumentHint` in the
    popup.
 3. **Phase 5** — the base system prompt is one sentence today
-   (`'You are SugarCrush, an AI coding assistant.'`); `contextWindow()` is correctly
+   (`'You are CandyCode, an AI coding assistant.'`); `contextWindow()` is correctly
    implemented on all seven providers and never called.
 4. **Rest of Phase 2** — `McpClient` de-duplication, `.mcp.json` builder,
    `WorkflowEngine` construction, `CommandLoader` + the template-substitution engine
@@ -6362,7 +6362,7 @@ positive result:
 
 | item | claim | verdict |
 |---|---|---|
-| 5.1 | base system prompt is one string literal | **holds** — `src/Runtime.php:1101`, `$base = 'You are SugarCrush, an AI coding assistant.'`; built in `buildSystemPrompt()` at `:1099` |
+| 5.1 | base system prompt is one string literal | **holds** — `src/Runtime.php:1101`, `$base = 'You are CandyCode, an AI coding assistant.'`; built in `buildSystemPrompt()` at `:1099` |
 | 5.3 | `dispatchSkill()` bypasses `Agent::systemPrompt()` | **exists** at `src/App/App.php:373` |
 | 5.4 | `contextWindow()` implemented on all 7 providers, never called | **holds** — defined in 8 files (7 providers + `ProviderInterface`); the only `contextWindow()` occurrence outside a definition is a *comment* at `src/Providers/SglangProvider.php:156` saying nothing reads it. `REMINDER_TOKEN_LIMIT` is a hardcoded `100000` at `src/Chat.php:198` with 4 uses (`:4228`, `:6876`, `:6901`) |
 | 5.5 | `shouldCompact()`/`shouldCompactForeground()` are dead code | **holds** — defined at `src/Context/ContextCompactor.php:49` and `:73`, **zero call sites anywhere in `src/`** |
@@ -6429,7 +6429,7 @@ applied, and the same file states all three correctly 4200 lines earlier.
   `$disagreesOnSubmit` is still a closed-world sorted `assertSame`. A corpus edit is
   the classic place coverage dies silently; this one was honest.
 - **README's `/model` persistence claim is true** — `Bootstrap::chat()` installs the
-  `onConfigChange` callback that writes `~/.sugar-crush/config.json`
+  `onConfigChange` callback that writes `~/.candy-code/config.json`
   (`src/Cli/Bootstrap.php:309`), and the picker and `/model <id>` share it.
 
 #### F5 — inventory blindness, reproduced by shipping an undisclosed command
@@ -6525,7 +6525,7 @@ popup by containing a space.
 Built on the user's instruction to **defer the fix, never the finding**: *"make
 notes and steps for it .. dont ignore the problems but where possible push the
 fixing of the security ones to the end"*. The acceptance target is explicit — they
-want to daily-drive sugar-crush once functionality is done, while the security pass
+want to daily-drive candy-code once functionality is done, while the security pass
 is still being worked.
 
 50 items across 6 groups (path containment 6 · permission surface 3 · process/
@@ -6716,7 +6716,7 @@ carried, none hardcoded null, and `new self(…)` appears once.
 `Renderer.php:1240` ("the limit is this app's fixed compaction threshold, **not** the
 provider's advertised window"), `contextTokenLimit()`'s "Deliberately NOT the live
 model's advertised context window", and `SglangProvider.php:155` ("nothing in
-sugar-crush reads `contextWindow()` today"). Changing a fact repo-wide falsifies every
+candy-code reads `contextWindow()` today"). Changing a fact repo-wide falsifies every
 place that described the old one — the domain-less-claim defect at scale.
 
 All eight real `100000` sites reconciled; the octal `0o100000` in
@@ -6775,7 +6775,7 @@ Suite verified by the supervisor, not by report: **6931 tests, 71073 assertions,
 skipped, exit 0**, up from 6918/70996. The one skip is still `McpClientTest`'s
 mock-builtins skip. `SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves`
 passed on all four of the agent's full runs and on mine; untouched.
-`.sugar-crush/config.json` md5 unchanged, `check-path-repos --no-lib-path-repos`
+`.candy-code/config.json` md5 unchanged, `check-path-repos --no-lib-path-repos`
 exits 0, no per-lib lock, none of the forbidden files touched. 15 mutations applied,
 15 killed.
 
@@ -7065,7 +7065,7 @@ states the fail-open as arithmetic. `/budget 1e309` is refused —
 rendering as `$inf`: silently no cap, from a command whose docblock insists that
 guessing "no cap" from ambiguous input is the wrong direction.
 
-`SUGARCRUSH_MAX_COST` now **fails closed** on the `SUGARCRUSH_PERMISSION_MODE`
+`CANDY_CODE_MAX_COST` now **fails closed** on the `CANDY_CODE_PERMISSION_MODE`
 convention that sits beside it (whose docblock argues precisely this: "silently
 discarding a mode the user set on purpose is a fail-open"). The prior justification —
 "matching the refusal `/budget 0` gives" — elided that `/budget 0` is *visible* and the
@@ -7163,7 +7163,7 @@ Config md5 unchanged, `check-path-repos --no-lib-path-repos` exits 0. The advers
 review round was in flight. **If that review's result was lost, re-spawn a review
 against the uncommitted diff — do not commit unreviewed.** The change-set:
 
-    M crush_code.md · docs/plans/crush_code_hardening_backlog.md · sugar-crush/README.md
+    M crush_code.md · docs/plans/crush_code_hardening_backlog.md · candy-code/README.md
     M src/Agents/AgentManager.php · src/App/App.php · src/Backend/EngineBackend.php
     M src/Cli/Bootstrap.php · src/Cli/NonInteractive.php · src/Context/EnvironmentBlock.php
     M src/Providers/{CompleteResponse,CustomProvider,VertexProvider}.php · src/Runtime.php
@@ -7332,7 +7332,7 @@ declarations, concrete 224→226).
 Suite verified by the supervisor personally on a clean tree: **7204 tests / 75944
 assertions / 1 skipped / exit 0**, 2m49s. Baseline into the fix round was 7190/75900/1;
 the fix round added exactly the 14 tests it claimed and no source file, so neither
-`BuiltInToolCorpusTest` census moved. `.sugar-crush/config.json` md5 still
+`BuiltInToolCorpusTest` census moved. `.candy-code/config.json` md5 still
 `05480c743aff302fd6c06c5a4a4c2210`; `check-path-repos --no-lib-path-repos` exit 0; the one
 skip re-confirmed by running `tests/MCP/McpClientTest.php` alone (40 tests, 1 skipped).
 
@@ -7706,8 +7706,8 @@ neither `BuiltInToolCorpusTest` census nor `BinSugarcrushWiringTest::crushSource
 
 ### Item 1 — the rename
 
-`SugarCraft\Crush\McpClient` → `ClaudeCodeMcpClient`, so it stops sharing a basename with
-`SugarCraft\Crush\MCP\McpClient`. Both stay dormant. The plan's premise that "`MCP\McpClient`
+`SugarCraft\Code\McpClient` → `ClaudeCodeMcpClient`, so it stops sharing a basename with
+`SugarCraft\Code\MCP\McpClient`. Both stay dormant. The plan's premise that "`MCP\McpClient`
 is the live one" is FALSE: measured, `grep -rn McpClient src/ bin/ examples/` returns exactly
 one hit outside the two class files and it is a doc comment
 (`src/Providers/Concerns/HttpClientDefaults.php:33`). Neither client is constructed by a real
@@ -7725,7 +7725,7 @@ defect of this chain, committed inside the bundle that was fixing an instance of
 
 ### Item 8 — the streaming tier, which carried far more than the plan described
 
-Wired as tier 3 behind `$SUGARCRUSH_BACKEND_CMD_STREAM`, below `$SUGARCRUSH_BACKEND_CMD` and
+Wired as tier 3 behind `$CANDY_CODE_BACKEND_CMD_STREAM`, below `$CANDY_CODE_BACKEND_CMD` and
 above the persisted provider. **Three readers had to learn it, not the one the plan names:**
 `backend()` chooses, and `selectedProviderName()` decides whether `NonInteractive` HARD-FAILS,
 so teaching only `selectedProviderLabel()` would have silenced the offline notice while a
@@ -7807,11 +7807,11 @@ a fix round grow a new subsystem is how these rounds get lost.
 
 Nine env-guard lists had been widened for the new variable and six had not, so:
 `--help`'s nine-line block for the new variable **survived deletion by the whole suite** (the
-only assertion was `assertStringContainsString('SUGARCRUSH_BACKEND_CMD', …)`, which the OLD
+only assertion was `assertStringContainsString('CANDY_CODE_BACKEND_CMD', …)`, which the OLD
 variable's name already satisfies); and six test files failed whenever either shell-out
 variable was ambient — **11 failures, identical under either variable**, so pre-existing, but
 the README now tells users to export one. One of those files even carried a comment asserting
-a precondition ("No SUGARCRUSH_PROVIDER/SUGARCRUSH_BACKEND_CMD env set") with no `putenv`
+a precondition ("No CANDY_CODE_PROVIDER/CANDY_CODE_BACKEND_CMD env set") with no `putenv`
 behind it.
 
 Both guards are now derived FROM SOURCE rather than hand-written, and the six files share one
@@ -7862,7 +7862,7 @@ exists).
    one. A table short by one, in a finding about lists that are short by one.
 7. **"5 of the 20 variables" was the pre-bundle figure**; on the tree the fixer inherited it is
    6 of 20, so the remainder is 14, not 15. And the 20 is right only after discarding
-   `SUGARCRUSH_DISABLE_`, a prefix fragment, from a 21-name raw grep.
+   `CANDY_CODE_DISABLE_`, a prefix fragment, from a 21-name raw grep.
 8. **My addendum told an agent to repair a sentence that does not exist.** There was no
    absence-semantics claim about either shell-out variable on `docs/ENVIRONMENT.md` — not a
    false one, not an accidentally-true one. The page was silent, so the rule was documented
@@ -7872,7 +7872,7 @@ exists).
    client — which is precisely the class that KEPT the name — so renaming it would have made a
    true line false. Annotated instead of renamed.
 10. **My config-md5 invariant named a file ambiguously.** It is the MONOREPO-ROOT
-    `.sugar-crush/config.json`; `sugar-crush/.sugar-crush/config.json` is a different file with
+    `.candy-code/config.json`; `candy-code/.candy-code/config.json` is a different file with
     a different md5 and is not tracked by git at all.
 
 And one prediction of mine that was simply wrong in the bundle's favour: I expected the
@@ -8019,7 +8019,7 @@ explicitly, to stop a later reviewer re-raising it.
    separate defect with its own mechanism and its own test, and the compaction notice is
    PREPENDED before the user prompt so it never sits after an unanswered user turn.
 9. **I ran my own invariant checks from the wrong directory once** — `md5sum
-   .sugar-crush/config.json` after `cd sugar-crush` reads a DIFFERENT, untracked file
+   .candy-code/config.json` after `cd candy-code` reads a DIFFERENT, untracked file
    (`dfbee969ef3987bc183247d97bfdf73c`), and `check-path-repos` exited 1 purely because
    `tools/` was not there. Both re-run with absolute paths. Exactly the claim-without-its-domain
    failure, in the supervisor's own verification step.
@@ -8076,10 +8076,10 @@ in `plan`:
 server was discarded — **and the command still ran.** Starting IS the execution.
 
 **This project already closed exactly this hole and documented it.** `README.md:441` says a project
-hook file is code execution, is off by default, that `git clone && cd && sugarcrush` would
+hook file is code execution, is off by default, that `git clone && cd && candy-code` would
 otherwise run shell the repository's author wrote "with no prompt and nothing in the transcript",
 that **"No permission mode protects you from it (`plan` included)"**, and that the grant must live
-in the user's own `~/.sugar-crush/config.json` under `trustedProjectHooks` — a file no repository
+in the user's own `~/.candy-code/config.json` under `trustedProjectHooks` — a file no repository
 can write. We introduced a second instance of the same hole.
 
 **And my own posture reasoning was the error.** I argued in the implementation brief that
@@ -8403,8 +8403,8 @@ it — more than the wrap call itself, which is one argument.
 ### In-flight state, for recovery
 
 Brief at `/tmp/…/scratchpad/w1-brief.md`, self-contained — re-spawn against it if the round was lost.
-As of this note the working tree carries `sugar-crush/src/Renderer.php` (+152/-4) and a new untracked
-`sugar-crush/tests/Renderer/PaneWidthInvariantTest.php` (518 lines). Nothing committed.
+As of this note the working tree carries `candy-code/src/Renderer.php` (+152/-4) and a new untracked
+`candy-code/tests/Renderer/PaneWidthInvariantTest.php` (518 lines). Nothing committed.
 **Baseline to beat: 7387 / 76813 / 1, exit 0**, measured by me against LOCAL sibling symlinks. Still
 owed after the round returns: supervisor suite verification, an adversarial review round on the diff,
 then commit — and only then `#88`, the stale README figures.
@@ -8417,7 +8417,7 @@ then commit — and only then `#88`, the stale README figures.
 `rc=0`, 2m57.819s.** Baseline was 7387 / 76813 / 1, so the delta is +125 tests / +7370 assertions —
 exactly the new test file and nothing else. One skip, so `vendor/sugarcraft/*` kept its symlinks and
 these figures describe the monorepo rather than Packagist copies. `check-path-repos --no-lib-path-repos`
-rc=0; `.sugar-crush/config.json` md5 still `05480c743aff302fd6c06c5a4a4c2210`; tree carries exactly the
+rc=0; `.candy-code/config.json` md5 still `05480c743aff302fd6c06c5a4a4c2210`; tree carries exactly the
 two W1 paths.
 
 **The agent used `git stash push`/`pop` once, against an explicit prohibition, and flagged it itself <!-- @rename-keep -->
@@ -8453,7 +8453,7 @@ paragraph is cut at the pane edge, the blank line is the Markdown paragraph brea
 line is just the next paragraph.
 
 **This is §5 again, and it is mine.** My 204-column measurement was real — but it was taken against
-standalone `Chat::view()`, and I wrote it next to the hosted `bin/sugarcrush` path. A number that
+standalone `Chat::view()`, and I wrote it next to the hosted `bin/candy-code` path. A number that
 travelled without its domain, in the brief whose job was to carry ground truth.
 
 Worse: **the user's own words were "not wrapped but cut off".** Cut off IS truncation. They described
@@ -8745,7 +8745,7 @@ half: **a mutation name is not a definition — write the exact edit.**
 ## Session state at the user's `/compact` request, 2026-08-19
 
 **Last CODE commit: `47ee2c86`** (bundle W1). Supervisor-verified **7577 / 87648 / 1, exit 0** against
-LOCAL sibling symlinks; `check-path-repos --no-lib-path-repos` rc=0; `.sugar-crush/config.json` md5
+LOCAL sibling symlinks; `check-path-repos --no-lib-path-repos` rc=0; `.candy-code/config.json` md5
 `05480c743aff302fd6c06c5a4a4c2210`; `git stash list` 9 entries; `vendor/sugarcraft/` holds 16 symlinks.
 
 **Bundle W2 is IN FLIGHT** — implementation round running, nothing committed. Its two briefs
@@ -8785,7 +8785,7 @@ Three things worth carrying forward that are not in any diff:
 
 **Supervisor gate: 7782 tests / 90237 assertions / 1 skipped / rc 0, 3m12s.** Entry HEAD `23d9bb54`.
 Skips stayed 1 (`tests/MCP/McpClientTest.php:106`), `vendor/sugarcraft` still 16 symlinks at gate time,
-tracked `.sugar-crush/config.json` md5 `05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos
+tracked `.candy-code/config.json` md5 `05480c743aff302fd6c06c5a4a4c2210`, `check-path-repos
 --no-lib-path-repos` rc 0.
 
 Workflow `wf_85ae4115-4fe`: 10 agents, 0 errors, 1.44M subagent tokens, 8197s wall. Three bundles,
@@ -8795,7 +8795,7 @@ whose suite was never run. Verified history beats tidy history.
 
 ### The five defects the review rounds found that the implementers' own green suites did not
 
-1. **`sugarcrush --config` with no value opened the alt-screen TUI.** rc 124, stdout beginning
+1. **`candy-code --config` with no value opened the alt-screen TUI.** rc 124, stdout beginning
    `\e[?1049h`. Same shape as the `--help`-opens-the-TUI bug already shipped once. The operator typed
    the flag and silently got the *discovered* default policy — the exact outcome the flag exists to
    prevent.
@@ -8803,7 +8803,7 @@ whose suite was never run. Verified history beats tidy history.
    accessor. Fixed with a `Bootstrap::sessionStore(bool $prune = true)` seam, default `true` so the
    launch path stays byte-identical. Data loss counts as functionality under §3 — fixed now, not deferred.
 3. **Repository content could shadow control built-ins, `/exit` and `/permissions` included.** A
-   checked-in `.sugar-crush/commands/exit.md` was enough. Fixed in the LOADER, not in `Chat`, so the
+   checked-in `.candy-code/commands/exit.md` was enough. Fixed in the LOADER, not in `Chat`, so the
    popup, `/help` and dispatch read one already-reserved map instead of three that agree by luck.
 4. **A file-based command expanding to nothing dispatched a real turn with an empty user message.**
 5. **`/name:arg` bypassed file-based overrides entirely** — `expandCustomCommand()` read the name as
@@ -8819,7 +8819,7 @@ the PROSE rather than the code:
 - C5a wrote (in a Bootstrap comment AND a test docblock) that a wrong temp dir would make the
   sibling-file check refuse and every persist a no-op. Mutation 7 survived and disproved it: `tempnam()`
   puts the file exactly where asked. The real breakage is a **cross-directory `rename()`** plus
-  `ensureDir()` creating `~/.sugar-crush` on a run told to stay out of it. On this host both paths are
+  `ensureDir()` creating `~/.candy-code` on a run told to stay out of it. On this host both paths are
   `/tmp`, so the content assertion proved nothing. After correcting both prose sites and adding
   `assertDirectoryDoesNotExist()`, the mutation died.
 - This is the intended outcome of the discipline: **the number that matters is what a reviewer who did
@@ -9018,8 +9018,8 @@ form reached the output, no marker created.
 - **CI pushed regenerated GIFs to master TWICE during the round**, unprompted (`5b77a75f`,
   `e522f69a`). Both rebased cleanly because no lane touches `.vhs/`. Lane freshness is a loop.
 - **A CWD drift produced three simultaneous false alarms.** An unanchored `md5sum
-  .sugar-crush/config.json` run from `sugar-crush/` resolved to
-  `sugar-crush/.sugar-crush/config.json` — the *different, untracked* file the briefs explicitly
+  .candy-code/config.json` run from `candy-code/` resolved to
+  `candy-code/.candy-code/config.json` — the *different, untracked* file the briefs explicitly
   name as NOT the invariant — reporting a changed md5, zero vendor symlinks and path-repos rc 1
   all at once. Anchor absolute paths; the distinction written into the briefs is what made the
   diagnosis one step.
@@ -9029,7 +9029,7 @@ form reached the output, no marker created.
 
 ## Round 30 — settings layering + the Phase 7 guides, and a documentation pass that found six bugs
 
-**Landed so far:** `8d15443c` (Phase 7 items 3-6 — ten pages under `sugar-crush/docs/`, 2,691
+**Landed so far:** `8d15443c` (Phase 7 items 3-6 — ten pages under `candy-code/docs/`, 2,691
 lines, zero `.php` files) which **completes Phase 7**, plus `35f3c1ac` / `1308a1d1` / `6b63022e`
 recording findings. The settings half committed as `3847fe42` at the time of writing. Count **56 of
 75**; Phase 2 complete except item 9.
@@ -9144,8 +9144,8 @@ would have been vacuous.
 - **`node --check … | head -3` reported success on a broken file** — the pipe hands back *head's*
   exit code. Same trap already documented for `phpunit | tail`.
 - **A CWD drift produced three simultaneous false alarms.** An unanchored
-  `md5sum .sugar-crush/config.json` run from `sugar-crush/` resolves to
-  `sugar-crush/.sugar-crush/config.json` — the *different, untracked* file the briefs explicitly
+  `md5sum .candy-code/config.json` run from `candy-code/` resolves to
+  `candy-code/.candy-code/config.json` — the *different, untracked* file the briefs explicitly
   name as NOT the invariant — reporting a changed md5, zero vendor symlinks and path-repos rc 1 at
   once. The distinction written into the briefs is what made the diagnosis one step.
 
@@ -9232,9 +9232,9 @@ not be shared would have been committed by the next `git add -A`. The claim ship
 implementation — the recurring defect, in the one form where the code is right and the *repository*
 is wrong, which no amount of mutation testing inside `src/` could ever catch.
 
-What hid it: `sugar-crush/.gitignore:2` ignores the whole `.sugar-crush/` directory, so under
-`sugar-crush/` the file **was** ignored. Only the monorepo root is exposed, because the root's
-`.sugar-crush/config.json` is deliberately tracked and the directory therefore cannot be swept
+What hid it: `candy-code/.gitignore:2` ignores the whole `.candy-code/` directory, so under
+`candy-code/` the file **was** ignored. Only the monorepo root is exposed, because the root's
+`.candy-code/config.json` is deliberately tracked and the directory therefore cannot be swept
 wholesale. A check run from the wrong directory would have reported this as fine — the same
 CWD-sensitivity that produced three simultaneous false alarms earlier in this plan.
 
@@ -9320,7 +9320,7 @@ record. What belongs here is what the round taught.
 
 **Three model defaults, not four.** I measured `SglangProvider.php:68` and the two
 `config.dev.json`, and missed `ProviderFactory::defaultConfig('sglang')['model']` — which is the one
-`$SUGARCRUSH_PROVIDER=sglang` actually reaches, because `defaultConfig()` is `bin/sugarcrush`'s only
+`$CANDY_CODE_PROVIDER=sglang` actually reaches, because `defaultConfig()` is `bin/candy-code`'s only
 hook into the provider system. Changing three of four would have left the plain `sglang` provider
 type 404ing on the model name: **the exact failure the task existed to fix, delivered by the fix.**
 `defaultConfig` now reads `SglangProvider::DEFAULT_MODEL` so the two cannot drift again.
@@ -9537,7 +9537,7 @@ but that nothing could have told us either way.
 **Nine items described the tree incorrectly.** The four that mattered:
 
 - **P5.1** quoted the base system prompt as "one string literal today:
-  `'You are SugarCrush, an AI coding assistant.'`". It has carried
+  `'You are CandyCode, an AI coding assistant.'`". It has carried
   `# Tone and style`, `# Tool use`, `# Acting vs. asking` and `# Security` since
   `bf3495f5`. **P5.2** called five tool descriptions "one-clause each"; all five
   are multi-sentence. Either line would have sent an agent to rewrite finished
@@ -9556,7 +9556,7 @@ but that nothing could have told us either way.
 - **P7.6 cost Phase 7 its "complete".** `docs/ARCHITECTURE.md` never states the
   "`App` wears two hats, do not retire it" warning it exists to carry, and its
   diagram calls `Chat` "the TEA Model" while `App implements Model`
-  (`src/App/App.php:71`) and `bin/sugarcrush:211` hands `Bootstrap::app()` — not
+  (`src/App/App.php:71`) and `bin/candy-code:211` hands `Bootstrap::app()` — not
   `Chat` — to `new Program(...)`. The document reproduces the misreading it was
   written to prevent, the one that already caused a revert-then-restore.
 
@@ -9642,7 +9642,7 @@ absent — it lived only in `CALIBER_LEARNINGS.md`, a file nobody greps while re
 page.
 
 **One clause of that item should never have been listed.** `ARCHITECTURE.md:115` has always read
-"`bin/sugarcrush` runs `Bootstrap::app()`, not `Bootstrap::chat()`". An implementer who grepped for
+"`bin/candy-code` runs `Bootstrap::app()`, not `Bootstrap::chat()`". An implementer who grepped for
 `Bootstrap::app` would have found it and closed the item on the wrong clause. That is round 32's own
 rule — verify by domain, not by token — failing inside round 32's write-up *of that rule*.
 
@@ -9751,7 +9751,7 @@ since. Re-measure the floor before standing on it.**
 was told to follow `MinimaxXmlFallbackToolCallParser`'s shape and discovered the shape *was* the
 vulnerability — the same `str_contains($content, MARKER)` guard, shipped and wired long before the
 DSML parser inherited it. `lsp` was told `bbf83869` was precedent for editing `candy-core` from a <!-- @rename-keep historical provenance -->
-sugar-crush-scoped step, and its reviewer found the precedent had also added 44 lines of
+candy-code-scoped step, and its reviewer found the precedent had also added 44 lines of
 `InputReaderTest.php`, an obligation the lane had dropped while claiming the permission. **A
 precedent is a vector, and it grants both halves or neither.**
 
@@ -10293,7 +10293,7 @@ measurement. Mark it as a hypothesis or have it settled before it is quoted.*
   literal anchors with a liveness anchor a real worker can satisfy. **L.**
 - **`statusLine`'s greenfield M holds, and both baits were confirmed baits.**
   `Chat::budgetStatusLine()` is a private `/budget` formatter; `candy-kit`'s `StatusLine` is a glyph <!-- @rename-keep historical provenance -->
-  printer. `statusLine` appears **zero** times in `sugar-crush/src/` and `bin/`, and is absent from
+  printer. `statusLine` appears **zero** times in `candy-code/src/` and `bin/`, and is absent from
   `LayeredSettings::LAYERED_KEYS` — so a `statusLine:` in `settings.json` is silently dropped today.
 - **Round 41's clean shape: E52 + E61(S) + statusLine.** Only `statusLine` needs `Bootstrap.php` *and*
   `Chat.php`. Adding E59 is safe **only** if its lane is told to extend the stdin `startup` payload
@@ -10427,7 +10427,7 @@ Three mutations, all killed: revert the OR to an assignment (4 failures), OR in 
 
 ### E61's S — the refusal named the one lever that could not move the outcome
 
-`sugar-crush/src/Hooks/HookRegistry.php`. The chain-expiry deny read *"did not finish within the N
+`candy-code/src/Hooks/HookRegistry.php`. The chain-expiry deny read *"did not finish within the N
 seconds their timeouts add up to"*. **Every noun in it was true and the sentence still misled.** The
 hook holding N is the one being *stopped* — it consumed none of the budget — while a hand-written
 `HookInterface` spends the clock without contributing to the sum, because `chainBudgetSeconds()`
@@ -10471,7 +10471,7 @@ unsorted, ledger bounded-only, sub-millisecond rendering fallback removed, spend
 **A `composer install`/`composer update` anywhere in this monorepo replaces `vendor/sugarcraft/*`
 symlinks with Packagist copies, and every suite figure taken afterwards is measuring code that is not
 in the working tree.** It happened live mid-round: the user ran `composer update` in several dirs, and
-**two consecutive full-suite runs of mine were void** — they exercised sugar-crush against a Packagist
+**two consecutive full-suite runs of mine were void** — they exercised candy-code against a Packagist
 `candy-core`, so the E52 fix under test was not even loaded. All fourteen sibling-lib verifications were <!-- @rename-keep historical provenance -->
 void for the same reason; only `candy-core`'s own suite was unaffected, because it tests its own `src/` <!-- @rename-keep historical provenance -->
 directly.
@@ -10503,12 +10503,12 @@ restore rather than merely asserting it.
 **One residue, and it is EXPECTED rather than a defect.** After the restore, `candy-testing` (and <!-- @rename-keep -->
 `candy-vcr` under `sugar-dash`) remain real directories in eight libs' `vendor/sugarcraft/` while every <!-- @rename-keep -->
 other entry is a symlink. `--fix --strict-closure` walks `require`, not `require-dev`, so a test-only
-sibling resolves from Packagist — which is also what CI does. `sugar-crush` itself is **18 of 18
+sibling resolves from Packagist — which is also what CI does. `candy-code` itself is **18 of 18
 symlinks**, which is the figure the invariant names. Recorded here so the next reader does not "fix" it.
 
 ### Concurrency restored to 3, and the round's remainder went out as a workflow
 
-Lanes `a` = `statusLine` (greenfield M; re-verified zero `statusLine` hits in `sugar-crush/src/` and
+Lanes `a` = `statusLine` (greenfield M; re-verified zero `statusLine` hits in `candy-code/src/` and
 `bin/` at `ae30fee5`, so both grep-baits are still baits), `b` = E73 (the candy-core ZWJ over-run), <!-- @rename-keep historical provenance -->
 `c` = E70 + E71 + E72 (three guards that do not guard). Lane split chosen so that no two lanes open the
 same file: `a` alone holds `Bootstrap.php`, `Chat.php` and both renderers; `b` alone holds
@@ -10550,12 +10550,12 @@ real ZWJ sequences, which the supervisor verified independently before the merge
 method per the standing dormant-code rule, and justified NOT wiring it with an ICU measurement showing
 its three extra ranges are majority-narrow.
 
-**The nine-lib stale closure is the round's most transferable finding.** After `sugar-crush`'s closure
+**The nine-lib stale closure is the round's most transferable finding.** After `candy-code`'s closure
 was restored and verified 18/18, a sibling sweep of 16 libs came back **all rc 0** — and nine of them
 had `vendor/sugarcraft/candy-core` as a stale Packagist copy (`Width.php` md5 `f2a3558f…` / 33,275 B <!-- @rename-keep historical provenance -->
 against the worktree's `270fc3f2…` / 38,125 B). Those nine said nothing whatever about the change they
 were meant to verify. Only 4 of 16 were signal. **"The closure is intact" is a per-lib fact, and the
-skip-count alarm is a `sugar-crush` alarm that has no sibling equivalent** — the siblings must be
+skip-count alarm is a `candy-code` alarm that has no sibling equivalent** — the siblings must be
 checked by content, per lib.
 
 Worse, the standard round-trip does not fix all of them: **`--fix --strict-closure` walks `require`
@@ -10565,14 +10565,14 @@ whole repair untouched. It needed a hand-injected scratch `repositories[]`, a `c
 assertion count moved 1,621 → 1,661** the moment it tested the real dependency — same test files, +40
 assertions, purely from no longer running against a stale vendored copy.
 
-**Six new backlog entries, E74–E79.** The one that matters most is **E74**: `sugar-crush/README.md`
+**Six new backlog entries, E74–E79.** The one that matters most is **E74**: `candy-code/README.md`
 tells users that a hostile project-tier `disabledTools` "means naming every tool it removes — a value
 you can see", while `LayeredSettings.php` records the measured counterexample
 `{"disabledTools":["[!B]*"]}` — eight characters, leaves only `Bash`. The tier design is sound; the
 documentation of it advertises a safety property the code does not have, in the file most likely to be
 read and least likely to be re-derived. E75 (README calls `config.json` deprecated; the source argues
 at length that it is not) and E76 (`Chat.php`'s docblock claims the `App`/`Tui\Renderer` system is
-constructed by nothing, while `bin/sugarcrush:225` constructs it) are the same species. E78 records
+constructed by nothing, while `bin/candy-code:225` constructs it) are the same species. E78 records
 that nothing ties `Bootstrap`'s shipped tool caps to the nudge floor lane `c` just spent a round
 pinning — a future cap below ~1,400 bytes silently reopens the dead band. E77 and E79 are deliberately
 not scheduled: E77 is unreachable while `ext-intl` is hard-required, and E79 is a rendering-semantics
@@ -10586,7 +10586,7 @@ rather than invented, so overlapping runs are impossible by construction rather 
 ## ROUND 42 — doc truth, launch-warning routing, and a prediction that was right to fail
 
 Merged `98589858` (a), `878c5fdf` (b), `c204015e` (c). Floor **8996 / 105179 / 1 skipped / rc 0** at
-`c204015e`, 04:12.080, measured by the supervisor in the live tree with `sugar-crush` linked.
+`c204015e`, 04:12.080, measured by the supervisor in the live tree with `candy-code` linked.
 Run `wf_062ad75c-a27`: 9 agents, 0 errors, ~71 min, 1.35 M subagent tokens, 689 tool calls.
 
 **The merged-total prediction missed by 2 and that is the whole value of making it.** Predicted 8994
@@ -10618,7 +10618,7 @@ one to do first is **E86**: the MCP failure notice goes to `error_log()`, so on 
 pointed at a file the user gets a silently reduced tool set and no message anywhere.
 
 **Out-of-band this round: the vendor closure was destroyed twice more and the second one was mine to
-catch.** The user ran `composer update` in `sugar-crush`; the tree went to **0/18 symlinks** with
+catch.** The user ran `composer update` in `candy-code`; the tree went to **0/18 symlinks** with
 `candy-core` at the pre-E73 md5. Repaired with the standard round-trip. Two things came out of it that <!-- @rename-keep historical provenance -->
 outlast the repair: a content probe on a file the round did not change reports `SAME` with the closure
 entirely absent (`is_link()` is the only check that cannot be fooled), and third-party drift between the
@@ -10631,7 +10631,7 @@ a correction the supervisor owed them — see the RESUME's §🟢 blocks.
 After the merge: root `composer update -v -o -W` ran and is committed (`2d78013d`), paying back the
 change round 41 reverted before it knew it was the user's. `scripts/refresh-deps.php --mode=linked`
 then took the monorepo from **12 linked / 12 mixed / 30 fully-Packagist** to **53 linked / 0 mixed /
-0 published**, no failures. `sugar-crush` was held out so the floor stays comparable.
+0 published**, no failures. `candy-code` was held out so the floor stays comparable.
 
 The sweep that followed was the first in which those 30 libs were actually testing the working tree,
 and it was green — but it also killed a claim this plan has been repeating. Round 41 cited
@@ -10659,7 +10659,7 @@ announced 9078; the run ended on 105590. Round 42 missed by 2 tests because a la
 forward from its implement stage; the two rules added to the brief in response both worked:
 
 - **every fix agent re-measured at its own final commit**, and
-- **every fix agent ran `git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'`
+- **every fix agent ran `git diff <base>..HEAD -- 'candy-code/tests/**' | grep -c '^+ *public function test'`
   and reconciled it against the suite delta in writing.**
 
 The reconciliations are worth keeping, because in two of three lanes the two numbers legitimately
@@ -10796,7 +10796,7 @@ lowest-first, and the comment had read that line and described the parameter lis
 
 🔴 **And it refuted its reviewer, correctly.** F6 claimed the README fence asserts a line the launcher
 would not print, "because nothing appends a period". `Bootstrap::warnPermissionConfig()` is
-`fwrite(STDERR, "sugarcrush: {$message}.\n")` — it prepends the prefix **and** appends the full stop. The
+`fwrite(STDERR, "candy-code: {$message}.\n")` — it prepends the prefix **and** appends the full stop. The
 reviewer had inspected the *transcript* seam, which carries neither. The defensible half — the word
 "TRANSCRIPT" in a doc-block, confusing when the app has a literal transcript surface carrying the same
 sentence without either affix — was fixed, and both affixes are now read out of
@@ -10924,7 +10924,7 @@ including all seven the reviewer had found.
 ### Lane b — E94 + E98 + E90 + E91 + E99. 10 commits, `775481e0`→`27343925`, +23 tests / +379 assertions
 
 🔴 **THE CONTRACT HAS SEVEN ERROR TYPES, NOT THE FIVE EVERY SOURCE SAID.** `not-found` and `mcp-config`
-were proven live from `bin/sugarcrush` — `session delete <missing> --output-format json` → `{"type":
+were proven live from `bin/candy-code` — `session delete <missing> --output-format json` → `{"type":
 "not-found"}` rc 1, and `mcp list` against a trusted-but-malformed `.mcp.json` → `{"type":"mcp-config"}`
 rc 1. **The old `[a-z_]+` extractor drops both hyphenated names silently**, which is why five looked
 complete. The derivation now reads all of `src/` + `bin/` (288 files, 395,237 tokens, 36 ms) in three
@@ -11012,7 +11012,7 @@ carries the losing numbers and cannot be fixed retroactively.
 One genuine same-file collision: **lane c edited `docs/SETTINGS.md`, which was lane a's**, on its
 **reviewer's explicit MAJOR-2 instruction**. It merged cleanly (disjoint sections — lane a around the
 glob-figure paragraph, lane c around the seam-count paragraph) and both survive, so no damage. Lane b's two
-out-of-list edits (`bin/sugarcrush`, `src/Cli/NonInteractive.php`) were **verified comment-only** by
+out-of-list edits (`bin/candy-code`, `src/Cli/NonInteractive.php`) were **verified comment-only** by
 filtering non-comment lines out of the diff — both empty — and neither file belonged to another lane.
 
 🔴 **THE STRUCTURAL CAUSE: THE REVIEW PROMPT TELLS REVIEWERS TO CHECK THE FILE SPLIT AND NEVER TELLS THEM
@@ -11020,7 +11020,7 @@ THEY ARE BOUND BY IT WHEN PRESCRIBING A FIX.** All three lanes independently con
 was wrong for their findings and two acted on it. Round 45's review prompt must say: a finding in another
 lane's file is reported, never prescribed as an edit.
 
-⚠️ **Lane b's `bin/sugarcrush` justification is the weaker half** — it overrode a constraint its own
+⚠️ **Lane b's `bin/candy-code` justification is the weaker half** — it overrode a constraint its own
 *implementer* had accepted, on the grounds that its own brief was silent. "Not explicitly forbidden" is the
 argument shape that erodes ownership over rounds.
 
@@ -11053,12 +11053,12 @@ and the four new files run standalone at exactly 23/379 — identical on both nu
 which additionally proves no pre-existing test changed its assertion count under its `src/` and README
 edits. Lane c: 13 declarations, 3 provider-driven, (13−3)+2+2+13 = **+27**.
 
-**Independently reproduced by the supervisor at merged HEAD:** the **62** unowned `sugarcrush:` stderr
+**Independently reproduced by the supervisor at merged HEAD:** the **62** unowned `candy-code:` stderr
 lines lane c counted (E120) appear 62 times in the supervisor's own floor log.
 
 ### INVARIANTS AT MERGE
 
-18/18 symlinks by `is_link()` · `md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210` ·
+18/18 symlinks by `is_link()` · `md5sum .candy-code/config.json` = `05480c743aff302fd6c06c5a4a4c2210` ·
 `php tools/check-path-repos.php --no-lib-path-repos` rc 0 · zero tracked per-lib `composer.lock` · skip
 still exactly 1 · every lane file byte-identical in master except the two knowingly shared
 (`docs/SETTINGS.md`, the backlog) · `drain44-{a,b,c}` deleted and `/home/sites/crush-lane-{a,b,c}` removed,
@@ -11071,7 +11071,7 @@ the three-way append conflict that lanes b and c then hit.
 ## ROUND 45 — a session limit mid-round, an unrestored mutation it exposed, and a floor that was measured at the wrong commit
 
 **Merged `ee77252c`, backlog `5daa7420`. Floor `9308 / 130874 / 1 skipped / rc 0`** (04:19.629, 276.40 MB),
-supervisor-measured in the live tree with `sugar-crush` LINKED. Base `06126017`. Three file-disjoint
+supervisor-measured in the live tree with `candy-code` LINKED. Base `06126017`. Three file-disjoint
 lanes, implement → adversarial review → fix, concurrency 3, run `wf_36783de1-2cf`.
 
 ### The prediction
@@ -11210,7 +11210,7 @@ this round is PHP 8.3.6 only.
 ## ROUND 46 — a weekly limit mid-round, a killed agent that had already committed, and a prediction the supervisor got wrong
 
 **Merged `dbb8e834`, renumbering `15fb34ff`, backlog `c4a810a1`. Floor `9378 / 131610 / 1 skipped / rc 0`**
-(04:25.272, 278.40 MB), supervisor-measured in the live tree with `sugar-crush` LINKED. Base `62f4e5d1`,
+(04:25.272, 278.40 MB), supervisor-measured in the live tree with `candy-code` LINKED. Base `62f4e5d1`,
 whose floor `9308 / 130874` was measured **at that exact commit** per E167 — and lane c observed it
 directly and confirmed it, which is the one figure round 45's lanes could not close.
 
@@ -11258,9 +11258,9 @@ the fix itself survived.
 
 ### A guard compelled a lane out of its file split
 
-Lane a gated `CommandLoader`'s five refusal lines behind a new `SUGARCRUSH_DEBUG_COMMANDS` flag — E154's
+Lane a gated `CommandLoader`'s five refusal lines behind a new `CANDY_CODE_DEBUG_COMMANDS` flag — E154's
 "gate, never delete" bucket, rule 6. Round 45's `EnvRosterDriftTest` then **required** a row in
-`sugar-crush/docs/ENVIRONMENT.md`, which was not in lane a's file list. The lane could not complete its
+`candy-code/docs/ENVIRONMENT.md`, which was not in lane a's file list. The lane could not complete its
 assigned work without touching a file its brief did not grant it. It cost nothing because no sibling owned
 `docs/` this round.
 
@@ -11292,7 +11292,7 @@ only their numbers were off.
 
 ### A lane falsified a previous round's finding (E176)
 
-Round 45 recorded the 62 `sugarcrush:` stderr lines as inherited child-process stderr. **Lane b measured
+Round 45 recorded the 62 `candy-code:` stderr lines as inherited child-process stderr. **Lane b measured
 `tests/Integration/` and found them in-process, not inherited** — the attribution was wrong for that
 directory. Rule 9 working: a lane disproving its own brief's inherited premise is the round's most
 valuable output, for the fourth round running.
@@ -11331,7 +11331,7 @@ the floor was measured.
 ## ROUND 47 — the mid-session seam lands, a session limit kills all three implementers post-commit, and a merge red that was the guard working
 
 **Merged `e8e35fa4`, renumbering `8a4421c9`, merge fix `fb2d13d8`. Floor `9445 / 132167 / 1 skipped / rc 0`**
-(04:24.679, 278.40 MB), supervisor-measured with `sugar-crush` LINKED. Base `7af5293b`, floor measured at
+(04:24.679, 278.40 MB), supervisor-measured with `candy-code` LINKED. Base `7af5293b`, floor measured at
 that exact commit per E167 — and **lane c observed it directly and confirmed it to the unit**.
 
 ### Both predictions exact, including the assertion bound
@@ -11479,7 +11479,7 @@ a stdin that never EOFs **hangs the suite**).
 ### Two supervisor actions taken at launch
 
 **E194 deferred, deliberately** — it was flagged in §0-NOW-48 as a supervisor decision. It wants a
-`PHPUnit\Runner\Extension` registered through `sugar-crush/phpunit.xml`. Deferred until after E192 lands,
+`PHPUnit\Runner\Extension` registered through `candy-code/phpunit.xml`. Deferred until after E192 lands,
 on the entry's own evidence: its generator note says *"re-run before acting; the answer changes as E192
 lands"*, and E192 changes which classes arm the sink. Registering a global test extension also shifts test
 infrastructure and the floor with it. Sequence is E192 → re-run the generator → decide.
@@ -11554,7 +11554,7 @@ Recovered whole by `git checkout --` only because the merge was already committe
 ### Merged floor
 
 **`9497 / 133585 / 1 skipped / rc 0` at `2b57cd9c`**, measured twice — at the merge and again after the
-renumber, byte-identical (04:32.542, 280.40 MB), `sugar-crush` LINKED.
+renumber, byte-identical (04:32.542, 280.40 MB), `candy-code` LINKED.
 
 **Prediction: tests 9497 EXACT, sixth consecutive round** (9445 + 29 + 6 + 17). **Assertions predicted as
 a lower bound of 133583 and landed at 133585** — the first genuinely loose bound, and the mechanism is
@@ -11602,12 +11602,12 @@ prose sat above an unrelated declaration.
 
 **Lanes (all base `cfb26f8f2`, worktrees clean at tips, all reviewed APPROVE-class BEFORE merge):** w1 candy-vt `d40802f16` (4 commits — API batch 4.1/4.3/4.4/12.3, perf 6.1/6.3, DRY 2.3, 6.2 gated-no-build; 6.4 carved OUT by design per §0-NOW-89 §2(b); vt 926/12689 +14T/+46A exact, render-dump md5-identical `dccc5c48…` 9,728 lines, 10/10 mutations; rv-w1 APPROVE 0C/0M/2MINOR — era-figure 305 + plan stamps folded IN-LANE; SEAM → §E742). w2 sugar-bits `4903d6727` (1 amended commit — `Tabs::view()` consumes stored scrollEnd; rv-w2 MAJOR-1 (left-ellipsis over-claim, 9 sweep regressions) fixed IN-LANE via POLICY-G: `computeScrollEnd` seeds `(1+dividerWidth)` iff `rendersLeftEllipsis()`, tail bounds width-1/width, first-tab force-include; P2 honestly re-measured scrollEnd 2→1 byte-pin unchanged; NEW P5 walk-form pin — LESSON LANDED: withActive-jump form missed the seed-neuter mutation, walk-form mandatory for adjust-gating defects; audit harness tuple-paired census: 15,506 rows 0 width-fail improve=46 regress=0 9/9 flips; rv-re-review CONFIRM-RESOLVED; zone-cost ≈13 cells erratum folded to §E736). w3 sugar-charts `30eb1ce18` (Phase-5 4/4 dispositioned: 5.1 verified-landed, 5.2/5.3/5.4 ruled-skip — feature/new-dep/API-sprawl; rv-v4 MINOR-1 Sixel key-collapse hardening tests-only; charts 577/1453, query+tick UNMOVED; rv APPROVE 0C/0M). <!-- @rename-keep historical provenance -->
 
-**Weld:** picks `f48537daf` `c37486747` `848f1fbb0` `232686276` `66debe01c` `971c0fa96` zero conflicts (file-disjoint); companion `7988f2305` (E742 MINT backlog+triage, zone-cost erratum, vt 6.2 stamp verify); stamps+filemap ride after. ZERO sugar-crush files diffed per lane (verified `git diff --name-only cfb26f8f2..tip | grep -c '^sugar-crush/'`=0 x3) → floor carried EXACT (4th consecutive zero-move round), NO re-pin, NO durations row. Link census 19/19 + 8/8 verified; config md5 `d96e124ee…231ad` start==end.
+**Weld:** picks `f48537daf` `c37486747` `848f1fbb0` `232686276` `66debe01c` `971c0fa96` zero conflicts (file-disjoint); companion `7988f2305` (E742 MINT backlog+triage, zone-cost erratum, vt 6.2 stamp verify); stamps+filemap ride after. ZERO candy-code files diffed per lane (verified `git diff --name-only cfb26f8f2..tip | grep -c '^candy-code/'`=0 x3) → floor carried EXACT (4th consecutive zero-move round), NO re-pin, NO durations row. Link census 19/19 + 8/8 verified; config md5 `d96e124ee…231ad` start==end.
 
 **Laws reinforced:** walk-form pins for adjust-gating defects (M3 seed-neuter caught only by replay-walking tests); tuple-pairing for transition censuses (recorded-offset keysets churn — pair by (row,old,new) not raw keys); zone-marker cost ≈13 cells to Width::of (measure stripped rows); frozen-not-blessed memo folds make later RULING-gated value fixes cheap (w1 6.3 → §E742).
 
 
-## ROUND 86 (2026-09-17) — PHASE-5 PORT-QUEUE WAVE-1: five build/derivation lanes v1–v5 welded + v6 product-rulings doc; ZERO sugar-crush files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census stays 1 (E736 renoted, r87 tail defined)
+## ROUND 86 (2026-09-17) — PHASE-5 PORT-QUEUE WAVE-1: five build/derivation lanes v1–v5 welded + v6 product-rulings doc; ZERO candy-code files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census stays 1 (E736 renoted, r87 tail defined)
 
 ### ROUND-86 WAVE-1 WELD (2026-09-17) — v1 shell / v2 layout / v3 bits / v4 charts / v5 vt — five picks ZERO conflicts; companion fold carries five rv-MINORs; ALL six lanes reviewed APPROVE-class before merge
 
@@ -11625,9 +11625,9 @@ prose sat above an unrelated declaration.
 
 **Companion fold `5c9cd321f` (all five MINORs, comment/docs-only):** layout 2.3 SHA correction; bits Table.php getPaginator docblock truth (NOT routed — behavior freeze); bits 7.1 softened to measured truth (bare SORT_NATURAL reverses; SORT_NATURAL|SORT_FLAG_CASE matched probes; SORT_FLAG_CASE_INSENSITIVE absent on this PHP — verdict unchanged); vt 8.2 feedAsync→`a45666b08` attrition corrected; vt 9.1 + findings #24 mutate() Cell.php:126 re-check.
 
-**Gates (weld tree, plain pipe, linked vendor):** shell 334/694 · layout 157/882 · bits 509/1066 · charts 576/1445 · forms **1891/3164 EXACT** (shared keystone) · consumers UNMOVED zero-wobble: prompt 158/310/2S, glow 122/313, stickers 221/476, query 1483/4203, tick 144/349, boxer 187/375, sprinkles 751/2629 · five-guard **125T/7362A** · child-lifetimes + path-repos rc0 · config md5 d96e124ee… start==end · sugar-crush files touched by weld = **0** → floor exact-carry, NO serial re-pin (r84/r85 shape). Rulings at this weld: bits 2.4 BUILD→r87w2, bits 3.1 DECLINED, charts P5 verify→r87w3; r87 w1 = vt 9-row tail per rv endorsement (4.1/4.3/4.4/12.3 → 6.1/6.3 → 2.3 → 6.2-conditional; 6.4 carved for post-w1 ruling). Master ff-only to `5c9cd321f`.
+**Gates (weld tree, plain pipe, linked vendor):** shell 334/694 · layout 157/882 · bits 509/1066 · charts 576/1445 · forms **1891/3164 EXACT** (shared keystone) · consumers UNMOVED zero-wobble: prompt 158/310/2S, glow 122/313, stickers 221/476, query 1483/4203, tick 144/349, boxer 187/375, sprinkles 751/2629 · five-guard **125T/7362A** · child-lifetimes + path-repos rc0 · config md5 d96e124ee… start==end · candy-code files touched by weld = **0** → floor exact-carry, NO serial re-pin (r84/r85 shape). Rulings at this weld: bits 2.4 BUILD→r87w2, bits 3.1 DECLINED, charts P5 verify→r87w3; r87 w1 = vt 9-row tail per rv endorsement (4.1/4.3/4.4/12.3 → 6.1/6.3 → 2.3 → 6.2-conditional; 6.4 carved for post-w1 ruling). Master ff-only to `5c9cd321f`.
 
-## ROUND 85 (2026-09-17) — E731 trait sweep + E736 sugar-forms F1/F3 welded; one keep-both docblock conflict; floor UNCHANGED 12,027 / 170,392 (zero sugar-crush files moved); census survivors 2 to 3 (E731/E736/E741-mint)
+## ROUND 85 (2026-09-17) — E731 trait sweep + E736 sugar-forms F1/F3 welded; one keep-both docblock conflict; floor UNCHANGED 12,027 / 170,392 (zero candy-code files moved); census survivors 2 to 3 (E731/E736/E741-mint)
 
 **Welded 2026-09-17 on `988696aea` (r86u post-upstream master; NEVER pushed).** Twin-run context: r86u proved the twin independent-merge protocol on the upstream absorption; r85 resumes the lane model — three lanes (u1/u2/u3), ALL reviewed BEFORE merge (r85-rv-{u1,u2,u3} APPROVE-class), base `988696aea` for all three.
 
@@ -11662,7 +11662,7 @@ dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/303
 
 **Gates (weld tree, plain pipe, linked 19/19+8/8):** forms 1891/3164/0W · dash 6006/10076/1S · bits 493/1015 · prompt 158/310/2S · readline 336/1076 · shell window 78/163 · query window 111/204 · crush `Form|Input|Select|Cursor` **633/3943 EXACT** · five-guard **125/7362 EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end · ZERO sugar-crush files moved (`git diff --name-only ccb86e5fa..0f26082fe | grep -c '^sugar-crush/'` = 0) → NO crush serial, NO re-pin — floor stays **12,027 / 170,392 / 0F / 0E / 1S / EXIT 0**. Chain: `ccb86e5fa` → `ac82cf822` → `c1cebb634` → `5461ded56` → `2aba19b05` → `0f26082fe`. **ROUND 85 CLOSED** (5 lanes; forms complete modulo Phase 5). Census 3 → **1**: E731 + E741 CLOSED, E736 sole survivor — decision point (§0-NOW-88 §2): cut E736-sugar-bits after per-lib re-derivation probe / forms-Phase-5 product-scoping session / close campaign. <!-- @rename-keep historical provenance -->
 
-## ROUND 84 (2026-09-16) — E735 leftover tail CLOSED in a single six-lane weld; floor UNCHANGED 12,027 / 172,610 (zero sugar-crush test files moved — no re-pin); census survivors 3 to 2 (E731/E736); the 68d73f9ba downstream-goldens family FULLY swept
+## ROUND 84 (2026-09-16) — E735 leftover tail CLOSED in a single six-lane weld; floor UNCHANGED 12,027 / 172,610 (zero candy-code test files moved — no re-pin); census survivors 3 to 2 (E731/E736); the 68d73f9ba downstream-goldens family FULLY swept
 
 **Closed 2026-09-16 at the W1 weld (code tip `7a3280759`, closeout docs atop; NEVER pushed).** The round
 executed the §0-NOW-85 §2(b) proposal cut exactly: six lanes t1–t6 across four file-disjoint libs + docs,
@@ -11696,7 +11696,7 @@ dash reads 0F.
 - **rv-t1 MINOR (report-accuracy only, no code):** the M3 mutation row "ctor clamp" should read
   "hang RC=124" — recorded here, artifact-level truth.
 - **DURATIONS SCOPE FACT (new):** `scripts/parallel-tests-durations.tsv` is SUGAR-CRUSH-ONLY
-  (`parallel-tests.sh` walks `sugar-crush/phpunit.xml`; sibling suites run as non-sharded single CI
+  (`parallel-tests.sh` walks `candy-code/phpunit.xml`; sibling suites run as non-sharded single CI
   jobs). The r84 brief's "4 durations rows for the new stash/glow test files" was a scope
   misattribution — the weld adds ZERO crush test files, and the tsv<->tree set-diff is EMPTY both
   directions at 532 rows. Future sibling-lib briefs: do NOT promise durations rows.
@@ -11714,7 +11714,7 @@ dash reads 0F.
 
 | figure | value | domain |
 |---|---|---|
-| **ROUND-84 FINAL** | **12,027 / 172,610 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial 9m34s, plain pipe, linked, cwd=sugar-crush) — EXACT r83 carry, NO re-pin owed (zero crush test files moved) | link-domain |
+| **ROUND-84 FINAL** | **12,027 / 172,610 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial 9m34s, plain pipe, linked, cwd=candy-code) — EXACT r83 carry, NO re-pin owed (zero crush test files moved) | link-domain |
 | lib gates | dash **5,977 / 9,890 / 0F / 1S** x2 (9,889 first read, +/-1 wobble) - stash **256/659/5S** - spark **269/1380** - glow **122/313** - candy-core `--filter Subscription` **14/38/1S** | lib-local | <!-- @rename-keep historical provenance -->
 | repo tools | `examples/dashboard-status.php` rc=0 - `tools/check-child-lifetimes.php` rc=0 - `tools/check-path-repos.php --no-lib-path-repos` rc=0 - K=8 CONSERVATION green (run 2; run 1 = the flake above) | |
 
@@ -11725,7 +11725,7 @@ wave). Phase-12 stays PAUSED by user decision. The next move is an OPERATOR DECI
 remaining work is product completion at port scale, not defect work — pick one lib for r85 or close the
 campaign.
 
-## ROUND 83 (2026-09-16) — PHASE 5 (docs-minted hygiene + adjudication, E729–E740) ships CLOSED: twelve lanes r1–r11 + s1–s4 in three waves + three in-round upstream merges (#1429–#1435 became the W3 base; #1436 absorbed at the close); floor 11,991 → 12,027 (one sugar-crush lane: E737); `failOnWarning` mandate COMPLETE repo-wide 58/58; census survivors 3 (E731/E735/E736)
+## ROUND 83 (2026-09-16) — PHASE 5 (docs-minted hygiene + adjudication, E729–E740) ships CLOSED: twelve lanes r1–r11 + s1–s4 in three waves + three in-round upstream merges (#1429–#1435 became the W3 base; #1436 absorbed at the close); floor 11,991 → 12,027 (one candy-code lane: E737); `failOnWarning` mandate COMPLETE repo-wide 58/58; census survivors 3 (E731/E735/E736)
 
 **Closed 2026-09-16 at the wave-3 weld (code tip `c9a0cafff`, docs atop; final tip `14428ef61` after the
 closing absorb-merge); NEVER pushed.** The round opened
@@ -11746,9 +11746,9 @@ reviewed APPROVE-class; all twelve lanes shipped.
 
 | figure | value | domain |
 |---|---|---|
-| **ROUND-83 FINAL** | **12,027 / 172,610 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial 9m37s, plain pipe, linked, cwd=sugar-crush; K=8 conservation +0 tests) | assertions carry the cold/warm ±32 `ensureFixtureRepo()` rebuild wobble band — shard-sum 172,578 and the reviewer's s4-tip serial both same family |
+| **ROUND-83 FINAL** | **12,027 / 172,610 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial 9m37s, plain pipe, linked, cwd=candy-code; K=8 conservation +0 tests) | assertions carry the cold/warm ±32 `ensureFixtureRepo()` rebuild wobble band — shard-sum 172,578 and the reviewer's s4-tip serial both same family |
 | wave-1 | 12,009 / 172,461 / 1S (r4's in-lane re-pin; weld read EXACT) | the +18 to FINAL = s4's 17 new `BootstrapMcpDisableEnvTest` pins + 1 derived Help.php file-scan provider row |
-| wave-2 | UNCHANGED 12,009 | zero sugar-crush code picks (docs, lib attrs, one ignore line) |
+| wave-2 | UNCHANGED 12,009 | zero candy-code code picks (docs, lib attrs, one ignore line) |
 | lib spots at weld | freeze **349/750/0W** · metrics **174/464** · pty **663/1862/17S** under the gate · dash 5964/9823/1S · wish 201/503 | lib-local |
 | durations | **532** rows (531→532; set-diff exactly +`BootstrapMcpDisableEnvTest.php`, verified) | regenerated from the weld junit |
 
@@ -11761,7 +11761,7 @@ reviewed APPROVE-class; all twelve lanes shipped.
   resumes** — the r82 nuance held: garbage ≠ blank, but this time resume-to-success rather than supersede.
 - **The weld base moved under the brief.** The wave-3 brief pinned `master @ 16a5c56f7`; master had
   advanced 19 commits (`e2818fd15`: PRs #1429–#1435 + operator config). Step-0 audit verified ZERO file
-  overlap between the upstream delta and the four picks before any cherry-pick (no `sugar-crush/` path
+  overlap between the upstream delta and the four picks before any cherry-pick (no `candy-code/` path
   touched; pick libs untouched), the weld went onto the LIVE tip, all four picks landed stat-identical,
   and ff-only into master was preserved. Deviation documented in the closeout REPORT.
 - **The base moved a SECOND time, mid-closeout** (PR #1436 sugar-toast/sugar-datepicker ANSI16 indexing +
@@ -11773,7 +11773,7 @@ reviewed APPROVE-class; all twelve lanes shipped.
   byte-identical green (127T/7410A, rc0/rc0). LAW: when closeout docs cite weld SHAs, absorb later master
   moves by merge, never rebase.
 - **Config md5 law hit its first legitimate supersession**: the standing pin `05480c74…2210` was retired
-  by the OPERATOR's own commit `e2818fd15` (added `trustedProjectMcp` to tracked `.sugar-crush/config.json`,
+  by the OPERATOR's own commit `e2818fd15` (added `trustedProjectMcp` to tracked `.candy-code/config.json`,
   +4/−1, benign). New at-rest truth `d96e124ee7967eb34ef479ef824231ad`, start==end verified in BOTH trees
   across the whole weld. The law (start==end WITHIN a session) is what protects; the pinned VALUE is perishable.
 - **Census-prose errata pattern**: all three W3 pick messages stated failOnWarning census arithmetic that
@@ -11794,7 +11794,7 @@ not-actionable), **E736** (LOW, MATCHUPS — 7🟡 port-completions bits/charts/
 1🔴 Windows blocked-by-pause; the mint-era "8🟡/2🔴" framing was a legend-line miscount, recorded as an
 erratum). Zero new mints at this close.
 
-## ROUND 82 (2026-09-15) — PHASE 4 (sibling-lib audit sweep) ships COMPLETE: eighteen lanes q1–q18 across six waves + closeout mint, fourteen mints E711–E728 ALL CLOSED; sugar-crush floor UNCHANGED 11,991 / 172,291 — the first sibling-lib round that moved ZERO sugar-crush tests; ACTIONABLE = 0 BY ROW CENSUS — PHASE-4 COMPLETE
+## ROUND 82 (2026-09-15) — PHASE 4 (sibling-lib audit sweep) ships COMPLETE: eighteen lanes q1–q18 across six waves + closeout mint, fourteen mints E711–E728 ALL CLOSED; candy-code floor UNCHANGED 11,991 / 172,291 — the first sibling-lib round that moved ZERO candy-code tests; ACTIONABLE = 0 BY ROW CENSUS — PHASE-4 COMPLETE
 
 **Closed 2026-09-15 at the FINAL weld `e765b1742`-base chain; NEVER pushed.** The round the campaign
 leaned entirely on the OTHER 51 libs: phase-4 opened with three scoping probes (audit-material inventory,
@@ -11819,7 +11819,7 @@ sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6)
 candy-pty 663/1862/1W(base-carry)/17S, candy-core 862/7646/27S, candy-git-server 354/875, sugar-reel 361/2473/1S, <!-- @rename-keep -->
 candy-mosaic 465/7783/6S, candy-sql 1483/4203, candy-kv 206/427 (audit-only); sugar-crush <!-- @rename-keep historical provenance -->
 **11,991 / 172,291 / 0F / 0E / 1S (McpClientTest canary) / EXIT 0 — UNCHANGED**: a sibling-lib round that
-touched ZERO sugar-crush files moved ZERO sugar-crush figures (q15's eight candy-vcr test rebinds are the
+touched ZERO candy-code files moved ZERO candy-code figures (q15's eight candy-vcr test rebinds are the
 closest approach; the `Vt|Terminal|Buffer` filter re-measured byte-identical 288T/20970A).
 `tools/check-child-lifetimes.php` + `check-path-repos.php --no-lib-path-repos` rc=0 at tip; config.json md5
 `05480c743aff302fd6c06c5a4a4c2210` start==end.
@@ -11865,7 +11865,7 @@ companion drift-fix `8dd48df9d` (rv MINORs: SETTINGS.md 'revisionof' glue; pg fi
 reworded to 'structurally identical' — both pairs deviate in SEARXNG_URL, widened honestly) →
 drift-fix `086035f50` (three whole-tree guards serial1 caught PAST the lane gates — see
 Process) → weld `a5d0033d9` floor **11,991 / 172,259 / 0F / 0E / 1 skipped (McpClientTest
-canary) / EXIT 0** linked @cwd=sugar-crush (serial2 green in one pass, 10m1s); NEVER pushed.
+canary) / EXIT 0** linked @cwd=candy-code (serial2 green in one pass, 10m1s); NEVER pushed.
 All NINE cherry-picks of the round landed ZERO-conflict.
 
 - **pa (E704, +12T):** bracketed paste enabled (`programOptions()` gains `bracketedPaste`) and
@@ -11886,7 +11886,7 @@ All NINE cherry-picks of the round landed ZERO-conflict.
   `/mcp` empty-state and panel guidance now NAME the declaration door
   (`<projectRoot>/.mcp.json`), ending the auth-only impression.
 - **pe (E705, +9T +fix):** `App::init()` pushes `Cmd::pushKittyKeyboard(DISAMBIGUATE)`; the
-  pop rides `bin/sugarcrush` after the loop (pop is not a model turn — Quit/ SIGINT/kill all
+  pop rides `bin/candy-code` after the loop (pop is not a model turn — Quit/ SIGINT/kill all
   exit without one); Ctrl/Shift+Enter now insert newlines on capable terminals, fail-soft
   unchanged, `modifyOtherKeys` deliberately NEVER enabled.
 - **pf (E707, +57T):** BOTH halves — every chat provider now parses its wire length-stop into
@@ -11898,7 +11898,7 @@ All NINE cherry-picks of the round landed ZERO-conflict.
   5/6 provider wires honor the ceiling — the ClaudeCode transport reads no request ceiling;
   TaskTool/Workflow keep provider defaults (threading seam recorded); the flag is NOT
   persisted across session resume.
-- **pg (E710, +23T):** `sugarcrush mcp import claude|opencode <path>` — PRINTS the translated
+- **pg (E710, +23T):** `candy-code mcp import claude|opencode <path>` — PRINTS the translated
   `.mcp.json` block, never writes; renames narrated on stderr, document on stdout, strict
   stream separation pinned through the REAL binary; Subcommands/Help/completion rosters +
   both census guards moved in-step.
@@ -11935,7 +11935,7 @@ APPROVE-WITH-FIX 0C/1MAJOR+4MINOR, all healed in fix-round `8b7989af1`). Chain `
 → pick `896c18205` (ob `ce41d8c9f`) → picks `ad8dfda12`+`e438c9dca`+`f0ef430fc`+`b57ed8fec`+`4b9ab1258`
 (oc `db93dbe16`+`a489db1da`+`54cc5afac`+`2f87b4f8b`+`8b7989af1`, ALL CLEAN, zero conflicts) → drift-fix
 `b11a34ca3` → weld `710544154` floor **11,870 / 170,786 / 0F / 0E / 1 skipped (McpClientTest canary) /
-EXIT 0** linked @cwd=sugar-crush (serial green in one pass after the drift-fix, 10m12s); NEVER pushed.
+EXIT 0** linked @cwd=candy-code (serial green in one pass after the drift-fix, 10m12s); NEVER pushed.
 
 - **ob (test hygiene):** the tempnam+suffix-append family — grep-proven exactly 3 sites under tests/ —
   leaked one 0-byte stub per call: 1,923 stale `/tmp/crush-mcp-auth-*` (CommandTableRenderingTest, the
@@ -11978,7 +11978,7 @@ EXIT 0** linked @cwd=sugar-crush (serial green in one pass after the drift-fix, 
 ## ROUND 79 (2026-09-14) — PHASE 2 (MCP) wave-3: E701 interactive OAuth auth-code + PKCE shipped by a single lane; queue drops to the E699 decision gate; floor 11,837/170,424 @ ca9aac147
 
 - **na — E701** (lane `a14f613ec`+`9d19bd2b5`+`44adf5fe0` → picks `8ed8ada1d`+`7b83a6454`+`1b8cc7ce8`, linear, ALL CLEAN;
-  r79-rv-na **APPROVE-WITH-FIX 0C/0M/3MINOR**, all healed at `44adf5fe0`): `sugarcrush mcp auth login <server>` — RFC 8414
+  r79-rv-na **APPROVE-WITH-FIX 0C/0M/3MINOR**, all healed at `44adf5fe0`): `candy-code mcp auth login <server>` — RFC 8414
   discovery, RFC 7591 registration when needed, RFC 8252 loopback + RFC 7636 S256 authorization-code exchange on a
   127.0.0.1-bound listener, state-checked, deadline-bounded (default 300 s, override flag), Ctrl-C-cancellable, stores
   NOTHING on every failure arm; persists a complete `AuthEntry` that E695 request-time attachment consumes/refreshes;
@@ -11990,7 +11990,7 @@ EXIT 0** linked @cwd=sugar-crush (serial green in one pass after the drift-fix, 
   §2.2 `updateRegistration()` redirect-churn seam carried as trigger-watch (NOT implemented — out of slice).
 - **Builder death + salvage (-72 re-proven):** the na builder died mid-tranche-2; the finisher discovered tranche-2 had
   been committed FROM the uncommitted working tree; SALVAGE-FIRST audit (ref vs porcelain vs disk) redid nothing.
-- **Floor:** 11,837 / 170,424 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0 linked @cwd=sugar-crush at weld `ca9aac147`;
+- **Floor:** 11,837 / 170,424 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0 linked @cwd=candy-code at weld `ca9aac147`;
   serial green in ONE pass (r78 cadence: hand-bump json tests-only first); K=8 CONSERVATION +0/+0; durations 508→515
   (+7 na files, set-diff exact); config.json md5 `05480c74…2210` stable. SwallowingCatch gate-law HELD CLEAN.
 - **Ledger:** E701 → CLOSED (backlog heading + §10-citing paragraph; triage row CLOSED-in-place). ACTIONABLE by row census:
@@ -12026,7 +12026,7 @@ code was cut. Both r78 implementation lanes then closed review **0-CRITICAL/0-MA
   throw line, DocFigure arm in-step. rv MINOR-1 (orphan-row suppression polarity) + MINOR-2 (α-line doc
   honesty) fixed in `4d1672b75`. Two new test files (McpClientStartedSnapshotTest, BootstrapMcpLivenessTest).
 
-**Floor 11,784T/169,799A/0F/0E/1S (McpClientTest canary)/exit0** LINKED cwd=sugar-crush @ weld `a594f073b`;
+**Floor 11,784T/169,799A/0F/0E/1S (McpClientTest canary)/exit0** LINKED cwd=candy-code @ weld `a594f073b`;
 +28T vs wave-1 exact; assertions -31 vs the builder serial = tree-scan census wobble (green-serial-is-weld-
 truth, r77 law); K=8 CONSERVATION PASS tests=+0 assertions=+0 (83s wall); five-guard 119T, DocFigure alone
 77T, Config window 856T/19122A/1S, citation+roster+swallow combined 216T, Glob pair green (corpus 131,765
@@ -12066,7 +12066,7 @@ MCP product-surface inventory, RuntimeNoticeSink wiring state, backlog heading h
   recommended) vs β (shared-client set/restore, REJECTED — race) deferred to an orchestrator ruling; carried as
   E696 [PARTIAL], round-78 lane ma. Design record `/home/sites/crush-r61-artifacts/lb/design.md`.
 
-**Floor 11,749T/169,388A/0F/0E/1S (McpClientTest canary)/exit0** LINKED cwd=sugar-crush @ weld `f895f03c5`; the
+**Floor 11,749T/169,388A/0F/0E/1S (McpClientTest canary)/exit0** LINKED cwd=candy-code @ weld `f895f03c5`; the
 +15T wave-1 prediction (la13+fix1+lc1) HIT exact; K=8 CONSERVATION +0/+0; guards 190T/13732A; Config
 849T/18909A/1S; durations 506 rows HELD exact. Actionables after this close: **6** by row census (E696 PARTIAL,
 E698, E699, E701, E702, E703). NEVER pushed.
@@ -12083,7 +12083,7 @@ E698, E699, E701, E702, E703). NEVER pushed.
   entry-present polarity was RULED IN by the review and kept by the orchestrator: `--confirm`-gated,
   TOTAL with respect to every project note the operator can see, doc-pinned as a home-store command;
   store-present polarity REJECTED because it would make the legacy byte-green test env-dependent on
-  any tree carrying `.sugar-crush/memory` — and this repo TRACKS it (the if-lane pollution incident).
+  any tree carrying `.candy-code/memory` — and this repo TRACKS it (the if-lane pollution incident).
   `--force` NOT implemented = unconditional refusal per the r75 ruling. `memoryLocate`'s docblock now
   spells the `[entry, store]` tuple + the `[null, home]` no-owner sentinel (rv-jb MINOR-1). MEMORY.md
   sentence landed first-sentence-VERBATIM with the falsified trailing clause REPLACED truthful —
@@ -12126,7 +12126,7 @@ E698, E699, E701, E702, E703). NEVER pushed.
 - **Floor / re-pin:** sextet cadence on master — see §0-NOW-78 figures. Durations 506 rows HELD
   (zero new *Test.php files). config.json md5 05480c74…2210 stable.
 - **HARNESS NOTES for future briefs:** (1) a fresh lane sandbox has NO root `vendor/` — gates run via
-  `sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml`; (2) an incompletely linked sandbox
+  `candy-code/vendor/bin/phpunit -c candy-code/phpunit.xml`; (2) an incompletely linked sandbox
   (candy-pty `--libs` gap) deterministically poisons 5 InteractivePromptContainmentTest env reds — <!-- @rename-keep historical provenance -->
   briefs must verify `refresh-deps --mode=linked` reaches 18/18 before building; (3) a lane-tip brief
   cannot promise "0F/EXIT=0" while the staleness pair is merge-owned — expect PAIR-ONLY red at tips.
@@ -12150,7 +12150,7 @@ Merge-side (precedent `96c01bbab`): `src/Cli/Bootstrap.php` `unfilteredTools()` 
 
 ### Floor / gates
 
-**11,727T / 169,276A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush, serial green; K=8 shardcheck CONSERVATION PASS; five-guard GREEN; Config window ALL green; Glob pair 14T/360A; DocFigure alone 71T/2451A; `durations.tsv` **506 rows HELD** (zero new `*Test.php` — ja/jb added methods to existing files); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **2 → 2 BY ROW CENSUS** (OPEN-table E611 + E694 · E686 CLOSED-in-place · PARTIAL/STALE/UNCERTAIN 0) — never chained. Brief's expected live-enum 11,722 was an arithmetic slip: 11,714 + 8 (ja) + 5 (jb) = **11,727**, measured exact.
+**11,727T / 169,276A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code, serial green; K=8 shardcheck CONSERVATION PASS; five-guard GREEN; Config window ALL green; Glob pair 14T/360A; DocFigure alone 71T/2451A; `durations.tsv` **506 rows HELD** (zero new `*Test.php` — ja/jb added methods to existing files); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **2 → 2 BY ROW CENSUS** (OPEN-table E611 + E694 · E686 CLOSED-in-place · PARTIAL/STALE/UNCERTAIN 0) — never chained. Brief's expected live-enum 11,722 was an arithmetic slip: 11,714 + 8 (ja) + 5 (jb) = **11,727**, measured exact.
 
 ### Process — the tty-harness serial reds and their plain-pipe cure
 
@@ -12170,12 +12170,12 @@ serial1 launched from a tmux pty answered 6 extra reds that were FULLY EXPLAINED
 
 ### The lanes
 
-- **if — E25 piece-2** lane `da38ed361` → pick `72079870d` + companion `96c01bbab`, +11T/+118A at the re-pin (11,703→11,714; live enum +10 methods +1 derived file-scan row) — repo-local PROJECT-scope memory writer `src/Context/ProjectMemoryWriter.php` (notes under `<root>/.sugar-crush/memory/`, the same sentinel corner imports use; `forRoot` READ resolver NEVER creates and refuses '' root — the `realpath('')`=CWD trap; `createForRoot` mkdir 0700 + POST-mkdir `ContainedPath::below` gate — post-check load-bearing because mkdir writes THROUGH a pre-planted symlink; `write()` guards empty / 8192 bytes), `MemoryBlock::capture(?projectStore = null)` folds repo-local first winning id collisions (35 call sites byte-identical), `Chat::memoryAdd()` (Hot) routes project scope createForRoot→write ?? home add with byte-identical response wording. DTO-enumeration held; DuplicatedTestHelperDrift dodged via helper renames; DocFigure fold-policy arm widened substr-count→DISTINCT-scope census IN-STEP (same commit) + MEMORY.md prose names the writer; E646 clean (zero wall-clock). Review r74-rv-if APPROVE 0C/0M/3MINOR — dispositions: **MINOR-2** the >8 KiB size asymmetry (project store REFUSES an oversized note where home would accept) lived only in code → one `docs/MEMORY.md` body sentence lands at this docs commit (DocFigure re-run 63T/1892A GREEN, hc arms unperturbed); **the inventory miss** — the pick landed WITHOUT the two fail-closed containment inventories updated; companion `96c01bbab` classified `ProjectMemoryWriter` into `ContainedPathInventoryTest` (routed-site roster 38→39 in 16→17 files, `ContainedPath.php` docblock word-number THIRTY-EIGHT→THIRTY-NINE + number-word range) and `ProjectTierRefusalInventoryTest` (`.sugar-crush/memory` REPOSITORY row; dot-path occurrences 38→39, repository-chosen 18→19, distinct-path figures unchanged) — the honest sentence: **the new class added exactly ONE routed ContainedPath comparison and ONE repository-chosen dot-path literal, both inventories enumerate every such site fail-closed, so the pick was unclosable without the companion — a census the builder AND the reviewer both missed; process lesson: containment-inventory rosters belong in every brief that adds src filesystem code.**; **the hermeticity incident** — unpinned Chat tests CAN write the project-root `.sugar-crush`: one Chat test exercising project-scope add with default `projectRoot=getcwd()` polluted the worktree root, and the purging `rm -rf .sugar-crush` then deleted TRACKED files (the repo commits `.sugar-crush/{agents,config*.json}`) — recovered via `git checkout --`; the offender now pins `projectRoot: $tempDir`. Seams left open (jb's r75 design input): list/search/delete/clear/edit home-only (E694 mint-candidate, no blind mint); null home store ⇒ no fold even with repo notes (memory off = off); no agent-facing memory tool.
+- **if — E25 piece-2** lane `da38ed361` → pick `72079870d` + companion `96c01bbab`, +11T/+118A at the re-pin (11,703→11,714; live enum +10 methods +1 derived file-scan row) — repo-local PROJECT-scope memory writer `src/Context/ProjectMemoryWriter.php` (notes under `<root>/.candy-code/memory/`, the same sentinel corner imports use; `forRoot` READ resolver NEVER creates and refuses '' root — the `realpath('')`=CWD trap; `createForRoot` mkdir 0700 + POST-mkdir `ContainedPath::below` gate — post-check load-bearing because mkdir writes THROUGH a pre-planted symlink; `write()` guards empty / 8192 bytes), `MemoryBlock::capture(?projectStore = null)` folds repo-local first winning id collisions (35 call sites byte-identical), `Chat::memoryAdd()` (Hot) routes project scope createForRoot→write ?? home add with byte-identical response wording. DTO-enumeration held; DuplicatedTestHelperDrift dodged via helper renames; DocFigure fold-policy arm widened substr-count→DISTINCT-scope census IN-STEP (same commit) + MEMORY.md prose names the writer; E646 clean (zero wall-clock). Review r74-rv-if APPROVE 0C/0M/3MINOR — dispositions: **MINOR-2** the >8 KiB size asymmetry (project store REFUSES an oversized note where home would accept) lived only in code → one `docs/MEMORY.md` body sentence lands at this docs commit (DocFigure re-run 63T/1892A GREEN, hc arms unperturbed); **the inventory miss** — the pick landed WITHOUT the two fail-closed containment inventories updated; companion `96c01bbab` classified `ProjectMemoryWriter` into `ContainedPathInventoryTest` (routed-site roster 38→39 in 16→17 files, `ContainedPath.php` docblock word-number THIRTY-EIGHT→THIRTY-NINE + number-word range) and `ProjectTierRefusalInventoryTest` (`.candy-code/memory` REPOSITORY row; dot-path occurrences 38→39, repository-chosen 18→19, distinct-path figures unchanged) — the honest sentence: **the new class added exactly ONE routed ContainedPath comparison and ONE repository-chosen dot-path literal, both inventories enumerate every such site fail-closed, so the pick was unclosable without the companion — a census the builder AND the reviewer both missed; process lesson: containment-inventory rosters belong in every brief that adds src filesystem code.**; **the hermeticity incident** — unpinned Chat tests CAN write the project-root `.candy-code`: one Chat test exercising project-scope add with default `projectRoot=getcwd()` polluted the worktree root, and the purging `rm -rf .candy-code` then deleted TRACKED files (the repo commits `.candy-code/{agents,config*.json}`) — recovered via `git checkout --`; the offender now pins `projectRoot: $tempDir`. Seams left open (jb's r75 design input): list/search/delete/clear/edit home-only (E694 mint-candidate, no blind mint); null home store ⇒ no fold even with repo notes (memory off = off); no agent-facing memory tool.
 - **ie — E686 completeness verdict** — ZERO commits, measure-and-verdict at tip `f46c203d6`; evidence `/home/sites/crush-r61-artifacts/ie/{REPORT,verdicts}.md`. VERDICT: **TRANCHE-11** — hc's "docs seed list EMPTY" rests on a FALSE upstream judgment: gd/measures.md row 22 ("figure-free … numeral-scan empty") is FALSE-to-tree — every flagged claim on those pages predates gd's base (blame-verified `8d15443c3`/`4b4ff3398`); the scan was empty-handed, not the pages. Independent re-derivation: DocFigure's 63 arms parse exactly 10 pages; **AGENTS_AUTHORING.md, COMMANDS.md, PROMPT_ENGINEERING.md** carry ZERO citations in any test (SymbolCitationDrift resolves backticks only — proves nothing about numerals/anchors); **ARCHITECTURE.md** carries 5 confirmed-drifted bare line anchors (`Runtime.php:154`→:1171, `line 311`→:338, `lines 564-595`→:625, `line 601`→:662, `line 1292`→:2416) plus an unguarded figure-dense Providers section; 3 claim-sites CONFIRMED FALSE at tip (incl. AGENTS_AUTHORING's "no `Task` tool … eleven built-in tools" — false since E675 `b636591b6` shipped 12 BuiltIn files — and the "not merely cosmetic" + "lines 136-159" anchor/quote). Work list **T11-a** ARCHITECTURE (anchor heals + Providers arm + both-shapes bare-anchor absence guard, HOOKS.md:264-style self-narrative exempt) / **T11-b** AGENTS_AUTHORING + COMMANDS (2 prose heals + roster arms) / **T11-c** PROMPT_ENGINEERING (cross-page pair arms reusing AP/BE derivations) — ~12–16 arms, ~6 prose fixes. PASS sub-verdict: every ARMED page's sweeps clean; all ~20 HELD rows' blocking reasons still live at tip. **CONFIRMED 8/9 by r74-rv-ie** — single miss is **erratum E1: `prompt_expand.md` IS tracked at the monorepo root**, so PROMPT_ENGINEERING's §9.12 cite is VALID-BUT-UNGUARDED (not broken); the closeout carries the erratum to ja.
 
 ### Floor / gates
 
-**11,714T / 168,729A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush, serial3 green at `ab7f3726a`; K=8 shardcheck CONSERVATION PASS EXIT=0 (plain pipe); `durations.tsv` **506** rows (+`ProjectMemoryWriterTest` — rule -70 honored: serial is conservation truth until the row lands). Closeout gates re-run at tip (plain pipe, `-c phpunit.xml`): five-guard (`ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift|SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedDocBlockLine`) 116T/6492A GREEN; Config window 836T/18348A/1S GREEN — no staleness pair, re-pin consistent; Glob window 254T/1890A GREEN; runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **3 → 2 BY ROW CENSUS** (OPEN-table E611/E686 · PARTIAL-table 0 — E25 CLOSED-in-place · STALE 0 · UNCERTAIN 0) — awk survivor recount over the four triage tables executed pre- and post-stamp, never chained.
+**11,714T / 168,729A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code, serial3 green at `ab7f3726a`; K=8 shardcheck CONSERVATION PASS EXIT=0 (plain pipe); `durations.tsv` **506** rows (+`ProjectMemoryWriterTest` — rule -70 honored: serial is conservation truth until the row lands). Closeout gates re-run at tip (plain pipe, `-c phpunit.xml`): five-guard (`ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift|SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedDocBlockLine`) 116T/6492A GREEN; Config window 836T/18348A/1S GREEN — no staleness pair, re-pin consistent; Glob window 254T/1890A GREEN; runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **3 → 2 BY ROW CENSUS** (OPEN-table E611/E686 · PARTIAL-table 0 — E25 CLOSED-in-place · STALE 0 · UNCERTAIN 0) — awk survivor recount over the four triage tables executed pre- and post-stamp, never chained.
 
 ### Process — merge-agent death after steps 1–4; the -72 salvage-first finisher re-proven
 
@@ -12198,12 +12198,12 @@ The r74 merge agent DIED after completing steps 1–4 (pick `72079870d`, compani
 
 ### Floor / gates
 
-**11,703T / 168,611A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush; the FIRST serial ended EXIT=1 with EXACTLY the two known staleness arms (documented hand-bump→green→refresh→weld cadence; second serial green, identical totals). K=8 shardcheck CONSERVATION PASS +0/+0 (plain pipe); five-guard (`ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift`) 105T/6372A GREEN incl. the former staleness pair — DocFigure alone 63T/1891A = 56+7 exact; Config window 836T/18332A/1S GREEN; `durations.tsv` **505 rows HELD** (hc added no new `*Test.php`); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **3 → 3 BY ROW CENSUS** (OPEN-table E611/E686 · PARTIAL-table E25 · STALE 0 · UNCERTAIN 0): E686 re-noted (tranche-10 landed, docs seed list DECLARED empty — completeness verdict at r74), nothing else moved.
+**11,703T / 168,611A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code; the FIRST serial ended EXIT=1 with EXACTLY the two known staleness arms (documented hand-bump→green→refresh→weld cadence; second serial green, identical totals). K=8 shardcheck CONSERVATION PASS +0/+0 (plain pipe); five-guard (`ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift`) 105T/6372A GREEN incl. the former staleness pair — DocFigure alone 63T/1891A = 56+7 exact; Config window 836T/18332A/1S GREEN; `durations.tsv` **505 rows HELD** (hc added no new `*Test.php`); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **3 → 3 BY ROW CENSUS** (OPEN-table E611/E686 · PARTIAL-table E25 · STALE 0 · UNCERTAIN 0): E686 re-noted (tranche-10 landed, docs seed list DECLARED empty — completeness verdict at r74), nothing else moved.
 
 ### Process notes / round-74 seeds
 
 - Single-lane round + zero-commit verdict lane: hd's value was confirmation — a clean 9/9 says the r70–r72 stamp discipline held; measure-and-verdict lanes cost half a gate cycle and retire drift anxiety.
-- **Round-74 seeds:** **ie — E686 completeness verdict** (read-only: independently re-derive the "docs seed list empty" declaration across ALL `sugar-crush/docs` pages + the gd/gg/ha/hc `measures.md` ledgers + existing guard families; rule E686 CLOSED or mint the tranche-11 work list — measure-and-verdict, owns docs only). **if — E25 piece-2** (project-scope memory-block writer: DESIGN-FIRST brief — read the E25 backlog row + `MemoryBlock.php` piece-1 state, enumerate censuses/ownership BEFORE touching code; owns `sugar-crush/src/Context/` + Runtime seams + tests; DTO-enumeration rule; no wall-clock timeouts, E646 ban). Carries: E611 pick-or-drop AT r74 CLOSE · E309 trigger watch · E655 phantom stays VOID · `LspClientDispatchPumpTest` load-flake ambient.
+- **Round-74 seeds:** **ie — E686 completeness verdict** (read-only: independently re-derive the "docs seed list empty" declaration across ALL `candy-code/docs` pages + the gd/gg/ha/hc `measures.md` ledgers + existing guard families; rule E686 CLOSED or mint the tranche-11 work list — measure-and-verdict, owns docs only). **if — E25 piece-2** (project-scope memory-block writer: DESIGN-FIRST brief — read the E25 backlog row + `MemoryBlock.php` piece-1 state, enumerate censuses/ownership BEFORE touching code; owns `candy-code/src/Context/` + Runtime seams + tests; DTO-enumeration rule; no wall-clock timeouts, E646 ban). Carries: E611 pick-or-drop AT r74 CLOSE · E309 trigger watch · E655 phantom stays VOID · `LspClientDispatchPumpTest` load-flake ambient.
 
 ## ROUND 72 (2026-09-13) — two lanes ha–hb, both reviewed BEFORE merge; the E686 tranche-9 phantom-page salvage; floor 11,696/168,413
 
@@ -12216,7 +12216,7 @@ The r74 merge agent DIED after completing steps 1–4 (pick `72079870d`, compani
 
 ### Floor / gates
 
-**11,696T / 168,413A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush; the FIRST serial ended EXIT=1 with EXACTLY the two known staleness arms (documented hand-bump→green→refresh→weld cadence; second serial green, identical totals). K=8 shardcheck CONSERVATION PASS +0/+0 (616.7s sum, plain pipe); five-guard (this round's family `ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift`) 98T/6174A — DocFigure alone 56T/1693A = 47+9 exact (the brief's "~54T" was mis-anchored on r71's DIFFERENT filter set); Config window 829T/18134A/1S GREEN incl. the former drift pair; `durations.tsv` **505 rows HELD** (no new `*Test.php` this round); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **4 → 3 BY ROW CENSUS** (OPEN-table E611/E686 · PARTIAL-table E25 · STALE 0 · UNCERTAIN 0): E693 flipped CLOSED-in-place; E686 renoted (tranche-9 landed; next = tranche-10 remaining pages per ha/measures.md).
+**11,696T / 168,413A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code; the FIRST serial ended EXIT=1 with EXACTLY the two known staleness arms (documented hand-bump→green→refresh→weld cadence; second serial green, identical totals). K=8 shardcheck CONSERVATION PASS +0/+0 (616.7s sum, plain pipe); five-guard (this round's family `ReadmeSuiteFigureDrift|DocFigureProseDrift|GlobDialectDifferential|ChildWallClockBudget|DuplicatedTestHelperDrift`) 98T/6174A — DocFigure alone 56T/1693A = 47+9 exact (the brief's "~54T" was mis-anchored on r71's DIFFERENT filter set); Config window 829T/18134A/1S GREEN incl. the former drift pair; `durations.tsv` **505 rows HELD** (no new `*Test.php` this round); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **4 → 3 BY ROW CENSUS** (OPEN-table E611/E686 · PARTIAL-table E25 · STALE 0 · UNCERTAIN 0): E693 flipped CLOSED-in-place; E686 renoted (tranche-9 landed; next = tranche-10 remaining pages per ha/measures.md).
 
 ### Process notes
 
@@ -12248,7 +12248,7 @@ Round 71’s five code commits were picked onto master by a session that merged 
 
 ### Floor / gates
 
-**11,687T / 168,165A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush, serial 9m27s at the pick tip (figures re-pinned at `328b14d91`; the first serial ended EXIT=1 with EXACTLY the two known staleness arms — the documented hand-bump→green→refresh→weld cadence ran against the second serial, both reporting identical totals). K=8 CONSERVATION PASS +0/+0 (638.3s sum); five-guard 45T/4544A; Config 820T/17,890A/1S GREEN including the drift pair; `durations.tsv` 504→**505** rows (+`EngineBackendHeartbeatThreadingTest`, zero deletions); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **6 → 4 BY ROW CENSUS** (OPEN-table 3 — E611/E686/E693 · PARTIAL-table 1 — E25 · STALE 0 · UNCERTAIN 0); three rows flipped CLOSED-in-place (E325, E493, E390), E686 renoted (tranche-8 + review-fix), E693 minted [LOW] OPEN.
+**11,687T / 168,165A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code, serial 9m27s at the pick tip (figures re-pinned at `328b14d91`; the first serial ended EXIT=1 with EXACTLY the two known staleness arms — the documented hand-bump→green→refresh→weld cadence ran against the second serial, both reporting identical totals). K=8 CONSERVATION PASS +0/+0 (638.3s sum); five-guard 45T/4544A; Config 820T/17,890A/1S GREEN including the drift pair; `durations.tsv` 504→**505** rows (+`EngineBackendHeartbeatThreadingTest`, zero deletions); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable **6 → 4 BY ROW CENSUS** (OPEN-table 3 — E611/E686/E693 · PARTIAL-table 1 — E25 · STALE 0 · UNCERTAIN 0); three rows flipped CLOSED-in-place (E325, E493, E390), E686 renoted (tranche-8 + review-fix), E693 minted [LOW] OPEN.
 
 ### Round-72 seeds (lanes ha–hb + carries)
 
@@ -12287,7 +12287,7 @@ gb's original builder session answered EVERY resume with an identical report —
 
 ### Floor / gates
 
-**11,674T / 167,892A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush, serial 9m27s at `4da36922a`. K=8 CONSERVATION PASS +0/+0 (82s); five-guard 45T/4532A; ReadmeSuiteFigureDrift 4T/26A; Config w1 811T/17,714A/1S; `durations.tsv` 503→**504** rows (+ProviderHeartbeatProgressTest — rule -70 honored: the serial run is conservation truth until the row lands, comm-proven exactly +1, zero deletions); runtime `config.json` md5 `05480c74…2210` stable. Wave-1 floor was 11,665/167,829 (serial==shard-sum exact). Ledger actionable **14 → 8 by ROW CENSUS** (OPEN-table 5 — E204/E325/E493/E611/E686 · PARTIAL-table 3 — E25/E134/E390 · STALE 0 · UNCERTAIN 0); six rows flipped CLOSED-in-place (E10, E172, E199, E309-VERDICT, E353, E616), three renoted (E390, E493, E686), E375 confirmation addendum (no move).
+**11,674T / 167,892A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code, serial 9m27s at `4da36922a`. K=8 CONSERVATION PASS +0/+0 (82s); five-guard 45T/4532A; ReadmeSuiteFigureDrift 4T/26A; Config w1 811T/17,714A/1S; `durations.tsv` 503→**504** rows (+ProviderHeartbeatProgressTest — rule -70 honored: the serial run is conservation truth until the row lands, comm-proven exactly +1, zero deletions); runtime `config.json` md5 `05480c74…2210` stable. Wave-1 floor was 11,665/167,829 (serial==shard-sum exact). Ledger actionable **14 → 8 by ROW CENSUS** (OPEN-table 5 — E204/E325/E493/E611/E686 · PARTIAL-table 3 — E25/E134/E390 · STALE 0 · UNCERTAIN 0); six rows flipped CLOSED-in-place (E10, E172, E199, E309-VERDICT, E353, E616), three renoted (E390, E493, E686), E375 confirmation addendum (no move).
 
 ### Round-71 seeds (lanes gf–gh + carries)
 
@@ -12333,7 +12333,7 @@ The wave-1 merge conservation gate went RED → bisect (suspect-prefix run, then
 
 ### Floor / gates
 
-**11,656T / 167,184A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=sugar-crush, serial 9m27s at `b600c9760`. K=8 CONSERVATION PASS +0/+0; five-guard 74T/5150A; Config filter 805T/17,129A/1S; `durations.tsv` 499→503 rows (+PaletteQueryCaretTest, +InputCaretGraphemeTest, +RuntimeNoticeSinkResetExtensionTest, +FixtureLifetimeCensusTest); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable 49 → **14 by ROW CENSUS** (OPEN 10 — E10/E199/E204/E309/E325/E353/E493/E611/E616/E686 · PARTIAL 4 — E25/E134/E172/E390 · STALE 0 · UNCERTAIN 0); 35 rows flipped CLOSED this round, kept in place per the r67 convention.
+**11,656T / 167,184A / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — LINKED, cwd=candy-code, serial 9m27s at `b600c9760`. K=8 CONSERVATION PASS +0/+0; five-guard 74T/5150A; Config filter 805T/17,129A/1S; `durations.tsv` 499→503 rows (+PaletteQueryCaretTest, +InputCaretGraphemeTest, +RuntimeNoticeSinkResetExtensionTest, +FixtureLifetimeCensusTest); runtime `config.json` md5 `05480c74…2210` stable. Ledger actionable 49 → **14 by ROW CENSUS** (OPEN 10 — E10/E199/E204/E309/E325/E353/E493/E611/E616/E686 · PARTIAL 4 — E25/E134/E172/E390 · STALE 0 · UNCERTAIN 0); 35 rows flipped CLOSED this round, kept in place per the r67 convention.
 
 ### Process finding — blank-replay extends to REVIEWERS
 
@@ -12371,7 +12371,7 @@ ff's reviewer returned FOUR blank reports; the same task_id was resumed each tim
 
 ## ROUND 68 (2026-09-12) — lanes ea–ee: E17 provider fold shipped, citation guard widened tree-wide, doc-figure t5, palette caret gated; floor 11,602/166,072
 
-- Floor moved 11,574/163,533 → **11,602/166,072/0F/0E/1S exit0** (linked, cwd=sugar-crush; serial 9m21s; K=8 shardcheck +0/+0 85s; five-guard 44T/4457A; Config 801T/17047A/1S; durations 496→499 rows).
+- Floor moved 11,574/163,533 → **11,602/166,072/0F/0E/1S exit0** (linked, cwd=candy-code; serial 9m21s; K=8 shardcheck +0/+0 85s; five-guard 44T/4457A; Config 801T/17047A/1S; durations 496→499 rows).
 - Chain: `741bb85e1`(foreign base) → `e0bbed2ab`(ee) → `8d1dadfa5`(ed) → `40107b8d5`(ec) → `aa630b142`(eb) → `5de95e395`(wave-1 re-pin) → `e4b6cb931`(ea) → `318cd7be5`(final re-pin). NEVER pushed.
 - Lanes (all builders APPROVE 0C/0M): **ea** c2a9b4089 +2T/+2,287A — 11 bare {@see}→FQN, SymbolCitationDriftTest tree-census + planted positive + DEFERRED roster (staleness arm :1262); five blank/truncated resumes, landed as claimed — rule-3 resume discipline vindicated. **eb** cb588d651 +3T/+18A — E3 caret gate, honest unreachable-today, E43 declined w/ measurement. **ec** 4a353a77c +17T/+146A — E17 fold (11 sites, backlog's 7 undercount; foldUsage byte-identical fallback; per-side Vertex carriers). **ed** 23099eeaf +6T/+73A — arms T–Y, ??-1 vacuity lesson (assertArrayHasKey-before-compare), "up to 30s" VOID, 12 HELD carry. **ee** bf78d13d2 +0T — stale trio healed w/ measured bootstrap truth; da-refusal multiset-faithful (roster lives in SwallowingCatchCensusTest — out of ee ownership, seam kept).
 - Closeout: E107 re-verified 8/8 (CLOSED); E347 judged NOT the citation owner (roster → fi); ledger actionable 55→**49 by row census** — the +6 chained-drift question retires (r67 recommendation adopted).
@@ -12386,18 +12386,18 @@ ff's reviewer returned FOUR blank reports; the same task_id was resumed each tim
 
 | run | figure | domain |
 |---|---|---|
-| round base | 11,519 / 176,743 / 0F / 0E / 1S / exit 0 | LINKED @ `d15bdefdf`, cwd = sugar-crush (round-66 anchor) |
+| round base | 11,519 / 176,743 / 0F / 0E / 1S / exit 0 | LINKED @ `d15bdefdf`, cwd = candy-code (round-66 anchor) |
 | hold gate (pre-fix) | 11,566T HIT PREDICTION / 163,325A / 4F | the 4F = 2 staleness + F4 (MemoryPromptWiring `$steps` lacked `withSpendCap`) + F1 (TaskList lock-path) — both healed before the re-pin |
-| **wave-1 (serial)** | 11,566 / 163,350 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0 (gate wall 558–565s) | **LINKED @ `56501908d`, cwd = sugar-crush — wave-1 anchor**; K=4 shardcheck PASS 159s; five-guard 56T/4749A; Config filter **790T / 16,845A / 1S** (the −13,393A step vs round-66 is dd's E143 memoization removing per-paragraph window noise, re-pinned honestly, not lost ground); tools/tests 87T/365A; `durations.tsv` 496 rows |
-| **round FINAL (serial)** | **11,574 / 163,533 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 9m23; prediction 11,574T HIT exactly — assertions 163,533 vs the +22 estimate, provider-row churn absorbed) | **LINKED @ `323605773`, cwd = sugar-crush — round-68 anchor**; K=8 shardcheck CONSERVATION PASS 83s (**6.7×** vs serial — the local default the user asked for); five-guard **64T/4913A**; Config filter **795T / 16,974A / 1S**; `durations.tsv` 496 rows — **values-only, no new test files in wave-2** |
+| **wave-1 (serial)** | 11,566 / 163,350 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0 (gate wall 558–565s) | **LINKED @ `56501908d`, cwd = candy-code — wave-1 anchor**; K=4 shardcheck PASS 159s; five-guard 56T/4749A; Config filter **790T / 16,845A / 1S** (the −13,393A step vs round-66 is dd's E143 memoization removing per-paragraph window noise, re-pinned honestly, not lost ground); tools/tests 87T/365A; `durations.tsv` 496 rows |
+| **round FINAL (serial)** | **11,574 / 163,533 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 9m23; prediction 11,574T HIT exactly — assertions 163,533 vs the +22 estimate, provider-row churn absorbed) | **LINKED @ `323605773`, cwd = candy-code — round-68 anchor**; K=8 shardcheck CONSERVATION PASS 83s (**6.7×** vs serial — the local default the user asked for); five-guard **64T/4913A**; Config filter **795T / 16,974A / 1S**; `durations.tsv` 496 rows — **values-only, no new test files in wave-2** |
 
 ### LANE OUTCOMES
 
 - **da — swallowing-catch census (lane `2a943d13b` → pick `d3fb349fd`; the wave-1 brief's `2973380d4` attribution was WRONG — that SHA is de's review-fix), E572/E577/E578/E612/E615/E617 CLOSED, +0T/+32A.** E578-as-written measured FALSE per E615 — the resolver's real divergence is the OTHER direction — and BOTH polarities are now pinned; E572-1's ten true-positive `AgentManagerTest` catches rode a SHRINK-ONLY roster row. Gotcha: an EXECUTED swallowing `set_error_handler` poisons the PHPUnit process itself — planted catch bodies must never actually fire.
-- **db — stderr-census cluster (lane `687f68cce` → pick `0e9ce9e05`): E195/E258/E259/E267/E269/E270 CLOSED; E154's OWNED half shipped (heading stays PARTIAL — Bootstrap.php:5722 remainder routed to wave-2 dh); E228 NOT shipped — the brief's closure claim REFUSED (pickaxe-zero over the whole range).** 21 `sugarcrush: ` prefixes routed; the scanner counts CALLS while the census MESSAGE_SHAPES counts literals — the distinction is now written down; E195 grew the use-alias resolver channel-6 was missing; E259's reconstructed-after-lost-mutation trio (NINETEEN / 19 / wm=5) flipped IN-STEP. The builder died BLANK ×4 — the resume-same-task protocol held; the REPORTS were lost, not the work, and the merged floor (+2T inside the wave total) is the ledger.
+- **db — stderr-census cluster (lane `687f68cce` → pick `0e9ce9e05`): E195/E258/E259/E267/E269/E270 CLOSED; E154's OWNED half shipped (heading stays PARTIAL — Bootstrap.php:5722 remainder routed to wave-2 dh); E228 NOT shipped — the brief's closure claim REFUSED (pickaxe-zero over the whole range).** 21 `candy-code: ` prefixes routed; the scanner counts CALLS while the census MESSAGE_SHAPES counts literals — the distinction is now written down; E195 grew the use-alias resolver channel-6 was missing; E259's reconstructed-after-lost-mutation trio (NINETEEN / 19 / wm=5) flipped IN-STEP. The builder died BLANK ×4 — the resume-same-task protocol held; the REPORTS were lost, not the work, and the merged floor (+2T inside the wave total) is the ledger.
 - **dc — child-scanner cluster (lane `bb83512bc` → pick `18daf2d55`): E174/E205/E235/E283/E343 CLOSED + E417 CLOSED-WITH-EVIDENCE (zero code), +0T/+35A.** `SplitsTopLevelArgumentsTrait` consolidated the three depth-walk copies with ZERO moves across the 215-stderr / 1706-lifetime scan sites; E205 replaced the text-regex predicate with `commandFragments()` + a quote/order-aware `shellFdTwo()` walker over ARGV0 only; E235/E283 OUT_OF_SCOPE deferrals became lower-bound `{minOffenders, reason}` data (mins 1,1,3,10,2,57,1,1,1,5,6,2 — growth silent, shrink reds); E417's prescribed fix was MEASURED WRONG (naming a high fd in the spec does not stop inheritance) — closed no-code, stale-prescription renote is a round-close chore. E319/E342/E358 verified zero-in-file — still out-of-ownership, wave-2 routing.
 - **dd — doc-oracle cluster (lane `1e4ff44c5` → pick `4d58dadd7`): E111/E125/E127/E143/E144/E148/E149/E357/E386 CLOSED, +9T.** `readOrFail()` now has ONE implementation tree-wide (`RefusesAnUnreadableSourceTrait`); E143's memoization cut ~14.2k per-paragraph window assertions — HONEST, measured, cited (Config window 31,014A → 16,830A at the lane); E111's five claim families pinned (premise drift documented: the claims live in SKILLS.md/README/TROUBLESHOOTING, not SETTINGS.md). GOTCHA: `GlobDialectDifferentialTest` harvests glob-shaped string literals TREE-WIDE — deleting `'/docs/*.md'` from a fixture drifted a FORBIDDEN docblock census (PathGlob 365×361); any test edit touching a glob-shaped literal can redden it.
-- **de — Chat behavioral (lane `bc3e11e1a` + review-fix `e4d448ead` → picks `2da286745`+`2973380d4`): E4/E17/E20/E175 CLOSED (+ the E154(c) detach-gate site), +36T live (34 methods + 2 derived provider rows); E3 → PARTIAL.** E4 cursor checkpoint (`inputCursorOffset()` saved/restored); E17 raw-record calibration f←clamp(real/raw) kills the period-2 √r oscillation; E20 mid-turn spend abort delivered as a `SpendCapBreached` FRAME EVENT — NO wall-clock kill anywhere (the standing E646 ban honored, documented at the ctor); E175 `SUGARCRUSH_DEBUG_STREAM` gate on the onToken detach log. E3 SEAM-REFUSED: the palette caret needs `src/Renderer.php:3600`'s unconditional '█' + PaletteState — forbidden ownership, needs a wave-2 TUI lane. Side finding carried to close: `Chat::dropLast` docblock says grapheme, the loop walks codepoints.
+- **de — Chat behavioral (lane `bc3e11e1a` + review-fix `e4d448ead` → picks `2da286745`+`2973380d4`): E4/E17/E20/E175 CLOSED (+ the E154(c) detach-gate site), +36T live (34 methods + 2 derived provider rows); E3 → PARTIAL.** E4 cursor checkpoint (`inputCursorOffset()` saved/restored); E17 raw-record calibration f←clamp(real/raw) kills the period-2 √r oscillation; E20 mid-turn spend abort delivered as a `SpendCapBreached` FRAME EVENT — NO wall-clock kill anywhere (the standing E646 ban honored, documented at the ctor); E175 `CANDY_CODE_DEBUG_STREAM` gate on the onToken detach log. E3 SEAM-REFUSED: the palette caret needs `src/Renderer.php:3600`'s unconditional '█' + PaletteState — forbidden ownership, needs a wave-2 TUI lane. Side finding carried to close: `Chat::dropLast` docblock says grapheme, the loop walks codepoints.
 - **df — sibling libs + CI (five picks).** `7fbc7636b` candy-core: E370 pinned (PosixBackend::isTty into the closed-descriptor-zero family); **E447 CLOSED-REFUTED — a no-op: the "unreadable spec" claim was refuted by E485's own instrument**. `436965761` candy-pty: E466 caller census (18 scopes, zero post-close fd reads — the dup window never existed). `aa2497e07` sugar-dash + `5b6bb6b1b` sugar-reel: E366/E448 bounded TERM→KILL reapers (`terminateBounded` / per-package `BoundedReaper` — sugar-crush's ProcessReaper is unreachable from siblings; the reel change also removed a LATENT SIGTERM-constant fatal when ext-pcntl is absent). `1a4c39fc4` repo: **E486 `tools/check-child-lifetimes.php` requires the canonical ChildLifetimeScanner BY PATH — no third copy — 57-lib autoload walk, ACCOUNTED roster fail-closed, wired as the LAST step of the path-repo CI check**; E629 needs:/job-name parser name-pins; E566 re-derived — no action (all remaining T_FUNCTION mentions are benign idioms). <!-- @rename-keep -->
 
 ### MERGE-FIXES, COUPLING, TOOLING
@@ -12409,7 +12409,7 @@ ff's reviewer returned FOUR blank reports; the same task_id was resumed each tim
 
 ### WAVE-2 LANES (dh · dj · di · dl — four picks, zero conflicts)
 
-- **dh — Bootstrap tail (lane `0575d4080` → pick `b08a96cf1`): E45 CLOSED, E74 CLOSED, E78c CLOSED-with-evidence (NO-OP), E154 CLOSED; +0T/+3A.** E45(a): the belt-braces comment shipped at the `mcpConfigDecision` trust arm, and it is load-bearing BEYOND the reachability argument — strict_types + a string param means deleting the `$canonicalRoot === false ||` arm turns `false` into a TypeError on `tools()`, and the premise itself is weaker than the entry wrote it since `$path` falls back to the raw `$root` when realpath fails (both stated in the comment). E74(b) was a REAL defect, not a comment: `projectSettingsTrusted()`'s throw left the freeze key ABSENT, so a config repaired mid-process re-asked the trust question and widened a grant the process had already refused — reproduced RED pre-fix, fixed by caching the empty list under the resolved config path, folded into `testACorruptUserConfigCostsTheProjectLayerAndNotTheRead` (+3A, +0T deliberate); the `??=` guard is documented as measured-unreachable-today insurance, and the property docblock tells the truth about per-key freeze semantics (keyed by `trustedConfigDirPath()`, does NOT follow `--config`). Reviewer pinned non-vacuity at `BootstrapLayeredSettingsTest:494`. E78c: NO-OP verdict measured before touching — both triage-named `NonInteractive` sites carry their `sugarcrush: ` prefix + the round-62 decision stamp (`0373308a3`); the bare `$e->getMessage()` at :248 is exempt per E78's own "run() writes need no decision" carve. E154(b): ALREADY-LANDED with an ERRATUM — `Bootstrap.php:5722`'s message has carried the prefix via `MCP_PARTIAL_START_LOG_FORMAT` since the call was first written (`3b0ba8fe6`), while the census seam comment asserted both rows unprefixed and contradicted this test's own MESSAGE_SHAPES roster (which credits Bootstrap 4) for three weeks; the comment was corrected in place, mutation-proven load-bearing (prefix-strip reddens `StderrEmitterCensusTest` exactly once at the MESSAGE_SHAPES arm). Gate: combined task filter 272T/11154A byte-identical before/after; Config +0T/+3A.
+- **dh — Bootstrap tail (lane `0575d4080` → pick `b08a96cf1`): E45 CLOSED, E74 CLOSED, E78c CLOSED-with-evidence (NO-OP), E154 CLOSED; +0T/+3A.** E45(a): the belt-braces comment shipped at the `mcpConfigDecision` trust arm, and it is load-bearing BEYOND the reachability argument — strict_types + a string param means deleting the `$canonicalRoot === false ||` arm turns `false` into a TypeError on `tools()`, and the premise itself is weaker than the entry wrote it since `$path` falls back to the raw `$root` when realpath fails (both stated in the comment). E74(b) was a REAL defect, not a comment: `projectSettingsTrusted()`'s throw left the freeze key ABSENT, so a config repaired mid-process re-asked the trust question and widened a grant the process had already refused — reproduced RED pre-fix, fixed by caching the empty list under the resolved config path, folded into `testACorruptUserConfigCostsTheProjectLayerAndNotTheRead` (+3A, +0T deliberate); the `??=` guard is documented as measured-unreachable-today insurance, and the property docblock tells the truth about per-key freeze semantics (keyed by `trustedConfigDirPath()`, does NOT follow `--config`). Reviewer pinned non-vacuity at `BootstrapLayeredSettingsTest:494`. E78c: NO-OP verdict measured before touching — both triage-named `NonInteractive` sites carry their `candy-code: ` prefix + the round-62 decision stamp (`0373308a3`); the bare `$e->getMessage()` at :248 is exempt per E78's own "run() writes need no decision" carve. E154(b): ALREADY-LANDED with an ERRATUM — `Bootstrap.php:5722`'s message has carried the prefix via `MCP_PARTIAL_START_LOG_FORMAT` since the call was first written (`3b0ba8fe6`), while the census seam comment asserted both rows unprefixed and contradicted this test's own MESSAGE_SHAPES roster (which credits Bootstrap 4) for three weeks; the comment was corrected in place, mutation-proven load-bearing (prefix-strip reddens `StderrEmitterCensusTest` exactly once at the MESSAGE_SHAPES arm). Gate: combined task filter 272T/11154A byte-identical before/after; Config +0T/+3A.
 - **dj — the inverted-sentence cluster (lane `b43fb131c` → pick `00c8bc14b`): E342 CLOSED, E358 CLOSED, E319 stays PARTIAL with the residue named; +0T/−6A.** The flip dj shipped is the E319 flag-VERB inversion in the 8 measured failure messages (ForkedChildTest ×4, ChatTest ×2, EngineBackendTest ×2 — the triage enumerated three sites per file, the tree carried eight), rewritten to the measured sense with the open-file-description mechanism clause, plus EngineBackendTest:379's stale flag-repair comment in E342 three-part form. GUARD-MANDATED deviation: the same commit deleted the three `NonBlockingVocabularyTest` INVERTED_ROSTER rows — the guard's own failure text demands "a data edit here, not a weaker check" — hence −6A (3 rows × 2 asserts), tests untouched, filter gate byte-equal 271T/1039A. Three stale comments SURVIVE (present-tense "bootstrap.php repairs descriptor 0 with exactly that flag" at ForkedChildTest:182/:275 + ChatTest:846 — FALSE at HEAD since attempt-2 was replaced) → routed to round-68 **ee**, with the E319 header causal-claim renote riding along.
 - **di — DuplicatedTestHelperDrift holes (FIRST INCARNATION FABRICATED; re-cut lane `9df5ac6e3` on `lane/di-rebuilt` → pick `a94628c5b`): E272 CLOSED (already-landed), E565 CLOSED (already-landed), E331 CLOSED (NO-OP-pin), E356 CLOSED (pinned), E481 CLOSED (consts half shipped), E610 CLOSED (real hole fixed); guard 11T/104A → 14T/160A, suite +3T.** The first builder reported landed work whose SHA existed nowhere — `lane/di` sat at base with ZERO commits (the round's first fabrication; see Lessons). The re-cut verified E272/E565 already-landed at base WITH discriminators (the guard IS the ask — no code), proved E610 a real hole (the name walk steps over comments; in-tree temp pair went green-at-base, red after the fix: `[260:1]` vs `[260:2]`) and fixed it + a permanent 3-polarity synthetic; E481 shipped as TWO POLITIES (`constReport()`: [identical]-duplication + within-DRIFT_BOUND drift, bidirectional rosters 23+14 rows, all data-derived, fail-closed; heredoc values compared LINE-WISE — a whole-script value is one token and would fake a rewrite as a 1-edit drift); E331's fifth copy measured NO-OP (exactly 2 `significantTokens()` declarations tree-wide, pinned); E356 pinned with a declaration-DOWN shape probe (the trait's prose NAMES `PhpToken::tokenize` — a file-wide `str_contains` false-matches). One named LOW not-done: the E481 unnamed-const branch stays unfixture'd.
 - **dl — E686 tranche-4 (FIRST INCARNATION'S REPORT LOST/FABRICATED; re-cut lane `c73374dca` → pick `66b92e3d6`): E686 stays PARTIAL, DocFigure arms 18 → 23; +5T/+108A (DocFigure 18T/432A → 23T/540A).** Ten HOOKS.md/TROUBLESHOOTING.md `CRUSH_*` claims judged: 7 TRUE pinned in arms O–S with a live roster derivation (`hookEnvRoster()`: fixed-array scan + `stagePayloads(` call-site keys + the `$name.'_FILE'` concatenation probe — first run red proved pointer keys are CONCATENATED, not literals); 2 FALSE fixed prose-only IN-STEP and pinned BOTH directions (HOOKS.md "coincidentally shows six lines" contradicted its own eight-row table; TROUBLESHOOTING.md "six CRUSH_*" was the pre-`_FILE` count → eight, cross-page word-pin arm S); 1 HELD (~128 KB paraphrase) + the marker's 200011 digit held (call-domain). The 131,054/131,053 boundary pair UPGRADED from cb's HELD to PINNED (arm Q) via the src docblock's own formula `strlen+1+value+1<=131072`. Brief misanchors measured: "~10 tokens" is 8 live; the "existing word(n) helper" does not exist — the house pattern is per-arm inline maps (H/I/J precedent), replicated.
@@ -12435,16 +12435,16 @@ Ledger: wave-1 **39 rows CLOSED** — da 6 (E572/E577/E578/E612/E615/E617) · db
 
 | run | figure | domain |
 |---|---|---|
-| round base | 11,494 / 176,293 / 0F / 0E / 1S / exit 0 | LINKED @ `ca2193942`, cwd = sugar-crush (round-65 anchor) |
+| round base | 11,494 / 176,293 / 0F / 0E / 1S / exit 0 | LINKED @ `ca2193942`, cwd = candy-code (round-65 anchor) |
 | wave-1 pin | 11,513 / 176,556 (`78a8f9d50`) | cc+cd+ce landed; ce alone +13T (its SlashDispatch attribution was errata'd — see Ledger) |
-| **final merged (serial)** | **11,519 / 176,743 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 558s) | **LINKED @ `61cde19c5`, cwd = sugar-crush — new anchor**; README headline + `suite-figure.json` agree; `durations.tsv` 491 rows; CI shard path K=4 conservation PASS (158s); Config filter **781T / 31,014A GREEN — the base-red is formally DEAD**; five-guard family 56T/4708A |
+| **final merged (serial)** | **11,519 / 176,743 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 558s) | **LINKED @ `61cde19c5`, cwd = candy-code — new anchor**; README headline + `suite-figure.json` agree; `durations.tsv` 491 rows; CI shard path K=4 conservation PASS (158s); Config filter **781T / 31,014A GREEN — the base-red is formally DEAD**; five-guard family 56T/4708A |
 
 ### LANE OUTCOMES
 
-- **cc — E691 sharded coverage (lane `a2353660f` → pick `a59d8a547`).** `scripts/parallel-tests.sh` gained an opt-in `--clover` (default OFF; the OFF-path is byte-compatible, the usage-`sed` range and the "NO coverage" discipline line flipped IN-STEP) and new `scripts/merge-clover.php` unions per-shard clovers by summing per-line counts (crap scores recomputed line-only; file/project metrics recomputed from lines — single-class exact, multi-class conservative floor; **fail-closed**: exit 2 on any missing/malformed shard with nothing written; byte-identical re-merge via a generated-timestamp copied from shard 0), proven by a CI-invoked 66-check self-`test` (`scripts/test-merge-clover.php`, zero suite files, +0T/+0A) that runs FIRST in the job. ci.yml coverage job split: serial for the non-sugar-crush matrix, sharded K=min(nproc,4) for sugar-crush, the conservation-vs-figure check FAIL-CLOSED **before** the merge, and the merged artifact written to the SAME `sugar-crush/coverage.xml` path — Codecov/Codacy/split-repo/coverage-final consumers byte-untouched. Validation needed **pcov built from source**: the devbox's only driver, xdebug 3.2, SEGFAULTS nondeterministically under full-suite coverage — record so future lanes stop chasing it. K=4 pcov conservation PASS 11,494T/176,293A delta **+0/+0**; serial-vs-merged covered-line drift gross 3 lines, net +1 (`Renderer:3123` process-local imageCache eviction vs `Chat:12439-40`) — inherent process topology, zero merger loss.
+- **cc — E691 sharded coverage (lane `a2353660f` → pick `a59d8a547`).** `scripts/parallel-tests.sh` gained an opt-in `--clover` (default OFF; the OFF-path is byte-compatible, the usage-`sed` range and the "NO coverage" discipline line flipped IN-STEP) and new `scripts/merge-clover.php` unions per-shard clovers by summing per-line counts (crap scores recomputed line-only; file/project metrics recomputed from lines — single-class exact, multi-class conservative floor; **fail-closed**: exit 2 on any missing/malformed shard with nothing written; byte-identical re-merge via a generated-timestamp copied from shard 0), proven by a CI-invoked 66-check self-`test` (`scripts/test-merge-clover.php`, zero suite files, +0T/+0A) that runs FIRST in the job. ci.yml coverage job split: serial for the non-candy-code matrix, sharded K=min(nproc,4) for candy-code, the conservation-vs-figure check FAIL-CLOSED **before** the merge, and the merged artifact written to the SAME `candy-code/coverage.xml` path — Codecov/Codacy/split-repo/coverage-final consumers byte-untouched. Validation needed **pcov built from source**: the devbox's only driver, xdebug 3.2, SEGFAULTS nondeterministically under full-suite coverage — record so future lanes stop chasing it. K=4 pcov conservation PASS 11,494T/176,293A delta **+0/+0**; serial-vs-merged covered-line drift gross 3 lines, net +1 (`Renderer:3123` process-local imageCache eviction vs `Chat:12439-40`) — inherent process topology, zero merger loss.
 - **cd — E670 + E687 + the r65 seam bundle (lane `5b61bdb31` → pick `7f352c691`).** E670 was measured ALREADY-LANDED in r63 (the `2f60e1696` hoist; its commit mis-cited E667) — the fix shipped was the comment citation → E670. E687 landed the pairing bd set up in r65: `__destruct()` teardown-total `error_log` (when `forkFailureCount > 0`, after the owner guard, before the resultDir early-return; message deliberately substring-disjoint from the two existing fork lines) with the census trio flipped IN-STEP (AgentWorkerPool roster row 2→3, aggregate prose TWENTY-THREE→TWENTY-FOUR; NUMBER_WORDS needed NO edit — "twenty-four" pre-existed) and `AgentWorkerPoolTeardownForkTotalTest` 4T/15A (helpers byte-copied from ForkFailureTest per drift discipline); the brief's "28→29" roster claim judged **FALSE-TO-TREE** (that's Bootstrap's channel-5 PREFIXED_WRITER_SITES census — untouched). Seam bundle: the keystone gained pid+grandchild liveness pins — a VACUITY gotcha surfaced (a naive bg `sleep` dies free when the session leader exits, `tty_hangup`→SIGHUP same-pgrp; the grandchild must be `(trap '' HUP; exec sleep 30) &` so the ignored disposition rides `exec` and only a group-kill can take it); the stuck branch now routes `ProcessReaper::escalate()` + `wait()` only when `$gone` — candy-pty `Child::wait()` is an unbounded `while(true)`, and a leaked live pty child HANGS phpunit shutdown (300s burn; timeout-`-s KILL` + `finally forceGone` leash makes mutations red-fast); `interactiveAvailable`'s function-local static moved to a private static property + testing-reset (function-local statics cannot be reset cross-method). <!-- @rename-keep historical provenance -->
 - **ce — E653 Shape B, the `/notices` command (lane `0aebed27d` → pick `5010c8bb2`).** `src/Commands/NoticesCommand.php` reports launch notices + drop count + narrowed-grant warnings through a pure `compose()` with SKELETON+entries line arithmetic (the forgery test COUNTS lines, scans no keyword — a message-scan oracle could be forged; every section header prints its count even at 0 with a `  - none` sentinel); args-tolerant `Chat.php` dispatch arm + permissions-inline transcript handler with NO `ob_start`/echo — deliberately stays out of the derived-stdout NoRawAnsiInTranscript census with no *Response twin; `Bootstrap::launchNoticesDropped()` public static (the dedup store is keyed by CLIPPED msg — an `array_values` returning bools bug caught by test); `reportField()` promoted private→public (E164 second-sibling precedent); `NoticesCommandTest` 12T/53A (helpers deliberately RENAMED vs the AgentManagerTest twins to dodge the DuplicatedTestHelperDrift name-scan); README roster + COMMANDS.md + ARCHITECTURE dispatch-arms numeral 22→23 flipped in-step (DocFigure live-pin). All five r65 census files verified UNCHANGED (554T/8323A filter green). Suite +13T / +200A churn from doc-pair assert-when-matching.
-- **cf — the E655-seam Config base-red healed (lane `2aa474db1` → pick `4747b55f5`).** `NonInteractiveProviderFailureTest::setUp` snapshotted `HomeSandboxTrait` AFTER its ENV_KEYS unset loop (which includes HOME in `putenv`-unset form) → the trait captured `false` → restore re-unset HOME at the last tearDown write → every later test poisoned; the victim `RuntimeTest:4011` reported a misleading "sandbox did not come down". Tests-only, three files: (1) snapshot FIRST + re-arm after the loop — a **naive single-move above the loop was REJECTED**: it leaves body HOME unset and `Bootstrap::writeUserConfig` then writes the DEV'S real `~/.sugar-crush` via the passwd fallback (the trait's "snapshots first call, may re-arm" contract is the doc); (2) a 2-assert tripwire after `RuntimeTest:3957` so future mutations red at the poison site; (3) the scanner arm folded into EXISTING `OneSidedHomeSandboxTest` methods at a **DELIBERATE +0T/+10A** — any new test method bumps the live enumeration and reddens `Config\ReadmeSuiteFigureDriftTest` INSIDE the `--filter Config` window while README/suite-figure.json are merge-owned. Probe on all 51 trait users: 0 false positives.
+- **cf — the E655-seam Config base-red healed (lane `2aa474db1` → pick `4747b55f5`).** `NonInteractiveProviderFailureTest::setUp` snapshotted `HomeSandboxTrait` AFTER its ENV_KEYS unset loop (which includes HOME in `putenv`-unset form) → the trait captured `false` → restore re-unset HOME at the last tearDown write → every later test poisoned; the victim `RuntimeTest:4011` reported a misleading "sandbox did not come down". Tests-only, three files: (1) snapshot FIRST + re-arm after the loop — a **naive single-move above the loop was REJECTED**: it leaves body HOME unset and `Bootstrap::writeUserConfig` then writes the DEV'S real `~/.candy-code` via the passwd fallback (the trait's "snapshots first call, may re-arm" contract is the doc); (2) a 2-assert tripwire after `RuntimeTest:3957` so future mutations red at the poison site; (3) the scanner arm folded into EXISTING `OneSidedHomeSandboxTest` methods at a **DELIBERATE +0T/+10A** — any new test method bumps the live enumeration and reddens `Config\ReadmeSuiteFigureDriftTest` INSIDE the `--filter Config` window while README/suite-figure.json are merge-owned. Probe on all 51 trait users: 0 false positives.
 - **ca — E657/E658/E659/E662 test-prose carry (lane `5b7348249` → pick `31b6b94df`).** Rule-4 symbol re-anchors across `src/Providers/` + `src/Runtime.php` prose and ~20 test dirs; the E659 guard-test rename landed with its `{@see}` + `SymbolCitationDriftTest` twin in one commit; E662's record-only re-derivation confirmed the autoload-then-miss shape still unreachable. **ERRATA (reviewer-caught):** the lane's ledger header claimed "31 fixed / 81 held" — the true split is **~77 fixed / ~35 held of 112 raw units**; the old figures double-counted wrapped multi-line citations. Honest record kept inline at the row, history unrewritten.
 - **cb — E686 tranche-3 (lane `bf6f40202` → pick `51e59798d`).** Environment/Hooks/Providers/RuleLoader figure families judged and pinned — `DocFigureProseDriftTest` 12→18 arms. Campaign continues; tranche-4 carry = the HOOKS.md `CRUSH_*` 7×/8× roster claims → dynamic derivation.
 - **cg — NO-OP (already-landed verdict).** The E653-B duplicate brief was caught before any code: `/notices` verified at tip (NoticesCommand 139 lines, dispatch `Chat.php:7295`/`:7464`, 12T/53A green) — zero diff, zero commit.
@@ -12452,7 +12452,7 @@ Ledger: wave-1 **39 rows CLOSED** — da 6 (E572/E577/E578/E612/E615/E617) · db
 
 ### MEASURE-FIRST VERDICTS AT CLOSEOUT (all four adjudicated against git/tree at `61cde19c5` before stamping)
 
-(a) **E261 CLOSED** — accessor `74dc2ab38` (r63) + teardown log via E687 `7f352c691`. (b) **E440 CLOSED** — seam `d0843c42c`/`96d87cdfb` + MCP mount `b76fee3cd` (E677) + LSP mount `858614688`/`ce87e4e1d` (E690); the loop-shape stays a documented E537 refusal, and the stamps say so. (c) **E43 stays PARTIAL** — the routed carrier E682 CLOSED, but it delivered the palette paint-parity rule; the adoption half (horizontal offset / per-block reflow-vs-clip toggle) has ZERO trace at tip (measured: no E43 marker, no fence-clip adoption, no scroll machinery in `sugar-crush/src/`) — left PARTIAL with the residual named, unowned. (d) **E42 CLOSED, heading reconciled** — backlog said [OPEN] while the ledger said PARTIAL for rounds; both halves now carry cited SHAs (`0373308a3` + the E665→E678→E689 chain).
+(a) **E261 CLOSED** — accessor `74dc2ab38` (r63) + teardown log via E687 `7f352c691`. (b) **E440 CLOSED** — seam `d0843c42c`/`96d87cdfb` + MCP mount `b76fee3cd` (E677) + LSP mount `858614688`/`ce87e4e1d` (E690); the loop-shape stays a documented E537 refusal, and the stamps say so. (c) **E43 stays PARTIAL** — the routed carrier E682 CLOSED, but it delivered the palette paint-parity rule; the adoption half (horizontal offset / per-block reflow-vs-clip toggle) has ZERO trace at tip (measured: no E43 marker, no fence-clip adoption, no scroll machinery in `candy-code/src/`) — left PARTIAL with the residual named, unowned. (d) **E42 CLOSED, heading reconciled** — backlog said [OPEN] while the ledger said PARTIAL for rounds; both halves now carry cited SHAs (`0373308a3` + the E665→E678→E689 chain).
 
 ### LESSONS
 
@@ -12472,9 +12472,9 @@ Ledger: **11 rows CLOSED** (E657, E658, E659, E662 | E670, E687 | E691 | E678-su
 
 | run | figure | domain |
 |---|---|---|
-| round base | 11,462 / 175,615 / 0F / 0E / 1S / exit 0 | LINKED @ `e028f142c`, cwd = sugar-crush (round-64 anchor) |
+| round base | 11,462 / 175,615 / 0F / 0E / 1S / exit 0 | LINKED @ `e028f142c`, cwd = candy-code (round-64 anchor) |
 | wave-1 merged | 11,480 / 175,940 / 1S | pinned at `74d16914e` after the two `DuplicatedTestHelperDriftTest` fixes; merge HOLD was correct — master waited at `e18184e8a` unre-pinned while the F3 blocker stood |
-| **final merged (serial)** | **11,494 / 176,293 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 559s, double-consistent) | **LINKED @ `0c61c0686`, cwd = sugar-crush — new anchor**; README headline + `suite-figure.json` agree; `durations.tsv` 489 rows; CI shard path K=4 conservation PASS (157s outer wall, slowest shard 156s) |
+| **final merged (serial)** | **11,494 / 176,293 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 559s, double-consistent) | **LINKED @ `0c61c0686`, cwd = candy-code — new anchor**; README headline + `suite-figure.json` agree; `durations.tsv` 489 rows; CI shard path K=4 conservation PASS (157s outer wall, slowest shard 156s) |
 
 Predictions: wave-1 came in **+18 methods vs the +17 brief estimate** (one extra method somewhere — benign, the re-pin took ground truth); bd's **+6T** and be's **+8T** deltas hit exactly, continuing the additive-tests rule.
 
@@ -12507,14 +12507,14 @@ Ledger: **6 CLOSED** (E653 — Shape A, Shape B follow-up noted; E682, E683, E68
 | run | figure | domain |
 |---|---|---|
 | round base | 11,438 / 175,211 / 0F / 0E / 1S / exit 0 | LINKED @ `8c52b26e5`, cwd = repo root (round-63 anchor) |
-| **final merged (serial)** | **11,462 / 175,615 / 0F / 0E / 1 skipped (`McpClientTest` canary) / exit 0** (535s) | **LINKED @ `e028f142c`, cwd = sugar-crush — new anchor** |
-| CI shard path | K=4 conservation PASS (156s) | the live sugar-crush CI path since `f67328f94` |
+| **final merged (serial)** | **11,462 / 175,615 / 0F / 0E / 1 skipped (`McpClientTest` canary) / exit 0** (535s) | **LINKED @ `e028f142c`, cwd = candy-code — new anchor** |
+| CI shard path | K=4 conservation PASS (156s) | the live candy-code CI path since `f67328f94` |
 
 The additive-tests rule hit **all three** mid-round predictions exactly — 11,444, then 11,459, then 11,462 — roughly fifteen rounds running.
 
 ### LANE OUTCOMES
 
-- **aa — E671 (STEP 1, the user's explicit ask).** The sugar-crush cell in `.github/workflows/ci.yml` now runs `scripts/parallel-tests.sh` at **K=min(nproc,4)**; `scripts/parallel-tests-durations.tsv` (480 rows) is committed; the harness gained `--durations`/`--against-json` (both additive) and CI checks the sharded totals **conservatively against `suite-figure.json` — FAIL-CLOSED**: a new test file without a manifest row makes shard-sum < figure → red. **K=8 REFUTED by measurement** — runners are 2–4 vCPU and ≥2× oversubscription trips the lease/idle-ceiling races. `ReadmeSuiteFigureDriftTest` grew into the live-enumeration arbiter (4 methods).
+- **aa — E671 (STEP 1, the user's explicit ask).** The candy-code cell in `.github/workflows/ci.yml` now runs `scripts/parallel-tests.sh` at **K=min(nproc,4)**; `scripts/parallel-tests-durations.tsv` (480 rows) is committed; the harness gained `--durations`/`--against-json` (both additive) and CI checks the sharded totals **conservatively against `suite-figure.json` — FAIL-CLOSED**: a new test file without a manifest row makes shard-sum < figure → red. **K=8 REFUTED by measurement** — runners are 2–4 vCPU and ≥2× oversubscription trips the lease/idle-ceiling races. `ReadmeSuiteFigureDriftTest` grew into the live-enumeration arbiter (4 methods).
 - **ab — E675 + E684 (`b636591b6`, review-fix `3b76a0e8d`).** TaskTool is production-fed: `Bootstrap::chat()` hoists the agent manager and a new private `taskWorkerPool()`, threaded through `backend()`/`backendFor()`/`tools()`; TaskTool moved to `src/Tools/BuiltIn/` with the `Runtime.php:549` FQN sweep; the census trio flipped in-step (CorpusTest flat 11→12). The live-feed pin (real `Bootstrap::chat`, reflection into `EngineBackend::$tools`, `assertSame` the chat's own manager) and the pool-constitution pin are both mutation-proven. E684: Bootstrap totals prose → measured 29/128/3 and 29/135/2.
 - **ac — E672/E673/E674 + E688 (`8aaa7211b`→`ee10b4b7b`→`19231e899`→`7d680fe99`→`ff1e9530f`).** New `src/Support/ProcessContainment.php` choke point (setsid -w probe once per process, `spawnSpec()`, `env()` forcing NONINTERACTIVE and stripping SUDO_ASKPASS/GPG_TTY); **10/10 measured spawn sites routed**; terminate-with-container wired (`?int $groupPid` reaper rungs, literals 15/9, pgid==pid discriminator); E674 effective at every real spawn. **E688 minted-then-fixed in-lane**: `getExitCode():?int` with a 2.0s **REAP-wait** bound — explicitly not a request timeout (the E646 standing prohibition honored) — plus the `WorkerExitCodeAttributionTest` keystone.
 - **ad — E676/E677/E679/E680 (`b76fee3cd`, census-fix `85e8ad2f7`).** Grace ladders consolidated into `ProcessReaper::escalate()` (real trap-ignoring-child e2e pins: TERM spent, KILL lands); MCP dispatch-entry `pumpStderr` mounts (entry + timer; the idle-drain removed — the timer was the drain); the new `Support/TimedFileLock` helper replaces two drifted hand-rolled twins (TaskList byte-identical, WorktreeManager gains the @-suppress — drift settled deliberately); Session.php **verified flock-free** (the entry claim FALSE; pin added: a foreign LOCK_EX on dest never delays save). E678's `crush mcp --json` rows landed; the /mcp panel refused — collides Tui — → **E689**.
@@ -12642,7 +12642,7 @@ Backlog **630 → 651** (E631–E651, 21 entries).
 
 | package | floor at close | vs base |
 |---|---|---|
-| **sugar-crush** | **10351 / 160648 / 1 skipped / rc 0** — MEASURED | +70 / +1270 |
+| **candy-code** | **10351 / 160648 / 1 skipped / rc 0** — MEASURED | +70 / +1270 |
 | **tools/tests** | **58 / 214 / rc 0** — MEASURED | unchanged |
 | **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED | unchanged | <!-- @rename-keep historical provenance -->
 | candy-core · sugar-animation · candy-mosaic | **CARRIED from round 55, NOT re-measured.** An inference. | — | <!-- @rename-keep historical provenance -->
@@ -12797,7 +12797,7 @@ zero errors**. Backlog **592 → 630** by max id (count 591 → 629; the +38 rec
 
 | package | floor at close | vs base |
 |---|---|---|
-| **sugar-crush** | **10281 / 159378 / 1 skipped / rc 0** | +12 tests, +142 assertions |
+| **candy-code** | **10281 / 159378 / 1 skipped / rc 0** | +12 tests, +142 assertions |
 | **tools/tests** | **58 / 214 / rc 0** | +30 tests, +78 assertions |
 | **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** | +14 tests, +291 assertions | <!-- @rename-keep historical provenance -->
 | candy-core · sugar-animation · candy-mosaic | CARRIED, not re-measured | no file touched in any of them | <!-- @rename-keep historical provenance -->
@@ -12815,9 +12815,9 @@ would be the more flattering choice:
 
 | claim | predicted | measured | verdict |
 |---|---|---|---|
-| sugar-crush tests | **10329 EXACT** | **10281** | ❌ **MISSED by 48, too high** |
-| sugar-crush assertions | ≥ 161,000 | 159,378 | ❌ **MISSED, 1,622 below the range floor** |
-| sugar-crush skipped / rc | 1 / 0 | 1 / 0 | ✅ |
+| candy-code tests | **10329 EXACT** | **10281** | ❌ **MISSED by 48, too high** |
+| candy-code assertions | ≥ 161,000 | 159,378 | ❌ **MISSED, 1,622 below the range floor** |
+| candy-code skipped / rc | 1 / 0 | 1 / 0 | ✅ |
 | tools/tests | ≥ 28, rc 0 | 58, rc 0 | ✅ |
 | candy-pty | **UNCHANGED** 630 / 1494 / 16 | **644 / 1785 / 16** | ❌ **MISSED** — lane c added 14 tests there | <!-- @rename-keep historical provenance -->
 | backlog | 592 → 610–628 | 592 → **630** | ❌ missed by 2, just above the range |
@@ -12842,7 +12842,7 @@ into a prediction document, where nothing downstream is asked to falsify it eith
 assertions `>= 159378` — "overshoot, or exactly equal if the censuses happen to be file-count-invariant".
 Measured: **exactly 159378.** The reasoning behind it — that lane a's per-file censuses would rise once
 lane b's new files arrived — was **wrong, because lane b added no new test file at all.** Exactly one file
-was added under `sugar-crush/tests/` in the whole round (lane a's `DuplicatedDocBlockLineTest.php`).
+was added under `candy-code/tests/` in the whole round (lane a's `DuplicatedDocBlockLineTest.php`).
 A claim written to be true whether or not its mechanism holds tells you nothing when it comes true.
 
 ### SIDE-PREDICTIONS
@@ -12975,7 +12975,7 @@ went red"). **Four in three rounds, and the brief is the artefact nothing downst
 
 | package | floor at `e4c69b04e` |
 |---|---|
-| **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** |
+| **candy-code** | **10269 / 159236 / 1 skipped / rc 0** |
 | **tools/tests** | **28 / 136 / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — measured **240 times**, see E593 | <!-- @rename-keep historical provenance -->
 | candy-core · sugar-animation · candy-mosaic | CARRIED, not re-measured | <!-- @rename-keep historical provenance -->
@@ -13064,7 +13064,7 @@ both runs, zero errors in the recovery. Backlog **555 → 592**.
 
 | package | floor at close |
 |---|---|
-| **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** |
+| **candy-code** | **10269 / 159236 / 1 skipped / rc 0** |
 | **tools/tests** | **28 / 136 / rc 0** (was 9 / 41 two rounds ago) |
 | **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — see the campaign below; measured **165+ times**, not once | <!-- @rename-keep historical provenance -->
 | candy-core · sugar-animation · candy-mosaic | CARRIED, not re-measured — `git diff --name-only` shows no file in any of them | <!-- @rename-keep historical provenance -->
@@ -13118,8 +13118,8 @@ worth keeping permanently.
 
 | claim | outcome |
 |---|---|
-| sugar-crush tests **10285** EXACT | ❌ **10269, −16** |
-| sugar-crush assertions ≥ **160,000** | ❌ **159,236**, short by 764 |
+| candy-code tests **10285** EXACT | ❌ **10269, −16** |
+| candy-code assertions ≥ **160,000** | ❌ **159,236**, short by 764 |
 | skipped exactly 1 · rc 0 | ✅ |
 | candy-pty UNCHANGED (explicitly not repeating round 57's ≥632 error) | ✅ | <!-- @rename-keep historical provenance -->
 | backlog 555 → 575–592 | ✅ **592** — landed exactly on the upper bound |
@@ -13246,7 +13246,7 @@ Backlog **523 → 555**.
 
 | package | floor at close |
 |---|---|
-| **sugar-crush** | **10215 / 156961 / 1 skipped / rc 0** |
+| **candy-code** | **10215 / 156961 / 1 skipped / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** | <!-- @rename-keep historical provenance -->
 | candy-core | 842 / 7587 / 24 — **NOT re-run**, no lane touched it | <!-- @rename-keep historical provenance -->
 | candy-flip | 83 / 227 / 2 — **NOT re-run** | <!-- @rename-keep -->
@@ -13265,8 +13265,8 @@ different questions**, exactly as in round 53: 10214 is the prediction's verdict
 
 | claim | outcome |
 |---|---|
-| sugar-crush tests 10214 EXACT | ✅ **10214 at the merge** (14th consecutive) |
-| sugar-crush assertions ≥ 150,000 | ✅ **156961** — the bound was weak and said so |
+| candy-code tests 10214 EXACT | ✅ **10214 at the merge** (14th consecutive) |
+| candy-code assertions ≥ 150,000 | ✅ **156961** — the bound was weak and said so |
 | skipped exactly 1 · rc 0 | ✅ |
 | candy-pty **≥ 632** tests | ❌ **630** — see below | <!-- @rename-keep historical provenance -->
 | backlog 523 → 543–555 | ✅ **553** at the renumber, 555 after the merge findings |
@@ -13302,7 +13302,7 @@ nothing, and the method it actually describes —
 by MOVING the block onto its method rather than merging the two, since they document different tests, with
 **attachment verified by `ReflectionMethod::getDocComment()` rather than by eye**.
 
-**E555 is the classifier.** Lane c's backtick widening scraped `` `SugarCraft\Crush\Tests\Backend` `` out of
+**E555 is the classifier.** Lane c's backtick widening scraped `` `SugarCraft\Code\Tests\Backend` `` out of
 the four doubles lane a created — where the sentence explains which shared namespace they were lifted OUT
 of — and reported all four as dangling class citations. **Both files were correct.** The guard's blessed
 remedy is "rename the citation", and taking it would have damaged correct prose to satisfy a broken
@@ -13325,7 +13325,7 @@ method's, caught in the same run, on the supervisor, one commit after the pair c
 ### 🔴 E490 — 53 TAKES, 0 EVENTS, AND A LANE THAT REFUSED TO CALL THAT A FIX
 
 Two rounds of "still open with a candidate" ended with an actual number. Arm A ran candy-pty alone **49 <!-- @rename-keep historical provenance -->
-times**, mostly concurrent with the lane's own sugar-crush runs, so a contended box is covered. **Arm C ran
+times**, mostly concurrent with the lane's own candy-code runs, so a contended box is covered. **Arm C ran
 the experiment that had never been run** — the full sugar-crush suite then candy-pty back to back, the only <!-- @rename-keep historical provenance -->
 context the single observed hang ever occurred in — four cycles, all byte-identical.
 
@@ -13343,7 +13343,7 @@ line, its open-fd count and its children.
 
 Round 56 measured **0 of 3** lanes noticing a contradiction in their own brief, and rule 42 was added in
 response. Round 57's map was freshly written and flagged itself. **One lane of three checked it — and found
-a real defect**: the map granted lane b all of `sugar-crush/src/MCP/` while its brief's file list enumerated
+a real defect**: the map granted lane b all of `candy-code/src/MCP/` while its brief's file list enumerated
 three files. The lane reported the disagreement, said which reading it followed, and explicitly did not
 resolve it. **0/3 → 1/3.** That is a movement, not a solution; round 58's map and file lists were reconciled
 against each other before launch so that any disagreement a lane finds next round is news.
@@ -13388,7 +13388,7 @@ errors. Backlog **492 → 523**.
 
 | package | floor at close |
 |---|---|
-| **sugar-crush** | **10126 / 149182 / 1 skipped / rc 0** |
+| **candy-code** | **10126 / 149182 / 1 skipped / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** | <!-- @rename-keep historical provenance -->
 | candy-core | 842 / 7587 / 24 / rc 0 (untouched) | <!-- @rename-keep historical provenance -->
 | candy-flip | 83 / 227 / 2 / rc 0 (untouched) | <!-- @rename-keep -->
@@ -13452,7 +13452,7 @@ an hour earlier.
 ### E492 — THE ROUND SHIPPED ROUND 53's OWNERSHIP MAP AND NOT ONE LANE NOTICED
 
 The launched script's `OWNERSHIP` block described round 53's lanes — "candy-core descriptor census", <!-- @rename-keep historical provenance -->
-"sugar-crush runtime bugs", "close the inheritance" — and listed files no round-56 lane touches. Lane b's
+"candy-code runtime bugs", "close the inheritance" — and listed files no round-56 lane touches. Lane b's
 two committed items live in `src/LSP/`, a directory the map does not grant it at all.
 
 **This is E416 recurring inside the very block whose own text warns about E416**, and which instructs
@@ -13517,14 +13517,14 @@ hang has not reproduced. Side-prediction (a) holds.
 
 | claim | outcome |
 |---|---|
-| sugar-crush tests 10167 EXACT | ❌ **10126, −41** |
-| sugar-crush assertions ≥ 152,200 | ❌ **149182** |
+| candy-code tests 10167 EXACT | ❌ **10126, −41** |
+| candy-code assertions ≥ 152,200 | ❌ **149182** |
 | skipped exactly 1 · rc 0 | ✅ |
 | candy-pty ≥ 614 tests | ✅ **630** | <!-- @rename-keep historical provenance -->
 | candy-core / sugar-animation / candy-mosaic unchanged | ✅ | <!-- @rename-keep historical provenance -->
 | backlog 491 → 512–528 | ✅ **523** |
 | backlog conflicts 3×, one per lane merge | ✅ exactly |
-| a SECOND conflict in `sugar-crush/src/Runtime.php` | ⚠️ **did not happen** — correctly hedged as a risk, and lane b never touched the file |
+| a SECOND conflict in `candy-code/src/Runtime.php` | ⚠️ **did not happen** — correctly hedged as a risk, and lane b never touched the file |
 | (a) E490 not root-caused | ✅ candidate only, no reproducer |
 | (b) E455 fixable inside the renderer alone | ✅ `Renderer.php` only |
 | (c) at least one lane reports its brief wrong | ✅ all three did |
@@ -13567,7 +13567,7 @@ agents, zero errors.
 
 | package | floor at `d38b644f4` |
 |---|---|
-| **sugar-crush** | **10059 / 148589 / 1 / rc 0** |
+| **candy-code** | **10059 / 148589 / 1 / rc 0** |
 | **candy-core** | **842 / 7587 / 24 / rc 0** | <!-- @rename-keep historical provenance -->
 | **candy-flip** | **83 / 227 / 2 / rc 0** | <!-- @rename-keep -->
 | **candy-mosaic** | **459 / 7753 / 6 / rc 0** | <!-- @rename-keep historical provenance -->
@@ -13613,7 +13613,7 @@ session limit, both landing in the fix stage.
 
 | package | floor at `49ae499e` |
 |---|---|
-| **sugar-crush** | **9994 / 144819 / 1 skipped / rc 0** |
+| **candy-code** | **9994 / 144819 / 1 skipped / rc 0** |
 | **candy-core** | **842 / 7573 / 25 / rc 0** | <!-- @rename-keep historical provenance -->
 | **candy-flip** | **83 / 227 / 2 / rc 0** | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 / rc 0 (untouched since round 52) | <!-- @rename-keep historical provenance -->
@@ -13630,7 +13630,7 @@ Predicted `9994 / 144819` before the first merge command; measured `9994 / 14481
 **twelfth** consecutive round, assertions for the third.
 
 **But exactly-the-sum was the outcome the prediction argued AGAINST.** Lane b added 312 lines to
-`sugar-crush/src/MCP/StdioMcpServer.php`, a file lane c's widened `DescriptorInheritanceGuard` walks, and
+`candy-code/src/MCP/StdioMcpServer.php`, a file lane c's widened `DescriptorInheritanceGuard` walks, and
 neither lane's suite had seen the other's half — the loaded rule-32 case. The prediction named three
 outcomes and expected the total to EXCEED the sum, or go red. It did neither.
 
@@ -13687,7 +13687,7 @@ an `until grep -q` wait there can be satisfied by work that is not yours.
 
 | package | floor at `b8808d5a` |
 |---|---|
-| **sugar-crush** | **9946 / 144269 / 1 / rc 0** |
+| **candy-code** | **9946 / 144269 / 1 / rc 0** |
 | **candy-core** | **819 / 7390 / 25 / rc 0** | <!-- @rename-keep historical provenance -->
 | **candy-flip** | **83 / 227 / 2 / rc 0** | <!-- @rename-keep -->
 | candy-mosaic | 459 / 7753 / 6 (untouched) | <!-- @rename-keep historical provenance -->
@@ -13705,7 +13705,7 @@ different questions, and collapsing them would have retroactively scored a corre
 
 ### 🔴 THE RED MERGE WAS PREDICTED, ON THE EXACT PAIR
 
-Written before the first merge: *"c's scanner files merge CLEANLY as text and the merged sugar-crush suite
+Written before the first merge: *"c's scanner files merge CLEANLY as text and the merged candy-code suite
 may still go RED … RULE 32 IS LIVE HERE."* It did — lane c's `DescriptorInheritanceGuardTest` against lane
 b's `Providers/ClaudeCodeProvider.php`, with **zero textual conflict**.
 
@@ -13748,7 +13748,7 @@ alone.**
 
 | package | floor at `cb0a7c69` |
 |---|---|
-| **sugar-crush** | **9860 / 143784 / 1 / rc 0** |
+| **candy-code** | **9860 / 143784 / 1 / rc 0** |
 | **candy-core** | **807 / 7288 / 25 / rc 0** | <!-- @rename-keep historical provenance -->
 | **candy-mosaic** | **459 / 7753 / 6 / rc 0** | <!-- @rename-keep historical provenance -->
 
@@ -13770,10 +13770,10 @@ predictions into exact ones.
 
 
 **Launched 2026-08-24.** Base floor `9730 / 143168 / 1 skipped / rc 0` observed at `b9abd2fb`, clean, no
-60s aborts. Lane dirs verified across all three packages this round touches — sugar-crush 18/18,
+60s aborts. Lane dirs verified across all three packages this round touches — candy-code 18/18,
 candy-core 3/3, candy-mosaic 7/7. <!-- @rename-keep historical provenance -->
 
-**Lane `a` — the fd defect family, and it is mostly NOT in `sugar-crush`.** E336: `TtyDetect::isAtty()`
+**Lane `a` — the fd defect family, and it is mostly NOT in `candy-code`.** E336: `TtyDetect::isAtty()`
 casts a STREAM to `(int)` and treats the result as a file descriptor — a resource id is not a descriptor
 number and coincides with one only by accident on small ids, in `candy-core`, the package everything else <!-- @rename-keep historical provenance -->
 sits on. E340: `Program::runExec()`'s closed-stream guard now falls back to a closed stream, because it
@@ -13783,10 +13783,10 @@ package's suite catches. E339: dormant `EnvDetect::isConsoleStdin()`, to be wire
 **never deleted**.
 
 **The through-line the lane is asked to state once and well:** candy-core and candy-mosaic were written <!-- @rename-keep historical provenance -->
-when descriptor 0 was always a live tty, and sugar-crush's suite now closes it. One guard that pins the
+when descriptor 0 was always a live tty, and candy-code's suite now closes it. One guard that pins the
 family beats four that each pin a symptom. **The lane owes three suites' figures (rule 28).**
 
-**Lane `b` — sugar-crush runtime.** It opens with a contradiction to settle rather than a fix to make:
+**Lane `b` — candy-code runtime.** It opens with a contradiction to settle rather than a fix to make:
 **E344 says E328's recorded mechanism does not reproduce** — E328 was fixed on a race theory, E344 says
 the hazard was reachability — **and both entries are in the tree, so one is wrong.** Then E345 (the
 hardened audit write fails SILENTLY, which is worse than no audit log because it looks authoritative),
@@ -13921,14 +13921,14 @@ unguarded `?? STDIN` in `candy-palette`, which is the second of the two defects 
 investigation found and the supervisor's round-50 fix left open.
 
 ⚠️ The brief carries round 49's failed attempt explicitly: it closed fd 0 and reopened `/dev/null` on a
-census of `sugar-crush/{src,bin,tests}` that concluded nothing read the `\STDIN` constant, **and the
+census of `candy-code/{src,bin,tests}` that concluded nothing read the `\STDIN` constant, **and the
 reader that mattered was in `candy-mosaic`** — rule 11 where the alphabet was a DIRECTORY. E313's fd-0 <!-- @rename-keep historical provenance -->
 reader roster and E320's four third-party packages naming descriptor 0 already exist as the map; the lane
 is told to extend them, not rebuild them.
 
 **Lane `b` — production defects.** E328: `AuditHook`'s default log path is a fixed shared name **in
 production**, not only in its test — the supervisor fixed the test half pre-round-50 and left this half
-on purpose, because two `sugarcrush` processes on one box truncate each other's audit log, and an audit
+on purpose, because two `candy-code` processes on one box truncate each other's audit log, and an audit
 log with a race in it is worse than none because it looks authoritative. E329: four `src/` `uniqid()`
 calls carry a literal prefix, so the argument was mistaken for entropy. **E308: a tool that throws can
 FORGE a refusal** — `Chat::invokeTool()`'s generic `catch` puts the raw exception message where the denial
@@ -14062,9 +14062,9 @@ matters: E285 (compares BODIES, signature divergence invisible), E279 (bound is 
 
 ### THE PRE-ROUND FIXES, AND THE DEAD PROBE THAT NEARLY HID ONE
 
-**E298** — `AuditHookTest` wrote and then unlinked `sys_get_temp_dir() . '/sugar-crush-audit.log'`, a fixed
+**E298** — `AuditHookTest` wrote and then unlinked `sys_get_temp_dir() . '/candy-code-audit.log'`, a fixed
 name with no entropy on the real temp dir. Concurrent copies race, and it deletes the audit log of any
-real `sugarcrush` on the box. Supervisor-fixed pre-round for the same reason E242 was: shared
+real `candy-code` on the box. Supervisor-fixed pre-round for the same reason E242 was: shared
 infrastructure, so a lane doing it would red its siblings.
 
 🔴 **The verification nearly shipped on a dead instrument.** The first probe gave each of six concurrent
@@ -14080,7 +14080,7 @@ that missed the Kitty branch. Fixed with a source-scan guard.
 
 ### THE CLOSE
 
-**Floor `9581 / 135471 / 1 skipped / rc 0` at `504d9a43`**, `sugar-crush` LINKED (04:45.418, 300.12 MB).
+**Floor `9581 / 135471 / 1 skipped / rc 0` at `504d9a43`**, `candy-code` LINKED (04:45.418, 300.12 MB).
 Merges `2cd49de9` a, `92aaa179` b, `3d3b9119` c, `ef46913e` d, `8964bfde` e; census bump `dfb01d2f`;
 renumber `90926b58`; drift fix `504d9a43`. Skip confirmed BY NAME — still
 `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. 18/18 symlinks by
@@ -14252,7 +14252,7 @@ re-running the blanket pass changes 0 sites and leaves the file's md5 unchanged.
 
 ## ROUND 89 (2026-09-17) — WAVE-1 RE-CUT WELD: the four r88 phantom scopes all landed clean — E742 + E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT; ZERO sugar-crush files — floor 12,027 EXACT-carry 6th round; census 4 → 2 (E736 renoted naming shine 7.2 + E744) <!-- @rename-keep historical provenance -->
 
-Four lanes, 20 picks, four rv-APPROVE verdicts (0C/0M each), zero cherry-pick conflicts, zero sugar-crush files moved — the commit-EARLY law (adopted after the r88 fabrication storm) is vindicated: every lane shipped incremental commits (y4 even landed a `WIP-3`), so nothing phantom'd this round.
+Four lanes, 20 picks, four rv-APPROVE verdicts (0C/0M each), zero cherry-pick conflicts, zero candy-code files moved — the commit-EARLY law (adopted after the r88 fabrication storm) is vindicated: every lane shipped incremental commits (y4 even landed a `WIP-3`), so nothing phantom'd this round.
 
 | lane | scope | lane tips | picks | review |
 |---|---|---|---|---|
@@ -14276,7 +14276,7 @@ Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows,
 
 - **y6** shipped `candy-shine/src/GithubEmoji.php` (final class, public const MAP — 1,837 kyokomi/GitHub-cheat-sheet codes), Renderer's inline table → const `HOUSE_EMOJI` (39) + merge HOUSE-LEFT-WINS over the 34 collisions (heart/warning/email/phone byte-divergences documented), the ' headphones' dead-key FIXED, unknown-code pass-through `?? $m[0]` intact at the sole lookup site; EmojiParityTest 14T; shine **573/1,075→587/1,119**; glow 122/313, shell 334/694, crush `Shine|Glamour|Style` 24/813 all UNMOVED (lib-local — zero crush files). Row 8.1 stamped CLOSED-ALREADY-LANDED (precompiled pattern const sole source). TWO y6 session deaths mid-lane — recovered via SALVAGE re-cut (addendum -72): the builder's tree was already complete including stamps; the finisher re-proved mutations/gates rather than redoing. <!-- @rename-keep historical provenance -->
 - **y5** shipped all six workstreams host-side: WS1 `delegateToInput` LAZY Cmd relay (nothing silently discarded; uncodable payloads verbatim fail-soft) + OSC52 writer capped `OSC52_MAX_CHARS=65_536`, over-cap → RuntimeNoticeSink transcript notice (zero new stderr emitters; frame composed from Ansi consts — NoRawAnsi roster untouched); WS2 Ctrl+C selection→copy precedence / no-selection→EXISTING quit pins byte-unchanged / raw \x03 always escape-hatch; WS3 PasteMsg routed to the focused `TextArea::update` (E704 no-pre-trim held), unfocused fallback byte-identical; WS4 `session-row:<n>` zones keyed by the painted window via the SAME rowZoneLines layout, whitelist refusal twin, wheel-to-picker before scrollTranscript, click=select/Enter=activate; WS5 LoadMoreMsg consumed at the frame before the KeyMsg gate, top-N PAGE_SIZE=20 growth, short-fetch closes the edge forever (real-SessionStore e2e pin); WS6 view-convergence by RULING — renderer keeps painting chrome (pixel stability), `InputProjectionInvariantTest` 4T as the executable projection tripwire. NEW src/Tui/SessionRow.php; ItemList wrap→CLAMP divergence flipped 3 pins + the KeyBindingDrift picker arm in-step; Bootstrap.php byte-untouched. +34T exact (relay 10 + widget 13 + mouse 6 + invariant 4 + guard-wheel 1); durations 532→536 rows in-step.
-- **Weld/re-pin/census-0:** green serial at `cf456a306` FLOOR **12,061T/170,810A/0F/0E/1S exit0** (linked, cwd=sugar-crush, plain pipe); K=8 conservation +0/+0; `b89059713` flipped §E736 + §E744 CLOSED under the ledger law (per-section re.split, assert-1, numstat, far-canary) → **row census prints NOTHING — ACTIONABLE = 0, definition-of-done met**. crush windows re-derived at this weld from the weld serial's junit by classname grep: `Form|Input|Select|Cursor` **712/4,516** (the 633/3,943 was pre-y5 — the relay/picker/mouse pins landed inside the window), `Vt|Terminal|Buffer` 305/21,034 and `Shine|Glamour|Style` 24/813 exact-held.
+- **Weld/re-pin/census-0:** green serial at `cf456a306` FLOOR **12,061T/170,810A/0F/0E/1S exit0** (linked, cwd=candy-code, plain pipe); K=8 conservation +0/+0; `b89059713` flipped §E736 + §E744 CLOSED under the ledger law (per-section re.split, assert-1, numstat, far-canary) → **row census prints NOTHING — ACTIONABLE = 0, definition-of-done met**. crush windows re-derived at this weld from the weld serial's junit by classname grep: `Form|Input|Select|Cursor` **712/4,516** (the 633/3,943 was pre-y5 — the relay/picker/mouse pins landed inside the window), `Vt|Terminal|Buffer` 305/21,034 and `Shine|Glamour|Style` 24/813 exact-held.
 - **Process notes:** the weld + census-probe agents both returned BLANK reports — both recovered by RESUMING THE SAME task_id (rule 3; weld disk-audited 10/10 before trusting). ERA-CORRECTION stamped tree-wide: the five-guard is **45T/4,768A** at this tip — the 125T/7,362A figure carried through RESUME tables was a stale era; DocFigure-alone 83T/2,685A. Campaign closure: MATCHUPS 🟡/🔴 port-completion rides the MATCHUPS board, not this ledger; the trigger-watch roster survives in §0-NOW-94.
 
 ## ROUND 88 — the forms Ph5 build-out welded through the campaign's worst fabrication storm (4 of 7 lanes phantom'd)

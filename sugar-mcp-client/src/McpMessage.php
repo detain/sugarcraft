@@ -8,9 +8,9 @@ namespace SugarCraft\McpClient;
  * A single JSON-RPC 2.0 envelope — request, notification, success response
  * or error response — as one immutable value object.
  *
- * Extracted from the sugar-crush MCP stack (src/McpMessage.php); the wire
+ * Extracted from the candy-code MCP stack (src/McpMessage.php); the wire
  * algorithm is faithful, the naming follows this library. As of the lane-A2
- * fold this class is the ONE JSON-RPC envelope in the monorepo: sugar-crush's
+ * fold this class is the ONE JSON-RPC envelope in the monorepo: candy-code's
  * twin was deleted into it, carrying its id-preserving variant
  * ({@see parsePreservingId()}, {@see withWireId()}, {@see MAX_DEPTH}) — the
  * ACP adapter's machinery — and the `mixed` error data payload the product's
@@ -254,7 +254,7 @@ final class McpMessage
      *
      * `$data` is `mixed`, not `?array`: JSON-RPC 2.0 leaves the error `data`
      * member "a value indicating additional information about the error", and
-     * sugar-crush's ACP error relay forwards whatever a peer's own error object
+     * candy-code's ACP error relay forwards whatever a peer's own error object
      * carried — a plain string among them. Constraining this parameter to
      * arrays made the faithful relay of a scalar `data` impossible.
      *
@@ -393,7 +393,7 @@ final class McpMessage
      * A third-party server sending `{"code":"abc"}` would cast to `0` under a
      * plain `(int)` — a fabricated success-ish code that downstream callers
      * cannot distinguish from a real one. Non-integer shapes therefore read as
-     * "no code reported", matching the sugar-crush twin accessor.
+     * "no code reported", matching the candy-code twin accessor.
      */
     public function errorCode(): ?int
     {
@@ -411,7 +411,7 @@ final class McpMessage
      *
      * An array or object message would stringify to `'Array'` (with a PHP
      * Warning under strict contexts); reading any non-string as "no message
-     * reported" keeps the accessor honest. Matches the sugar-crush twin.
+     * reported" keeps the accessor honest. Matches the candy-code twin.
      */
     public function errorMessage(): ?string
     {

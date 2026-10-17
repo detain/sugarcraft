@@ -12,7 +12,7 @@ require_once __DIR__ . '/../check-one-type-per-file.php';
 /**
  * Guards `tools/check-one-type-per-file.php`: every PSR-4 file declares only
  * the type its path names, because Composer cannot autoload a second one by
- * name (sugar-crush's App\LayoutResetMsg died "class not found" that way, and
+ * name (candy-code's App\LayoutResetMsg died "class not found" that way, and
  * sugar-dashboard's twice-declared SortDirection was a redeclaration fatal).
  */
 final class OneTypePerFileToolTest extends TestCase

@@ -161,7 +161,7 @@ final class TextArea implements Model
         if ($msg instanceof PasteMsg) {
             // E736 5.13: bracketed paste replaces the selection (when any) and
             // inserts at the caret — the same insertString seam the host app
-            // routes its own paste through (sugar-crush E704 law: verbatim
+            // routes its own paste through (candy-code E704 law: verbatim
             // payload, cursor lands at the end of the inserted text).
             if (!$this->focused) {
                 return [$this, null];
@@ -908,7 +908,7 @@ final class TextArea implements Model
      * Cursor column measured in DISPLAY CELLS rather than codepoints — the
      * x-offset the caret paints at once wide characters (CJK, emoji) and
      * zero-width marks are accounted for. `column()` stays the codepoint
-     * offset the flat draft-index math (and sugar-crush's seekInput) relies
+     * offset the flat draft-index math (and candy-code's seekInput) relies
      * on; this is the presentation-side companion, wrapping aside (each
      * visual row restarts at 0 — add {@see wrapSegments()} offsets to locate
      * the caret inside a soft-wrapped line).

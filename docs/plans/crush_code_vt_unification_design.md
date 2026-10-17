@@ -36,7 +36,7 @@ wider once Screen/Scrollback/Cursor/Sgr/Mode count in).
   (`use SugarCraft\Vt\Terminal\Terminal;`), ~50 candy-vt tests, and <!-- @rename-keep historical provenance -->
   sugar-pty `tests/Integration/VimSmokeTest.php:10`.
 - **sugar-crush → NEITHER.** `grep -rn 'SugarCraft\\Vt' sugar-crush/` = **0**. <!-- @rename-keep historical provenance -->
-  The backlog §E729 acceptance clause "all downstream consumers (sugar-crush
+  The backlog §E729 acceptance clause "all downstream consumers (candy-code
   cell-grid tests via `SugarCraft\Vt\Terminal`)" was a FALSE premise; erratum <!-- @rename-keep historical provenance -->
   appended in place (E729 stays OPEN).
 
@@ -93,7 +93,7 @@ purity, largest blast radius on BOTH downstream suites simultaneously.
 - candy-vt suite (607T weld figure, r82) and candy-vcr suite (≈890T, r83) are <!-- @rename-keep historical provenance -->
   BOTH sensitive — sibling-lib gate = full suite of every touched lib
   (RESUME §1b).
-- **sugar-crush is UNAFFECTED** (zero references): no suite-figure.json /
+- **candy-code is UNAFFECTED** (zero references): no suite-figure.json /
   README headline / durations re-pin; the weld serial stays a negative control.
 - DocFigure/campaign census: this doc adds NO backlog rows; §2(a) census
   unchanged at 7 survivors.

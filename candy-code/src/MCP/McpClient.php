@@ -1,0 +1,796 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\MCP;
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
+use SugarCraft\Code\Agents\AgentPreset;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
+
+final class McpClient
+{
+    // E710 moved the foreign-spelling vocabulary — the TYPE_ALIASES map and
+    // normalizeEntry() — into {@see McpForeignTranslate}, the ONE table the
+    // `candy-code mcp import` translator and this loader share. The read here
+    // is byte-identical to what it was; only the home of the constants moved,
+    // so a new foreign spelling can never be taught to one caller and not the
+    // other.
+
+    /** @var array<string, McpServer> */
+    private array $servers = [];
+
+    /**
+     * Names of entries skipped because the config says `enabled: false`
+     * (E708). Collected per {@see startServers()} run and reported WITH the
+     * build failures rather than dropped in silence — the silent half is what
+     * made a disabled opencode server indistinguishable from a running one.
+     *
+     * @var list<string>
+     */
+    private array $disabledServers = [];
+
+    /**
+     * Names of entries the admission check declined (audit MCP-5) in the last
+     * {@see startServers()} run — not started, and not a config error: the
+     * caller that supplied the check reports them.
+     *
+     * @var list<string>
+     */
+    private array $refusedServers = [];
+
+    /**
+     * Per stdio server attempted in the last {@see startServers()} run, the
+     * inherited credentials its spawn withheld (item 0.14-b, decision D3).
+     * Recorded whether or not the server came up — a server that failed its
+     * handshake for want of a token is exactly the one worth naming.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $strippedSecretEnv = [];
+
+    private Client $httpClient;
+
+    /**
+     * The preset of the agent currently driving this client, if any. When set,
+     * listTools()/callTool()/callToolByName() are filtered through McpRouter
+     * against $agentPreset->mcpServers.
+     */
+    private ?AgentPreset $agentPreset;
+
+    /**
+     * Escape hatch for callers that are genuinely not agent-scoped (e.g.
+     * system/admin tooling). Fails CLOSED by default: with no agent preset
+     * attached, listTools()/callTool() see and reach nothing at all, so a
+     * caller that forgets to call setAgentPreset() is denied rather than
+     * silently handed every configured server's every tool.
+     */
+    private bool $unrestricted;
+
+    /**
+     * The setting whose globs become {@see $denyPatterns} at launch (E696):
+     * `.mcp.json` server keys, `fnmatch` wildcards.
+     */
+    public const DENY_SETTINGS_KEY = 'disabledMcpServers';
+
+    /**
+     * Server-name pattern => "deny" (E696). Fed at launch from the
+     * `disabledMcpServers` setting by
+     * {@see \SugarCraft\Code\Cli\Bootstrap::mcpClient()}: a matching
+     * server is never started ({@see startServer()}), and the map is applied
+     * again on every listing and call, preset-routed or unrestricted, so a map
+     * set after the servers came up still hides and refuses them.
+     *
+     * @var array<string, string>
+     */
+    private array $denyPatterns;
+
+    /** @var list<string> entries {@see startServers()} skipped for matching a deny pattern */
+    private array $deniedServers = [];
+
+    public function __construct(
+        private string $configPath,
+        ?Client $httpClient = null,
+        ?AgentPreset $agentPreset = null,
+        bool $unrestricted = false,
+        array $denyPatterns = [],
+        private readonly ?McpAuthStore $authStore = null,
+        // Audit MCP-5: asked of every entry AFTER it is canonicalised and
+        // BEFORE anything is built or spawned — `(string $name, mixed $type,
+        // array $entry): bool`. Evaluated on the bytes this client itself
+        // loaded, so there is no window between a check and the start in
+        // which `.mcp.json` could change. Null admits everything, as before.
+        private readonly ?\Closure $admit = null,
+    ) {
+        // Injectable so tests can supply a MockHandler-backed client; defaults to
+        // a real client for production use.
+        $this->httpClient = $httpClient ?? new Client(['timeout' => 30]);
+        $this->agentPreset = $agentPreset;
+        $this->unrestricted = $unrestricted;
+        $this->denyPatterns = $denyPatterns;
+    }
+
+    /**
+     * Set (or clear) the preset of the agent driving this client, so that
+     * subsequent listTools()/callTool()/callToolByName() calls are routed
+     * through McpRouter::resolveAllowedTools() against the preset's mcpServers
+     * allowlist rather than exposing every configured server unconditionally.
+     */
+    public function setAgentPreset(?AgentPreset $agentPreset): void
+    {
+        $this->agentPreset = $agentPreset;
+    }
+
+    /**
+     * Set the global wildcard deny-pattern map (server-name pattern => "deny")
+     * forwarded to McpRouter on every routed call, alongside the active agent
+     * preset's allowlist, and applied by the unrestricted arm and by
+     * {@see startServers()} too.
+     *
+     * @param array<string, string> $denyPatterns
+     */
+    public function setDenyPatterns(array $denyPatterns): void
+    {
+        $this->denyPatterns = $denyPatterns;
+    }
+
+    /**
+     * Load and start MCP servers from config.
+     *
+     * EVERY ENTRY IS ATTEMPTED, and every one that comes up is registered, even
+     * when an earlier or later entry fails — see {@see startServer()} for the
+     * three measured routes by which one bad entry used to disable the whole
+     * file, and for why the failures are still reported rather than swallowed.
+     *
+     * @throws \RuntimeException naming every entry whose CONFIG could not be
+     *         built — an unrecognised `type` — AFTER all of them have been
+     *         attempted, so the throw no longer decides which servers get to
+     *         exist, and (E708) naming SEPARATELY every entry the config
+     *         itself disabled (`enabled: false`) and that was therefore not
+     *         started — a deliberate skip is reported, not dropped. A server
+     *         whose `start()` merely fails is skipped silently,
+     *         as it always was; see {@see startServer()} for why those two are
+     *         not the same event. A caller that wants the working servers
+     *         regardless catches this and carries on — which is what
+     *         {@see \SugarCraft\Code\Cli\Bootstrap::mcpClient()} does, and
+     *         why that seam is the one place in this package writing both
+     *         `error_log()` and the transcript.
+     */
+    public function startServers(): void
+    {
+        $config = $this->loadConfig();
+        $failures = [];
+        $this->disabledServers = [];
+        $this->refusedServers = [];
+        $this->deniedServers = [];
+        $this->strippedSecretEnv = [];
+
+        foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
+            $failure = $this->startServer($name, $serverConfig);
+            if ($failure !== null) {
+                $failures[] = $failure;
+            }
+        }
+
+        // AFTER the loop, deliberately: this is the whole fix. The throw used to
+        // happen ON the offending entry, so entries after it were never even
+        // constructed and the same broken file lost a different set of servers
+        // depending purely on key order.
+        if ($failures !== []) {
+            $disabled = $this->disabledReport();
+
+            throw new \RuntimeException(
+                sprintf(
+                    '%d MCP server %s in this config could not be built: %s',
+                    count($failures),
+                    count($failures) === 1 ? 'entry' : 'entries',
+                    implode('; ', $failures),
+                )
+                . ($disabled === '' ? '' : '. ' . $disabled),
+            );
+        }
+
+        // E708: a purely disabled file still reports. A `false` the reader
+        // ignores is the same silent-drop class as an `environment` map read
+        // nowhere — the operator configured a decision and deserves to see it
+        // honoured, not inferred from a server that quietly never appears.
+        $disabled = $this->disabledReport();
+        if ($disabled !== '') {
+            throw new \RuntimeException($disabled);
+        }
+    }
+
+    /**
+     * The entries the admission check refused in the last {@see startServers()}
+     * run (audit MCP-5).
+     *
+     * @return list<string>
+     */
+    public function refusedServers(): array
+    {
+        return $this->refusedServers;
+    }
+
+    /**
+     * The entries the last {@see startServers()} run did not start because
+     * their name matches a deny pattern (E696). Not reported as a failure:
+     * the operator's own setting declined them.
+     *
+     * @return list<string>
+     */
+    public function deniedServers(): array
+    {
+        return $this->deniedServers;
+    }
+
+    /**
+     * The inherited credential-shaped variables each stdio server was started
+     * WITHOUT in the last {@see startServers()} run, keyed by server name;
+     * servers that lost nothing are absent. Names only, never values. The
+     * launch notice reads this: a server needing one declares it in its
+     * `env` block (`"GITHUB_TOKEN": "${GITHUB_TOKEN}"`) or the operator lists
+     * it in `secretEnvAllowlist`.
+     *
+     * @return array<string, list<string>>
+     */
+    public function strippedSecretEnv(): array
+    {
+        return $this->strippedSecretEnv;
+    }
+
+    /**
+     * The one-sentence launch notice for {@see strippedSecretEnv()}, or the
+     * empty string when no server lost anything.
+     */
+    public function strippedSecretEnvNotice(): string
+    {
+        if ($this->strippedSecretEnv === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($this->strippedSecretEnv as $server => $names) {
+            $parts[] = sprintf('%s (%s)', $server, implode(', ', $names));
+        }
+
+        return sprintf(
+            'MCP stdio servers start without inherited credentials: %s. A server that needs one declares it in its .mcp.json "env" block, e.g. "GITHUB_TOKEN": "${GITHUB_TOKEN}", or list the name in secretEnvAllowlist.',
+            implode('; ', $parts),
+        );
+    }
+
+    /**
+     * The one-sentence account of entries skipped for `enabled: false`, or the
+     * empty string when nothing was skipped. Deliberately NOT phrased as a
+     * build failure — the entry built fine and its own config declined to
+     * run; the distinction is why this reads "disabled and skipped" where a
+     * malformed entry reads "could not be built".
+     */
+    private function disabledReport(): string
+    {
+        if ($this->disabledServers === []) {
+            return '';
+        }
+
+        return sprintf(
+            '%d MCP server %s in this config %s disabled and skipped: %s',
+            count($this->disabledServers),
+            count($this->disabledServers) === 1 ? 'entry' : 'entries',
+            count($this->disabledServers) === 1 ? 'is' : 'are',
+            implode(', ', $this->disabledServers),
+        );
+    }
+
+    /**
+     * Stop all MCP servers.
+     */
+    public function stopServers(): void
+    {
+        foreach ($this->servers as $server) {
+            $server->stop();
+        }
+        $this->servers = [];
+    }
+
+    /**
+     * Pump every STARTED stdio server's stderr once, between exchanges.
+     *
+     * E440's dispatch side from this angle: the client owns the server set, so
+     * a caller that knows no exchange is in flight (the parent between turns)
+     * can refresh all diagnostic tails in one call instead of holding server
+     * handles. The instanceof narrowing is deliberate — {@see McpServer} does
+     * NOT grow a pumpStderr(): only a spawned child has an fd 2, and making
+     * HTTP/Git servers answer with a no-op would advertise a capability their
+     * transport cannot have.
+     *
+     * Same per-server contract as {@see StdioMcpServer::pumpStderr()} —
+     * bounded, idempotent, never throws on a torn-down server. E699 widens
+     * the narrowing to {@see ClaudeCodeMcpServer}, which is the second
+     * SPAWNED child this client can own — the law is "only a spawned child
+     * has an fd 2", and now exactly two classes qualify.
+     */
+    public function pumpStderr(): void
+    {
+        foreach ($this->servers as $server) {
+            if ($server instanceof StdioMcpServer || $server instanceof ClaudeCodeMcpServer) {
+                $server->pumpStderr();
+            }
+        }
+    }
+
+    /**
+     * E698: a LIVENESS READOUT of the servers this client has STARTED, with
+     * zero side effects — no exchange, no `proc_open()`, no wire traffic.
+     *
+     * WHY IT CAN BE HONEST AT ALL: {@see startServer()} registers a server in
+     * {@see $servers} ONLY after its `start()` succeeded, and a `start()` that
+     * fails is skipped silently. So the map's KEYS are exactly "came up at
+     * launch", and its ABSENCES are the silent skip — the pair the `/mcp`
+     * panel renders as up-vs-not-up. This method adds the second half the map
+     * could not carry before: whether a registered stdio child is STILL alive,
+     * which until now nothing outside {@see writeLine()}'s EINTR branch ever
+     * asked after launch.
+     *
+     * The instanceof narrowing is deliberate, same law as {@see pumpStderr()}:
+     * {@see McpServer} does NOT grow an isUp(). A transport that has no
+     * liveness to report should not be forced to fake one; an unrecognised
+     * fourth class answers `transport: 'other'` with `up: null` — unknown,
+     * which is the truth, rather than a default that reads as healthy.
+     *
+     * `tools` counts the START-TIME cache every transport already holds
+     * ({@see StdioMcpServer::listTools()}, {@see HttpMcpServer::listTools()},
+     * {@see GitMcpServer::listTools()} all return arrays built during the
+     * handshake or constructor), so enumerating it costs no traffic.
+     *
+     * @return array<string, array{transport: string, up: bool|null, tools: int}>
+     */
+    public function startedSnapshot(): array
+    {
+        $rows = [];
+
+        foreach ($this->servers as $name => $server) {
+            $rows[$name] = [
+                'transport' => match (true) {
+                    $server instanceof StdioMcpServer => 'stdio',
+                    $server instanceof HttpMcpServer => 'http',
+                    $server instanceof GitMcpServer => 'git',
+                    $server instanceof ClaudeCodeMcpServer => ClaudeCodeMcpServer::TYPE,
+                    default => 'other',
+                },
+                'up' => match (true) {
+                    $server instanceof StdioMcpServer,
+                    $server instanceof HttpMcpServer,
+                    $server instanceof GitMcpServer,
+                    $server instanceof ClaudeCodeMcpServer => $server->isUp(),
+                    default => null,
+                },
+                'tools' => count($server->listTools()),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Start a single server, and NEVER let one entry's failure reach the loop
+     * that is starting the others.
+     *
+     * ⚠️ THIS GUARD PROMISED SOMETHING IT DID NOT DELIVER, BY THREE SEPARATE
+     * ROUTES, AND ALL THREE WERE MEASURED.
+     * WHAT THIS SAID: "A single unreachable/misbehaving server must not abort
+     * loading the rest. An unknown type is a config error and is thrown above,
+     * before we get here." Both sentences were wrong in effect.
+     * WHAT IS TRUE NOW: the `match` is INSIDE the guard and the guard catches
+     * `\Throwable`. The three routes, each measured at this tree (PHP 8.3.6,
+     * Linux 6.8) by driving `startServers()` over a two-server `.mcp.json` with
+     * the offender FIRST and a well-formed server second:
+     *
+     *   1. `{"tools":[{"name":5}]}` from a `stdio` or `http` peer raised a
+     *      `TypeError` out of `McpTool::fromArray()`. Not a `RuntimeException`,
+     *      so it escaped: "tools visible: 0". Closed at source too, by
+     *      {@see McpTool::tryFromArray()}.
+     *   2. `"type": "sse"` threw `RuntimeException: Unknown MCP server type: sse`
+     *      from the `default` arm, which sat OUTSIDE the try. "tools visible: 0".
+     *      `sse` is not a typo hazard invented for the test — it is a transport
+     *      the MCP specification defines and this port has not implemented, so
+     *      the first `.mcp.json` carrying one silently disabled every OTHER
+     *      server in the file.
+     *   3. Anything else a constructor or a `start()` can raise that is not a
+     *      `RuntimeException` — an `\Error` from a third party's output, a
+     *      `JsonException`, a `ValueError` off a closed pipe.
+     *
+     * ⚠️ THE ORDER-DEPENDENCE IS WHY THIS READS AS INTERMITTENT. `startServers()`
+     * iterates the config map, so servers listed BEFORE the offender had already
+     * started and stayed started. The same broken `.mcp.json` therefore lost
+     * everything, something, or nothing depending purely on key order.
+     *
+     * ⚠️ TWO CATCHES, NOT ONE, AND FLATTENING THEM INTO ONE WAS THIS FIX'S FIRST
+     * CUT AND ITS FIRST MISTAKE. The original code distinguished the two classes
+     * by WHERE the throw came from, and the distinction is principled:
+     *
+     *   CONFIG ERROR (the `match`): the file is wrong and only a human can fix
+     *       it. Reported. `Bootstrap::mcpClient()` catches the report and writes
+     *       it to `error_log()` AND the transcript — the one site in that class
+     *       that uses both channels — then carries on with fewer tools.
+     *   RUNTIME FAILURE (`start()`): the binary is missing, the host is down,
+     *       the handshake timed out. Routine, expected, and SKIPPED SILENTLY, as
+     *       it always has been.
+     *
+     * Collapsing both into one aggregate report was green across the MCP suites
+     * and red across four rows that pin those two contracts. What was actually
+     * wrong was never the reporting — it was that reporting ABORTED THE LOOP.
+     * So both catches stay, both keep their old meaning, and the only change is
+     * that the config-error report is deferred to {@see startServers()} until
+     * every entry has been attempted. The runtime catch also widens from
+     * `\RuntimeException` to `\Throwable`, which is route 3.
+     *
+     * E708 — before anything is constructed, the entry is READ: an
+     * `enabled: false` declines to start and is collected for the report, and
+     * a foreign `type` name is translated through
+     * {@see McpForeignTranslate::TYPE_ALIASES}; the entry itself is
+     * canonicalised by {@see McpForeignTranslate::normalizeEntry()} (E710
+     * moved both into the shared table the importer calls too). The
+     * non-string `type` deliberately rides into {@see buildServer()}'s typed
+     * parameter UNtranslated rather than being special-cased here: the `match`
+     * raises its TypeError inside the existing guard, where it joins the
+     * per-entry report like every other unbuildable shape.
+     *
+     * @return string|null a description of a CONFIG error, to be reported after
+     *         every entry has been attempted; null for a clean start and for a
+     *         runtime failure alike
+     */
+    private function startServer(string $name, array $config): ?string
+    {
+        $type = $config['type'] ?? 'stdio';
+        if (is_string($type)) {
+            $type = McpForeignTranslate::TYPE_ALIASES[$type] ?? $type;
+        }
+
+        try {
+            $entry = McpForeignTranslate::normalizeEntry($config);
+            if ($entry === null) {
+                $this->disabledServers[] = $name;
+
+                return null;
+            }
+            // Before the admission check, so a denied entry is neither
+            // started nor recorded as trusted: the operator said no to it.
+            if (LibraryMcpRouter::serverDenied($name, $this->denyPatterns)) {
+                $this->deniedServers[] = $name;
+
+                return null;
+            }
+            if ($this->admit !== null && ($this->admit)($name, $type, $entry) !== true) {
+                $this->refusedServers[] = $name;
+
+                return null;
+            }
+            $server = $this->buildServer($name, $type, $entry);
+        } catch (\Throwable $e) {
+            return sprintf('%s (%s)', $name, $e->getMessage());
+        }
+
+        try {
+            $server->start();
+        } catch (\Throwable) {
+            $this->recordStrippedSecretEnv($name, $server);
+
+            return null;
+        }
+
+        $this->recordStrippedSecretEnv($name, $server);
+        $this->servers[$name] = $server;
+
+        return null;
+    }
+
+    private function recordStrippedSecretEnv(string $name, McpServer $server): void
+    {
+        if ($server instanceof StdioMcpServer && $server->strippedSecretEnv() !== []) {
+            $this->strippedSecretEnv[$name] = $server->strippedSecretEnv();
+        }
+    }
+
+    /**
+     * Construct the {@see McpServer} one `.mcp.json` entry asks for.
+     *
+     * Split out of {@see startServer()} so that the `default` arm's throw is
+     * inside that method's guard rather than beside it — see route 2 there.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function buildServer(string $name, string $type, array $config): McpServer
+    {
+        return match ($type) {
+            // `startTimeout` (seconds) is OPTIONAL and per-server: a locally
+            // installed binary answers the handshake in milliseconds, while a
+            // cold `npx -y @modelcontextprotocol/server-…` first has to fetch a
+            // package tree. Only a positive number is honoured — anything else
+            // (a string, 0, a negative) falls back to
+            // {@see StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS}, because a
+            // hand-edited config must not be able to turn the bound OFF by
+            // accident. It bounds the HANDSHAKE only.
+            //
+            // `toolTimeout` (seconds, item 0.5, decision D2, bounded-by-
+            // default per cl-4 FIX-C) is the per-`tools/call` bound. Unset
+            // takes {@see StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS} — a
+            // hung third-party server must cost one call, never the session;
+            // slow real work (a build, a crawl) raises the number per entry.
+            // Only a positive finite number overrides it — a string, 0 or a
+            // negative falls back to the default rather than inventing a
+            // zero bound, the same policy `startTimeout` enforces.
+            'stdio' => new StdioMcpServer(
+                name: $name,
+                command: $config['command'] ?? '',
+                args: $config['args'] ?? [],
+                env: $this->resolveEnv($config['env'] ?? []),
+                startTimeoutSeconds: is_numeric($config['startTimeout'] ?? null)
+                    ? (float) $config['startTimeout']
+                    : null,
+                toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null),
+            ),
+            'http' => new HttpMcpServer(
+                name: $name,
+                url: $config['url'] ?? '',
+                headers: $this->resolveEnv($config['headers'] ?? []),
+                httpClient: $this->httpClient,
+                // E695: the http arm is the ONLY consumer of the auth store —
+                // it is created lazily here so stdio/git-only configs never
+                // touch ~/.local/share/candy-code/mcp-auth.json. Tests pass
+                // an explicit store backed by a temp path for hermeticity.
+                authStore: $this->authStore ?? McpAuthStore::new(),
+            ),
+            // `timeout` (seconds per git invocation, hooks included) is
+            // OPTIONAL — audit R18. GitCommandHandlers::configuredTimeout()
+            // honours only a positive number, like `startTimeout` above, so
+            // the config can move the bound but never switch it off.
+            'git' => new GitMcpServer(
+                name: $name,
+                handlers: new GitCommandHandlers(
+                    cwd: $config['path'] ?? null,
+                    timeoutSeconds: GitCommandHandlers::configuredTimeout($config['timeout'] ?? null),
+                ),
+            ),
+            // E699: the gated transport. Deliberately NOT `new ClaudeCodeMcpServer`
+            // with args threaded from $config: the ENTRY carries no spawn keys at
+            // all — the repository does not name this binary — and the grant is
+            // read from the OPERATOR tier (Bootstrap::claudeMcpGrant(), same file
+            // and same once-per-process posture as trustedProjectMcp) inside
+            // ClaudeCodeMcpServer::fromGrant(), which throws a config error for
+            // every gate failure. A refusal lands in mcpClient()'s existing
+            // catch: reported on both channels, degraded-not-refused, exactly
+            // like an unknown type.
+            //
+            // THE BOOTSTRAP CITE IS THE WIREING-LAW REMINDER, not prose:
+            // Bootstrap::mcpClient()'s TWO-CONTROLS comment states that
+            // STARTING a server is itself the execution the trust tiers gate —
+            // PreToolUse sees tool calls and never sees proc_open() — so the
+            // double opt-in above is the boundary for the spawn, and the
+            // PreToolUse chain stays the boundary only for the CALLS.
+            'claude-mcp' => ClaudeCodeMcpServer::fromGrant(
+                $name,
+                $config,
+                Bootstrap::claudeMcpGrant(),
+            ),
+            default => throw new \RuntimeException("Unknown MCP server type: $type"),
+        };
+    }
+
+    /**
+     * List available tools, restricted to what the current agent preset (if
+     * any) is allowed to see per McpRouter::resolveAllowedTools(). With no
+     * preset attached, returns nothing unless $unrestricted was explicitly
+     * set at construction time.
+     *
+     * @return array<McpTool>
+     */
+    public function listTools(): array
+    {
+        // E677: mount the idle pump at the dispatch caller. Before any
+        // exchange entered through this class begins, every started stdio
+        // child gets the bounded between-turns drain its pump documented
+        // ({@see pumpStderr()}) — so the servers NOT being called this
+        // exchange stop sitting on unread fd 2 while another one is talked
+        // to. readResponse() drains only the server in flight; between turns
+        // there is no reader at all, and that gap is what this line closes.
+        $this->pumpStderr();
+
+        if ($this->agentPreset !== null) {
+            return $this->router()->resolveAllowedTools($this->agentPreset);
+        }
+
+        if (!$this->unrestricted) {
+            return [];
+        }
+
+        $tools = [];
+
+        foreach ($this->servers as $name => $server) {
+            if (LibraryMcpRouter::serverDenied($name, $this->denyPatterns)) {
+                continue;
+            }
+
+            $tools = array_merge($tools, $server->listTools());
+        }
+
+        return $tools;
+    }
+
+    /**
+     * Call a tool on a specific server. Rejected when the current agent
+     * preset's mcpServers allowlist does not cover $serverName, so a caller
+     * cannot bypass listTools() filtering by naming a denied server directly.
+     * With no preset attached, rejected unconditionally unless $unrestricted
+     * was explicitly set at construction time.
+     *
+     * @param (\Closure(): void)|null $onWait the caller's wait beat (item 0.4-b)
+     */
+    public function callTool(string $serverName, string $toolName, array $args, ?\Closure $onWait = null): array
+    {
+        $server = $this->servers[$serverName] ?? null;
+
+        if ($server === null) {
+            throw new \RuntimeException("Unknown MCP server: $serverName");
+        }
+
+        if (!$this->isServerAllowed($serverName)) {
+            throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
+        }
+
+        // E677: see listTools() — pump idle children before entering an
+        // exchange, so a flooding child on ANOTHER server is drained here and
+        // this server's own between-turns bytes are already absorbed.
+        $this->pumpStderr();
+
+        // The wait beat (item 0.4-b) reaches the stdio transport only: it is
+        // the one whose call can legitimately outlast the other transports.
+        // `http` carries Guzzle's 30 s total
+        // timeout, under the turn's 120 s idle ceiling, and `claude-mcp`
+        // speaks through its own client.
+        return $server instanceof StdioMcpServer && $onWait !== null
+            ? $server->callTool($toolName, $args, $onWait)
+            : $server->callTool($toolName, $args);
+    }
+
+    /**
+     * Whether $serverName is reachable under the current routing mode: via
+     * the active agent preset's allowlist (and any deny patterns), or via the
+     * explicit $unrestricted escape hatch when no preset is attached.
+     */
+    private function isServerAllowed(string $serverName): bool
+    {
+        if ($this->agentPreset !== null) {
+            return in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true);
+        }
+
+        return $this->unrestricted && !LibraryMcpRouter::serverDenied($serverName, $this->denyPatterns);
+    }
+
+    /**
+     * Call a tool by name across all servers the current agent preset is
+     * allowed to see (first match). Tools belonging to servers outside the
+     * preset's allowlist are invisible here, not merely unlisted.
+     */
+    public function callToolByName(string $toolName, array $args): array
+    {
+        foreach ($this->listTools() as $tool) {
+            if ($tool->name !== $toolName) {
+                continue;
+            }
+
+            $server = $this->servers[$tool->serverName] ?? null;
+            if ($server !== null) {
+                return $server->callTool($toolName, $args);
+            }
+        }
+
+        throw new \RuntimeException("Tool not found: $toolName");
+    }
+
+    /**
+     * Build an McpRouter over this client's currently-started servers,
+     * forwarding the configured global deny patterns alongside the servers
+     * so both halves of McpRouter's enforcement (allowlist + deny patterns)
+     * are actually wired through, not just the allowlist.
+     */
+    private function router(): McpRouter
+    {
+        return new McpRouter($this->servers, $this->denyPatterns);
+    }
+
+    /**
+     * Read the config whose PATH this method never judged.
+     *
+     * Containment and trust are decided at the grant site, {@see
+     * \SugarCraft\Code\Cli\Bootstrap::mcpConfigDecision()}, which is what put
+     * `$configPath` into this client; this method re-reads rather than
+     * re-adjudicates. That is {@see \SugarCraft\Code\Support\ContainedPath}'s
+     * house rule stated where the window lives (E40(a)): between the grant's
+     * `is_file()` + `within()` and this `file_get_contents()` the bytes under the
+     * granted path can change, and nothing here narrows the window, because a
+     * co-resident writer that could swap the file after the grant could have
+     * written it before it. The residual is a config that names servers nobody
+     * approved between two stats — answered by the trust gate upstream, not by a
+     * second containment here. The hard-link limit of that grant is qualified at
+     * {@see \SugarCraft\Code\Support\ContainedPath}'s threat-model paragraph.
+     *
+     * E41 (c) — WHAT SAID: an existing-but-broken config used to answer `[]`
+     * three different ways (unreadable, unparseable, wrong shape) and the launch
+     * proceeded as if the project had declared nothing. TRUE NOW: only an absent
+     * file is "nothing declared"; each of the three broken shapes throws a
+     * RuntimeException naming the path, in the SAME wording
+     * {@see \SugarCraft\Code\Cli\Bootstrap::mcpServerInventory()} reports for
+     * the identical file, so `crush mcp` and the launch can never disagree about
+     * whether a config is usable. WHY IT EARNS ITS PLACE: at the launch the throw
+     * lands in mcpClient()'s existing catch, which puts the reason on stderr and
+     * in the transcript — the alternative was users debugging a silently absent
+     * toolset; the inventory arm already refused to stay silent about these
+     * three.
+     */
+    private function loadConfig(): array
+    {
+        if (!file_exists($this->configPath)) {
+            return [];
+        }
+
+        $content = @file_get_contents($this->configPath);
+        if (!is_string($content)) {
+            throw new \RuntimeException($this->configPath . ' could not be read');
+        }
+
+        try {
+            $data = json_decode($content, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \RuntimeException(
+                $this->configPath . ' is not valid JSON (' . $e->getMessage() . ')',
+                0,
+                $e,
+            );
+        }
+
+        if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
+            throw new \RuntimeException($this->configPath . ' has no "mcpServers" object');
+        }
+
+        return $data;
+    }
+
+    /**
+     * A stdio entry's `toolTimeout` as written, or null for "nothing usable":
+     * only a positive, finite JSON number is honoured, and null resolves to
+     * {@see StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS} in the server's
+     * constructor (see buildServer()). The parser reports what the config
+     * SAYS; the ceiling policy lives on the server, one place.
+     */
+    public static function toolTimeout(mixed $raw): ?float
+    {
+        if (!is_int($raw) && !is_float($raw)) {
+            return null;
+        }
+
+        $seconds = (float) $raw;
+
+        return is_finite($seconds) && $seconds > 0.0 ? $seconds : null;
+    }
+
+    /**
+     * @param array<string, string> $env
+     * @return array<string, string>
+     */
+    private function resolveEnv(array $env): array
+    {
+        $resolved = [];
+
+        foreach ($env as $key => $value) {
+            if (is_string($value) && preg_match('/^\$\{(.*?)(?::-(.*))?\}$/', $value, $matches)) {
+                $resolved[$key] = getenv($matches[1]) ?: ($matches[2] ?? '');
+            } else {
+                $resolved[$key] = $value;
+            }
+        }
+
+        return $resolved;
+    }
+}

@@ -23,7 +23,7 @@ use SugarCraft\Diff\Writer\UnifiedFormat;
  * the raw line-mode op sequence; {@see hunks()} is the same rows grouped with
  * context; {@see unified()} renders the whole patch.
  *
- * Mirrors sugar-crush/src/Tools/Concerns/BuildsUnifiedDiff.php — the trait
+ * Mirrors candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php — the trait
  * this library was extracted from (upstream-scout candidate S4), with the
  * hardcoded constants widened into {@see DiffOptions}.
  */

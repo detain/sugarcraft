@@ -22,7 +22,7 @@ use SugarCraft\Diff\LineKind;
  * at an unterminated end-of-file with `\ No newline at end of file`.
  *
  * Mirrors the string assembly of
- * sugar-crush/src/Tools/Concerns/BuildsUnifiedDiff.php (`unifiedDiff()` +
+ * candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php (`unifiedDiff()` +
  * `buildHunks()`' body loop).
  */
 final class UnifiedFormat

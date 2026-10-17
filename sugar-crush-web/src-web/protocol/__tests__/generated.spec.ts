@@ -5,13 +5,13 @@ import { generate, toType } from '../../../scripts/gen-protocol.mjs'
 import { EVENT_KINDS, IDEMPOTENT_METHODS, METHOD_SCOPES, PROTOCOL } from '../generated'
 
 // vitest runs from the package root.
-const schemaPath = resolve(process.cwd(), '../sugar-crush/docs/protocol/sugarcrush.v1.schema.json')
+const schemaPath = resolve(process.cwd(), '../candy-code/docs/protocol/candy-code.v1.schema.json')
 const generatedPath = resolve(process.cwd(), 'src-web/protocol/generated.ts')
 
 describe('gen:protocol', () => {
   it.skipIf(!existsSync(schemaPath))('generated.ts matches the server schema (run `npm run gen:protocol`)', () => {
     const schema = JSON.parse(readFileSync(schemaPath, 'utf8'))
-    const fresh = generate(schema, 'sugar-crush/docs/protocol/sugarcrush.v1.schema.json')
+    const fresh = generate(schema, 'candy-code/docs/protocol/candy-code.v1.schema.json')
     expect(readFileSync(generatedPath, 'utf8')).toBe(fresh)
   })
 

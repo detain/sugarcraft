@@ -29,7 +29,7 @@ declare(strict_types=1);
  *     (see `$purgeStaleSiblings`) — composer will not relink them on its own.
  *
  * WHY THE MODE MUST BE EXPLICIT. Measured 2026-08-22: a `composer update` in
- * `sugar-crush` replaced a symlinked `sugar-core` with a Packagist copy two
+ * `candy-code` replaced a symlinked `sugar-core` with a Packagist copy two
  * audit rounds old — because master had 22 UNPUSHED commits, so Packagist
  * could not have had them. The suite still passed and still printed a total;
  * it had simply stopped testing the working tree. That is not an argument
@@ -502,8 +502,8 @@ $updateLibs = static function (array $targets, string $root, array &$failed): vo
     }
 };
 
-if ($opts['mode'] === 'published' && \in_array('sugar-crush', $targets, true)) {
-    // sugar-crush's suite carries the closure canary:
+if ($opts['mode'] === 'published' && \in_array('candy-code', $targets, true)) {
+    // candy-code's suite carries the closure canary:
     // GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed
     // SKIPS when there are no path-repo symlinks to walk. Published mode
     // therefore moves its skip count 1 -> 2, which is precisely the alarm the
@@ -511,10 +511,10 @@ if ($opts['mode'] === 'published' && \in_array('sugar-crush', $targets, true)) {
     // not wrong, but it is no longer comparable to any recorded floor.
     \fwrite(
         \STDOUT,
-        "WARNING: sugar-crush in published mode moves its skip count 1 -> 2\n"
+        "WARNING: candy-code in published mode moves its skip count 1 -> 2\n"
         . "         (GitignoreAwarenessTest has no symlinks to walk). Its suite total is\n"
         . "         then NOT comparable to the recorded audit floor. Re-link it with\n"
-        . "         --mode=linked --libs=sugar-crush before measuring.\n\n"
+        . "         --mode=linked --libs=candy-code before measuring.\n\n"
     );
 }
 

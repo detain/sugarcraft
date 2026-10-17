@@ -197,3 +197,22 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   CI `vhs.yml` re-renders from the already-rewritten `.tape` on the next tape run. <!-- @rename-keep -->
 - `media/icons/sugar-core.png` + `docs/img/icons/sugar-core.png` — bytes unchanged (old-brand <!-- @rename-keep -->
   artwork moved to the new path); `scripts/generate_icons.py` slug row already flipped for regen. <!-- @rename-keep -->
+
+## f1 sugar-crush → candy-code (2026-10-16, lane rename/f1) <!-- @rename-keep -->
+- ~32 `ansi/ansi.json` captions still name the frozen wordmark bytes verbatim <!-- @rename-keep -->
+  (`SUGAR-CRUSH`, `SUGARCRUSH`, `SUGAR/CRUSH` spellings the residue vocabulary <!-- @rename-keep -->
+  does not accuse; `*.ansi` content is C.3-excluded). Reword when the art is redrawn. <!-- @rename-keep -->
+- `ansi/sugarcraft/4-sugarcraft-crush-volcano.ansi` carried the old slug in its <!-- @rename-keep -->
+  FILENAME (the one path the renamer's extra_literal rewrote in JSON but not on disk); <!-- @rename-keep -->
+  git-mv'd to `4-candy-code-volcano.ansi` in this lane — the erupting art itself still <!-- @rename-keep -->
+  draws the pre-rename lockups at the base (frozen content). <!-- @rename-keep -->
+- `sugar-crush-web/` package name, `SugarCraft\CrushWeb` namespace, and <!-- @rename-keep -->
+  `src-web/protocol/generated.ts` (still typed for `sugarcrush.v1`) ride phase 8B; <!-- @rename-keep -->
+  the web suite is intentionally red between 8A and 8B. <!-- @rename-keep -->
+- `sugar-core/src/Util/LegacyPaths.php` docblock line 13 self-garbled to <!-- @rename-keep -->
+  `~/.candy-code -> ~/.candy-code` by an earlier batch's own sweep (cosmetic, one word). <!-- @rename-keep -->
+- `ansi/sugarcraft/3-sugarcraft-x-crush-splash.ansi` keeps `crush` in its <!-- @rename-keep -->
+  filename and JSON keys: the art paints the frozen SUGAR-CRUSH x SACRED-CRAFT <!-- @rename-keep -->
+  lockup (C.3 content-frozen, R4.9 class). Its sibling volcano piece already <!-- @rename-keep -->
+  moved to `4-candy-code-volcano.ansi`; rename the splash only together with <!-- @rename-keep -->
+  a redrawn lockup. <!-- @rename-keep -->

@@ -5,12 +5,12 @@ declare(strict_types=1);
 // P7.S4 FP measurement. READ-ONLY against the production classes; every
 // alternative matcher lives ONLY in this file. Run with the worktree autoloader.
 
-require '/tmp/p7s4-measure-wt/sugar-crush/vendor/autoload.php';
+require '/tmp/p7s4-measure-wt/candy-code/vendor/autoload.php';
 
-use SugarCraft\Crush\Skills\Skill;
-use SugarCraft\Crush\Skills\SkillLoader;
-use SugarCraft\Crush\Skills\SkillRegistry;
-use SugarCraft\Crush\Context\Triggers\KeywordTrigger;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Context\Triggers\KeywordTrigger;
 
 // ---------------------------------------------------------------------------
 // 1. Build corpus through the REAL loader / registry (native discovery shape).

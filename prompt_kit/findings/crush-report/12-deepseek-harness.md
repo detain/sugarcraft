@@ -1,8 +1,8 @@
-# 12 — DeepSeek Harness (`dsh`) vs sugar-crush
+# 12 — DeepSeek Harness (`dsh`) vs candy-code
 
 Feeds steps: 0.1, 0.3, 0.4-a, 0.4-b, 0.5, 0.12, 0.13-a, 0.13-b, 0.14-b, 0.16, 1.A-1, 1.A-2, 1.B-1, 1.B-2, 1.C-1, 1.C-3, 1.C-4a, 2.1, 2.2-1, 2.4-1, 2.4-2, 2.5, 2.7-1, 2.7-3, 2.8, 2.9, 2.12, 3.A-1, 3.B-5, 3.C, 3.D-2, 3.D-3, 3.I-2, 4.1-1, 4.1-2, 4.3-1, 4.3-2, 4.4, 4.6-1, 4.6-2, 4.7-1, 4.7-3, 4.10-2, 5.6, 5.7-1, 5.7-2, 5.11-2, 5.12, 5.14j, 5.14l, DEF-MODE
 
-**Competitor:** DeepSeek Harness, `deepseek-ai/deepseek-harness`. **Clone:** `/home/sites/crush-research-repos/deepseek-harness` (HEAD `639ed01`, "release-dsh-0.2.0-rc.2"). Competitor paths are relative to the clone root; sugar-crush classes/methods are named without line anchors (current anchors live in `impact/*.md`).
+**Competitor:** DeepSeek Harness, `deepseek-ai/deepseek-harness`. **Clone:** `/home/sites/crush-research-repos/deepseek-harness` (HEAD `639ed01`, "release-dsh-0.2.0-rc.2"). Competitor paths are relative to the clone root; candy-code classes/methods are named without line anchors (current anchors live in `impact/*.md`).
 
 dsh is DeepSeek's own harness, tuned for DeepSeek-V4-Flash's 1M window and for keeping the provider's KV/prefix cache warm. Every package README has a "Model Experience" section listing, per model-visible artefact, what the model sees, its token effect and its KV-cache effect.
 
@@ -325,7 +325,7 @@ Default `timeoutMs` 60 s. Output markers: `[stderr]`, `(no output)`, `[output tr
 
 **P1-1. Cache-reusing summariser + 8-section checkpoint (→ 2.4-2, 2.5).**
 - "Replay" mode for the summary call: same `systemPrompt`, same `tools` (sent but not callable; "do not call any tool"), typed history up to the cut, final `UserMessage(COMPACTION_INSTRUCTION)` (§3.5).
-- Default to the main model so the cache is reused; keep `SUGARCRUSH_SUMMARY_MODEL` as an option.
+- Default to the main model so the cache is reused; keep `CANDY_CODE_SUMMARY_MODEL` as an option.
 - Frame the result with dsh's checkpoint preamble and `<compacted-summary>` tags; re-merge prior summaries; reject summaries not smaller than their source and truncated (length-stopped) summaries.
 
 **P1-2. Structured cross-turn tool history (→ 1.B-1, 1.B-2).** Carry `toolCalls` (id, name, arguments) on assistant rows and `toolCallId` on result rows; `toTypedMessages()` emits `AssistantMessage(content, toolCalls, reasoning)` + `ToolResultMessage` pairs. Byte-identical replay of earlier steps also keeps the prefix cache hitting across user turns.
@@ -349,7 +349,7 @@ Default `timeoutMs` 60 s. Output markers: `[stderr]`, `(no output)`, `[output tr
 
 **P2 rows still on the roadmap:**
 
-| Idea | Step | dsh reference | sugar-crush wiring |
+| Idea | Step | dsh reference | candy-code wiring |
 |---|---|---|---|
 | Todo tool (whole-list replace, `pending`/`in_progress`/`completed`) with a pane | 3.C | `packages/todo/tool-todo` | New tool + dock pane |
 | Plan mode with `exit_plan_mode` review; tool catalog identical in both modes | 5.7-1, 5.7-2 | `base/cordis.patch.yml:322-337`, `packages/plan/plan-mode` | Plan section + tool + Veil approve/reject-with-feedback modal over 1.C |
@@ -360,7 +360,7 @@ Default `timeoutMs` 60 s. Output markers: `[stderr]`, `(no output)`, `[output tr
 | LLM auto-review with risk rubric and source roles | 5.11-2 | §5.5 | Augment `SafetyClassifier`; `titleBackend` call |
 | Per-turn workspace change tracking (git snapshot + pre-edit copies) | 3.A-1 | `packages/deliverables/workspace-changes` | `Chat::dispatchTurn()` checkpoint |
 | Dispatch `Stop` / `PreCompact` hooks; Stop block forces continuation | 3.D-2, 2.12 | `packages/hooks/hooks-claude-code` | `HookEvent` dispatch sites |
-| Instruction files + skill catalog as appended user messages; `~/.sugar-crush/AGENTS.md` + `.local.md` overlays; `/name`-style per-turn skill injection | 1.A-2, 5.14j, 5.14l | §4.2 | Move `SkillMatcher::listForPrompt()` / instruction output to the turn-context channel |
+| Instruction files + skill catalog as appended user messages; `~/.candy-code/AGENTS.md` + `.local.md` overlays; `/name`-style per-turn skill injection | 1.A-2, 5.14j, 5.14l | §4.2 | Move `SkillMatcher::listForPrompt()` / instruction output to the turn-context channel |
 | Per-step time context (timestamp + elapsed) instead of a day-granular date | 1.A-1 | `packages/context/time-context` | Part of the turn-context snapshot |
 | Token meter anchored on provider usage + system/tools/messages breakdown | 2.1, 5.6 | `packages/llm/token-meter` | Anchor `Chat::estimateTokenCount()` on last usage + delta |
 | Fail loudly on preset fields that cannot be honoured (`model`, `permissionMode`, `isolation`) | 4.1-1 | `docs/subsystems/subagent.md:13-36` | `AgentManager::createSubAgent()` warnings → errors, or honour them |

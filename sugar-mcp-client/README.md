@@ -7,7 +7,7 @@ MCP (Model Context Protocol) client core for PHP: a JSON-RPC 2.0 envelope
 codec, a newline-delimited stdio transport with a fully bounded lifecycle,
 the initialize/tools protocol layer, and policy-free allow/deny routing.
 
-Extracted from the [sugar-crush](https://github.com/sugarcraft/sugar-crush)
+Extracted from the [candy-code](https://github.com/sugarcraft/candy-code)
 MCP stack, where these classes run a ~4.9k-LOC production subsystem. The wire
 algorithms are faithful ports; everything product-specific stayed downstream.
 
@@ -145,7 +145,7 @@ process that started it — one server shared by the whole process tree:
   for as long as it holds the lock, and `flock` carries no FIFO promise, so a
   waiter can be starved even after the holder releases. Nothing in this
   library can bound another process's work; each waiter bounds **itself**
-  with `callTool(..., timeoutSeconds:)` (in sugar-crush, the per-server
+  with `callTool(..., timeoutSeconds:)` (in candy-code, the per-server
   `"toolTimeout"` entry in `.mcp.json` feeds exactly that knob). Set it if
   you share a server across forked turns or sub-agents;
 - stdout bytes read past a response are kept in the lock file, so the next
@@ -166,7 +166,7 @@ process that started it — one server shared by the whole process tree:
 
 stderr is not locked — it is diagnostics only.
 
-> **A note on `LspExchangeLock`.** sugar-crush's LSP transport keeps its own
+> **A note on `LspExchangeLock`.** candy-code's LSP transport keeps its own
 > close-looking twin of `ExchangeLock` (`src/LSP/LspExchangeLock.php`). That
 > duplication is deliberate, not a missed reuse: the LSP side needs phase
 > state carried as an atomic write-to-temp + `rename()` (`store()`), so a

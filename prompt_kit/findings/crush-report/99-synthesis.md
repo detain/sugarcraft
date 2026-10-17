@@ -1,6 +1,6 @@
-# sugar-crush roadmap: implementation report
+# candy-code roadmap: implementation report
 
-**Subject:** `sugar-crush` · **Scope:** what is still to build or verify after the roadmap, with the competitor detail it needs.
+**Subject:** `candy-code` · **Scope:** what is still to build or verify after the roadmap, with the competitor detail it needs.
 
 **What this report is.** Twelve competitor studies, three design reports and five code audits were merged into one roadmap, and the roadmap was executed in eleven waves plus a remainder wave and a final pass. Everything shipped has been removed. What remains is:
 - two partly built roadmap items and the Agent View remainder;
@@ -91,7 +91,7 @@ Detail: Appendix L §3, M §3, I §3, E §3, K §3, C §3.
 - a paused state on the live line;
 - the view following a cold-resumed run's new id.
 
-**Attached TUI** (Appendix O §4.9). `sugarcrush attach` still runs slash commands and compaction on its own copy of the transcript and shows a turn another client starts only on re-attach. The fix: server-logic commands go to `command.exec`, local compaction is skipped, and foreign `message.*`/`turn.*`/`session.updated` events are applied live.
+**Attached TUI** (Appendix O §4.9). `candy-code attach` still runs slash commands and compaction on its own copy of the transcript and shows a turn another client starts only on re-attach. The fix: server-logic commands go to `command.exec`, local compaction is skipped, and foreign `message.*`/`turn.*`/`session.updated` events are applied live.
 
 ---
 
@@ -99,7 +99,7 @@ Detail: Appendix L §3, M §3, I §3, E §3, K §3, C §3.
 
 The five code audits have no open finding. Argument-scoped **permission rules** are implemented (`PermissionRule::matches`/`matchesShellSubject`, fail-closed on `$(…)`, backticks and redirects).
 
-**Live checks** (`sugar-crush/scripts/provider-cache-live-probe.php`; results and unblocking steps in `live-checks.md`, schedule in Appendix R):
+**Live checks** (`candy-code/scripts/provider-cache-live-probe.php`; results and unblocking steps in `live-checks.md`, schedule in Appendix R):
 
 | ID | Check | Status |
 |---|---|---|
@@ -113,7 +113,7 @@ The five code audits have no open finding. Argument-scoped **permission rules** 
 
 # Open follow-ups
 
-Gaps recorded as "later" or "optional" while the waves ran and verified still open against the source at the end of the roadmap. Paths are relative to `sugar-crush/`.
+Gaps recorded as "later" or "optional" while the waves ran and verified still open against the source at the end of the roadmap. Paths are relative to `candy-code/`.
 
 **Engine and providers**
 - The Chat-side `ToolCall` has no `rawArguments`/`argumentsError`, so a call replayed in a later turn re-encodes its arguments (the engine-side one has them).
@@ -148,7 +148,7 @@ Gaps recorded as "later" or "optional" while the waves ran and verified still op
 - A URL attachment shows as a `File` chip (`AttachmentType` has no URL case).
 
 **Sessions, server and web**
-- `sugarcrush session delete` does not refuse a session that is open and locked; shell completion ignores the per-verb session flags.
+- `candy-code session delete` does not refuse a session that is open and locked; shell completion ignores the per-verb session flags.
 - A new session records `getcwd()`, not `--root`.
 - No headless host command for `/model`, `/compact`, `/budget`, `/init`, `/goal`, `/grind`, `/compress`, `/newrule`, so the server and web UI cannot run them; no `session.setModel` method.
 - Missing protocol events: `assistant.started`, `notice`, `compaction.started`, `settings.changed`, and `workflow.*` stage events (Appendix O §6.5).

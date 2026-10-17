@@ -18,7 +18,7 @@ Repro scripts are in `/home/sites/crush-research-repos/_audit-scratch/15d/`.
 - **Support and util:** `src/Support/Frontmatter.php`, `src/Util/PathGlob.php`, `src/Util/Exporter.php`, `src/Util/TokenTracker.php`, `src/Compactor.php`, `src/CompactedGroup.php`, `src/Registry/{Tool,ToolSignature}.php`
 - **`src/Cli/Bootstrap.php`:** the config paths, user-config read/merge/write, permission layers, policy file, nudge and tool wiring, tool-set filtering, instruction loader and title/summary backend ranges
 - **Docs:** `docs/SETTINGS.md`, `docs/ENVIRONMENT.md` (env tables compared against `src/`), `docs/SKILLS.md`, most of `docs/MEMORY.md` and `docs/PROMPT_ENGINEERING.md`
-- **Root `.sugar-crush/`:** `config.json`, `config.dev.json`, `agents/{coder,reviewer,security-auditor}.md`
+- **Root `.candy-code/`:** `config.json`, `config.dev.json`, `agents/{coder,reviewer,security-auditor}.md`
 
 ### Skimmed, or deliberately left to other reports
 - **`src/Context/ContextCompactor.php`:** the rest is the compaction-quality surface already covered by known items #15-#19.
@@ -31,7 +31,7 @@ Repro scripts are in `/home/sites/crush-research-repos/_audit-scratch/15d/`.
 - **`boundHeadAssistantForSummary()` `## Skill: ` exemption:** documented by the authors as an accepted residual (`ContextCompactor.php:686-700`).
 
 ### Other checks with no finding
-- **Root `.sugar-crush/`:** `config.dev.json` is read only from the **package** root, never from a project, so a cloned repo cannot point the provider at its own endpoint (ENVIRONMENT.md's "a project `.sugar-crush/config.dev.json`" means the package; wording only). The monorepo root's `"trustedProjectMcp"` key is inert there, because trust keys are read only from the user's layer-4 file. The agent presets' `model`/`permissionMode`/`isolation` keys are known item #23.
+- **Root `.candy-code/`:** `config.dev.json` is read only from the **package** root, never from a project, so a cloned repo cannot point the provider at its own endpoint (ENVIRONMENT.md's "a project `.candy-code/config.dev.json`" means the package; wording only). The monorepo root's `"trustedProjectMcp"` key is inert there, because trust keys are read only from the user's layer-4 file. The agent presets' `model`/`permissionMode`/`isolation` keys are known item #23.
 - **`KeywordTrigger`:** keywords with a non-word edge (`.env`, `C++`, `--force`, `@deprecated`) can never fire, and a prompt containing one invalid UTF-8 byte fires no keyword. Both are documented in the class docblock, and the matcher has no consumer today. When it is wired, `Rule::new()` should refuse such keywords loudly (known #37).
 - **`RulePathNudge`:** budget, escape and clip logic are correct; deferral pointers are bounded at 1,024 B and escaped.
 - **`Exporter::toJson()`:** returns `json_encode()`'s `false` through a `: string` return type on invalid UTF-8 (a TypeError), but its only caller is `ShareSession` (`/share`, a stub per known #35).

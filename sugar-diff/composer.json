@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-diff",
-    "description": "Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and scanner. Extracted from sugar-crush.",
+    "description": "Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and scanner. Extracted from candy-code.",
     "type": "library",
     "license": "MIT",
     "keywords": [

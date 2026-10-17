@@ -113,13 +113,13 @@ Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcra
 - F7 sugar-dash WeatherModuleTest+PersistenceTest residue pair: <!-- @rename-keep -->
   PRE-EXISTING-RECORDED — byte-matches rename-baseline.md catalog item 2
   (AtomicJsonFile temp-residue family).
-- F8 sugar-crush DoctorExtensionProbesTest::testTheManifestDeclaresBothExtensionsAnd
+- F8 candy-code DoctorExtensionProbesTest::testTheManifestDeclaresBothExtensionsAnd
   CarriesNoRepositoriesBlock + ReelDependencyTest::testTheManifestCarriesTheRequire
   WithoutAPathRepo: NEEDS-OWNER-RULING — both read the WORKING-TREE
-  sugar-crush/composer.json, which CI's `check-path-repos.php --fix`
+  candy-code/composer.json, which CI's `check-path-repos.php --fix`
   deliberately injects before install (green locally, red in CI by design
   tension). Two legitimate cure shapes exist — (a) tests read the committed
-  blob (`git show HEAD:sugar-crush/composer.json`), or (b) the injection step
+  blob (`git show HEAD:candy-code/composer.json`), or (b) the injection step
   is scoped out of these manifests — choosing between them is a policy call
   the owner must make. Nothing disabled or skipped.
 

@@ -207,7 +207,7 @@ WHAT THIS PARAGRAPH USED TO SAY: "The `path-repo-check` job in
 they are the `tools-guards` job and the `path-repo-check` job, which `needs:`
 it. The first line below moved into a job of its own because a red from
 tools/tests/ was arriving under the name "Path-repo policy" and misdescribing
-itself — those files now also pin a scanner copied from sugar-crush, so a
+itself — those files now also pin a scanner copied from candy-code, so a
 one-token change there failed a job whose name says composer manifests. WHY THE
 REST STILL EARNS ITS PLACE: the SET did not move when the jobs did, and the set
 is what you can run. Three of these had no counterpart anyone had written down,
@@ -638,7 +638,7 @@ if ($unused) {
         // and one for `sugarcraft/package-that-does-not-exist`, which is not
         // even a require -- produced no output at all and exit 0.
         //
-        // `sugar-crush` has a PHPUnit guard that catches exactly this
+        // `candy-code` has a PHPUnit guard that catches exactly this
         // (`tests/Support/ManifestDependencyReachTest`, which an attack rather
         // than a reading found the hole in). No other lib has one, and there
         // are 58. So the guarantee lived in one lib's test suite while the

@@ -441,7 +441,7 @@ No plugin system exists. smenu is a single-purpose tool.
 |---|---|
 | **Word length limits** | SugarForms text inputs have max length; should be configurable and generous |
 | **Terminal capability detection** | sugar-forms and sugar-readline must handle TERM variations |
-| **Exit code semantics** | SugarForms/SugarCrush should document exit codes |
+| **Exit code semantics** | SugarForms/CandyCode should document exit codes |
 | **Pre-filtered selection** | SugarForms's Select field could support initial filter state |
 | **Multi-select UX** | MultiSelect field should visualize tagged state clearly |
 | **stdout/stderr separation** | All SugarCraft CLI tools must separate output types correctly |
@@ -568,7 +568,7 @@ No plugin system exists. smenu is a single-purpose tool.
 | **Port TST-based filtering as standalone library** | smenu's core algorithm is excellent but locked in app; SugarCraft could provide reusable library |
 | **Implement single-key selection in sugar-forms** | Clear demand, not implemented in smenu |
 | **Pre-filtered initial state for Select field** | Meta-search is a recognized pattern |
-| **Exit code constants package** | SugarCrush and other CLIs should share exit code conventions |
+| **Exit code constants package** | CandyCode and other CLIs should share exit code conventions |
 | **Reference smenu's bitmap tracking** | Smart highlighting without re-scanning |
 
 ### For sugar-widgets specifically

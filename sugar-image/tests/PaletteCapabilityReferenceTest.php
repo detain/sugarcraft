@@ -17,7 +17,7 @@ use SugarCraft\ColorProfile\Probe\Capability as PaletteCapability;
  * not match the Kitty branch first — the one branch tested above it.
  *
  * IT SURVIVED BECAUSE NOTHING EVER REACHED THE LINE. It was found from a
- * SIBLING repository: sugar-crush's round-49 suite closed descriptor 0, which
+ * SIBLING repository: candy-code's round-49 suite closed descriptor 0, which
  * made `Detect::probe()` throw for the first time and drove execution past the
  * Kitty arm. A defect reachable only under a condition no test creates is
  * invisible to a suite that never creates it, so this guard does not go through

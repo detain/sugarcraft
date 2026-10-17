@@ -33,7 +33,7 @@ jobs:
   # reverse-dep graph from each lib's composer.json (see scripts/affected-libs.php).
   # Only libs whose own files changed — plus the transitive closure of libs that
   # require them — get tested. A `sugar-core` change fans out to ~40 libs; a
-  # `sugar-crush` change scopes down to one cell.
+  # `candy-code` change scopes down to one cell.
   #
   # Force-all triggers (script-side): root composer.json/composer.lock change,
   # the workflow itself changing, or the script changing. workflow_dispatch and
@@ -161,9 +161,9 @@ jobs:
   # has since grown guards that have nothing to do with composer manifests, and
   # one of them — `tools/tests/StackedDocCommentTest.php` — pins its copy of a
   # scanner against the canonical implementation in
-  # `sugar-crush/tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`. So a
+  # `candy-code/tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`. So a
   # contributor who changes `stackedDocCommentLines()` by one token in
-  # `sugar-crush` gets a red from a job called "Path-repo policy", whose name
+  # `candy-code` gets a red from a job called "Path-repo policy", whose name
   # offers no hint at all of the reason. That is a real cost — a red whose name
   # misdescribes it is read as flaky infrastructure — and this job's name is
   # the fix. The failure text names the file to port the change into; the job
@@ -188,7 +188,7 @@ jobs:
   # a test instead of rotting quietly — move the literal and this paragraph
   # in the same edit if the judgement changes again.
   tools-guards:
-    name: 'tools/ guards (+ drift pins that read sugar-pty/ and sugar-crush/)'
+    name: 'tools/ guards (+ drift pins that read sugar-pty/ and candy-code/)'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -241,7 +241,7 @@ jobs:
           php tools/check-path-repos.php --fix --strict-closure
           php tools/check-path-repos.php --strict-closure
           git checkout -- .
-      # E486, closing E448. sugar-crush's DescriptorInheritanceGuardTest can
+      # E486, closing E448. candy-code's DescriptorInheritanceGuardTest can
       # only reach the eighteen libraries in ITS vendor/sugarcraft closure;
       # the three exposed spawns E448 measured (sugar-dashboard, sugar-video x2) sat
       # outside that reach, where a new one could appear with nothing saying
@@ -256,7 +256,7 @@ jobs:
         run: php tools/check-child-lifetimes.php
       # Composer's PSR-4 autoloader finds a type only in the file named after
       # it, so a second type declared inside another class's file is "class
-      # not found" unless its host loaded first (sugar-crush App\LayoutResetMsg
+      # not found" unless its host loaded first (candy-code App\LayoutResetMsg
       # really died this way; sugar-dashboard's twice-declared SortDirection was a
       # redeclaration fatal). All 13 affected libs were split one type per
       # file; this keeps it so. tools/tests/OneTypePerFileToolTest.php guards
@@ -432,14 +432,14 @@ jobs:
       # per-advisory exemptions live in the manifest as config.audit.ignore.
       # To accept an advisory WITH a written reason in the PR that accepts it:
       #   composer config audit.ignore --json '["GHSA-xxxx-yyyy-zzzz"]'
-      # run from sugar-crush/ (it edits sugar-crush/composer.json). The audit
+      # run from candy-code/ (it edits candy-code/composer.json). The audit
       # below then skips those IDs automatically. Today the array is absent —
       # nothing is pre-accepted.
-      - name: Audit dependencies (sugar-crush — rv-sec-5)
-        if: matrix.lib == 'sugar-crush'
+      - name: Audit dependencies (candy-code — rv-sec-5)
+        if: matrix.lib == 'candy-code'
         run: |
           set -euo pipefail
-          cd sugar-crush
+          cd candy-code
           AUDIT_IGNORE_SEVERITY='--ignore-severity=low --ignore-severity=medium'
           if ! composer audit --no-dev --format=summary $AUDIT_IGNORE_SEVERITY; then
             echo '::error::composer audit reported HIGH/CRITICAL advisories — table below, accept with a documented config.audit.ignore entry or bump the dep'
@@ -447,7 +447,7 @@ jobs:
             exit 1
           fi
 
-      # E671 (2026-09-10): the sugar-crush cell shards through
+      # E671 (2026-09-10): the candy-code cell shards through
       # scripts/parallel-tests.sh instead of the ~9.3-minute serial run
       # (round-63 junit time=559.6s) — the suite was the wall-clock critical
       # path of every push that touches it. K equals the runner core count,
@@ -459,7 +459,7 @@ jobs:
       # by raising the timeout). CI never runs a serial baseline for durations:
       # it shards from the committed scripts/parallel-tests-durations.tsv and
       # the conservation gate compares the per-shard junit sum against the
-      # PINNED sugar-crush/tests/Config/Support/suite-figure.json. Fail-closed:
+      # PINNED candy-code/tests/Config/Support/suite-figure.json. Fail-closed:
       # a test file absent from the manifest runs in zero shards, so shard-sum
       # tests < figure tests -> red; and the figure itself cannot rot, because
       # ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
@@ -471,19 +471,19 @@ jobs:
       # 330-600s on 2026-10-06 — two shards were killed at exactly 600s while
       # still passing. 1200 restores ~2x headroom on the slowest legit shard
       # and still bounds a hung one well under the ~30 min serial run.
-      - name: Run tests (sugar-crush — sharded, E671)
-        if: matrix.lib == 'sugar-crush'
+      - name: Run tests (candy-code — sharded, E671)
+        if: matrix.lib == 'candy-code'
         run: |
           set -euo pipefail
           CORES=$(nproc)
           K=$CORES
           if [ "$K" -gt 4 ]; then K=4; fi
-          echo "::notice::sugar-crush sharded at K=$K on $CORES-core ubuntu-latest (E671)"
+          echo "::notice::candy-code sharded at K=$K on $CORES-core ubuntu-latest (E671)"
           OUT="${RUNNER_TEMP:-/tmp}/parallel-tests"
           RC=0
           bash scripts/parallel-tests.sh "$K" \
             --durations scripts/parallel-tests-durations.tsv \
-            --against-json sugar-crush/tests/Config/Support/suite-figure.json \
+            --against-json candy-code/tests/Config/Support/suite-figure.json \
             --out "$OUT" --timeout 1200 || RC=$?
           if [ "$RC" -ne 0 ]; then
             echo "sharded run failed rc=$RC (per-shard tails are printed inline by the harness)"
@@ -491,7 +491,7 @@ jobs:
           fi
 
       - name: Run tests (serial)
-        if: matrix.lib != 'sugar-crush'
+        if: matrix.lib != 'candy-code'
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
 
   # Windows test job — verifies Windows-native TTY paths (FFI/kernel32 paths
@@ -609,8 +609,8 @@ jobs:
       - name: Run tests
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
 
-  # rv-devops-5 (crush-review-1014): sugar-crush macOS SMOKE — install, lint
-  # sweep, boot. Deliberately NOT in the macos test matrix: sugar-crush stays
+  # rv-devops-5 (crush-review-1014): candy-code macOS SMOKE — install, lint
+  # sweep, boot. Deliberately NOT in the macos test matrix: candy-code stays
   # out of scripts/affected-libs.php's MACOS_LIBS roster (running the 22k-test
   # suite on a macOS runner is a deferred capacity decision). This job closes
   # the honest gap that decision leaves — today a Darwin-only install/boot
@@ -618,7 +618,7 @@ jobs:
   # ~3-minute runner. Independent of build-matrix on purpose: a matrix bug
   # can neither mask it nor schedule it.
   macos-smoke:
-    name: 'macOS smoke · sugar-crush'
+    name: 'macOS smoke · candy-code'
     runs-on: macos-15
     timeout-minutes: 15
     # Read-only checkout: this job publishes nothing.
@@ -630,7 +630,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
-      # Same PHP shape as macos-test (the FFI/pcntl set sugar-crush's server
+      # Same PHP shape as macos-test (the FFI/pcntl set candy-code's server
       # mode probes for); curl/openssl/git are bundled with the runner image.
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
@@ -644,33 +644,33 @@ jobs:
       - name: Cache vendor/
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
-          path: sugar-crush/vendor
-          key: vendor-mac-v3-8.3-sugar-crush-${{ hashFiles('sugar-crush/composer.json') }}
+          path: candy-code/vendor
+          key: vendor-mac-v3-8.3-candy-code-${{ hashFiles('candy-code/composer.json') }}
           restore-keys: |
-            vendor-mac-v3-8.3-sugar-crush-
+            vendor-mac-v3-8.3-candy-code-
 
       - name: Link sibling libs
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
-        run: cd sugar-crush && composer install --prefer-dist --no-progress -n
+        run: cd candy-code && composer install --prefer-dist --no-progress -n
 
       # Parse every shipped source file, then the bin itself (no .php suffix,
       # so it is linted explicitly rather than via the find sweep).
       - name: Syntax sweep
         run: |
           set -euo pipefail
-          find sugar-crush/src -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
-          php -l sugar-crush/bin/sugarcrush > /dev/null
-          echo 'php -l clean across sugar-crush src/ and bin/'
+          find candy-code/src -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+          php -l candy-code/bin/candy-code > /dev/null
+          echo 'php -l clean across candy-code src/ and bin/'
 
       # `doctor` exits 1 only on a FAIL line (WARN never fails it, by design),
       # and `--help` must reach usage on a machine with no config at all.
       - name: Boot — doctor
-        run: php sugar-crush/bin/sugarcrush doctor
+        run: php candy-code/bin/candy-code doctor
 
       - name: Boot — help
-        run: php sugar-crush/bin/sugarcrush --help
+        run: php candy-code/bin/candy-code --help
 
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
@@ -782,10 +782,10 @@ jobs:
           done
 
       - name: Run tests with coverage (serial)
-        if: matrix.lib != 'sugar-crush'
+        if: matrix.lib != 'candy-code'
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
 
-      # E691 (2026-09-11): sugar-crush coverage shards through the E671 harness
+      # E691 (2026-09-11): candy-code coverage shards through the E671 harness
       # (same never-oversubscribe K = cores capped at 4 — 2x oversubscription
       # measured lease/idle-ceiling race failures on the test suite). Each shard
       # adds --coverage-clover via --clover; the CONSERVATION GATE runs before
@@ -794,7 +794,7 @@ jobs:
       # test file missing from the durations manifest, dies here rather than
       # shipping a coverage report for an unproven subset). Then
       # scripts/merge-clover.php unions the per-shard clovers into
-      # sugar-crush/coverage.xml — THE SAME PATH the serial job wrote — so the
+      # candy-code/coverage.xml — THE SAME PATH the serial job wrote — so the
       # Codecov upload, the detain/sugarcraft Codacy upload and the split-repo
       # Codacy mirror downstream are untouched and cannot tell merged from
       # serial. test-merge-clover.php runs FIRST: a merger regression must fail
@@ -805,21 +805,21 @@ jobs:
       # The engine is still pcov (setup-php above); only the report SHAPE
       # (K files merged) changed, and merge-clover.php refuses missing or
       # malformed shard reports fail-closed.
-      - name: Run tests with coverage (sugar-crush — sharded, E691)
-        if: matrix.lib == 'sugar-crush'
+      - name: Run tests with coverage (candy-code — sharded, E691)
+        if: matrix.lib == 'candy-code'
         run: |
           set -euo pipefail
           CORES=$(nproc)
           K=$CORES
           if [ "$K" -gt 4 ]; then K=4; fi
-          echo "::notice::sugar-crush coverage sharded at K=$K on $CORES-core ubuntu-latest (E691)"
+          echo "::notice::candy-code coverage sharded at K=$K on $CORES-core ubuntu-latest (E691)"
           OUT="${RUNNER_TEMP:-/tmp}/parallel-tests-cov"
           php scripts/test-merge-clover.php
           bash scripts/parallel-tests.sh "$K" \
             --durations scripts/parallel-tests-durations.tsv \
-            --against-json sugar-crush/tests/Config/Support/suite-figure.json \
+            --against-json candy-code/tests/Config/Support/suite-figure.json \
             --out "$OUT" --timeout 1800 --clover
-          php scripts/merge-clover.php "$OUT" "$K" sugar-crush/coverage.xml
+          php scripts/merge-clover.php "$OUT" "$K" candy-code/coverage.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f

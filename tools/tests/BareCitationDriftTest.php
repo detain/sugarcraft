@@ -23,11 +23,11 @@ use PHPUnit\Framework\TestCase;
  *
  * THE POPULATION IS THE FINDING (rule 48). Every `.php` file under `tools/` and
  * under `sugar-pty/` was outside every citation guard in the repo, for the
- * plainest possible reason: the only such guard is `sugar-crush`'s
- * `SymbolCitationDriftTest`, and neither tree is inside `sugar-crush`.
+ * plainest possible reason: the only such guard is `candy-code`'s
+ * `SymbolCitationDriftTest`, and neither tree is inside `candy-code`.
  *
  * WHAT THIS PARAGRAPH USED TO SAY, AND IT WAS FALSE: that
- * `SymbolCitationDriftTest` "walks `sugar-crush/tests` and nothing else".
+ * `SymbolCitationDriftTest` "walks `candy-code/tests` and nothing else".
  * WHAT IS TRUE, MEASURED in its own `citations()`:
  *
  *     foreach ([['src', 'php'], ['tests', 'php'], ['docs', 'md']] as ...)
@@ -37,7 +37,7 @@ use PHPUnit\Framework\TestCase;
  * this file gives below, that elsewhere the shape is overwhelmingly a
  * production method on the class being documented. WHY THE CORRECTION MATTERS
  * RATHER THAN BEING PEDANTRY: the false version reads as "`src/` is
- * unguarded", which is an invitation to add `sugar-crush/src` to {@see ROOTS}
+ * unguarded", which is an invitation to add `candy-code/src` to {@see ROOTS}
  * — and that would red on exactly the correct citations the alphabet paragraph
  * below measures. The conclusion survives the correction; the reason does not,
  * and the reason is what a later reader acts on.

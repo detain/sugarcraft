@@ -4,7 +4,7 @@ import type { Timers } from '../protocol/reconnect'
 /** A WebSocket stand-in the tests drive by hand: open it, feed frames, close it. */
 export class FakeSocket implements SocketLike {
   readyState = 0
-  protocol = 'sugarcrush.v1'
+  protocol = 'candy-code.v1'
   onopen: ((event: unknown) => void) | null = null
   onclose: ((event: { code: number; reason: string }) => void) | null = null
   onerror: ((event: unknown) => void) | null = null

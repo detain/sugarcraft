@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { expect, newSession, openApp, send, SugarCrushServer, test } from './fixtures/server'
+import { expect, newSession, openApp, send, CandyCodeServer, test } from './fixtures/server'
 import { RpcClient } from './fixtures/rpc'
 import { PNG_MAGIC_HEX, startStubSd, TINY_PNG_BASE64, type StubSd } from './fixtures/media'
 
 /**
  * The serve-mode media chain (plan W6.5): a fake sd endpoint dialed by the
- * real `GenerateImage` tool inside a real `sugarcrush serve`, the artifact
+ * real `GenerateImage` tool inside a real `candy-code serve`, the artifact
  * refs riding `tool.finished`, and the bytes arriving in the browser only
  * through sliced `media.fetch` frames.
  *
@@ -25,16 +25,16 @@ import { PNG_MAGIC_HEX, startStubSd, TINY_PNG_BASE64, type StubSd } from './fixt
  * same journal, so the second render costs seconds, not a server boot.
  */
 
-let server: SugarCrushServer
+let server: CandyCodeServer
 let stub: StubSd
 
 test.beforeAll(async () => {
   stub = await startStubSd()
-  server = await SugarCrushServer.start((scratch) => {
+  server = await CandyCodeServer.start((scratch) => {
     // User-tier settings.json is the only dial address the fixture env can
     // set: it strips every SUGARCRUSH_* variable, so the tool must find
     // `sd.baseUrl` in the HOME the server reads.
-    const file = join(scratch, 'home', '.sugar-crush', 'settings.json')
+    const file = join(scratch, 'home', '.candy-code', 'settings.json')
     const settings = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
     settings['sd.baseUrl'] = stub.baseUrl
     writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 })

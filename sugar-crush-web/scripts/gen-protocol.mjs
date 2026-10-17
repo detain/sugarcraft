@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Generates src-web/protocol/generated.ts from sugar-crush's protocol schema
-// (sugar-crush/docs/protocol/sugarcrush.v1.schema.json, itself generated from
-// the PHP value objects by sugar-crush's scripts/gen-protocol-schema.php).
+// Generates src-web/protocol/generated.ts from candy-code's protocol schema
+// (candy-code/docs/protocol/candy-code.v1.schema.json, itself generated from
+// the PHP value objects by candy-code's scripts/gen-protocol-schema.php).
 //
 //   npm run gen:protocol            rewrite generated.ts
 //   npm run gen:protocol -- --check exit 1 when generated.ts is stale
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
-const schemaPath = resolve(process.env.SCHEMA_PATH ?? resolve(root, '../sugar-crush/docs/protocol/sugarcrush.v1.schema.json'))
+const schemaPath = resolve(process.env.SCHEMA_PATH ?? resolve(root, '../candy-code/docs/protocol/candy-code.v1.schema.json'))
 const outPath = resolve(root, 'src-web/protocol/generated.ts')
 
 const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/
@@ -206,7 +206,7 @@ function main() {
     process.exit(2)
   }
   // A fixed label, so the output does not depend on where the schema was read.
-  const output = generate(JSON.parse(raw), 'sugar-crush/docs/protocol/sugarcrush.v1.schema.json')
+  const output = generate(JSON.parse(raw), 'candy-code/docs/protocol/candy-code.v1.schema.json')
 
   if (check) {
     let current = ''

@@ -3,7 +3,7 @@ Read-only. Repo /home/sites/sugarcraft, master tip 3e053e3c9. No edits, no commi
 
 ## PART 1 — §5 collision forensics — VERDICT: CLEAR
 
-(a) `git log --oneline --full-history 341d71876..HEAD -- sugar-crush/` → **6 commits, all six on the expected prompt-lane list, ZERO foreign**:
+(a) `git log --oneline --full-history 341d71876..HEAD -- candy-code/` → **6 commits, all six on the expected prompt-lane list, ZERO foreign**:
 ```
 b2936ee5c  Merge-parent 926524d36  P10 close FOLD-1 (CacheBreakpoints seam sentence)
 b0bc60ebd  (merge 5f30fec05 58a34f6fe)  Merge P10.S4
@@ -12,18 +12,18 @@ b0bc60ebd  (merge 5f30fec05 58a34f6fe)  Merge P10.S4
 140b974ed  P10.S4 src wave
 e57dd0340  P10.S3 unwired contract
 ```
-Form named: `--full-history` (6). History-simplified `-- sugar-crush/` without it returns the same 6 here because the pruned S1 merge `b0bc60ebd` is itself in the list.
+Form named: `--full-history` (6). History-simplified `-- candy-code/` without it returns the same 6 here because the pruned S1 merge `b0bc60ebd` is itself in the list.
 Range-wide all-path scan (`341d71876..HEAD`, 12 commits) shows the other 6 are prompt_* prose only: e0929717d 28d84b2b1 4ab8c3f98 ba9ccd38b 7ca12510e 926524d36 be5e7ed8a d53ff75a2 3e053e3c9 (worklog/plan/resume).
-`git diff --stat b2936ee5c..HEAD -- sugar-crush/` = **EMPTY** (only prompt_plan.md +2, prompt_resume.md 57±, prompt_worklog.md +18 moved) → confirms the floor anchor claim "b2936ee5c tree == this for sugar-crush/, markdown-only above".
+`git diff --stat b2936ee5c..HEAD -- candy-code/` = **EMPTY** (only prompt_plan.md +2, prompt_resume.md 57±, prompt_worklog.md +18 moved) → confirms the floor anchor claim "b2936ee5c tree == this for candy-code/, markdown-only above".
 
 (b) last-touch (plain form, i.e. content-change following; `--full-history` variant noted where it differs):
 | file | last touch | class | topology |
 |---|---|---|---|
-| `sugar-crush/src/Context/PromptFence.php` | `730478ab2` 2026-09-05 08:25 "sugar-crush: complete P6.S2b roster census sentence" | untagged (not on the 6-list) | ancestor of 447541d7e = **pre-Phase-9 base** |
-| (same, `--full-history` form) | `506ef5f5e` 2026-09-05 08:39 "sugar-crush: P6.S2b the harness-injected roster channel (Phase 6, step 3 of 6)" — a merge | untagged | ancestor of 447541d7e |
-| `sugar-crush/src/Context/ContextCompactor.php` | `beb8df1b6` 2026-09-08 02:15 "state the skill-marker prefix residual, pin the exemption's two boundaries" | untagged | ancestor of 447541d7e |
+| `candy-code/src/Context/PromptFence.php` | `730478ab2` 2026-09-05 08:25 "candy-code: complete P6.S2b roster census sentence" | untagged (not on the 6-list) | ancestor of 447541d7e = **pre-Phase-9 base** |
+| (same, `--full-history` form) | `506ef5f5e` 2026-09-05 08:39 "candy-code: P6.S2b the harness-injected roster channel (Phase 6, step 3 of 6)" — a merge | untagged | ancestor of 447541d7e |
+| `candy-code/src/Context/ContextCompactor.php` | `beb8df1b6` 2026-09-08 02:15 "state the skill-marker prefix residual, pin the exemption's two boundaries" | untagged | ancestor of 447541d7e |
 | (same, `--full-history`) | `996ed0556` 2026-09-08 02:55 "P8.S4 merge: bound head tool output for the summariser" | untagged | ancestor of 447541d7e |
-| `sugar-crush/tests/Chat/CompactModelSummaryTest.php` (real path — ledger's `:1571` is a *line inside this file*, not a path) | `b417dbbb7` 2026-09-08 05:53 "Phase-8 close review folds - truthful carry prose, cap-notice tail pinned byte-exact" | untagged | ancestor of 447541d7e |
+| `candy-code/tests/Chat/CompactModelSummaryTest.php` (real path — ledger's `:1571` is a *line inside this file*, not a path) | `b417dbbb7` 2026-09-08 05:53 "Phase-8 close review folds - truthful carry prose, cap-notice tail pinned byte-exact" | untagged | ancestor of 447541d7e |
 Every untagged sha is `merge-base --is-ancestor <sha> 447541d7e` = Y and `... b759ea42e` = Y → all sit in the **pre-Phase-9 window, already-merged master history**, not lane traffic. No target file has been touched inside the Phase-9/10 window at all.
 
 (c) lane freshness without reading lanes:
@@ -41,12 +41,12 @@ b759ea42e prompt/P10 batch-2 staffing: step briefs for S3 cache kill switch and 
 > free only because no round is in flight, and they re-block the instant one is.
 Lane refs in this repo are fully merged and stale (read topology only): `refs/lanes/a` 0c870ba1f · `b` 0632fd34a · `c` 815d4eb6d · `r54a` 4600a1a2f · `r54b` e99eb5cd3 · `r54c` e05454c32 — all 2026-08-24/25, all `--is-ancestor HEAD` = Y. Two `--all` hits outside the range are `refs/stash` / `refs/claude/checkpoint-*` artifacts, 2026-08-08 and 2026-08-17, non-ancestors of HEAD — pre-existing debris, not lane commits.
 
-(d) **VERDICT: CLEAR** — every `sugar-crush/` commit in the re-check window is one of the six known prompt-lane commits, and all three target files' last touches are Phase-8-era merged history, so no lane has written these hot files since the Phase-9 base.
+(d) **VERDICT: CLEAR** — every `candy-code/` commit in the re-check window is one of the six known prompt-lane commits, and all three target files' last touches are Phase-8-era merged history, so no lane has written these hot files since the Phase-9 base.
 
 ## PART 2 — law-4j premises for (24)
 
 ### 2.1 TAGS roster — COUNT 7 CONFIRMED
-`sugar-crush/src/Context/PromptFence.php:118-126`:
+`candy-code/src/Context/PromptFence.php:118-126`:
 ```php
 118:    private const TAGS = [
 119:        'env',
@@ -64,18 +64,18 @@ Sites a widen to 8 must touch:
 2. `PromptFence.php:155-178` `escape()` — **NO code edit required**: :159 `static $pattern = null; $pattern ??= '~</?(?:' . implode('|', self::TAGS) . ')\s*/?>~i';` derives from the roster. Caveat for the brief: the pattern is process-memoized (`static`), so the roster is read once per process — fine in prod/tests, but it forbids any runtime roster mutation.
 3. `PromptFence.php:74` count sentence — "`harness-injected`, **the seventh entry** and the only one the roster carries with NO emitter" and :76 "so **unlike the six above** it is not derived from a fence that exists" → both go false (a new 8th entry *does* have an emitter).
 4. `PromptFence.php:86-114` the roster-census sentence — ":86 **WHAT PINS THIS ROSTER — FIVE SITES**, not the one this note used to name", naming PromptSectionTest sorted list, BaseSystemPromptTest declaration-order map, 3 tier-forgery guards, the escape-level guard, and the assembler guard. The P8.S3 pin becomes a 6th/7th pinner and `harness-injected`'s "no emitter" argument (":104 dropping that tag reddens none of them") must be re-derived. This is exactly the sentence `730478ab2` ("complete P6.S2b roster census sentence") exists to maintain.
-5. `sugar-crush/src/Chat.php:9839-9843` — the in-block escape site (today there is none):
+5. `candy-code/src/Chat.php:9839-9843` — the in-block escape site (today there is none):
 ```php
 9839:    private static function renderPriorSummariesForSummary(array $priors): string
 9841:        return "<prior-summary>\n" . implode("\n", $priors) . "\n</prior-summary>\n\n"
 9842:            . self::PRIOR_SUMMARY_NOTE;
 ```
-6. `sugar-crush/src/Chat.php:9763-9772` "THE FENCE RESIDUAL, DOCUMENTED AND ACCEPTED (ruling P8.S3-R1)" paragraph — becomes false on the widen and must be re-written with the re-ruled R-C.
+6. `candy-code/src/Chat.php:9763-9772` "THE FENCE RESIDUAL, DOCUMENTED AND ACCEPTED (ruling P8.S3-R1)" paragraph — becomes false on the widen and must be re-written with the re-ruled R-C.
 7. Count sentences outside the array: `tests/BaseSystemPromptTest.php:996` "(seven since P6.S2b added `harness-injected`, the first roster tag that nothing emits)", `:1016` "the seventh tag", `:1495` "the seventh roster entry", `:1561` "seventh tag taxes no byte"; `src/Context/Sections/MaximsSection.php:34` "**sixth** tag the roster carries since the P6.S2 fix" / `:36` "a **seventh** tag around bytes no model can influence would move"; `tests/Context/Sections/MaximsSectionTest.php:44-45` "the sixth tag … a seventh tag around these constants".
 8. New escape call site = new §1.12 production-reachability + deletion-experiment obligation (precedent rows: `RuntimeTest.php:1636`, `EnvironmentBlockTest.php:994/1425/1539/1688`, `MemoryBlockTest.php:518`, `RepoMapBlockTest.php:1349`).
 
 ### 2.2 The characterization pin — EXISTS, POLARITY CONFIRMED (it must redden)
-`sugar-crush/tests/Chat/CompactModelSummaryTest.php:1560-1615` (the ledger's `:1571` is a line *inside this docblock*, :1561-1583).
+`candy-code/tests/Chat/CompactModelSummaryTest.php:1560-1615` (the ledger's `:1571` is a line *inside this docblock*, :1561-1583).
 ```
 1560:    // REDDENS the day PromptFence::TAGS widens and escape() lands — re-make P8.S3-R1 then.
 1562:     * CHARACTERISATION PIN, not an endorsement (ruling P8.S3-R1).
@@ -135,7 +135,7 @@ Corroboration in source: `CompactModelSummaryTest.php:1575` "the first time `pri
 | `tests/BaseSystemPromptTest.php:1044-1054`, `:1096-1097`, `:1157` | forgery payload + neutralised-copy counts; payload currently plants all 7 tags ×2 + `</ENV>` ("fifteen spellings (all fourteen roster polarities plus an uppercase variant)", :1060) → grows to 16/18 if the new tag is forged |
 | `tests/Chat/CompactModelSummaryTest.php:1584-1615` | **the intentional red** |
 Solo figures measured at tip: `PromptSectionTest` **23/84**, `BaseSystemPromptTest` **24/326**, `CompactModelSummaryTest` **38/191**, all EXIT 0.
-No `assertCount(7)` exists anywhere for this roster — the pins are list-equality only (grep `assertCount(7` in sugar-crush/tests → no PromptFence hit).
+No `assertCount(7)` exists anywhere for this roster — the pins are list-equality only (grep `assertCount(7` in candy-code/tests → no PromptFence hit).
 
 ## PART 3 — law-4j premises for (29)
 
@@ -157,7 +157,7 @@ No `assertCount(7)` exists anywhere for this roster — the pins are list-equali
 RE-MEASURED arithmetically at tip (php, `truncateWithEllipsis($s,120)` = `mb_substr(0,117).'...'`): reminder with a 4-digit count = 170 B full → **folded 130 B**, marker `'[summary] '` = 10 B, survivors = **117 chars**. Ledger holds (the byte length varies with digit count: 171/131 at 5 digits).
 
 ### 3.2 ContextCompactor.php — the live rider clip site + exact constants
-`sugar-crush/src/Context/ContextCompactor.php:1249-1257` (the rider branch of `summarizeExchanges()`, method :1210):
+`candy-code/src/Context/ContextCompactor.php:1249-1257` (the rider branch of `summarizeExchanges()`, method :1210):
 ```php
 1249:                foreach ($pair['interleaved'] ?? [] as $rider) {
 1250:                    $riderContent = (string) $rider['content'];
@@ -183,7 +183,7 @@ Prose census sentence naming the bound: :605-607 "Standalone messages … are NO
 **What the fix is, per the ledger:** the *rider SOURCE* fix, not the clip — plan:2828 "fix it at the source of the rider", worklog:560 "ContextCompactor.php rider-source fix", :629 "honest fix lives at rider source (ContextCompactor.php)", resume:738 "(29) E38 rider-source fix". I.e. stop the app-generated token-count notice from being folded into the transcript as a `[summary]` row at all (its bytes are regenerated every turn), rather than tuning the 120/117 ellipsis. The clip numbers stay as-is unless the brief decides otherwise.
 
 ### 3.3 isContextReminder — where it lives/acts (widening stays FORBIDDEN)
-- `sugar-crush/src/Chat.php:13328-13332` definition: `return $msg->role === Role::System && str_starts_with($msg->content, self::CONTEXT_REMINDER_PREFIX);`
+- `candy-code/src/Chat.php:13328-13332` definition: `return $msg->role === Role::System && str_starts_with($msg->content, self::CONTEXT_REMINDER_PREFIX);`
 - acts at `Chat.php:13309-13315` `withoutContextReminders()` (filter :13313).
 - forbidding note: `Chat.php:9752-9753` "**Widening `isContextReminder()` is expressly out of scope;** this predicate simply declines the rider at carry time." + plan:2827 "Do NOT fix that by widening `isContextReminder()`."
 - the marker const it matches: `Chat.php:480` `private const CONTEXT_REMINDER_PREFIX = 'Heads up: this conversation has grown to ~';` (docblock :451-459 explains prefix-vs-whole; message built at :13233-13241).
@@ -212,11 +212,11 @@ MEASURED at tip: `ContextCompactorTest` **85/317**, `ExchangeSummaryTest` **22/5
 Censuses each step moves:
 - (24) `PromptFence::TAGS` 7→8 → `PromptSectionTest::testTheEscapeRosterIsExactlyTheDerivedFenceTagList` (23/84) and `BaseSystemPromptTest::testForgedInstructionDocumentCannotForgeFencesOrAuthorityVoice` (24/326) go red until grown in lockstep; `CompactModelSummaryTest` (38/191) goes red **on purpose** (simulation says 38/188, 1F). Roster count sentences: PromptFence.php:74,:76,:86-114 + BaseSystemPromptTest.php:996,:1016,:1495,:1561 + MaximsSection.php:34,:36 + MaximsSectionTest.php:44-45. Goldens must be re-measured, expected UNMOVED (the summariser request is not the base prompt; precedent: `harness-injected` "widening for it costs zero golden bytes", PromptFence.php:73). `GlobFigureDriftTest` **UNMOVED at 61/22,835** (re-measured at tip) — its scope is the `[!B]*` deny-glob character counts only (file:51-55), not fence prose; the FOLD-1 precedent (worklog:264) shows a src-docblock sentence leaves it at 22,835.
 - (29) rider bytes → `ContextCompactorTest` (85/317) and `ExchangeSummaryTest` (22/54, byte-exact rider row at :513-522); the "120 characters" prose census at ContextCompactor.php:606 + ExchangeSummaryTest.php:98; if the rider stops being written, `CompactModelSummaryTest.php:1483-1502` (R-D decline) and its docblock become the re-derivation targets. Goldens expected UNMOVED (compaction is not prompt assembly). `GlobFigureDriftTest` UNMOVED.
-Floor anchor for both predictions: **11,178 / 170,862 / 0F / 0E / 2S / EXIT 0 at 3e053e3c9** (worklog:270 "Floor after close"); `git diff b2936ee5c..HEAD -- sugar-crush/` empty, so the anchor transfers byte-for-byte.
+Floor anchor for both predictions: **11,178 / 170,862 / 0F / 0E / 2S / EXIT 0 at 3e053e3c9** (worklog:270 "Floor after close"); `git diff b2936ee5c..HEAD -- candy-code/` empty, so the anchor transfers byte-for-byte.
 
 ## PREMISES-MEASURED-FALSE
 
-1. **The 8th tag's identity contradicts across the working set — BLOCKING for a (24) brief.** `prompt_resume.md:570` says "(24) widens `sugar-crush/src/Context/PromptFence.php` TAGS 7→8 **to roster the `<git_commits>` fragment** (R-C wording re-ruled at staffing)"; :738 "add the **`<git_commits>`** row with the R-C wording re-ruled"; :752 "(24) PromptFence roster-widen TAGS 7→8 + escape … add…" (git_commits framing). The deferral record and the code say **`prior-summary`**: worklog:761 "widen `PromptFence::TAGS` 7→8 (`prior-summary`)", CompactModelSummaryTest.php:1575 "the first time `prior-summary` joins the roster". `<git_commits>` is explicitly ruled OUT of the roster — plan:2898 "the fragment self-wraps `<git_commits>` (1+1 tags, **NOT in `PromptFence::TAGS` — stays 7**)"; worklog:467 same; worklog:527 "R-C **NO new fence tag, PromptFence::TAGS stays 7**". The resume is also self-inconsistent: a `<git_commits>` widen would leave `</prior-summary>` untouched and therefore could NOT redden `CompactModelSummaryTest:1571`, which the same resume line asserts reddens.
+1. **The 8th tag's identity contradicts across the working set — BLOCKING for a (24) brief.** `prompt_resume.md:570` says "(24) widens `candy-code/src/Context/PromptFence.php` TAGS 7→8 **to roster the `<git_commits>` fragment** (R-C wording re-ruled at staffing)"; :738 "add the **`<git_commits>`** row with the R-C wording re-ruled"; :752 "(24) PromptFence roster-widen TAGS 7→8 + escape … add…" (git_commits framing). The deferral record and the code say **`prior-summary`**: worklog:761 "widen `PromptFence::TAGS` 7→8 (`prior-summary`)", CompactModelSummaryTest.php:1575 "the first time `prior-summary` joins the roster". `<git_commits>` is explicitly ruled OUT of the roster — plan:2898 "the fragment self-wraps `<git_commits>` (1+1 tags, **NOT in `PromptFence::TAGS` — stays 7**)"; worklog:467 same; worklog:527 "R-C **NO new fence tag, PromptFence::TAGS stays 7**". The resume is also self-inconsistent: a `<git_commits>` widen would leave `</prior-summary>` untouched and therefore could NOT redden `CompactModelSummaryTest:1571`, which the same resume line asserts reddens.
 2. **plan:2826-2827 "100% of the 171-byte text survives, merely prefixed"** — FALSE at tip (already logged as F3 NIT, worklog:559); re-measured: the folded line is 130 B = 10 B marker + 117 chars + `...`, i.e. ~68% of the notice survives; and the full notice is 170 B at a 4-digit token count (171 only at 5 digits).
 3. **Chat.php:9770-9772 numeric cites into ContextCompactor are stale at tip** — the text reads "the two return paths at `Context\ContextCompactor.php:1223` and `Context\ContextCompactor.php:1227`, marker prefixed at `Context\ContextCompactor.php:1166`". Those were truthful at the P8.S3 merge (`git show 1eef96e9a:…`:1223 `return $userTruncated . ' → ' . $assistantMsg;`, :1227 `return $userTruncated . ' → [exchanged information]';`, :1166 `'content' => '[summary] ' . $summary,`) and P8.S4 shifted them. At tip: :1223 is a comment, :1227 is `$summaries[] = [`, :1166 is `return $skills;`; live truth = return paths :1295 and :1299, marker prefixes :1229/:1238/:1255. No test guards numeric `file.php:line` cites (`SymbolCitationDriftTest` covers `{@see}`/backticked SYMBOL names only, :35-46), so nothing reddened — (24)'s brief must re-derive these three numbers.
 4. **The Part-4 hypothesis "ContextCompactor prose → GlobFigureDrift paragraphs" is FALSE** — `tests/Config/GlobFigureDriftTest.php:51-55`: "THIS FILE IS THAT GENERATOR, and it is deliberately narrow: … Every number either page spells about **the glob** is derived here from `strlen()` of the glob the page itself quotes". Fence/rider prose is out of its scope; it stays at 61/22,835 (measured) for both steps unless the `[!B]*` prose is touched.

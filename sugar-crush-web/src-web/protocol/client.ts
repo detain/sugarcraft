@@ -3,14 +3,14 @@ import { IDEMPOTENT_METHODS, PROTOCOL, type EventEnvelope, type MethodName, type
 import { isEvent, isResponse, ProtocolError, type RpcResponse } from './jsonrpc'
 import { Backoff, realTimers, Watchdog, type Timers } from './reconnect'
 
-export const SUBPROTOCOL = 'sugarcrush.v1'
+export const SUBPROTOCOL = 'candy-code.v1'
 
 /**
  * - `connecting`: the first connect is under way;
  * - `connected`: the handshake is done, requests flow;
  * - `reconnecting`: the socket dropped and a retry is scheduled or running;
  * - `signed-out`: no valid cookie — the user must sign in (no retry);
- * - `stopped`: {@see SugarCrushClient.stop()} was called, or the server
+ * - `stopped`: {@see CandyCodeClient.stop()} was called, or the server
  *   speaks a protocol this client does not.
  */
 export type ClientStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'signed-out' | 'stopped'
@@ -60,7 +60,7 @@ const HELLO_ID = 'hello'
 const DEFAULT_TICK_MS = 15_000
 
 /**
- * One WebSocket to `sugarcrush serve`, speaking `sugarcrush.v1` (Appendix O
+ * One WebSocket to `candy-code serve`, speaking `candy-code.v1` (Appendix O
  * §6, §7.6): JSON-RPC requests correlated by id, `event` notifications fanned
  * out to listeners, the `server.hello` handshake with resume cursors, a
  * liveness watchdog (no frame for two tick intervals means the socket is
@@ -72,7 +72,7 @@ const DEFAULT_TICK_MS = 15_000
  * answers a repeat key with the original answer, so a prompt resent after a
  * drop is never a second turn.
  */
-export class SugarCrushClient {
+export class CandyCodeClient {
   private readonly options: ClientOptions
   private readonly timers: Timers
   private readonly backoff: Backoff
@@ -84,7 +84,7 @@ export class SugarCrushClient {
   private readonly pending = new Map<string, Pending>()
   private readonly waiting: Pending[] = []
   private readonly eventListeners = new Set<Listener<EventEnvelope>>()
-  private readonly changeListeners = new Set<Listener<SugarCrushClient>>()
+  private readonly changeListeners = new Set<Listener<CandyCodeClient>>()
   private readonly helloListeners = new Set<Listener<HelloResult>>()
 
   status: ClientStatus = 'idle'
@@ -108,7 +108,7 @@ export class SugarCrushClient {
     return () => this.eventListeners.delete(listener)
   }
 
-  onChange(listener: Listener<SugarCrushClient>): () => void {
+  onChange(listener: Listener<CandyCodeClient>): () => void {
     this.changeListeners.add(listener)
     return () => this.changeListeners.delete(listener)
   }

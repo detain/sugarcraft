@@ -1,6 +1,6 @@
-# Step 10.31 — sugar-crush built-in tools + syntax highlighting + slash commands
+# Step 10.31 — candy-code built-in tools + syntax highlighting + slash commands
 
-**Source:** `leftover_updates_later.md` sugar-crush H4 + M5 + M6
+**Source:** `leftover_updates_later.md` candy-code H4 + M5 + M6
 **Branch:** `ai/crush-tools-syntax-slash`
 
 ## Deliverable
@@ -12,7 +12,7 @@
 
 ## Files
 
-**Create:** `sugar-crush/src/Tool/{FileTool,BashTool}.php`,
+**Create:** `candy-code/src/Tool/{FileTool,BashTool}.php`,
 `SlashCommand/{Help,Clear,Compact,Model}Command.php`.
 
 **Modify:** `Chat.php` — slash-command dispatch; tools registry.
@@ -23,7 +23,7 @@
 
 ## Acceptance
 
-- `cd sugar-crush && vendor/bin/phpunit` green.
+- `cd candy-code && vendor/bin/phpunit` green.
 
 ---
 

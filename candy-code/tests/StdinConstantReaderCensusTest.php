@@ -1,0 +1,666 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests;
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * EVERY REACHABLE SUGARCRAFT LIBRARY THAT NAMES DESCRIPTOR 0.
+ *
+ * The headline used to read "everything reachable from this process", and the
+ * scope below has never been that — see "what this scope excludes, measured
+ * rather than assumed" at the foot of this doc-block, which is where the
+ * difference is written down instead of being left for a reader to discover.
+ *
+ * THIS ROSTER IS NO LONGER AN INPUT TO A DECISION — IT IS THE STANDING
+ * CONTRACT OF ONE THAT WAS TAKEN. WHAT THIS SAID: "this roster is the missing
+ * input to E296", framed around whether the suite's descriptor 0 COULD be
+ * replaced. WHAT IS TRUE NOW: it is. `tests/bootstrap.php` does
+ * `fclose(\STDIN)` plus a `/dev/null` handle on the freed fd, so the `\STDIN`
+ * constant IS a closed resource for the rest of every non-tty run, and every
+ * site below is handed one on each such run. WHY THE ROSTER STILL EARNS ITS
+ * PLACE — more than before, not less: it was a list of things to check once,
+ * and it is now a list of things that are live. A new entry is a new site
+ * receiving a dead handle today.
+ *
+ * Round 49 tried three times to make that replacement and PHP has no `dup2`,
+ * so it always meant closing the constant. Two of those attempts died on a
+ * claim of the form "nothing reaches it", and the reason both claims were wrong
+ * is the same reason:
+ *
+ *   THE CENSUS BEHIND THEM WAS SCOPED TO `candy-code/`, AND THE READER THAT
+ *   MATTERED WAS IN A SIBLING LIBRARY.
+ *
+ * `SugarCraft\Image\Detect::stdinFd()` is `self::$probeStdin ?? STDIN` and
+ * hands the result to `stream_select()` with no `is_resource()` guard. A
+ * census's ALPHABET includes the directory it was pointed at, and that one was
+ * a package.
+ *
+ * ## WHAT THAT COST, AND WHY THE NUMBER THIS FILE FIRST CARRIED IS RETIRED
+ *
+ * WHAT THIS SAID: `9500 tests, 107 errors, rc 2`, presented as the price of
+ * option (a).
+ *
+ * WHAT IS TRUE NOW: that run predated E302, and it was never 107 costs. It was
+ * ONE defect multiplied by every test that reached it — `sugar-image` naming
+ * `Capability::Iterm2Image`, a case sugar-colorprofile spells `ITerm2`, in a
+ * fallback that nothing entered until fd 0 was closed. The unguarded read
+ * below was the TRIGGER; the enum name was the FAULT, and `1a2caebb` fixed it.
+ * Verified by symbol: `sugar-colorprofile/src/Probe/Capability.php` declares
+ * `case ITerm2`, and that commit is an ancestor of this tree. RE-MEASURED
+ * here after it, PHP 8.3.6, full suite, with the descriptor replacement
+ * applied to `tests/bootstrap.php`: one error and two failures, all three in
+ * tests whose entire subject is that repair, and not one `sugar-image` error
+ * of any kind.
+ *
+ * AND THE ONE SITE THAT WAS STILL WRONG AFTER THE PRICE FELL IS FIXED TOO.
+ * WHAT THIS SAID: "`Detect` still leaves its normal path by exception on every
+ * call", recorded because "no test noticed" is not the same as "the library is
+ * fine". WHAT IS TRUE NOW: `Detect::stdinFd()` answers null for a dead handle
+ * instead of passing it to `stream_select()`, `drainStdin()` and
+ * `readStdinTimed()` treat null as their existing no-answer case, and a closed
+ * INJECTED probe stream no longer short-circuits `isInteractiveTty()` to true.
+ * Verified by symbol, and driven directly: `Detect::probe()` in a process that
+ * had done `fclose(\STDIN)` threw `ValueError: No stream arrays were passed`
+ * before and completes after (PHP 8.3.6). WHY THE PARAGRAPH STAYS: the
+ * distinction it draws is the one that made anyone look — a library that
+ * degrades by exception passes every test that only checks the caller
+ * survived.
+ *
+ * ## What this file asserts, and why it is a roster rather than a count
+ *
+ * The exact set of (file, spelling) pairs, over `src` and `bin` of this
+ * package plus `src` of every reachable sibling library. A cardinality would
+ * be stale on the next commit and would say nothing useful when it changed
+ * (rule 18); a roster names what appeared, so the diff IS the finding. It is
+ * also its own dead-scanner control: the expectation is a NON-EMPTY exact set,
+ * so a scanner that matched nothing fails immediately rather than reporting a
+ * clean tree (rule 15/E228). The fixture test beside it pushes known answers
+ * through the same scanner in both polarities anyway.
+ *
+ * ## THE ALPHABET IS FOUR SPELLINGS, AND THE FOURTH WAS FOUND BY THE SCANNER
+ * ## BEING WRONG
+ *
+ * The obvious alphabet is the `STDIN` constant, because that is the spelling
+ * every known instance used. It cannot express `fopen('php://fd/0')`,
+ * `fopen('php://stdin')` or `fopen('/dev/stdin')`, all of which open the same
+ * descriptor without naming the constant. So all four are in.
+ *
+ * AND THE CONSTANT ITSELF IS MATCHED INSIDE STRING BODIES TOO, which is not
+ * where a constant normally lives and is the point. Containment was applied
+ * only to the three STREAM NAMES at first, so a nowdoc holding a child script
+ * that says `feof(STDIN)` scanned CLEAN — the same blind spot the stream-name
+ * fix had just closed, left open one spelling over. Widening it found a real
+ * site the narrower alphabet could not see:
+ * `candy-code/src/Agents/ProcessExecutor.php`, whose
+ * `createInlineWorkerScript()` returns a nowdoc that reads `STDIN` four times.
+ * Rule 11 in one line — a census's alphabet is usually written to match the
+ * cases already known.
+ *
+ * The cost is that a PROSE string naming the constant — an exception message
+ * that says "cannot read STDIN" — is reported too, and there is no way to tell
+ * it from a worker script without running the code. That is the same trade the
+ * `WorkerPool` row below makes: the scanner reports, the doc-block judges, and
+ * somebody looks once. What is NOT reported is `Foo::STDIN` or `$o->STDIN` —
+ * a `T_STRING` reached through `::` or `->` is a member, not the constant, and
+ * the fixtures pin both.
+ *
+ * AND THE FIRST VERSION OF THIS SCANNER REPORTED ZERO FOR THE STREAM NAMES
+ * WHILE `grep` FOUND ONE, which is the part worth keeping.
+ *
+ * WHAT THAT WAS FIRST WRITTEN DOWN AS: "it compared each string token to the
+ * name for EQUALITY, and a heredoc body arrives as ONE token, so the heredoc
+ * in `sugar-core/src/WorkerPool.php` read as a string that was not
+ * `php://fd/0`." That account is narrower than the defect, and it leaves a
+ * reader believing a plain `fopen('php://stdin')` was covered.
+ *
+ * WHAT IS TRUE: equality on the raw token never matched ANY string spelling,
+ * because `token_get_all()` hands back the token WITH ITS QUOTES. Measured,
+ * PHP 8.3.6, on `<?php $f = fopen('php://stdin', 'r');` — the
+ * `T_CONSTANT_ENCAPSED_STRING` is the 13-byte `'php://stdin'`, so
+ * `=== 'php://stdin'` is false and `str_contains(...)` is true. Reverting
+ * containment to equality today reds 8 of the 15 rows below, not just the
+ * heredoc one.
+ *
+ * WHY IT STILL EARNS ITS PLACE: the heredoc is still the shape that MADE the
+ * zero look plausible — a one-token block is where a reader stops suspecting
+ * the instrument. The comparison is containment now, and the fixtures below
+ * carry nowdoc cases for exactly this reason: a harness written to check a
+ * claim can carry the defect the claim is about, and the only thing that
+ * catches it is a fixture whose answer you already know.
+ *
+ * ## What the roster does NOT do
+ *
+ * It does not classify. Whether a given reader BREAKS on a closed descriptor
+ * is a per-site question, and the ASSERTED set is the roster alone — the
+ * judgements live in prose below, are not machine-checked, and a new row
+ * arrives unjudged. They are named rather than counted: a count of a roster
+ * the test itself derives rots silently the next time an entry is added (rule
+ * 18), and the sentence that used to stand here said "three" over four
+ * bullets, having been written before one of them was added.
+ *
+ * As of the descriptor replacement shipping (see the deferral note below,
+ * which this retires), every row carries a judgement. Each was driven on this
+ * box rather than reasoned about, PHP 8.3.6:
+ *
+ *  - `sugar-image/src/Detect.php` — GUARDED NOW, and it is the site that
+ *    TRIGGERED round 49's 107 errors rather than the site that caused them:
+ *    the fault was the enum case name in the fallback it dropped into (E302).
+ *    WHAT THIS ROW SAID: "UNGUARDED … `stdinFd()` returns `?? STDIN` and
+ *    `drainStdin()` passes it straight to `stream_select()`". WHAT IS TRUE NOW:
+ *    `stdinFd()` is `$fd = self::$probeStdin ?? STDIN; return is_resource($fd)
+ *    ? $fd : null;` and the two consumers treat null as their no-answer case.
+ *    WHY THE ROW STAYS: it still NAMES the constant, which is what this roster
+ *    tracks, and it is the row a future reader will want the history of.
+ *  - `sugar-core/src/Util/Tty/PosixBackend.php` — one of its two sites is
+ *    already guarded, and says so: `TermiosFactory::open((int) STDIN)` sits in
+ *    a `try`/`catch (\Throwable)` whose comment reads "STDIN closed (CI
+ *    runner): silently no-op". The other is the constructor's `?? STDIN`.
+ *  - `sugar-core/src/WorkerPool.php` — NOT a reader of this process's fd 0 at
+ *    all. The `php://fd/0` is inside a nowdoc that is written to a temp file
+ *    and run as a CHILD, whose descriptor 0 is a `proc_open()` pipe. It is in
+ *    the roster because the scanner must report what it finds rather than
+ *    silently drop what it cannot judge (rule 14), and this line is the
+ *    judgement.
+ *  - `candy-code/src/Agents/ProcessExecutor.php` — the same judgement, same
+ *    reason, different spelling. `createInlineWorkerScript()` returns a nowdoc
+ *    that `feof(STDIN)`/`fgets(STDIN)` its way through a startup handshake,
+ *    and `spawnWorker()` runs it via `proc_open([$binary, '-r', $script], [0
+ *    => ['pipe', 'r'], …])` — verified by symbol — so that `STDIN` is the
+ *    CHILD's pipe. Not this process's descriptor 0, and not affected by
+ *    closing it.
+ *  - `candy-code/src/Hooks/BuiltIn/BashEscapeDenyHook.php` — NOT A READER
+ *    (audit F-J5, wave 5). `/dev/stdin` is one entry of the `SAFE_DEVICES`
+ *    string list: a redirect target in a shell command the hook JUDGES is
+ *    compared against it, and nothing is opened. Closing this process's
+ *    descriptor 0 cannot change what the hook answers.
+ *  - `candy-code/src/Server/Workspace/WorkspaceHostProcess.php` — A READER,
+ *    IN ITS OWN PROCESS ONLY (roadmap O-7). `main()` is the entry point of a
+ *    workspace-host child the serve gateway spawns with `php -r`; descriptor
+ *    0 there is the gateway's config pipe — one JSON line, then EOF meaning
+ *    "the gateway let go". Nothing in the TUI or the suite's runner calls
+ *    `main()`, so closing THIS process's descriptor 0 never reaches it; a
+ *    host started with descriptor 0 closed reads no config and exits 2.
+ *
+ *  - `candy-code/src/Cli/Acp.php` — DEGRADES, IN ITS OWN PROCESS ONLY
+ *    (roadmap 5.9). `run()` hands `\STDIN` — the editor's half of the ACP
+ *    connection — to a `ReadableResourceStream`, whose constructor throws on
+ *    a closed handle, so `run()` checks `\defined('STDIN') &&
+ *    \is_resource(\STDIN)` first and, with descriptor 0 closed, says so on
+ *    stderr and exits 1. Nothing in the TUI or the suite's runner calls
+ *    `run()`; the suite drives `serve()` with its own streams.
+ *  - `candy-code/src/Cli/NonInteractive.php` — FIXED (E338); the row is
+ *    rewritten rather than dropped, because what it records is why the guard
+ *    it now describes is shaped the way it is. WHAT THIS ROW SAID: "DEGRADES
+ *    TODAY, WILL THROW ON THE NEXT UNPIN-AND-READ, and it is the one row this
+ *    change made WORSE" — `stdinDefault()` was `self::$stdinDefault ?? \STDIN`
+ *    and `readStdinIfPiped()` was `$stream ??= self::stdinDefault();` then
+ *    `\stream_isatty($stream)` with no `is_resource()` guard, so inside the
+ *    suite the fallback handed back a CLOSED handle where it used to hand
+ *    back a live one. Not reachable at the time, because the two callers of
+ *    `pinStdinDefault(null)` cleared the pin and neither then read.
+ *    WHAT IS TRUE NOW: `stdinDefault()` answers `null` for a dead descriptor,
+ *    and `readStdinIfPiped()` opens with one `is_resource()` guard on the
+ *    RESOLVED stream. The hazard is exercised rather than described by
+ *    {@see \SugarCraft\Code\Tests\Cli\NonInteractiveStdinPinTest::testReadingWithNoPinAndNoDescriptorZeroAnswersNullRatherThanThrowing()},
+ *    which is precisely the "next test that unpins and reads" this row
+ *    predicted, and by its sibling covering an explicitly-passed closed
+ *    stream — the third route in, which neither call-site guard would have
+ *    covered.
+ *    WHY THE MEASUREMENT STILL EARNS ITS PLACE, and it is the load-bearing
+ *    part: `stream_isatty()` on a closed resource throws
+ *    `TypeError: supplied resource is not a valid stream resource`, AND SO
+ *    DOES the `@\stream_get_contents()` two lines later — `@` suppresses
+ *    diagnostics, not a thrown `TypeError`. That is why the guard is one
+ *    check on the resolved stream and not a check at the call a reader
+ *    notices first; delete the sentence and the next person to touch this
+ *    method reintroduces the half-fix.
+ *  - `sugar-core/src/Util/Tty/EnvDetect.php` — WAS THE UNTHRESHOLDED SITE;
+ *    NOW GUARDED AND STILL DORMANT IN PRODUCTION. WHAT THIS ROW SAID: "WOULD
+ *    THROW, AND IS DORMANT. `isConsoleStdin()` is a bare
+ *    `return stream_isatty(STDIN);` with no guard, which is the throwing
+ *    shape above. It has NO caller ... the only occurrence of the name is its
+ *    own declaration." WHAT IS TRUE NOW: the method opens with
+ *    `if (!\defined('STDIN') || !\is_resource(\STDIN)) { return false; }`
+ *    and only then asks `stream_isatty()` - the no-throw half landed. The
+ *    "NO caller" half has aged: production `src` and `bin` still never call
+ *    it - the `EnvDetect` uses in `Tty.php` are `isWsl()`/`isMintty()`/
+ *    `isCygwin()`, a different question entirely - but
+ *    `sugar-core/tests/Util/closed_descriptor_zero_probe.php` now drives it
+ *    inside a child that has closed its own descriptor 0, so the guard is
+ *    exercised, not merely present. WHY THE ROW STAYS: the file still names
+ *    the constant, which is what this roster tracks, and the dormancy claim
+ *    is the reason the guard lives in the method rather than at a call site -
+ *    there is no call site to put it at.
+ *  - `sugar-core/src/Util/Tty.php` and `sugar-core/src/Util/RawMode.php` —
+ *    DEGRADE. Both resolve `?? STDIN` and then hand the result somewhere that
+ *    tests liveness first. `RawMode::enable()`/`disable()` gate on
+ *    {@see \SugarCraft\Core\Util\TtyDetect::isAtty()}, which opens with
+ *    `is_resource($stream)` and returns false. `Tty::backend()` on this box
+ *    reaches `PosixBackend`, whose `isTty()` is
+ *    `is_resource($this->stream) && stream_isatty($this->stream)` — the
+ *    liveness test is the LEFT operand, so the throwing call is never made —
+ *    and whose two `stream_set_blocking()` calls are each `is_resource()`
+ *    guarded. Verified by symbol.
+ *  - `sugar-core/src/Util/Tty/WindowsBackend.php` — UNREACHABLE ON THIS BOX
+ *    AND IN CI. Its `$stream ?? STDIN` is only constructed from
+ *    `Tty::backend()` behind `DIRECTORY_SEPARATOR === '\\'`, and
+ *    `scripts/affected-libs.php`'s `WINDOWS_LIBS` does not list `candy-code`,
+ *    so no Windows runner executes this suite. Unjudged for Windows on
+ *    purpose: this box is Linux and PHP 8.3.6 only, and a claim about the
+ *    Windows path would be reasoning rather than measurement.
+ *  - `sugar-core/src/Program.php` — WAS "GUARDED, BUT THE GUARD'S FALLBACK IS
+ *    ITSELF DEAD"; THE FALLBACK IS NOW A FILE SPEC. WHAT THIS ROW SAID:
+ *    "`runExec()` does `$childIn = is_resource($this->input) ? $this->input
+ *    : STDIN;`", and once the suite closes the constant both arms are dead
+ *    handles whenever `$input` came from the constructor's
+ *    `$options->input ?? STDIN` - so the guard's fallback was the very thing
+ *    the guard was guarding against, and the degradation was by `TypeError`
+ *    rather than by falling back. WHAT IS TRUE NOW: the ternary is gone, and
+ *    with it the dead-fallback. `runExec()` resolves the descriptor through
+ *    `Program::childDescriptor()`, whose ladder is own-handle → constant →
+ *    `['file', $nul, 'r']` (`/dev/null`, `NUL` on Windows) - a last resort
+ *    `proc_open()` opens for itself, which is precisely the property the
+ *    closed `\STDIN` handle lacked. The constant is STILL named, and it is
+ *    still the middle rung, so the row stays on the roster for the same
+ *    reason every other row does: the scanner reports what a file names, not
+ *    what it survives. WHY THE OBSERVATION STILL EARNS ITS PLACE: the
+ *    distinction this row drew between "the fallback exists" and "the
+ *    fallback can itself be dead" is the reason a file spec replaced the
+ *    constant, and a reader who deletes the row loses the argument for
+ *    keeping the third rung.
+ *
+ * ## THE DEFERRAL THAT USED TO STAND HERE IS SPENT
+ *
+ * WHAT THIS SAID: "Every other entry is unclassified on purpose. Classifying
+ * them is the work E296's option (a) actually requires, and doing it here —
+ * without running the descriptor replacement behind a full suite — would be
+ * the same reasoning-instead-of-measuring that killed the first three
+ * attempts."
+ *
+ * WHAT IS TRUE NOW: option (a) has shipped, in `tests/bootstrap.php`, and has
+ * been run behind a full suite more than once. The deferral's own stated
+ * precondition is satisfied, so the rows above are classified from a tree in
+ * which the closed descriptor is the ACTUAL state of every non-tty run — which
+ * is exactly the measurement the deferral was waiting for, and is why two of
+ * them (`NonInteractive`, `Program`) came out worse than a reader would have
+ * guessed while the constant was still open.
+ *
+ * WHY THE PARAGRAPH STILL EARNS ITS PLACE: it is the reason the roster and the
+ * judgements are separate things. A deferral that survives its own precondition
+ * stops being a record and becomes a licence, so retiring it is part of the
+ * work rather than housekeeping — and the next reader tempted to classify a
+ * NEW row from first principles should note that the standard the deferral set
+ * still applies to that row.
+ *
+ * ## Scope, stated rather than left to be inferred
+ *
+ * `src` and `bin` of this package, and `src` of each reachable SUGARCRAFT
+ * sibling under `vendor/sugarcraft`. Not a sibling's `tests`, which never
+ * execute in this process. Not this package's `tests`: the files there that
+ * read the constant do so deliberately and as the subject of their own
+ * assertions, and pinning them here would make this file a merge conflict for
+ * every lane that adds one while telling nobody anything they did not already
+ * assert. No count, on purpose (rule 18) — one taken over `tests/` in a lane
+ * worktree is wrong the hour a sibling lane merges. The generator is in this
+ * class, so the wider answer is one edit away: add `tests` to
+ * {@see PACKAGE_SCOPE} and read what it reports.
+ *
+ * ## WHAT THIS SCOPE EXCLUDES, MEASURED RATHER THAN ASSUMED
+ *
+ * The rest of `vendor/` — the third-party packages — is NOT scanned, and that
+ * is a choice rather than an oversight, so here is what is out there. Running
+ * {@see fd0References()} over every non-`sugarcraft` `vendor/**.php` outside a
+ * `tests/` directory (8,247 files, PHP 8.3.6) reports FOUR:
+ * `sebastian/environment/src/Console.php` and
+ * `phpunit/phpunit/src/TextUI/Command/Commands/GenerateConfigurationCommand.php`
+ * (both `STDIN`), `mtdowling/jmespath.php/bin/jp.php` (`STDIN`), and
+ * `symfony/yaml/Command/LintCommand.php` (`php://stdin`).
+ *
+ * The first is the one that matters, because it is inside the runner's OWN
+ * dependency tree: `Console::getNumberOfColumns()` is
+ * `$this->isInteractive(defined('STDIN') ? STDIN : self::STDIN)`, and
+ * `defined('STDIN')` stays TRUE after `fclose(\STDIN)` (measured, 3/3, PHP
+ * 8.3.6 — `defined()` true, `is_resource()` false), so under option (a) it
+ * hands a CLOSED resource on. Read to the end, though, it is safe:
+ * `isInteractive()` opens with `is_resource($fileDescriptor)`, so a closed
+ * handle takes the int branch, reaches `@posix_isatty()`, and degrades to "not
+ * interactive" — an 80-column answer, not a break. Observed: the full-suite
+ * run with the descriptor replacement applied produced no error from it.
+ *
+ * It stays out of the asserted set for a reason that is not "it is fine".
+ * `vendor/` is gitignored and composer-managed, so a roster over it is a
+ * roster over content this repository does not version: it would red on an
+ * unrelated upstream bump and teach the next reader to widen it away. The four
+ * names above are therefore recorded here, with their generator, as a
+ * measurement at a point in time.
+ *
+ * OPTION (a) HAS NOW SHIPPED, so the follow-up that sentence asked for is done:
+ * OBSERVED, PHP 8.3.6, a full green suite with the descriptor replacement in
+ * `tests/bootstrap.php` — no error from `sebastian/environment` or from any of
+ * the other three.
+ *
+ * THAT SENTENCE CARRIED A SUITE HEADCOUNT AND NO LONGER DOES. WHAT IT SAID:
+ * "9661 tests". WHAT IS TRUE NOW: it was already wrong two commits after it
+ * was written, by this lane's own PTY test, and it would have been wrong again
+ * at the next merge — a cardinality over `tests/` measured in a lane worktree
+ * is stale the hour a sibling lands (rule 18). WHY THE SENTENCE STAYS: the
+ * claim it supports is "the full suite was green and none of these four
+ * errored", and that claim needs the RUN, not the count. The other suite
+ * figures in this tree's stdin doc-blocks are deliberately left alone: they
+ * are BASELINES pinned to a named commit, where the number is the measurement
+ * rather than a description of the present tree.
+ */
+final class StdinConstantReaderCensusTest extends TestCase
+{
+    /** Directories of THIS package that are scanned. */
+    private const PACKAGE_SCOPE = ['src', 'bin'];
+
+    /** Where the reachable siblings live, relative to the package root. */
+    private const LIB_SCOPE = 'vendor/sugarcraft';
+
+    /**
+     * The stream names that open descriptor 0 without naming the constant.
+     *
+     * Lower-case, and matched case-insensitively: PHP's stream wrappers are
+     * not case sensitive, so `PHP://STDIN` opens the same thing.
+     */
+    private const FD0_STREAM_NAMES = ['php://stdin', 'php://fd/0', '/dev/stdin'];
+
+    /**
+     * Every place reachable from this process that names descriptor 0.
+     *
+     * A new entry here is not automatically a defect — it is a site somebody
+     * has to look at before the descriptor can be replaced. Add it with the
+     * spelling the scanner reported, and put the judgement in the class
+     * doc-block rather than in this array.
+     *
+     * @var array<string, list<string>>
+     */
+    private const EXPECTED = [
+        'sugar-core/src/Program.php' => ['STDIN'],
+        'sugar-core/src/Util/RawMode.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty/EnvDetect.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty/PosixBackend.php' => ['STDIN'],
+        'sugar-core/src/Util/Tty/WindowsBackend.php' => ['STDIN'],
+        'sugar-core/src/WorkerPool.php' => ['php://fd/0'],
+        'sugar-image/src/Detect.php' => ['STDIN'],
+        'candy-code/src/Agents/ProcessExecutor.php' => ['STDIN'],
+        'candy-code/src/Cli/Acp.php' => ['STDIN'],
+        'candy-code/src/Cli/NonInteractive.php' => ['STDIN'],
+        'candy-code/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
+        'candy-code/src/Server/Workspace/WorkspaceHostProcess.php' => ['STDIN'],
+        // rv-qa-1: the no-tty pre-flight names \STDIN in stream_isatty() only. A closed
+        // descriptor 0 makes stream_isatty() answer false, which is the SAFE direction —
+        // the launch is refused with the usage line instead of degrading into a read.
+        'candy-code/bin/candy-code' => ['STDIN'],
+    ];
+
+    public function testTheReachableDescriptorZeroReaderRosterIsUnchanged(): void
+    {
+        $found = [];
+        foreach (self::sources() as $path => $source) {
+            $refs = self::fd0References($source);
+            if ($refs !== []) {
+                $found[$path] = $refs;
+            }
+        }
+        ksort($found);
+
+        $expected = self::EXPECTED;
+        ksort($expected);
+
+        self::assertSame(
+            $expected,
+            $found,
+            "the set of reachable places that name descriptor 0 has changed.\n\n"
+                . "This is not automatically a defect. It is the input to E296: replacing the suite's fd 0 "
+                . "means closing the \\STDIN constant, and every entry here is a site that has to be checked "
+                . "first. A reader in a SIBLING LIBRARY is what cost round 49 two refuted attempts and a "
+                . "full suite run, and no census scoped to candy-code/ could see it.\n\n"
+                . 'Look at the new site, decide whether a closed descriptor 0 degrades or throws there, record '
+                . "that judgement in this class's doc-block, and then add the row.",
+        );
+    }
+
+    /**
+     * KNOWN ANSWERS THROUGH THE SAME SCANNER, BOTH POLARITIES.
+     *
+     * The nowdoc rows are not decoration: the first version of this scanner
+     * compared string tokens for equality and therefore reported ZERO for
+     * every heredoc body, including a real one in sugar-core. These rows are
+     * what makes the roster above evidence rather than output.
+     *
+     * @param list<string> $expected
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('fixtures')]
+    public function testTheScannerAnswersCorrectlyOnSourcesWhoseAnswerIsKnown(
+        string $source,
+        array $expected,
+    ): void {
+        self::assertSame($expected, self::fd0References($source));
+    }
+
+    /** @return iterable<string, array{string, list<string>}> */
+    public static function fixtures(): iterable
+    {
+        yield 'bare constant' => ['<?php $x = STDIN;', ['STDIN']];
+        yield 'root-qualified constant, the spelling src/ uses' => ['<?php $x = \STDIN;', ['STDIN']];
+        yield 'a constant merely STARTING with the name is not it' => ['<?php $x = STDINX;', []];
+        yield 'in a line comment - not a reference' => ["<?php // STDIN php://stdin\n\$x = 1;", []];
+        yield 'in a doc-block - not a reference, and this file is full of them' => [
+            "<?php /** reads php://fd/0 and \\STDIN */\n\$x = 1;",
+            [],
+        ];
+        yield 'php://stdin opened by name' => ["<?php \$f = fopen('php://stdin', 'r');", ['php://stdin']];
+        yield 'php://fd/0 opened by name' => ["<?php \$f = fopen('php://fd/0', 'rb');", ['php://fd/0']];
+        yield '/dev/stdin opened by name' => ["<?php \$f = fopen('/dev/stdin', 'r');", ['/dev/stdin']];
+        yield 'wrappers are case-insensitive, so the scanner is too' => [
+            "<?php \$f = fopen('PHP://StdIn', 'r');",
+            ['php://stdin'],
+        ];
+        yield 'php://memory is not descriptor 0' => ["<?php \$f = fopen('php://memory', 'r+');", []];
+        // THE ROW THAT CAUGHT THE SCANNER'S OWN DEFECT. A nowdoc body is one
+        // token, so an equality comparison reported nothing here - which is
+        // exactly the shape of the real site in sugar-core/src/WorkerPool.php.
+        yield 'NOWDOC body carrying a child script that opens fd 0' => [
+            "<?php \$code = <<<'X'\n<?php \$fd = fopen('php://fd/0', 'rb');\nX;\n",
+            ['php://fd/0'],
+        ];
+        yield 'HEREDOC body, interpolating form' => [
+            "<?php \$code = <<<X\nthe worker reads php://stdin here\nX;\n",
+            ['php://stdin'],
+        ];
+        yield 'a nowdoc with nothing relevant in it' => ["<?php \$c = <<<'X'\nplain text\nX;\n", []];
+        yield 'one file naming two different spellings, de-duplicated and ordered by first sight' => [
+            "<?php \$a = STDIN; \$b = fopen('php://fd/0', 'rb'); \$c = \\STDIN;",
+            ['STDIN', 'php://fd/0'],
+        ];
+        // THE ROWS THAT CAUGHT THE ALPHABET'S SECOND HALF. Containment was
+        // applied to the three stream names and not to the constant, so a
+        // nowdoc worker script reading STDIN scanned clean - which is the real
+        // shape in src/Agents/ProcessExecutor.php.
+        yield 'NOWDOC body carrying a child script that reads the STDIN CONSTANT' => [
+            "<?php \$code = <<<'X'\nwhile (!feof(STDIN)) { \$l = fgets(STDIN); }\nX;\n",
+            ['STDIN'],
+        ];
+        yield 'HEREDOC body naming the root-qualified constant' => [
+            "<?php \$code = <<<X\nthe worker reads \\STDIN here\nX;\n",
+            ['STDIN'],
+        ];
+        yield 'a PROSE string naming the constant is reported too, deliberately' => [
+            "<?php throw new \\RuntimeException('cannot read STDIN');",
+            ['STDIN'],
+        ];
+        yield 'a word merely CONTAINING the name inside a string is not it' => [
+            "<?php \$m = 'MY_STDIN_BUFFER and STDINX';",
+            [],
+        ];
+        // The two spellings that are an identifier reached through an operator,
+        // not the global constant. sebastian/environment has both in one file.
+        yield 'a class constant named STDIN is not the global one' => [
+            '<?php $x = Console::STDIN;',
+            [],
+        ];
+        yield 'a property named STDIN is not the global one' => [
+            '<?php $x = $console->STDIN;',
+            [],
+        ];
+        yield 'a nullsafe property named STDIN is not the global one' => [
+            '<?php $x = $console?->STDIN;',
+            [],
+        ];
+        yield 'an import of the constant IS a reference' => [
+            "<?php\nuse const STDIN;\n",
+            ['STDIN'],
+        ];
+    }
+
+    /**
+     * Every spelling of descriptor 0 named in $source, de-duplicated, in order
+     * of first appearance.
+     *
+     * Token-based because the two polarities a regex gets wrong are both live
+     * here: `STDIN` appears in prose throughout these files' doc-blocks (this
+     * one included), and the stream names appear inside heredocs that build
+     * child scripts.
+     *
+     * @return list<string>
+     */
+    private static function fd0References(string $source): array
+    {
+        $found = [];
+        $tokens = token_get_all($source);
+
+        foreach ($tokens as $index => $token) {
+            if (!\is_array($token)) {
+                continue;
+            }
+
+            if ($token[0] === \T_STRING || $token[0] === \T_NAME_FULLY_QUALIFIED) {
+                if (ltrim($token[1], '\\') === 'STDIN' && !self::isMemberAccess($tokens, $index)) {
+                    $found[] = 'STDIN';
+                }
+
+                continue;
+            }
+
+            if ($token[0] !== \T_CONSTANT_ENCAPSED_STRING && $token[0] !== \T_ENCAPSED_AND_WHITESPACE) {
+                continue;
+            }
+
+            // CONTAINMENT rather than equality, and the doc-block says why: the
+            // token arrives WITH ITS QUOTES, so equality never matched any
+            // string spelling at all, and a heredoc/nowdoc body arrives as one
+            // token holding the whole block.
+            $literal = strtolower($token[1]);
+            foreach (self::FD0_STREAM_NAMES as $name) {
+                if (str_contains($literal, $name)) {
+                    $found[] = $name;
+                }
+            }
+
+            // AND THE CONSTANT INSIDE A STRING BODY, because a nowdoc holding a
+            // child script names it exactly the way a normal file does. Word
+            // boundaries so `STDINX` and `MY_STDIN` are not it; case-sensitive,
+            // because a constant is.
+            if (preg_match('/\bSTDIN\b/', $token[1]) === 1) {
+                $found[] = 'STDIN';
+            }
+        }
+
+        return array_values(array_unique($found));
+    }
+
+    /**
+     * Whether the identifier at $index is reached through `::` or `->`.
+     *
+     * `Console::STDIN` and `$o->STDIN` are a class constant and a property, not
+     * the global constant, and both spell the identifier `T_STRING` exactly the
+     * way the real thing does. `sebastian/environment` has both spellings in
+     * one file, which is how this came up.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     */
+    private static function isMemberAccess(array $tokens, int $index): bool
+    {
+        for ($i = $index - 1; $i >= 0; $i--) {
+            $t = $tokens[$i];
+            if (\is_array($t) && \in_array($t[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return \is_array($t) && \in_array(
+                $t[0],
+                [\T_DOUBLE_COLON, \T_OBJECT_OPERATOR, \T_NULLSAFE_OBJECT_OPERATOR],
+                true,
+            );
+        }
+
+        return false;
+    }
+
+    /**
+     * The scanned files: this package's own scope, then each sibling's `src`.
+     *
+     * @return iterable<string, string> `<lib>/<path>` => contents
+     */
+    private static function sources(): iterable
+    {
+        $root = \dirname(__DIR__);
+        $package = basename($root);
+
+        foreach (self::PACKAGE_SCOPE as $dir) {
+            $base = $root . '/' . $dir;
+            if (!is_dir($base)) {
+                self::fail('package scope "' . $dir . '" does not exist under ' . $root);
+            }
+            yield from self::phpFilesIn($base, $package . '/' . $dir . '/', $dir === 'bin');
+        }
+
+        $libRoot = $root . '/' . self::LIB_SCOPE;
+        if (!is_dir($libRoot)) {
+            // Loud rather than skipped: this suite cannot have autoloaded
+            // without it, so its absence means the walk moved, not that the
+            // libraries went away.
+            self::fail(self::LIB_SCOPE . ' does not exist under ' . $root);
+        }
+
+        foreach (glob($libRoot . '/*', \GLOB_ONLYDIR) ?: [] as $lib) {
+            if (!is_dir($lib . '/src')) {
+                continue;
+            }
+            yield from self::phpFilesIn($lib . '/src', basename($lib) . '/src/', false);
+        }
+    }
+
+    /**
+     * @return iterable<string, string>
+     */
+    private static function phpFilesIn(string $base, string $prefix, bool $extensionless): iterable
+    {
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($base, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($it as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile()) {
+                continue;
+            }
+            // `bin/candy-code` has no extension and is still PHP.
+            if ($file->getExtension() !== 'php' && !$extensionless) {
+                continue;
+            }
+            $source = (string) file_get_contents($file->getPathname());
+            if (!str_contains($source, '<?php')) {
+                continue;
+            }
+
+            yield $prefix . substr($file->getPathname(), \strlen($base) + 1) => $source;
+        }
+    }
+}

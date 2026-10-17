@@ -240,7 +240,7 @@ CPROTO;
      *
      * Uses `posix_kill()` when ext-posix is loaded and libc `kill(2)` over
      * FFI otherwise. ext-posix is optional for this package (every other
-     * posix_* call site is `function_exists`-guarded, and sugar-crush runs
+     * posix_* call site is `function_exists`-guarded, and candy-code runs
      * without it by design), but the child `kill()` methods called
      * `posix_kill()` bare -- a fatal "undefined function" at exactly the
      * moment a caller tries to terminate a wedged child. ext-ffi is a hard

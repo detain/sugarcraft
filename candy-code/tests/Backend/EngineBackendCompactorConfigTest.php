@@ -1,0 +1,101 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Backend;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Context\CompactorConfig;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
+
+/**
+ * Audit R1 residual: the per-turn App EngineBackend builds carried no
+ * compactor config, so the skill budget an engine turn spliced against was
+ * whatever Runtime fell back to — decided apart from the launch notice that
+ * names the deferred skills and from Chat's own compactor. The backend now
+ * carries one, defaulting to the same {@see CompactorConfig::new()} the
+ * launch notice prices against, and a configured one reaches the prompt.
+ */
+final class EngineBackendCompactorConfigTest extends TestCase
+{
+    use HomeSandboxTrait;
+
+    private string $home;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->home = sys_get_temp_dir() . '/sc_eb_compactor_' . bin2hex(random_bytes(4));
+        $this->useHomeSandbox($this->home);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+        @rmdir($this->home);
+        parent::tearDown();
+    }
+
+    public function testAConfiguredSkillBudgetReachesTheTurnsSystemPrompt(): void
+    {
+        $provider = new ScriptedProvider([new CompleteResponse('done')]);
+
+        EngineBackend::new($provider, 'm')
+            ->withSkills([$this->smallSkill()])
+            ->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 50))
+            ->complete([Message::user('hi')]);
+
+        $prompt = (string) $provider->requests[0]->systemPrompt;
+        $this->assertStringNotContainsString('SMALLCANARY', $prompt, 'the backend\'s per-skill budget defers the body');
+        $this->assertStringContainsString('the skill budget is 50 per skill and', $prompt);
+    }
+
+    public function testWithoutOneTheTurnUsesTheLaunchNoticesDefaults(): void
+    {
+        $provider = new ScriptedProvider([new CompleteResponse('done')]);
+        $backend = EngineBackend::new($provider, 'm')->withSkills([$this->smallSkill()]);
+
+        $backend->complete([Message::user('hi')]);
+
+        $this->assertEquals(CompactorConfig::new(), $backend->compactorConfig());
+        $this->assertStringContainsString('SMALLCANARY', (string) $provider->requests[0]->systemPrompt);
+    }
+
+    public function testNullRestoresTheDefaults(): void
+    {
+        $backend = EngineBackend::new(new ScriptedProvider([]), 'm')
+            ->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 50))
+            ->withCompactorConfig(null);
+
+        $this->assertEquals(CompactorConfig::new(), $backend->compactorConfig());
+    }
+
+    /**
+     * Roadmap 2.9: the engine lane resolves the per-model absolute caps for
+     * the backend's own model — provider-qualified key first — and a config
+     * naming no override for it comes back as the configured instance.
+     */
+    public function testThePerModelCapsForThisBackendsModelApply(): void
+    {
+        $config = CompactorConfig::new()
+            ->withModelTokenOverride('m', ['reminderTokens' => 60_000])
+            ->withModelTokenOverride('scripted/m', ['reminderTokens' => 40_000]);
+        $backend = EngineBackend::new(new ScriptedProvider([]), 'm')->withCompactorConfig($config);
+
+        $this->assertSame(40_000, $backend->compactorConfig()->reminderTokens);
+        $this->assertSame(40_000, $backend->compactorConfig()->reminderTokenThreshold(1_000_000));
+
+        $other = CompactorConfig::new()->withModelTokenOverride('another', ['reminderTokens' => 60_000]);
+        $this->assertSame($other, EngineBackend::new(new ScriptedProvider([]), 'm')->withCompactorConfig($other)->compactorConfig());
+    }
+
+    private function smallSkill(): Skill
+    {
+        return Skill::parse("---\ndescription: small\n---\nSMALLCANARY " . str_repeat('word ', 200) . "\n", 'small');
+    }
+}

@@ -24,7 +24,7 @@ use SugarCraft\Constraints\Region;
  *
  * Nothing in this library used to prove that split/allocation results tile the
  * available span: the dock had a HEIGHT sweep (DockLayoutTest) but no width
- * sibling, and the solver's tiling guarantees only had point cases. sugar-crush
+ * sibling, and the solver's tiling guarantees only had point cases. candy-code
  * depends on exactly this invariant for its docked frame — a split that silently
  * loses a column grows a gutter or clips the last pane every resize.
  *

@@ -11,7 +11,7 @@ use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\LineKind;
 
 /**
- * Pure-engine pins ported from sugar-crush's Edit/Write suites
+ * Pure-engine pins ported from candy-code's Edit/Write suites
  * (tests/Tools/BuiltIn/EditTest.php, WriteTest.php) — the byte shapes those
  * tools asserted through `ToolResult::diff()` are asserted here directly
  * against the extracted engine, which is exactly what they pinned when the

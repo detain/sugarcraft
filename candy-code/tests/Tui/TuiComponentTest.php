@@ -1,0 +1,596 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Tui;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Tui\Components\AgentsPane;
+use SugarCraft\Code\Tui\Components\ChatPane;
+use SugarCraft\Code\Tui\Components\FilesPane;
+use SugarCraft\Code\Tui\Components\InputPane;
+use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Components\SettingsPane;
+use SugarCraft\Code\Tui\Components\SkillsPane;
+use SugarCraft\Code\Tui\Components\ToolsPane;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\Tui\Renderer;
+use SugarCraft\Core\Util\ColorProfile;
+
+/**
+ * @see ChatPane
+ * @see InputPane
+ * @see MenuBar
+ * @see SkillsPane
+ * @see AgentsPane
+ * @see FilesPane
+ * @see ToolsPane
+ */
+final class TuiComponentTest extends TestCase
+{
+    private ProviderInterface $provider;
+
+    /**
+     * The exact SGR bytes a Sprinkles Style emits for this colour as a
+     * foreground. Style's default profile is TrueColor, so this is what the
+     * pane output actually carries - derived from the theme rather than
+     * hardcoded, because the whole point of W3 is that the shell's colours are
+     * the PALETTE's now and a literal here would re-freeze one palette.
+     */
+    private static function fg(\SugarCraft\Core\Util\Color $c): string
+    {
+        return $c->toFg(ColorProfile::TrueColor);
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Renderer::resetSizeCache();
+
+        $this->provider = $this->createMock(ProviderInterface::class);
+        $this->provider->method('name')->willReturn('TestProvider');
+    }
+
+    protected function tearDown(): void
+    {
+        Renderer::resetSizeCache();
+        parent::tearDown();
+    }
+
+    private function makeApp(?Pane $pane = null, array $messages = [], array $contextFiles = [], array $enabledSkills = []): App
+    {
+        $app = App::new($this->provider, 'test-model');
+        if ($pane !== null) {
+            $app = $app->withPane($pane);
+        }
+        foreach ($messages as $msg) {
+            $app = $app->withMessage($msg);
+        }
+        if ($contextFiles !== []) {
+            $app = $app->withContextFiles($contextFiles);
+        }
+        if ($enabledSkills !== []) {
+            $app = $app->withEnabledSkills($enabledSkills);
+        }
+        return $app;
+    }
+
+    // =========================================================================
+    // ChatPane Tests (Extended)
+    // =========================================================================
+
+    /**
+     * @testdox ChatPane::render() produces non-empty output
+     */
+    public function testChatPaneRenderProducesNonEmptyOutput(): void
+    {
+        $app = $this->makeApp();
+        Renderer::setSize(120, 40);
+
+        $output = ChatPane::render($app, 120, 40);
+
+        $this->assertIsString($output);
+        $this->assertNotEmpty($output);
+    }
+
+    /**
+     * @testdox ChatPane::render() contains expected border styling
+     */
+    public function testChatPaneContainsExpectedBorderStyling(): void
+    {
+        $app = $this->makeApp(Pane::Chat);
+        Renderer::setSize(120, 40);
+
+        $output = ChatPane::render($app, 120, 40);
+
+        // Should contain rounded border characters and 'chat' title
+        $this->assertStringContainsString('┌', $output);
+        $this->assertStringContainsString('┐', $output);
+        $this->assertStringContainsString('└', $output);
+        $this->assertStringContainsString('┘', $output);
+        $this->assertStringContainsString('chat', $output);
+    }
+
+    /**
+     * @testdox ChatPane::render() shows "Welcome to CandyCode!" when no messages
+     */
+    public function testChatPaneShowsWelcomeMessageWhenNoMessages(): void
+    {
+        $app = $this->makeApp();
+        Renderer::setSize(120, 40);
+
+        $output = ChatPane::render($app, 120, 40);
+
+        $this->assertStringContainsString('Welcome to CandyCode', $output);
+    }
+
+    /**
+     * @testdox ChatPane::render() border color changes based on pane focus
+     */
+    public function testChatPaneBorderColorChangesBasedOnPaneFocus(): void
+    {
+        Renderer::setSize(120, 40);
+
+        // Chat pane focused - should carry the palette's `primary`
+        $appFocused = $this->makeApp(Pane::Chat);
+        $outputFocused = ChatPane::render($appFocused, 120, 40);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
+
+        // Chat pane not focused - should carry the palette's (contrast-checked) `border`
+        $appUnfocused = $this->makeApp(Pane::Skills);
+        $outputUnfocused = ChatPane::render($appUnfocused, 120, 40);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
+    }
+
+    // =========================================================================
+    // InputPane Tests (Extended)
+    // =========================================================================
+
+    /**
+     * @testdox InputPane::render() produces non-empty output
+     */
+    public function testInputPaneRenderProducesNonEmptyOutput(): void
+    {
+        $app = $this->makeApp();
+        Renderer::setSize(120, 40);
+
+        $output = InputPane::render($app, 120);
+
+        $this->assertIsString($output);
+        $this->assertNotEmpty($output);
+    }
+
+    /**
+     * @testdox InputPane::render() contains "input" in the output
+     */
+    public function testInputPaneContainsInputInOutput(): void
+    {
+        $app = $this->makeApp();
+        Renderer::setSize(120, 40);
+
+        $output = InputPane::render($app, 120);
+
+        $this->assertStringContainsString('input', $output);
+    }
+
+    /**
+     * @testdox InputPane::render() border color changes based on pane focus
+     */
+    public function testInputPaneBorderColorChangesBasedOnPaneFocus(): void
+    {
+        Renderer::setSize(120, 40);
+
+        // Input pane focused
+        $appFocused = $this->makeApp(Pane::Input);
+        $outputFocused = InputPane::render($appFocused, 120);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
+
+        // Input pane not focused
+        $appUnfocused = $this->makeApp(Pane::Chat);
+        $outputUnfocused = InputPane::render($appUnfocused, 120);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
+    }
+
+    // =========================================================================
+    // MenuBar Tests
+    // =========================================================================
+
+    /**
+     * @testdox MenuBar::render() produces non-empty output with menu items
+     */
+    public function testMenuBarRenderProducesNonEmptyOutputWithMenuItems(): void
+    {
+        $app = $this->makeApp(Pane::Chat);
+
+        $output = MenuBar::render($app);
+
+        $this->assertIsString($output);
+        $this->assertNotEmpty($output);
+        // One menu per CommandRegistry category, so the bar can only
+        // advertise commands the app actually dispatches.
+        $this->assertStringContainsString('Session', $output);
+        $this->assertStringContainsString('Model', $output);
+        $this->assertStringContainsString('Appearance', $output);
+        $this->assertStringContainsString('Agents', $output);
+        $this->assertStringContainsString('Workflow', $output);
+        $this->assertStringContainsString('Memory', $output);
+    }
+
+    // =========================================================================
+    // SkillsPane Tests
+    // =========================================================================
+
+    /**
+     * @testdox SkillsPane::render() shows "(no skills enabled)" when empty
+     */
+    public function testSkillsPaneShowsNoSkillsEnabledWhenEmpty(): void
+    {
+        $app = $this->makeApp(Pane::Skills);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('(no skills enabled)', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() shows skills when enabled
+     */
+    public function testSkillsPaneShowsSkillsWhenEnabled(): void
+    {
+        $app = $this->makeApp(Pane::Skills, [], [], ['php-best-practices', 'scaffold-library', 'write-phpunit-test']);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('php-best-practices', $output);
+        $this->assertStringContainsString('scaffold-library', $output);
+        $this->assertStringContainsString('write-phpunit-test', $output);
+        // Should NOT contain the empty state message
+        $this->assertStringNotContainsString('(no skills enabled)', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() border color changes based on pane focus
+     */
+    public function testSkillsPaneBorderColorChangesBasedOnPaneFocus(): void
+    {
+        Renderer::setSize(120, 40);
+
+        // Skills pane focused
+        $appFocused = $this->makeApp(Pane::Skills);
+        $outputFocused = SkillsPane::render($appFocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
+
+        // Skills pane not focused
+        $appUnfocused = $this->makeApp(Pane::Chat);
+        $outputUnfocused = SkillsPane::render($appUnfocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
+    }
+
+    /**
+     * @testdox SkillsPane::render() shows the picker list when OpenSkillPickerMsg populated skillPickerOptions
+     */
+    public function testSkillsPaneShowsPickerOptionsWhenOpen(): void
+    {
+        $registry = new \SugarCraft\Code\Skills\SkillRegistry();
+        $palette = \SugarCraft\Code\Skills\Skill::parse(
+            "---\ndescription: Palette skill\nuser-invocable: true\n---\n\nContent.",
+            'palette-skill'
+        );
+        $registry->register(['palette-skill' => $palette]);
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withPane(Pane::Skills);
+        [$app] = $app->update(new \SugarCraft\Code\App\OpenSkillPickerMsg());
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('palette-skill', $output);
+        $this->assertStringContainsString('select a skill', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() renders a Skill object in enabledSkills by name, not a fatal type error
+     */
+    public function testSkillsPaneRendersSkillObjectInEnabledSkills(): void
+    {
+        $skill = \SugarCraft\Code\Skills\Skill::parse(
+            "---\ndescription: Object skill\n---\n\nContent.",
+            'object-skill'
+        );
+        $app = App::new($this->provider, 'test-model')->withEnabledSkills([$skill]);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('object-skill', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() prefixes a foreign skill with a coloured provenance badge
+     */
+    public function testSkillsPanePickerShowsForeignProvenanceBadge(): void
+    {
+        $app = $this->appWithPickerSkill(\SugarCraft\Code\Skills\SkillSource::Claude);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        // Badge text, its own theme token, and the badge preceding the name.
+        $this->assertStringContainsString('[claude]', $output);
+        $this->assertStringContainsString(self::fg($app->theme()->shellWarning), $output);
+        $this->assertMatchesRegularExpression('/\[claude\].*imported-skill/s', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() renders an opencode-sourced skill with the opencode badge
+     */
+    public function testSkillsPanePickerShowsOpencodeProvenanceBadge(): void
+    {
+        $app = $this->appWithPickerSkill(\SugarCraft\Code\Skills\SkillSource::Opencode);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('[opencode]', $output);
+        $this->assertStringContainsString(self::fg($app->theme()->shellInfo), $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() adds no badge for a native skill
+     */
+    public function testSkillsPanePickerOmitsBadgeForNativeSkill(): void
+    {
+        $app = $this->appWithPickerSkill(\SugarCraft\Code\Skills\SkillSource::Native);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('imported-skill', $output);
+        $this->assertStringNotContainsString('[claude]', $output);
+        $this->assertStringNotContainsString('[opencode]', $output);
+        $this->assertStringNotContainsString('[spec]', $output);
+    }
+
+    /**
+     * Build an App whose skill picker is open over a single user-invocable
+     * skill tagged with $source.
+     */
+    private function appWithPickerSkill(\SugarCraft\Code\Skills\SkillSource $source): App
+    {
+        $skill = new \SugarCraft\Code\Skills\Skill(
+            name: 'imported-skill',
+            description: 'Imported skill',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'inline',
+            paths: [],
+            content: 'Content.',
+            sourcePath: '/tmp/imported-skill/SKILL.md',
+            source: $source,
+        );
+        $registry = new \SugarCraft\Code\Skills\SkillRegistry();
+        $registry->register(['imported-skill' => $skill]);
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withPane(Pane::Skills);
+        [$app] = $app->update(new \SugarCraft\Code\App\OpenSkillPickerMsg());
+
+        return $app;
+    }
+
+    // =========================================================================
+    // AgentsPane Tests
+    // =========================================================================
+
+    /**
+     * @testdox AgentsPane::render() shows "(no active agents)"
+     */
+    public function testAgentsPaneShowsNoActiveAgents(): void
+    {
+        $app = $this->makeApp(Pane::Agents);
+        Renderer::setSize(120, 40);
+
+        $output = AgentsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('(no active agents)', $output);
+    }
+
+    /**
+     * Pins what {@see AgentsPane} IS: a preserved dormant seam, not the widget
+     * the shell paints for `Pane::Agents`. {@see Renderer::renderView()}
+     * diverts that pane to the full-width AgentDashboardPane before any
+     * sidebar is built, so `rightSidebar()`'s `Pane::Agents` arm is never
+     * reached on a real frame.
+     *
+     * Asserted because the two boxes are trivially confusable by eye —
+     * AgentDashboardPane delegates to AgentViewPane, which draws the same
+     * `' agents '` title and the same `(no active agents)` empty state. Width
+     * is the only thing that tells them apart, and a docblock in
+     * `src/Renderer.php` once claimed the opposite on the strength of that
+     * resemblance. Neither this seam nor the arm may be deleted; if a
+     * side-by-side layout ever re-enters through them, this test is what has
+     * to change first.
+     */
+    public function testTheShellPaintsTheFullWidthDashboardForPaneAgentsNotTheAgentsPaneSeam(): void
+    {
+        $app = $this->makeApp(Pane::Agents);
+        Renderer::setSize(120, 40);
+
+        $view = Renderer::renderView($app, 120, 40);
+        $frame = $view instanceof \SugarCraft\Core\View ? $view->body : (string) $view;
+
+        $sidebar = AgentsPane::render($app, 30, 20);
+        $this->assertStringNotContainsString(
+            $sidebar,
+            $frame,
+            'the sidebar-sized AgentsPane block must not appear in a Pane::Agents frame',
+        );
+
+        $agentsRow = null;
+        foreach (explode("\n", $frame) as $line) {
+            if (str_contains($line, 'agents')) {
+                $agentsRow = $line;
+                break;
+            }
+        }
+
+        $this->assertNotNull($agentsRow, 'the frame must still draw an agents box');
+        $this->assertSame(
+            120,
+            \SugarCraft\Core\Util\Width::of($agentsRow),
+            'the box actually painted is the full-width dashboard, not the quarter-width sidebar',
+        );
+    }
+
+    /**
+     * @testdox AgentsPane::render() border color changes based on pane focus
+     */
+    public function testAgentsPaneBorderColorChangesBasedOnPaneFocus(): void
+    {
+        Renderer::setSize(120, 40);
+
+        // Agents pane focused
+        $appFocused = $this->makeApp(Pane::Agents);
+        $outputFocused = AgentsPane::render($appFocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
+
+        // Agents pane not focused
+        $appUnfocused = $this->makeApp(Pane::Chat);
+        $outputUnfocused = AgentsPane::render($appUnfocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
+    }
+
+    // =========================================================================
+    // FilesPane Tests
+    // =========================================================================
+
+    /**
+     * @testdox FilesPane::render() shows "(no files attached)" when empty
+     */
+    public function testFilesPaneShowsNoFilesAttachedWhenEmpty(): void
+    {
+        $app = $this->makeApp(Pane::Files);
+        Renderer::setSize(120, 40);
+
+        $output = FilesPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('(no files attached)', $output);
+    }
+
+    /**
+     * @testdox FilesPane::render() shows files when attached
+     */
+    public function testFilesPaneShowsFilesWhenAttached(): void
+    {
+        $app = $this->makeApp(
+            Pane::Files,
+            [],
+            ['/path/to/project/src/Component.php', '/path/to/project/tests/ComponentTest.php']
+        );
+        Renderer::setSize(120, 40);
+
+        $output = FilesPane::render($app, 40, 20);
+
+        // Should show basenames of files
+        $this->assertStringContainsString('Component.php', $output);
+        $this->assertStringContainsString('ComponentTest.php', $output);
+        // Should NOT contain empty state message
+        $this->assertStringNotContainsString('(no files attached)', $output);
+    }
+
+    /**
+     * @testdox FilesPane::render() border color changes based on pane focus
+     */
+    public function testFilesPaneBorderColorChangesBasedOnPaneFocus(): void
+    {
+        Renderer::setSize(120, 40);
+
+        // Files pane focused
+        $appFocused = $this->makeApp(Pane::Files);
+        $outputFocused = FilesPane::render($appFocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
+
+        // Files pane not focused
+        $appUnfocused = $this->makeApp(Pane::Chat);
+        $outputUnfocused = FilesPane::render($appUnfocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
+    }
+
+    // =========================================================================
+    // ToolsPane Tests
+    // =========================================================================
+
+    /**
+     * @testdox ToolsPane::render() shows "(tool history empty)"
+     */
+    public function testToolsPaneShowsToolHistoryEmpty(): void
+    {
+        $app = $this->makeApp(Pane::Tools);
+        Renderer::setSize(120, 40);
+
+        $output = ToolsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('(tool history empty)', $output);
+    }
+
+    /**
+     * @testdox ToolsPane::render() border color changes based on pane focus
+     */
+    public function testToolsPaneBorderColorChangesBasedOnPaneFocus(): void
+    {
+        Renderer::setSize(120, 40);
+
+        // Tools pane focused
+        $appFocused = $this->makeApp(Pane::Tools);
+        $outputFocused = ToolsPane::render($appFocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appFocused->theme()->shellPrimary), $outputFocused);
+
+        // Tools pane not focused
+        $appUnfocused = $this->makeApp(Pane::Chat);
+        $outputUnfocused = ToolsPane::render($appUnfocused, 40, 20);
+        $this->assertStringContainsString(self::fg($appUnfocused->theme()->border), $outputUnfocused);
+        $this->assertStringNotContainsString(self::fg($appUnfocused->theme()->shellPrimary), $outputUnfocused);
+    }
+
+    // =========================================================================
+    // Integration Tests
+    // =========================================================================
+
+    /**
+     * @testdox All pane components render without errors with various pane focus states
+     */
+    public function testAllPaneComponentsRenderWithoutErrorsWithVariousFocusStates(): void
+    {
+        // Keyed by backing string: PHP enums cannot be used as array keys.
+        $panes = [
+            Pane::Chat->value => fn() => ChatPane::render($this->makeApp(Pane::Chat), 120, 40),
+            Pane::Input->value => fn() => InputPane::render($this->makeApp(Pane::Input), 120),
+            Pane::Skills->value => fn() => SkillsPane::render($this->makeApp(Pane::Skills), 40, 20),
+            Pane::Agents->value => fn() => AgentsPane::render($this->makeApp(Pane::Agents), 40, 20),
+            Pane::Files->value => fn() => FilesPane::render($this->makeApp(Pane::Files), 40, 20),
+            Pane::Tools->value => fn() => ToolsPane::render($this->makeApp(Pane::Tools), 40, 20),
+            Pane::Settings->value => fn() => SettingsPane::render($this->makeApp(Pane::Settings), 40, 20),
+            Pane::Help->value => fn() => ChatPane::render($this->makeApp(Pane::Help), 120, 40),
+        ];
+
+        foreach ($panes as $paneName => $renderFn) {
+            Renderer::resetSizeCache();
+            $output = $renderFn();
+            $this->assertNotEmpty($output, "Failed for pane: $paneName");
+        }
+    }
+}

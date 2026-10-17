@@ -167,7 +167,7 @@
 				}
 			}
 		},
-		"sugarcrush-orchestrator": {
+		"candy-code-orchestrator": {
 			"permission": {
 				"edit": "deny",
 				"write": "allow",
@@ -179,7 +179,7 @@
 				"todoread": "deny"
 			}
 		},
-		"sugarcrush-phase-lead": {
+		"candy-code-phase-lead": {
 			"permission": {
 				"edit": "deny",
 				"write": "allow",
@@ -191,7 +191,7 @@
 				"todoread": "deny"
 			}
 		},
-		"sugarcrush-reviewer": {
+		"candy-code-reviewer": {
 			"temperature": 0.1,
 			"permission": {
 				"edit": "deny",
@@ -214,7 +214,7 @@
 				"delegation_list": "allow"
 			}
 		},
-		"sugarcrush-committer": {
+		"candy-code-committer": {
 			"permission": {
 				"edit": "deny",
 				"write": "deny",
@@ -237,7 +237,7 @@
 				}
 			}
 		},
-		"sugarcrush-feat-orchestrator": {
+		"candy-code-feat-orchestrator": {
 			"permission": {
 				"edit": "deny",
 				"write": "allow",
@@ -249,7 +249,7 @@
 				"todoread": "deny"
 			}
 		},
-		"sugarcrush-feat-phase-lead": {
+		"candy-code-feat-phase-lead": {
 			"permission": {
 				"edit": "deny",
 				"write": "allow",
@@ -261,7 +261,7 @@
 				"todoread": "deny"
 			}
 		},
-		"sugarcrush-feat-reviewer": {
+		"candy-code-feat-reviewer": {
 			"temperature": 0.1,
 			"permission": {
 				"edit": "deny",
@@ -286,7 +286,7 @@
 				"delegation_list": "allow"
 			}
 		},
-		"sugarcrush-feat-committer": {
+		"candy-code-feat-committer": {
 			"permission": {
 				"edit": "deny",
 				"write": "deny",
@@ -309,13 +309,13 @@
 				}
 			}
 		},
-		"sugarcrush-feat-final-reviewer": {
+		"candy-code-feat-final-reviewer": {
 			"temperature": 0.1,
 			"permission": {
 				"edit": "deny",
 				"write": {
 					"*": "deny",
-					".sugar-crush-build/feat-audit-log.json": "allow"
+					".candy-code-build/feat-audit-log.json": "allow"
 				},
 				"task": "deny",
 				"bash": {

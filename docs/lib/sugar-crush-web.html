@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SugarCrushWeb — SugarCraft</title>
-<meta name="description" content="SugarCrushWeb: browser UI for sugar-crush's WebSocket server mode. A Vite + Vue 3 bundle committed as dist/ and located by a one-class PHP shim, so sugarcrush serve needs no Node.">
-<meta property="og:title" content="SugarCrushWeb — SugarCraft">
-<meta property="og:description" content="The browser face of sugar-crush's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.">
+<title>CandyCodeWeb — SugarCraft</title>
+<meta name="description" content="CandyCodeWeb: browser UI for candy-code's WebSocket server mode. A Vite + Vue 3 bundle committed as dist/ and located by a one-class PHP shim, so candy-code serve needs no Node.">
+<meta property="og:title" content="CandyCodeWeb — SugarCraft">
+<meta property="og:description" content="The browser face of candy-code's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-crush-web.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-crush-web.html">
 <meta property="og:type" content="website">
@@ -35,10 +35,10 @@
     <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All 21 apps</a></p>
 
     <div class="detail-header">
-      <img class="detail-icon" src="../img/icons/sugar-crush-web.png" alt="SugarCrushWeb">
+      <img class="detail-icon" src="../img/icons/sugar-crush-web.png" alt="CandyCodeWeb">
       <div>
-        <h2>SugarCrushWeb</h2>
-        <p class="detail-sub">Browser UI for sugar-crush's server mode</p>
+        <h2>CandyCodeWeb</h2>
+        <p class="detail-sub">Browser UI for candy-code's server mode</p>
         <div class="detail-meta">
           <span class="tag-chip accent">app satellite</span>
           <span class="tag-chip">web-ui</span>
@@ -47,9 +47,9 @@
         </div>
       </div>
     </div>
-    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-crush-web"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-crush-web" alt="SugarCrushWeb code coverage" loading="lazy"></a></p>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-crush-web"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-crush-web" alt="CandyCodeWeb code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The browser face of <a href="sugar-crush.html">SugarCrush</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>sugarcrush serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
+    <p class="lede" style="margin-top: 28px;">The browser face of <a href="candy-code.html">CandyCode</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>sugarcrush serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
 
     <p><strong>Multi-session.</strong> Over the <code>sugarcrush.v1</code> protocol: a sessions sidebar, a virtualised transcript with tool cards and diffs, permission cards, a composer that queues, steers or interrupts, and a status bar with a changeable permission mode; tabs and a tiled grid of up to nine live sessions; a server-wide approvals drawer; a settings form generated from the server's schema with a diff preview before saving; the Agents (with an agent view to message, pause or cancel a run), Todo, Background, Workflows and Memory panels; a command palette (Ctrl+K); a folder picker for a new session's project directory when the server runs with <code>--allow-dir-browse</code>; and reconnect-and-resume from a gap-free event cursor.</p>
 
@@ -67,7 +67,7 @@ echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.
     <div class="feature-grid">
       <div class="feature"><strong>Committed dist/</strong><span>The built bundle is part of the package, like the committed demo GIFs. Content-hashed file names and no timestamps make a clean rebuild byte-identical.</span></div>
       <div class="feature"><strong>CI parity gate</strong><span>The web workflow runs npm ci, lint, typecheck, unit tests and a build, then fails if the committed dist/ differs from what the source produces.</span></div>
-      <div class="feature"><strong>One-class shim</strong><span>Assets::distPath() / manifest() / version(). sugar-crush lists the package under suggest, so headless installs stay lean.</span></div>
+      <div class="feature"><strong>One-class shim</strong><span>Assets::distPath() / manifest() / version(). candy-code lists the package under suggest, so headless installs stay lean.</span></div>
       <div class="feature"><strong>Lean Packagist dist</strong><span>archive.exclude drops src-web/, node_modules/ and the Node config, so the Composer download is the bundle plus the shim.</span></div>
     </div>
 

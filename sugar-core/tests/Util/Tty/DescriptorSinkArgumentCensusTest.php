@@ -395,8 +395,8 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'identity two lines above, so the literal and the stream cannot disagree.',
         ],
 
-        // ---- sugar-crush -------------------------------------------------
-        'sugar-crush/src/Support/ProcessContainment.php::->fcntl($fd)' => [
+        // ---- candy-code -------------------------------------------------
+        'candy-code/src/Support/ProcessContainment.php::->fcntl($fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. closeOnExec() (audit B3): FD_CLOEXEC on a stream_socket_pair() end. $fd '
             . 'comes from descriptorNumber(), which matches the stream\'s st_dev+st_ino against '
@@ -404,27 +404,27 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'and answers null (so no call is made) when no entry or more than one matches. '
             . 'Never a cast of a PHP stream.',
         ],
-        'sugar-crush/src/Tools/IgnoreRules.php::->close($start)' => [
+        'candy-code/src/Tools/IgnoreRules.php::->close($start)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the start-state closure in simulate(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
         ],
-        'sugar-crush/src/Tools/IgnoreRules.php::->close($next)' => [
+        'candy-code/src/Tools/IgnoreRules.php::->close($next)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the `/` that ends one `(?:[^/]+/)` iteration in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
         ],
-        'sugar-crush/src/Tools/IgnoreRules.php::->close($next) #2' => [
+        'candy-code/src/Tools/IgnoreRules.php::->close($next) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, a byte inside a `[...]` class in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
         ],
-        'sugar-crush/src/Tools/IgnoreRules.php::->close($next) #3' => [
+        'candy-code/src/Tools/IgnoreRules.php::->close($next) #3' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, a literal, `?`, `*` or `**` advance in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
         ],
 
-        // ---- sugar-crush Ws/Protocol/Server session-close family ---------
-        // Imported into sugar-core's scan path by the sugar-crush merges
+        // ---- candy-code Ws/Protocol/Server session-close family ---------
+        // Imported into sugar-core's scan path by the candy-code merges
         // (campaign re-verify 2026-10-08). Every `->close(...)` below is a
-        // method on sugar-crush's OWN objects — a WebSocket close code, a
+        // method on candy-code's OWN objects — a WebSocket close code, a
         // session release, or an LSP didClose — never the libc symbol. The
         // scanner reports them because its method-sink list is derived from
         // Libc::cdef() and forms no opinion about the receiver; each row
@@ -433,86 +433,86 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         // testNoSiteIsSpelledInAWayTheScannerCannotClassify): a lone string,
         // a (string) cast, a first-class-callable `...`, and a ternary.
 
-        'sugar-crush/src/Cli/Attach.php::->close(\'detached\')' => [
+        'candy-code/src/Cli/Attach.php::->close(\'detached\')' => [
             DescriptorSinkScanner::UNCLASSIFIED,
             'NOT A LIBC CALL, a session release in a finally block: $host->close(\'detached\') on '
             . 'Host\RemoteSessionHost, whose close(string $reason = \'client closing\') sends the RPC '
             . 'goodbye. The lone string literal is classify()\'s single-token fallthrough -- the exact '
             . 'shape its control fixture pins as UNCLASSIFIED, and a descriptor is never spelled as a word.',
         ],
-        'sugar-crush/src/Host/SessionHub.php::->close((string)$sessionId)' => [
+        'candy-code/src/Host/SessionHub.php::->close((string)$sessionId)' => [
             DescriptorSinkScanner::UNCLASSIFIED,
             'NOT A LIBC CALL, closeAll() releasing one hub session: $this->close((string) $sessionId, '
             . 'force: true) into SessionHub::close(string $sessionId, bool $force). A (string) cast '
             . 'produces text, never an int descriptor, so the classifier names no shape for it -- '
             . 'teaching one would widen the ladder for an argument that can never be a sink.',
         ],
-        'sugar-crush/src/LSP/LspClient.php::->close($connection)' => [
+        'candy-code/src/LSP/LspClient.php::->close($connection)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the finally-arm teardown in freshDiagnostics(): $this->close($connection, '
             . '$uri) into LspClient\'s private close(LspConnectionInterface $connection, string $uri), '
             . 'which sends textDocument/didClose. First argument is a connection object, not a descriptor.',
         ],
-        'sugar-crush/src/LSP/LspClient.php::->close($connection) #2' => [
+        'candy-code/src/LSP/LspClient.php::->close($connection) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the same didClose helper reached from the outline() finally arm -- the '
             . 'second spelling-identical site in the file, judged separately as the ordinal demands.',
         ],
-        'sugar-crush/src/Protocol/Dispatcher.php::->close(Frame::CLOSE_TOO_BIG)' => [
+        'candy-code/src/Protocol/Dispatcher.php::->close(Frame::CLOSE_TOO_BIG)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, a WebSocket protocol-violation close: $connection->close(1009, \'send '
             . 'server.hello first\') on Server\Ws\Connection, whose close(int $code, string $reason) '
             . 'frames an RFC6455 close. The int is a status code, not a descriptor.',
         ],
-        'sugar-crush/src/Protocol/Dispatcher.php::->close(self::CLOSE_NOT_INITIALIZED)' => [
+        'candy-code/src/Protocol/Dispatcher.php::->close(self::CLOSE_NOT_INITIALIZED)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the not-initialized refusal: close(4002, \'not initialized\') -- a private '
             . 'use-range WebSocket code on the same Ws\Connection::close(int $code, string $reason).',
         ],
-        'sugar-crush/src/Protocol/Methods/SessionMethods.php::->close(...)' => [
+        'candy-code/src/Protocol/Methods/SessionMethods.php::->close(...)' => [
             DescriptorSinkScanner::UNCLASSIFIED,
             'NOT A LIBC CALL, not even a call: `self::close(...)` is PHP 8.1 first-class-callable syntax '
             . 'producing the Closure registered as the session.close RPC handler. There is no argument '
             . 'list to classify -- the `...` is the syntax itself -- so UNCLASSIFIED is honest and the '
             . 'row exists to say so.',
         ],
-        'sugar-crush/src/Protocol/Methods/SessionMethods.php::->close($sessionId)' => [
+        'candy-code/src/Protocol/Methods/SessionMethods.php::->close($sessionId)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the session.close handler releasing through Host\SessionHub::close(string '
             . '$sessionId, bool $force). First argument is a session id string.',
         ],
-        'sugar-crush/src/Protocol/Methods/SessionMethods.php::->close($sessionId) #2' => [
+        'candy-code/src/Protocol/Methods/SessionMethods.php::->close($sessionId) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the same hub release reached from the session.delete handler before it '
             . 'destroys the stored session.',
         ],
-        'sugar-crush/src/Server/Server.php::->close(self::CLOSE_CREDENTIALS_ROTATED)' => [
+        'candy-code/src/Server/Server.php::->close(self::CLOSE_CREDENTIALS_ROTATED)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, reloadToken() signing every socket out: close(4001, ...) with a private-range '
             . 'WebSocket code on Ws\Connection::close(int $code, string $reason).',
         ],
-        'sugar-crush/src/Server/Server.php::->close(Frame::CLOSE_GOING_AWAY)' => [
+        'candy-code/src/Server/Server.php::->close(Frame::CLOSE_GOING_AWAY)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, stop() draining listeners: close(1001, $reason) -- the RFC6455 going-away '
             . 'code on the same Ws\Connection method.',
         ],
-        'sugar-crush/src/Server/Workspace/WorkspaceHostClient.php::->close($reason)' => [
+        'candy-code/src/Server/Workspace/WorkspaceHostClient.php::->close($reason)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, stop() taking the workspace child down: $this->rpc->close($reason) on the '
             . 'readonly Host\RemoteSessionHost, whose close(string $reason) is the RPC goodbye.',
         ],
-        'sugar-crush/src/Server/Ws/Connection.php::->close(Frame::CLOSE_BAD_DATA)' => [
+        'candy-code/src/Server/Ws/Connection.php::->close(Frame::CLOSE_BAD_DATA)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, a self-call on the binary-frame refusal: $this->close(1003, \'text frames '
             . 'only\') into this class\'s own close(int $code, string $reason) -- it SENDS the WebSocket '
             . 'close frame, it does not touch a descriptor.',
         ],
-        'sugar-crush/src/Server/Ws/Connection.php::->close(Frame::CLOSE_SRV_ERR)' => [
+        'candy-code/src/Server/Ws/Connection.php::->close(Frame::CLOSE_SRV_ERR)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the handler-exception refusal: $this->close(1011, \'internal error\') on the '
             . 'same method -- status code, not descriptor.',
         ],
-        'sugar-crush/src/Server/Ws/Connection.php::->close($code===Frame::CLOSE_NO_STATUS?Frame::CLOSE_NORMAL:$code)' => [
+        'candy-code/src/Server/Ws/Connection.php::->close($code===Frame::CLOSE_NO_STATUS?Frame::CLOSE_NORMAL:$code)' => [
             DescriptorSinkScanner::UNCLASSIFIED,
             'NOT A LIBC CALL, onControl() echoing the client\'s close frame: the ternary picks between two '
             . 'int STATUS codes. classify() answers UNCLASSIFIED for an operator-laden expression rooted '
@@ -520,32 +520,32 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . '-- naming ternaries would mean unpinning the control, and either branch here could in '
             . 'principle hide anything. The per-site judgement is the honest resolution.',
         ],
-        'sugar-crush/src/Server/Ws/Outbox.php::->close(self::CLOSE_TRY_AGAIN_LATER)' => [
+        'candy-code/src/Server/Ws/Outbox.php::->close(self::CLOSE_TRY_AGAIN_LATER)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the overflow grace timer giving up on a slow client: $this->connection->close('
             . '1013, \'client too slow; reconnect and resubscribe\') on Ws\Connection -- a status code.',
         ],
 
-        // ---- sugar-crush daemon/relaunch libc sites (genuine sinks) ------
-        'sugar-crush/src/Support/Daemonize.php::->close($null)' => [
+        // ---- candy-code daemon/relaunch libc sites (genuine sinks) ------
+        'candy-code/src/Support/Daemonize.php::->close($null)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. redirectStdio() opens /dev/null through the FFI libc, dup2()s it onto stdin, and '
             . 'closes the spare only when $null > 2 -- a real descriptor from a real open(2), released '
             . 'exactly once and never one of the std trio.',
         ],
-        'sugar-crush/src/Support/Daemonize.php::->close($log)' => [
+        'candy-code/src/Support/Daemonize.php::->close($log)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. The same redirect opens the log file (0o600), dup2()s it onto stdout and stderr, '
             . 'and closes the spare only when $log > 2. Genuine descriptor, guarded release.',
         ],
-        'sugar-crush/src/Support/ForkedChild.php::->close((int)$entry)' => [
+        'candy-code/src/Support/ForkedChild.php::->close((int)$entry)' => [
             DescriptorSinkScanner::INT_CAST,
             'CORRECT. closeInheritedServerFds() walks scandir(\'/proc/self/fd\'); $entry is a directory '
             . 'NAME already gated by ctype_digit() and (int) $entry > 2 before the dev+ino match, so the '
             . 'cast turns the fd number itself out of its digit string -- the safe direction of (int), '
             . 'not a resource cast. The sink is the FFI cdef `int close(int fd)`.',
         ],
-        'sugar-crush/src/Support/SessionRelaunch.php::->fcntl((int)$entry)' => [
+        'candy-code/src/Support/SessionRelaunch.php::->fcntl((int)$entry)' => [
             DescriptorSinkScanner::INT_CAST,
             'CORRECT. closeOnExec() applies the same scandir/ctype_digit/>2 gate before casting the '
             . 'directory name to the fd number for F_SETFD|FD_CLOEXEC, per-fd in a try/catch. Digit '
@@ -778,7 +778,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 . "RESOLUTION: teach the classifier that shape, respell the call, or -- only\n"
                 . "when the site is verifiably NOT a libc descriptor call -- roster its exact\n"
                 . "key with kind UNCLASSIFIED and a judgement opening 'NOT A LIBC CALL' (see\n"
-                . "the sugar-crush Ws rows for the format). Leaving a GENUINE sink unnamed is\n"
+                . "the candy-code Ws rows for the format). Leaving a GENUINE sink unnamed is\n"
                 . "the failure this whole census exists to make impossible.\n"
                 . var_export($unclassified, true),
         );

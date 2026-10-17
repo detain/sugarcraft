@@ -1,0 +1,199 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Permissions;
+
+use SugarCraft\Code\Backend\ChildChannel;
+use SugarCraft\Code\Events\PermissionResolved;
+
+/**
+ * What an approver answers about one ASK (roadmap 1.C-2): allow once, allow
+ * always, refuse — or nobody answered at all — plus the text the MODEL reads
+ * about it.
+ *
+ * WHY NOT `bool`, which is what {@see \SugarCraft\Code\Runtime::settleAsk()}
+ * took until this step. One bit cannot carry the two facts the frame channel
+ * (1.C-1) already delivers to the turn child:
+ *
+ * - **Who refused.** A reply of `reject` is somebody's decision about this
+ *   call ({@see DenialKind::Refused}, `Permission denied:`). A question the
+ *   turn ended underneath — the parent's end of the socket gone, a corrupt
+ *   stream — is not a decision at all ({@see DenialKind::Unanswered},
+ *   `Permission required:`). Folded into `false`, the second used to reach the
+ *   model and every refusal surface as the first.
+ * - **Why.** A rejection can carry feedback ("use rg instead"), and the
+ *   grandchild of a parallel Task batch is refused with a reason
+ *   ({@see ChildChannel::GRANDCHILD_REFUSAL}). Both reach the model through
+ *   {@see \SugarCraft\Code\Hooks\HookManager::resolveAsk()}'s `$feedback`,
+ *   which existed and had no producer.
+ *
+ * The approver contract stays BACKWARD COMPATIBLE: {@see of()} reads a
+ * literal `true` as {@see once()} and anything else that is not a verdict as
+ * a feedback-less {@see reject()}, so a `bool` approver (the console prompt,
+ * an embedder's closure) settles exactly as it always did — and a truthy
+ * object that is not a verdict (a {@see PermissionReply}, which every case of
+ * is) still grants nothing.
+ */
+final readonly class ApprovalVerdict
+{
+    /**
+     * @param ?PermissionReply $reply    the answer; null exactly when nobody answered
+     * @param string           $feedback model-visible text about a refusal — a
+     *                                   user's note (already labelled as theirs)
+     *                                   or the reason nobody could answer; empty
+     *                                   when there is nothing to add. On a
+     *                                   permitting verdict only a user's note
+     *                                   ({@see fromReply()}), which only a
+     *                                   question tool reads.
+     */
+    private function __construct(
+        public ?PermissionReply $reply,
+        public string $feedback = '',
+    ) {
+    }
+
+    /** Permit this one call. */
+    public static function once(): self
+    {
+        return new self(PermissionReply::Once);
+    }
+
+    /**
+     * Permit this one call, keeping feedback a relay carried home — already
+     * labelled by the verdict it was read from ({@see userNote()}), so it is
+     * not labelled twice. A parallel member's question answered with words
+     * (an `AskUser` choice, a server client's `once` + text) keeps the answer.
+     */
+    public static function onceRelayed(string $feedback): self
+    {
+        return new self(PermissionReply::Once, trim($feedback));
+    }
+
+    /** Permit this call and, where the asker allows it, the same question again. */
+    public static function always(): self
+    {
+        return new self(PermissionReply::Always);
+    }
+
+    /**
+     * Refuse the call. $reason is model-visible as it stands — use
+     * {@see rejectedByUser()} for a note a person typed.
+     */
+    public static function reject(string $reason = ''): self
+    {
+        return new self(PermissionReply::Reject, trim($reason));
+    }
+
+    /**
+     * Refuse the call with the user's own feedback, labelled as theirs so the
+     * model does not read a person's instruction as the harness's.
+     */
+    public static function rejectedByUser(string $note): self
+    {
+        return new self(PermissionReply::Reject, self::userNote($note));
+    }
+
+    /** Nobody answered — the question outlived whoever could have. */
+    public static function unanswered(string $reason = ''): self
+    {
+        return new self(null, trim($reason));
+    }
+
+    /**
+     * A {@see PermissionReply} with its optional note, as a person gave it.
+     *
+     * The note is kept on a permitting reply too, labelled as the user's
+     * (roadmap 5.7-2): for a question the model put itself — `AskUser`, or a
+     * server client answering `once` with text, or the modal's number key for
+     * a choice — the words ARE the answer
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\AskUserTool::answer()}). A
+     * permission gate ignores feedback on a verdict that permits
+     * ({@see \SugarCraft\Code\Hooks\HookManager}), so a note on an ordinary
+     * `once` changes nothing there.
+     */
+    public static function fromReply(PermissionReply $reply, string $note = ''): self
+    {
+        return match ($reply) {
+            PermissionReply::Once => new self(PermissionReply::Once, self::userNote($note)),
+            PermissionReply::Always => self::always(),
+            PermissionReply::Reject => self::rejectedByUser($note),
+        };
+    }
+
+    /** $note labelled as the person's own words, or '' for none. */
+    private static function userNote(string $note): string
+    {
+        $note = trim($note);
+
+        return $note === '' ? '' : 'the user said: ' . $note;
+    }
+
+    /**
+     * The settlement the frame channel delivered to the turn child.
+     *
+     * The note on a `reject` is the user's, EXCEPT the one refusal the child
+     * writes itself — a parallel Task grandchild that has no channel of its
+     * own — which is a reason, not a person speaking.
+     */
+    public static function fromResolution(PermissionResolved $resolution): self
+    {
+        if ($resolution->cancelled || $resolution->reply === null) {
+            return self::unanswered($resolution->note);
+        }
+
+        if ($resolution->reply === PermissionReply::Reject && $resolution->note === ChildChannel::GRANDCHILD_REFUSAL) {
+            return self::reject($resolution->note);
+        }
+
+        return self::fromReply($resolution->reply, $resolution->note);
+    }
+
+    /**
+     * Normalise whatever an approver returned. Only a literal `true` or a
+     * permitting verdict grants — see the class docblock.
+     */
+    public static function of(mixed $answer): self
+    {
+        if ($answer instanceof self) {
+            return $answer;
+        }
+
+        return $answer === true ? self::once() : self::reject();
+    }
+
+    public function permits(): bool
+    {
+        return $this->reply?->permits() === true;
+    }
+
+    public function isUnanswered(): bool
+    {
+        return $this->reply === null;
+    }
+
+    /**
+     * The denial kind this verdict produces, or null when it permits.
+     */
+    public function denialKind(): ?DenialKind
+    {
+        if ($this->permits()) {
+            return null;
+        }
+
+        return $this->isUnanswered() ? DenialKind::Unanswered : DenialKind::Refused;
+    }
+
+    /**
+     * The refusal text the model reads: the hook's question, then this
+     * verdict's feedback when there is any.
+     */
+    public function denialMessage(string $question): string
+    {
+        if ($this->feedback === '') {
+            return $question;
+        }
+
+        return $question === '' ? $this->feedback : $question . ' — ' . $this->feedback;
+    }
+}

@@ -131,10 +131,10 @@ describe('attention', () => {
     const { wire, stop } = await attending()
     wire.serverEvent('permission.asked', ask('k1', 'a'))
     await flushPromises()
-    expect(document.title).toBe('(1) SugarCrush')
+    expect(document.title).toBe('(1) CandyCode')
     wire.serverEvent('permission.settled', { sessionId: 'a', askId: 'k1' })
     await flushPromises()
-    expect(document.title).toBe('SugarCrush')
+    expect(document.title).toBe('CandyCode')
     stop()
   })
 

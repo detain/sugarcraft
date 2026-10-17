@@ -11,9 +11,9 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 
 /**
- * A sign-in code (from `sugarcrush serve url`) or the owner token
- * (`sugarcrush serve token`). The two cannot be told apart by shape — a
- * container's SUGARCRUSH_SERVER_TOKEN is any string of 32+ characters — so
+ * A sign-in code (from `candy-code serve url`) or the owner token
+ * (`candy-code serve token`). The two cannot be told apart by shape — a
+ * container's CANDY_CODE_SERVER_TOKEN is any string of 32+ characters — so
  * the code is tried first and the token second.
  */
 async function submit(): Promise<void> {

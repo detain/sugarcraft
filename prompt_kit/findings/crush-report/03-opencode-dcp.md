@@ -1,10 +1,10 @@
-# 03 — opencode-dynamic-context-pruning (DCP) vs sugar-crush
+# 03 — opencode-dynamic-context-pruning (DCP) vs candy-code
 
 Feeds steps: 0.2, 1.A-1, 1.B-1, 1.B-2, 1.B-3, 2.1, 2.2-1, 2.2-2, 2.3, 2.4-1, 2.4-2, 2.9, 2.12, 3.B-2, 3.B-3, 3.B-4, 3.B-5, 5.6, N-P4b
 
 **Competitor:** `Tarquinen/opencode-dynamic-context-pruning` (npm `@tarquinen/opencode-dcp`), an **opencode plugin**. Clone `/home/sites/crush-research-repos/opencode-dynamic-context-pruning` @ `f8232fd` (package `3.2.0`); the older three-tool design is in the published `2.1.8` tarball.
 
-Paths without a prefix are DCP paths (`lib/...`, `index.ts`). opencode paths start with `opencode/packages/...`. sugar-crush paths start with `src/...` (under `sugar-crush/`); sugar-crush anchors are current as of master `574e4cccb`.
+Paths without a prefix are DCP paths (`lib/...`, `index.ts`). opencode paths start with `opencode/packages/...`. candy-code paths start with `src/...` (under `candy-code/`); candy-code anchors are current as of master `574e4cccb`.
 
 **What it is.** DCP rewrites the message list on every LLM request (opencode's `experimental.chat.messages.transform`, fired once per step and also on the compaction input) **without touching stored history**. It exposes a model-callable `compress` tool and runs zero-cost automatic strategies (dedup, purge errored inputs).
 
@@ -15,7 +15,7 @@ Paths without a prefix are DCP paths (`lib/...`, `index.ts`). opencode paths sta
 | 3.1.x | Experimental `compress.mode: "message"`, multi-range batches, `summaryBuffer`, protect tags. |
 | 3.2.0 | Compact IDs (`@4@`, `@b1@`, `@blocked@`), hook on opencode's own compaction. |
 
-sugar-crush's 3.B merges both: 2.x `prune`+`distill` → `Prune`, 3.x range `compress` → `Compress` (§13.2).
+candy-code's 3.B merges both: 2.x `prune`+`distill` → `Prune`, 3.x range `compress` → `Compress` (§13.2).
 
 ---
 
@@ -358,7 +358,7 @@ Pitfall: DCP skips its prompt for internal title/summariser calls by string-matc
   - The distillation lives in the `distill` call's own arguments (a protected tool); the raw output becomes the generic placeholder.
 - **Validation:** out-of-range, unknown, protected, file-protected and already-pruned IDs are skipped. If none remain the call throws *"Invalid IDs provided: [..]. Only use numeric IDs from the <prunable-tools> list."*; otherwise the model gets the pruned list plus *"Note: N IDs were skipped …"*.
 
-Tool-level drop/distil and range-level compress are complementary. sugar-crush stores **one history row per tool result** (`Chat::toolResultMessage`, `src/Chat.php:4639`), so a single ref namespace covers both granularities (§13.2).
+Tool-level drop/distil and range-level compress are complementary. candy-code stores **one history row per tool result** (`Chat::toolResultMessage`, `src/Chat.php:4639`), so a single ref namespace covers both granularities (§13.2).
 
 ### 4.15 Persistence and state hygiene (→ 2.2-2)
 
@@ -405,7 +405,7 @@ Tool-level drop/distil and range-level compress are complementary. sugar-crush s
 
 ---
 
-## 13. Recommended improvements for sugar-crush
+## 13. Recommended improvements for candy-code
 
 ### 13.1 Prioritised list
 
@@ -444,7 +444,7 @@ Tool-level drop/distil and range-level compress are complementary. sugar-crush s
 - `src/Compactor.php` / `CompactedGroup.php` group file paths by category ("code ×12, config ×3"). Use them for the `/sweep`, `Prune` and `/context` "pruned items" lists and the compression receipt. It is a filesystem helper (`is_file`/`filesize`), so UI only, never the prompt.
 
 **P2-12. Recall of pruned content (→ 3.B-5). Effort M.**
-- Neither DCP nor sugar-crush can re-surface a pruned output on demand (magic-context can, DCP #552). Add a `Recall` tool (`{ref}`) returning the raw stored content of a pruned row or block (raw history is kept, since projection is non-destructive). Gate to N calls per turn.
+- Neither DCP nor candy-code can re-surface a pruned output on demand (magic-context can, DCP #552). Add a `Recall` tool (`{ref}`) returning the raw stored content of a pruned row or block (raw history is kept, since projection is non-destructive). Gate to N calls per turn.
 
 ### 13.2 Detailed implementation design: agent-driven self-pruning and compaction
 
@@ -572,7 +572,7 @@ Each strategy implements `PruningStrategy::propose(array $typedMessages, Context
 **Inputs:**
 - the projected token count, anchored on the provider-reported prompt tokens of the last step, as DCP does. `Usage::promptTokens()` returns null unless all three input buckets are reported, so fall back to `ownTokens()`/the estimate as Chat already does;
 - `minContextTokens` (default **60000**) and `maxContextTokens` (default **120000**), each accepting `"N%"`, plus a `summaryBuffer`;
-- `nudgeFrequency` **5** and `iterationNudgeThreshold` **10**. sugar-crush counts tool rows, which are finer-grained than DCP's messages.
+- `nudgeFrequency` **5** and `iterationNudgeThreshold` **10**. candy-code counts tool rows, which are finer-grained than DCP's messages.
 
 **Texts:** adapt DCP's three nudges (§4.7) and wrap them in `<context-reminder>`. These replace `Chat::contextReminderMessage()`'s System row (`:18179`); keep the wording constant in one place and reflection-test it like `CONTEXT_REMINDER_PREFIX`.
 
@@ -647,7 +647,7 @@ Description (adapted from 2.x `prune.md`/`distill.md`):
 }
 ```
 
-- **Description:** reuse DCP's range prompt (§4.4) nearly verbatim. It is well-tuned and its placeholder rules are needed. Add sugar-crush-specific rules:
+- **Description:** reuse DCP's range prompt (§4.4) nearly verbatim. It is well-tuned and its placeholder rules are needed. Add candy-code-specific rules:
   - *"Never include the newest user message or your current step."*
   - *"Outputs of Task and Skill, and rows the user wrapped in `<protect>`, are re-attached automatically — do not restate them."*
 - **Validation:**
@@ -695,7 +695,7 @@ Description (adapted from 2.x `prune.md`/`distill.md`):
   Docs: `docs/COMMANDS.md` and the README roster (drift-tested by `ReadmeRosterDriftTest::testTheSlashCommandRosterIsExactlyWhatTheRegistryAdvertises`). `/context` also goes in `Chat::READ_ONLY_COMMANDS` (`:9378`).
 - **Config:** a `contextPruning` object in `src/Config/LayeredSettings.php` (`LAYERED_KEYS` `:410-432`), user tier: `mode`, `minContextTokens`, `maxContextTokens`, `nudgeFrequency`, `iterationNudgeThreshold`, `protectedTools`, `protectedFilePatterns`, `strategies.{duplicates,staleReads,supersededWrites,erroredInputs:{turns}}`, `subAgents`, `maxBlockTokens`.
   - The project tier may only *add* protections.
-  - New env var `SUGARCRUSH_CONTEXT_PRUNING=auto|manual|off`, which must be added to `docs/ENVIRONMENT.md` (`EnvRosterDriftTest`).
+  - New env var `CANDY_CODE_CONTEXT_PRUNING=auto|manual|off`, which must be added to `docs/ENVIRONMENT.md` (`EnvRosterDriftTest`).
   - **Recommended default: `auto` for strategies, `manual` for `Compress`** (the #611 lesson) until evals show the model compresses sensibly. `Prune` is safe enough for `auto`.
 
 #### I. Sub-agents (→ 3.B-5)
@@ -707,7 +707,7 @@ Description (adapted from 2.x `prune.md`/`distill.md`):
 
 #### J. Tests to add
 
-`tests/` mirrors `src/`. New files must be added to `scripts/parallel-tests-durations.tsv`; `sugar-crush/tests/Config/Support/suite-figure.json` is refreshed in the Final pass.
+`tests/` mirrors `src/`. New files must be added to `scripts/parallel-tests-durations.tsv`; `candy-code/tests/Config/Support/suite-figure.json` is refreshed in the Final pass.
 
 | Test file | What it pins (step) |
 |---|---|
@@ -740,7 +740,7 @@ Drift updates: the README tool roster (`ReadmeRosterDriftTest::testTheCapabiliti
 
 ---
 
-## 14. Problems in sugar-crush exposed by this comparison
+## 14. Problems in candy-code exposed by this comparison
 
 1. **Tool-call ids are not unique on the default model path (→ 0.2).** The DSML parser mints `dsml_call_<index>` per response (`DsmlToolCallParser.php:399`); MiniMax mints `minimax_xml_call_<n>` (`MinimaxXmlFallbackToolCallParser.php:267`). Steps 1 and 2 of one turn can both contain `dsml_call_0`. `HistorySanitizer` keys `callIds`/`answeredIds` by id (`src/Messages/HistorySanitizer.php:82-94`), so a second step's unanswered call can be marked "answered" by the first step's result, and OpenAI-compatible servers receive duplicate `tool_call_id`s. Any id-keyed feature (pruning, structured replay, placeholder matching by `pendingToolCallId`) inherits DCP's #615. *Inferred from code; not reproduced.*
 2. **Cross-turn tool replay is lossy (→ 1.B-2).** `toTypedMessages` (`:2861`) replays tool output as `AssistantMessage($content)`; the persisted `toolResults[].id/name/arguments` are discarded at conversion time.

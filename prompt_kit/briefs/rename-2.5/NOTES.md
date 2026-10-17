@@ -70,7 +70,7 @@ defects in the 34-commit chain being CI'd for the first time, plus one infra fam
 4. PHPStan 8.3/8.4 candy-core — pre-existing src findings surfaced: '<= always true' <!-- @rename-keep historical provenance -->
    (int<1,3> vs 1MiB), 'Cannot unset offset null on array of TimerInterface',
    'ClosedResource invalid type' (AtomicJsonFile::$lockHandle), 4x unused closure `use`
-   in sugar-crush-side? (listed in log). Chain never PHPStan'd before.
+   in candy-code-side? (listed in log). Chain never PHPStan'd before.
 5. candy-mines — DifficultyStatsTest::testSaveLeavesNoTempArtifacts (AtomicJsonFile <!-- @rename-keep -->
    lock/temp residue — known documented family).
 6. candy-top — BorderBatteryTest::testAppShrinksTheClockForThePresentBattery
@@ -78,7 +78,7 @@ defects in the 34-commit chain being CI'd for the first time, plus one infra fam
 7. sugar-dash — WeatherModuleTest::testCacheRoundTripThroughAtomicFileLeavesNoTemp + <!-- @rename-keep -->
    PersistenceTest::testSaveLeavesNoLeftoverTempFiles (same AtomicJsonFile residue
    family; proc_open posix_spawn warning = absent external cmds on runner, noise).
-8. sugar-crush (8.3+8.4 sharded) — DoctorExtensionProbesTest::
+8. candy-code (8.3+8.4 sharded) — DoctorExtensionProbesTest::
    testTheManifestDeclaresBothExtensionsAndCarriesNoRepositoriesBlock +
    ReelDependencyTest::testTheManifestCarriesTheRequireWithoutAPathRepo — GREEN LOCALLY
    (linked mode, 2/2 OK); red in CI because check-path-repos --fix injects

@@ -1,0 +1,2490 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tools\BuiltIn;
+
+use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Agents\AgentResult;
+use SugarCraft\Code\Agents\AgentWorkerPool;
+use SugarCraft\Code\Agents\Live\ActivityItem;
+use SugarCraft\Code\Agents\Live\SubAgentActivityBuffer;
+use SugarCraft\Code\Agents\Live\SubAgentTranscriptLog;
+use SugarCraft\Code\Agents\Live\ToolSummary;
+use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Agents\SuspendedDelegations;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Backend\TurnInterrupted;
+use SugarCraft\Code\Events\SpendCapBreached;
+use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Events\ToolStarted;
+use SugarCraft\Code\Messages\AssistantMessage;
+use SugarCraft\Code\Messages\SystemMessage;
+use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Support\ParentProcessGuard;
+use SugarCraft\Code\Support\SiblingSpendLedger;
+use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Tools\DelegatesToEngine;
+use SugarCraft\Code\Tools\ActivitySink;
+use SugarCraft\Code\Tools\ExemptFromParallelDeadline;
+use SugarCraft\Code\Tools\ParallelSafe;
+use SugarCraft\Code\Tools\PromptGuidance;
+use SugarCraft\Code\Tools\SharesSiblingSpend;
+use SugarCraft\Code\Tools\StreamsActivity;
+use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Code\Usage;
+
+/**
+ * The model-callable Task tool: delegate one bounded task to a sub-agent from
+ * the session's agent roster and return the sub-agent's final text (crush_code.md P8.13).
+ *
+ * This is the seam the whole sub-agent machinery was built toward but never had:
+ * {@see AgentManager::createSubAgent()} and {@see AgentManager::executeAll()}
+ * existed, `Chat::executeAgents()` reached them only through slash-command
+ * plumbing, and `src/Renderer.php`'s header recorded the absence in terms —
+ * "nothing in src/ or bin/ calls createSubAgent()/executeSubAgent() directly,
+ * because there is no Task/Agent tool". The name deliberately mirrors the
+ * upstream delegation tool rather than the unrelated `SugarCraft\Code\Agents\Task`
+ * value object, which this class neither reads nor extends; the `Tool` suffix
+ * on the class follows the `LspTool`/`SkillTool` precedent, the bare wire name
+ * `Task` follows what the model already knows from upstream.
+ *
+ * THE CEILING IS INHERITED, NOT REIMPLEMENTED. Dispatch goes through
+ * {@see AgentManager::executeAll()}, which resolves each batch member's grants
+ * against the session registry (E644) and hands the worker pool a per-agent
+ * resolver — the same governed path `Chat::executeAgents()` drives. A Task call
+ * can never widen what the named agent declared, and a batch that fails grant
+ * resolution settles its members with the reason and fails loud here rather
+ * than forking anything.
+ *
+ * FAIL-CLOSED IN FOUR PLACES, because a delegation tool that fabricates is
+ * worse than no delegation tool at all:
+ *  - unbound (no session {@see AgentManager} wired in) → refusal naming the
+ *    missing wiring; the corpus builds this instance standalone, and the one
+ *    consumer that calls `execute()` on every corpus tool must get an error
+ *    result, never a spawn and never a throw;
+ *  - no worker provider spec (a pool bound without one falls through to the
+ *    manager's default pool, whose refusing worker reports FAILED naming the
+ *    absence) → the refusal text comes back as this result's error;
+ *  - anything the pool reports as Failed/Stopped/TimedOut → loud, with the
+ *    status and the child's own message, never a plausible-looking summary.
+ *  - unknown agent → the roster is named in full, so the model can correct
+ *    itself on the next turn instead of hallucinating one.
+ *
+ * THE DELEGATED RUN IS VISIBLE, NOT COARSE. To the PARENT MODEL the tool still
+ * surfaces as one ordinary ToolStarted/ToolFinished pair — upstream's Task tool
+ * behaves the same way from the caller's point of view, one call, one final
+ * report — but the run's own beats (tool calls, thinking bursts) are recorded
+ * onto the sub-agent row as they happen and cross the wire as
+ * {@see SubAgentActivity} frames, which the parent projects into its own
+ * AgentManager ({@see AgentManager::projectRemoteSubAgent()}). They must: the
+ * engine path runs the whole delegation INSIDE
+ * {@see EngineBackend::completeAsync()}'s forked child, so without the frames
+ * the child's row — and every chunk streamed into it — died with the child and
+ * the Agents dashboard showed nothing for a delegation that was visibly,
+ * expensively running.
+ *
+ * THE SUB-AGENT IS A WHOLE AGENTIC RUN, NOT ONE COMPLETION. The pool path
+ * below is a single provider call in a `php -r` worker that advertises the
+ * grant and executes nothing, so a sub-agent whose first move was a tool call
+ * — which, for any real task, is every sub-agent — came back as "completed
+ * without any output text" in 2-13s. Measured in a live session: ten audit
+ * delegations in a row, all refused that way. When the running
+ * {@see EngineBackend} is bound ({@see DelegatesToEngine}, which it does for
+ * itself every turn), the sub-agent instead runs through that engine's own
+ * bounded tool loop: the SAME provider, hook chain (ProtectFilesHook and the
+ * trusted project hooks), permission gate, approver, spend cap and root as
+ * the turn that called it, with the tool list narrowed to the preset's grant
+ * ({@see AgentManager::grantedToolsFor()}), its prompt and skills as a system
+ * turn ({@see AgentManager::systemPromptFor()}), and `maxTurns` as the step
+ * cap. The pool path stays as the unbound fallback.
+ *
+ * DELEGATION NESTS, TO A FIXED DEPTH AND AN OPT-IN WIDTH (roadmap 4.7-3). A
+ * sub-agent that inherits the whole tool set keeps `Task`, so it can delegate
+ * in turn — down to {@see MAX_DELEGATION_DEPTH} levels below the session's own
+ * agent (Claude Code's default of 3); the agent at the last level gets no
+ * `Task` at all, as Zed and OpenClaw withhold their spawn tool from leaves.
+ * Across every level, every parallel member and every background agent, one
+ * session may run at most {@see MAX_CONCURRENT_AGENTS} delegated runs at once
+ * when that cap is set (null, the default, sets none) — a seat in
+ * {@see \SugarCraft\Code\Agents\DelegationSlots}
+ * held for the run's life — and a run that finds none free is refused, never
+ * queued, since a parent waiting on its children already holds a seat. A
+ * nested run's frames reach the Agents pane through the delegating run's own
+ * emitter and name it as their parent.
+ *
+ * THE PROVIDER IS THE SESSION'S; THE MODEL AND EFFORT ARE THE AGENT'S
+ * (roadmap 4.1-1). The sub-agent talks to whatever provider the calling turn
+ * is on, on the first of: the call's own `model` argument, the agent's model
+ * when it names one (a preset's non-`inherit` `model:`, or the
+ * `subagentModel` setting `Bootstrap::agentManager()` pins onto every agent
+ * that would inherit), and the session's current model. A model the provider
+ * cannot serve is never relabelled and never refused: the run goes ahead on
+ * the SESSION'S model and says so — a line on its live trail, and a
+ * `[model: …]` note on the result the caller reads. That covers a model a
+ * single-model server does not serve ({@see EngineBackend::servedModel()},
+ * {@see EngineBackend::servesOneModel()}), and a Claude Code tier alias
+ * (`sonnet`, `opus`, `haiku`) where the session's own model is not of that
+ * tier, since on any other provider it names nothing. A preset's `effort:`
+ * rides every request as the reasoning effort where the provider honours it
+ * ({@see EngineBackend::honoursReasoningEffort()}), and is left off with the
+ * same kind of note where it would be silently dropped.
+ *
+ * THE PERMISSION MODE NARROWS, NEVER WIDENS (roadmap 4.1-2). The session's
+ * gate governs every call the sub-agent makes, exactly as it governs the
+ * caller's own, and the preset's `tools:` grant narrows it. A preset's
+ * `permissionMode:` narrows it further when it is the stricter of the two:
+ * the sub-agent's own gate ({@see AgentManager::createSubAgent()}, built for
+ * the stricter mode) is put to every call as a second gate through
+ * {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} — so a `plan`
+ * reviewer cannot write under a `default` session — while a WIDER preset mode
+ * (`bypass-permissions` under `default`) changes nothing. A delegation can
+ * therefore never do more than the session that asked for it could.
+ *
+ * SEVERAL TASK CALLS IN ONE MESSAGE RUN CONCURRENTLY. Bound, this tool is
+ * {@see ParallelSafe}, which the interface's rule 1 would forbid for a tool
+ * that edits files — and that is the point of delegating: the caller asked
+ * for parallel workers and owns keeping them off each other's files. The two
+ * hazards that rule guards are closed here instead. The 90s group deadline
+ * would kill every run, so the tool is {@see ExemptFromParallelDeadline} and
+ * bounds itself by `maxTurns`; and a forked run that outlives a cancelled turn
+ * would keep editing the tree, so every chunk and tool event checks the
+ * parent pid it started under and abandons the run once that process is gone.
+ *
+ * EVERY RUN THAT RAN CAN BE RESUMED (step 4.7-1). Whether the sub-agent
+ * reports, hits its step cap (its report is then the engine's no-tools
+ * summary of where it stopped), or fails part-way (a provider error, a dropped
+ * connection, a cancelled parent), its transcript is saved to
+ * {@see SuspendedDelegations} and the result names a `resume` id. Calling
+ * Task again with that id continues the SAME conversation — every tool call
+ * and result it already made — with `prompt` as the next instruction, and
+ * another full `maxTurns` of steps: a follow-up to a finished agent, or a
+ * retry of a failed one. The id is stable across repeated resumes, and the
+ * result counts them, so a caller can apply its own retry budget. A run that
+ * fails also hands back the last 3 x {@see ACTIVITY_TAIL_BYTES} bytes of what
+ * it produced, fenced. A refusal that says nothing about resuming is one where
+ * nothing ran (bad grant, unknown agent) and there is nothing to continue.
+ *
+ * EVERY RUN KEEPS ITS OWN TRANSCRIPT, AND BECOMES A SESSION (step P-C1). The
+ * process running the sub-agent writes the whole conversation — its task,
+ * prose, thoughts, every tool call and (clipped) result, and how it ended — to
+ * a {@see SubAgentTranscriptLog} under the delegating session, and names the
+ * file on the started and finished frames. The PARENT, which alone writes
+ * SQLite, reads it back into a `subagent` child session when the finished
+ * frame lands ({@see AgentManager::projectRemoteSubAgent()}), so a finished
+ * agent stays viewable. A resume continues the same log.
+ *
+ * THE SUB-AGENT'S SPEND IS THE CALLER'S SPEND (audit B4). Every result this
+ * tool returns after a run — report, refusal or interruption alike — carries
+ * the run's {@see Usage} on {@see ToolResult::usage()}, because the bookkeeping
+ * on the {@see SubAgent} row lives in a forked child and dies with it. The
+ * engine folds that usage into the calling turn's total and its spend-cap
+ * check, and the delegated run's own cap starts from what the calling turn
+ * had spent when it started ({@see EngineBackend}'s turn spend probe). A run
+ * the cap stops is refused naming the cap, never passed off as a report.
+ * Parallel Task calls are siblings in one forked group, and share one spend
+ * file ({@see SharesSiblingSpend}, audit B4-rem): each run records its steps as
+ * it bills them and its cap check counts the others', so a batch cannot spend
+ * the remaining budget once per sibling; and a run whose child dies before it
+ * reports is still billed for the steps it recorded. Each sibling's
+ * {@see SubAgentActivity} beats reach the Agents pane through a per-member
+ * relay the forking parent drains ({@see RelaysSubAgentActivity}), since the
+ * bound emitter only writes from the turn process.
+ *
+ * Mirrors the delegation role of candy-code's plan P8.13 (`Task` tool) over
+ * the in-tree {@see AgentManager}/{@see AgentWorkerPool} machinery; see
+ * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
+ * carries across the fork.
+ */
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, \SugarCraft\Code\Tools\SharesBoard, StreamsActivity, \SugarCraft\Code\Tools\RelaysPermissionAsks, \SugarCraft\Code\Tools\TakesToolCallId
+{
+    /**
+     * Step cap for a preset that declares no `maxTurns`. 200 since
+     * WAVE_PLAN_2 §5 (was 50), alongside the main loop's 1000. It IS
+     * {@see \SugarCraft\Code\Agents\EngineExecutor::DEFAULT_MAX_TURNS}, the
+     * workflow path's default, by reference rather than by a second literal,
+     * so the two cannot drift. The `subagentMaxTurns` setting (roadmap N-P4f)
+     * is resolved over that default by
+     * {@see \SugarCraft\Code\Agents\EngineExecutor::defaultMaxTurns()}, which
+     * both paths read as each run starts.
+     */
+    public const DEFAULT_MAX_TURNS = \SugarCraft\Code\Agents\EngineExecutor::DEFAULT_MAX_TURNS;
+
+    /**
+     * The tool's wire name — also how a display surface recognises a
+     * delegation (the tools sidebar leaves them to the Agents pane).
+     */
+    public const NAME = 'Task';
+
+    /**
+     * Claude Code's model TIER names (roadmap 4.1-1). A preset copied from
+     * `.claude/agents` routinely says `model: sonnet`; no engine provider
+     * serves an id by that name, so it resolves only where the session's own
+     * model is of that tier, and runs on the session's model everywhere else.
+     */
+    public const CLAUDE_MODEL_ALIASES = ['sonnet', 'opus', 'haiku'];
+
+    /** The instruction a resume continues with when the caller gives no better one. */
+    public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
+
+    /**
+     * Byte ceiling on a run's rolling activity tail — the same buffer that is
+     * recorded onto the row, sent as progress-frame tails, and left as the
+     * finished row's output when there is no report. Frame size stays bounded
+     * no matter how chatty the delegation gets.
+     */
+    public const ACTIVITY_TAIL_BYTES = 4096;
+
+    /** Byte ceiling on the task snippet a started frame carries for display. */
+    public const TASK_SNIPPET_BYTES = 200;
+
+    /** Reasoning bytes accumulated before a "thinking" line is folded into the trail. */
+    public const THINK_LINE_BYTES = 160;
+
+    /**
+     * UTF-8 cost of the '…' marker the clippers prepend/append. The clip
+     * budgets reserve this much, so a clipped string stays WITHIN its byte
+     * cap instead of overshooting it by two — the off-by-two a "1 byte for
+     * the dots" reservation silently ships for every non-ASCII ellipsis.
+     */
+    public const ELLIPSIS_BYTES = 3;
+
+    /**
+     * The deepest a delegated run may be (roadmap 4.7-3): the session's agent
+     * is level 0, its sub-agents level 1, theirs level 2, and a level-3 run
+     * gets no `Task`. Claude Code's default; OpenClaw allows 5.
+     */
+    public const MAX_DELEGATION_DEPTH = 3;
+
+    /**
+     * Delegated runs one session may have going at once, every level, member
+     * and background agent counted (roadmap 4.7-3), or null for NO cap.
+     *
+     * Null is the default: a run that finds no seat free is refused rather
+     * than queued ({@see \SugarCraft\Code\Agents\DelegationSlots}), so a cap
+     * nobody asked for turns a wide batch into an error the model has to work
+     * around. Set `subagentMaxActive` to have one — OpenClaw's 8 was the number
+     * this shipped at.
+     */
+    public const MAX_CONCURRENT_AGENTS = null;
+
+    /**
+     * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
+     * @param \Closure(SubAgentActivity): void|null $subAgentEmitter see {@see DelegatesToEngine}
+     * @param SuspendedDelegations|null $suspended where resumable runs are kept;
+     *        null uses {@see SuspendedDelegations::new()}
+     * @param SiblingSpendLedger|null $siblingSpend see {@see SharesSiblingSpend};
+     *        set only on the copy a concurrent group's forked member runs
+     * @param (\Closure(): float)|null $activityClock the clock the run's frame
+     *        buffer paces itself by; null is wall time ({@see withActivityClock()})
+     * @param string|null $transcriptRoot where each run's
+     *        {@see SubAgentTranscriptLog} goes; null is
+     *        {@see SubAgentTranscriptLog::defaultRoot()} ({@see withTranscriptRoot()})
+     * @param \SugarCraft\Code\Sessions\BackgroundSupervisor|null $backgroundSupervisor
+     *        what a background run is spawned through (roadmap 4.3-2,
+     *        {@see withBackgroundSupervisor()}); null runs every call in the
+     *        foreground
+     * @param string $backgroundDirectory the project a background run works in
+     * @param int $delegationDepth how deep the agent CALLING this tool runs:
+     *        0 for the session's own agent, 1 for a sub-agent it delegated to
+     *        (roadmap 4.7-3, {@see nestedFor()})
+     * @param int $maxDelegationDepth the deepest level a delegated run may be
+     * @param ?int $maxConcurrentAgents the session's seats, or null for no cap
+     *        ({@see \SugarCraft\Code\Agents\DelegationSlots})
+     * @param string|null $parentAgentId the delegating run's id, when nested
+     * @param string|null $delegationScope the session the seats are counted
+     *        for; null is the engine's session id
+     * @param string|null $slotRoot where the seat files live; null is the
+     *        system temp dir (a test seam)
+     * @param \SugarCraft\Code\Agents\WorktreeManager|null $worktreeManager
+     *        where an `isolation: worktree` run gets its git worktree (roadmap
+     *        4.9, {@see withWorktreeManager()}); null refuses such a run
+     * @param \SugarCraft\Code\Agents\Board\Board|null $board the member's view of
+     *        its parallel batch's shared board (roadmap 4.5, {@see withBoard()});
+     *        set only on the copy a batch member runs
+     */
+    public function __construct(
+        private ?AgentManager $agentManager = null,
+        private ?AgentWorkerPool $workerPool = null,
+        private ?EngineBackend $engine = null,
+        private ?\Closure $heartbeat = null,
+        private ?SuspendedDelegations $suspended = null,
+        private ?\Closure $subAgentEmitter = null,
+        private ?SiblingSpendLedger $siblingSpend = null,
+        private ?\Closure $activityClock = null,
+        private ?string $transcriptRoot = null,
+        private ?\SugarCraft\Code\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
+        private string $backgroundDirectory = '',
+        private int $delegationDepth = 0,
+        private int $maxDelegationDepth = self::MAX_DELEGATION_DEPTH,
+        private ?int $maxConcurrentAgents = self::MAX_CONCURRENT_AGENTS,
+        private ?string $parentAgentId = null,
+        private ?string $delegationScope = null,
+        private ?string $slotRoot = null,
+        private ?\SugarCraft\Code\Agents\WorktreeManager $worktreeManager = null,
+        private ?\SugarCraft\Code\Agents\Board\Board $board = null,
+    ) {}
+
+    /**
+     * Rebuild with the named constructor fields replaced, every other one
+     * carried forward BY NAME — so a field added to the constructor cannot be
+     * dropped by a wither that forgot to spell it.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_merge(get_object_vars($this), $changes));
+    }
+
+    /**
+     * The same tool, writing each run's transcript log below $dir instead of
+     * `~/.candy-code/subagents` (step P-C1) — the seam a test or an embedder
+     * points elsewhere.
+     */
+    public function withTranscriptRoot(string $dir): self
+    {
+        return $this->mutate(['transcriptRoot' => $dir]);
+    }
+
+    /**
+     * The same tool, able to run a delegation in the BACKGROUND (roadmap
+     * 4.3-2): a call with `background: true`, or for an agent whose preset
+     * says `background: true`, spawns a session daemon through $supervisor
+     * working in $workingDirectory and returns its `agent_id` at once. The
+     * spawn happens in the turn's forked child; the supervisor stamps the
+     * session as the HOST's, so the host's own supervisor adopts it on its
+     * next poll and announces the result ({@see BackgroundSupervisor::adoptHandedOff()}).
+     */
+    public function withBackgroundSupervisor(\SugarCraft\Code\Sessions\BackgroundSupervisor $supervisor, string $workingDirectory): self
+    {
+        return $this->mutate(['backgroundSupervisor' => $supervisor, 'backgroundDirectory' => $workingDirectory]);
+    }
+
+    /**
+     * The same tool, able to isolate a run (roadmap 4.9): an agent whose
+     * preset says `isolation: worktree` runs in a git worktree of its own,
+     * created through $manager on a branch of its own — its tools jailed to
+     * that tree, its Bash refused paths outside it, its environment and hook
+     * root naming it ({@see EngineBackend::withWorktreeRoot()}). On the way
+     * out a tree that holds no work is removed with its branch; one that does
+     * is kept, and the report names where.
+     */
+    public function withWorktreeManager(?\SugarCraft\Code\Agents\WorktreeManager $manager): self
+    {
+        return $this->mutate(['worktreeManager' => $manager]);
+    }
+
+    /** What a background run is spawned through, or null when none is bound. */
+    public function backgroundSupervisor(): ?\SugarCraft\Code\Sessions\BackgroundSupervisor
+    {
+        return $this->backgroundSupervisor;
+    }
+
+    /**
+     * The same tool under other nesting caps (roadmap 4.7-3): delegated runs
+     * at most $maxDepth levels deep, at most $maxConcurrent of them at once in
+     * the session. A null $maxConcurrent caps nothing. The settings rows that
+     * set them are N-P4f's.
+     *
+     * @throws \InvalidArgumentException for a depth cap below 1
+     */
+    public function withDelegationLimits(int $maxDepth, ?int $maxConcurrent): self
+    {
+        if ($maxDepth < 1 || ($maxConcurrent !== null && $maxConcurrent < 1)) {
+            throw new \InvalidArgumentException('Delegation caps must be at least 1.');
+        }
+
+        return $this->mutate(['maxDelegationDepth' => $maxDepth, 'maxConcurrentAgents' => $maxConcurrent]);
+    }
+
+    /**
+     * The same tool, counting its seats for $scope instead of the engine's
+     * session — what a background daemon passes, so its agent counts against
+     * the session that started it rather than against itself.
+     */
+    public function withDelegationScope(?string $scope): self
+    {
+        return $this->mutate(['delegationScope' => $scope === '' ? null : $scope]);
+    }
+
+    /** The same tool, keeping its seat files below $root (a test seam). */
+    public function withDelegationSlotRoot(string $root): self
+    {
+        return $this->mutate(['slotRoot' => $root]);
+    }
+
+    /** How deep the agent calling this tool runs: 0 for the session's own. */
+    public function delegationDepth(): int
+    {
+        return $this->delegationDepth;
+    }
+
+    /**
+     * The copy a delegated run at $depth is handed, so it can delegate one
+     * level further: its frames go out through $emitter (the delegating run's,
+     * which reaches the parent from any process the run is in) naming
+     * $parentAgentId, and its seats are counted in $scope. Never backgrounds:
+     * a background agent is announced into the session's conversation, which
+     * a nested run is not having.
+     *
+     * @param \Closure(SubAgentActivity): void $emitter
+     */
+    public function nestedFor(int $depth, string $parentAgentId, \Closure $emitter, ?string $scope): self
+    {
+        return $this->mutate([
+            'delegationDepth' => $depth,
+            'parentAgentId' => $parentAgentId,
+            'subAgentEmitter' => $emitter,
+            'delegationScope' => $scope,
+            'backgroundSupervisor' => null,
+            'siblingSpend' => null,
+        ]);
+    }
+
+    public function withEngine(
+        EngineBackend $engine,
+        ?\Closure $heartbeat = null,
+        ?\Closure $subAgentEmitter = null,
+    ): self {
+        return $this->mutate(['engine' => $engine, 'heartbeat' => $heartbeat, 'subAgentEmitter' => $subAgentEmitter]);
+    }
+
+    /**
+     * The copy {@see \SugarCraft\Code\Runtime::executeConcurrently()} runs
+     * as one member of a concurrent group: its delegated run records each step
+     * onto $ledger and counts its siblings' records in its spend-cap check
+     * (audit B4-rem). Only the engine path uses it; the pool path is never
+     * parallel-safe, so it is never a group member.
+     */
+    public function withSiblingSpend(SiblingSpendLedger $ledger): self
+    {
+        return $this->mutate(['siblingSpend' => $ledger]);
+    }
+
+    /**
+     * The participant this call becomes on its batch's shared board (roadmap
+     * 4.5): the agent it names and its short description. Null for a call
+     * that will run in the background — it hands off and returns before its
+     * peers start, so a peer could only ever post to it unheard — and for
+     * one that names no agent, which is refused before it runs.
+     *
+     * Mirrors the background decision {@see execute()} makes: the call's own
+     * `background` wins, else the agent's preset.
+     *
+     * @param array<string, mixed> $args
+     */
+    public function boardMember(array $args): ?\SugarCraft\Code\Agents\Board\BoardMember
+    {
+        $agent = $args['agent'] ?? $args['subagent_type'] ?? null;
+        if (!\is_string($agent) || trim($agent) === '') {
+            return null;
+        }
+        $agent = trim($agent);
+
+        $background = \is_bool($args['background'] ?? null)
+            ? $args['background']
+            : ($this->agentManager?->get($agent)?->background ?? false);
+        if ($background && $this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0) {
+            return null;
+        }
+
+        $task = \is_string($args['description'] ?? null) ? trim($args['description']) : '';
+
+        return \SugarCraft\Code\Agents\Board\BoardMember::new($agent, self::snippet($task, self::TASK_SNIPPET_BYTES));
+    }
+
+    /**
+     * The copy {@see \SugarCraft\Code\Runtime::executeConcurrently()} runs
+     * as one member of a parallel batch that shares a board (roadmap 4.5):
+     * its run is offered `BoardRead` and `BoardPost` over $board (this
+     * member's view), and the board's news reaches it as a notice on its next
+     * tool result. The board's tools are the harness's, not the preset's: a
+     * `tools:` list does not narrow them, but a `disallowedTools:` entry
+     * naming one keeps the run from it.
+     */
+    public function withBoard(\SugarCraft\Code\Agents\Board\Board $board): self
+    {
+        return $this->mutate(['board' => $board]);
+    }
+
+    /**
+     * The run's tools with the board's two added — each unless the preset's
+     * denylist names it ({@see AgentManager::grantRefusalFor()}) — and the
+     * seat binding the board to this
+     * process for as long as the run holds it ({@see \SugarCraft\Code\Agents\Board\ActiveBoard}).
+     * A run that is not a batch member, or cannot read its board, binds none,
+     * which also keeps a nested run from consuming its delegator's notices.
+     *
+     * @param list<Tool> $tools
+     *
+     * @return array{0: list<Tool>, 1: \SugarCraft\Code\Agents\Board\ActiveBoardSeat}
+     */
+    private function joinBoard(array $tools, AgentManager $manager, SubAgent $subAgent): array
+    {
+        $board = $this->board;
+        if ($board !== null) {
+            $joined = [];
+            foreach ([BoardReadTool::NAME => BoardReadTool::new()->withBoard($board), BoardPostTool::NAME => BoardPostTool::new()->withBoard($board)] as $name => $tool) {
+                try {
+                    $refused = $manager->grantRefusalFor(new \SugarCraft\Code\ToolCall($name, []), $subAgent);
+                } catch (\RuntimeException) {
+                    $refused = 'an unreadable declaration';
+                }
+                if ($refused === null) {
+                    $tools[] = $tool;
+                    $joined[$name] = true;
+                }
+            }
+            if (!isset($joined[BoardReadTool::NAME])) {
+                $board = null;
+            }
+        }
+
+        return [$tools, \SugarCraft\Code\Agents\Board\ActiveBoard::enter($board)];
+    }
+
+    public function subAgentEmitter(): ?\Closure
+    {
+        return $this->subAgentEmitter;
+    }
+
+    public function withSubAgentEmitter(\Closure $emitter): self
+    {
+        return $this->mutate(['subAgentEmitter' => $emitter]);
+    }
+
+    /**
+     * The same tool, pacing its activity frames by $clock instead of wall
+     * time — how a test makes the {@see SubAgentActivityBuffer} flush
+     * interval deterministic (a clock that always reads "later" flushes every
+     * item at once; a frozen one holds them all for the finished frame).
+     *
+     * @param \Closure(): float $clock
+     */
+    public function withActivityClock(\Closure $clock): self
+    {
+        return $this->mutate(['activityClock' => $clock]);
+    }
+
+    /**
+     * The copy a forked member of a concurrent group runs: every beat goes to
+     * $sink (the member's datagram relay) instead of the turn-pinned emitter,
+     * which would drop it from this process — see {@see StreamsActivity}.
+     */
+    public function withActivitySink(ActivitySink $sink): self
+    {
+        return $this->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($sink): void {
+            $sink->emit($activity);
+        });
+    }
+
+    /**
+     * The copy a forked member of a concurrent group runs (roadmap 1.C-5):
+     * every question its delegated run raises goes to $approver — the
+     * member's {@see \SugarCraft\Code\Support\PermissionAskRelay} — instead
+     * of the turn child's channel, which refuses from any other process. A
+     * copy with no engine bound has no run to gate and is returned as is.
+     *
+     * @param \Closure(\SugarCraft\Code\Tools\ToolCall, \SugarCraft\Code\Hooks\HookResult): \SugarCraft\Code\Permissions\ApprovalVerdict $approver
+     */
+    public function withPermissionApprover(\Closure $approver): self
+    {
+        if ($this->engine === null) {
+            return $this;
+        }
+
+        return $this->mutate(['engine' => $this->engine->withPermissionApprover($approver)]);
+    }
+
+    /**
+     * A queued member's placeholder beat: the roster name and the task it
+     * will run, under {@see SubAgentActivity::queuedId()} — the SubAgent id
+     * does not exist until the member's own process creates it.
+     *
+     * @param array<string, mixed> $args
+     */
+    public function queuedActivity(\SugarCraft\Code\Tools\ToolCall $call, array $args): ?SubAgentActivity
+    {
+        $agentName = trim((string) ($args['agent'] ?? ''));
+        if ($agentName === '') {
+            $agentName = trim((string) ($args['subagent_type'] ?? ''));
+        }
+        if ($agentName === '' || $call->id() === '') {
+            return null;
+        }
+
+        return new SubAgentActivity(
+            SubAgentActivity::OP_QUEUED,
+            SubAgentActivity::queuedId($call->id()),
+            $agentName,
+            self::snippet(trim((string) ($args['prompt'] ?? '')), self::TASK_SNIPPET_BYTES),
+            1,
+            '',
+            parentCallId: $call->id(),
+            description: is_string($args['description'] ?? null) ? $args['description'] : '',
+        );
+    }
+
+    /**
+     * Only the engine path forks safely: it bounds itself and watches for its
+     * parent's death. The unbound pool path keeps the barrier it always had.
+     */
+    public function isParallelSafe(): bool
+    {
+        return $this->engine !== null && $this->agentManager !== null;
+    }
+
+    public function name(): string
+    {
+        return self::NAME;
+    }
+
+    public function description(): string
+    {
+        return 'Delegate one self-contained task to a sub-agent from the agent roster and return that agent\'s final text.'
+            . ' The sub-agent does not see this conversation, so the prompt must carry every path, constraint and'
+            . ' expected output the task needs; the tool returns once the sub-agent finishes, not as it works —'
+            . ' unless `background` is true, when it returns the agent\'s id at once and the result arrives later'
+            . ' as a new message on its own.'
+            . ' The sub-agent works with its own tools until it has an answer; several Task calls in one message run'
+            . ' concurrently, so keep parallel agents off each other\'s files.'
+            . ' Do not reach for it for work you can do directly in one call, and never parallelise a dependency with'
+            . ' it — the delegated agent runs under the roster entry\'s own tool grants and this session\'s permission'
+            . ' policy, so a narrower agent cannot be widened by phrasing.'
+            . ' The result is the sub-agent\'s report or a loud failure naming why; it is not a diff, and the working'
+            . ' tree may have moved underneath by the time it returns.';
+    }
+
+    /**
+     * Batch-spawn doctrine for the session prompt (spawn-latency plan F1, with
+     * the orchestration-mode sanction of F7). The one-call-per-message pattern
+     * this prose exists to break is the dominant latency cost of delegating on
+     * this harness: every un-batched spawn pays a full model round-trip before
+     * the next worker even starts, while a message carrying N Task calls forks
+     * all N at once for a single step.
+     *
+     * The fragment names no sibling tool ({@see PromptGuidance}), stays
+     * self-contained when the tool is wired alone, and carries the live roster
+     * only when a manager is bound — an unbound corpus build renders the
+     * doctrine without a roster line rather than the lie of an empty one.
+     */
+    public function promptGuidance(): string
+    {
+        $doctrine = 'Delegate breadth-first work by emitting one Task call per independent unit of work inside a SINGLE message: every spawn in that message launches together, runs concurrently, and the whole batch costs one step — while one Task per message pays a fresh model round-trip for each spawn. Batching Task calls this way is the sanctioned shape of orchestration in this build, even where project instructions advise running sub-agents one at a time: that rule scopes to concurrent writes onto shared files, not to the spawn calls themselves. Keep spawns that share a message on disjoint files, and never batch a spawn that depends on an earlier spawn\'s answer — a dependency stays sequential. A name off the live roster is refused loudly with the full roster named in the refusal, so a batched guess is cheap to correct.';
+
+        if ($this->agentManager === null) {
+            return $doctrine;
+        }
+
+        return $doctrine . "\n\n" . 'Current agent roster: ' . $this->rosterNames() . '.';
+    }
+
+    // @region schema
+    /**
+     * @return array<string, mixed>
+     */
+    public function inputSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'description' => [
+                    'type' => 'string',
+                    'description' => 'Clear, concise 5-10 word description in active voice of what is delegated'
+                        . ' (e.g. "Audit the auth middleware", not "delegates a task")',
+                ],
+                'prompt' => [
+                    'type' => 'string',
+                    'description' => 'The complete task for the sub-agent, self-contained: it never sees this'
+                        . ' conversation, so include every path, constraint and expected-output shape inline',
+                ],
+                'agent' => [
+                    'type' => 'string',
+                    'description' => 'Roster name of the agent to run (e.g. "coder", "reviewer", "debugger",'
+                        . ' "architect", "tester", "devops"); an unknown name is refused and the live roster is'
+                        . ' named in the failure',
+                ],
+                // Deprecation-tolerant alias (F4): NOT in `required`, NOT
+                // mentioned first anywhere — `agent` stays the contract.
+                'subagent_type' => [
+                    'type' => 'string',
+                    'description' => 'Optional alias of `agent` accepted for callers that emit this name instead;'
+                        . ' `agent` wins when both are present. Prefer `agent`.',
+                ],
+                'model' => [
+                    'type' => 'string',
+                    'description' => 'Optional. The model id to run this sub-agent on, overriding the agent\'s own'
+                        . ' and the session\'s; omit it to use the agent\'s model (or the session\'s, for an agent'
+                        . ' that inherits). A model this session\'s provider cannot serve runs on the session\'s'
+                        . ' model instead, and the result says so',
+                ],
+                'resume' => [
+                    'type' => 'string',
+                    'description' => 'Optional. The resume id an earlier Task result named — a finished report,'
+                        . ' a step-capped summary or a failure: continues that sub-agent\'s own conversation'
+                        . ' instead of starting over. `agent` must name the same agent, and `prompt` is the'
+                        . ' instruction to continue with (e.g. "continue and give your final report", or a'
+                        . ' follow-up question about its report)',
+                ],
+                'background' => [
+                    'type' => 'boolean',
+                    'description' => 'Optional. true runs the sub-agent in the background: the call returns'
+                        . ' `{"agent_id": ...}` at once and the sub-agent\'s status, report and stats arrive later as a'
+                        . ' new message, so do NOT sleep or poll for it. false runs it in the foreground even when'
+                        . ' the agent\'s preset says `background: true`; omit it to follow the preset',
+                ],
+            ],
+            'required' => ['description', 'prompt', 'agent'],
+        ];
+    }
+    // @endregion schema
+
+    // @region execute
+    public function execute(array $args): ToolResult
+    {
+        $startedAt = microtime(true);
+        $toolCallId = (string) ($args['id'] ?? '');
+
+        $prompt = trim((string) ($args['prompt'] ?? ''));
+        if ($prompt === '') {
+            return $this->refusal($toolCallId, 'the Task tool needs a non-empty "prompt": the complete, self-contained task the sub-agent should carry out');
+        }
+
+        // F4: `subagent_type` is the field name this model family carries from
+        // its upstream priors, so it is accepted as an ALIAS of `agent` — the
+        // canonical name still wins whenever it is non-blank, and a call that
+        // fills neither gets the byte-identical refusal, naming only `agent`.
+        // Tolerating the prior beats refusing it; documenting only `agent` as
+        // canonical keeps the prior from becoming the wire contract.
+        $agentName = trim((string) ($args['agent'] ?? ''));
+        if ($agentName === '') {
+            $agentName = trim((string) ($args['subagent_type'] ?? ''));
+        }
+        if ($agentName === '') {
+            return $this->refusal($toolCallId, 'the Task tool needs a non-empty "agent": the roster name to run the task as');
+        }
+
+        // Bound or absent — the LAUNCH decision, before anything is dispatched.
+        if ($this->agentManager === null) {
+            return $this->refusal(
+                $toolCallId,
+                'the Task tool is not wired to a session AgentManager on this launch, so it cannot delegate'
+                . ' (the registration feed is the documented Bootstrap seam; refusing rather than inventing a manager)',
+            );
+        }
+
+        // The roster is the authority on names; answering with the live list on
+        // a miss is what keeps a hallucinated agent cheap to recover from.
+        if ($this->agentManager->get($agentName) === null) {
+            return $this->refusal($toolCallId, sprintf(
+                'agent "%s" is not in the session roster (registered: %s)',
+                $agentName,
+                $this->rosterNames(),
+            ));
+        }
+
+        $resumeId = trim((string) ($args['resume'] ?? ''));
+        $suspension = null;
+        if ($resumeId !== '') {
+            if ($this->engine === null) {
+                return $this->refusal($toolCallId, 'resume needs the engine-bound Task path, which this launch did not wire; start a new Task instead');
+            }
+
+            $suspension = $this->suspendedStore()->load($resumeId);
+            if ($suspension === null) {
+                return $this->refusal($toolCallId, sprintf(
+                    'resume id "%s" is unknown, expired or unreadable, so that run CANNOT be resumed; start a new Task instead',
+                    $resumeId,
+                ));
+            }
+
+            if ($suspension['agent'] !== $agentName) {
+                return $this->refusal($toolCallId, sprintf(
+                    'resume id "%s" belongs to agent "%s", not "%s"; resume it with that agent',
+                    $resumeId,
+                    $suspension['agent'],
+                    $agentName,
+                ));
+            }
+        }
+
+        // Roadmap 4.3-2: the call's `background` wins; without one, the
+        // preset's. A launch with nowhere to spawn a session runs it in the
+        // foreground and says so, rather than refusing work it can do.
+        $backgroundNote = null;
+        $wantsBackground = is_bool($args['background'] ?? null)
+            ? $args['background']
+            : ($this->agentManager->get($agentName)?->background ?? false);
+        if ($wantsBackground) {
+            if ($this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0) {
+                return $this->startInBackground($toolCallId, $agentName, $prompt, $args, $resumeId, $startedAt);
+            }
+            $backgroundNote = '[background was requested, but this launch cannot start background sessions,'
+                . ' so the sub-agent ran in the foreground and this is its result]';
+        }
+
+        try {
+            // 4.1-2: the agent's own mode, narrowed to the session's — see
+            // AgentManager::createSubAgent().
+            $subAgent = $this->agentManager->createSubAgent(
+                $agentName,
+                $prompt,
+                $this->agentManager->get($agentName)?->permissionMode,
+                $this->engine?->permissionGate()?->mode(),
+            );
+        } catch (\RuntimeException|\LogicException $refusal) {
+            return $this->refusal($toolCallId, $refusal->getMessage());
+        }
+
+        // Roadmap 4.1-1: the call's own model, when it names one.
+        $requestedModel = is_string($args['model'] ?? null) ? trim($args['model']) : '';
+
+        if ($this->engine !== null) {
+            $result = $this->runOnEngine(
+                $this->engine,
+                $this->agentManager,
+                $subAgent,
+                $toolCallId,
+                $startedAt,
+                $suspension === null ? null : ['id' => $resumeId] + $suspension,
+                is_string($args['description'] ?? null) ? $args['description'] : '',
+                $requestedModel,
+            );
+
+            return $backgroundNote === null ? $result : $result->withContent($backgroundNote . "\n\n" . $result->content());
+        }
+
+        $request = new CompleteRequest(
+            model: $requestedModel !== '' ? $requestedModel : $subAgent->agent->model,
+            messages: [],
+            tools: null,
+            systemPrompt: $subAgent->agent->prompt,
+        );
+
+        try {
+            /** @var list<AgentResult> $results */
+            $results = iterator_to_array(
+                $this->agentManager->executeAll([$subAgent], $request, $this->workerPool),
+                false,
+            );
+        } catch (\RuntimeException $refusal) {
+            // E644 grant-resolution failures arrive here AFTER the manager has
+            // settled the batch with the reason; forwarding that text is what
+            // keeps the model-facing story identical to the operator-facing one.
+            return $this->refusal($toolCallId, $refusal->getMessage());
+        }
+
+        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+        if ($results === []) {
+            return $this->refusal($toolCallId, sprintf(
+                'sub-agent "%s" was cancelled before it produced a result',
+                $agentName,
+            ), $durationMs);
+        }
+
+        $result = $results[0];
+        // The worker's provider call is billed whether or not it produced a
+        // usable answer, so every arm below carries it (audit B4).
+        $spent = Usage::reported($result->tokensUsed, $result->costUsd);
+
+        if ($result->isFailure()) {
+            return $this->refusal($toolCallId, sprintf(
+                'sub-agent "%s" %s%s%s',
+                $agentName,
+                $result->status->value,
+                $result->error !== null ? ': ' . $result->error->getMessage() : '',
+                // The partial output is the sub-agent's text inside a
+                // harness sentence: neutralised, no header (step 0.15).
+                $result->output !== null && trim($result->output) !== ''
+                    ? ' — partial output: ' . \SugarCraft\Code\Context\DelegatedOutputFence::neutralise(trim($result->output))
+                    : '',
+            ), $durationMs, $spent);
+        }
+
+        if ($result->output === null || trim($result->output) === '') {
+            return $this->refusal($toolCallId, sprintf(
+                'sub-agent "%s" completed without any output text',
+                $agentName,
+            ), $durationMs, $spent);
+        }
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: \SugarCraft\Code\Context\DelegatedOutputFence::wrap(trim($result->output)),
+            isError: false,
+            durationMs: $durationMs,
+            usage: $spent,
+        );
+    }
+
+    /**
+     * Start $agentName on $prompt as a background session and answer at once
+     * with its id (roadmap 4.3-2).
+     *
+     * The daemon runs the delegation through this tool in its own process
+     * ({@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}), so the
+     * preset's grants, model, effort and step cap hold, the run is resumable,
+     * and the session's permission mode rides along: it is never run under
+     * a wider one than the session that asked. With nobody at a terminal, a
+     * call that would ASK is refused there, and the result says so.
+     *
+     * The id is the background session's: what `/bg`, the announcement and
+     * the turn context's "Active subagents" row all call it by.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function startInBackground(string $toolCallId, string $agentName, string $prompt, array $args, string $resumeId, float $startedAt): ToolResult
+    {
+        $description = is_string($args['description'] ?? null) ? trim($args['description']) : '';
+        $model = is_string($args['model'] ?? null) ? trim($args['model']) : '';
+
+        try {
+            $session = $this->spawnDelegation($agentName, $prompt, $description, $model, $resumeId);
+        } catch (\Throwable $e) {
+            return $this->refusal($toolCallId, sprintf(
+                'agent "%s" could not be started in the background (%s); run it in the foreground instead (omit `background`)',
+                $agentName,
+                $e->getMessage(),
+            ), self::elapsedMs($startedAt));
+        }
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: (string) json_encode(['agent_id' => $session->id, 'status' => 'running'], JSON_UNESCAPED_SLASHES)
+                . "\n\n" . self::backgroundNote($agentName, $session->id),
+            isError: false,
+            durationMs: self::elapsedMs($startedAt),
+        );
+    }
+
+    /**
+     * What a run the user moved to the background is told when its
+     * background session takes the conversation up again (roadmap P-E3).
+     */
+    private const BACKGROUND_CONTINUE_TEXT = 'The user moved this run to the background; your task has not changed.'
+        . ' Continue where you left off, and end with your report.';
+
+    /**
+     * Hand a run the user moved to the background (roadmap P-E3, `Ctrl+X b`
+     * in the Agent View) to a background session, and answer the delegating
+     * call at once — so the parent turn goes on instead of waiting for it.
+     *
+     * The run has already stopped at a step boundary and been saved
+     * ($resumeId, $resume); the session resumes that saved conversation
+     * through this tool in its own process exactly as `Task(background:
+     * true, resume: …)` would ({@see startInBackground()}), so the preset's
+     * grants, model and step cap still hold, and the host adopts the session
+     * and announces its result when it settles (4.3-2). The foreground leg
+     * ends with a `backgrounded` finished frame naming the session.
+     *
+     * A run that could not be saved, or a session that could not be
+     * started, is reported the way a cancelled run is — stopped, with what
+     * resumes it.
+     *
+     * @param \Closure(string, string, ?string, string, ?string): void $finish the run's settle-and-announce
+     */
+    private function moveToBackground(
+        string $toolCallId,
+        string $agentName,
+        string $description,
+        string $model,
+        string $task,
+        ?string $resumeId,
+        string $resume,
+        int $steps,
+        float $startedAt,
+        ?Usage $spent,
+        \Closure $finish,
+        string $notes,
+    ): ToolResult {
+        $stopped = sprintf('sub-agent "%s" was stopped to move it to the background', $agentName);
+        $session = null;
+        $why = null;
+        if ($resumeId === null) {
+            $why = $stopped . ', but it could not be saved for a background session to continue';
+        } else {
+            try {
+                $session = $this->spawnDelegation(
+                    $agentName,
+                    self::BACKGROUND_CONTINUE_TEXT,
+                    $description !== '' ? $description : self::snippet($task, 60),
+                    $model,
+                    $resumeId,
+                );
+            } catch (\Throwable $e) {
+                $why = sprintf('%s, but no background session could be started (%s)', $stopped, $e->getMessage());
+            }
+        }
+        if ($session === null) {
+            $finish(SubAgent::STATUS_STOPPED, '', $why, SubAgentActivity::OUTCOME_CANCELLED, $resumeId);
+
+            return $this->refusal($toolCallId, $why . '. ' . $resume . $notes, self::elapsedMs($startedAt), $spent);
+        }
+
+        $after = sprintf('after %d step%s', $steps, $steps === 1 ? '' : 's');
+        $finish(
+            SubAgent::STATUS_COMPLETE,
+            sprintf('moved to the background by the user %s; it goes on as background session %s', $after, $session->id),
+            null,
+            SubAgentActivity::OUTCOME_BACKGROUNDED,
+            $resumeId,
+        );
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: (string) json_encode(['agent_id' => $session->id, 'status' => 'running', 'background' => true], JSON_UNESCAPED_SLASHES)
+                . "\n\n" . sprintf(
+                    'The user moved this sub-agent to the background %s, so this call returns now; the run goes on'
+                    . ' in the same conversation. ',
+                    $after,
+                ) . self::backgroundNote($agentName, $session->id) . $notes,
+            isError: false,
+            durationMs: self::elapsedMs($startedAt),
+            usage: $spent,
+        );
+    }
+
+    /**
+     * Spawn the background session that runs $agentName on $prompt — or, with
+     * $resumeId, continues that saved run with $prompt — through this tool in
+     * the session daemon ({@see \SugarCraft\Code\Sessions\BackgroundSessionRunner}).
+     *
+     * @throws \Throwable when the session cannot be started
+     */
+    private function spawnDelegation(string $agentName, string $prompt, string $description, string $model, string $resumeId): \SugarCraft\Code\Sessions\BackgroundSession
+    {
+        $agent = $this->agentManager?->get($agentName);
+        $engine = $this->engine;
+        $supervisor = $this->backgroundSupervisor;
+        if ($agent === null || $engine === null || $supervisor === null) {
+            throw new \LogicException('a background run needs the session\'s agent roster, engine and background supervisor');
+        }
+
+        $delegation = array_filter([
+            'agent' => $agentName,
+            'description' => $description,
+            'model' => $model,
+            'resume' => $resumeId,
+            'permissionMode' => $engine->permissionGate()?->mode()->value ?? '',
+            'scope' => $this->delegationScope ?? $engine->sessionId() ?? '',
+        ], static fn (string $value): bool => $value !== '');
+
+        return $supervisor->spawnSession(
+            name: ($description !== '' ? $description : self::snippet($prompt, 60)) . ' (@' . $agentName . ')',
+            // The daemon starts on the model this session is on now; the
+            // agent's own model (or the call's) is chosen over it there,
+            // exactly as in the foreground (4.1-1).
+            agent: trim($engine->model()) === '' ? $agent : $agent->withModel($engine->model()),
+            task: $prompt,
+            workingDirectory: $this->backgroundDirectory !== '' ? $this->backgroundDirectory : (getcwd() ?: '.'),
+            tags: ['task', \SugarCraft\Code\Sessions\BackgroundSupervisor::AGENT_TAG_PREFIX . $agentName],
+            delegation: $delegation,
+        );
+    }
+
+    /** The model's instructions for a delegation now running as background session $id. */
+    private static function backgroundNote(string $agentName, string $id): string
+    {
+        return sprintf(
+            'Sub-agent "%s" is running in the background as %s. DO NOT sleep or poll for it, and do not call'
+            . ' Task again to check on it: when it finishes, its status, report and stats (runtime, tokens,'
+            . ' cost and the resume id that continues it) arrive in this conversation as a new message, and'
+            . ' a turn starts for it if none is running. Carry on with other work meanwhile, or end your turn'
+            . ' if there is none.',
+            $agentName,
+            $id,
+        );
+    }
+    // @endregion execute
+
+    /**
+     * Run $subAgent to completion through the bound engine's tool loop — see
+     * the class doc for what it inherits and what it is narrowed to.
+     *
+     * @param array{id: string, agent: string, transcript: list<\SugarCraft\Code\Messages\Message>, resumes: int, transcriptLog?: ?string}|null $suspension
+     *        the saved run to continue, or null for a fresh one
+     */
+    private function runOnEngine(
+        EngineBackend $engine,
+        AgentManager $manager,
+        SubAgent $subAgent,
+        string $toolCallId,
+        float $startedAt,
+        ?array $suspension = null,
+        string $description = '',
+        string $requestedModel = '',
+    ): ToolResult {
+        // @region setup
+        $agentName = $subAgent->agent->name;
+
+        // Roadmap 4.1-1: the run's model and reasoning effort. One the
+        // session's provider cannot honour is never relabelled or silently
+        // dropped, and never refused either: the run goes ahead on the
+        // session's own model (or without the effort), and says so once — a
+        // line on the run's live trail for the person, and a note on the
+        // result for the model ($runNote, on every return once the run starts).
+        [$runModel, $modelFallback] = self::chooseModel($engine, $subAgent->agent, $requestedModel);
+        if ($runModel !== null) {
+            $engine = $engine->withModel($runModel);
+        }
+        $runNotes = $modelFallback === null ? [] : [$modelFallback['note']];
+        $trailNotes = $modelFallback === null ? [] : [\SugarCraft\Code\Lang::t('agents.trail.model_fallback', [
+            'model' => $engine->servedModel() ?? $engine->model(),
+            'asked' => $modelFallback['asked'],
+        ])];
+        $effort = $subAgent->agent->effort;
+        if ($effort !== null) {
+            if ($engine->honoursReasoningEffort()) {
+                $engine = $engine->withReasoningEffort($effort->value);
+            } else {
+                $runNotes[] = sprintf(
+                    'effort: %s ignored (agent "%s" declares it, but provider "%s" sends no reasoning effort)',
+                    $effort->value,
+                    $agentName,
+                    $engine->provider()->name(),
+                );
+                $trailNotes[] = \SugarCraft\Code\Lang::t('agents.trail.effort_ignored', [
+                    'effort' => $effort->value,
+                    'provider' => $engine->provider()->name(),
+                ]);
+            }
+        }
+        $runNote = $runNotes === [] ? '' : "\n\n[" . implode("]\n[", $runNotes) . ']';
+
+        try {
+            $granted = $manager->grantedToolsFor($subAgent);
+            $systemPrompt = $manager->systemPromptFor($subAgent);
+        } catch (\RuntimeException $refusal) {
+            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $refusal->getMessage());
+
+            return $this->refusal($toolCallId, $refusal->getMessage());
+        }
+
+        // Roadmap 4.7-3: one seat of the session's concurrent-run cap, held
+        // for as long as this method runs — every return below, and a throw,
+        // gives it back. Refused, not queued: see DelegationSlots.
+        // A run with no session (an embedder's engine) has nothing to count
+        // seats against, and is held to the per-batch cap alone. $seat is
+        // never read again: it is a local so that it lives exactly as long
+        // as this call.
+        $scope = $this->delegationScope ?? $engine->sessionId();
+        $seat = $scope === null || $this->maxConcurrentAgents === null
+            ? null
+            : \SugarCraft\Code\Agents\DelegationSlots::acquire($scope, $this->maxConcurrentAgents, $this->slotRoot);
+        if ($seat === false) {
+            $why = sprintf(
+                '%d sub-agents are already running in this session, which is its limit (background agents and'
+                . ' nested delegations count). Do not retry this call right away: do the work yourself, or wait'
+                . ' until a running sub-agent reports',
+                $this->maxConcurrentAgents,
+            );
+            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+
+            return $this->refusal($toolCallId, $why);
+        }
+
+        // Roadmap 4.7-3: the run delegates in turn while it is above the
+        // depth cap — the session's Task, handed down one level deeper, its
+        // frames riding THIS run's emitter (the one that reaches the parent
+        // from whatever process this runs in) and its seats counted in the
+        // same session. Every other engine-bound tool stays withheld, and at
+        // the cap Task goes too.
+        $childDepth = $this->delegationDepth + 1;
+        $nestedEmitter = $this->subAgentEmitter ?? static function (SubAgentActivity $activity): void {
+        };
+        // Roadmap 4.4: the one other engine-bound tool a run keeps is the
+        // reply half of messaging — `SendMessage`, when the preset grants it
+        // (or inherits everything), re-bound to speak as THIS run, so its
+        // `to: "parent"` reaches whoever delegated it and its own `to` reaches
+        // only the runs it delegates in turn. `Subagents` and
+        // `InterruptAgent` stay with the session's agent: a delegating run
+        // waits on its nested runs, so it has no running child to manage.
+        $tools = [];
+        foreach ($granted ?? $engine->tools() as $tool) {
+            if ($tool instanceof SendMessageTool) {
+                $tools[] = $tool->asChildOf($subAgent->id, $this->parentAgentId ?? SendMessageTool::MAIN, $scope);
+            } elseif (!$tool instanceof DelegatesToEngine) {
+                $tools[] = $tool;
+            } elseif ($tool instanceof self && $childDepth < $this->maxDelegationDepth) {
+                $tools[] = $tool->nestedFor($childDepth, $subAgent->id, $nestedEmitter, $scope)
+                    ->withDelegationLimits($this->maxDelegationDepth, $this->maxConcurrentAgents)
+                    ->mutate(['slotRoot' => $this->slotRoot]);
+            }
+        }
+        $maxTurns = max(1, $subAgent->agent->maxTurns ?? \SugarCraft\Code\Agents\EngineExecutor::defaultMaxTurns());
+
+        // Roadmap 3.B-5 (DCP §13.2 I): the run manages its OWN context — an
+        // EPHEMERAL ledger, private to this delegation: its refs number only
+        // the run's rows, nothing is persisted with the parent session, and
+        // the parent's ledger (which EngineBackend::turnTools() never hands
+        // down) is never read or written. Only where the run was granted a
+        // ledger tool (`Prune`, `Recall`) — a preset whose `tools:` omits
+        // them runs exactly as before, with no ref tags on its wire — and
+        // only in the configured `auto` mode, the one that lets the model
+        // prune. The delegated prompt stays whole: `Prune` refuses a prompt,
+        // and `Compress` is offered only on a person's `/compress` turn,
+        // which a delegated run never is. A resumed run continues on the
+        // ledger it was suspended with, so its pruned view survives.
+        $runLedger = null;
+        $pruningMode = \SugarCraft\Code\Context\Pruning\PruningMode::configured();
+        if ($pruningMode->allowsModelPruning()) {
+            foreach ($tools as $tool) {
+                if ($tool instanceof \SugarCraft\Code\Tools\MutatesContextLedger) {
+                    $runLedger = \SugarCraft\Code\Context\Pruning\ContextLedger::fromArray($suspension['contextLedger'] ?? null)
+                        ->withDefaultMode($pruningMode);
+                    $engine = $engine->withContextLedger($runLedger);
+
+                    break;
+                }
+            }
+        }
+
+        // Roadmap 4.9: an `isolation: worktree` agent works in a git worktree
+        // of its own — a resumed run in the one it kept — with every tool it
+        // was granted re-jailed there and Bash refused paths outside it. A
+        // run that cannot be isolated is REFUSED rather than run in the
+        // session's checkout: the preset asked for isolation, and running
+        // without it is the one outcome it ruled out.
+        $worktree = null;
+        if ($subAgent->isolation === \SugarCraft\Code\Agents\Isolation::Worktree) {
+            [$worktree, $why] = $this->enterWorktree($subAgent, $suspension['worktree'] ?? null);
+            if ($worktree === null) {
+                $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+
+                return $this->refusal($toolCallId, $why);
+            }
+            $engine = $engine->withTools($tools)->withWorktreeRoot($worktree['path']);
+            $tools = $engine->tools();
+        }
+
+        // The roster above is narrowed by tool NAME only, so `Bash(git *)`
+        // put all of Bash on the wire. Every call the run makes is held to the
+        // preset's whole declaration — argument halves and argument-scoped
+        // denials included — by this hook, ahead of the session gate (4.2).
+        // 4.1-2: and to the preset's permission mode, as a second gate beside
+        // the session's (both must pass), when it is the stricter one — a gate
+        // no stricter than the session's could only repeat its questions. An
+        // engine with no gate (an embedder's) compares against `default`: it
+        // is the mode every agent carries when its preset declared none, so
+        // only a declared `plan`/`dont-ask` narrows there.
+        $sessionMode = $engine->permissionGate()?->mode() ?? \SugarCraft\Code\Permissions\PermissionMode::Default;
+        $modeGate = $subAgent->permissionGate !== null && $subAgent->permissionGate->mode()->isStricterThan($sessionMode)
+            ? $subAgent->permissionGate
+            : null;
+        $engine = $engine->withSubAgentGrant(
+            new \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook($manager, $subAgent, $modeGate),
+        );
+
+        // Roadmap 4.4: followups `SendMessage` kept for the conversation's
+        // next run (AgentRunCards::takeFollowups()) — this one, when it
+        // continues it. They lead the new instruction, each framed by sender
+        // like a mailbox message, inside the ONE user turn the resume adds.
+        $followups = [];
+        // What the mailbox followups below did, written to the run's log once
+        // it exists: each delivery as an inbox row, each drop as a status.
+        $followupLog = [];
+        if ($suspension !== null && $scope !== null) {
+            foreach (\SugarCraft\Code\Agents\Live\AgentRunCards::takeFollowups($scope, $suspension['id']) as $followup) {
+                try {
+                    $followups[] = \SugarCraft\Code\Backend\MailboxTurnInbox::frame(
+                        \SugarCraft\Code\Agents\Live\AgentMessage::new($followup['from'], $followup['text'], \SugarCraft\Code\Agents\Live\MessageMode::Followup),
+                    );
+                } catch (\InvalidArgumentException) {
+                    // A card line no message could carry: dropped, as the
+                    // mailbox drops a malformed one.
+                }
+            }
+
+            // And the `followup` lines in the MAILBOX of every earlier run of
+            // this conversation (AgentInbox::takeFollowups()): a mailbox
+            // followup is never read by the run it was sent to, so without
+            // this it waited unread for good. Each is checked like any
+            // mailbox line — a user line needs this launch's HMAC — and
+            // framed by sender as the run's own inbox frames it.
+            $parentName = $this->parentAgentId ?? SendMessageTool::MAIN;
+            foreach (\SugarCraft\Code\Agents\Live\AgentRunCards::runs($scope) as $card) {
+                if ($card['resumeId'] !== $suspension['id'] || $card['inboxSession'] === '') {
+                    continue;
+                }
+                $earlierInbox = \SugarCraft\Code\Agents\Live\AgentInbox::forSession($card['inboxSession']);
+                if ($earlierInbox === null) {
+                    continue;
+                }
+                try {
+                    $taken = $earlierInbox->takeFollowups($card['runId'], static function (string $msgId, string $from, string $reason) use (&$followupLog): void {
+                        $followupLog[] = [SubAgentTranscriptLog::T_STATUS, [
+                            'status' => 'inbox',
+                            'outcome' => 'dropped a message',
+                            'error' => sprintf('%s (id %s, claimed sender %s)', $reason, $msgId, $from),
+                        ]];
+                    });
+                } catch (\InvalidArgumentException | \RuntimeException) {
+                    // A card naming no readable mailbox: nothing kept there.
+                    continue;
+                }
+                foreach ($taken as $message) {
+                    $followups[] = \SugarCraft\Code\Backend\MailboxTurnInbox::frame($message, $parentName);
+                    $followupLog[] = [SubAgentTranscriptLog::T_INBOX, [
+                        'msgId' => $message->msgId,
+                        'from' => $message->from,
+                        'mode' => $message->mode->value,
+                        'text' => $message->text,
+                        'step' => 0,
+                    ]];
+                }
+            }
+        }
+
+        if ($suspension !== null) {
+            // The saved transcript already opens with the preset's system turn.
+            $messages = [...$suspension['transcript'], new UserMessage(
+                $followups === [] ? $subAgent->task : implode("\n\n", [...$followups, $subAgent->task]),
+            )];
+        } else {
+            $messages = trim($systemPrompt) === '' ? [] : [new SystemMessage($systemPrompt)];
+            $messages[] = new UserMessage($subAgent->task);
+        }
+        $resumes = $suspension === null ? 0 : $suspension['resumes'] + 1;
+
+        // Step P-C1: the run's own transcript, written HERE — in the process
+        // that runs it (the turn child, or a parallel member's grandchild) —
+        // and read back into a child session by the parent once the finished
+        // frame arrives. A run with no session has no parent session to be a
+        // child of, so it keeps no log (nor does a process with no owned
+        // home to keep one in). A resume continues the log its
+        // suspension names, so the stored session follows the conversation.
+        $parentSessionId = $engine->sessionId();
+        $log = null;
+        $logRoot = $this->transcriptRoot ?? SubAgentTranscriptLog::defaultRoot();
+        if ($parentSessionId !== null && $logRoot !== null) {
+            $savedLog = $suspension['transcriptLog'] ?? null;
+            $log = \is_string($savedLog) && SubAgentTranscriptLog::isLogPath($savedLog, $logRoot)
+                ? SubAgentTranscriptLog::at($savedLog)
+                : SubAgentTranscriptLog::forRun($parentSessionId, $subAgent->id, $logRoot);
+            foreach ($followupLog as [$type, $fields]) {
+                $log->append($type, $fields);
+            }
+            $log->user($subAgent->task);
+        }
+        $logPath = $log?->path();
+        // Prose and reasoning arrive as deltas; each is written as ONE item
+        // when the step's next tool call (or the run's end) closes it.
+        $logProse = '';
+        $logThought = '';
+        $flushLog = static function () use ($log, &$logProse, &$logThought): void {
+            if ($log !== null && trim($logThought) !== '') {
+                $log->thinking($logThought);
+            }
+            if ($log !== null && trim($logProse) !== '') {
+                $log->assistant($logProse);
+            }
+            $logProse = '';
+            $logThought = '';
+        };
+
+        // Step P-D1: the run's mailbox. What the user (from the Agent View,
+        // HMAC-signed) or the delegating agent sends this run while it works
+        // is read at each of its step boundaries, framed by sender, and
+        // logged beside the rest of its transcript. Keyed by the parent
+        // session like the log: no session, no mailbox to address.
+        $turnInbox = null;
+        $agentInbox = $parentSessionId === null ? null : \SugarCraft\Code\Agents\Live\AgentInbox::forSession($parentSessionId);
+        if ($agentInbox !== null) {
+            try {
+                $turnInbox = \SugarCraft\Code\Backend\MailboxTurnInbox::new($agentInbox, $subAgent->id, $log, $this->parentAgentId ?? SendMessageTool::MAIN);
+            } catch (\InvalidArgumentException) {
+                // An id no mailbox can be named by (an embedder's own
+                // SubAgent): the run cannot be messaged, and still runs.
+            }
+        }
+
+        // Step 4.7-1: a run that FAILS hands back the last 3 x 4096 bytes of
+        // what it produced — its own text, the calls it made and their
+        // results, from this run's steps only (the opening turns and a
+        // resumed run's earlier steps are not "partial output" of this one).
+        // Before it the caller got the failure reason and a resume id, and the
+        // only trace of the work was the activity trail on a dashboard row the
+        // MODEL never sees, so it could not judge whether to resume, redo or
+        // give up. Labels are bracketed, not `assistant:`, so the fence does
+        // not quote them; the body is fenced because it is foreign bytes
+        // re-entering the caller's conversation (step 0.15).
+        $opening = count($messages);
+        $failureTailBytes = 3 * self::ACTIVITY_TAIL_BYTES;
+        $failureTail = static function (array $transcript) use ($opening, $failureTailBytes): string {
+            $parts = [];
+            foreach (array_slice($transcript, $opening) as $message) {
+                if ($message instanceof AssistantMessage) {
+                    $text = trim($message->content());
+                    foreach ($message->toolCalls() ?? [] as $call) {
+                        $text .= ($text === '' ? '' : "\n") . '-> ' . $call->name();
+                    }
+                    $label = '[sub-agent]';
+                } elseif ($message instanceof \SugarCraft\Code\Messages\ToolResultMessage) {
+                    $text = trim($message->content());
+                    $label = $message->isError() ? '[tool error]' : '[tool result]';
+                } else {
+                    $text = trim($message->content());
+                    $label = '[' . $message->role() . ']';
+                }
+                if ($text !== '') {
+                    $parts[] = $label . ' ' . $text;
+                }
+            }
+            if ($parts === []) {
+                return '';
+            }
+
+            return sprintf(
+                ".\n\nIts partial output before it stopped (the last %d bytes at most):\n%s",
+                $failureTailBytes,
+                \SugarCraft\Code\Context\DelegatedOutputFence::wrap(self::tailClip(implode("\n", $parts), $failureTailBytes)),
+            );
+        };
+
+        $orphanGuard = ParentProcessGuard::capture('turn that delegated it');
+        $heartbeat = $this->heartbeat;
+        $onProgress = static function () use ($orphanGuard, $heartbeat): void {
+            $orphanGuard();
+            if ($heartbeat !== null) {
+                $heartbeat();
+            }
+        };
+        // 1.C-4b: Esc stopped this call (`cancel_tool{callId}`). A run in
+        // this process cannot be killed from outside it without killing the
+        // turn, so it stops itself at the next point that is safe to throw
+        // from — a tool about to start, a provider step about to go out —
+        // and the failure boundary below settles it cancelled and resumable.
+        // In a concurrent member this never fires: the turn child kills the
+        // member's process instead (ToolCancelRequests answers only there).
+        $stopIfCancelled = static function () use ($toolCallId): void {
+            if (\SugarCraft\Code\Support\ToolCancelRequests::isRequested($toolCallId)) {
+                throw new \SugarCraft\Code\Support\ToolCallCancelled();
+            }
+        };
+
+        $emit = $this->subAgentEmitter;
+        // The engine above is already on the run's model (4.1-1), so the row
+        // names the model the requests actually go to.
+        $subAgent->runModel = $engine->model();
+        $subAgent->status = SubAgent::STATUS_RUNNING;
+        $subAgent->startedAt = new \DateTimeImmutable();
+
+        // Frame ordering within one run: strictly increasing, minted here (the
+        // run's own stack), never derived from wall clock — a reader that sees
+        // seq 7 then 5 knows 5 is stale, whatever the sockets did to the order.
+        $seq = 0;
+        $think = '';
+        // Whether the trail's last line is part of an open thought: the
+        // `thinking:` label goes on a thought's first line only, so one long
+        // burst reads as one block instead of a label per folded line.
+        $thinking = false;
+        // Trail lines produced, for the row's "N more lines" count — the
+        // output itself is clipped to ACTIVITY_TAIL_BYTES.
+        $lines = 0;
+
+        // P-B1: what the run did since its last frame (coalesced, at most 4
+        // frames a second) and the figures every frame carries. The stats
+        // are the run's own: steps and tokens from each billed step, tool
+        // calls from its events, cost from the row's running total.
+        $buffer = SubAgentActivityBuffer::new($this->activityClock);
+        $stats = [
+            'step' => 0,
+            'maxSteps' => $maxTurns,
+            'tools' => 0,
+            'tokensIn' => 0,
+            'tokensOut' => 0,
+            'costUsd' => 0.0,
+            'startedAt' => $startedAt,
+        ];
+
+        // One v2 frame. Its items get whatever byte budget the rest of the
+        // frame leaves under SubAgentActivityBuffer::MAX_BYTES; the v1 fields
+        // (tail, recent calls) keep their own bounds.
+        $parentAgentId = $this->parentAgentId;
+        $frame = static function (string $op, array $extra = []) use (
+            $subAgent, $agentName, $toolCallId, $description, $buffer, &$seq, &$lines, &$stats, $logPath, $parentSessionId, $parentAgentId,
+        ): SubAgentActivity {
+            // P-C1: the log and the parent session ride the two frames that
+            // bracket the run, not every progress beat.
+            $bracket = $op === SubAgentActivity::OP_STARTED || $op === SubAgentActivity::OP_FINISHED;
+            $stats['costUsd'] = $subAgent->costUsd;
+            $build = static fn (array $items): SubAgentActivity => new SubAgentActivity(
+                $op,
+                $subAgent->id,
+                $agentName,
+                $extra['task'] ?? '',
+                $seq + 1,
+                $op === SubAgentActivity::OP_STARTED ? '' : self::tailClip($subAgent->output, self::ACTIVITY_TAIL_BYTES),
+                $subAgent->tokensUsed,
+                $subAgent->costUsd,
+                $lines,
+                $extra['model'] ?? '',
+                $subAgent->contextTokens,
+                $op === SubAgentActivity::OP_STARTED ? [] : $subAgent->recentCalls,
+                parentCallId: $toolCallId,
+                parentAgentId: $parentAgentId,
+                description: $description,
+                items: $items,
+                stats: $stats,
+                outcome: $extra['outcome'] ?? '',
+                error: $extra['error'] ?? null,
+                resumeId: $extra['resumeId'] ?? null,
+                transcriptLog: $bracket ? $logPath : null,
+                parentSessionId: $bracket ? $parentSessionId : null,
+            );
+            $budget = SubAgentActivityBuffer::MAX_BYTES - strlen(serialize($build([])->toArray()));
+            $seq++;
+
+            return $build($buffer->flush($budget));
+        };
+
+        // An activity frame whenever the buffer says one is due. Asked on
+        // every callback the run makes, so a pending item waits at most about
+        // one flush interval.
+        $flushIfDue = static function () use ($emit, $buffer, $frame): void {
+            if ($emit !== null && $buffer->due()) {
+                $emit($frame(SubAgentActivity::OP_PROGRESS));
+            }
+        };
+
+        // The row counts tokens as each step is billed, not only once the
+        // run settles. The baseline is whatever the row carried before this
+        // run (a resumed run keeps counting from it); bill() later replaces
+        // the live figure with the settled one.
+        $baseTokens = $subAgent->tokensUsed;
+        $baseCost = $subAgent->costUsd;
+        $observeUsage = static function (?Usage $usage) use ($subAgent, &$stats, $flushIfDue): void {
+            $subAgent->tokensUsed += $usage?->totalTokens ?? 0;
+            $subAgent->costUsd += $usage?->costUsd ?? 0.0;
+            // One response's total is its prompt plus its reply — the size
+            // of the context that request carried, which is what "current
+            // context" means for a row.
+            if (($usage?->totalTokens ?? 0) > 0) {
+                $subAgent->contextTokens = $usage->totalTokens;
+            }
+            $stats['step']++;
+            $stats['tokensIn'] += $usage?->inputTokens ?? 0;
+            $stats['tokensOut'] += $usage?->outputTokens ?? 0;
+            $flushIfDue();
+        };
+
+        // The run's visible trail. Every line lands on the row's rolling
+        // output, and its item (if it has one) on the frame buffer; frames go
+        // out at the buffer's pace — the dashboard is a monitor, not a tape
+        // deck.
+        $record = static function (string $line, ?ActivityItem $item) use (
+            $subAgent, $buffer, $flushIfDue, &$lines,
+        ): void {
+            $subAgent->output = self::appendActivity($subAgent->output, $line);
+            $lines++;
+            if ($item !== null) {
+                $buffer->add($item);
+            }
+            $flushIfDue();
+        };
+
+        // A reasoning burst becomes trail lines folded at THINK_LINE_BYTES,
+        // so a long thought streams instead of never appearing until it ends.
+        // Only the burst's first line carries the label (and the one
+        // `thinking` item); the rest continue under it, indented, until a
+        // tool boundary closes the thought.
+        $foldThink = static function () use (&$think, &$thinking, $record): void {
+            if ($think === '') {
+                return;
+            }
+            $line = self::tailClip($think, self::THINK_LINE_BYTES);
+            $think = '';
+            $record(($thinking ? '  ' : 'thinking: ') . $line, $thinking ? null : ActivityItem::thinking());
+            $thinking = true;
+        };
+
+        // The transport's own beat (fired inside a provider call) doubles as
+        // the buffer's clock tick, so an item buffered just before a long
+        // request still goes out within the flush interval.
+        $onHeartbeat = $emit === null ? $heartbeat : static function () use ($heartbeat, $flushIfDue): void {
+            $flushIfDue();
+            if ($heartbeat !== null) {
+                $heartbeat();
+            }
+        };
+
+        // Roadmap 4.4: the run's card — how the messaging tools find it from
+        // whatever process asks (AgentRunCards). Kept under the session the
+        // seats count against, which is where its parent looks; its mailbox
+        // is wherever $agentInbox put it. A background daemon's run was
+        // started as `bg_<its session>`, and the parent knows it by that
+        // session's id. No mailbox, nothing to address: no card.
+        $cardScope = $agentInbox === null ? null : $scope;
+        if ($cardScope !== null && $parentSessionId !== null) {
+            \SugarCraft\Code\Agents\Live\AgentRunCards::recordRun($cardScope, [
+                'runId' => $subAgent->id,
+                'agent' => $agentName,
+                'description' => $description,
+                'task' => self::snippet($subAgent->task, self::TASK_SNIPPET_BYTES),
+                'parent' => $this->parentAgentId ?? SendMessageTool::MAIN,
+                'inboxSession' => $parentSessionId,
+                'background' => $toolCallId === 'bg_' . $parentSessionId ? $parentSessionId : '',
+                'status' => \SugarCraft\Code\Agents\Live\AgentRunCards::STATUS_RUNNING,
+                'resumeId' => $suspension['id'] ?? '',
+                'startedAt' => (int) floor(microtime(true) * 1000),
+                'pid' => (int) getmypid(),
+            ]);
+        }
+
+        if ($emit !== null) {
+            $emit($frame(SubAgentActivity::OP_STARTED, [
+                'task' => self::snippet($subAgent->task, self::TASK_SNIPPET_BYTES),
+                'model' => $subAgent->runModel,
+            ]));
+        }
+        // The model/effort fallback taken above, once, at the head of the trail.
+        foreach ($trailNotes as $trailNote) {
+            $record($trailNote, null);
+        }
+
+        // Terminal beat: settle the row, then say so once, with how the run
+        // really ended. The report wins when there is one; a run that ends
+        // without one keeps its activity trail as the row's output — the
+        // story of what it got through — rather than going blank on the
+        // dashboard at exactly the moment a human looks.
+        $finish = function (string $status, string $report, ?string $error, string $outcome, ?string $resumeId) use (
+            $subAgent, $emit, $foldThink, $frame, $flushLog, $log, $cardScope,
+        ): void {
+            $foldThink();
+            // The log is complete BEFORE the finished frame leaves: the
+            // parent reads it into the child session the moment it lands.
+            $flushLog();
+            $log?->status($status, $outcome, $error);
+            // Roadmap 4.4: settled on its card before anyone is told, so a
+            // `Subagents wait` that wakes on the frame reads the outcome.
+            if ($cardScope !== null) {
+                \SugarCraft\Code\Agents\Live\AgentRunCards::updateRun($cardScope, $subAgent->id, static function (array $card) use ($outcome, $error, $resumeId): array {
+                    return [
+                        'status' => $outcome,
+                        'error' => $error ?? '',
+                        'resumeId' => $resumeId ?? $card['resumeId'],
+                        'finishedAt' => (int) floor(microtime(true) * 1000),
+                    ] + $card;
+                });
+            }
+            // Report wins; without one the trail IS the row's story.
+            $this->settle($subAgent, $status, $report !== '' ? $report : $subAgent->output, $error);
+            if ($emit === null) {
+                return;
+            }
+            $emit($frame(SubAgentActivity::OP_FINISHED, [
+                'outcome' => $outcome,
+                'error' => $error,
+                'resumeId' => $resumeId,
+            ]));
+        };
+
+        // @endregion setup
+
+        // @region run
+        // Set when the engine's mid-turn spend cap stops the run: the loop
+        // then RETURNS normally with whatever its last step said, which must
+        // not be handed back as the sub-agent's report.
+        $capStop = null;
+
+        // P-D3: the user's controls for this run — `cancel`, `pause`,
+        // `resume` control messages in its mailbox (AgentInbox::control(),
+        // sent from the Agent View or the agent dashboard). They are READ on
+        // every callback the run makes, throttled to a stat a quarter second
+        // (the same probe a step's drain does), so a control never waits for
+        // a whole step to be noticed; they are ACTED ON only where it is safe
+        // to throw or to wait: a soft cancel at the next tool start or step,
+        // as Esc's cancel_tool does, so the run stops resumable; a pause at
+        // the next step boundary, so the step it is in finishes first.
+        $control = ['cancel' => false, 'cancelledBy' => null, 'paused' => false, 'background' => false, 'size' => -1, 'probedAt' => null];
+        $controlClock = $this->activityClock ?? static fn (): float => microtime(true);
+        $runId = $subAgent->id;
+        $readControls = static function (bool $force) use ($agentInbox, $runId, &$control, $controlClock, $log): void {
+            if ($agentInbox === null) {
+                return;
+            }
+            $now = $controlClock();
+            if (!$force && $control['probedAt'] !== null && $now - $control['probedAt'] < 0.25) {
+                return;
+            }
+            $control['probedAt'] = $now;
+            try {
+                $size = $agentInbox->size($runId);
+                if ($size === 0 || $size === $control['size']) {
+                    return;
+                }
+                $verbs = $agentInbox->takeControls($runId, static function (string $msgId, string $from, string $reason) use ($log): void {
+                    $log?->append(SubAgentTranscriptLog::T_STATUS, [
+                        'status' => 'inbox',
+                        'outcome' => 'dropped a control message',
+                        'error' => sprintf('%s (id %s, claimed sender %s)', $reason, $msgId, $from),
+                    ]);
+                });
+                $control['size'] = $agentInbox->size($runId);
+            } catch (\InvalidArgumentException|\RuntimeException) {
+                // A run whose id names no mailbox, or a mailbox gone unreadable:
+                // it cannot be controlled, and it still runs.
+                return;
+            }
+            foreach ($verbs as $verb) {
+                if ($verb->text === 'cancel') {
+                    // Who asked decides the wording: the user from the Agent
+                    // View, or the agent that launched the run (`Subagents
+                    // cancel`, roadmap 4.4).
+                    $control['cancelledBy'] = $verb->from;
+                }
+                match ($verb->text) {
+                    'cancel' => $control['cancel'] = true,
+                    'pause' => $control['paused'] = true,
+                    'resume' => $control['paused'] = false,
+                    \SugarCraft\Code\Agents\Live\AgentInbox::BACKGROUND_VERB => $control['background'] = true,
+                    default => null,
+                };
+            }
+        };
+        // Pause is CAPPED: the parent's Task call blocks on this run, so a
+        // pause left on would hang the parent turn. It holds for at most
+        // ten minutes, feeding the parent's no-progress watchdog a heartbeat
+        // every slice, and then the run goes on by itself.
+        $pauseCapSeconds = 600.0;
+        // P-E3: `background` (Ctrl+X b) stops the run where a soft cancel
+        // would, and the failure boundary below hands the saved run to a
+        // background session — only for a run the main conversation
+        // delegated, on a launch that can start one; any other run is told
+        // so on its line and goes on here.
+        $canBackground = $this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0;
+        $promoteIfAsked = static function () use (&$control, $canBackground, $record, $log): void {
+            if (!$control['background']) {
+                return;
+            }
+            $control['background'] = false;
+            if ($canBackground) {
+                throw new \SugarCraft\Code\Support\RunPromotedToBackground();
+            }
+            $why = 'cannot move to the background: only a run the main conversation delegated can, on a launch that starts background sessions';
+            $record('⧗ ' . $why, ActivityItem::text('⧗ ' . $why));
+            $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'inbox', 'outcome' => 'stayed in the foreground', 'error' => $why]);
+        };
+        $stopIfControlled = static function (bool $stepBoundary) use (
+            &$control, $readControls, $controlClock, $pauseCapSeconds, $record, $log, $orphanGuard, $onHeartbeat, $promoteIfAsked,
+        ): void {
+            $readControls(true);
+            if ($control['cancel']) {
+                throw new \SugarCraft\Code\Support\ToolCallCancelled();
+            }
+            $promoteIfAsked();
+            if (!$stepBoundary || !$control['paused']) {
+                return;
+            }
+
+            $until = $controlClock() + $pauseCapSeconds;
+            $record('⏸ paused by the user · auto-resumes in 10 min', ActivityItem::text('⏸ paused by the user · auto-resumes in 10 min'));
+            $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'paused', 'outcome' => 'paused by the user', 'error' => null]);
+            while ($control['paused']) {
+                $left = $until - $controlClock();
+                if ($left <= 0.0) {
+                    $control['paused'] = false;
+                    $record('▶ resumed: the 10 min pause cap ran out', ActivityItem::text('▶ resumed: the pause cap ran out'));
+                    $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'resumed', 'outcome' => 'resumed after the 10 min pause cap', 'error' => null]);
+
+                    return;
+                }
+                $orphanGuard();
+                if ($onHeartbeat !== null) {
+                    $onHeartbeat();
+                }
+                usleep((int) (min(1.0, $left) * 1_000_000));
+                $readControls(true);
+                if ($control['cancel']) {
+                    throw new \SugarCraft\Code\Support\ToolCallCancelled();
+                }
+                $promoteIfAsked();
+            }
+            $record('▶ resumed by the user', ActivityItem::text('▶ resumed by the user'));
+            $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'resumed', 'outcome' => 'resumed by the user', 'error' => null]);
+        };
+
+        // Roadmap 4.5: a member of a parallel batch joins the batch's board.
+        // $boardSeat is never read again: it is a local so that the binding
+        // lives exactly as long as this run, as $seat does above.
+        [$tools, $boardSeat] = $this->joinBoard($tools, $manager, $subAgent);
+
+        try {
+            $turn = $engine
+                ->withTools($tools)
+                ->withMaxSteps($maxTurns)
+                ->withSiblingSpend($this->siblingSpend)
+                ->withStepUsageObserver($observeUsage)
+                ->withTurnInbox($turnInbox)
+                ->completeTranscript(
+                    $messages,
+                    // SubAgentActivity is deliberately NOT in this signature:
+                    // a nested Task (roadmap 4.7-3) keeps the delegating run's
+                    // emitter (EngineBackend::turnTools() leaves a pre-bound
+                    // emitter in place below depth 0), so its frames go
+                    // straight to the parent and never reach this channel.
+                    // SpendCapBreached IS: the run's own cap check emits it, and
+                    // a narrower type here made that emit a TypeError that
+                    // surfaced as an unexplained "failed" (audit B4).
+                    // ContextLedgerChanged too (roadmap 3.B-5): a run on its
+                    // ephemeral ledger reports each prune as it lands, for
+                    // the same reason — it is the run's own view, shown to
+                    // nobody, so it is taken and dropped here.
+                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Code\Events\ContextLedgerChanged $event) use ($onProgress, $stopIfCancelled, $stopIfControlled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
+                        if ($event instanceof \SugarCraft\Code\Events\ContextLedgerChanged) {
+                            return;
+                        }
+                        // Before the call runs; a throw from a finished
+                        // event would only become that call's result.
+                        if ($event instanceof ToolStarted) {
+                            $stopIfCancelled();
+                            $stopIfControlled(false);
+                        }
+                        $onProgress();
+                        // A tool boundary ends the thought before it: the
+                        // next burst opens under a fresh label.
+                        $closeThought = static function () use ($foldThink, &$thinking): void {
+                            $foldThink();
+                            $thinking = false;
+                        };
+                        if ($event instanceof SpendCapBreached) {
+                            $capStop = $event;
+                            $closeThought();
+                            $record(sprintf('stopped: spend cap $%.4f reached ($%.4f spent)', $event->capUsd, $event->spentUsd), null);
+
+                            return;
+                        }
+                        if ($event instanceof ToolStarted) {
+                            $closeThought();
+                            $flushLog();
+                            $log?->toolCall($event->toolCallId, $event->toolName, $event->arguments);
+                            self::trackCall($subAgent, $event);
+                            $stats['tools']++;
+                            $record('-> '.self::describeCall($event), ActivityItem::toolStarted(
+                                $event->toolCallId,
+                                $event->toolName,
+                                ToolSummary::of($event->toolName, $event->arguments),
+                            ));
+
+                            return;
+                        }
+                        $closeThought();
+                        $log?->toolResult($event->toolCallId, $event->toolName, !$event->result->isError(), $event->result->content());
+                        self::trackCall($subAgent, $event);
+                        $record('<- '.$event->toolName.($event->result->isError() ? ' (error)' : ''), ActivityItem::toolFinished(
+                            $event->toolCallId,
+                            $event->toolName,
+                            !$event->result->isError(),
+                            $event->result->durationMs() ?? 0,
+                        ));
+                    },
+                    onReasoning: static function (string $delta) use ($onProgress, $readControls, &$think, $foldThink, $flushIfDue, &$logThought): void {
+                        $onProgress();
+                        $readControls(false);
+                        $logThought .= $delta;
+                        // The heartbeat's "alive, nothing to show" frame is an
+                        // empty delta ({@see EngineBackend::turnTools()}) — it
+                        // carries no thought to fold, but it still ticks the
+                        // frame buffer.
+                        if ($delta !== '') {
+                            $think .= $delta;
+                            if (strlen($think) >= self::THINK_LINE_BYTES) {
+                                $foldThink();
+                            }
+                        }
+                        $flushIfDue();
+                    },
+                    onHeartbeat: static function () use ($onHeartbeat, $readControls): void {
+                        $readControls(false);
+                        if ($onHeartbeat !== null) {
+                            $onHeartbeat();
+                        }
+                    },
+                    // P-B2: the run's prose, as `text` items — the parent's
+                    // live line shows the newest fragment when the run is
+                    // writing rather than calling tools. Items only: the v1
+                    // tail stays the run's trail of what it did.
+                    onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse): void {
+                        $onProgress();
+                        $readControls(false);
+                        $logProse .= $delta;
+                        if ($delta !== '') {
+                            $buffer->add(ActivityItem::text($delta));
+                        }
+                        $flushIfDue();
+                    },
+                    // P-B2: per-step stats from the turn loop's own step
+                    // beat. Each step's start carries the loop's real step
+                    // ceiling, and it ticks the frame buffer before the
+                    // step's request goes out, so items waiting from the
+                    // last step leave now rather than after a long call.
+                    // The step count and token totals stay with the usage
+                    // observer, which bills each step as it lands.
+                    onStep: static function (\SugarCraft\Code\Events\StepStarted|\SugarCraft\Code\Events\UsageUpdated $event) use (&$stats, $flushIfDue, $stopIfCancelled, $stopIfControlled): void {
+                        if ($event instanceof \SugarCraft\Code\Events\StepStarted) {
+                            $stopIfCancelled();
+                            // The step boundary: where a pause holds.
+                            $stopIfControlled(true);
+                            $stats['maxSteps'] = $event->maxSteps;
+                        }
+                        $flushIfDue();
+                    },
+                );
+        } catch (TurnInterrupted $failure) {
+            // A run that failed part-way still billed every step it completed
+            // (audit B4). The transcript holds those steps' assistant turns,
+            // each with its own usage; the opening $messages are skipped so a
+            // resumed run's earlier, already-billed steps are not counted twice.
+            $spent = self::spentSince($failure->transcript, count($messages));
+            self::bill($subAgent, $spent, $baseTokens, $baseCost);
+            // P-E3: the user moved the run to the background. Saved like a
+            // cancelled run, then continued by a background session.
+            if ($failure->getPrevious() instanceof \SugarCraft\Code\Support\RunPromotedToBackground) {
+                [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
+                $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
+                // The log is complete before the session can append to it.
+                $foldThink();
+                $flushLog();
+                $inboxTrailer = $turnInbox?->trailer() ?? '';
+
+                return $this->moveToBackground(
+                    $toolCallId,
+                    $agentName,
+                    $description,
+                    $requestedModel,
+                    $subAgent->task,
+                    $resumeId,
+                    $resume,
+                    $stats['step'],
+                    $startedAt,
+                    $spent,
+                    $finish,
+                    ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote,
+                );
+            }
+            $cancelled = $failure->getPrevious() instanceof \SugarCraft\Code\Support\ToolCallCancelled;
+            $why = match (true) {
+                !$cancelled => sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage()),
+                $control['cancel'] && $control['cancelledBy'] !== null && $control['cancelledBy'] !== \SugarCraft\Code\Agents\Live\AgentMessage::FROM_USER
+                    => sprintf('sub-agent "%s" was cancelled by the agent that launched it (Subagents cancel)', $agentName),
+                default => sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc'),
+            };
+            [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
+            $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
+            $finish(
+                $cancelled ? SubAgent::STATUS_STOPPED : SubAgent::STATUS_FAILED,
+                '',
+                $why,
+                $cancelled ? SubAgentActivity::OUTCOME_CANCELLED : SubAgentActivity::OUTCOME_FAILED,
+                $resumeId,
+            );
+
+            // P-D1: what the user told the run before it stopped is part of
+            // why it stopped where it did.
+            $inboxTrailer = $turnInbox?->trailer() ?? '';
+
+            return $this->refusal(
+                $toolCallId,
+                $why . '. ' . $resume . $failureTail($failure->transcript) . ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote,
+                self::elapsedMs($startedAt),
+                $spent,
+            );
+        }
+        // @endregion run
+
+        // @region finish
+        $reply = $turn->reply;
+        $spent = $reply->usage;
+        self::bill($subAgent, $spent, $baseTokens, $baseCost);
+        // Saved before the finished frame goes out, so the frame can name
+        // the id a later Task call resumes it by (every path below saves).
+        // Roadmap 4.9: the run's worktree, removed when it holds no work and
+        // kept — and named, below and in the suspension — when it does.
+        [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
+        // Roadmap 3.B-5: with the ledger the run ended on — its refs fixed
+        // over the transcript saved beside it — so a resume keeps its view.
+        $resume = $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger === null ? null : ($reply->contextLedger ?? $runLedger), $keptWorktree);
+        // P-D1: what the user told the run while it worked, on every return
+        // below as on the failure path — the harness's note, so it goes
+        // outside the report's fence.
+        $inboxTrailer = $turnInbox?->trailer() ?? '';
+        $inboxNote = ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote;
+
+        if ($capStop !== null) {
+            $why = sprintf(
+                'sub-agent "%s" was stopped by the session spend cap after %d provider call%s ($%.4f spent of a $%.4f cap);'
+                . ' any work it did is in the tree but was not summarised',
+                $agentName,
+                $capStop->completedCalls,
+                $capStop->completedCalls === 1 ? '' : 's',
+                $capStop->spentUsd,
+                $capStop->capUsd,
+            );
+            $finish(SubAgent::STATUS_FAILED, '', $why, SubAgentActivity::OUTCOME_FAILED, $resumeId);
+
+            return $this->refusal(
+                $toolCallId,
+                $why . '. ' . $resume . $failureTail($turn->transcript) . $inboxNote,
+                self::elapsedMs($startedAt),
+                $spent,
+            );
+        }
+
+        $content = trim($reply->content);
+        $finish(
+            SubAgent::STATUS_COMPLETE,
+            $content,
+            null,
+            $content === '' ? SubAgentActivity::OUTCOME_EMPTY : SubAgentActivity::OUTCOME_COMPLETE,
+            $resumeId,
+        );
+
+        if ($content === '') {
+            return $this->refusal($toolCallId, sprintf(
+                'sub-agent "%s" ended without a final report (step cap %d); any work it did is in the tree'
+                . ' but was not summarised. %s',
+                $agentName,
+                $maxTurns,
+                $resume,
+            ) . $failureTail($turn->transcript) . $inboxNote, self::elapsedMs($startedAt), $spent);
+        }
+
+        // A run that hit its step cap now ENDS IN A SUMMARY rather than in
+        // silence: the engine makes one no-tools request asking what is done,
+        // what remains and what comes next (WAVE_PLAN_2 §5), so $content is no
+        // longer empty there and the refusal above no longer catches it. The
+        // summary is the report — it is exactly what the caller needs — but
+        // the run is still unfinished, so it keeps its resume id rather than
+        // forgetting it: dropping resumability is the regression the summary
+        // would otherwise have introduced.
+        //
+        // A run that FINISHED keeps its id too (step 4.7-1). A report used to
+        // forget the suspension, so a follow-up question to the agent that
+        // just did the work — "and the other module?", "fix what you found" —
+        // started a stranger from nothing and paid for every read again.
+        // Every run is now saved and its report names the id; the store's
+        // age and count caps ({@see SuspendedDelegations}) bound the cost.
+        //
+        // The report re-enters the parent's conversation as foreign bytes,
+        // so it is fenced (step 0.15) - before the harness's own step-cap
+        // note is appended, which stays outside the fence. The dashboard row
+        // ($finish above) keeps the raw report: it is read by a human, not
+        // replayed to a model.
+        $content = \SugarCraft\Code\Context\DelegatedOutputFence::wrap($content);
+        if ($reply->stepsTruncated) {
+            $content .= sprintf(
+                "\n\n[sub-agent \"%s\" stopped at its step cap (%d); the above is its own summary of where it stopped. %s.]",
+                $agentName,
+                $maxTurns,
+                $resume,
+            );
+        } else {
+            $content .= sprintf(
+                "\n\n[sub-agent \"%s\" finished; to follow up with it in the same conversation instead of starting over: %s.]",
+                $agentName,
+                $resume,
+            );
+        }
+        $content .= $inboxNote;
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: $content,
+            isError: false,
+            durationMs: self::elapsedMs($startedAt),
+            usage: $spent,
+        );
+        // @endregion finish
+    }
+
+    /**
+     * The git worktree an `isolation: worktree` run works in (roadmap 4.9):
+     * the one its suspension kept when it is still there, else a new one for
+     * this run. Answers it, or null and why the run cannot be isolated.
+     *
+     * @return array{0: array{id: string, path: string}|null, 1: string}
+     */
+    private function enterWorktree(SubAgent $subAgent, mixed $kept): array
+    {
+        $manager = $this->worktreeManager;
+        if ($manager === null) {
+            return [null, sprintf(
+                'agent "%s" declares `isolation: worktree`, but this session has no worktree manager, so the run'
+                . ' cannot be isolated and was not started; remove `isolation:` from the preset, or delegate from'
+                . ' a session launched in a git checkout',
+                $subAgent->agent->name,
+            )];
+        }
+        if (\is_string($kept) && $kept !== '') {
+            try {
+                $path = $manager->getWorktreePath($kept);
+                if (is_dir($path)) {
+                    return [['id' => $kept, 'path' => $path], ''];
+                }
+            } catch (\RuntimeException) {
+                // Swept or removed since: the resumed run starts a fresh tree.
+            }
+        }
+
+        try {
+            // A cheap, rate-limited sweep of stale trees that hold no work.
+            $manager->sweepIfDue();
+        } catch (\RuntimeException) {
+            // A sweep that failed has already said so; it never blocks a run.
+        }
+        try {
+            return [['id' => $subAgent->id, 'path' => $manager->createWorktree($subAgent->id)], ''];
+        } catch (\RuntimeException|\InvalidArgumentException $failure) {
+            return [null, sprintf(
+                'agent "%s" declares `isolation: worktree`, but its worktree could not be created (%s), so the'
+                . ' run was not started',
+                $subAgent->agent->name,
+                $failure->getMessage(),
+            )];
+        }
+    }
+
+    /**
+     * The end of an isolated run (roadmap 4.9): its worktree is removed with
+     * its branch when it holds no work, and kept otherwise — never deleted
+     * with changes in it. Answers the note the result carries (empty when
+     * nothing remains) and the id of a kept tree, for the suspension.
+     *
+     * @param array{id: string, path: string}|null $worktree
+     * @return array{0: string, 1: ?string}
+     */
+    private function leaveWorktree(?array $worktree, string $agentName): array
+    {
+        $manager = $this->worktreeManager;
+        if ($worktree === null || $manager === null) {
+            return ['', null];
+        }
+        try {
+            if ($manager->releaseIfUnused($worktree['id'])) {
+                return ['', null];
+            }
+        } catch (\RuntimeException $failure) {
+            return [sprintf(
+                "\n\n[sub-agent \"%s\" worked in its own git worktree at %s, which made no changes but could not be"
+                . ' removed: %s]',
+                $agentName,
+                $worktree['path'],
+                $failure->getMessage(),
+            ), $worktree['id']];
+        }
+        $branch = $manager->branchOf($worktree['id']);
+
+        return [sprintf(
+            "\n\n[sub-agent \"%s\" worked in its own git worktree; its changes were kept there, not in this checkout:"
+            . ' %s%s. Review them and merge what you want (a resume continues in the same tree).]',
+            $agentName,
+            $worktree['path'],
+            $branch === null ? '' : ' on branch ' . $branch,
+        ), $worktree['id']];
+    }
+
+    /**
+     * The model a delegated run must be pinned to, or null to stay on the
+     * session's current one — and, when the session's provider cannot serve
+     * the model the call or the agent asked for, what to tell the caller
+     * about running on the session's model instead (roadmap 4.1-1, relaxed
+     * from a refusal to a fallback: a preset copied from Claude Code says
+     * `model: sonnet`, and refusing it on a self-hosted server stopped the
+     * work for want of a model the session already had).
+     *
+     * First of: the call's own `model` argument, the agent's model when it
+     * names one ({@see \SugarCraft\Code\Agents\Agent::$inheritsModel} —
+     * a preset's `model:` or the `subagentModel` setting), the session's
+     * model. The asked-for model is honoured unless it plainly cannot be:
+     * a Claude Code tier alias no model of this session's tier answers to,
+     * a server that reports serving another ({@see EngineBackend::servedModel()}),
+     * a single-model server ({@see EngineBackend::servesOneModel()}), or an
+     * id no provider could take (whitespace or control bytes). Decided from
+     * what the provider already knows — never a request per delegation.
+     *
+     * @return array{0: ?string, 1: ?array{asked: string, note: string}}
+     *         [model to pin, the fallback taken (null when none)]
+     */
+    private static function chooseModel(EngineBackend $engine, \SugarCraft\Code\Agents\Agent $agent, string $requested): array
+    {
+        $model = trim($requested);
+        $origin = 'this Task call';
+        if ($model === '' || $model === 'inherit') {
+            if ($agent->inheritsModel || trim($agent->model) === '' || $agent->model === 'inherit') {
+                return [null, null];
+            }
+            $model = trim($agent->model);
+            $origin = sprintf('agent "%s"', $agent->name);
+        }
+
+        $session = $engine->model();
+        if ($model === $session) {
+            return [null, null];
+        }
+
+        $provider = $engine->provider()->name();
+        $fallback = static fn (string $why): array => [null, [
+            'asked' => $model,
+            'note' => sprintf(
+                'model: %s (%s asked for "%s", %s; the run used this session\'s model instead)',
+                $engine->servedModel() ?? $session,
+                $origin,
+                $model,
+                $why,
+            ),
+        ]];
+
+        if (preg_match('/[\s[:cntrl:]]/', $model) === 1) {
+            return $fallback('which is not a model id');
+        }
+
+        if (\in_array(strtolower($model), self::CLAUDE_MODEL_ALIASES, true)) {
+            if (str_contains(strtolower($session), strtolower($model))) {
+                return [null, null];
+            }
+
+            return $fallback(sprintf('a Claude Code tier name no %s model answers to', $provider));
+        }
+
+        $served = $engine->servedModel();
+        if ($served !== null) {
+            return $served === $model
+                ? [$model, null]
+                : $fallback(sprintf('which this %s server does not serve', $provider));
+        }
+        if ($engine->servesOneModel()) {
+            return $fallback(sprintf('which this %s server does not serve: it runs one model', $provider));
+        }
+
+        return [$model, null];
+    }
+
+    /**
+     * What the run billed in the steps it completed after the first $from
+     * messages of $transcript — the opening turns (and, on a resume, the
+     * saved run's own steps, billed by the Task call that made them).
+     *
+     * @param list<\SugarCraft\Code\Messages\Message> $transcript
+     */
+    private static function spentSince(array $transcript, int $from): ?Usage
+    {
+        $usages = [];
+        foreach (array_slice($transcript, $from) as $message) {
+            if ($message instanceof AssistantMessage) {
+                $usages[] = $message->usage();
+            }
+        }
+
+        return Usage::sum($usages);
+    }
+
+    /**
+     * Settle the run's spend onto its row (the Agents dashboard reads it):
+     * the baseline the row carried before the run plus what the run billed,
+     * REPLACING the live count {@see runOnEngine()}'s usage observer kept, so
+     * the settled figure is the authority and nothing is counted twice.
+     */
+    private static function bill(SubAgent $subAgent, ?Usage $spent, int $baseTokens = 0, float $baseCost = 0.0): void
+    {
+        $subAgent->tokensUsed = $baseTokens + ($spent?->totalTokens ?? 0);
+        $subAgent->costUsd = $baseCost + ($spent?->costUsd ?? 0.0);
+    }
+
+    /**
+     * Keep the run's recent-call list current: a started call is appended
+     * as running, its finish marks the SAME entry (matched by call id) ok or
+     * error, and only the newest {@see SubAgentActivity::MAX_CALLS} are kept.
+     * The list is what the Tools pane shows for this run.
+     */
+    private static function trackCall(SubAgent $subAgent, ToolStarted|ToolFinished $event): void
+    {
+        $calls = $subAgent->recentCalls;
+        if ($event instanceof ToolStarted) {
+            $calls[] = [
+                'id' => $event->toolCallId,
+                'label' => self::describeCall($event),
+                'state' => SubAgentActivity::CALL_RUNNING,
+                'at' => time(),
+            ];
+            $subAgent->recentCalls = array_slice($calls, -SubAgentActivity::MAX_CALLS);
+
+            return;
+        }
+
+        for ($i = count($calls) - 1; $i >= 0; $i--) {
+            if ($calls[$i]['id'] === $event->toolCallId && $calls[$i]['state'] === SubAgentActivity::CALL_RUNNING) {
+                $calls[$i]['state'] = $event->result->isError() ? SubAgentActivity::CALL_ERROR : SubAgentActivity::CALL_OK;
+                $subAgent->recentCalls = $calls;
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * One tool call as a trail line: the model's own description when it
+     * gave one (`Bash: List files`), else the call's argument dump
+     * (`Read(path: "src/x.php")`) — the same one-liner the chat shows, so a
+     * sub-agent's trail reads like the transcript rather than a bare name.
+     */
+    private static function describeCall(ToolStarted $event): string
+    {
+        $described = \SugarCraft\Code\Message::describeToolCall(
+            new \SugarCraft\Code\ToolCall($event->toolName, $event->arguments),
+        );
+
+        return str_starts_with($described, $event->toolName . '(')
+            ? $described
+            : $event->toolName . ': ' . $described;
+    }
+
+    /**
+     * Save a run that ended without a report and say how to continue it — or,
+     * if it cannot be saved, say plainly that it cannot be resumed.
+     *
+     * @param list<\SugarCraft\Code\Messages\Message> $transcript
+     * @param string|null $savedId set to the id it was saved under; null when it could not be saved
+     * @param string|null $transcriptLog the run's log, which a resume keeps writing (P-C1)
+     * @param \SugarCraft\Code\Context\Pruning\ContextLedger|null $ledger the run's ephemeral
+     *        ledger (roadmap 3.B-5), which a resume continues on; null when it kept none
+     * @param string|null $worktree the id of the worktree the run kept (roadmap 4.9),
+     *        which a resume works in again; null when it kept none
+     */
+    private function suspend(string $agentName, array $transcript, int $resumes, ?string $id, ?string &$savedId = null, ?string $transcriptLog = null, ?\SugarCraft\Code\Context\Pruning\ContextLedger $ledger = null, ?string $worktree = null): string
+    {
+        $savedId = null;
+        try {
+            $id = $this->suspendedStore()->save($agentName, $transcript, $resumes, $id, $transcriptLog, $ledger, $worktree);
+        } catch (\RuntimeException $unsaved) {
+            return 'It CANNOT be resumed (the run could not be saved: ' . $unsaved->getMessage() . '); start a new Task instead';
+        }
+        $savedId = $id;
+
+        return sprintf(
+            'Resume it by calling Task again with "resume": "%s" and agent "%s"%s',
+            $id,
+            $agentName,
+            $resumes > 0 ? sprintf(' (it has been resumed %d time%s)', $resumes, $resumes === 1 ? '' : 's') : '',
+        );
+    }
+
+    private function suspendedStore(): SuspendedDelegations
+    {
+        return $this->suspended ?? SuspendedDelegations::new();
+    }
+
+    private function settle(SubAgent $subAgent, string $status, string $output, ?string $error): void
+    {
+        $subAgent->status = $status;
+        $subAgent->output = $output;
+        $subAgent->error = $error;
+        $subAgent->completedAt = new \DateTimeImmutable();
+    }
+
+    /**
+     * Append one trail line to the rolling activity buffer, oldest lines
+     * evicting from the head once the buffer passes {@see ACTIVITY_TAIL_BYTES}.
+     * Whole-line eviction, never a byte slice: a cut mid-codepoint is exactly
+     * the invalid UTF-8 the width-computing renderers trip over.
+     */
+    private static function appendActivity(string $current, string $line): string
+    {
+        $lines = $current === '' ? [] : explode("\n", $current);
+        $lines[] = $line;
+
+        $grown = implode("\n", $lines);
+        while (strlen($grown) > self::ACTIVITY_TAIL_BYTES && count($lines) > 1) {
+            $lines = array_slice($lines, 1);
+            $grown = implode("\n", $lines);
+        }
+
+        return $grown;
+    }
+
+    /**
+     * Keep the last $bytes of $text, byte-bounded for the wire, prepending the
+     * ellipsis and dropping any leading fragment of a split codepoint (the
+     * empty-pattern /u probe is the established validity oracle).
+     */
+    private static function tailClip(string $text, int $bytes): string
+    {
+        if (strlen($text) <= $bytes) {
+            return $text;
+        }
+
+        if ($bytes <= self::ELLIPSIS_BYTES) {
+            return ''; // the cap fits the marker alone or less — nothing displayable survives
+        }
+
+        $cut = substr($text, -($bytes - self::ELLIPSIS_BYTES));
+        while ($cut !== '' && preg_match('//u', $cut) !== 1) {
+            $cut = substr($cut, 1);
+        }
+
+        return '…' . $cut;
+    }
+
+    /**
+     * The task's first line, byte-bounded, for the started frame's display
+     * snippet — the delegated prompt can be pages, and a dashboard row shows
+     * one.
+     */
+    private static function snippet(string $text, int $bytes): string
+    {
+        $first = strtok($text, "\r\n");
+        $first = $first === false ? '' : trim($first);
+        if (strlen($first) <= $bytes) {
+            return $first;
+        }
+
+        if ($bytes < self::ELLIPSIS_BYTES) {
+            return ''; // a cap below the marker cannot carry even the dots
+        }
+
+        $cut = substr($first, 0, $bytes - self::ELLIPSIS_BYTES);
+        while ($cut !== '' && preg_match('//u', $cut) !== 1) {
+            $cut = substr($cut, 0, -1);
+        }
+
+        return $cut . '…';
+    }
+
+    private static function elapsedMs(float $startedAt): int
+    {
+        return (int) round((microtime(true) - $startedAt) * 1000);
+    }
+
+    /**
+     * @param non-empty-string $why
+     */
+    private function refusal(string $toolCallId, string $why, ?int $durationMs = null, ?Usage $spent = null): ToolResult
+    {
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: 'Error: Task refused — ' . $why,
+            isError: true,
+            durationMs: $durationMs,
+            // A refusal after a run still carries what the run spent: failing
+            // does not un-bill it (audit B4).
+            usage: $spent,
+        );
+    }
+
+    /**
+     * Comma-joined names of every agent the bound manager currently answers.
+     */
+    private function rosterNames(): string
+    {
+        $names = [];
+        foreach ($this->agentManager?->all() ?? [] as $agent) {
+            $names[] = $agent->name;
+        }
+        sort($names);
+
+        return $names === [] ? 'none' : implode(', ', $names);
+    }
+}

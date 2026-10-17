@@ -76,7 +76,7 @@ async function signOut(): Promise<void> {
   <div class="shell" :class="{ 'drawer-open': layout.sidebarOpen }">
     <header class="topbar">
       <button v-if="!onLogin" type="button" class="link menu" aria-label="Sessions" @click="layout.toggleSidebar()">☰</button>
-      <span class="brand">&#9670; SugarCrush</span>
+      <span class="brand">&#9670; CandyCode</span>
       <span v-if="connection.hello?.server.root" class="root" :title="connection.hello.server.root">{{ connection.hello.server.root }}</span>
       <span class="spacer" />
       <ApprovalsButton v-if="!onLogin" />

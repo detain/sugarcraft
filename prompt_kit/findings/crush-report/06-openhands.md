@@ -1,8 +1,8 @@
-# 06 — OpenHands vs sugar-crush
+# 06 — OpenHands vs candy-code
 
 Feeds steps: 0.4-a, 0.4-b, 0.5, 0.6, 0.10, 0.11, 0.12, 0.13-a, 1.A-1, 1.A-2, 1.B-1, 1.B-2, 1.C-1, 1.C-2, 1.C-3, 2.1, 2.2-1, 2.4-1, 2.5, 2.7-1b, 2.8, 2.10, 3.C, 3.D-1, 3.D-2, 3.D-3, 3.I-1, 4.1-1, 4.1-2, 4.2, 4.7-1, 4.10-1, 4.10-2, 5.1-1, 5.1-2, 5.7-1, 5.10, 5.11-2, 5.14b, 5.14j
 
-**Sources** (under `/home/sites/crush-research-repos/`): **SDK** = `software-agent-sdk/openhands-sdk/openhands/sdk/` (V1 agent core); **TOOLS** = `software-agent-sdk/openhands-tools/openhands/tools/`; **V0** = `OpenHands-legacy-0.62/openhands/` (legacy monolith: condenser zoo, `AgentDelegateAction`); **CLI** = `OpenHands-CLI/openhands_cli/` (Textual TUI). sugar-crush symbols are under `/home/sites/sugarcraft/sugar-crush/`; current line anchors are in `impact/*.md`.
+**Sources** (under `/home/sites/crush-research-repos/`): **SDK** = `software-agent-sdk/openhands-sdk/openhands/sdk/` (V1 agent core); **TOOLS** = `software-agent-sdk/openhands-tools/openhands/tools/`; **V0** = `OpenHands-legacy-0.62/openhands/` (legacy monolith: condenser zoo, `AgentDelegateAction`); **CLI** = `OpenHands-CLI/openhands_cli/` (Textual TUI). candy-code symbols are under `/home/sites/sugarcraft/candy-code/`; current line anchors are in `impact/*.md`.
 
 ---
 
@@ -117,7 +117,7 @@ This is a question, do not make any tool call and just answer my question.
   - The script runs in a restricted sandbox: private `wf` attributes are rejected and the script may not touch files or shell. Sub-agents do the work.
   - Intended use: "codebase-wide audits, independent plan reviews, security sweeps… where intermediate results should stay outside the main conversation."
 
-For sugar-crush, take the shape (map/reduce/pipeline over agent stages, bounded concurrency) but accept a declarative YAML/JSON plan, not arbitrary code.
+For candy-code, take the shape (map/reduce/pipeline over agent stages, bounded concurrency) but accept a declarative YAML/JSON plan, not arbitrary code.
 
 ---
 
@@ -308,7 +308,7 @@ The user template wraps each event in `<EVENT>…</EVENT>` and ends with "Now su
 - **Events:** `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `SessionEnd`, `Stop` (`SDK/hooks/types.py`).
 - `command` hooks: a shell script with JSON on stdin. Exit code 2 = block; JSON stdout fields `decision`, `reason`, `additionalContext`, `continue`; Claude-Code-compatible.
 - A Stop-hook deny re-enters the loop with feedback (§2.1). A blocked `PreToolUse` becomes a `UserRejectObservation(rejection_source="hook")` (`agent.py:351-378`).
-- **Pitfall (don't copy):** the hook loader picks up `<workspace>/.openhands/hooks.json` with no trust check (`SDK/hooks/config.py:284-296`), so a cloned repo can ship hooks that run commands. Keep sugar-crush's project-trust gating.
+- **Pitfall (don't copy):** the hook loader picks up `<workspace>/.openhands/hooks.json` with no trust check (`SDK/hooks/config.py:284-296`), so a cloned repo can ship hooks that run commands. Keep candy-code's project-trust gating.
 
 ---
 
@@ -341,7 +341,7 @@ The user template wraps each event in `<EVENT>…</EVENT>` and ends with "Now su
 
 ---
 
-## 13. Recommended improvements for sugar-crush
+## 13. Recommended improvements for candy-code
 
 **Empty / reasoning-only reply nudge** (→ 0.10). In `EngineBackend::runTurn()`, when `$assistant` has no tool calls and blank content (or reasoning only), append the "did not include a function call or a message" user message once and `continue` instead of ending; tag it as a framework (environment) row.
 

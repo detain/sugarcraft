@@ -1,4 +1,4 @@
-# 15b — Audit: sugar-crush interactive UI state machine and rendering
+# 15b — Audit: candy-code interactive UI state machine and rendering
 
 Scope: `src/Chat.php`, `src/Renderer.php`, `src/App/`, `src/Tui/`, `src/Commands/`, `src/CommandParser.php`, the `*Msg.php` classes, `src/Attachment*.php`.
 

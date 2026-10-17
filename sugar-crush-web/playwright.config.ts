@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// End-to-end against a real `sugarcrush serve` on the offline EchoProvider
+// End-to-end against a real `candy-code serve` on the offline EchoProvider
 // (e2e/fixtures/server.ts starts it). Serial on purpose: the suite shares
 // one server per worker and its turns run in forked PHP children.
 export default defineConfig({

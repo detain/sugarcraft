@@ -12,7 +12,7 @@
 - **The version travels inside `dist/`.** `package.json` is excluded from the
   Packagist archive (`archive.exclude`), so `Assets::version()` reads
   `dist/build-info.json`, never `package.json`.
-- **Hash history in the router.** `sugarcrush serve` serves `dist/` as static
+- **Hash history in the router.** `candy-code serve` serves `dist/` as static
   files; a history-mode deep link would reach the server as a path with no
   file. The one-time login code also rides in the fragment.
 - **TypeScript stays out of `src/`.** `src/` is the PSR-4 root, checked by
@@ -22,7 +22,7 @@
   was dropped for plain `typescript-eslint` + `eslint-plugin-vue`: it pulled a
   `fast-glob` → `braces` chain with an open high-severity advisory.
 - **`src-web/protocol/generated.ts` is generated** by `scripts/gen-protocol.mjs`
-  from `../sugar-crush/docs/protocol/sugarcrush.v1.schema.json`; `web.yml`
+  from `../candy-code/docs/protocol/candy-code.v1.schema.json`; `web.yml`
   regenerates and diffs it, and `generated.spec.ts` does the same locally
   (skipped in a split-repo clone, where the schema is absent).
 - **DOMPurify is unreliable under happy-dom** (its parser mangles the walk:

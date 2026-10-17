@@ -1,0 +1,160 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Providers;
+
+final readonly class CompleteResponse
+{
+    public function __construct(
+        public string $content,
+        public ?string $reasoning = null,
+        public ?array $toolCalls = null,
+        public int $tokensUsed = 0,
+        public float $costUsd = 0.0,
+        public bool $isError = false,
+        public ?string $errorMessage = null,
+        /**
+         * Whether the failure behind {@see $isError} is worth another attempt
+         * — {@see TransientFailure::isTransient()}'s verdict on the live
+         * exception, recorded at the catch site while that exception still
+         * exists (crush_code.md Phase 5 item 8).
+         *
+         * This field exists because {@see CustomProvider} and
+         * {@see VertexProvider} report a failed call as an error RESPONSE
+         * rather than by throwing, and both used to keep only
+         * `$e->getMessage()`. Without somewhere to put the verdict, a retry
+         * layer above them would have had to re-derive transience by
+         * pattern-matching that prose — so the two providers a user is most
+         * likely to be running would either never retry or would retry on a
+         * substring. Classifying where the exception is still in hand is the
+         * same information from its real source.
+         *
+         * Null means UNCLASSIFIED, which is not the same claim as "permanent"
+         * but is treated the same way: {@see
+         * TransientFailure::responseIsTransient()} requires an explicit true,
+         * because the allow-list rule that governs unrecognised exceptions has
+         * to govern unrecognised error responses too.
+         *
+         * SIX sites set it, and only four of them are catch sites — stated
+         * precisely because an earlier version of this docblock said "the two
+         * catch sites above", which was wrong on both the count and the
+         * mechanism. {@see CustomProvider}'s `complete()` and `completeStream()`
+         * catches and {@see VertexProvider}'s two exception catches classify a
+         * live `\Throwable` with {@see TransientFailure::isTransient()}. The
+         * other two hold no exception at all: `VertexProvider`'s rawPredict
+         * error object and its 200-SSE `error` event are structured error
+         * payloads on a SUCCESSFUL HTTP response, classified on their Anthropic
+         * error `type` by {@see TransientFailure::anthropicErrorIsTransient()}.
+         * That second mechanism is the one this field exists for most — an
+         * overloaded Anthropic-on-Vertex backend answers 200, so no status and
+         * no exception ever exist to carry the verdict.
+         *
+         * Nothing stops a future provider passing it on a non-error response;
+         * `responseIsTransient()`'s `isError` gate is what makes that harmless,
+         * not this field's default.
+         */
+        public ?bool $errorTransient = null,
+        /**
+         * Whether the server said this response was CUT OFF (§Q7 of the qwen
+         * lane, evidence E-32: `finish_reason` `length`/`abort`).
+         *
+         * Batch: every chat provider's parse seam now reads its own wire
+         * stop field and sets it — Sglang from the choice's `finish_reason`,
+         * and E707 (round 81) widened that to OpenAI, Custom, Vertex
+         * (Anthropic `stop_reason` and Gemini `finishReason` routes), Bedrock
+         * and the ClaudeCode envelope. Stream: the flag rides whichever frame
+         * carries the stop signal on each wire (Sglang's §Q7 flush frame, the
+         * OpenAI chunk whose choice reports `finish_reason`, the closing
+         * Anthropic-family `message_delta`, the Bedrock `messageStop` event,
+         * the Gemini parked end-of-stream frame); every other streamed chunk
+         * keeps the default false.
+         *
+         * FALSE IS NOT A PROOF OF CLEANLINESS. A clean end (`stop`,
+         * `tool_calls`, `end_turn`) never sets it, and a stream cut before
+         * its stop frame — or the Vertex legacy PaLM route, whose wire
+         * documents no stop field — cannot report what it never saw. The
+         * field is each provider's honest statement about the frames it read,
+         * not an across-the-board guarantee.
+         *
+         * CONSUMED since E707 (round 81): Runtime ORs the flag across a
+         * turn's chunks into the assistant message, the engine carries it to
+         * Chat, and the settle arm appends one transcript notice when a reply
+         * stopped at the output ceiling. Whether a truncated batch should
+         * also re-enter the E-56 retry classification remains a deliberate
+         * non-goal: a length stop is a SUCCESS the ceiling cut short, not a
+         * failure to retry.
+         */
+        public bool $truncated = false,
+        /**
+         * The provider's own usage DOCUMENT, split buckets included — the
+         * carrier half of the decision E17 was blocked on.
+         *
+         * WHAT WAS BLOCKING (verbatim from the entry): "A decision on whether
+         * CompleteResponse::$tokensUsed is split into prompt/completion and
+         * surfaced through Backend." The decision is TAKEN, in this field:
+         * the split surfaces through `Backend` as a {@see \SugarCraft\Code\Usage}
+         * rather than as two new flat ints, because `Usage` is where
+         * prompt_plan.md P4.S1 defined the bucket identity
+         * (`promptTokens = cacheRead + cacheCreation + input`) and P4.S2
+         * already routed five providers' parse seams through it — a flat pair
+         * here would fork that arithmetic a second time. The old projection
+         * fields are untouched and remain authoritative for anything that
+         * only reads a total: this is ADDITIVE.
+         *
+         * CORRECTED IN PLACE when the fold landed (E17 follow-through): WHAT
+         * IT SAID: "NULL IS THE ORDINARY ANSWER TODAY. No construction site
+         * in `src/` passes it yet ... widening Runtime's fold ... is the
+         * follow-through." WHAT IS TRUE NOW: every split-reading provider
+         * passes its parsed document whole at its usage-bearing construction
+         * sites, and `Runtime`'s fold prefers that carrier, falling back to
+         * the projection whenever a carrier measures nothing — so an empty
+         * usage document and no document at all still answer identically.
+         * Null remains ordinary where no split exists: stream deltas (which
+         * carry no usage), EchoProvider, and error arms. (ClaudeCodeProvider
+         * left this list with audit A25: its CLI's usage document is the
+         * Anthropic bucket split, now parsed and carried.) A null still means "the split was not carried",
+         * never "the split is zero" — see the
+         * Usage docblock's "Zero is not the same as unknown".
+         *
+         * WHY IT EARNS ITS PLACE: Chat's tier calibration
+         * ({@see \SugarCraft\Code\Chat::noteTurnUsageObservation()}) reads
+         * `promptTokens()` THROUGH this field and prefers it over the total —
+         * with the fold landed, the estimator tightens with no further Chat
+         * change, and where the carrier is null the fallback keeps the
+         * calibration honest about what it is actually measuring.
+         */
+        public ?\SugarCraft\Code\Usage $usage = null,
+        /**
+         * Whether the failure behind {@see $isError} was a context-window
+         * overflow — {@see ContextOverflow}'s verdict, recorded where the
+         * failure was seen. The sibling of {@see $errorTransient}, for the
+         * same reason: {@see VertexProvider} (and {@see CustomProvider})
+         * report a failure as a response rather than by throwing, so without
+         * a field the verdict could only ride in the text
+         * ({@see ContextOverflow::MESSAGE_PREFIX}) and be re-derived from it.
+         * The overflow recovery in the turn loop (roadmap 2.7-1b) acts on it.
+         *
+         * Null means UNCLASSIFIED: {@see ContextOverflow::matches()} then
+         * falls back to the wording, which is how a provider that never sets
+         * this field keeps working. Last in the list, not beside
+         * `$errorTransient`, so no positional construction site moves.
+         */
+        public ?bool $errorContextOverflow = null,
+    ) {}
+
+    /**
+     * The provider's counted PROMPT-side tokens, or null when this response
+     * does not carry a usage document at all or the document's cache buckets
+     * are incomplete.
+     *
+     * The "resolved accessor" the split needed: one call answers BOTH null
+     * shapes — no carrier, and a carrier that could not total the prompt
+     * ({@see \SugarCraft\Code\Usage::promptTokens()}'s three-bucket rule) —
+     * so a consumer never re-derives the identity or forgets half of it.
+     */
+    public function promptTokens(): ?int
+    {
+        return $this->usage?->promptTokens();
+    }
+}

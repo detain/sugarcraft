@@ -13,7 +13,7 @@ use SugarCraft\Image\Detect;
  * `Detect` resolves the stream it probes as `self::$probeStdin ?? STDIN` and,
  * before the guard this file pins, handed the result straight to
  * `stream_select()`/`fread()`. A closed descriptor 0 is an ordinary state for a
- * process to be in — a daemon, a git hook, `sugarcrush 0<&-`, or a test harness
+ * process to be in — a daemon, a git hook, `candy-code 0<&-`, or a test harness
  * that replaced its own fd 0 to keep spawned children off the runner's stdin —
  * and `defined('STDIN')` stays TRUE after `fclose(STDIN)` while `is_resource()`
  * goes false, so nothing about the constant's presence says the handle is live.
@@ -31,8 +31,8 @@ use SugarCraft\Image\Detect;
  *
  * ## WHY IT MATTERED SOMEWHERE ELSE
  *
- * `SugarCraft\Crush`'s suite wants to replace ITS descriptor 0 so a spawned
- * `bin/sugarcrush` cannot read the runner's stdin, and PHP has no `dup2`, so
+ * `SugarCraft\Code`'s suite wants to replace ITS descriptor 0 so a spawned
+ * `bin/candy-code` cannot read the runner's stdin, and PHP has no `dup2`, so
  * that means `fclose(\STDIN)`. Two attempts died here: the throw above escaped
  * `Detect::probe()`, `Mosaic::auto()` caught it, and the fallback it landed in
  * named an enum case that did not exist — reported as 107 errors in a library

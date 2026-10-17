@@ -59,7 +59,7 @@ final class SafeText
      * preserving the line structure.
      *
      * The counterpart of {@see line()} for authored pages (E453, round of
-     * the crush_libs rerun): sugar-crush's translated `help` screen is one
+     * the crush_libs rerun): candy-code's translated `help` screen is one
      * catalogue string whose embedded newlines ARE the layout, so the
      * line-wise flattening in {@see line()} destroys it. Here every byte
      * {@see line()} would remove still goes — escape sequences via

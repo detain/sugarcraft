@@ -10,7 +10,7 @@ use SugarCraft\Diff\Reader\ScannedLine;
 use SugarCraft\Diff\Reader\UnifiedScan;
 
 /**
- * Region-model pins ported from sugar-crush's tests/Tui/DiffGutterTest.php —
+ * Region-model pins ported from candy-code's tests/Tui/DiffGutterTest.php —
  * the counting rules (not the gutter's fixed-width formatting, which is view
  * code that stays downstream) asserted straight against the scan model the
  * gutter was built on.

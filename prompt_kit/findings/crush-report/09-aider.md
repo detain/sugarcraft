@@ -1,8 +1,8 @@
-# Aider vs sugar-crush: competitor deep-dive
+# Aider vs candy-code: competitor deep-dive
 
 Feeds steps: 0.11, 1.A-1, 2.1, 2.3, 2.6, 2.7-1a, 2.7-2, 2.10, 3.A-2, 3.E, 3.G, 3.H, 3.I-1, 3.I-3, 4.1-1, 5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.6, 5.10, 5.13a, 5.14a, 5.14h, 5.14i
 
-**Competitor:** Aider (`Aider-AI/aider`), Python. Clone at `/home/sites/crush-research-repos/aider`, HEAD `5dc9490bb`, version `0.86.3.dev`. All Aider paths are relative to the clone; sugar-crush paths are relative to `sugar-crush/`.
+**Competitor:** Aider (`Aider-AI/aider`), Python. Clone at `/home/sites/crush-research-repos/aider`, HEAD `5dc9490bb`, version `0.86.3.dev`. All Aider paths are relative to the clone; candy-code paths are relative to `candy-code/`.
 
 Aider is not a tool-calling agent: the harness applies text edit blocks, then auto-commits, auto-lints and optionally auto-tests, feeding failures back as a new user message ("reflection", at most `max_reflections = 3` per user message, `base_coder.py:101`, `run_one` `:924-944`). The pieces below are the ones a roadmap step reuses.
 
@@ -149,8 +149,8 @@ Then `git checkout HEAD~1 -- <files>` and `git reset --soft HEAD~1`. With `send_
 
 **Recommendation (→ 3.G).**
 - Setting `autoCommit: off|turn|edit` in user settings, default `off`.
-- Dirty-commit: per Edit/Write (a PreToolUse built-in), if `git status --porcelain` shows user changes to the target path, commit those paths first as `"chore: snapshot user changes before sugar-crush edit"`.
-- At turn end, when the turn wrote: collect the changed paths (Bash edits too, via `git status`), generate the message with the tool-less weak backend (`titleBackend`) using Aider's commit prompt and the diff, then commit with a `Co-authored-by: sugar-crush (<model>) <…>` trailer. Never pass `--no-verify`.
+- Dirty-commit: per Edit/Write (a PreToolUse built-in), if `git status --porcelain` shows user changes to the target path, commit those paths first as `"chore: snapshot user changes before candy-code edit"`.
+- At turn end, when the turn wrote: collect the changed paths (Bash edits too, via `git status`), generate the message with the tool-less weak backend (`titleBackend`) using Aider's commit prompt and the diff, then commit with a `Co-authored-by: candy-code (<model>) <…>` trailer. Never pass `--no-verify`.
 - Record commit hashes in the session store.
 - `/undo` (shared with 3.A-2): Aider's refusals (not ours, merge commit, dirty files, file absent in parent, already pushed), then `git checkout HEAD~1 -- files` + `git reset --soft HEAD~1`, and append a row telling the model the change was reverted.
 - Update `docs/COMMANDS.md`, `docs/SETTINGS.md` and the drift tests.
@@ -243,7 +243,7 @@ Fallbacks: if the result is empty, retry with no chat files (a global map); then
 **Refresh policy** (`:576-627`, `--map-refresh auto|always|files|manual`): `auto` recomputes every time unless the last computation took > 1 s, then serves cached results keyed by (chat files, other files, budget, mentions); `files` keys only on the file sets; `manual` reuses until `/map-refresh`. On `RecursionError` the map is disabled. **Under prompt caching Aider switches `auto` to `files`** (`main.py:954-955`) so the map's bytes stay cache-stable (→ 5.5-5).
 
 **Recommendation.**
-1. **5.5-1** `src/Context/SymbolIndex.php` (or `src/RepoMap/*`): PHP tags through `token_get_all()` — defs `T_CLASS/T_INTERFACE/T_TRAIT/T_ENUM/T_FUNCTION` + the following `T_STRING`; refs `T_STRING` after `new`, `::`, `->`, `?->`, `extends`/`implements`/`use`, and bare calls. Cache rows `(path, mtime, tags)` in SQLite under `~/.sugar-crush/cache/tags-<roothash>.sqlite`. Files from `git ls-files`, honouring the `.gitignore` filter `Glob` uses.
+1. **5.5-1** `src/Context/SymbolIndex.php` (or `src/RepoMap/*`): PHP tags through `token_get_all()` — defs `T_CLASS/T_INTERFACE/T_TRAIT/T_ENUM/T_FUNCTION` + the following `T_STRING`; refs `T_STRING` after `new`, `::`, `->`, `?->`, `extends`/`implements`/`use`, and bare calls. Cache rows `(path, mtime, tags)` in SQLite under `~/.candy-code/cache/tags-<roothash>.sqlite`. Files from `git ls-files`, honouring the `.gitignore` filter `Glob` uses.
 2. **5.5-2** Other languages: `universal-ctags --output-format=json` through `proc_open` when on `PATH` (defs), plus an identifier-token regex for refs, mirroring the pygments backfill.
 3. **5.5-3** Ranker: referencer→definer edges with Aider's exact multipliers (mentioned ×10, specific-name ×10, `_`-private ×0.1, defined in >5 files ×0.1, focus-file referencer ×50, `sqrt(refs)`), then personalised PageRank by power iteration (20-30 iterations, damping 0.85, personalisation also as the dangling vector) — about 80 lines of PHP. Render definition lines plus enclosing class headers, clipped to 100 chars; binary-search the tag count to a budget with the calibrated chars/4 estimate.
 4. **5.5-4** Expose it as a `RepoMap` tool first (`ParallelSafe`; args `focus_files[]`, `identifiers[]`, `max_tokens` default 2048) — cache-neutral for the system prefix. Add one base-prompt line ("call RepoMap before broad Grep/Glob exploration of an unfamiliar repo"). Seed personalisation with files touched this session and the latest user message's identifiers.
@@ -287,7 +287,7 @@ Editable files sit **after** the history on purpose: editing a file invalidates 
 
 `ModelInfoManager` (`models.py:161-326`): downloads litellm's `model_prices_and_context_window.json` into `~/.aider/caches/` with a **24 h TTL** and a 5 s timeout, writing `{}` on failure so it does not retry each launch. Local `--model-metadata-file` entries win. OpenRouter models use a cached API database, then scrape the model page. Window sizes, repo-map budget, history budget and costs all derive from it.
 
-**Recommendation (→ 5.13a).** Fetch the same JSON with a 24 h TTL into `~/.sugar-crush/cache/` (5 s timeout, `{}` on failure), overlaid by a user `modelMetadata` file. Use it in `ContextWindow::ofBackend()` (replacing Custom's fixed 128,000) and in `TokenTracker` pricing (replacing the $0 defaults), keeping `modelPrices` as an override.
+**Recommendation (→ 5.13a).** Fetch the same JSON with a 24 h TTL into `~/.candy-code/cache/` (5 s timeout, `{}` on failure), overlaid by a user `modelMetadata` file. Use it in `ContextWindow::ofBackend()` (replacing Custom's fixed 128,000) and in `TokenTracker` pricing (replacing the $0 defaults), keeping `modelPrices` as an override.
 
 ---
 

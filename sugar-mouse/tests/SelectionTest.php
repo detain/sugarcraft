@@ -12,7 +12,7 @@ use SugarCraft\Mouse\SelectionRange;
  * The press → drag → release gesture machine: anchoring, region clamping,
  * shift-extend, clear semantics and the drag/click distinction.
  *
- * Pins ported from sugar-crush's `tests/Tui/TextSelectionTest.php`, adapted
+ * Pins ported from candy-code's `tests/Tui/TextSelectionTest.php`, adapted
  * to the upstream API: 1-based cells (so the region
  * [rowFrom, rowTo, colFrom, colTo] = [2, 5, 4, 13] where downstream read
  * [1, 4, 3, 12]) and a state machine instead of the per-event value object.

@@ -14,16 +14,16 @@ use PHPUnit\Framework\TestCase;
  * PHP attaches only the LAST of a run of doc-comment blocks to the declaration
  * beneath it, so every earlier block in the run documents nothing: its `@return`
  * tag is off the method and its reasoning is orphaned above an unrelated one.
- * `sugar-crush` has guarded that shape across its own `src/` and `tests/` for
+ * `candy-code` has guarded that shape across its own `src/` and `tests/` for
  * several rounds. `tools/` was outside every doc-drift roster in the tree.
  *
  * WHY THE OBVIOUS ONE-LINE FIX IS WRONG, MEASURED RATHER THAN ARGUED. The
- * roster that guard walks is rooted at the `sugar-crush` package, and adding
+ * roster that guard walks is rooted at the `candy-code` package, and adding
  * `../../tools` to it would red in the split-repo clone that CI publishes to,
  * where `tools/` does not exist at all — or need an `is_dir()` skip, which
  * makes the guard score zero in precisely the environment the published package
  * lives in. `tools/` is monorepo-only and the dependency has to run that way
- * round: a guard HERE may read `sugar-crush`, and never the reverse.
+ * round: a guard HERE may read `candy-code`, and never the reverse.
  *
  * WHY THE SCANNER IS A COPY, WHICH IS NORMALLY THE WRONG ANSWER. The zero-copy
  * shape was tried first and MEASURED not to work. The job that runs these files
@@ -32,10 +32,10 @@ use PHPUnit\Framework\TestCase;
  * policy" and misdescribe itself (E589) — does NO `composer install` at all.
  * Nothing under `tools/` is a composer package, so there is no per-lib
  * `vendor/bin/phpunit` to borrow and the job installs a PHPUnit PHAR. There
- * is therefore no autoloader for `SugarCraft\Crush\Tests\*` in that job, and
+ * is therefore no autoloader for `SugarCraft\Code\Tests\*` in that job, and
  * `require`-ing the canonical guard to reach its scanner by reflection dies
  * before PHPUnit reports anything: VERIFIED on this box, PHP 8.3.6, it fatals
- * with `Trait "SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait" not found`.
+ * with `Trait "SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait" not found`.
  *
  * SO THE COPY IS PINNED INSTEAD OF WISHED AWAY.
  * {@see testTheScannerHasNotDriftedFromTheOneItWasCopiedFrom()} reads the
@@ -45,9 +45,9 @@ use PHPUnit\Framework\TestCase;
  * `DuplicatedTestHelperDriftTest` cannot make it — but not for the reason
  * first written here, and the reason is the half a reader checks.
  *
- * WHAT THIS SAID: "MEASURED, its roster is `sugar-crush/src` alone, so it would
+ * WHAT THIS SAID: "MEASURED, its roster is `candy-code/src` alone, so it would
  * never have seen this file." WHAT IS TRUE NOW: that named the wrong roster.
- * That guard walks `sugar-crush/tests/`. Its population comes from
+ * That guard walks `candy-code/tests/`. Its population comes from
  * `TestFileWalkTrait::everyTestFile()`, which it `use`s and which roots at
  * `\dirname(__DIR__)` from `tests/Support/`; every one of its censuses
  * iterates that, and its own failure text says so — "no private test helper was
@@ -56,8 +56,8 @@ use PHPUnit\Framework\TestCase;
  * `declaredTypeNames()`, an auxiliary lookup answering "is this name a class in
  * this package", not the population it compares. WHY THIS STILL EARNS ITS
  * PLACE: the conclusion is unchanged and now rests on a fact that holds.
- * `tools/` is outside `sugar-crush/tests/` exactly as it is outside
- * `sugar-crush/src/`, so under either roster that guard never sees this file,
+ * `tools/` is outside `candy-code/tests/` exactly as it is outside
+ * `candy-code/src/`, so under either roster that guard never sees this file,
  * and the drift between this scanner and its canonical has to be pinned here.
  *
  * @internal
@@ -69,7 +69,7 @@ final class StackedDocCommentTest extends TestCase
     /**
      * The canonical implementation this file's scanner is a copy of.
      */
-    private const CANONICAL = '/sugar-crush/tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php';
+    private const CANONICAL = '/candy-code/tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php';
 
     /**
      * No file under `tools/` carries a stacked doc-comment pair.

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * One-shot: which SugarCraft libs does sugar-crush actually touch, and through
+ * One-shot: which SugarCraft libs does candy-code actually touch, and through
  * which classes. Emits a per-lib surface table for the audit agents.
  *
  * Deliberately regex-free: the patterns are all backslash-heavy and building
@@ -33,7 +33,7 @@ $libs = [
 
 $BS = chr(92);
 $repoRoot = dirname(__DIR__, 2);
-$crushDir = $repoRoot . '/sugar-crush';
+$crushDir = $repoRoot . '/candy-code';
 $skip = ['/vendor/', '/.phpunit.cache/', '/node_modules/'];
 
 $files = [];
@@ -51,7 +51,7 @@ foreach ($it as $f) {
     $files[$path] = (string) file_get_contents($path);
 }
 
-echo 'scanned ' . count($files) . " sugar-crush php files (vendor + caches excluded)\n\n";
+echo 'scanned ' . count($files) . " candy-code php files (vendor + caches excluded)\n\n";
 
 foreach ($libs as $slug => $ns) {
     $prefix = 'SugarCraft' . $BS . $ns . $BS;

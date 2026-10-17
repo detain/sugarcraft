@@ -1,23 +1,23 @@
-# 14 — sugar-crush server mode (WebSocket) + `sugar-crush-web` multi-session web UI: design report
+# 14 — candy-code server mode (WebSocket) + `sugar-crush-web` multi-session web UI: design report
 
 Feeds: the open follow-ups on the attached TUI and the missing protocol events, and the open TLS decision (synthesis Part IV).
 
 **What this is.** A design for two features the user asked for:
 
-1. **Server mode.** `sugarcrush serve` runs in the foreground or as a background daemon and starts a WebSocket server.
+1. **Server mode.** `candy-code serve` runs in the foreground or as a background daemon and starts a WebSocket server.
 2. **`sugar-crush-web`.** A separate Vite + Vue package in `/home/sites/sugarcraft/sugar-crush-web` that drives that server and controls several sessions at once.
 
-Paths are relative to `/home/sites/sugarcraft/sugar-crush/` unless they start with `/` or with a lib directory name.
+Paths are relative to `/home/sites/sugarcraft/candy-code/` unless they start with `/` or with a lib directory name.
 
 ---
 
-Only the sections an open item still cites are kept: the attach design (§4.9), the event catalogue (§6.5) and the open TLS question (§10). The shipped behaviour is documented in `sugar-crush/docs/SERVER.md`.
+Only the sections an open item still cites are kept: the attach design (§4.9), the event catalogue (§6.5) and the open TLS question (§10). The shipped behaviour is documented in `candy-code/docs/SERVER.md`.
 
 ## 4. Server mode design
 
 ### 4.9 The TUI as a client (Phase 8)
 
-- `sugarcrush attach [url|--discover]` reads `server.json` (or a URL plus token), opens a WS, and runs the normal `Program(App)` with a **`Backend\RemoteBackend`** (implements `Backend`, `ObservesReasoning`) plus a `RemoteSessionHost` proxy that implements the same `SessionHost` client surface over JSON-RPC.
+- `candy-code attach [url|--discover]` reads `server.json` (or a URL plus token), opens a WS, and runs the normal `Program(App)` with a **`Backend\RemoteBackend`** (implements `Backend`, `ObservesReasoning`) plus a `RemoteSessionHost` proxy that implements the same `SessionHost` client surface over JSON-RPC.
 - Because Chat already delegates to `Host\*` services after the extraction, the remote variant swaps the service implementations, not Chat.
 - **Benefits:**
   - the TUI and browser see the same live session;
@@ -25,13 +25,13 @@ Only the sections an open item still cites are kept: the attach design (§4.9), 
   - the TUI gains approvals parity automatically.
 - **Optional cheap remote-TUI channel:** because candy-core `Program` accepts `input`/`output` streams and `windowSize` (`ProgramOptions.php`), a `/pty` WS endpoint could stream the real TUI into xterm.js (ttyd-style). candy-wish already does "TUI over SSH via sshd". This is low-effort but **not** multi-session-friendly. Keep it as a footnote, not the plan. <!-- @rename-keep -->
 
-## 6. Wire protocol (`sugarcrush.v1`)
+## 6. Wire protocol (`candy-code.v1`)
 
 ### 6.5 Event catalogue (v1)
 
 Durable (D) events are written to `session_events` before they are broadcast. Ephemeral (E) events are live only.
 
-| Type | D/E | `data` | Source in sugar-crush |
+| Type | D/E | `data` | Source in candy-code |
 |---|---|---|---|
 | `session.created` / `session.updated` / `session.deleted` | D (server scope) | `SessionSummary {id, name, provider, model, permissionMode, createdAt, updatedAt, messageCount, spentUsd, status}` | store ops, title rename |
 | `session.status` | D | `{status: "idle"\|"busy"\|"waiting_permission"\|"queued"\|"compacting"\|"error", detail?}` | TurnController |

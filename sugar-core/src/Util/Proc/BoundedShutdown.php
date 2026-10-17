@@ -26,7 +26,7 @@ namespace SugarCraft\Core\Util\Proc;
  * over callables, which is what lets the same sequence serve a `proc_open()`
  * resource, a containment-wrapped process group, and a `pcntl_fork()`ed pid
  * whose liveness is a `WNOHANG` poll — the three shapes that previously grew
- * five separate private ladders downstream (sugar-crush's `ProcessReaper`
+ * five separate private ladders downstream (candy-code's `ProcessReaper`
  * absorbed four of them; sugar-dashboard's `ExternalModule::terminateBounded()`
  * and sugar-video's `BoundedReaper` were documented per-lib copies of the
  * same rungs). Callers bring their own budgets; the sequence never varies.
@@ -73,7 +73,7 @@ final class BoundedShutdown
      * The status is captured from `proc_get_status()` at the moment the poll
      * observes the exit, NOT from `proc_close()`: once the status poll has
      * seen the child gone, `proc_close()` reports -1 (measured, PHP 8.3.6 —
-     * the same reason sugar-crush's clipboard spawner reads its exit code out
+     * the same reason candy-code's clipboard spawner reads its exit code out
      * of the poll). When the poll never observed an exit — the uninterruptible
      * kernel-wait case — the status falls back to `proc_close()`'s own report,
      * which is honest because that call will have waited out the child.

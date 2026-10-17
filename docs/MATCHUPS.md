@@ -71,8 +71,8 @@ called out in the table below.
 | **SugarDatepicker** (`sugar-datepicker/`) | 🟢 ready | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
 | **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + simple sort/filter table — ratio-based sizing, gap, justify, align, per-column styling. |
-| **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter region model). |
-| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from sugar-crush MCP stack; protocol per Model Context Protocol spec. |
+| **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from candy-code (BuildsUnifiedDiff + DiffGutter region model). |
+| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 
 ## Apps
 
@@ -87,8 +87,8 @@ called out in the table below.
 | **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
 | **CandyMail** (`candy-mail/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | **CandyGitServer** (`candy-git-server/`) | 🟢 ready | Self-hostable Git server over SSH (authorized keys), Git daemon, and HTTP — users, repos, access control, optional LFS. |
-| **SugarCrush** (`sugar-crush/`) | 🟢 ready | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions. |
-| **SugarCrushWeb** (`sugar-crush-web/`) | 🟡 in progress | Browser UI for sugar-crush's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. MVP today (one session: transcript, tool cards, diffs, approvals, composer). |
+| **CandyCode** (`candy-code/`) | 🟢 ready | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions. |
+| **CandyCodeWeb** (`sugar-crush-web/`) | 🟡 in progress | Browser UI for candy-code's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. MVP today (one session: transcript, tool cards, diffs, approvals, composer). |
 | **CandyTetris** (`candy-tetris/`) | 🟢 ready | Tetris clone — SRS / 7-bag / NES scoring. |
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
 | **CandyGit** (`candy-git/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
@@ -190,8 +190,8 @@ reference projects supplied the ideas, not the code.
 | SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |
 | SugarCraft (sugar-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
-| SugarCrush (sugar-crush/) | [Crush](https://github.com/charmbracelet/crush) |
-| SugarCrushWeb (sugar-crush-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |
+| CandyCode (candy-code/) | [Crush](https://github.com/charmbracelet/crush) |
+| CandyCodeWeb (sugar-crush-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |
 | SugarNavstack (sugar-navstack/) | [bubbleo](https://github.com/KevM/bubbleo) |
 | SugarDashboard (sugar-dashboard/) | [bubble-grid](https://github.com/charmbracelet/bubble-grid) |
 | SugarDiff (sugar-diff/) | none — first-party |

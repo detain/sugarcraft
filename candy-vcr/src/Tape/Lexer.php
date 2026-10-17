@@ -18,7 +18,7 @@ namespace SugarCraft\Vcr\Tape;
  * The two value-delimiter kinds the original port omitted — JSON (`{` … `}`)
  * and REGEX (`/` … `/`) — are upstream first-class token kinds, measured
  * against the real `vhs` binary by the oracle sweep in
- * `sugar-crush/tests/VhsTapeContractTest.php`. The facts that port with them:
+ * `candy-code/tests/VhsTapeContractTest.php`. The facts that port with them:
  *
  * - **Tab is whitespace.** Upstream's stream has no newline token and its
  *   whitespace class includes `\t`, so `Type "x"\tSleep 1s` is two
@@ -36,7 +36,7 @@ namespace SugarCraft\Vcr\Tape;
  *   what a directive accepted by name may carry; here the same idea is the
  *   match chain — a delimiter token is only recognized at a token START, and
  *   only when a whitespace/line-end boundary follows its closer, so
- *   `./bin/sugarcrush` (identifier run-class bytes hold it together) and
+ *   `./bin/candy-code` (identifier run-class bytes hold it together) and
  *   `Set Shell /bin/sh` (no boundary after `/bin/`) lex as one token, never
  *   as an opened regex.
  * - **Five delimiter pairs make `#` literal:** `"` `"`, `'` `'`, `` ` `` `` ` ``,

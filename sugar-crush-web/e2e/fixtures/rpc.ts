@@ -1,4 +1,4 @@
-import type { SugarCrushServer } from './server'
+import type { CandyCodeServer } from './server'
 
 interface Envelope {
   sessionId: string | null
@@ -8,8 +8,8 @@ interface Envelope {
 }
 
 /**
- * A second, scripted client: the way a script drives `sugarcrush serve`
- * (bearer token as the `sugarcrush.auth.<token>` subprotocol). The tests use
+ * A second, scripted client: the way a script drives `candy-code serve`
+ * (bearer token as the `candy-code.auth.<token>` subprotocol). The tests use
  * it to make things happen while the browser is not looking.
  */
 export class RpcClient {
@@ -41,8 +41,8 @@ export class RpcClient {
     }
   }
 
-  static async connect(server: SugarCrushServer): Promise<RpcClient> {
-    const socket = new WebSocket(`ws://127.0.0.1:${server.port}/ws`, ['sugarcrush.v1', `sugarcrush.auth.${server.token}`])
+  static async connect(server: CandyCodeServer): Promise<RpcClient> {
+    const socket = new WebSocket(`ws://127.0.0.1:${server.port}/ws`, ['candy-code.v1', `candy-code.auth.${server.token}`])
     await new Promise<void>((resolve, reject) => {
       socket.onopen = () => resolve()
       socket.onerror = () => reject(new Error('rpc socket failed'))

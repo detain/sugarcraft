@@ -8,7 +8,7 @@ namespace SugarCraft\McpClient;
  * The lifecycle every MCP server transport must honour: start, expose its
  * tool table, answer tool calls, stop.
  *
- * Extracted from the sugar-crush MCP stack (src/MCP/McpServer.php). Phase 1
+ * Extracted from the candy-code MCP stack (src/MCP/McpServer.php). Phase 1
  * ships one implementation (StdioMcpServer); the HTTP transport remains
  * downstream until Phase 2.
  *

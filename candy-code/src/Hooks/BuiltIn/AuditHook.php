@@ -1,0 +1,797 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Hooks\BuiltIn;
+
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Hooks\HookInterface;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Permissions\DenialKind;
+
+/**
+ * One appended line per finished tool call: when, which session, which tool,
+ * what it was given, and the first 200 bytes of what it produced — plus, since
+ * audit F-H2, one line per call the engine REFUSED ({@see recordDenial()}) and
+ * per output a PostToolUse hook WITHHELD ({@see recordWithheld()}).
+ *
+ * The three line shapes share one prefix, and the separator after the input
+ * says which record it is:
+ *
+ *     [Y-m-d H:i:s] <session> <tool> <input> => <output excerpt>
+ *     [Y-m-d H:i:s] <session> <tool> <input> =! DENY <kind>: <reason>
+ *     [Y-m-d H:i:s] <session> <tool> <input> =! WITHHELD "<hook>": <reason>
+ *
+ * `<kind>` is {@see DenialKind::token()} (`hook`, `refused`, `unanswered`);
+ * `<hook>` is the name of the `PostToolUse` hook that withheld the output, and
+ * is absent (`=! WITHHELD: <reason>`) when no single hook did.
+ *
+ * ONE RECORD PER CALL THAT RAN, and never the excerpt of a withheld one (audit
+ * R7). The registry runs this hook LAST in its chain
+ * ({@see \SugarCraft\Code\Hooks\HookRegistry::findMatches()}), so
+ * {@see execute()} writes its `=>` line only once every other hook has
+ * permitted the output. A chain that withholds returns before reaching it, and
+ * the Runtime writes the `=! WITHHELD` line instead. Run first, as the
+ * registration order used to put it, it copied 200 bytes of the very output a
+ * secret scanner behind it was about to refuse.
+ * Every interpolated field goes through {@see field()}, so a field cannot
+ * end the line early, and the input is capped at {@see INPUT_CAP_BYTES}.
+ *
+ * THE DEFAULT PATH IS THE PRODUCTION PATH, WHICH IS WHY IT GETS THIS MUCH
+ * ATTENTION. {@see \SugarCraft\Code\Hooks\HookManager::registerBuiltIns()}
+ * registers `new BuiltIn\AuditHook()` with no argument, and
+ * `Cli\Bootstrap::hooks()` (private) and
+ * {@see \SugarCraft\Code\Backend\EngineBackend} both call it — so an
+ * ordinary run writes every tool call it makes to whatever
+ * {@see defaultLogFile()} answers. It is not a fallback nothing reaches.
+ *
+ * WHY THIS CLASS IS NO LONGER `final readonly` (E345, E351). It carries two
+ * pieces of PROCESS state now — the once-per-process notice latch behind
+ * {@see noticeRefusalOnce()} and the test-only directory seam behind
+ * {@see pinDefaultLogDirectory()} — and MEASURED on PHP 8.3.6, a `readonly`
+ * class cannot declare a static property AT ALL: both
+ * `private static bool $x = false;` and `private static bool $x;` are fatal
+ * ("Readonly property cannot have default value" / "Static property cannot be
+ * readonly"). E345 anticipated this cost as "process state on a class that has
+ * none". NOTHING ABOUT AN INSTANCE CHANGED: `$logFile` and `$ownsPath` are
+ * each declared `readonly` individually, so the immutability a caller can
+ * observe is exactly what it was; what moved is the keyword, not the
+ * guarantee.
+ */
+final class AuditHook implements HookInterface
+{
+    /**
+     * This hook's name in the `PostToolUse` chain — what
+     * {@see \SugarCraft\Code\Runtime} looks it up by to record refusals that
+     * never reach the chain.
+     */
+    public const NAME = 'audit';
+
+    /**
+     * How much of a tool's output the `=>` record keeps.
+     */
+    public const OUTPUT_EXCERPT_BYTES = 200;
+
+    /**
+     * How much of a call's input any record keeps (audit F-H2). The input used
+     * to be logged whole, so every `Write` copied the entire file it wrote
+     * into a log that is never rotated. 4 KiB holds every ordinary command
+     * line and path set; what is cut is named with its full length, so the
+     * record still says how big the call was.
+     */
+    public const INPUT_CAP_BYTES = 4096;
+
+    /**
+     * Leaf-name stem of the per-user directory {@see defaultLogFile()} lives
+     * in. The effective uid is appended to it.
+     */
+    private const DEFAULT_DIRECTORY_STEM = 'candy-code-audit-';
+
+    /** Leaf name of the default log inside that directory. */
+    private const DEFAULT_LOG_LEAF = 'audit.log';
+
+    /**
+     * Mode the default directory is CREATED with — owner only.
+     *
+     * Set at creation rather than by a `chmod()` afterwards, deliberately:
+     * a create-then-chmod leaves a window in which the directory exists
+     * group- and other-readable, and the whole point of the directory is that
+     * no window exists.
+     *
+     * THIS IS THE CREATE MODE ONLY. What an ALREADY-EXISTING directory has to
+     * satisfy is {@see FOREIGN_ACCESS_BITS}, which is the weaker "nobody else
+     * can reach it" rather than this exact number — see
+     * {@see directoryIsOurs()} for why those are two requirements and not one.
+     */
+    private const DEFAULT_DIRECTORY_MODE = 0o700;
+
+    /**
+     * The bits that make a directory or a log reachable by somebody other than
+     * its owner: group and other, `rwx` each.
+     *
+     * The accept path tests `mode & FOREIGN_ACCESS_BITS === 0` rather than
+     * `mode === DEFAULT_DIRECTORY_MODE`, because the property being defended
+     * is that no other user can get in — a 0500 or 0600 directory an operator
+     * tightened FURTHER than this class does satisfies that and would fail an
+     * equality test for no reason.
+     */
+    private const FOREIGN_ACCESS_BITS = 0o077;
+
+    private readonly string $logFile;
+
+    /**
+     * True when no caller named a path, so this class chose one and is
+     * answerable for what is at the other end of it.
+     *
+     * A caller-supplied path is the CALLER'S choice and is written the way it
+     * always was. The guards below apply only to the path this class invented,
+     * because refusing a path an embedder deliberately passed — a symlink into
+     * a log-rotation directory is an ordinary thing to want — would be this
+     * class overruling its own API.
+     */
+    private readonly bool $ownsPath;
+
+    /**
+     * A directory {@see defaultLogDirectory()} answers with instead of the
+     * production one, or null for the production one (E351).
+     *
+     * THE SUITE WAS WRITING TO THE PRODUCTION PATH AND NOTHING REMOVED IT.
+     * OBSERVED on this box during round 49: `/tmp/candy-code-audit-1000/`,
+     * `drwx------`, its `audit.log` grown to 29165 bytes by a phpunit run and
+     * by no real `candy-code`. `AuditHookTest` was rewritten at E298
+     * specifically to stop driving writes at this default and no longer does;
+     * the leak is every OTHER suite that reaches
+     * {@see \SugarCraft\Code\Hooks\HookManager::registerBuiltIns()}, which
+     * constructs `new BuiltIn\AuditHook()` with no argument.
+     *
+     * WHY A SEAM AND NOT `TMPDIR`. MEASURED, PHP 8.3.6: `putenv('TMPDIR=…')`
+     * followed by `sys_get_temp_dir()` still answers `/tmp`, because PHP
+     * resolves and caches the temp directory once per process. That is the
+     * same fact {@see \SugarCraft\Code\Support\ToolIpcFiles::sweep()}
+     * records for its own `$dir` parameter, and the remedy is the same one:
+     * an explicit seam a test process points somewhere harmless.
+     *
+     * NOT NULLABLE-BY-DEFAULT AS A FEATURE FLAG. Nothing in `src/` or `bin/`
+     * assigns this, so a shipped run always takes the production arm — the
+     * same shape and the same guarantee as
+     * {@see \SugarCraft\Code\Cli\NonInteractive::pinStdinDefault()}.
+     */
+    private static ?string $directoryPin = null;
+
+    /**
+     * Whether this process has already announced a refused audit write.
+     *
+     * See {@see noticeRefusalOnce()} for why once and not per call.
+     */
+    private static bool $noticed = false;
+
+    /**
+     * Point {@see defaultLogDirectory()} at $directory instead of the
+     * production one, or pass null to put it back.
+     *
+     * Spent once from `tests/bootstrap.php`. Public for the same reason
+     * `pinStdinDefault()` is: the seam is worth ASSERTING rather than
+     * trusting, and a bootstrap that quietly stopped installing it would put
+     * the suite back on the production path with every test still green.
+     */
+    public static function pinDefaultLogDirectory(?string $directory): void
+    {
+        self::$directoryPin = $directory;
+    }
+
+    /**
+     * The pin {@see pinDefaultLogDirectory()} installed, or null.
+     *
+     * Read rather than reflected, so a test can assert the bootstrap did its
+     * job without reaching into a private.
+     */
+    public static function defaultLogDirectoryPin(): ?string
+    {
+        return self::$directoryPin;
+    }
+
+    public function __construct(?string $logFile = null)
+    {
+        $this->logFile = $logFile ?? self::defaultLogFile();
+        $this->ownsPath = $logFile === null;
+    }
+
+    /**
+     * Where this hook writes when nobody says.
+     *
+     * WHAT THE JUSTIFICATION FOR THIS PATH SAID (E298, and the inventory row
+     * in `tests/Support/ProcessUniqueTempNameTest.php` that carried it): the
+     * default was `sys_get_temp_dir() . '/candy-code-audit.log'`, one fixed
+     * name, and the fixed name was the INTENDED behaviour — "an audit log that
+     * moves every run is not an audit log, and a caller who wants a private
+     * one passes it in". What was wrong was a test that drove the production
+     * default, wrote it and unlinked it.
+     *
+     * WHAT IS TRUE NOW (E328). That argument is still right and is kept: the
+     * name is still fixed, so `tail -f` on it works across runs. What it did
+     * not account for is WHO ELSE can reach the name. `sys_get_temp_dir()` is
+     * world-writable and its leaf was shared by every user on the box, so a
+     * local user could pre-create it as a symlink and have this hook append
+     * through it, and — MEASURED on PHP 8.3.6 under the ordinary umask 0002 —
+     * the file this hook creates is mode 0664, i.e. every other user could
+     * READ a log carrying every tool's arguments and 200 bytes of its output.
+     * Neither is a race. The fixed leaf now sits inside a per-user directory
+     * this process creates 0700 and refuses to use if it is not its own, so
+     * the name is still stable for the user who owns it and unreachable for
+     * anyone else.
+     *
+     * WHAT WAS *NOT* THE HAZARD, stated because it was recorded as one and a
+     * reader who fixes it will change the wrong line. Two `candy-code`
+     * processes appending here neither truncate nor split each other's
+     * records: {@see execute()} writes with `FILE_APPEND | LOCK_EX`, and
+     * MEASURED on PHP 8.3.6 — 8 concurrent processes, 200 records each, 9000
+     * bytes per record (well past both `PIPE_BUF` and one page), three takes —
+     * all 1600 lines came back intact with the byte total exact and nothing
+     * interleaved. Cross-process APPENDING was already safe. Cross-user
+     * REACHABILITY was not.
+     *
+     * AND THE CLAIM WAS FALSE WHEN IT WAS MADE, not merely superseded by this
+     * fix — which is the part that decides whether a reader treats the old
+     * entry as stale or as wrong. `git show d881f552^` is the commit
+     * immediately BEFORE the per-user directory landed, and its write already
+     * spells `FILE_APPEND | LOCK_EX`. There was never a version of this class
+     * whose appends raced.
+     *
+     * THAT SENTENCE IS LOAD-BEARING — it is the reason a future reader is told
+     * not to reach for locking — SO IT IS PINNED BY A TEST RATHER THAN BY THIS
+     * PARAGRAPH. {@see \SugarCraft\Code\Tests\Hooks\AuditHookConcurrentAppendTest}
+     * drives concurrent writers through this class at a payload past
+     * `PIPE_BUF` and asserts nothing is lost, torn or interleaved, with three
+     * constructed known-positive controls proving its analyser can still
+     * report each of those three. Dropping a flag from the
+     * `file_put_contents()` below is a one-token edit, and that test is what
+     * notices it.
+     *
+     * WHY THIS IS A STATIC METHOD RATHER THAN A CONSTANT: the uid is a
+     * property of the running process, so there is nothing to declare.
+     */
+    public static function defaultLogFile(): string
+    {
+        return self::defaultLogDirectory() . '/' . self::DEFAULT_LOG_LEAF;
+    }
+
+    /**
+     * The per-user directory {@see defaultLogFile()} sits in.
+     *
+     * Scoped by the EFFECTIVE uid, matching
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles::sweep()}: the effective
+     * uid is the one the kernel checks when the `mkdir()` and the append
+     * actually run, so under setuid the real uid would name a directory this
+     * process then cannot use.
+     *
+     * ON A POSIX-LESS BUILD THERE IS NO UID TO ASK FOR and the scope falls
+     * back to the literal below. That is a real loss — every such user on one
+     * box shares one directory again — and it is preferred to the
+     * alternatives: `getmyuid()` answers the SCRIPT FILE's owner rather than
+     * the process's, which for a shared installation is one answer for
+     * everybody and a wrong one, and inventing a name from the environment
+     * puts an attacker-supplied string in a path.
+     *
+     * WHAT KEEPS THAT SHARED DIRECTORY SAFE, CORRECTED. This paragraph said
+     * "the 0700 creation and the OWNERSHIP REFUSAL in `append()` still hold on
+     * that build". The ownership half is exactly backwards:
+     * {@see directoryIsOurs()} has no uid to compare on a posix-less build and
+     * SKIPS the comparison rather than failing it — there is no ownership
+     * refusal there at all. WHAT IS TRUE: the mode is what holds. The first
+     * user to arrive creates the directory {@see DEFAULT_DIRECTORY_MODE}, and
+     * a second user reaches a directory that is a real directory, is not a
+     * symlink and carries no {@see FOREIGN_ACCESS_BITS} — so it is ACCEPTED,
+     * and the `file_put_contents()` in {@see append()} then fails on the
+     * kernel's own permission check. WHY THE CONCLUSION SURVIVES THE
+     * CORRECTION: the outcome is unchanged — the second user loses their audit
+     * log rather than reading the first's — but a reader who believed the old
+     * mechanism would have gone looking for a uid comparison to fix and found
+     * none.
+     *
+     * IT DEFERS TO {@see pinDefaultLogDirectory()} FIRST (E351), and the pin
+     * is a test seam that production never sets. The guards below are NOT
+     * skipped for a pinned directory: {@see append()} still refuses one that
+     * is a symlink, is not a directory, is not this euid's, or is reachable by
+     * anybody else — so pointing the suite somewhere else moves WHERE it
+     * writes without turning off WHAT is being tested.
+     */
+    public static function defaultLogDirectory(): string
+    {
+        return self::$directoryPin
+            ?? self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null);
+    }
+
+    /**
+     * {@see defaultLogDirectory()}'s name for a given effective uid, or for a
+     * build that has none.
+     *
+     * A SEAM WITH ONE JOB: making the `null` arm reachable from a test. Every
+     * build this suite runs on HAS `posix_geteuid()`, so with the lookup inline
+     * the fallback scope was prose only — MEASURED at round 49, renaming the
+     * literal was a mutation the entire `AuditHook` suite survived, and the
+     * paragraph above explaining what that name costs was the sole record that
+     * the arm existed. It is private because the shared-scope name is not
+     * something a caller should be choosing.
+     */
+    private static function directoryFor(?int $uid): string
+    {
+        return \sys_get_temp_dir() . '/' . self::DEFAULT_DIRECTORY_STEM
+            . ($uid === null ? 'noposix' : (string) $uid);
+    }
+
+    public function name(): string
+    {
+        return self::NAME;
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PostToolUse;
+    }
+
+    public function matcher(): string
+    {
+        return '.*';
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        $this->append(self::line(
+            $context,
+            '=> ' . self::field(self::cut($context->toolOutput, self::OUTPUT_EXCERPT_BYTES)),
+        ));
+
+        return HookResult::allow();
+    }
+
+    /**
+     * Record a call the engine refused before it ran, answering whether the
+     * line was written.
+     *
+     * WHY THIS IS A METHOD AND NOT AN EVENT. A refused call never reaches
+     * `PostToolUse` — {@see \SugarCraft\Code\Runtime::gate()} returns before
+     * the tool runs — so `execute()` used to be blind to exactly the
+     * security-relevant events: a ProtectFilesHook denial, a gate refusal, an
+     * ASK nobody answered, a hook that timed out (audit F-H2). The Runtime
+     * calls this on its refusal arm instead. Best-effort like every write here
+     * ({@see append()}): a log line must not decide a call.
+     *
+     * $reason is the bare detail; the kind is written as its token, so the
+     * line does not repeat the `Hook denied:` prefix the model saw.
+     */
+    public function recordDenial(HookContext $context, DenialKind $kind, string $reason): bool
+    {
+        return $this->append(self::line($context, sprintf('=! DENY %s: %s', $kind->token(), self::field($reason))));
+    }
+
+    /**
+     * Record that a `PostToolUse` hook withheld a call's output from the model
+     * (audit F-H1), answering whether the line was written.
+     *
+     * The call RAN, and this is its ONLY record: the chain returned at the
+     * refusing hook, before reaching this one (see the class note, audit R7),
+     * so no `=>` line holds an excerpt of what was withheld. It keeps the
+     * reason — which otherwise only the model read — and, when one hook owns
+     * the refusal, that hook's name ({@see HookResult::refusingHook()}).
+     */
+    public function recordWithheld(HookContext $context, string $reason, ?string $hook = null): bool
+    {
+        $tag = $hook === null ? '=! WITHHELD: ' : '=! WITHHELD "' . self::field($hook) . '": ';
+
+        return $this->append(self::line($context, $tag . self::field($reason)));
+    }
+
+    /**
+     * The shared `[time] session tool input <tail>` record.
+     */
+    private static function line(HookContext $context, string $tail): string
+    {
+        return sprintf(
+            "[%s] %s %s %s %s\n",
+            date('Y-m-d H:i:s'),
+            self::field($context->sessionId),
+            self::field($context->toolName),
+            self::field(self::capInput($context->toolInput)),
+            $tail,
+        );
+    }
+
+    /**
+     * $input cut to {@see INPUT_CAP_BYTES}, with the original length named.
+     */
+    private static function capInput(string $input): string
+    {
+        $length = strlen($input);
+        if ($length <= self::INPUT_CAP_BYTES) {
+            return $input;
+        }
+
+        return self::cut($input, self::INPUT_CAP_BYTES) . sprintf(' [truncated: %d bytes]', $length);
+    }
+
+    /**
+     * At most $bytes of $text, never ending inside a UTF-8 sequence.
+     *
+     * `mb_strcut()` rather than `substr()`: a byte cut can split a multi-byte
+     * character, which {@see field()} would then show as U+FFFD — the record
+     * would claim the tool printed a byte it did not.
+     */
+    private static function cut(string $text, int $bytes): string
+    {
+        return strlen($text) <= $bytes ? $text : mb_strcut($text, 0, $bytes, 'UTF-8');
+    }
+
+    /**
+     * $value made safe to interpolate into one log line.
+     *
+     * LINE FORGING IS THE THREAT (audit F-H2). The output excerpt is bytes a
+     * web page or a command chose, and a raw newline in it let that content
+     * write a second, fabricated `[time] session Tool …` record. Every C0
+     * control, DEL and the Unicode line breaks (NEL, U+2028, U+2029) are
+     * therefore written as escapes (`\n`, `\r`, `\t`, `\xNN`, `\u{NNNN}`) —
+     * which also keeps a terminal escape out of an operator's `cat`. Invalid
+     * UTF-8 becomes U+FFFD so the line stays valid text.
+     *
+     * A BACKSLASH IS NOT ESCAPED, deliberately: the input is the call's JSON,
+     * full of `\"`, and doubling every one would make the most-read field
+     * unreadable. The cost is that the escape is not reversible — a literal
+     * `\n` in the output reads the same as an escaped newline. That is
+     * acceptable for an excerpt meant to be read; nothing parses it back, and
+     * what it guarantees is that one record is one line.
+     */
+    private static function field(string $value): string
+    {
+        $value = mb_scrub($value, 'UTF-8');
+
+        return (string) preg_replace_callback(
+            '/[\x00-\x1F\x7F]|\x{0085}|\x{2028}|\x{2029}/u',
+            static function (array $match): string {
+                $char = $match[0];
+
+                return match ($char) {
+                    "\n" => '\\n',
+                    "\r" => '\\r',
+                    "\t" => '\\t',
+                    default => strlen($char) === 1
+                        ? sprintf('\\x%02X', ord($char))
+                        : sprintf('\\u{%04X}', mb_ord($char, 'UTF-8')),
+                };
+            },
+            $value,
+        );
+    }
+
+    /**
+     * Append $entry to the log, or decline to, answering which happened.
+     *
+     * THE RETURN VALUE IS DISCARDED BY {@see execute()} AND THAT IS THE
+     * DECISION, not an oversight. This is a PostToolUse hook: the tool has
+     * already run and its result is already on its way to the model, so there
+     * is no verdict left for a failed audit write to influence, and a
+     * `HookResult::deny()` here would be a lie about a call that happened.
+     * Throwing would take down the run over a log line. What is left is
+     * best-effort, and it is split into its own method so the refusal arms
+     * have a name and a test can drive them
+     * ({@see \SugarCraft\Code\Tests\Hooks\AuditHookTest}).
+     *
+     * That the refusal is SILENT is a real cost and is recorded as such: an
+     * operator whose audit directory has been squatted learns nothing until
+     * they look. The alternative on the table was a line on stderr, which on a
+     * squatted box would be one line per tool call for the whole run.
+     */
+    private function append(string $entry): bool
+    {
+        $directory = \dirname($this->logFile);
+
+        // THE REASON IS PASSED AS A CLOSURE AND NOT AS A STRING, which is the
+        // difference between "computed once" and "computed on every refused
+        // call". PHP evaluates a call's arguments before the call, so the
+        // earlier `noticeRefusalOnce(self::directoryRefusalReason($dir))`
+        // spelling ran the whole inspection every time this arm was taken and
+        // then threw the string away — MEASURED at round 49, five refused
+        // calls produced five inspections and one notice. The latch suppresses
+        // the `warn()`, not the work that builds its argument, and only a
+        // deferred argument can be suppressed by a latch inside the callee.
+        //
+        // The parameter type is what enforces it: a `\Closure` parameter under
+        // `strict_types` cannot be handed an eagerly-built string, so the
+        // regression is a `TypeError` rather than a silent cost.
+        if ($this->ownsPath && !self::directoryIsOurs($directory)) {
+            self::noticeRefusalOnce(static fn (): string => self::directoryRefusalReason($directory));
+
+            return false;
+        }
+
+        // A SYMLINK AT THE LOG'S OWN NAME, checked separately from the
+        // directory because the two are planted by different opportunities:
+        // the directory check answers "did somebody else get here first", and
+        // this answers "is the leaf inside our own directory still a file".
+        // PHP has no `O_NOFOLLOW`, so the refusal has to be explicit; it is
+        // race-free in the case that matters because a 0700 directory this
+        // uid owns is one nobody else can create an entry in.
+        if ($this->ownsPath && \is_link($this->logFile)) {
+            $log = $this->logFile;
+            self::noticeRefusalOnce(static fn (): string => \sprintf(
+                'audit log disabled: %s is a symbolic link, and this hook will not append through one '
+                . 'to a file it did not create. Nothing is being recorded. Remove or replace the link.',
+                $log,
+            ));
+
+            return false;
+        }
+
+        // AND THE LEAF ITSELF IS CREATED OWNER-ONLY, by narrowing the umask
+        // around the create rather than by a `chmod()` after it — the same
+        // pattern and the same reason as
+        // {@see \SugarCraft\Code\Support\ToolIpcFiles::write()}: a
+        // chmod-afterwards leaves a window with the bytes on disk and readable.
+        // `file_put_contents()` creates at 0666 minus the ambient umask, i.e.
+        // 0664 on an ordinary box (MEASURED, PHP 8.3.6, umask 0002), and the
+        // bytes are every tool's arguments and 200 bytes of its output.
+        //
+        // BELT AND BRACES RATHER THAN THE ONLY GUARD, stated so it is not read
+        // as the load-bearing one: the directory this leaf sits in is refused
+        // above unless it is unreachable by anybody else, and a mode on a file
+        // nobody can traverse to is already moot. It matters when the leaf
+        // outlives the directory's mode — a directory loosened after the file
+        // was made, or the file moved.
+        //
+        // GATED ON $ownsPath like the two refusals above, for the same reason:
+        // a caller-supplied path is written the way it always was, and
+        // silently narrowing an embedder's own log file is this class making a
+        // decision about a path it was handed.
+        //
+        // The umask is process-global, so this is not safe against a thread or
+        // a concurrently-running fork of this process changing it. That is the
+        // same exposure `ToolIpcFiles::write()` has and it is accepted for the
+        // same reason: PHP has no per-open mode argument, and the alternative
+        // (create, chmod) is the window this avoids.
+        $previous = $this->ownsPath ? \umask(self::FOREIGN_ACCESS_BITS) : null;
+
+        try {
+            return @\file_put_contents($this->logFile, $entry, \FILE_APPEND | \LOCK_EX) !== false;
+        } finally {
+            if ($previous !== null) {
+                \umask($previous);
+            }
+        }
+    }
+
+    /**
+     * Announce, ONCE PER PROCESS, that this hook is not recording.
+     *
+     * WHY IT IS NOT SILENT ANY MORE (E345). {@see append()} answers `false`
+     * and {@see execute()} discards the answer, so an operator whose audit
+     * directory has been squatted — or merely made by hand — learned nothing
+     * until they went looking. An audit log that silently stops recording is
+     * strictly worse than one that never existed, because it looks
+     * authoritative.
+     *
+     * WHY IT IS NOT A `deny()` OR A THROW, which is the reasoning `append()`
+     * already carried and which is unchanged: this is a `PostToolUse` hook, so
+     * the tool has already run and there is no verdict left for a failed log
+     * write to influence; a `HookResult::deny()` would be a lie about a call
+     * that happened, and throwing would take down a run over a log line.
+     *
+     * WHY NOT `HookResult::allow('<message>')`, WHICH E345 OFFERED AS THE
+     * ALTERNATIVE — MEASURED, AND IT HAS NO CONSUMER. The `HookResult` a
+     * `PostToolUse` run answers with is DISCARDED at both of its call sites:
+     * {@see \SugarCraft\Code\Runtime}'s `postToolUse()` call ignores the
+     * return value entirely, and {@see \SugarCraft\Code\Chat::applyPostToolUse()}
+     * calls it and then returns the tool result unchanged. A message put there
+     * reaches nobody. E345 said to check before designing; this is the check.
+     *
+     * WHY ONCE, WHICH IS THE WHOLE REASON THE COST ARGUMENT DIES. E345's
+     * objection to a notice was that on a squatted box it is one line per tool
+     * call for the whole run — the shape that trains an operator to ignore
+     * stderr. One line is the whole of what needs saying, and the latch is
+     * what makes that true rather than hoped for.
+     *
+     * WHY *THAT* REASON AND NOT THE ONE THIS PARAGRAPH FIRST GAVE. It said:
+     * "every condition this method reports is a property of a directory that
+     * does not change mid-run, so the second line would carry no information
+     * the first did not." THAT IS NOT TRUE, and the message itself is the
+     * counter-example — the mode arm ends `Fix it with: chmod 700 <dir>`,
+     * which invites exactly the mid-run change the sentence says cannot
+     * happen, and after the operator makes it the hook silently resumes
+     * recording and says nothing more. WHY THE DECISION SURVIVES THE
+     * CORRECTION: the reason for once is signal-to-noise, not immutability. A
+     * line per tool call is the failure mode; a second line announcing that a
+     * directory changed shape mid-run would be a real (if rare) piece of
+     * information, and it is given up deliberately to keep the first line
+     * worth reading. A reader who believed the old reason would "fix" a
+     * repeat-notice bug that is not a bug.
+     *
+     * THROUGH {@see RuntimeNoticeSink::warn()} AND NOT A BARE `fwrite`. That
+     * funnel writes the complete text to stderr via `error_log()` AND puts a
+     * clipped row on the mid-session transcript seam, which is the surface an
+     * interactive operator is actually looking at — a raw `fwrite` to fd 2
+     * during a TUI session lands in a frame the renderer believes it owns.
+     * It also means this file does not become a new raw-stderr emitter; it
+     * joins the funnel {@see \SugarCraft\Code\Tests\Cli\StderrEmitterCensusTest}
+     * counts as channel 6.
+     *
+     * THE ARGUMENT IS DEFERRED, and the parameter type is the enforcement.
+     * A latch inside a callee cannot suppress work its caller already did
+     * building the argument, so with a `string` parameter this method's
+     * "once" applied to the `warn()` and to nothing else — see
+     * {@see append()} for the measurement. `\Closure` is the narrowest type
+     * that makes the eager spelling impossible rather than merely discouraged;
+     * {@see \SugarCraft\Code\Tests\Hooks\AuditHookRefusalNoticeTest} asserts
+     * both the type and the fact that a spent latch never invokes what it is
+     * handed.
+     *
+     * @param \Closure(): string $reason built only if it is going to be said
+     */
+    private static function noticeRefusalOnce(\Closure $reason): void
+    {
+        if (self::$noticed) {
+            return;
+        }
+
+        self::$noticed = true;
+        RuntimeNoticeSink::warn($reason());
+    }
+
+    /**
+     * WHICH arm of {@see directoryIsOurs()} refused $directory, in words an
+     * operator can act on.
+     *
+     * A SEPARATE INSPECTION AND NOT A SECOND RETURN VALUE FROM
+     * {@see directoryIsOurs()}, deliberately: that method is driven directly
+     * by several tests and by {@see append()}'s hot path, and widening its
+     * contract to carry a reason would make every caller pay for a string
+     * nobody reads on the ACCEPT path.
+     *
+     * WHAT THIS PARAGRAPH SAID WHEN IT WAS WRITTEN, and it was wrong about the
+     * site it annotates rather than about the design: "this runs only after a
+     * refusal, at most once per process". WHAT IS TRUE NOW: the first half was
+     * always true and still is; the second half was false the moment it was
+     * written, because {@see append()} spelled the call as
+     * `noticeRefusalOnce(self::directoryRefusalReason($dir))` and PHP builds a
+     * call's arguments before the call. MEASURED at round 49, PHP 8.3.6: five
+     * refused calls through a mode-refused directory produced FIVE inspections
+     * and one notice. The refusing caller was paying, on every call after the
+     * first, for exactly the discarded string the accept-path argument above
+     * objects to. WHY THIS STILL EARNS ITS PLACE: the accept-path reasoning is
+     * the load-bearing half and is untouched — the refusal is still a separate
+     * inspection so that `directoryIsOurs()` stays a predicate. What changed is
+     * that {@see append()} now defers this call behind a `\Closure`, so the
+     * "at most once per process" clause is a property of the code instead of a
+     * hope about it.
+     *
+     * THE MODE ARM IS SPELLED WITH ITS REMEDY AND THE OTHER TWO ARE NOT, and
+     * that asymmetry is the point (E345's amendment). The symlink and
+     * foreign-owner arms fire only when something is genuinely amiss and an
+     * operator has a reason to go looking. The MODE arm fires on a directory
+     * the operator created themselves, by hand, with an ordinary `mkdir -p`
+     * under umask 0022 — no attacker, nothing visibly wrong — and the fix
+     * (`chmod 700`) is invisible from the symptom.
+     *
+     * IT RE-INSPECTS RATHER THAN REMEMBERING. Between the refusal and this
+     * call the directory could in principle have changed, in which case this
+     * names the state a reader will actually find when they look — which is
+     * more useful than naming the state that caused the refusal and no longer
+     * exists.
+     */
+    private static function directoryRefusalReason(string $directory): string
+    {
+        \clearstatcache(true, $directory);
+
+        if (\is_link($directory)) {
+            return \sprintf(
+                'audit log disabled: %s is a symbolic link rather than a directory, so this hook will '
+                . 'not write through it. Nothing is being recorded.',
+                $directory,
+            );
+        }
+
+        if (!\is_dir($directory)) {
+            return \sprintf(
+                'audit log disabled: %s could not be created as a directory. Nothing is being recorded.',
+                $directory,
+            );
+        }
+
+        $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : null;
+        $owner = @\fileowner($directory);
+        if ($uid !== null && ($owner === false || $owner !== $uid)) {
+            return \sprintf(
+                'audit log disabled: %s is owned by uid %s and this process is uid %d, so it is not a '
+                . 'directory this user can be sure of. Nothing is being recorded.',
+                $directory,
+                $owner === false ? 'unknown' : (string) $owner,
+                $uid,
+            );
+        }
+
+        $mode = @\fileperms($directory);
+        if ($mode !== false && ($mode & self::FOREIGN_ACCESS_BITS) !== 0) {
+            return \sprintf(
+                'audit log disabled: %s is mode %04o, which lets other users on this box reach a log of '
+                . 'every tool call and its arguments. Nothing is being recorded. Fix it with: chmod 700 %s',
+                $directory,
+                $mode & 0o7777,
+                $directory,
+            );
+        }
+
+        return \sprintf(
+            'audit log disabled: %s could not be verified as a directory this user owns exclusively. '
+            . 'Nothing is being recorded.',
+            $directory,
+        );
+    }
+
+    /**
+     * True when $directory is a real directory this process's effective user
+     * owns, creating it {@see DEFAULT_DIRECTORY_MODE} when nothing is there.
+     *
+     * `is_link()` BEFORE `is_dir()`, because `is_dir()` follows symlinks and
+     * would answer true for a planted link pointing at a directory — which is
+     * exactly the shape being refused.
+     *
+     * The uid comparison is skipped, not failed, when the build has no
+     * `posix_geteuid()`: same reasoning as
+     * {@see \SugarCraft\Code\Support\ToolIpcFiles::sweep()}, where the uid
+     * filter is a courtesy on a shared temp dir rather than the safety
+     * property. Here the safety property is the mode, which is checked on
+     * every build.
+     *
+     * THE MODE IS CHECKED ON THE ACCEPT PATH AND NOT ONLY SET ON THE CREATE
+     * PATH, and the two arms are not the same arm. WHAT THIS GUARD DID WHEN IT
+     * LANDED (E328): `mkdir()` at {@see DEFAULT_DIRECTORY_MODE}, then owner,
+     * and nothing looked at the mode of a directory that already existed.
+     * MEASURED on PHP 8.3.6 under umask 0002, against this exact method: a
+     * pre-existing `0777` directory owned by this euid was ACCEPTED, was not
+     * repaired, and {@see append()} then created the log inside it at 0664.
+     * The create arm runs once in the life of a machine; the accept arm runs
+     * on every tool call of every run after that, so it was the whole of the
+     * real exposure. An operator's own `mkdir -p` under umask 0022, a
+     * container image, a restore from a backup and a group-shared `TMPDIR` all
+     * arrive here and never touched the create arm.
+     *
+     * WHY IT REFUSES RATHER THAN REPAIRING, which is the tempting fix and is
+     * wrong. A repair is a `chmod()` on `dirname($this->logFile)`, and this
+     * method is handed whatever directory its caller names — the suite already
+     * calls it with `sys_get_temp_dir()` itself. MEASURED on this box: `/tmp`
+     * is mode 1777 and owned by root, so on any run whose euid is root the
+     * ownership check above passes and a repair arm would `chmod('/tmp', 0700)`
+     * — a machine-wide outage traded for a log line. Tightening is not safe
+     * merely because it is tightening. Refusal is also what every other arm
+     * here does (symlink, non-directory, foreign owner), and the cost is the
+     * one {@see append()} already documents: the write is silently skipped.
+     */
+    private static function directoryIsOurs(string $directory): bool
+    {
+        \clearstatcache(true, $directory);
+
+        if (\is_link($directory)) {
+            return false;
+        }
+
+        if (!\is_dir($directory)) {
+            if (\file_exists($directory)) {
+                return false;
+            }
+            if (!@\mkdir($directory, self::DEFAULT_DIRECTORY_MODE, true) && !\is_dir($directory)) {
+                return false;
+            }
+            \clearstatcache(true, $directory);
+        }
+
+        $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : null;
+        if ($uid !== null) {
+            $owner = @\fileowner($directory);
+            if ($owner === false || $owner !== $uid) {
+                return false;
+            }
+        }
+
+        $mode = @\fileperms($directory);
+
+        return $mode !== false && ($mode & self::FOREIGN_ACCESS_BITS) === 0;
+    }
+}

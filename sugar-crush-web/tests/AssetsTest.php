@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\CrushWeb\Assets;
 
 /**
- * Pins the committed bundle the shim hands to `sugarcrush serve`.
+ * Pins the committed bundle the shim hands to `candy-code serve`.
  *
  * These assertions run against the real `dist/`, not a fixture: what ships
  * to Packagist IS this directory, so a build that forgot its manifest, leaked

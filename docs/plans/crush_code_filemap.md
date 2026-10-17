@@ -23,23 +23,23 @@ all six RETIRED (files landed; y5/y6 retired the two surviving rows outright). R
 x-partial (r88), w (r87), v (r86), u (r85), t (r84), r/s (r83), q1–q18 (r82), pa–pg (r81), ob/oc (r80),
 na (r79), ma/mb (r78), la/lc/lb (r77).
 
-**Campaign-closure note (the definition-of-done met):** the row census prints NOTHING — the sugar-crush
+**Campaign-closure note (the definition-of-done met):** the row census prints NOTHING — the candy-code
 hardening plan is COMPLETE. The MATCHUPS 🟡/🔴 port-completion backlog rides the MATCHUPS board itself (add-a-lib
 checklist per lib, one lib per wave) — it was never a ledger row and stays out of this map. The standing
 STOP list (no push / no removal of unfinished code / no prompt_*.md / no blanket-LLM-timeout / E639-class
 decisions ask first) and the trigger-watch roster survive verbatim at §0-NOW-94 §2/§3. The harness laws stay
 in force for any future operator-opened work: serials PLAIN BASH PIPE (NEVER tmux/setsid/PTY); re-pin crush
-figures ONLY when sugar-crush files move (r89w2 re-proved the re-pin shape: +34T serial → README/suite-figure
+figures ONLY when candy-code files move (r89w2 re-proved the re-pin shape: +34T serial → README/suite-figure
 hand-bump → green serial → refresh-suite-figure, at `cf456a306`); `scripts/parallel-tests-durations.tsv` is
 SUGAR-CRUSH-ONLY (now 536 rows — 4 y5 files landed in-step); `failOnWarning` UNIVERSAL (58/58); the
 SwallowingCatch gate law stays in every src-touching brief's gate list; SHARD GATE (s4/E737): shards launch
-with `SUGARCRUSH_MCP_DISABLE=1`, launch-asserting tests arm via `tests/Support/McpLaunchEnabledTrait.php`;
-no lane may touch `sugar-crush/src/Cli/Bootstrap.php`, `scripts/parallel-tests.sh`, or the figure files
+with `CANDY_CODE_MCP_DISABLE=1`, launch-asserting tests arm via `tests/Support/McpLaunchEnabledTrait.php`;
+no lane may touch `candy-code/src/Cli/Bootstrap.php`, `scripts/parallel-tests.sh`, or the figure files
 without re-arming the census family. ERA-CORRECTION stamped at this close: five-guard is **45T/4,768A**
 (the 125T/7,362A cited through the RESUME tables was stale era); DocFigure-alone 83T/2,685A; crush windows
 re-derived by junit classname grep at the weld: `Form|Input|Select|Cursor` 712/4,516 (633/3,943 pre-y5),
 `Vt|Terminal|Buffer` 305/21,034, `Shine|Glamour|Style` 24/813. Config-md5 at-rest truth
-**`d96e124ee7967eb34ef479ef824231ad`** (start==end at the weld). **LINK CENSUS: sugar-crush 19/19 + sugar-pty 8/8.**
+**`d96e124ee7967eb34ef479ef824231ad`** (start==end at the weld). **LINK CENSUS: candy-code 19/19 + sugar-pty 8/8.**
 
 Tier/lane analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain`
 column below is a file-cluster bucket.
@@ -49,8 +49,8 @@ column below is a file-cluster bucket.
 Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_code_backlog_triage.md`) and
 the §0-NOW-94 seam/watch roster, normalized to repo-root paths:
 
-- Bare `src/…`, `tests/…`, `docs/…` (lib docs), `bin/…`, `README.md`, `phpunit.xml` as cited → **`sugar-crush/`-prefixed** — EXCEPT where the citation names a sibling lib.
-- Citations already written monorepo-root (`sugar-crush/…`, `docs/plans/…`, `tools/…`, `.github/…`, `scripts/…`, `crush_code.md`, `docs/MATCHUPS.md`) kept as-is.
+- Bare `src/…`, `tests/…`, `docs/…` (lib docs), `bin/…`, `README.md`, `phpunit.xml` as cited → **`candy-code/`-prefixed** — EXCEPT where the citation names a sibling lib.
+- Citations already written monorepo-root (`candy-code/…`, `docs/plans/…`, `tools/…`, `.github/…`, `scripts/…`, `crush_code.md`, `docs/MATCHUPS.md`) kept as-is.
 - Sibling libs (`candy-…`, `sugar-dash`, `sugar-widgets`, …) → kept as-is. <!-- @rename-keep historical provenance -->
 - Bare-directory citations kept with trailing `/` (e.g. `docs/plans/leftover/`).
 - `files = UNKNOWN(re-derive)` when the row cites no resolvable path.

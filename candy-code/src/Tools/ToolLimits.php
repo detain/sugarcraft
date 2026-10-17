@@ -1,0 +1,310 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tools;
+
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Config\Settings\SettingsSchema;
+use SugarCraft\Code\Config\Settings\SettingType;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
+use SugarCraft\Code\Tools\BuiltIn\Glob;
+use SugarCraft\Code\Tools\BuiltIn\Read;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
+use SugarCraft\Code\Tools\BuiltIn\WebFetch;
+use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
+
+/**
+ * The tool bounds a setting can move (roadmap N-P4c, design Appendix N §2.2
+ * "Tools"), resolved once from the merged config.
+ *
+ * WHY A TURN-TIME REBIND. The tools are built once, at launch, by
+ * `Bootstrap::tools()`; the settings view saves at any time and a turn runs in
+ * a child forked per turn. So `EngineBackend::turnTools()` reads the merged
+ * config at the top of each turn and hands every tool through
+ * {@see applyTo()}, which rebinds the turn's copy with the bounds that are set.
+ * A save — the session tier included, which the child inherits — therefore
+ * applies from the next turn with no apply arm, and the tools the launch built
+ * are never touched.
+ *
+ * UNSET IS "KEEP WHAT THE TOOL WAS BUILT WITH", never "the default": a key
+ * that no tier sets leaves the tool exactly as constructed, so an embedder's
+ * own caps survive and nothing is rebuilt for nothing. A value is honoured only
+ * when it passes its {@see SettingsSchema} definition's validation — the range
+ * a tool can be held to is stated once, in the schema, and an out-of-range or
+ * mistyped value falls back to the tool's own bound rather than being clamped.
+ * A JSON number with no fractional part (`4096.0`) counts as the whole number
+ * it spells; a quoted `"4096"` does not, for the reason
+ * {@see \SugarCraft\Code\Config\Settings\Validator\RangeValidator} gives.
+ *
+ * The same rebind hands the session's `Task` its delegation caps (roadmap
+ * N-P4f, {@see DELEGATION_KEYS}): how deep delegated runs may nest and how
+ * many may run at once.
+ *
+ * Bounds read where a turn-time rebind cannot reach — the search tool's,
+ * built per use by `/websearch` too, the two process-wait bounds read
+ * at the moment they are armed, and the trait-level instruction cap and spill
+ * capture bounds, which belong to no one tool's constructor — are read
+ * through {@see current()} at their use site instead, from the same
+ * definitions.
+ */
+final readonly class ToolLimits
+{
+    /** Result cap of Bash, Grep, Glob, Lsp and WebFetch — `TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES`. */
+    public const OUTPUT_CAP_KEY = 'toolOutputCapBytes';
+
+    /** Result cap of one MCP tool's answer. */
+    public const MCP_RESULT_CAP_KEY = 'mcpResultCapBytes';
+
+    /** Read's per-file read bound — {@see Read::DEFAULT_MAX_BYTES}. */
+    public const READ_MAX_BYTES_KEY = 'readMaxBytes';
+
+    /** Lines a Read returns when the call names no `limit` — {@see Read::PAGE_LINES}. */
+    public const READ_PAGE_LINES_KEY = 'readPageLines';
+
+    /** Bytes one Read page may hold — {@see Read::PAGE_BYTES}. */
+    public const READ_PAGE_BYTES_KEY = 'readPageBytes';
+
+    /** Paths one Glob collects — {@see Glob::DEFAULT_MAX_MATCHES}. */
+    public const GLOB_MAX_MATCHES_KEY = 'globMaxMatches';
+
+    /** WebFetch's memory bound on a body — {@see WebFetch::MAX_WIRE_BYTES}. */
+    public const WEB_FETCH_MAX_BYTES_KEY = 'webFetchMaxBytes';
+
+    /** WebFetch's per-read socket timeout — {@see WebFetch::READ_TIMEOUT_SECONDS}. */
+    public const WEB_FETCH_TIMEOUT_KEY = 'webFetchTimeoutSeconds';
+
+    /** Results one WebSearch digest lists. */
+    public const WEB_SEARCH_MAX_RESULTS_KEY = 'webSearchMaxResults';
+
+    /** WebSearch's request timeout. */
+    public const WEB_SEARCH_TIMEOUT_KEY = 'webSearchTimeoutSeconds';
+
+    /**
+     * The SearXNG URL WebSearch queries (roadmap N-P4e); outranked by
+     * `CANDY_CODE_SEARCH_ENDPOINT`. There is no default, by design.
+     */
+    public const WEB_SEARCH_ENDPOINT_KEY = 'webSearchEndpoint';
+
+    /** Silence an `interactive: true` Bash run may keep before it is stopped. */
+    public const INTERACTIVE_IDLE_KEY = 'bashInteractiveIdleSeconds';
+
+    /** The window share one tool result may take before it is spilled ({@see \SugarCraft\Code\Support\ToolOutputSpill::forModel()}). */
+    public const SPILL_WINDOW_PERCENT_KEY = 'toolSpillWindowPercent';
+
+    /**
+     * The flat bound on the nested instruction-file body Edit, Write and
+     * ApplyPatch prepend to their one-line result —
+     * `TruncatesOutput::DEFAULT_MAX_INSTRUCTION_BYTES`.
+     */
+    public const INSTRUCTION_CAP_KEY = 'toolInstructionCapBytes';
+
+    /** How much of a process's output a spilling tool captures — {@see \SugarCraft\Code\Support\ToolOutputSpill::CAPTURE_BYTES}. */
+    public const SPILL_CAPTURE_BYTES_KEY = 'toolSpillCaptureBytes';
+
+    /** The smallest result cap a tool-side spill is attempted at — {@see \SugarCraft\Code\Support\ToolOutputSpill::MIN_CAP_BYTES}. */
+    public const SPILL_MIN_CAP_KEY = 'toolSpillMinCapBytes';
+
+    /** Bash's `timeout` default, in seconds (W9 integration of the N-P4c remainder). */
+    public const BASH_TIMEOUT_KEY = 'bashTimeoutSeconds';
+
+    /** Bash's `timeout` ceiling, in seconds. */
+    public const BASH_MAX_TIMEOUT_KEY = 'bashMaxTimeoutSeconds';
+
+    /** Wall-clock budget of the chat-native path's forked tool children. */
+    public const PARALLEL_TIMEOUT_KEY = 'chatToolTimeoutSeconds';
+
+    /**
+     * How many levels below the session a delegated run may be (roadmap
+     * N-P4f) — {@see TaskTool::MAX_DELEGATION_DEPTH}.
+     */
+    public const SUBAGENT_MAX_DEPTH_KEY = 'subagentMaxDepth';
+
+    /**
+     * Delegated runs one session may have going at once, every level counted
+     * (roadmap N-P4f) — {@see TaskTool::MAX_CONCURRENT_AGENTS}.
+     */
+    public const SUBAGENT_MAX_ACTIVE_KEY = 'subagentMaxActive';
+
+    /** The tool bounds this class resolves (roadmap N-P4c, N-P4e). */
+    public const KEYS = [
+        self::OUTPUT_CAP_KEY,
+        self::MCP_RESULT_CAP_KEY,
+        self::READ_MAX_BYTES_KEY,
+        self::READ_PAGE_LINES_KEY,
+        self::READ_PAGE_BYTES_KEY,
+        self::SPILL_WINDOW_PERCENT_KEY,
+        self::INSTRUCTION_CAP_KEY,
+        self::SPILL_CAPTURE_BYTES_KEY,
+        self::SPILL_MIN_CAP_KEY,
+        self::GLOB_MAX_MATCHES_KEY,
+        self::WEB_FETCH_MAX_BYTES_KEY,
+        self::WEB_FETCH_TIMEOUT_KEY,
+        self::WEB_SEARCH_MAX_RESULTS_KEY,
+        self::WEB_SEARCH_TIMEOUT_KEY,
+        self::WEB_SEARCH_ENDPOINT_KEY,
+        self::INTERACTIVE_IDLE_KEY,
+        self::BASH_TIMEOUT_KEY,
+        self::BASH_MAX_TIMEOUT_KEY,
+        self::PARALLEL_TIMEOUT_KEY,
+    ];
+
+    /** The delegation caps {@see applyTo()} hands the session's `Task` (roadmap N-P4f). */
+    public const DELEGATION_KEYS = [
+        self::SUBAGENT_MAX_DEPTH_KEY,
+        self::SUBAGENT_MAX_ACTIVE_KEY,
+    ];
+
+    /** @param array<string, int|float|string> $values every key that is set and honoured */
+    private function __construct(private array $values)
+    {
+    }
+
+    /** @param array<string, mixed> $config the merged config (`Bootstrap::readUserConfig()`) */
+    public static function fromConfig(array $config): self
+    {
+        $values = [];
+        foreach ([...self::KEYS, ...self::DELEGATION_KEYS] as $key) {
+            $value = self::honoured($config, $key);
+            if ($value !== null) {
+                $values[$key] = $value;
+            }
+        }
+
+        return new self($values);
+    }
+
+    /**
+     * The limits the merged config sets now, or none: guarded like
+     * `EngineBackend::userConfig()`, because a missing or malformed settings
+     * file must cost the tools' own bounds, never a tool call.
+     */
+    public static function current(): self
+    {
+        try {
+            return self::fromConfig(Bootstrap::readUserConfig());
+        } catch (\Throwable) {
+            return new self([]);
+        }
+    }
+
+    /**
+     * $config[$key] when it is set and passes the key's own schema
+     * validation, else null. An Int key also takes an integral finite float,
+     * the shape a JSON writer may give a whole number.
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function honoured(array $config, string $key): int|float|string|null
+    {
+        $definition = SettingsSchema::byKey($key);
+        $raw = $config[$key] ?? null;
+        if ($definition === null || $raw === null) {
+            return null;
+        }
+
+        if ($definition->type === SettingType::Int && \is_float($raw) && is_finite($raw) && $raw === floor($raw) && abs($raw) < 2 ** 53) {
+            $raw = (int) $raw;
+        }
+
+        if (!\is_int($raw) && !\is_float($raw) && !\is_string($raw)) {
+            return null;
+        }
+
+        return $definition->validate($raw) === null ? $raw : null;
+    }
+
+    /** The honoured whole-number value of $key, or null when it is unset. */
+    public function int(string $key): ?int
+    {
+        $value = $this->values[$key] ?? null;
+
+        return \is_int($value) ? $value : null;
+    }
+
+    /** The honoured text of $key (a URL, a command), or null when it is unset. */
+    public function string(string $key): ?string
+    {
+        $value = $this->values[$key] ?? null;
+
+        return \is_string($value) ? $value : null;
+    }
+
+    /** The honoured number of seconds of $key, or null when it is unset. */
+    public function seconds(string $key): ?float
+    {
+        $value = $this->values[$key] ?? null;
+
+        return \is_int($value) || \is_float($value) ? (float) $value : null;
+    }
+
+    /**
+     * $tool with every bound a setting names rebound, or $tool itself when
+     * none applies to it. Each tool keeps the bounds no key sets.
+     */
+    public function applyTo(Tool $tool): Tool
+    {
+        // The session's own Task only (depth 0): a nested copy was handed its
+        // caps by the run that delegated it ({@see TaskTool::nestedFor()}).
+        // A key left unset takes the shipped cap, not an embedder's — the
+        // tool exposes no reader for the one it was built with. A width of 0
+        // means NO cap, the same verdict `subagentMaxConcurrent` gives, so a
+        // session can lift a cap an embedder wired in without deleting keys.
+        if ($tool instanceof TaskTool) {
+            $depth = $this->int(self::SUBAGENT_MAX_DEPTH_KEY);
+            $active = $this->int(self::SUBAGENT_MAX_ACTIVE_KEY);
+
+            if ($tool->delegationDepth() > 0 || ($depth === null && $active === null)) {
+                return $tool;
+            }
+
+            return $tool->withDelegationLimits(
+                $depth ?? TaskTool::MAX_DELEGATION_DEPTH,
+                $active === null ? TaskTool::MAX_CONCURRENT_AGENTS : ($active < 1 ? null : $active),
+            );
+        }
+
+        if ($tool instanceof McpToolBridge) {
+            $cap = $this->int(self::MCP_RESULT_CAP_KEY);
+
+            return $cap === null ? $tool : $tool->withMaxOutputBytes($cap);
+        }
+
+        if ($tool instanceof Read) {
+            $maxBytes = $this->int(self::READ_MAX_BYTES_KEY);
+            $pageLines = $this->int(self::READ_PAGE_LINES_KEY);
+            $pageBytes = $this->int(self::READ_PAGE_BYTES_KEY);
+
+            return $maxBytes === null && $pageLines === null && $pageBytes === null
+                ? $tool
+                : $tool->withReadLimits($maxBytes, $pageLines, $pageBytes);
+        }
+
+        if ($tool instanceof Bash) {
+            $default = $this->int(self::BASH_TIMEOUT_KEY);
+            $max = $this->int(self::BASH_MAX_TIMEOUT_KEY);
+            if ($default !== null || $max !== null) {
+                $tool = $tool->withTimeoutBounds($default, $max);
+            }
+        }
+
+        if ($tool instanceof Glob && ($maxMatches = $this->int(self::GLOB_MAX_MATCHES_KEY)) !== null) {
+            $tool = $tool->withMaxMatches($maxMatches);
+        }
+
+        if ($tool instanceof WebFetch) {
+            $timeout = $this->int(self::WEB_FETCH_TIMEOUT_KEY);
+            $wire = $this->int(self::WEB_FETCH_MAX_BYTES_KEY);
+            if ($timeout !== null || $wire !== null) {
+                $tool = $tool->withFetchLimits($timeout, $wire);
+            }
+        }
+
+        $cap = $this->int(self::OUTPUT_CAP_KEY);
+        if ($cap !== null && \in_array(TruncatesOutput::class, class_uses($tool), true)) {
+            $tool = $tool->withMaxOutputBytes($cap);
+        }
+
+        return $tool;
+    }
+}

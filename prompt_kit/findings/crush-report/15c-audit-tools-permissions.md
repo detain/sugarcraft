@@ -1,4 +1,4 @@
-# 15c — sugar-crush audit: tool execution and the safety layer
+# 15c — candy-code audit: tool execution and the safety layer
 
 Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge), `src/Permissions/`, `src/Hooks/`, `src/Support/ProcessContainment.php`, `docs/PERMISSIONS.md`, `docs/HOOKS.md`.
 Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`, run against a scratch root, never the real repo.
@@ -24,7 +24,7 @@ Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`, 
 - `PathJail::resolve`/`resolveForCreate`/`resolveDir`, `ContainedPath::within`/`below`, and `Agents\PathJail` (which delegates to them).
 - CR/LF in the WebFetch URL: `parse_url()` replaces control characters with `_`, and `Location:` values arrive already split into lines.
 - WebFetch's DNS pinning: one resolution, every answer checked, the literal dialled, SNI and Host kept on the name, every hop re-checked, non-http(s) redirects refused.
-- `SuspendedDelegations`: id regex, `0600` files, `unserialize` with a class allow-list, and an owner/mode-verified directory. A foreign-owned `/tmp/sugarcrush-suspended-delegations` or `/tmp/sc-hook-ctx` disables resume and context retention, failing closed (DoS only).
+- `SuspendedDelegations`: id regex, `0600` files, `unserialize` with a class allow-list, and an owner/mode-verified directory. A foreign-owned `/tmp/candy-code-suspended-delegations` or `/tmp/sc-hook-ctx` disables resume and context retention, failing closed (DoS only).
 - `HookContextFiles::bound()`: UTF-8-safe cut, `0600` plus rename, symlink/owner/mode refusal. Retained files are never deleted, by design (HOOKS.md), and can hold tool output containing secrets in the user's temp directory.
 - `TruncatesOutput`: the `mb_strcut` cuts are UTF-8-safe on valid input, and the markers carry exact byte counts.
 - `HookConfig`: strict schema, finite timeouts; project `hooks.yaml` is trust-gated. Matchers are case-insensitive and unanchored, which errs toward running deny hooks.

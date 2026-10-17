@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-mcp-client",
-    "description": "MCP client core — JSON-RPC 2.0 codec, newline-delimited stdio transport and initialize/tools protocol layer. Extracted from sugar-crush.",
+    "description": "MCP client core — JSON-RPC 2.0 codec, newline-delimited stdio transport and initialize/tools protocol layer. Extracted from candy-code.",
     "type": "library",
     "license": "MIT",
     "keywords": [

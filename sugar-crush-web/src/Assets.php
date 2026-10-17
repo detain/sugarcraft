@@ -7,7 +7,7 @@ namespace SugarCraft\CrushWeb;
 /**
  * Locates the pre-built sugar-crush-web bundle on disk.
  *
- * This is the whole PHP surface of the package. `sugarcrush serve` asks
+ * This is the whole PHP surface of the package. `candy-code serve` asks
  * `class_exists(Assets::class)` and, when the package is installed, serves
  * {@see distPath()} as its web root, so a PHP user gets the browser UI from
  * `composer require` alone and never needs Node. The bundle itself is

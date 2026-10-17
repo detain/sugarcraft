@@ -11,15 +11,15 @@ name: web
 # or a hand-edit to the bundle, must go red here rather than ship.
 #
 # THE SECOND GENERATED ARTIFACT is src-web/protocol/generated.ts: the
-# client's types are generated from sugar-crush's protocol schema
-# (sugar-crush/docs/protocol/sugarcrush.v1.schema.json, itself generated from
+# client's types are generated from candy-code's protocol schema
+# (candy-code/docs/protocol/candy-code.v1.schema.json, itself generated from
 # the PHP value objects). A server change that the client was not regenerated
 # for goes red here, at the diff after `npm run gen:protocol`, before it can
 # become a runtime surprise.
 #
-# The e2e job drives the built UI in Chromium against a real `sugarcrush
+# The e2e job drives the built UI in Chromium against a real `candy-code
 # serve` on the offline EchoProvider (e2e/fixtures/server.ts), so it also
-# runs when sugar-crush's server, protocol or provider code changes.
+# runs when candy-code's server, protocol or provider code changes.
 #
 # Path-scoped on purpose — not in affected-libs.php's FORCE_ALL_FILES.
 
@@ -28,20 +28,20 @@ on:
     branches: [master]
     paths:
       - 'sugar-crush-web/**'
-      - 'sugar-crush/docs/protocol/**'
-      - 'sugar-crush/src/Server/**'
-      - 'sugar-crush/src/Protocol/**'
-      - 'sugar-crush/src/Host/**'
-      - 'sugar-crush/src/Providers/EchoProvider.php'
+      - 'candy-code/docs/protocol/**'
+      - 'candy-code/src/Server/**'
+      - 'candy-code/src/Protocol/**'
+      - 'candy-code/src/Host/**'
+      - 'candy-code/src/Providers/EchoProvider.php'
       - '.github/workflows/web.yml'
   pull_request:
     paths:
       - 'sugar-crush-web/**'
-      - 'sugar-crush/docs/protocol/**'
-      - 'sugar-crush/src/Server/**'
-      - 'sugar-crush/src/Protocol/**'
-      - 'sugar-crush/src/Host/**'
-      - 'sugar-crush/src/Providers/EchoProvider.php'
+      - 'candy-code/docs/protocol/**'
+      - 'candy-code/src/Server/**'
+      - 'candy-code/src/Protocol/**'
+      - 'candy-code/src/Host/**'
+      - 'candy-code/src/Providers/EchoProvider.php'
       - '.github/workflows/web.yml'
   workflow_dispatch:
 
@@ -105,7 +105,7 @@ jobs:
           echo "OK: dist/ is byte-identical to a clean build of src-web/"
 
   e2e:
-    name: 'sugar-crush-web · e2e against sugarcrush serve'
+    name: 'sugar-crush-web · e2e against candy-code serve'
     needs: build
     runs-on: ubuntu-latest
     env:
@@ -114,7 +114,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
-      # `sugarcrush serve` refuses to start without pcntl, posix and FFI.
+      # `candy-code serve` refuses to start without pcntl, posix and FFI.
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
@@ -128,8 +128,8 @@ jobs:
       - name: Link sibling libs
         run: php tools/check-path-repos.php --fix --strict-closure
 
-      - name: Install sugar-crush
-        run: cd sugar-crush && composer install --prefer-dist --no-progress -n
+      - name: Install candy-code
+        run: cd candy-code && composer install --prefer-dist --no-progress -n
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

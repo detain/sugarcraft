@@ -58,8 +58,8 @@ if ($click !== null) {
 | `Selection` | Press → drag → release text-selection state machine over a selectable region |
 | `SelectionRange` | Normalised, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
 
-`Selection` / `SelectionRange` were lifted from sugar-crush's
-`Tui\TextSelection`, and sugar-crush now runs on them: `Tui\TextSelection` is
+`Selection` / `SelectionRange` were lifted from candy-code's
+`Tui\TextSelection`, and candy-code now runs on them: `Tui\TextSelection` is
 an immutable adapter over a cloned `Selection` machine, reads its geometry and
 copied text through `SelectionRange`, and speaks the same 1-based cells end to
 end. What it keeps locally is what this lib leaves to the app — a
@@ -68,7 +68,7 @@ repaint.
 
 ## Sentinel design
 
-Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they never collide with ANSI SGR sequences or regular text, and terminal emulators render them invisibly. Scanning *reads* them from the rendered string to compute zone bounding boxes; it does not modify the string. Stripping the sentinels from the bytes actually written to the terminal is the consumer's job (e.g. sugar-crush's renderer scans, then strips).
+Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they never collide with ANSI SGR sequences or regular text, and terminal emulators render them invisibly. Scanning *reads* them from the rendered string to compute zone bounding boxes; it does not modify the string. Stripping the sentinels from the bytes actually written to the terminal is the consumer's job (e.g. candy-code's renderer scans, then strips).
 
 ## Scan rules
 

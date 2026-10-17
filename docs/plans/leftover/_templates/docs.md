@@ -52,7 +52,7 @@ var, a public class, a flag), every doc page above gets an update.
 Audience: someone deploying the lib in production (SSH servers,
 dashboards, recording pipelines, etc.). Only relevant for libs that
 run as services: candy-git-server, sugar-ssh-server, candy-vcr, sugar-dashboard,
-sugar-crush, sugar-metrics.
+candy-code, sugar-metrics.
 
 Headings:
 

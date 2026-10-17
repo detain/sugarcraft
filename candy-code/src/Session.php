@@ -1,0 +1,245 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code;
+
+use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Code\Support\HomeDirectory;
+
+/**
+ * Session persistence for candy-code.
+ *
+ * Stores and restores session state to ~/.config/candy-code/session.json.
+ * Gracefully handles missing or corrupted session files by returning a
+ * fresh empty session rather than propagating errors.
+ *
+ * Persisted state:
+ *   - cwd         — current working directory
+ *   - selected    — list of selected file paths
+ *   - filter      — active filter string
+ *   - sortColumn  — sort column name
+ *   - sortDir     — sort direction (asc|desc)
+ *   - activePane  — active pane identifier
+ *
+ * @mirrors charmbracelet/<repo>.Session
+ */
+final class Session
+{
+    private const SESSION_FILE = '.config/candy-code/session.json';
+
+    /**
+     * @param string $cwd        Current working directory
+     * @param list<string> $selected Selected file paths
+     * @param string $filter     Active filter string
+     * @param string $sortColumn Sort column name
+     * @param string $sortDir    Sort direction (asc|desc)
+     * @param string $activePane Active pane identifier
+     */
+    public function __construct(
+        public readonly string $cwd = '',
+        public readonly array $selected = [],
+        public readonly string $filter = '',
+        public readonly string $sortColumn = 'name',
+        public readonly string $sortDir = 'asc',
+        public readonly string $activePane = 'files',
+    ) {
+    }
+
+    /**
+     * Load session state from the JSON file.
+     *
+     * If the file does not exist or is corrupted, returns a fresh
+     * empty Session rather than throwing.
+     */
+    public static function load(): self
+    {
+        // AtomicJsonFile::read() returns [] for a missing file and throws on a
+        // corrupt one: \JsonException for malformed JSON, \RuntimeException for
+        // a read failure or a non-array top level. Catch every failure and fall
+        // back to a fresh session, preserving the original never-throw contract
+        // (and the prior is_array guard, now enforced inside read()).
+        try {
+            $data = AtomicJsonFile::new(self::sessionFilePath())->read();
+        } catch (\Throwable) {
+            return new self();
+        }
+
+        return new self(
+            cwd: self::string($data, 'cwd', ''),
+            selected: self::stringList($data, 'selected', []),
+            filter: self::string($data, 'filter', ''),
+            sortColumn: self::string($data, 'sortColumn', 'name'),
+            sortDir: self::string($data, 'sortDir', 'asc'),
+            activePane: self::string($data, 'activePane', 'files'),
+        );
+    }
+
+    /**
+     * Save session state to the JSON file.
+     *
+     * Creates the directory hierarchy if it does not exist.
+     * Errors are suppressed — save failures are silent to avoid
+     * disrupting the user session.
+     */
+    public function save(): void
+    {
+        $store = AtomicJsonFile::new(self::sessionFilePath())->withPermissions(0600);
+
+        $data = [
+            'cwd' => $this->cwd,
+            'selected' => $this->selected,
+            'filter' => $this->filter,
+            'sortColumn' => $this->sortColumn,
+            'sortDir' => $this->sortDir,
+            'activePane' => $this->activePane,
+        ];
+
+        // AtomicJsonFile serialises writers with an exclusive flock on the
+        // stable `.<basename>.lock` sidecar beside the target — never on the
+        // uniquely-named temp, whose fresh name would make the lock one nobody
+        // else takes — then writes temp + rename, so a reader never sees a
+        // torn file, and it creates the parent dir 0700.
+        // This session file records the user's working directory, selections
+        // and filter history — private data that must stay owner-only (a
+        // security requirement from #1232) — which withPermissions(0600) now
+        // guarantees structurally: the mode lands on the temp inode BEFORE any
+        // payload byte and before the publishing rename, so no world-readable
+        // window ever exists and a replace of an already-loose file tightens
+        // it. save() is best-effort — a persistence failure must never disrupt
+        // the session — so AtomicJsonFile's throw (including a failed chmod,
+        // the fail-closed direction: nothing is published with loose bits) is
+        // swallowed, matching the prior @file_put_contents contract.
+        try {
+            $store->write($data);
+        } catch (\Throwable) {
+            // Silent: save failures do not surface to the user.
+        }
+    }
+
+    /**
+     * @return $this Fresh instance with updated cwd
+     */
+    public function withCwd(string $cwd): self
+    {
+        return new self(
+            cwd: $cwd,
+            selected: $this->selected,
+            filter: $this->filter,
+            sortColumn: $this->sortColumn,
+            sortDir: $this->sortDir,
+            activePane: $this->activePane,
+        );
+    }
+
+    /**
+     * @param list<string> $selected
+     * @return $this Fresh instance with updated selected files
+     */
+    public function withSelected(array $selected): self
+    {
+        return new self(
+            cwd: $this->cwd,
+            selected: $selected,
+            filter: $this->filter,
+            sortColumn: $this->sortColumn,
+            sortDir: $this->sortDir,
+            activePane: $this->activePane,
+        );
+    }
+
+    /**
+     * @return $this Fresh instance with updated filter
+     */
+    public function withFilter(string $filter): self
+    {
+        return new self(
+            cwd: $this->cwd,
+            selected: $this->selected,
+            filter: $filter,
+            sortColumn: $this->sortColumn,
+            sortDir: $this->sortDir,
+            activePane: $this->activePane,
+        );
+    }
+
+    /**
+     * @return $this Fresh instance with updated sort
+     */
+    public function withSort(string $column, string $direction): self
+    {
+        return new self(
+            cwd: $this->cwd,
+            selected: $this->selected,
+            filter: $this->filter,
+            sortColumn: $column,
+            sortDir: $direction,
+            activePane: $this->activePane,
+        );
+    }
+
+    /**
+     * @return $this Fresh instance with updated active pane
+     */
+    public function withActivePane(string $pane): self
+    {
+        return new self(
+            cwd: $this->cwd,
+            selected: $this->selected,
+            filter: $this->filter,
+            sortColumn: $this->sortColumn,
+            sortDir: $this->sortDir,
+            activePane: $pane,
+        );
+    }
+
+    /**
+     * Resolve the session file path under the user's home directory.
+     */
+    private static function sessionFilePath(): string
+    {
+        $home = self::homeDirectory();
+        return $home . '/' . self::SESSION_FILE;
+    }
+
+    /**
+     * Return the home directory, falling back to environment detection.
+     *
+     * The env/passwd lookup is {@see HomeDirectory::resolved()}'s, which
+     * guards the posix calls: a build without ext-posix and with HOME unset
+     * reaches the cwd last resort instead of fataling on posix_geteuid().
+     */
+    private static function homeDirectory(): string
+    {
+        return HomeDirectory::resolved() ?? (getcwd() ?: '/tmp');
+    }
+
+    /**
+     * Extract a string field from decoded session data.
+     *
+     * @param array<string, mixed> $data
+     */
+    private static function string(array $data, string $key, string $default): string
+    {
+        return is_string($data[$key] ?? null) ? $data[$key] : $default;
+    }
+
+    /**
+     * Extract a list-of-strings field from decoded session data.
+     *
+     * @param array<string, mixed> $data
+     * @param list<string> $default
+     * @return list<string>
+     */
+    private static function stringList(array $data, string $key, array $default): array
+    {
+        if (!is_array($data[$key] ?? null)) {
+            return $default;
+        }
+        /** @var list<string> */
+        return array_values(array_filter(
+            $data[$key],
+            static fn(mixed $v): bool => is_string($v),
+        ));
+    }
+}

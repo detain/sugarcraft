@@ -1,6 +1,6 @@
-# Step 10.30 — sugar-crush real-time streaming UI + context compaction
+# Step 10.30 — candy-code real-time streaming UI + context compaction
 
-**Source:** `leftover_updates_later.md` sugar-crush H2 + H3
+**Source:** `leftover_updates_later.md` candy-code H2 + H3
 **Branch:** `ai/crush-streaming-compaction`
 
 ## Deliverable
@@ -13,10 +13,10 @@
 
 ## Files
 
-**Modify:** `sugar-crush/src/Chat.php`, `Renderer.php`,
+**Modify:** `candy-code/src/Chat.php`, `Renderer.php`,
 `Backend/StreamingCommandBackend.php`.
 
-**Create:** `sugar-crush/src/Compaction/ContextCompactor.php`.
+**Create:** `candy-code/src/Compaction/ContextCompactor.php`.
 
 ## Tests
 
@@ -24,7 +24,7 @@
 
 ## Acceptance
 
-- `cd sugar-crush && vendor/bin/phpunit` green.
+- `cd candy-code && vendor/bin/phpunit` green.
 
 ---
 

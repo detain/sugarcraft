@@ -14,7 +14,7 @@ _Last updated: 2026-10-08 (plan + post-plan round complete; IPMI box `6e5e2f1ad`
 - Up to ~5 agents concurrently on disjoint paths. Agents never git stash/checkout/reset/clean/commit; supervisor
   commits. When a shared file (e.g. `candy-top/lang/en.php`) holds two units' edits, stage partially
   (build the blob without the other unit's block, `git hash-object -w` + `git update-index --cacheinfo`).
-- Skip Caliber entirely. Don't touch sugar-crush. `unset GITHUB_TOKEN` before any `gh`.
+- Skip Caliber entirely. Don't touch candy-code. `unset GITHUB_TOKEN` before any `gh`.
 - Docs for every feature (phase P-H). Ask the user only for genuine decisions; otherwise keep going.
 
 ## Done (on master)

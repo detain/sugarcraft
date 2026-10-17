@@ -14,7 +14,7 @@ What remains is unscheduled: the five live checks below, which wait on credentia
 | LIVE-A21b | Gemini 2.5 output budget with `thinkingConfig` | `GCP_PROJECT_ID` and application-default credentials |
 | LIVE-CH | cache-health notice after three consecutive replies with zero buckets | as LIVE-A15b (Bedrock) or LIVE-A15v (Vertex) |
 
-Run them from `sugar-crush/` once the credentials exist:
+Run them from `candy-code/` once the credentials exist:
 
 ```sh
 php scripts/provider-cache-live-probe.php --check=<ID>[,<ID>…]

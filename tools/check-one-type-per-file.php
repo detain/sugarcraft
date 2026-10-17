@@ -10,7 +10,7 @@ declare(strict_types=1);
  * type declared inside another class's file therefore resolves only if that
  * host file happens to be loaded first; asked for first (a direct
  * construction, an instanceof target, `class_exists()`), it is "class not
- * found". That is not theoretical in this tree: `sugar-crush`'s
+ * found". That is not theoretical in this tree: `candy-code`'s
  * `App\LayoutResetMsg`, declared inside `App.php`, died that way once a
  * regenerated shard plan put the unloaded case first, and `sugar-dashboard` carried
  * a `SortDirection` enum both in its own file and again inside `Sort.php` — a

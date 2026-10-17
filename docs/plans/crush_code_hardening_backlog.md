@@ -1,4 +1,4 @@
-# sugar-crush — hardening / audit-instrument backlog
+# candy-code — hardening / audit-instrument backlog
 
 **What this is.** A single actionable ledger of every security, containment,
 permission-surface and audit-instrument finding that `crush_code.md`'s 13-angle
@@ -59,7 +59,7 @@ So: **defer the fix, never the finding.** Everything below was probed once, by a
 review round that had a sandbox and a mutation protocol. This file exists so the
 end-of-plan hardening pass starts **from proof rather than re-discovery**.
 
-**Acceptance target.** The user wants to daily-drive `bin/sugarcrush` as soon as
+**Acceptance target.** The user wants to daily-drive `bin/candy-code` as soon as
 the functionality phases (4 → 5 → 6 → rest of 2 → 7) land, *while this backlog is
 still open*. So each entry's Severity is written from that angle: what does a
 single-user, own-checkout, own-`$HOME` operator actually risk today. Almost
@@ -67,9 +67,9 @@ everything here needs either a **cloned/tarball-delivered repository** or a
 **second local user**; a solo operator on their own trees is the least-exposed
 case, which is exactly why the deferral is affordable.
 
-**A caveat on five in-flight files' line numbers.** `sugar-crush/src/Chat.php`,
+**A caveat on five in-flight files' line numbers.** `candy-code/src/Chat.php`,
 `src/Renderer.php`, `src/Commands/CommandRegistry.php`, `README.md` and several
-files under `sugar-crush/tests/` were **modified and uncommitted** while this was
+files under `candy-code/tests/` were **modified and uncommitted** while this was
 compiled (a concurrent Phase 4 lane). Line references into those five files were
 read against the **working tree**, not against HEAD, and will move again when that
 lane commits. Every citation into any other file is against HEAD. No test suite
@@ -134,7 +134,7 @@ Fix the tracking, not the code:
   (colon with **no** separator after it) passes the lexical pattern guard, and on
   Windows that form denotes a path relative to the current directory *on drive C*
   — i.e. potentially outside the source root.
-- **Where** `sugar-crush/src/Agents/WorktreeManager.php:575`
+- **Where** `candy-code/src/Agents/WorktreeManager.php:575`
   (`patternStaysInside()`); the residual is stated in its own docblock at
   `:560-573`.
 - **Severity** Containment gap — **Windows-only, and UNVERIFIED as exploitable**.
@@ -160,12 +160,12 @@ Fix the tracking, not the code:
 
 - **What** Every *read* `WorkflowRegistry` performs goes through the containment-
   anchored answer, but the engine's pause files are written to and read back from
-  the **configured** `workflowsPath()`. So a `~/.sugar-crush/workflows ->
+  the **configured** `workflowsPath()`. So a `~/.candy-code/workflows ->
   <outside>` link that the registry refuses to `list()` or `require` out of still
   relocates `<outside>/.running/*.json`.
-- **Where** `sugar-crush/src/Workflows/WorkflowRegistry.php:275`
+- **Where** `candy-code/src/Workflows/WorkflowRegistry.php:275`
   (`workflowsPath()`, residual stated at `:262-274`);
-  `sugar-crush/src/Workflows/WorkflowEngine.php:62` (`PAUSE_DIR = '.running'`)
+  `candy-code/src/Workflows/WorkflowEngine.php:62` (`PAUSE_DIR = '.running'`)
   and `:308` (`getPauseFilePath()`).
 - **Severity** Containment gap — bounded, and the bound is written down.
 - **Evidence** Surfaced not by a reviewer but by `dad90b18`'s **own new
@@ -185,10 +185,10 @@ Fix the tracking, not the code:
 
 ### A3 — tracker #84: a same-checkout `workflows` symlink still discloses `*.yaml` basenames
 
-- **What** A repository can commit `.sugar-crush/workflows -> <another directory
+- **What** A repository can commit `.candy-code/workflows -> <another directory
   inside the same checkout>` and have that directory's `*.yaml` **basenames**
   disclosed through the workflow listing.
-- **Where** `sugar-crush/src/Workflows/WorkflowRegistry.php`
+- **Where** `candy-code/src/Workflows/WorkflowRegistry.php`
   (`readableProjectDir()` / `yamlDirectories()`, `:565` and `:728`).
 - **Severity** Containment gap — documented as *a reduction, not an elimination*.
 - **Evidence** Filed as tracker **#84** (worklog `:2020`, confirmed and sharpened
@@ -202,11 +202,11 @@ Fix the tracking, not the code:
 
 ### A4 — lane D F-6: the dangling-link refusal misses the one-component-higher layout
 
-- **What** With the symlink one component higher — `.sugar-crush -> <a directory
-  that exists but has no workflows/ in it>` — `realpath('<root>/.sugar-crush/
+- **What** With the symlink one component higher — `.candy-code -> <a directory
+  that exists but has no workflows/ in it>` — `realpath('<root>/.candy-code/
   workflows')` is `false` **and** `is_link(...)` is `false`, so the dangling-link
   refusal does not fire and the directory is granted.
-- **Where** `sugar-crush/src/Workflows/WorkflowRegistry.php:528-540` as cited by
+- **Where** `candy-code/src/Workflows/WorkflowRegistry.php:528-540` as cited by
   the review. **DRIFTED** — at HEAD that region is inside the
   `yamlDirectories()`/`readableProjectDir()` doc cluster (`:522-565`); re-locate
   by the refusal string rather than the line.
@@ -231,7 +231,7 @@ Fix the tracking, not the code:
   `.claude/agents/reviewer.md` outranks the user's own
   `~/.claude/agents/reviewer.md`. Its sibling `ForeignSkillDiscovery`
   deliberately does the **opposite**, with the argument written out.
-- **Where** `sugar-crush/src/Agents/ForeignAgentPresetRegistry.php:169`
+- **Where** `candy-code/src/Agents/ForeignAgentPresetRegistry.php:169`
   (`discover()`); the asymmetry and its reasoning are in the docblock at
   `:148-168`. Wired into production by `15a2e605` via
   `src/Cli/Bootstrap.php:793` (`foreignAgentPresets()`) →
@@ -261,8 +261,8 @@ Fix the tracking, not the code:
   `initialPrompt`, `model`, `tools`, `skills`. Every richer field is dropped
   without notice — which today *bounds* the §A5 exposure, but the bound is only
   as good as `Agent`'s shape.
-- **Where** `sugar-crush/src/Agents/Agent.php:116` (`fromPreset()`); the field
-  set is `sugar-crush/src/Agents/AgentPreset.php:22-37`.
+- **Where** `candy-code/src/Agents/Agent.php:116` (`fromPreset()`); the field
+  set is `candy-code/src/Agents/AgentPreset.php:22-37`.
 - **Severity** Containment gap — a **load-bearing accident**, which is the
   dangerous kind.
 - **Evidence** Counted at HEAD against `AgentPreset`'s constructor: **8
@@ -295,7 +295,7 @@ Fix the tracking, not the code:
 - **What** The commit that made a permission prompt stop answering to a slash
   command was committed without the adversarial review round this chain applies
   to everything else. That omission is itself the gap.
-- **Where** commit `c075adcf`, *"sugar-crush: lane E round 8 — a permission
+- **Where** commit `c075adcf`, *"candy-code: lane E round 8 — a permission
   prompt no longer answers to a slash command"*. Touches `src/Chat.php`,
   `src/Renderer.php`, `src/Permissions/*`,
   `src/Commands/KeyBindingRegistry.php`, `tests/Renderer/KeyHelpTest.php`.
@@ -323,7 +323,7 @@ Fix the tracking, not the code:
 - **What** A binding's *description* text can be reverted or rewritten and the
   entire suite stays green. The drift suite reads a description only for
   keyish-token violations and paints it; it never asserts its words.
-- **Where** `sugar-crush/src/Commands/KeyBindingRegistry.php` (rows, e.g.
+- **Where** `candy-code/src/Commands/KeyBindingRegistry.php` (rows, e.g.
   `:393` `chat.cursor`); the instruments are
   `tests/Commands/KeyBindingDriftTest.php` and `tests/Renderer/KeyHelpTest.php`.
 - **Severity** Instrument blindness.
@@ -344,7 +344,7 @@ Fix the tracking, not the code:
 - **What** The launch-wide collector of "which directories were refused and why"
   is cleared on one entry path only, so a second `Bootstrap` call on another
   entry path inherits the previous launch's refusals.
-- **Where** `sugar-crush/src/Cli/Bootstrap.php:210` (declaration), `:247`
+- **Where** `candy-code/src/Cli/Bootstrap.php:210` (declaration), `:247`
   (the only reset, inside `chat()`); accessor at `:513`; drained into at `:461`,
   `:472`, `:809`, `:882`, `:890`, `:1432`.
 - **Severity** Real bug — but **cosmetic in the shipped binary**, structural for
@@ -371,10 +371,10 @@ Fix the tracking, not the code:
 - **What** A config-file hook script that never exits wedges the CLI. The drain
   loop blocks on a **null** `stream_select` timeout, so there is no upper bound
   on a hook's runtime.
-- **Where** `sugar-crush/src/Hooks/ScriptHook.php:238`
+- **Where** `candy-code/src/Hooks/ScriptHook.php:238`
   (`@stream_select($read, $write, $except, null)`); `proc_open` at `:158`.
 - **Severity** Real bug — availability, reachable from a file the repository or
-  the user supplies (`.sugar-crush/hooks.yaml`).
+  the user supplies (`.candy-code/hooks.yaml`).
 - **Evidence** Filed as tracker **#60** in the worklog's "Queued follow-ups
   found by the review chain" (`:566-572`): *"`ScriptHook` has no execution
   timeout (a hook that never exits wedges the CLI; **pre-existing**,
@@ -400,7 +400,7 @@ Fix the tracking, not the code:
   variable.
 - **Where** `sugar-forms/src/TextArea/TextArea.php:127` (`'o' => [$this,
   $this->openInEditor()]`), exit-code handling documented at `:742`. The gate is
-  `sugar-crush/src/Chat.php:109` (`DRAFT_KEYS`, the delegation const) behind a
+  `candy-code/src/Chat.php:109` (`DRAFT_KEYS`, the delegation const) behind a
   total `!$msg->ctrl` guard, plus the explicit ctrl arms at `:1163-1175`.
 - **Severity** Containment gap — **dormant**, and pinned as dormant.
 - **Evidence** `939f8ada`'s deferral list, verified rather than assumed:
@@ -421,7 +421,7 @@ Fix the tracking, not the code:
 
 - **What** The draft editor is constructed with `withCharLimit(0)`, disabling
   `TextArea`'s 65536-character paste-DoS guard.
-- **Where** `sugar-crush/src/Chat.php:6213` (`freshInput()`), reasoning at
+- **Where** `candy-code/src/Chat.php:6213` (`freshInput()`), reasoning at
   `:6183-6189`.
 - **Severity** Containment gap — **deliberate, reasoned, and narrow**.
 - **Evidence** `939f8ada` recorded it as deferred-and-verified: *"`withCharLimit(0)`
@@ -441,7 +441,7 @@ Fix the tracking, not the code:
 
 - **What** No workflow stage reaches a live model: the inline worker script the
   executor generates is the Phase-1 simulation.
-- **Where** `sugar-crush/src/Agents/ProcessExecutor.php`
+- **Where** `candy-code/src/Agents/ProcessExecutor.php`
   (`createInlineWorkerScript()`).
 - **Severity** Real bug — functionality, **and an audit trap**.
 - **Evidence** Tracker **#80** (worklog `:1253`, `:1683`, `:2007`, `:3455`). The
@@ -460,7 +460,7 @@ Fix the tracking, not the code:
 - **What** The pool's completion wait blocks the event loop on a sleep-poll.
   `69d58867` fixed the *hang* (a worker dying without writing), not the
   *blocking*.
-- **Where** `sugar-crush/src/Agents/AgentWorkerPool.php`
+- **Where** `candy-code/src/Agents/AgentWorkerPool.php`
   (`waitForCompletion()`).
 - **Severity** Real bug — **dormant today**.
 - **Evidence** `crush_code.md`'s own "Partially complete, do not read the ✅ as
@@ -504,7 +504,7 @@ Fix the tracking, not the code:
   is not a smaller version of the intended behaviour, it is the opposite of it in
   the one case that matters: `architect`'s narrower-looking roster does not make
   the sub-agent read-only.
-- **Where** `sugar-crush/src/Agents/AgentDefinition.php` (the six
+- **Where** `candy-code/src/Agents/AgentDefinition.php` (the six
   `defaultTools:` arguments, `:49`/`:66`/`:83`/`:109`/`:126`/`:142`);
   `src/Agents/Agent.php:83` (`tools: $definition->defaultTools`);
   `src/Agents/AgentManager.php:383-389` (the `CompleteRequest` the presets
@@ -554,7 +554,7 @@ Fix the tracking, not the code:
   send sites agree about it. **No fork is oriented by it.** The method has no
   production caller, and the executor it would reach ignores both fields it
   sends.
-- **Where** `sugar-crush/src/App/App.php` (`dispatchSkill()`, and the
+- **Where** `candy-code/src/App/App.php` (`dispatchSkill()`, and the
   `withEnvironment()` capture inside it); `src/Agents/AgentWorkerPool.php`
   (`executeOne()` → `ProcessExecutor` fallback);
   `src/Agents/ProcessExecutor.php:455-470` (the two send sites) and `:515+`
@@ -597,7 +597,7 @@ Lane B round 22 owes findings **F1–F9** against `f0d95785`. All nine are
 *"Audit-instrument correctness defers too — mutation registers, censuses,
 inventories are audit hygiene, not functionality."*
 
-All nine live in one file, `sugar-crush/tests/VhsTapeContractTest.php` (5902
+All nine live in one file, `candy-code/tests/VhsTapeContractTest.php` (5902
 lines at HEAD), which has not been touched since `f0d95785` — so every citation
 below still resolves. **F1 is the one to fix first**: an 8-assertion tautology is
 worse than no check, because it reads as coverage.
@@ -793,7 +793,7 @@ records them as **survivors**.
 - **What** The read-path census forces a written verdict per read/execute sink,
   but a path that never had a containment check produces no compare for it to
   judge — so it would not have auto-failed the tenth path.
-- **Where** `sugar-crush/tests/Support/ReadPathCensusTest.php` (755 lines).
+- **Where** `candy-code/tests/Support/ReadPathCensusTest.php` (755 lines).
 - **Severity** Instrument blindness — **the residual of the fix for exactly this
   class of blindness**.
 - **Evidence** `dad90b18` states it plainly: *"it would **not** have auto-failed
@@ -819,7 +819,7 @@ records them as **survivors**.
 
 - **What** The docblock says the widest declared keybinding row was *"measured at
   58 columns"*; the widest live row is now **59**.
-- **Where** `sugar-crush/src/Renderer.php:555-556` (the docblock claim); the
+- **Where** `candy-code/src/Renderer.php:555-556` (the docblock claim); the
   constant itself is `:561`, **value 64**.
 - **Severity** Cosmetic — a stale claim, **not** a truncation risk. The constant
   is 64, so 59 still fits with 5 columns of headroom, and
@@ -843,7 +843,7 @@ records them as **survivors**.
   said five, then seven, then eight, was wrong within a round each time, and is
   now **deleted** — so there is no instrument on how many repository-chosen read
   paths exist.
-- **Where** `sugar-crush/src/Support/ContainedPath.php` (class docblock).
+- **Where** `candy-code/src/Support/ContainedPath.php` (class docblock).
 - **Severity** Instrument blindness — a **deliberate** removal of a figure that
   could not be kept true by hand.
 - **Evidence** `dad90b18`: *"The tier count at the head of `ContainedPath` is
@@ -863,7 +863,7 @@ records them as **survivors**.
 
 - **What** `README.md` advertises a test/assertion count that is many commits
   stale.
-- **Where** `sugar-crush/README.md:396` — **"6,424 tests / 51,767 assertions, 0
+- **Where** `candy-code/README.md:396` — **"6,424 tests / 51,767 assertions, 0
   failures, 1 skipped"**. (Line may drift: another agent is editing this file.)
 - **Severity** Cosmetic.
 - **Evidence** Deferred **five times** by name in the worklog queue, each time
@@ -888,7 +888,7 @@ records them as **survivors**.
 - **What** readline's Alt+B / Alt+F word motion, when a terminal sends it as
   `ESC b`/`ESC f`, decodes as `KeyMsg(Char "b", alt)` and is **typed** rather
   than moving the cursor.
-- **Where** `sugar-crush/src/Chat.php:1145-1152` (the reasoning) and `:1153-1156`
+- **Where** `candy-code/src/Chat.php:1145-1152` (the reasoning) and `:1153-1156`
   (the arms that do handle `Left`/`Right` with alt/ctrl).
 - **Severity** Real bug — **identical at HEAD before the cursor work**, so a
   regression it is not.
@@ -912,7 +912,7 @@ records them as **survivors**.
 
 - **What** After the chat draft got a real cursor, the command palette's query is
   still a hand-rolled append/`dropLast` string — no cursor movement in it.
-- **Where** `sugar-crush/src/Chat.php:6701`
+- **Where** `candy-code/src/Chat.php:6701`
   (`withPaletteQuery(self::dropLast($this->palette->query))`); the helper survives
   at `:6912` **specifically because** of this second buffer.
 - **Severity** Real bug — cosmetic in effect (a short query), structural in shape.
@@ -934,7 +934,7 @@ records them as **survivors**.
 
 - **What** A restored checkpoint reseeds the draft with the cursor at the end
   rather than where it was.
-- **Where** `sugar-crush/src/Chat.php` — the `input`/`inputBuf` `mutate()` keys
+- **Where** `candy-code/src/Chat.php` — the `input`/`inputBuf` `mutate()` keys
   (reasoning at `:6265-6273`, `inputCursorOffset()` at `:6275`); checkpoint
   restore is one of the four whole-draft writers.
 - **Severity** Cosmetic.
@@ -957,7 +957,7 @@ records them as **survivors**.
 - **What** The block cursor `█` is spliced into the draft at a character offset,
   so a combining mark immediately after that offset composes onto the **cursor
   glyph** rather than onto its base character.
-- **Where** `sugar-crush/src/Renderer.php:2929` (`renderInput()`); the splice is
+- **Where** `candy-code/src/Renderer.php:2929` (`renderInput()`); the splice is
   at `:2956-2958` (`$body = "> " . mb_substr(...) . $cursor . mb_substr(...)`).
 - **Severity** Cosmetic.
 - **Evidence** `939f8ada`: *"combining marks splice onto the block glyph"*,
@@ -979,7 +979,7 @@ records them as **survivors**.
 
 - **What** `renderInput()` sets **no width** at all — the bordered box grows with
   its content, so a long single-line draft emits rows wider than the terminal.
-- **Where** `sugar-crush/src/Renderer.php:2959-2964` (the `Style::new()->border()
+- **Where** `candy-code/src/Renderer.php:2959-2964` (the `Style::new()->border()
   ->padding(0,1)->render($body)` chain, with no `->width(...)`).
 - **Severity** Real bug — **pre-existing and byte-identical to HEAD**; the
   render-invariant class that caused PR #1403.
@@ -1000,7 +1000,7 @@ records them as **survivors**.
 
 - **What** A real `/workflow run` blocks the event loop for the duration of the
   run.
-- **Where** `sugar-crush/src/Chat.php` (documented at the `/workflow` dispatch;
+- **Where** `candy-code/src/Chat.php` (documented at the `/workflow` dispatch;
   the fix is named in code).
 - **Severity** Real bug — availability, on a user-invoked command.
 - **Evidence** Tracker **#79** (worklog `:3457`): *"Now DOCUMENTED in `Chat.php`
@@ -1018,7 +1018,7 @@ records them as **survivors**.
   "Nothing ran" — so a run that dispatched nothing reports
   "Stages completed: 1".
 - **Where** **DRIFTED** — the review cited `src/Chat.php:3823`; at HEAD the
-  print is at **two** sites, `sugar-crush/src/Chat.php:4868` and `:4943`. The
+  print is at **two** sites, `candy-code/src/Chat.php:4868` and `:4943`. The
   pre-flight is `src/Workflows/WorkflowEngine.php:506-533` per the review (also
   likely drifted; locate by the "Nothing ran" comment).
 - **Severity** Real bug — reporting only.
@@ -1040,7 +1040,7 @@ records them as **survivors**.
 
 - **What** The second half of lane D round 5's F-3 was a `README.md` claim,
   deferred because `README.md` was owned by a concurrent lane.
-- **Where** `sugar-crush/README.md:272` as cited — **UNVERIFIED at HEAD**; the
+- **Where** `candy-code/README.md:272` as cited — **UNVERIFIED at HEAD**; the
   README has changed substantially since, and the ledger compiler could not
   match a claim at that line to the finding.
 - **Severity** Unknown — recorded so it is not lost.
@@ -1062,7 +1062,7 @@ records them as **survivors**.
 
 - **What** The tool-schema name is `'doctor'` while the other built-in tools are
   TitleCase.
-- **Where** `sugar-crush/src/Tools/BuiltIn/Doctor.php:44-47`. Verified at HEAD.
+- **Where** `candy-code/src/Tools/BuiltIn/Doctor.php:44-47`. Verified at HEAD.
 - **Severity** Cosmetic.
 - **Evidence** Tracker **#78** (worklog `:3450`): *"Deliberately not renamed by a
   review round: the model already knows the name. Belongs to whoever owns the
@@ -1076,7 +1076,7 @@ records them as **survivors**.
 
 - **What** Two consecutive docblocks with no declaration between them, so the
   first documents nothing.
-- **Where** `sugar-crush/src/Tui/Components/MenuBar.php` — cited as `:362-368`;
+- **Where** `candy-code/src/Tui/Components/MenuBar.php` — cited as `:362-368`;
   **confirmed present at HEAD** around `:362-371` (the `handleKey()`-persistence
   docblock is immediately followed by the dropdown-panel docblock).
 - **Severity** Cosmetic.
@@ -1090,7 +1090,7 @@ records them as **survivors**.
 - **What** `Ctrl+P` (and `Ctrl+K`, which translates to it) opens a hosted-`Chat`
   palette that the shell's full-pane agent dashboard never paints and never
   drives — visible-but-undrivable in the skill-picker and F10-menu states.
-- **Where** `sugar-crush/src/Tui/Renderer.php` (`renderAgentDashboard()`), which
+- **Where** `candy-code/src/Tui/Renderer.php` (`renderAgentDashboard()`), which
   *"never renders the hosted chat at all — verified"*.
 - **Severity** Real bug — a live keychord with no visible result.
 - **Evidence** Worklog `:2500` and `:3463` (filed under **two different tracker
@@ -1126,7 +1126,7 @@ records them as **survivors**.
 - **What** Two tests assert an exception that a **root** user never triggers,
   because root can traverse a `chmod 0` directory. Fine on a uid-1000 dev host;
   CI containers often run as root.
-- **Where** `sugar-crush/tests/Cli/BootstrapUserConfigTest.php` and
+- **Where** `candy-code/tests/Cli/BootstrapUserConfigTest.php` and
   `tests/Cli/BootstrapPermissionGateTest.php` are the candidates at HEAD
   (both contain unsearchable-directory fixtures); the review did not name the
   file. **Location approximate.**
@@ -1140,17 +1140,17 @@ records them as **survivors**.
   already uses.
 - **Blocked on** Nothing.
 
-### E14 [CLOSED] — `src/ToolRegistry.php` declares its own `SugarCraft\Crush\Tool`
+### E14 [CLOSED] — `src/ToolRegistry.php` declares its own `SugarCraft\Code\Tool`
 
 - **What** A second class literally named `Tool` in the root namespace, one `use`
   statement away from colliding with the tool **interface** every built-in tool
   implements.
-- **Where** `sugar-crush/src/ToolRegistry.php:5` (`namespace SugarCraft\Crush;`)
+- **Where** `candy-code/src/ToolRegistry.php:5` (`namespace SugarCraft\Code;`)
   and `:33` (`final class Tool`). Confirmed at HEAD.
 - **Severity** Real bug waiting to happen — a latent collision, not a live
   defect.
 - **Evidence** Worklog `:5192`: *"Reported, unowned: `src/ToolRegistry.php`
-  declares its own `SugarCraft\Crush\Tool`, one `use` away from colliding with
+  declares its own `SugarCraft\Code\Tool`, one `use` away from colliding with
   the tool interface."*
 - **Step** **Do not delete it** — `crush_code.md`'s consolidation-review list
   flags root-namespace `ToolRegistry` as superseded-with-zero-production-callers,
@@ -1164,7 +1164,7 @@ records them as **survivors**.
 
 - **What** `candy-vcr/src/Tape/Lexer.php` has no JSON token and no regex token,
   so it does not implement upstream vhs's real grammar.
-- **Where** `candy-vcr/src/Tape/Lexer.php` (a **sibling lib**, not `sugar-crush`).
+- **Where** `candy-vcr/src/Tape/Lexer.php` (a **sibling lib**, not `candy-code`).
 - **Severity** Real bug — in the tape renderer, not in the agent.
 - **Evidence** Tracker **#81** (worklog `:1261`, `:1692`, `:2010`, `:3458`).
   Lane B round 15 established four portable facts to port with it: *"tab is
@@ -1173,7 +1173,7 @@ records them as **survivors**.
   Three independent vhs oracles were built and all three agree (worklog
   `:4535-4540`).
 - **Step** Port the grammar into `candy-vcr`, carrying the named constants with
-  the Go predicate names plus the grammar write-up. Out of `sugar-crush`'s scope
+  the Go predicate names plus the grammar write-up. Out of `candy-code`'s scope
   — record it here only so it is not lost with the worklog.
 - **Blocked on** Nothing, but it belongs to `candy-vcr`, not this plan.
 
@@ -1184,7 +1184,7 @@ records them as **survivors**.
 - **What** Flagged by an early round as *"the same stale-`toolArgs` family as
   `HookDispatcher` was"*, with `ToolStarted`/`ToolFinished` still carrying the
   **pre-rewrite** `ToolCall` on both pipelines.
-- **Where** `sugar-crush/src/Hooks/HookManager.php:199` (`applyPreHooks()`); the
+- **Where** `candy-code/src/Hooks/HookManager.php:199` (`applyPreHooks()`); the
   re-scan reasoning is at `:180`.
 - **Severity** **UNVERIFIED at HEAD.** `df0a563b` (*"make the permission gate a
   real hook, and stop rewrites reaching the tool unjudged"*) plausibly closed it,
@@ -1216,7 +1216,7 @@ records them as **survivors**.
   `Chat::estimateTokenCount()`'s chars/4 + 10-per-message proxy. The two units
   do not match, so the refusal can be wrong in both directions — a turn that
   would have fit is refused, or one that will not fit is sent.
-- **Where** `sugar-crush/src/Chat.php` — the tier block in `submit()` and
+- **Where** `candy-code/src/Chat.php` — the tier block in `submit()` and
   `foregroundBlockedResponse()`; the estimate is `estimateTokenCount()` and
   `ContextCompactor::countTokens()`; the window comes from
   `Context/ContextWindow::ofBackend()`.
@@ -1286,9 +1286,9 @@ fixture. What is left after the correction is a narrower but real dead end.
     it, and every refusal makes the total slightly WORSE. `/clear` is the only
     way out.
 
-- **Where** `sugar-crush/src/Context/ContextCompactor.php:197` (the
+- **Where** `candy-code/src/Context/ContextCompactor.php:197` (the
   `count($pairs) <= $preserveCount` early return) and the refusal in
-  `sugar-crush/src/Chat.php`'s `submit()` tier block.
+  `candy-code/src/Chat.php`'s `submit()` tier block.
 - **Severity** UX dead end for the single-exchange case, not security. Reachable
   in normal use: one tool turn that reads a file larger than 95% of the window.
   The many-exchanges case is a slow start, not a dead end.
@@ -1338,8 +1338,8 @@ fixture. What is left after the correction is a narrower but real dead end.
   or a system notice adjacent to the real user turn — is two consecutive `user`
   entries in a Converse `messages` array, which the Anthropic-on-Bedrock models
   reject.
-- **Where** `sugar-crush/src/Providers/BedrockProvider.php:294` and
-  `sugar-crush/src/Backend/EngineBackend.php:1219`.
+- **Where** `candy-code/src/Providers/BedrockProvider.php:294` and
+  `candy-code/src/Backend/EngineBackend.php:1219`.
 - **Severity** Provider-specific request rejection, not security. Bedrock only.
 - **Evidence** Settled by reading the two other shapes rather than by driving a
   live provider, and the conclusion is that this is **pre-existing and unrelated
@@ -1385,13 +1385,13 @@ fixture. What is left after the correction is a narrower but real dead end.
 **Closed ROUND-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** mid-turn abort via `Events\SpendCapBreached` frame event — `EngineBackend` gains `withSpendCap`/`sessionSpendAtStartUsd` (13 clone sites threaded), the check runs only past the `toolResults !== []` continue point, `Chat` folds at both event pumps under generation guards. NO wall-clock kill anywhere — the E646 standing prohibition honored, documented in the ctor docblock. Follow-through `9f0c5db62` wired `withSpendCap` into `MemoryPromptWiringTest::$steps`. Evidence: triage E20, worklog ROUND 67.
 
 - **What** `Chat::spendCapRefusal()` (Phase 5 item 7) refuses to START a turn once
-  the reported spend has reached `$SUGARCRUSH_MAX_COST` / `/budget <n>`. It cannot
+  the reported spend has reached `$CANDY_CODE_MAX_COST` / `/budget <n>`. It cannot
   abort a turn already in flight, so the turn that crosses the cap runs to
   completion and the session's final total overshoots by that turn's whole cost.
   A turn is up to `maxSteps` (default 8) provider calls, so the overshoot is not
   bounded by one call's price.
-- **Where** `sugar-crush/src/Chat.php` — `spendCapRefusal()`, whose docblock states
-  this — and `sugar-crush/src/Backend/EngineBackend.php:441` (the
+- **Where** `candy-code/src/Chat.php` — `spendCapRefusal()`, whose docblock states
+  this — and `candy-code/src/Backend/EngineBackend.php:441` (the
   `for ($step = 0; $step < $this->maxSteps; $step++)` loop) plus
   `completeAsync()`'s fork.
 - **Severity** Cost exposure on unattended use (workflows, `/bg`, background
@@ -1455,7 +1455,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   AUTOMATIC 85% tier still uses the truncate-and-`[exchanged information]`
   heuristic, so the compaction that happens without the user asking is the lossier
   of the two.
-- **Where** `sugar-crush/src/Chat.php` — the `shouldCompact()` branch in `submit()`
+- **Where** `candy-code/src/Chat.php` — the `shouldCompact()` branch in `submit()`
   (the automatic tier) versus `scheduleModelCompaction()` (the `/compact` route).
 - **Severity** Information loss on the unattended path. Not security.
 - **Evidence** The automatic tier fires INLINE, inside `submit()`, as the turn it
@@ -1500,7 +1500,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   protect. This is **frame corruption, i.e. functionality, not hardening** — filed
   here only so it is not lost, and it needs its own bundle rather than the
   end-of-plan security pass.
-- **Where** `sugar-crush/src/Chat.php` — `view()` and the transcript composition it
+- **Where** `candy-code/src/Chat.php` — `view()` and the transcript composition it
   drives. Contrast `Renderer::renderStatusBar()`, which DOES select a form against
   a measured `$room`, and `handleHelpCommand()`, which clips every listing row.
 - **Severity** Functionality. Every app state that can produce a long line is
@@ -1562,8 +1562,8 @@ fixture. What is left after the correction is a narrower but real dead end.
   would receive the same summary either way"*, which is a **judgement, not a
   measurement**, and `testTwoIdenticalExchangesShareOneKey` asserts the COLLISION,
   not the harmlessness.
-- **Where** `sugar-crush/src/Context/ContextCompactor.php` — `exchangeKey()` and
-  the stage-3 grouping; `sugar-crush/src/Chat.php` —
+- **Where** `candy-code/src/Context/ContextCompactor.php` — `exchangeKey()` and
+  the stage-3 grouping; `candy-code/src/Chat.php` —
   `parseExchangeSummaries()`'s `isset()` guard.
 - **Severity** Low. Correctness of a docblock claim, and possibly of the summary
   count the `/compact` notice reports.
@@ -1586,7 +1586,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   DELTAS — and every one of the seven does. A future provider that reported a
   CUMULATIVE total on each chunk would be over-counted, quadratically in the worst
   case, with no guard to notice.
-- **Where** `sugar-crush/src/Runtime.php` — `runStreaming()`'s `$usages[]`
+- **Where** `candy-code/src/Runtime.php` — `runStreaming()`'s `$usages[]`
   accumulation and the `Usage::sum()` at the yield.
 - **Severity** Low today, and purely a cost-readout error rather than a behaviour
   change — except that the spend cap reads the same total, so an over-count would
@@ -1608,7 +1608,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 **ROUND-75 renote (ops half landed):** jb (lane `c79d69cfd` → pick `90b7d1ae7`) shipped the per-id memory ops — `Chat::memoryLocate()` resolves an id repo-store-FIRST and hands back the OWNING store, so `/memory delete` and `/memory edit` mutate the entry the prompt actually showed (fixes the r74 self-contradiction: capture folds repo-first; absent repo store degrades byte-identically home-only; response wording byte-unchanged; +5T, r75-rv-jb APPROVE 0C/0M). The DISCOVERY + BULK remainder is **E694** (minted at r75 closeout WITH the orchestrator bulk-clear ruling: no project-scope bulk clear — per-id only). The agent-facing memory tool stays GATED (E694 step 3 on E25 re-severity review + built-in-tool corpus census).
 
-**CLOSED ROUND-74 (lane if `da38ed361` → pick `72079870d`, companion `96c01bbab`; reviewed BEFORE merge, r74-rv-if APPROVE 0C/0M/3MINOR):** piece-2 shipped — `src/Context/ProjectMemoryWriter.php` writes repo-local PROJECT-scope notes at `<root>/.sugar-crush/memory/` (`forRoot` READ resolver never creates, '' root refused; `createForRoot` mkdir 0700 + POST-mkdir `ContainedPath::below` gate — load-bearing because mkdir writes THROUGH a pre-planted symlink; empty/8192-byte write guards — an oversized note REFUSES at the project store where home accepts, the loud asymmetry disclosed in `docs/MEMORY.md`); `MemoryBlock::capture(?projectStore = null)` folds repo-local first, wins id collisions; `Chat::memoryAdd()` routes project-first. This entry's severity premise ("rises only if a future writer can reach PROJECT scope") is now reality BY DESIGN — operator-authored, repo-local, the same sentinel corner imports use. Seams left for the r75 jb design decision (no blind mint): list/search/delete/clear/edit stay home-only (**E694** candidate); null home store ⇒ no fold even with repo notes (memory off = off); no agent-facing memory tool. Prior state:
+**CLOSED ROUND-74 (lane if `da38ed361` → pick `72079870d`, companion `96c01bbab`; reviewed BEFORE merge, r74-rv-if APPROVE 0C/0M/3MINOR):** piece-2 shipped — `src/Context/ProjectMemoryWriter.php` writes repo-local PROJECT-scope notes at `<root>/.candy-code/memory/` (`forRoot` READ resolver never creates, '' root refused; `createForRoot` mkdir 0700 + POST-mkdir `ContainedPath::below` gate — load-bearing because mkdir writes THROUGH a pre-planted symlink; empty/8192-byte write guards — an oversized note REFUSES at the project store where home accepts, the loud asymmetry disclosed in `docs/MEMORY.md`); `MemoryBlock::capture(?projectStore = null)` folds repo-local first, wins id collisions; `Chat::memoryAdd()` routes project-first. This entry's severity premise ("rises only if a future writer can reach PROJECT scope") is now reality BY DESIGN — operator-authored, repo-local, the same sentinel corner imports use. Seams left for the r75 jb design decision (no blind mint): list/search/delete/clear/edit stay home-only (**E694** candidate); null home store ⇒ no fold even with repo notes (memory off = off); no agent-facing memory tool. Prior state:
 
 - **What** Since crush_code.md Phase 5 item 9, `Context/MemoryBlock` renders every
   PROJECT-scope `MemoryStore` entry into a `<project-memory>` fence inside the
@@ -1621,8 +1621,8 @@ fixture. What is left after the correction is a narrower but real dead end.
   parenthetical is false, and it was the entry's whole reason for expecting the
   severity to rise — see Severity. `/memory add --scope project` is the ONLY
   writer that reaches this block.
-- **Where** `sugar-crush/src/Context/MemoryBlock.php` — `render()`/`renderEntry()`;
-  folded in at `sugar-crush/src/Runtime.php` `buildSystemPrompt()`, after the
+- **Where** `candy-code/src/Context/MemoryBlock.php` — `render()`/`renderEntry()`;
+  folded in at `candy-code/src/Runtime.php` `buildSystemPrompt()`, after the
   `<project-instructions>` documents and before the skill listing.
 - **Severity** Low for the target operator (own `$HOME`, own notes: the content is
   their own, and this is no worse than their own `AGENTS.md`, which is also
@@ -1658,7 +1658,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **What** crush_code.md Phase 5 item 10a asks for an "additional working
   directories" line in the `<env>` block. It was deliberately NOT added. This
   records the prerequisite so the item is a decision rather than an oversight.
-- **Where** `sugar-crush/src/Context/EnvironmentBlock.php` — `render()`'s line
+- **Where** `candy-code/src/Context/EnvironmentBlock.php` — `render()`'s line
   array, which now carries seven lines (the OS-version line from the same item
   WAS added). The absence is pinned by
   `tests/Context/EnvironmentBlockTest::testNoAdditionalWorkingDirectoriesLineIsEmitted()`.
@@ -1703,8 +1703,8 @@ fixture. What is left after the correction is a narrower but real dead end.
   does not decode to an object. A truncated stream is a plausible transport
   failure, but the same branch also fires for a model that emitted genuinely
   malformed JSON, which retrying cannot fix and would cost 3x.
-- **Where** `sugar-crush/src/Providers/ClaudeCodeProvider.php` (its two throws);
-  `sugar-crush/src/Providers/VertexProvider.php` — the truncated-arguments
+- **Where** `candy-code/src/Providers/ClaudeCodeProvider.php` (its two throws);
+  `candy-code/src/Providers/VertexProvider.php` — the truncated-arguments
   `CompleteResponse` in `parseAnthropicChunk()`, which leaves `errorTransient`
   null. (a) is pinned by
   `tests/Providers/TransientFailureTest::testAClaudeCodeSubprocessFailureIsNotTransientAndThatIsAKnownGap()`.
@@ -1732,7 +1732,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   path deliberately cannot do. Nothing in `src/` or `bin/` calls
   `executeSubAgent()`, so that retry — and the rollback — is exercised only by
   this repo's tests and by an embedder driving the manager directly.
-- **Where** `sugar-crush/src/Agents/AgentManager.php` — `executeSubAgent()`'s
+- **Where** `candy-code/src/Agents/AgentManager.php` — `executeSubAgent()`'s
   streaming and non-streaming branches. The reachability fact is already recorded
   in `src/Renderer.php`'s class docblock.
 - **Severity** **Raised (fix round): Medium the day the seam is wired.** The
@@ -1779,7 +1779,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   and without the rest of the suite's ordering, and `defaultTimeLimit=60` in
   `phpunit.xml` does not abort it — so whatever blocks is not interruptible by the
   time-limit signal.
-- **Where** `sugar-crush/tests/Cli/` as a selection. Not attributable to one file:
+- **Where** `candy-code/tests/Cli/` as a selection. Not attributable to one file:
   each passes individually. Candidate mechanism (unverified): a test that leaves an
   env var, a `getcwd()`, a latched static (`ToolIpcFiles::sweepOnce()`,
   `Bootstrap`'s config-dir latch) or a child process behind, which a later file in
@@ -1813,7 +1813,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   `EngineBackend::COMPLETE_TIMEOUT_SECONDS`). That is the "derive, don't literal"
   rule working exactly as intended for the CODE — the rot risk is in the PROSE.
 - **Where** `crush_code.md` Phase 5 item 8's status entry ("500ms doubling, ~1.5s
-  of backoff per provider call"), and `sugar-crush/src/Providers/TransientFailure.php`'s
+  of backoff per provider call"), and `candy-code/src/Providers/TransientFailure.php`'s
   class docblock, which after the fix round names `totalBackoffMicroseconds()`
   instead of quoting 1.5s — so the surviving literals are in `crush_code.md` only,
   now marked "at the constants of the time".
@@ -1843,7 +1843,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   answers with a notice naming the spend, the cap and the `/budget` figure that
   would lift it, because "a silent downgrade is indistinguishable from having no
   provider at all, and the user set the ceiling that caused it".
-- **Where** `sugar-crush/src/Chat.php` — `scheduleParkedCompaction()`'s first
+- **Where** `candy-code/src/Chat.php` — `scheduleParkedCompaction()`'s first
   statement, versus `scheduleModelCompaction()`'s cap arm.
 - **Severity** None today: dormant, and the wrong answer is only lossier, not
   unsafe. It becomes a real silent downgrade the day the ordering upstream changes.
@@ -1863,7 +1863,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **CLOSED 2026-09-08 (prompt plan P8.S5 — merge `c4c9b3b01`, close fold
   `b417dbbb7`) — CLOSED-with-variant-shape.** The goal was met, but not via the
   shape this Step implies: E31's `compactNow`-shape guidance is measured UNSOUND
-  for the parked route (the E31 argument at `sugar-crush/src/Chat.php:9511-9549`
+  for the parked route (the E31 argument at `candy-code/src/Chat.php:9511-9549`
   — the route OWES a turn and `compactNow()` starts none, so returning a
   completed parked turn would silently drop the prompt the user pressed Enter
   for). The goal was met instead via the null + by-ref `$capNotice` surfaced
@@ -1881,14 +1881,14 @@ fixture. What is left after the correction is a narrower but real dead end.
   `scheduleParkedCompaction()` deliberately arms no token (there is no backend turn
   yet). So the user cancels, the request runs to completion in the background, and
   the cost is accounted — correctly — against their key.
-- **Where** `sugar-crush/src/Chat.php` — `buildSummarizationRequest()`'s
+- **Where** `candy-code/src/Chat.php` — `buildSummarizationRequest()`'s
   `Cmd::promise` (the `completeAsync($prompt)` call), the double-Escape arm in
   `update()`, and `scheduleParkedCompaction()`.
 - **Severity** Money, not correctness. Bounded by one summarization per parked
   turn; a compaction reads the whole earlier conversation, so it is routinely the
   largest single prompt the app sends.
 - **Evidence** Settled by reading the three sites rather than by driving a
-  provider. `sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php::testAnAbandonedSummarizationIsStillBilled()`
+  provider. `candy-code/tests/Chat/AutomaticCompactionModelSummaryTest.php::testAnAbandonedSummarizationIsStillBilled()`
   pins the accounting half behaviourally: after a cancel, the landing still bills
   the call. That test asserts the current behaviour is HONEST, not that it is
   desirable.
@@ -1911,7 +1911,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   sent again on every subsequent turn alongside a fresh copy of itself. A session
   driven twenty turns past 70% carries twenty near-identical ~171-character system
   messages whose whole content is "consider running /compact".
-- **Where** `sugar-crush/src/Chat.php` — `dispatchTurn()`'s reminder arm and
+- **Where** `candy-code/src/Chat.php` — `dispatchTurn()`'s reminder arm and
   `contextReminderMessage()`.
 - **Severity** Wasted context on the very histories that are short of it, plus
   transcript noise. Not security.
@@ -1966,10 +1966,10 @@ fixture. What is left after the correction is a narrower but real dead end.
   cannot run until the completion has already resolved. The user sees a silent
   spinner and then the whole answer, which is precisely the behaviour the streaming
   tier was added to remove.
-- **Where** `sugar-crush/src/Backend/StreamingCommandBackend.php` —
+- **Where** `candy-code/src/Backend/StreamingCommandBackend.php` —
   `completeAsync()` wrapping the synchronous `complete()`;
-  `sugar-crush/src/Backend/CommandBackend.php` does the same. The render side is
-  `sugar-crush/src/Chat.php` (`withTick` → `$streamingText`).
+  `candy-code/src/Backend/CommandBackend.php` does the same. The render side is
+  `candy-code/src/Chat.php` (`withTick` → `$streamingText`).
 - **Severity** Not security. It is the defect that the wiring of Phase 2 item 8
   was justified by removing, so it matters to whether that item is really done.
 - **Evidence** Measured by bundle C1's reviewer on a six-token/1.81s fixture:
@@ -1994,7 +1994,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   `$cancellation?->isCancelled()` exactly once, at `futureTick` entry, and never
   again. `complete()` then blocks the loop, so no keystroke is even read — double
   Escape and Ctrl+C are unobservable until the command finishes on its own.
-- **Where** `sugar-crush/src/Backend/StreamingCommandBackend.php`, the
+- **Where** `candy-code/src/Backend/StreamingCommandBackend.php`, the
   `completeAsync()` cancellation check. Identical on `CommandBackend`.
 - **Severity** Not security. A user cannot abandon a wedged or wrong turn.
 - **Evidence** Bundle C1's reviewer traced the single check and confirmed the
@@ -2015,7 +2015,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **What** Run on its own against a clean tree the file exits 1 with
   `OK, but there were issues! Risky: 2`; in the full configured run it contributes
   no risky tests and the suite is exit 0 with 0 risky. Order-dependent.
-- **Where** `sugar-crush/tests/Cli/BootstrapSkillSkipsTest.php`.
+- **Where** `candy-code/tests/Cli/BootstrapSkillSkipsTest.php`.
 - **Severity** Not security. It is a trap for any future round that tries to
   judge this file in isolation — and `failOnRisky` is ON, so the exit code is red
   while the banner says OK.
@@ -2034,18 +2034,18 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **What** `src/Cli/Help.php` names six environment variables; `src/` and `bin/` read
   twenty. (Five before bundle C1, which added the streaming variable — the heading said
   five until this was re-measured. And the twenty is right only after discarding
-  `SUGARCRUSH_DISABLE_`, a prefix fragment, from a 21-name raw grep.) Missing include `SUGARCRUSH_MAX_COST`,
-  `SUGARCRUSH_PERMISSION_MODE`, `SUGARCRUSH_TITLE_MODEL`,
-  `SUGARCRUSH_SUMMARY_MODEL` and `SUGARCRUSH_SEARCH_ENDPOINT` — i.e. the spend cap
+  `CANDY_CODE_DISABLE_`, a prefix fragment, from a 21-name raw grep.) Missing include `CANDY_CODE_MAX_COST`,
+  `CANDY_CODE_PERMISSION_MODE`, `CANDY_CODE_TITLE_MODEL`,
+  `CANDY_CODE_SUMMARY_MODEL` and `CANDY_CODE_SEARCH_ENDPOINT` — i.e. the spend cap
   and the permission mode, both of which change what the agent is allowed to do.
-- **Where** `sugar-crush/src/Cli/Help.php`; the inventory gap is why bundle C1's
+- **Where** `candy-code/src/Cli/Help.php`; the inventory gap is why bundle C1's
   finding 7 existed (a nine-line block for a brand-new variable that no test
   pinned, because the only assertion was a substring the OLD variable's name
   already satisfied).
 - **Severity** Not security in itself, though two of the undocumented variables
   govern permission and spend.
 - **Evidence** Counted by bundle C1's reviewer across `src/` and `bin/`.
-  `docs/ENVIRONMENT.md` is missing only one (`SUGARCRUSH_DEBUG_SKILLS`), so the
+  `docs/ENVIRONMENT.md` is missing only one (`CANDY_CODE_DEBUG_SKILLS`), so the
   reference doc is nearly complete and the help screen is not.
 - **Step** Extend the env-var scrape C1's round B added for the backend-selection
   subset to cover all twenty, the way `HelpTest` already scrapes `ArgvParser` so a
@@ -2063,8 +2063,8 @@ fixture. What is left after the correction is a narrower but real dead end.
   STARTS with `Chat::CONTEXT_REMINDER_PREFIX` — which is exactly what
   `Chat::isContextReminder()` matches on. One such line can accrue per compaction,
   so the pile-up changes shape rather than being eliminated.
-- **Where** `sugar-crush/src/Context/ContextCompactor.php` (the `[summary] ` rider
-  path) against `sugar-crush/src/Chat.php`'s `isContextReminder()` /
+- **Where** `candy-code/src/Context/ContextCompactor.php` (the `[summary] ` rider
+  path) against `candy-code/src/Chat.php`'s `isContextReminder()` /
   `withoutContextReminders()`.
 - **Severity** Not security. Wasted context and transcript noise, at one line per
   compaction rather than one per turn — a large improvement on the original bug, but
@@ -2229,8 +2229,8 @@ anyone who *does* wire one knows what gate to add at the same time.
   `WorkflowRegistry::readableProjectDir()`, which narrows its own window rather
   than pretending it has none"). (b) A `.mcp.json` that is a HARD LINK to a file
   outside the tree passes containment.
-- **Where** `sugar-crush/src/Cli/Bootstrap.php` (`mcpClient()`),
-  `sugar-crush/src/Support/ContainedPath.php`.
+- **Where** `candy-code/src/Cli/Bootstrap.php` (`mcpClient()`),
+  `candy-code/src/Support/ContainedPath.php`.
 - **Severity** Low. (a) needs a co-resident writer. (b) needs someone who can
   already hard-link, and who could therefore just write the file — so it is not an
   escalation.
@@ -2265,7 +2265,7 @@ anyone who *does* wire one knows what gate to add at the same time.
   is reached only from the `$agentPreset !== null` arm, so with `unrestricted: true`
   and no preset `listTools()` merges every server directly and deny patterns
   enforce nothing. (c) Four of five broken-config shapes are SILENT.
-- **Where** `sugar-crush/src/MCP/McpClient.php` — `startServers()`, `startServer()`,
+- **Where** `candy-code/src/MCP/McpClient.php` — `startServers()`, `startServer()`,
   `loadConfig()`, `listTools()`.
 - **Severity** Not security (the trust gate is upstream of all of it). Silent
   capability loss on a file the user wrote on purpose.
@@ -2300,7 +2300,7 @@ anyone who *does* wire one knows what gate to add at the same time.
   name — `mcp__github.com/foo__*` for the `.mcp.json` key `github.com/foo` — never
   matches the sanitised wire name `mcp__github_com_foo__…`, so the tool stays behind
   an Ask forever, and nothing surfaces the sanitised name to the user.
-- **Where** `sugar-crush/src/Tools/McpToolBridge.php` (`sanitize()`, `name()`).
+- **Where** `candy-code/src/Tools/McpToolBridge.php` (`sanitize()`, `name()`).
 - **Severity** Low. (b) is the more annoying half in daily use.
 - **Evidence** Bundle C3's reviewer, by construction for (a) and by rule-matching
   for (b).
@@ -2336,7 +2336,7 @@ anyone who *does* wire one knows what gate to add at the same time.
   code or a wide table is exactly the information the reader wanted. The real
   answer is horizontal scrolling (or a per-block "expand" the way tool results
   already have one), not reflow.
-- **Where** `sugar-crush/src/Renderer.php` — `renderHistory()` and whatever W1
+- **Where** `candy-code/src/Renderer.php` — `renderHistory()` and whatever W1
   lands as the width net; `candy-shine/src/Renderer.php` for why the wrap does <!-- @rename-keep historical provenance -->
   not cover these two block types.
 - **Severity** Not security. A readability regression against the alternative of
@@ -2355,11 +2355,11 @@ anyone who *does* wire one knows what gate to add at the same time.
   CLOSED in r65 (`cf70cd0ae`/`8222f9576`), but E682 delivered the abandoned-
   palette paint-parity rule, not this entry's STEP: measured at `61cde19c5` the
   tree carries no `E43` marker, no fence-clip adoption, and no horizontal
-  offset/scroll anywhere under `sugar-crush/src/` — and E682's own stamp names
+  offset/scroll anywhere under `candy-code/src/` — and E682's own stamp names
   the full composite-live route still open (closed-by-decision under E12/E666's
   route (b)). Shipped halves remain: preconditions (`f4b3407ec` clipOverlay +
   E48 floor, lane R r62) and the candy-shine sibling fence clip (opt-in, <!-- @rename-keep historical provenance -->
-  `5ba4e022f`, lane EE r63). The open half is sugar-crush adoption — a per-block
+  `5ba4e022f`, lane EE r63). The open half is candy-code adoption — a per-block
   reflow-vs-clip toggle or expand-driven horizontal offset — still unowned and
   unlaned for round 67.
 
@@ -2367,7 +2367,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ### E44 [CLOSED] — a `composer update` silently moves the suite off the monorepo, and the only signal is a skip count
 
-- **What** `sugar-crush/vendor/sugarcraft/*` is symlinked to the sibling libs when
+- **What** `candy-code/vendor/sugarcraft/*` is symlinked to the sibling libs when
   path repos are injected, and replaced with real Packagist directories by any
   `composer install`/`update` that runs without the injection. When that happens
   the suite stops testing the monorepo's own `candy-*` and starts testing
@@ -2376,7 +2376,7 @@ anyone who *does* wire one knows what gate to add at the same time.
   `GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed`
   self-skips on the absence of symlinks. A self-skip is not a signal; it is the
   absence of one.
-- **Where** `sugar-crush/tests/Tools/BuiltIn/GitignoreAwarenessTest.php:255`
+- **Where** `candy-code/tests/Tools/BuiltIn/GitignoreAwarenessTest.php:255`
   (the `markTestSkipped`), `tools/check-path-repos.php`, `CONTRIBUTING.md`'s
   local-wiring loop.
 - **Severity** Not security. It costs correctness of *verification*, which is
@@ -2421,7 +2421,7 @@ triage E45, worklog ROUND 67 wave-2.
   `$mcpClients`, so an untrusted or out-of-tree root re-stats and re-checks trust
   on every `tools()` call, while the memo's docblock reads as if every outcome is
   cached.
-- **Where** `sugar-crush/src/Cli/Bootstrap.php` — `mcpClient()` and the
+- **Where** `candy-code/src/Cli/Bootstrap.php` — `mcpClient()` and the
   `$mcpClients` docblock.
 - **Severity** Neither is a hole. (a) is a documentation gap on a security gate,
   which is the kind that gets "cleaned up" later. (b) is idempotent and the notice
@@ -2522,7 +2522,7 @@ is deleted — every case round-tripped byte-identically.
 
 **Where.** `candy-core/src/Util/Width.php:57-89` (`compute()`) vs `:264+` (`wrapAnsi()`). <!-- @rename-keep historical provenance -->
 
-**Severity.** Medium, and wider than sugar-crush — every candy-* consumer that wraps user or model text
+**Severity.** Medium, and wider than candy-code — every candy-* consumer that wraps user or model text
 inherits it. For 40 `🇺🇸` on a 40-column pane the real terminal overflow was measured at 80 columns.
 
 **Evidence.** W1's review, probe `/tmp/…/scratchpad/w1r/p2.php` and `p9.php`.
@@ -2559,7 +2559,7 @@ simplified, not removed — the fallback is also what protects against the NEXT 
 the session picker and the permission prompt emits rows wider than the terminal: measured
 **`palette open, cols=40 → widest=56, over rows 1..21 and 23`**.
 
-**Where.** `sugar-crush/src/Renderer.php:1099-1114` (the Veil composite).
+**Where.** `candy-code/src/Renderer.php:1099-1114` (the Veil composite).
 
 **Severity.** Medium. Pre-existing, not introduced by W1 — but W1 established the invariant for the
 transcript, and this is the remaining hole in it. On the hosted path
@@ -2577,7 +2577,7 @@ than a silent gap.
 **What.** `$available = max(1, $rows - 1)` plus the always-present status bar means a 1-row terminal gets
 a 2-line frame. Pre-existing.
 
-**Where.** `sugar-crush/src/Renderer.php:1019` and `:1032`.
+**Where.** `candy-code/src/Renderer.php:1019` and `:1032`.
 
 **Severity.** Low — a 1-row terminal is not a real configuration. Recorded because
 `PaneWidthInvariantTest`'s class docblock asserted the height invariant unconditionally, and W1 bounded
@@ -2653,7 +2653,7 @@ therefore on the **keyboard path only**. `handleMouse()` itself opens on a wheel
 left-button check and consults no modal state at all. So while a permission prompt is up and the
 keyboard is correctly captured, the mouse is not.
 
-**Where.** `sugar-crush/src/Chat.php:1108` (the `MouseMsg` dispatch), `:1110` (the non-`KeyMsg`
+**Where.** `candy-code/src/Chat.php:1108` (the `MouseMsg` dispatch), `:1110` (the non-`KeyMsg`
 return the guards hide behind), `:1194` (the `pendingPermission` guard), and `:3555`
 (`handleMouse()`, unguarded). Tool-call zones are dispatched at `:3639` into
 `toggleToolOutput()` (`:4174`).
@@ -2663,15 +2663,15 @@ this as a **`pane:files` zone surviving at row=1, col=1..7**. That is wrong on e
 correction matters more than the original claim:
 
 - **There is no `pane:files` zone anywhere in the product.** `markPane()`
-  (`sugar-crush/src/Renderer.php:1684`) is the sole producer of the `pane:` prefix
+  (`candy-code/src/Renderer.php:1684`) is the sole producer of the `pane:` prefix
   (`PANE_ZONE_PREFIX`, `:404`), and it is reached with exactly two panes: `Pane::Menu`, directly at
   `:1253`, and `Pane::Agents`, via `markPaneHeader()` at `:1575` which calls `markPane()` at `:1793`.
-  The string `pane:files` occurs once in the whole tree, at `sugar-crush/tests/PaneClickTest.php:252`,
+  The string `pane:files` occurs once in the whole tree, at `candy-code/tests/PaneClickTest.php:252`,
   where it is a **hand-written synthetic fixture** fed straight to `Renderer::scanner()->scan()`. It
   is almost certainly where the original report came from — a test fixture read as a live render.
 - **`pane:menu` is destroyed by the modal, not preserved.** It was reported as surviving; it does not.
 - **What genuinely survives are the `toolcall:<id>` zones** (`TOOL_CALL_ZONE_PREFIX`,
-  `sugar-crush/src/Renderer.php:424`), one per rendered tool call in the transcript.
+  `candy-code/src/Renderer.php:424`), one per rendered tool call in the transcript.
 
 **On coordinates.** The reviewer's enumeration observed the surviving zones at **rows 5/8/11/14,
 cols 1..30** under its own fixture. Those numbers are *fixture-dependent* — row positions follow
@@ -2803,7 +2803,7 @@ whole string**, while `AgentViewPane::truncate()` still walks `preg_split('//u')
 lane: the family emoji `U+1F468 ZWJ U+1F469 ZWJ U+1F467` is **2 cells** whole-string and **6** summed
 per codepoint.
 
-**Where.** `sugar-crush/src/Tui/AgentViewPane.php` — `truncate()` and `visualWidth()`/`charWidth()`.
+**Where.** `candy-code/src/Tui/AgentViewPane.php` — `truncate()` and `visualWidth()`/`charWidth()`.
 
 **Severity.** Low. **CORRECTED IN ROUND 38 — the bound this paragraph rested on is not there.** It
 read: the per-codepoint sum is the **larger** of the two, so the loop over-truncates and **cannot**
@@ -2873,18 +2873,18 @@ which sizes the **content box**, and the rounded border (2 cells) plus `padding(
 drawn outside it. Measured in this lane across `$w` = 20/28/40/58/60/98, populated and empty-list alike
 — the `+4` holds in every case. Its two callers do **not** both compensate:
 
-- `Renderer::renderAgentView()` (`sugar-crush/src/Renderer.php:1630` — was `:1567`, 63 lines stale) passes `max(40, $cols - 4)` —
+- `Renderer::renderAgentView()` (`candy-code/src/Renderer.php:1630` — was `:1567`, 63 lines stale) passes `max(40, $cols - 4)` —
   **compensates exactly**, at 44 columns and above. Below 44 the `max(40, …)` clamp floors the width
   and the rows run wider than the terminal.
-- `AgentDashboardPane::render()` (`sugar-crush/src/Tui/Components/AgentDashboardPane.php:193` — was `:194`) passes
+- `AgentDashboardPane::render()` (`candy-code/src/Tui/Components/AgentDashboardPane.php:193` — was `:194`) passes
   `max(20, $width - 2)` — **does not compensate at all**. Measured, *both* of its paths over-run by
   exactly 2: the empty-list `AgentViewPane::render()` call at `:202`, and the `box()` frame at `:205`,
   which repeats the same `border + padding(0,1) + width($inner)` geometry. Pane width 30 → 32,
   60 → 62, 100 → 102.
 
 **Severity.** Low — real but currently unobservable. Every dashboard frame goes out through
-`clipWidth(clipTail(...), $cols)` in `sugar-crush/src/Tui/Renderer.php` (the `$frame` assignment around
-`sugar-crush/src/Tui/Renderer.php:490` **and `:561` — there are TWO of them, not one, and neither is
+`clipWidth(clipTail(...), $cols)` in `candy-code/src/Tui/Renderer.php` (the `$frame` assignment around
+`candy-code/src/Tui/Renderer.php:490` **and `:561` — there are TWO of them, not one, and neither is
 at the "around `:464`" this entry originally cited), which trims the excess before the diff renderer
 sees it. The backstop is what makes this a
 documentation-grade finding today; it is also what would hide a real regression if the arithmetic
@@ -2984,8 +2984,8 @@ that the appended block is outside the cap, and `InstructionFileLoader` applies
 no size limit of its own. So `maxOutputBytes` now bounds the hit list, not the
 result.
 
-**Where.** `sugar-crush/src/Tools/BuiltIn/Grep.php` — the append block after
-`truncateMerged()`; `sugar-crush/src/Context/InstructionFileLoader.php`
+**Where.** `candy-code/src/Tools/BuiltIn/Grep.php` — the append block after
+`truncateMerged()`; `candy-code/src/Context/InstructionFileLoader.php`
 (`loadForPath()` returns the file whole).
 
 **Evidence — MEASURED.** A temp tree with one 6513-byte `sub/CLAUDE.md` and one
@@ -3021,7 +3021,7 @@ body consumes the entire budget and the **matched paths — the answer the calle
 asked for — are what the truncation marker reports as dropped**. The tool
 returns a document the caller did not ask for and none of the filenames it did.
 
-**Where.** `sugar-crush/src/Tools/BuiltIn/Glob.php` — the prepend happens ahead
+**Where.** `candy-code/src/Tools/BuiltIn/Glob.php` — the prepend happens ahead
 of the `TruncatesOutput` call.
 
 **Evidence — MEASURED.** Temp tree, `sub/CLAUDE.md` of `"BIG-RULE\n"` plus 500
@@ -3073,7 +3073,7 @@ bare `fnmatch()` (`src/Permissions/PermissionRule.php:334`). `fnmatch` honours
 negated character classes, so a glob can name a complement rather than a list.
 
 **Evidence — MEASURED end to end** through `Bootstrap::tools()` with a project
-`.sugar-crush/settings.json` of `{"disabledTools":["[!B]*"]}`:
+`.candy-code/settings.json` of `{"disabledTools":["[!B]*"]}`:
 
 ```
 surviving tools: Bash
@@ -3090,7 +3090,7 @@ one line".
 > twenty-seven, re-derived on PHP 8.3.6; nothing in this counterexample is
 > eight. (b) A trust grant **is** required, and this was probably true when
 > recorded and overtaken by the gate since. MEASURED, fresh process per row,
-> PHP 8.3.6, sandboxed `HOME`, project `.sugar-crush/settings.json` =
+> PHP 8.3.6, sandboxed `HOME`, project `.candy-code/settings.json` =
 > `{"disabledTools":["[!B]*"]}`: with **no** `trustedProjectSettings` entry all
 > **11** tools survive and nothing is printed; with the entry, **1** (`Bash`)
 > survives and the removal is reported on stderr and in the transcript.
@@ -3228,7 +3228,7 @@ still deliberately open on the capability itself.**
 trusted repo with `{"disabledTools":["[!B]*"]}`: the warning is written to stderr, the terminal enters
 the alternate screen ~0.5s later and paints over it, and the primary buffer does not return until the
 session ENDS. Replaying the captured byte stream through a `candy-vt` `Terminal(120, 40)` gives <!-- @rename-keep historical provenance -->
-`altScreen=true` and a visible screen containing neither `disabledTools` nor `sugarcrush:`. The operator
+`altScreen=true` and a visible screen containing neither `disabledTools` nor `candy-code:`. The operator
 whose tool set a checkout had just cut to `Bash` was told after the Bash-only session was over — which
 defeats the "a value you can see" property the whole round-40 argument rests on.
 
@@ -3273,7 +3273,7 @@ differs), and `reportPrunedSessions()` (history already deleted, not this sessio
 with no de-duplication at all — probed at `8add627b`, a config with two bad rules printed **four**
 stderr lines. Routing through the seam picks up the per-process map, so it is one apiece now.
 
-**Finding: `app()` raised two of these AFTER `chat()` had already read the list.** `bin/sugarcrush`
+**Finding: `app()` raised two of these AFTER `chat()` had already read the list.** `bin/candy-code`
 runs `app()`, not `chat()`; `app()` calls `reportSkillSkips()` and `reportProjectTierRefusals()` a
 second time after `chat()` returned, so anything they recorded landed in a static nothing read again.
 Migrating them without fixing that would have been a no-op that looked like a fix. `app()` now applies
@@ -3345,7 +3345,7 @@ Pre-existing: a 2400-row cross-product replay of the old `??` chain against the 
 shows **zero divergence**, so this behaviour predates round 35 and was merely made visible by it.
 
 `permissionConfigLayers()` merges the tiers with `array_merge`, so a later layer wins. A
-`permissionMode` key present in `~/.sugar-crush/config.json` as `""` or `null` normalises to *absent*
+`permissionMode` key present in `~/.candy-code/config.json` as `""` or `null` normalises to *absent*
 **after** it has already displaced the earlier layer's value. Net effect: a user who configured
 `plan` in `settings.json` gets the built-in default — which is currently `bypass-permissions`.
 
@@ -3884,7 +3884,7 @@ the NEXT pass's `toolInput` and E65's env ceiling then killed pass 2. Called DIR
 ceiling on `modifiedInput` was **not a bound anybody wrote** — it was E65 leaking into E60, and it
 would have silently disappeared the moment E65 was fixed alone.
 
-**What was changed** (`sugar-crush/src/Hooks/ScriptHook.php`):
+**What was changed** (`candy-code/src/Hooks/ScriptHook.php`):
 
 - **ASK is now clipped** at a new `MAX_ASK_PROMPT_BYTES = 16384`, a constant of its own rather than a
   widening of `MAX_DENY_REASON_BYTES` — the two are separate decisions that agree on a number.
@@ -4010,7 +4010,7 @@ right for any implementor.
 **The E60 non-collision note above still holds and is now load-bearing in the other direction:** the S
 touched only the refusal's wording and the ledger behind it, so `ScriptHook` remains the sole
 `BoundedHookInterface` implementor in `src/` and E60's clip design still has exactly one caller.
-sugar-crush: 8909 tests / 101051 assertions / 1 skipped / rc 0 (from 8905 / 101022). Seven mutations
+candy-code: 8909 tests / 101051 assertions / 1 skipped / rc 0 (from 8905 / 101022). Seven mutations
 killed: old message restored, unbounded advice forced on and forced off, ledger unsorted, ledger
 bounded-only, sub-millisecond rendering fallback removed, spender cap raised to 999.
 
@@ -4053,23 +4053,23 @@ bytes rendered inside trusted chrome. A PTY is that with a keyboard attached.
 matters.
 
 *First, the framing.* There is no local model process — the model is a remote API. The accurate claim
-is that askpass keeps the plaintext out of **`sugar-crush`'s address space**, and therefore out of
-anything `sugar-crush` can persist or transmit. That distinction is load-bearing **in this app
+is that askpass keeps the plaintext out of **`candy-code`'s address space**, and therefore out of
+anything `candy-code` can persist or transmit. That distinction is load-bearing **in this app
 specifically**: the PTY route puts a password within reach of the transcript, of tool output that is
 sent back to the model as context, and of `EnhancedSessionStore::saveCheckpoint()`, which writes
 conversation state to SQLite. Password prompts disable echo, so the bytes should not round-trip — but
 "should not echo" is a property of the child, not a guarantee of ours.
 
 *Second, and this is the real limit.* **`sudo -A` only helps if the askpass helper can reach the user
-without going back through `sugar-crush`.** `sudo -A` execs `$SUDO_ASKPASS` with the prompt as
+without going back through `candy-code`.** `sudo -A` execs `$SUDO_ASKPASS` with the prompt as
 `argv[1]` and reads the secret from the helper's **stdout** — no tty anywhere, which is why it composes
 cleanly with Phase 9's step 1. But the helper still has to ask somebody. Its options:
 - a GUI dialog (X11/Wayland) — irrelevant to a TUI over SSH, and **none is installed on this box**
   (checked: no `ssh-askpass`, no `zenity`; only `pinentry`/`pinentry-curses`);
 - `pinentry-curses` or any terminal helper — **needs a tty, which step 1 just removed**, so it would
   need a *different* terminal (a second window, another tmux pane);
-- a helper that sockets back to `sugar-crush` so the app renders the modal — at which point
-  **`sugar-crush` handles the plaintext again and the entire advantage collapses.**
+- a helper that sockets back to `candy-code` so the app renders the modal — at which point
+  **`candy-code` handles the plaintext again and the entire advantage collapses.**
 
 **What survives the collapse, and is the actual reason to want askpass:** the prompt becomes an
 **authenticated channel**. With `-A`, the app learns that *`sudo` asked* out-of-band — via the helper's
@@ -4130,19 +4130,19 @@ leak and adds no surface; it should ship regardless of when (C) is scheduled.
 finding — a **measurement-integrity** one, which is why it is recorded here rather than left in a lane
 report: it can fabricate a failure in the very suite runs this project uses to certify its floor.
 
-**What.** `sugar-crush/tests/ChatTest.php:76` snapshots `glob(sys_get_temp_dir() . '/sc_chat_tool_*')`
+**What.** `candy-code/tests/ChatTest.php:76` snapshots `glob(sys_get_temp_dir() . '/sc_chat_tool_*')`
 in `setUpBeforeClass()`, and `:96` diffs the same glob in `tearDownAfterClass()`, asserting the
 difference is empty with *"a forked tool child was abandoned with its IPC payload uncollected"*.
 
 The diff does not measure what that message says. It measures **every `sc_chat_tool_*` file that
 appeared anywhere in the shared temp dir during this class's window, from any process on the box** —
-a sibling lane running the same suite, a second developer, or the user's own `sugar-crush` session.
+a sibling lane running the same suite, a second developer, or the user's own `candy-code` session.
 Payload names are `prefix . bin2hex(random_bytes(8)) . '.json'` (`ToolIpcFiles::reserve()`, `:93-96`):
 no pid, no run id, nothing that ties a file to its creator.
 
 **This is THE recurring defect, and the refutation is already written down inside the class the test
 calls into.** `ToolIpcFiles::STALE_AFTER_SECONDS`' docblock states the constraint plainly — the cutoff
-exists to *"never delete a file belonging to a LIVE run, including another sugar-crush process on the
+exists to *"never delete a file belonging to a LIVE run, including another candy-code process on the
 same box, **whose files this process cannot tell apart from its own**. Age is the only signal available
 for that."* `sweep()` therefore attributes by age and refuses to attribute by identity. `ChatTest` then
 attributes by identity anyway, from a weaker signal (a window), and calls the result *this run's*.
@@ -4269,13 +4269,13 @@ The sufficient condition is stated positively and holds without exception in tha
 `$width + CHROME_WIDTH`.** Over 2,904 (width × payload × name) combinations there were 0 cases where
 the body fit and the row still over-ran.
 
-**Where.** `sugar-crush/src/Tui/AgentViewPane.php` — the `$opBudget = max(5, …)` assignment in
+**Where.** `candy-code/src/Tui/AgentViewPane.php` — the `$opBudget = max(5, …)` assignment in
 `render()`, and the `Width::padRight($leftSection, $width - Width::string($rightSection) - 1)` that
 cannot claw the excess back. Identical at `087a3179`: the same ten numbers come out of that tree's
 `AgentViewPane`, so this predates `CHROME_WIDTH`/`contentWidth()` and is untouched by them.
 
 **Severity.** Low, and currently **masked**. Every agent-view frame goes out through
-`clipWidth(clipTail(...), $cols)` in `sugar-crush/src/Tui/Renderer.php` (both `$frame` assignments,
+`clipWidth(clipTail(...), $cols)` in `candy-code/src/Tui/Renderer.php` (both `$frame` assignments,
 `:490` and `:561`), which trims the two cells before the diff renderer — which paints one line per
 terminal row — ever sees them. So it is not visible today. It is also the second backstop-masked
 width bug found in this one class, which is the argument for recording it rather than shrugging: the
@@ -4380,7 +4380,7 @@ measurement in two units, so the `+6` stands and the units are now spelled out w
 fails in the one direction that reads as someone else's bug.
 
 **What.** `ScriptHook` passes the tool input to its child through the **environment**
-(`CRUSH_TOOL_INPUT`, `sugar-crush/src/Hooks/ScriptHook.php:340-346`). Linux caps a single env entry at
+(`CRUSH_TOOL_INPUT`, `candy-code/src/Hooks/ScriptHook.php:340-346`). Linux caps a single env entry at
 `MAX_ARG_STRLEN` = 131,072 bytes. Past that the `exec` fails with `E2BIG`, the hook cannot run, and the
 chain denies. Measured against a hook whose script is nothing but `exit(0)`:
 
@@ -4482,7 +4482,7 @@ per-entry limit is **larger**, the old code did not deny in `131,055 … real_li
 arguments **verbatim** and an argument-inspecting guard worked — so substituting the marker there is
 exactly *"a hook previously saw real arguments at a size that now yields a marker"*. Two classes:
 64 KiB-page Linux (ppc64le, and the aarch64 kernels RHEL and SLES ship, where `MAX_ARG_STRLEN` is
-2 MiB) and macOS/BSD, which cap the total and not the entry. `sugar-crush` is in neither `MACOS_LIBS`
+2 MiB) and macOS/BSD, which cap the total and not the entry. `candy-code` is in neither `MACOS_LIBS`
 nor `WINDOWS_LIBS` in `scripts/affected-libs.php`, so neither is CI-tested.
 
 **Fixed by not assuming.** `executeStaged()` offers the real bytes and retries with the file-backed
@@ -4551,7 +4551,7 @@ Suite: **8837 / 99827 / 1 skipped / rc 0**.
 
 **Two defects: the code one, and a tracker one that caused a supervisor to brief a lane wrongly.**
 
-**The tracker defect.** `sugar-crush/src/Tools/BuiltIn/Grep.php:377` says *"Recorded as **E57** in the
+**The tracker defect.** `candy-code/src/Tools/BuiltIn/Grep.php:377` says *"Recorded as **E57** in the
 hardening backlog"* — but `## E57` is the project-tier `disabledTools` glob. The nudge claim exists only
 as a **bold label inside the ROUND 37 `lsp` narrative**, with no heading of its own, which is why the
 round-38 queue summary read "E57 — `SkillPathNudge` genuinely unbounded" while the entry it pointed at
@@ -4685,7 +4685,7 @@ these against the E66 fix; the supervisor reproduced them and fixed the two bloc
     `intdiv(shippedCap, 8) >= SkillPathNudge::maxBytes()`.
 
 The `Grep::execute()` cross-reference is corrected from E57 to E66, and the two comments in `Grep` and
-`Glob` that described the nudge as living outside the cap are rewritten. `sugar-crush/docs/SKILLS.md`'s
+`Glob` that described the nudge as living outside the cap are rewritten. `candy-code/docs/SKILLS.md`'s
 `paths` row now states the bound.
 
 Tests: `SkillPathNudgeTest::testTheNudgeIsBoundedHoweverManySkillsMatchAndHoweverLongTheirDescriptions`,
@@ -4710,7 +4710,7 @@ the cap on its own AND the nudge to be present, or it proves nothing. It now use
 
 **Reasoned from reading, NOT verified against callers — recorded at that strength deliberately.**
 
-`sugar-crush/src/Skills/SkillRegistry.php:19-24` stores each skill under its incoming **array key**. A
+`candy-code/src/Skills/SkillRegistry.php:19-24` stores each skill under its incoming **array key**. A
 list-shaped `register([$skill, …])` therefore stores under `0, 1, 2 …`, after which
 `isAutoInvocable($skill->name)` misses and **every skill silently becomes non-auto-invocable**. The
 round-39 scout hit this in its own probe harness.
@@ -4783,17 +4783,17 @@ this lane's independent re-measurement with the fixtures named, and the two agre
 mechanism while differing in count, which is what differing fixtures do. The named fixtures are the
 ones to re-derive from.)*
 
-**Where.** `sugar-crush/src/Tui/Components/AgentDashboardPane.php:326` (`row()`) and `:348` (`clip()`),
+**Where.** `candy-code/src/Tui/Components/AgentDashboardPane.php:326` (`row()`) and `:348` (`clip()`),
 reached from `AgentDashboardPane::render()`; root cause in
 `candy-core/src/Util/Width.php::truncateAnsi()`. <!-- @rename-keep historical provenance -->
 
 **Severity.** Medium. Masked today by `clipWidth(clipTail(...), $cols)` in
-`sugar-crush/src/Tui/Renderer.php`, exactly as E64 was — which is the argument for recording it, not
+`candy-code/src/Tui/Renderer.php`, exactly as E64 was — which is the argument for recording it, not
 against. A backstop is not a budget, and this is now the third width defect in this pane family that
 the same backstop hid.
 
 **Why the existing guard misses it.** `AgentViewPaneGeometryTest::testTheAgentDashboardPaneFitsTheOutsideWidthItWasHanded()`
-(`sugar-crush/tests/Tui/AgentViewPaneGeometryTest.php:546`) already asserts precisely this property
+(`candy-code/tests/Tui/AgentViewPaneGeometryTest.php:546`) already asserts precisely this property
 and passes, because its fixture's description is `'Reviews code for bugs'` — **ASCII**. The same
 ASCII-fixture blindness that let E54's `+4` be written up as an invariant, in the file whose subject
 is that blindness. That guard is where the fix's regression test belongs.
@@ -5020,7 +5020,7 @@ as a seam on its docblock plus a `phpstan.neon` `ignoreErrors` entry, following 
 
 candy-core: 799 tests / 7,210 assertions / 25 skipped / rc 0 (from 795 / 7,181). candy-sprinkles green. <!-- @rename-keep -->
 
-### E74 [CLOSED] — `sugar-crush/README.md` repeats a project-tier claim the source records as measured FALSE
+### E74 [CLOSED] — `candy-code/README.md` repeats a project-tier claim the source records as measured FALSE
 
 **Closed ROUND-67 wave-2 (lane dh — lane `0575d4080` → master `b08a96cf1`):** the OPEN half — the negative
 outcome of the `trustedSettingsRoots` freeze — is FIXED for real: `projectSettingsTrusted()`'s swallow now
@@ -5103,7 +5103,7 @@ PHP 8.3.6:
   RE-DERIVED IN-LANE, not taken from the reviewer (RULE 9). Generator:
   `scratchpad/probe/memo2.php`, ONE PHP 8.3.6 process, three `Bootstrap::tools($root)` calls, sandboxed
   `HOME` via `putenv()` + `$_SERVER['HOME']`, `chmod 0600` on each `config.json`, project
-  `.sugar-crush/settings.json` = `{"disabledTools":["[!B]*"]}` throughout, trust granted via
+  `.candy-code/settings.json` = `{"disabledTools":["[!B]*"]}` throughout, trust granted via
   `LayeredSettings::PROJECT_SETTINGS_TRUST_KEY` with `realpath()`. No fuzzing, no seed, no ICU.
   `Bootstrap::$trustedSettingsRoots` read back by reflection after each call:
 
@@ -5156,17 +5156,17 @@ anyone trying to find their own settings.
 deprecated; a block quote records what it used to say, why the word was damaging (it pointed readers
 off the only file that receives a write) and what is true instead. Verified against the write path
 rather than against the other doc: `Bootstrap::writeUserConfig()` → `Bootstrap::userConfigPath()` →
-`configDirPath() . '/config.json'`, and the only two `@deprecated` tags anywhere in `sugar-crush/src/`
+`configDirPath() . '/config.json'`, and the only two `@deprecated` tags anywhere in `candy-code/src/`
 are on `Agents/PathJail` and `Chat::pool`'s alias — neither mentions `config.json`. Both halves are
 pinned by `tests/Config/ReadmeSettingsTierClaimTest`.
 
-### E76 [CLOSED] — `Chat.php`'s pane-click docblock asserts the opposite of what `bin/sugarcrush` does
+### E76 [CLOSED] — `Chat.php`'s pane-click docblock asserts the opposite of what `bin/candy-code` does
 
 **Recorded 2026-08-22 by the round-41 lane-a reviewer; deliberately not fixed in-lane.**
 Severity: low (comment-only), but it is a **load-bearing argument** that a future reader would act on.
 
 **What.** The docblock states that the `App` / `Tui\Renderer` system is one "that nothing constructs
-(`bin/sugarcrush` runs THIS model)". `bin/sugarcrush:225` constructs `new Program(Bootstrap::app(...))`,
+(`bin/candy-code` runs THIS model)". `bin/candy-code:225` constructs `new Program(Bootstrap::app(...))`,
 so `App::view()` → `TuiRenderer::renderView()` **is** the live path. `Renderer.php`'s class docblock
 already carries the corrected account, so the tree contradicts itself.
 
@@ -5182,7 +5182,7 @@ true on a real launch. If so, say *that*, rather than that nothing constructs th
 **ROUND 42 `lane c` — FIXED. THE ENTRY WAS RIGHT ABOUT THE FALSE CLAIM AND MISSED A SECOND ONE IN THE
 SAME DOCBLOCK.**
 
-**Launch path, traced rather than accepted.** `bin/sugarcrush` ends in
+**Launch path, traced rather than accepted.** `bin/candy-code` ends in
 `new Program(Bootstrap::app($args->root), Chat::programOptions())`; `Cli\Bootstrap::app()` builds the
 `App` and calls `->withChat(self::chat($root))`; `App::view()` calls `Tui\Renderer::renderView()`. So
 the entry is correct: the system IS constructed and `nothing constructs it` was false.
@@ -5236,11 +5236,11 @@ wires it, which is the commit on which the docblock's ⚠️ paragraph becomes w
 existed to catch.** The regex `/\bnew\s+(\\[\w\\]+\\)?SelectPaneMsg\s*\(/` requires a LEADING
 backslash on its optional namespace prefix, so it matched `new SelectPaneMsg(` and
 `new \Fully\Qualified\SelectPaneMsg(` and was blind to `new App\SelectPaneMsg(` — the relative form
-`Chat.php` would use, since it sits in `SugarCraft\Crush` and imports no `SelectPaneMsg`. Measured: with
+`Chat.php` would use, since it sits in `SugarCraft\Code` and imports no `SelectPaneMsg`. Measured: with
 that arm added to `selectPane()`'s match the test stayed green, and reflection on the mutated method
-really did return a `SugarCraft\Crush\App\SelectPaneMsg`, so it was a producer and not a phantom.
+really did return a `SugarCraft\Code\App\SelectPaneMsg`, so it was a producer and not a phantom.
 It also scanned only `src/`, while this entry claimed `src/ or bin/`. Both are fixed: any namespace
-prefix or none, `use … as` aliases resolved, `bin/sugarcrush` included, plus a second assertion pinning
+prefix or none, `use … as` aliases resolved, `bin/candy-code` included, plus a second assertion pinning
 the exact set of production files that so much as name the symbol (`src/App/App.php`, `src/Chat.php`) —
 which is what catches an alias import landing in a file not already on the list. All four construction
 syntaxes were driven as mutations and all four now red. **Residual, stated rather than papered over:**
@@ -5328,7 +5328,7 @@ prints its id rows with no header above them.
 **Why it is not fixed.** The alternative is a second de-dup map keyed on the detail, which would drop
 rows from the channel that exists to be the complete unclipped record — the property
 `LAUNCH_NOTICE_MAX_CHARS`'s doc-block relies on when it advertises "full text on stderr". The rows are
-self-describing (`sugarcrush:   <id> (last used ... UTC, N messages)`), and a launch only reaches this
+self-describing (`candy-code:   <id> (last used ... UTC, N messages)`), and a launch only reaches this
 by building two Chats in one process, which no shipped entry point does.
 
 **Step.** Leave it. If a second de-dup is ever wanted, key it on the report rows and not on the
@@ -5354,7 +5354,7 @@ radius costed first. Its shape is already pinned by
 ### E78 [CLOSED]/round-42 follow-up — two `NonInteractive` stderr writes are transcript-seam candidates the seam cannot reach
 
 **E78c CLOSED-WITH-EVIDENCE ROUND-67 wave-2 (lane dh — master `b08a96cf1`), NO-OP verdict measured before
-touching:** both triage-named sites carry their `sugarcrush: ` literals AND their round-62 DECISION STAMP
+touching:** both triage-named sites carry their `candy-code: ` literals AND their round-62 DECISION STAMP
 (lane T, `0373308a3`); `NonInteractive.php:248`'s bare `$e->getMessage()` is exempt per E78's own carve
 ("run() writes need no decision"). `launchNotices()` gained a reader — `NoticesCommand` (/notices, lane ce) —
 but that is the interactive path; the one-shot seam-cannot-reach decision stands. No count moved by the ce
@@ -5363,14 +5363,14 @@ work. Evidence: triage E78c, worklog ROUND 67 wave-2.
 **Recorded 2026-08-22 by the round-42 lane-b fix agent, after the round-42 review.** Severity: low;
 **functionality, not security** (RULE 14 records it rather than fixing it).
 
-**What.** Round 42 claimed on `bin/sugarcrush` and on
+**What.** Round 42 claimed on `bin/candy-code` and on
 `Tests\Integration\BinSugarcrushAutoloadGuardTest` that "every other stderr write in this codebase was
 re-examined" against `Bootstrap::warnPermissionConfigInTranscript()`. It had not been. Measured
 myself, `grep -rn 'STDERR' src/ bin/` on this tree, PHP 8.3.6 — **eleven** raw `fwrite(STDERR, …)`
 call sites: `Cli\NonInteractive` **six** (`run()` twice, `failUsage()`, `failUnusableProvider()`,
 `noticeOfflineDefault()`, `readStdinIfPiped()`), `Cli\Subcommands` **two** (`sessionDelete()`,
 `mcp()`), `Cli\Bootstrap` **two** (`warnPermissionConfig()`, which *is* the stderr channel, and
-`reportPrunedSessions()`'s id rows), `bin/sugarcrush` **one**. Both doc-blocks are corrected in place
+`reportPrunedSessions()`'s id rows), `bin/candy-code` **one**. Both doc-blocks are corrected in place
 per RULE 7. Note the review's own distribution was slightly off in the same total: it recorded
 NonInteractive at five (missing `noticeOfflineDefault()`, whose `fwrite(` and `\STDERR,` are on
 separate lines) and Bootstrap at three (counting the summary that is no longer a raw write).
@@ -5378,7 +5378,7 @@ separate lines) and Bootstrap at three (counting the summary that is no longer a
 Two of the eight unexamined writes satisfy the routing rule the round applied — *a warning reaches the
 transcript iff it names something the session can no longer **do***:
 
-- `NonInteractive::readStdinIfPiped()` — `sugarcrush: piped stdin exceeds 10MB cap; truncating.` The
+- `NonInteractive::readStdinIfPiped()` — `candy-code: piped stdin exceeds 10MB cap; truncating.` The
   model is handed a truncated prompt and is never told it is answering half a question. This is the
   stronger of the two.
 - `NonInteractive::noticeOfflineDefault()` — the session is answering from the offline echo provider
@@ -5491,7 +5491,7 @@ reach the retraction also reached an unrelated "not".
 
 **Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: low; pre-existing and deliberate.
 
-**What.** `bin/sugarcrush`'s missing-autoloader guard cannot emit the JSON error document, because the
+**What.** `bin/candy-code`'s missing-autoloader guard cannot emit the JSON error document, because the
 document's owner — `NonInteractive::emitErrorDocument()` — is itself behind the absent autoloader. So
 `--output-format json` gets an empty stdout and a stderr line. Round 42 *pinned* the behaviour rather
 than leaving it asserted in prose, but it remains a hole in the "exactly one JSON object on stdout"
@@ -5662,15 +5662,15 @@ call than the finding warrants on its own.
 ### E94 [CLOSED] — `README.md`'s "exactly two exceptions" to the JSON contract is now one
 
 **Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, documentation-correctness.
-**Not fixed here because `sugar-crush/README.md` belonged to lane `c` this round.**
+**Not fixed here because `candy-code/README.md` belonged to lane `c` this round.**
 
 **What.** `README.md` (search for `There are exactly two exceptions`) tells a machine consumer that
 `--output-format json` leaves stdout empty in two cases: an `--output-format` value that is neither
 `text` nor `json`, and *"a checkout with no `vendor/autoload.php`: that exits 2 with an empty stdout,
 because the class that owns the JSON document shape is precisely the one that could not be loaded, and
-hand-rolling a second copy of the shape in `bin/sugarcrush` to cover it would be the drift that having
+hand-rolling a second copy of the shape in `bin/candy-code` to cover it would be the drift that having
 one definition prevents."* E84 (round 43) closed that second case — the guard now emits
-`{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot find composer autoload.php"}}`
+`{"result":null,"error":{"type":"installation","message":"candy-code: cannot find composer autoload.php"}}`
 and a newline, still at exit 2 — so the paragraph is now false, and it is false in the direction that
 matters: it tells a consumer not to bother parsing stdout on the one failure where parsing now works.
 Nothing asserts that sentence, so no test went red — `grep -rn 'exactly two exceptions'` hits `README.md`
@@ -5692,7 +5692,7 @@ it is, deliberately; recorded so it is not rediscovered as an accident.**
 is a `fwrite(STDERR, …)` in `Bootstrap::warnPermissionConfig()`, which no ini setting can redirect, so
 `McpToolWiringTest::testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()` — which
 runs in-process and points `error_log` at a file precisely to stay quiet — now prints exactly one line
-(`sugarcrush: MCP tools from …/.mcp.json are incomplete…`) into the suite's output. MEASURED on the full
+(`candy-code: MCP tools from …/.mcp.json are incomplete…`) into the suite's output. MEASURED on the full
 run at PHP 8.3.6: one line, and the suite already tolerates a comparable one from the workflow-tier
 refusal test.
 
@@ -5721,17 +5721,17 @@ widening the assertion; the leak-detection is the point.
 ### E97 [CLOSED] — the "fourteen call sites" seam count is stale in three places outside `Bootstrap.php`
 
 **Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
-documentation-correctness. **Not fixed here — `sugar-crush/src/Chat.php` and
-`sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php` were outside lane `b`'s file split.**
+documentation-correctness. **Not fixed here — `candy-code/src/Chat.php` and
+`candy-code/tests/Cli/BootstrapLaunchNoticeRoutingTest.php` were outside lane `b`'s file split.**
 
 **What.** The verified number of `self::warnPermissionConfigInTranscript(` CALL sites in
-`sugar-crush/src/Cli/Bootstrap.php` is **16** — counted with `token_get_all()` and a `::`/`(` adjacency
+`candy-code/src/Cli/Bootstrap.php` is **16** — counted with `token_get_all()` and a `::`/`(` adjacency
 test, not `grep`, so doc-comment mentions of the name are excluded. E86 (round 43) corrected the count
 inside `Bootstrap.php` itself and deliberately left the other three, which still say fourteen/fifteen:
 
-- `sugar-crush/src/Chat.php`, `Chat::withLaunchNotices()`'s doc-block — the paragraph opening
-  `FOURTEEN OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL`.
-- `sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php`, class doc-block — "the guard for the
+- `candy-code/src/Chat.php`, `Chat::withLaunchNotices()`'s doc-block — the paragraph opening
+  `FOURTEEN OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL`.
+- `candy-code/tests/Cli/BootstrapLaunchNoticeRoutingTest.php`, class doc-block — "the guard for the
   other fourteen" and "the retention summary onto the seam as the fifteenth call site".
 - The same file, on the method whose doc-block says "a transcript that also carries fourteen".
 
@@ -5744,11 +5744,11 @@ than merely wrong.
 ### E98 [CLOSED] — `README.md` has a THIRD spot E84 falsified, beyond the two E94 names
 
 **Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
-documentation-correctness. **Not fixed here — `sugar-crush/README.md` belonged to lane `c`.** Fold this
+documentation-correctness. **Not fixed here — `candy-code/README.md` belonged to lane `c`.** Fold this
 into E94 before touching that file, or E94 will be closed with the file still wrong.
 
 **What.** E94 names two spots: the `There are exactly two exceptions` paragraph (README.md, and confirmed
-the only file under `sugar-crush/` carrying that phrase) and the exit-code table's row for `2`. There is
+the only file under `candy-code/` carrying that phrase) and the exit-code table's row for `2`. There is
 a third: the sentence enumerating the `error.type` values, which reads *"`usage` and
 `provider_configuration` are both `2`, `backend` and `encoding` are both `1`"* and omits `installation`
 entirely. The JSON schema block a few lines above it lists the same four types in its `"type":` union and
@@ -5929,15 +5929,15 @@ constants, but too volatile to pin without building a change-detector, which is 
 **Step.** Take them one at a time as each acquires a machine-readable source. The roster and preset
 lists are the two most likely to become checkable, since both are already enumerated in `src/`.
 
-### E112 [CLOSED] — `bin/sugarcrush` carries a comment saying README.md is still wrong; it is not, as of round 44
+### E112 [CLOSED] — `bin/candy-code` carries a comment saying README.md is still wrong; it is not, as of round 44
 
 **Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, comment-correctness.
-**Not fixed at record time — `bin/sugarcrush` was read-only for that lane** (it is item 1's SOURCE, not
+**Not fixed at record time — `bin/candy-code` was read-only for that lane** (it is item 1's SOURCE, not
 its target). **CLOSED in the same round by the lane-b fix agent**, which was not under that restriction:
 the last two sentences were rewritten in the three-part form, keeping the load-bearing half and adding
 the pointer at `ReadmeJsonErrorContractDriftTest` as the README end's guard.
 
-**What.** The `$args->usageError` block in `bin/sugarcrush` ends with *"README.md's list still names both;
+**What.** The `$args->usageError` block in `bin/candy-code` ends with *"README.md's list still names both;
 correcting it is lane c's file this round and is recorded as a deferred finding."* Round 44 lane b did
 correct it: the "exactly two exceptions" paragraph now names one, and the retraction is a blockquote.
 So the sentence describes a state that no longer exists and points a reader at a defect they will not
@@ -5956,13 +5956,13 @@ recorded so the asymmetry is not mistaken for an oversight.**
 
 **What.** The test reads `src/Cli/NonInteractive.php` for `emitErrorDocument()` call sites (arguments
 split from the token stream, exit code taken from the `return self::EXIT_*` closing the same block) and
-`bin/sugarcrush` for a literal `'type' => …` pair plus the `exit(<int>)` after it. Two scans, because the
+`bin/candy-code` for a literal `'type' => …` pair plus the `exit(<int>)` after it. Two scans, because the
 guard is a plain script with no class to reflect on — which is the entire point of the guard. Both go
 red rather than skipping on anything they cannot parse.
 
 The asymmetry that is worth naming: the `NonInteractive` scan finds ALL types by construction, while the
 guard scan finds THE FIRST `'type' => <literal>` and stops. A second hand-rolled document in
-`bin/sugarcrush` would be invisible to it. There is no second one today and no reason to expect one — the
+`bin/candy-code` would be invisible to it. There is no second one today and no reason to expect one — the
 guard exists precisely because that path can load nothing — but a `--version` fast path or a second
 pre-autoload guard would reopen it.
 
@@ -6110,7 +6110,7 @@ with `offset: 1` and **delete
 the same commit — that test asserts the sentence is STILL stale, precisely so this hole in the census
 cannot go quiet, and it will fail the moment this is fixed. Its failure message says the same thing.
 
-### E120 [CLOSED] — the suite prints 62 unowned `sugarcrush:` stderr lines, and only one of them was ever argued for
+### E120 [CLOSED] — the suite prints 62 unowned `candy-code:` stderr lines, and only one of them was ever argued for
 
 **Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low, but see the measurement trap.
 
@@ -6118,8 +6118,8 @@ cannot go quiet, and it will fail the moment this is fixed. Its failure message 
 distinct message shapes.
 
 **Generator** (a figure without one is not a measurement): PHP 8.3.6, `vendor/bin/phpunit > cap.txt 2>&1`
-from `sugar-crush/`, then `grep -ac 'sugarcrush:' cap.txt` for the total and
-`grep -ao "sugarcrush: .\{0,40\}" cap.txt | sed 's|/tmp/[^ ]*|PATH|g' | sort | uniq -c | sort -rn` for the
+from `candy-code/`, then `grep -ac 'candy-code:' cap.txt` for the total and
+`grep -ao "candy-code: .\{0,40\}" cap.txt | sed 's|/tmp/[^ ]*|PATH|g' | sort | uniq -c | sort -rn` for the
 breakdown. The `-a` is load-bearing (see the trap below) and the 40-char window plus the path
 normalisation is what collapses per-run tmpdirs into one row.
 
@@ -6242,21 +6242,21 @@ none of them under any oracle.
 
 **Step.** This is a design question, not a scope widening. A second oracle must distinguish a tabulated
 PROMISE from a prose MENTION, because `docs/ENVIRONMENT.md` deliberately discusses
-`SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT` in prose **precisely because nothing
+`CANDY_CODE_TOOL_CALL_PARSER` and `CANDY_CODE_REASONING_EFFORT` in prose **precisely because nothing
 reads them** — a naive widening would red on the two sentences that exist to record that fact.
 
-### E124 [CLOSED] — `docs/_data/sugar-crush.json` is a fourth documentation surface outside every oracle
+### E124 [CLOSED] — `docs/_data/candy-code.json` is a fourth documentation surface outside every oracle
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
 **Monorepo-root scope — needs a supervisor decision before any lane can own it.**
 
-**What.** `docs/_data/sugar-crush.json` + `docs/_data/sugar-crush.body.html` generate
-`docs/lib/sugar-crush.html` via `tools/gen-docs.php`, and carry env names and glob claims of their own.
-No `sugar-crush` oracle reads them. The generated page must never be hand-edited, so any pin has to sit
-on the `_data` sources, which live outside `sugar-crush/` — outside every lane's file split to date.
+**What.** `docs/_data/candy-code.json` + `docs/_data/candy-code.body.html` generate
+`docs/lib/candy-code.html` via `tools/gen-docs.php`, and carry env names and glob claims of their own.
+No `candy-code` oracle reads them. The generated page must never be hand-edited, so any pin has to sit
+on the `_data` sources, which live outside `candy-code/` — outside every lane's file split to date.
 
-**Step.** Decide whether the `_data` sources are in scope for the `sugar-crush` doc-drift guards at all.
-If they are, the guard belongs beside `tools/gen-docs.php`, not in `sugar-crush/tests/`.
+**Step.** Decide whether the `_data` sources are in scope for the `candy-code` doc-drift guards at all.
+If they are, the guard belongs beside `tools/gen-docs.php`, not in `candy-code/tests/`.
 
 ### E125 [CLOSED] — the `paragraphs()` splitter exists in three independent copies
 
@@ -6603,7 +6603,7 @@ the parent's `tearDown()` has by then deleted the temp tree those children are s
 observed failure had exactly this shape: the parent aborted at 60s while a child was still inside
 PHPUnit's own shutdown.
 
-**Why it was not fixed here.** `sugar-crush/phpunit.xml` is supervisor-owned, and the choice (drop the
+**Why it was not fixed here.** `candy-code/phpunit.xml` is supervisor-owned, and the choice (drop the
 limit, raise it, or make forked-child tests register their pids with a shutdown reaper) is a decision
 rather than an edit.
 
@@ -6621,7 +6621,7 @@ future round's reporting. **Measured, with the generator below.**
 **What.** `GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()`
 alone accounted for **18,234** of the suite's 127,822 assertions at the time of writing — about one in
 seven. The mechanism: `census()` calls `carriesTheStaleFigure()` once per paragraph of every `.php` under
-`sugar-crush/src/` and every `.md` under `sugar-crush/docs/`; that calls `stalePattern()`; and
+`candy-code/src/` and every `.md` under `candy-code/docs/`; that calls `stalePattern()`; and
 `stalePattern()` calls `word(8)`, whose first statement is `assertArrayHasKey()`. So the test performs
 **one assertion per paragraph in scope**, asserting each time that a hard-coded constant array still
 contains the key `8`.
@@ -6696,13 +6696,13 @@ transplanted. Transplant the repaired form, not the round-45 one.
 **What.** E123's new `EnvRosterDriftTest::testEveryVariableAnotherPageNamesIsOneTheCodeReads()` treats
 every `SUGARCRUSH_*` name on any page except `docs/ENVIRONMENT.md` as a promise the code must keep. The
 roster page is excluded from that scrape precisely so its deliberate not-read discussion of
-`SUGARCRUSH_TOOL_CALL_PARSER` stays out of the rule — **verified by mutation**: removing the `continue`
+`CANDY_CODE_TOOL_CALL_PARSER` stays out of the rule — **verified by mutation**: removing the `continue`
 that skips it reds three tests, and both of the set comparisons among them red on a one-element diff
-naming `SUGARCRUSH_TOOL_CALL_PARSER` and nothing else.
+naming `CANDY_CODE_TOOL_CALL_PARSER` and nothing else.
 
 **Corrected 2026-08-22 by the round-45 lane-c fix agent.** The paragraph above originally said "its two
-deliberate not-read discussions (`SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_REASONING_EFFORT`) … two of
-them on exactly those two names". `SUGARCRUSH_REASONING_EFFORT` does not appear on `docs/ENVIRONMENT.md`
+deliberate not-read discussions (`CANDY_CODE_TOOL_CALL_PARSER`, `CANDY_CODE_REASONING_EFFORT`) … two of
+them on exactly those two names". `CANDY_CODE_REASONING_EFFORT` does not appear on `docs/ENVIRONMENT.md`
 at all — not in a table, not in prose, not in a fence — so it cannot become a mention when the exclusion
 is removed. It exists in exactly one place in the package, a doc-block in
 `src/Providers/ProviderFactory.php`. The pairing was inherited from `EnvRosterDriftTest`'s own class
@@ -6737,20 +6737,20 @@ seam is the split between the two methods; the measured reason to keep it is tha
 document lands on a ternary branch, `shippedTypes()` needs a decision from a person rather than a
 silent `null`.
 
-### E147 [CLOSED] — the Agents suites share `~/.sugar-crush/teams/` across lanes and go red on each other
+### E147 [CLOSED] — the Agents suites share `~/.candy-code/teams/` across lanes and go red on each other
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: medium, process + test hygiene. **Lane-local
 provisional id per E135.**
 
 **What.** `tests/Agents/{AgentManagerTest,TeamManagerTest,TeamTest}` register teams in the REAL
-`~/.sugar-crush/teams/` registry — a path outside every lane worktree — and do not remove them. Lane c's
+`~/.candy-code/teams/` registry — a path outside every lane worktree — and do not remove them. Lane c's
 third full-suite run at round 45 went **rc 1 with 9 failures**, all nine in those three files, and the
-failure diffs are lists of two thousand-plus `~/.sugar-crush/teams/throwing-<uniqid>` entries left by
+failure diffs are lists of two thousand-plus `~/.candy-code/teams/throwing-<uniqid>` entries left by
 sibling lanes' concurrent runs. **All 136 tests in the three files pass when run alone** (136 tests / 469
 assertions, immediately afterwards, same commit), so the failures are interference and not a defect in
 the tree.
 
-**Measured** at round 45 on PHP 8.3.6: `~/.sugar-crush/teams/` held **2,094** entries, **240** of them
+**Measured** at round 45 on PHP 8.3.6: `~/.candy-code/teams/` held **2,094** entries, **240** of them
 `throwing-*` fixtures. The count grows with every suite run on this box, by anyone.
 
 **Why it is worse than a flake.** E133 already recorded that `sys_get_temp_dir()` caches on first use and
@@ -6762,7 +6762,7 @@ every `getenv('HOME')` read, so the fix is available here in a way it was not th
 `TeamManager` constructor) and remove it in `tearDown()`. Until then, treat an `rc 1` whose failures are
 confined to `tests/Agents/*` as interference, re-run those files alone, and say so — which is what the
 round-45 brief already asks for `/tmp`, extended to `$HOME`. Do NOT bulk-delete
-`~/.sugar-crush/teams/*` while sibling lanes are running.
+`~/.candy-code/teams/*` while sibling lanes are running.
 
 ### E148 [CLOSED] — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
 
@@ -6774,11 +6774,11 @@ E135.**
 **What.** `EnvRosterDriftTest::mentionSurfaces()` is `README.md` plus a NON-RECURSIVE `glob('docs/*.md')`.
 Round 45's report filed the gap as untested. It is now measured, on PHP 8.3.6, by
 `scratchpad/r45c/alpha.php`: `docs/` has **no subdirectories** today, so the non-recursive glob costs
-nothing yet; outside the surface set there are **17** other `.md` files under `sugar-crush/` (including
+nothing yet; outside the surface set there are **17** other `.md` files under `candy-code/` (including
 every `src/Skills/BuiltIn/**/SKILL.md`, which is shipped prose a user reads), of which **two** name a
-prefixed variable — `CALIBER_LEARNINGS.md` (`SUGARCRUSH_SEARCH_ENDPOINT`) and `CHANGELOG.md`
-(`SUGARCRUSH_SESSION_RETENTION_DAYS`) — plus `bin/sugarcrush`, which is not `.md` at all and names
-`SUGARCRUSH_DISABLE_MOUSE`.
+prefixed variable — `CALIBER_LEARNINGS.md` (`CANDY_CODE_SEARCH_ENDPOINT`) and `CHANGELOG.md`
+(`CANDY_CODE_SESSION_RETENTION_DAYS`) — plus `bin/candy-code`, which is not `.md` at all and names
+`CANDY_CODE_DISABLE_MOUSE`.
 
 **Why it is not urgent.** All three of those names are ALREADY in the oracle's scope through an in-scope
 page (`README.md` names all three), so every one of them is already compared. The gap is real and
@@ -6813,7 +6813,7 @@ the two censuses onto one window. Do it when a name first wraps, and pin it with
 
 **What.** `ConfigWriteProducerDocumentationDriftTest::ENUMERATION_LEAD_IN` is the literal `'two
 producers'`, and `enumerationSpan()` asserts it identifies EXACTLY ONE unit in each of two documents —
-`docs/SETTINGS.md` and `SugarCraft\Crush\Config\LayeredSettings`' class doc-block. Both are read-side
+`docs/SETTINGS.md` and `SugarCraft\Code\Config\LayeredSettings`' class doc-block. Both are read-side
 surfaces a sibling lane may be rewriting. The `assertCount(1, $leadIn)` makes the coupling fail loudly
 rather than silently, which is the right shape.
 
@@ -6878,16 +6878,16 @@ since `3b0ba8fe6`) — the census seam comment asserting otherwise contradicted 
 for three weeks and was corrected in place with the mutation proof that the census is load-bearing for the
 literal (prefix-strip reddens `StderrEmitterCensusTest` exactly once at the MESSAGE_SHAPES arm);
 `Chat.php`'s detach site (`:8174` era) was disposed by lane de's E154c/E175 (`2da286745`) — gated behind
-`SUGARCRUSH_DEBUG_STREAM`, self-labelled. The db-owned prefixing half closed at `0e9ce9e05` (wave-1).
+`CANDY_CODE_DEBUG_STREAM`, self-labelled. The db-owned prefixing half closed at `0e9ce9e05` (wave-1).
 
-**Round-67 wave-1 status:** the db-owned half CLOSED (lane `687f68cce` → master `0e9ce9e05` — 21 `sugarcrush:` prefixes routed; census counts CALLS vs MESSAGE_SHAPES literals), and the (c) site — `Chat`'s onToken detach — landed with de/E175 (`2da286745`). **Remainder was: the one site at `src/Cli/Bootstrap.php:5722` — routed to round-67 wave-2 lane dh — CLOSED there (above).**
+**Round-67 wave-1 status:** the db-owned half CLOSED (lane `687f68cce` → master `0e9ce9e05` — 21 `candy-code:` prefixes routed; census counts CALLS vs MESSAGE_SHAPES literals), and the (c) site — `Chat`'s onToken detach — landed with de/E175 (`2da286745`). **Remainder was: the one site at `src/Cli/Bootstrap.php:5722` — routed to round-67 wave-2 lane dh — CLOSED there (above).**
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, TUI corruption.
 **Measured on PHP 8.3.6, `ini_get('error_log')` empty on this box.**
 
 **What.** Per file: `DsmlToolCallParser` 11, `MinimaxXmlFallbackToolCallParser` 7, `CommandLoader` 5,
 `WorktreeManager` 4, `SglangProvider` 3, `ForeignAgentPresetRegistry` 2, `SkillLoader` 2, and 1 each in
-`AgentWorkerPool`, `Chat`, `Cli/Bootstrap`, `ForeignMemoryImporter`. None carries the `sugarcrush: `
+`AgentWorkerPool`, `Chat`, `Cli/Bootstrap`, `ForeignMemoryImporter`. None carries the `candy-code: `
 prefix, none is routed onto the transcript seam, and **a write to fd 2 while the alternate screen is up
 lands on a frame the renderer believes it owns** — the render-invariant class of bug.
 
@@ -6898,13 +6898,13 @@ per file by `StderrEmitterCensusTest`, so a 39th reds.
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Pinned, unanalysed.**
 
-**What.** It emits four distinct `sugarcrush: ` shapes through a captured `\STDERR` handle. Now pinned as
+**What.** It emits four distinct `candy-code: ` shapes through a captured `\STDERR` handle. Now pinned as
 channel 2 / channel 4 by `StderrEmitterCensusTest`, but never subjected to the routing analysis
 `Bootstrap`'s writes have had.
 
 **Step.** Walk the four and decide, per shape, transcript seam versus stderr.
 
-### E156 [CLOSED] — the 62 `sugarcrush:` lines a full run prints are a HARNESS property, not a `src/` one
+### E156 [CLOSED] — the 62 `candy-code:` lines a full run prints are a HARNESS property, not a `src/` one
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, noise. **Measured;
 the supervisor reproduced the 62 independently in round 44.**
@@ -7112,7 +7112,7 @@ this lane's file set, so a gate could not be landed green.
 
 **Step.** The real fix is a mid-session notice sink the parsers can push to, which is the same missing
 seam E171 names. Second best, and much cheaper: drop `readonly`, add a `degradations()` accumulator
-mirroring `SkillLoader::skipped()`, gate the `error_log()` behind `SUGARCRUSH_DEBUG_TOOLCALLS`, and update
+mirroring `SkillLoader::skipped()`, gate the `error_log()` behind `CANDY_CODE_DEBUG_TOOLCALLS`, and update
 the two parser test files to set the flag. One lane, three src files plus two test files.
 
 ### E171 [CLOSED] — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one
@@ -7133,7 +7133,7 @@ mid-turn are: `DsmlToolCallParser` (11) and `MinimaxXmlFallbackToolCallParser` (
 per-response); `AgentWorkerPool` (1 — `warnSequentialFallback()`, fires when a pool first degrades to
 sequential); and `WorktreeManager` (4 — agent worktree creation and include-file refusals, all
 mid-session). 11+7+3+1+4 = 26. Do not restate these figures elsewhere; read them off the roster.
-`HeadlessPermissionPrompt`'s four `sugarcrush:` shapes are the same shape of problem seen from the
+`HeadlessPermissionPrompt`'s four `candy-code:` shapes are the same shape of problem seen from the
 headless side and are analysed in that class's docblock (E155) — they are correct on stderr precisely
 because nothing on their paths opens the alternate screen.
 
@@ -7142,7 +7142,7 @@ because nothing on their paths opens the alternate screen.
 
 ### E172 [CLOSED] — three CommandLoader `error_log()` sites duplicate a message already on the seam
 
-**Closed ROUND-70 (lane gc `9de0e3fd6` → pick `d7be5733f`):** the drain half shipped. `Bootstrap::chat()` feeds `CommandLoader::skippedFiles()` into the `$commandSkips` dedup set and `reportCommandSkips()` emits ONE aggregate transcript row via `COMMAND_SKIP_NOTICE_FORMAT` (count-only; paths stay behind `SUGARCRUSH_DEBUG_COMMANDS=1`, shared with the loader feeder). The dormancy pin flipped to a drain-pin (roster `['src/Cli/Bootstrap.php']`); keystone `RoutingTest` asserts the transcript+stderr pair, count 1, no paths. Census trio flipped IN-STEP (seam census 21→22, StderrEmitterCensus Bootstrap 28→29, BootstrapLaunchFormatConstants 15→16). +1T. Evidence: gc REPORT, triage E172, worklog ROUND 70. **Prior PARTIAL (fc round-69):** feeder verified — CommandLoader DEBUG_REFUSALS_ENV :95 / skippedFiles :293, dormancy statements accurate.
+**Closed ROUND-70 (lane gc `9de0e3fd6` → pick `d7be5733f`):** the drain half shipped. `Bootstrap::chat()` feeds `CommandLoader::skippedFiles()` into the `$commandSkips` dedup set and `reportCommandSkips()` emits ONE aggregate transcript row via `COMMAND_SKIP_NOTICE_FORMAT` (count-only; paths stay behind `CANDY_CODE_DEBUG_COMMANDS=1`, shared with the loader feeder). The dormancy pin flipped to a drain-pin (roster `['src/Cli/Bootstrap.php']`); keystone `RoutingTest` asserts the transcript+stderr pair, count 1, no paths. Census trio flipped IN-STEP (seam census 21→22, StderrEmitterCensus Bootstrap 28→29, BootstrapLaunchFormatConstants 15→16). +1T. Evidence: gc REPORT, triage E172, worklog ROUND 70. **Prior PARTIAL (fc round-69):** feeder verified — CommandLoader DEBUG_REFUSALS_ENV :95 / skippedFiles :293, dormancy statements accurate.
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low. **Verified, not fixed.**
 
@@ -7152,7 +7152,7 @@ refusal that reaches only a log is the failure being fixed."* That was written w
 It is now wired: `Bootstrap::chat()` spreads `refusedDirectories()` and `refusedCommands()` into
 `$projectTierRefusals`, and `reportProjectTierRefusals()` puts each on
 `warnPermissionConfigInTranscript()`. So the three collector-paired sites put the SAME text on stderr
-twice — once raw and unprefixed from the loader, once `sugarcrush: `-prefixed from the seam — plus a
+twice — once raw and unprefixed from the loader, once `candy-code: `-prefixed from the seam — plus a
 transcript row. The other two sites (`Skipping command file outside …`, `Failed to load command from …`)
 are per-FILE and have **no** collector at all, so they are stderr-only.
 
@@ -7160,7 +7160,7 @@ are per-FILE and have **no** collector at all, so they are stderr-only.
 constructor and `mutate()` carries the loaded map across clones, so all five fire at LAUNCH, before the
 alternate screen. The cost is duplicate noise on `-p`, not a corrupted frame.
 
-**Landed**, exactly as the step below described. `SUGARCRUSH_DEBUG_COMMANDS` on
+**Landed**, exactly as the step below described. `CANDY_CODE_DEBUG_COMMANDS` on
 `SkillLoader::DEBUG_SKIPS_ENV`'s contract, a `skippedFiles()` accumulator for the two per-file sites, both
 stale paragraphs rewritten in the three-part form, and `CommandLoaderRefusalReportingTest` pinning both
 branches, the `=0` reading, and the new accessor's dormancy. No test in `tests/` asserted any of the five
@@ -7202,7 +7202,7 @@ round where that directory is in scope. Until then, every copy must carry the ar
 
 ### E175 [CLOSED] — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
 
-**Closed ROUND-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** the two-file change landed at last — the onToken detach `error_log` gated behind `Chat::DEBUG_STREAM_ENV` (`SUGARCRUSH_DEBUG_STREAM`, report-only; the DETACH itself stays ungated), with `StreamingWiringTest` both polarities + ENVIRONMENT.md row + Help.php roster IN-STEP. Carries E154's (c) site — see E154's remainder note. Evidence: triage E175, worklog ROUND 67.
+**Closed ROUND-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** the two-file change landed at last — the onToken detach `error_log` gated behind `Chat::DEBUG_STREAM_ENV` (`CANDY_CODE_DEBUG_STREAM`, report-only; the DETACH itself stays ungated), with `StreamingWiringTest` both polarities + ENVIRONMENT.md row + Help.php roster IN-STEP. Carries E154's (c) site — see E154's remainder note. Evidence: triage E175, worklog ROUND 67.
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low, blocked. **Analysed and deliberately not done.**
 
@@ -7220,7 +7220,7 @@ the reasoning is now written in full at the call site rather than only here, so 
 have to rediscover it.
 
 **Step.** One lane holding both `src/Chat.php` and `tests/Integration/StreamingWiringTest.php`. Add
-`Chat::DEBUG_STREAM_ENV = 'SUGARCRUSH_DEBUG_STREAM'`, gate the report (never the detach — the env var must
+`Chat::DEBUG_STREAM_ENV = 'CANDY_CODE_DEBUG_STREAM'`, gate the report (never the detach — the env var must
 decide whether anyone is told, never whether the turn survives), amend the integration test to set the
 flag, and add the row `EnvRosterDriftTest` will demand on `docs/ENVIRONMENT.md`. That last one is not
 optional: the page claims to list every variable `src/` reads and a guard enforces it.
@@ -7230,9 +7230,9 @@ optional: the page claims to list every variable `src/` reads and a guard enforc
 
 **Recorded 2026-08-22 by round-46 lane b.** Severity: process, and it redirected a whole lane item.
 **Measured at `62f4e5d1`, PHP 8.3.6, one file per `vendor/bin/phpunit <file>` run, counted with
-`grep -ac 'sugarcrush: '`.**
+`grep -ac 'candy-code: '`.**
 
-**What.** Round 45 recorded the 62 `sugarcrush: ` lines a full suite prints as a **harness** property —
+**What.** Round 45 recorded the 62 `candy-code: ` lines a full suite prints as a **harness** property —
 "child-process launches whose stderr the PHPUnit process inherits rather than keeping on the pipe the
 test already reads" — and named `tests/Integration/BinSugarcrushDispatchTest.php` and
 `tests/Integration/McpToolWiringTest.php` among the eleven owning files, with per-spawn stderr
@@ -7330,7 +7330,7 @@ leaves its children running unbounded into a temp tree `tearDown()` is about to 
   what went wrong. Regenerate it instead:
 
   ```sh
-  cd sugar-crush && vendor/bin/phpunit --filter testEveryInProcessForkInScopeIsCoveredByTheReaper
+  cd candy-code && vendor/bin/phpunit --filter testEveryInProcessForkInScopeIsCoveredByTheReaper
   ```
 
   with `ForkedChildReaperAdoptionTest::SCOPE` set to `''`. It fails loudly and names every file.
@@ -7663,7 +7663,7 @@ whatever wakes the loop for a background worker, rather than a permanent one.
 Appointment (`Chat::drainsRuntimeNotices`) made the leak round 47 found unreachable, but the sink is
 still a process-wide static that any test can arm via `Bootstrap::chat()` and fill via a parser. A
 `PHPUnit\Runner\Extension` resetting it per test case would make that structural rather than a property
-of who happens to be appointed. Registering one needs an `<extensions>` block in `sugar-crush/phpunit.xml`,
+of who happens to be appointed. Registering one needs an `<extensions>` block in `candy-code/phpunit.xml`,
 which no round-47 lane was allowed to touch.
 
 **Generator for the current emitter list** (re-run before acting; the answer changes as `E192` lands):
@@ -7917,15 +7917,15 @@ non-captured site, concentrated in `Context/`, `Tools/` and `Commands/`. Each ne
 real fix from its owning lane; `Commands/` is almost entirely `inherited` rather than `discarded`, which
 is the cheaper shape to close.
 
-### E207 [CLOSED] — a team test writes into the REAL `~/.sugar-crush`, and concurrent lanes red each other
+### E207 [CLOSED] — a team test writes into the REAL `~/.candy-code`, and concurrent lanes red each other
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process + test isolation. **Out of lane.**
 
 **What.** `tests/Agents/AgentManagerTest.php` carries a guard that fails a test when the real
-`$HOME/.sugar-crush` is mutated during it ("a team test wrote into the real ~/.sugar-crush instead of its
+`$HOME/.candy-code` is mutated during it ("a team test wrote into the real ~/.candy-code instead of its
 sandbox HOME"). Round-47 lane b's reviewer hit it on a full run at `acf71649`:
 `testCreateSubAgentCannotEnterPlanModeAfterDifferentModeIsLive` failed with ~70
-`~/.sugar-crush/teams/throwing-*` entries appearing and disappearing between snapshots, and passed
+`~/.candy-code/teams/throwing-*` entries appearing and disappearing between snapshots, and passed
 cleanly when re-run alone. The writer is some other test — a `throwing-*` team fixture — that really does
 use the real home rather than its sandbox.
 
@@ -8073,26 +8073,26 @@ lane c owns to all of `tests/`, and expect the prose arm to find instances.
 
 **Recorded 2026-08-22 by round-47 lane c, alongside E187.** Severity: informational. **Measured.**
 
-**What.** After this round's widening, `docPages()` collects every `*.md` at `sugar-crush/` plus every
-`*.md` anywhere under `sugar-crush/docs/`. It cannot see (a) a page outside the package — the monorepo
-root `README.md` and `docs/` quote sugar-crush behaviour in places, and (b) a launch line quoted inside a
+**What.** After this round's widening, `docPages()` collects every `*.md` at `candy-code/` plus every
+`*.md` anywhere under `candy-code/docs/`. It cannot see (a) a page outside the package — the monorepo
+root `README.md` and `docs/` quote candy-code behaviour in places, and (b) a launch line quoted inside a
 non-markdown page. Neither is a live miss today: the wider alphabet nominates the same (constant, page)
 set the narrow one did.
 
 **Two more collector gaps, added at the round-47 fix stage.** (c) `markdownPagesUnder()` selects on
 `glob($root.'/*.md')` and `getExtension() === 'md'`, both case-sensitive on Linux, so `README.MD`,
 `*.markdown` and `*.mdx` are invisible, as is a dotfile page. MEASURED on PHP 8.3.6: no such file exists
-in `sugar-crush/` today (`*.md` at the root: 3; under `docs/`: 12; non-`.md` files under `docs/`: none),
+in `candy-code/` today (`*.md` at the root: 3; under `docs/`: 12; non-`.md` files under `docs/`: none),
 so it is not a live miss — but it is an alphabet gap and rule 11 says an alphabet is part of a claim.
 
 **And a POSITIVE result worth keeping, because it is the evidence the "same set" claim rests on.** The
 round-47 review re-ran `pagesQuoting()` over **5,427 files** across the whole monorepo
-(`*.md|html|htm|txt|rst|json|jsonc|yml|yaml|php`, excluding `vendor/`, `.git/` and `sugar-crush/tests/`).
+(`*.md|html|htm|txt|rst|json|jsonc|yml|yaml|php`, excluding `vendor/`, `.git/` and `candy-code/tests/`).
 Every hit outside the sweep's own page set was either a `docs/plans/*` file or an instance of the known
 coincidence class for the two near-degenerate formats (`STDERR_LINE_FORMAT`, `PROJECT_TIER_REFUSAL_FORMAT`).
 No real doc-page miss, under an alphabet roughly 360x wider than the one that produced the claim.
 
-**Step.** Decide whether a monorepo-root page quoting a sugar-crush launch line is in this guard's remit;
+**Step.** Decide whether a monorepo-root page quoting a candy-code launch line is in this guard's remit;
 if so, extend the collector's root and expect the roster to grow. Separately, widen the extension test to
 be case-insensitive — cheap, and it closes (c) without any roster movement.
 
@@ -8133,7 +8133,7 @@ span is empty, and add the case to the fixture.
 **What.** All three implementers are subagents of one session, so `.../<session-uuid>/scratchpad` is the
 SAME directory for all of them. Lane c wrote its baseline suite output to `scratchpad/baseline_head.txt`;
 partway through, that file was truncated and re-headed by a run whose banner read
-`Configuration: /home/sites/crush-lane-a/sugar-crush/phpunit.xml`. Two processes held the same path open
+`Configuration: /home/sites/crush-lane-a/candy-code/phpunit.xml`. Two processes held the same path open
 with `>`, so the surviving bytes were an interleave of two different suites and the figure was void. The
 brief's `/tmp` rule already says "unique probe names"; it reads as being about `/tmp/sc_*` fixtures, and
 the scratchpad is the more likely collision because every lane reaches for the same obvious filenames.
@@ -8278,7 +8278,7 @@ block already there. PHP attaches only the LAST doc-comment of a run, so the ear
 nothing: the method had lost its `@return array{0:Chat,1:?\Closure}` tag entirely (VERIFIED by
 `ReflectionMethod::getDocComment()`) and two paragraphs of reasoning were orphaned.
 
-Scanning for the shape found it is not a one-off. SIX pairs existed in `src/` plus `bin/sugarcrush`
+Scanning for the shape found it is not a one-off. SIX pairs existed in `src/` plus `bin/candy-code`
 (MEASURED, PHP 8.3.6, adjacent `T_DOC_COMMENT` tokens with nothing significant between). Three were in
 `src/Chat.php` and were fixed; the other two there were WORSE than the pump's, because the stranded block
 belonged to a DIFFERENT method: `refuseInFlightCommand()` and `dispatchCommand()` both read as
@@ -8301,7 +8301,7 @@ sibling lanes, which is a merge conflict dressed as a finding.
 
 **Step.** Once the parallel lanes have merged, check each of the four for a lost `@return` or a
 mis-attributed block, fix them, then widen the existing guard from `Chat.php` to `src/` plus
-`bin/sugarcrush`. The scanner and both its fixtures already exist and move as-is; only the file list
+`bin/candy-code`. The scanner and both its fixtures already exist and move as-is; only the file list
 changes. The generator for the census is
 `stackedDocCommentLines()` in that test.
 
@@ -8687,7 +8687,7 @@ properly at the event rather than in the text). `Chat` and `Runtime` both re-exp
 **Recorded 2026-08-22 by round-48 lane c.** Severity: cosmetic. **Known and deliberate.**
 
 **What.** E219 added `NonInteractive::noticeRefusal()`, which writes one line per refusal from the
-tool-lifecycle observer. `HeadlessPermissionPrompt::__invoke()` already writes `sugarcrush: refused
+tool-lifecycle observer. `HeadlessPermissionPrompt::__invoke()` already writes `candy-code: refused
 <tool>.` when a person answers anything non-affirmative at a real terminal. That one case therefore
 produces two lines: the approver's (the ANSWER) and the observer's (the OUTCOME, carrying the reason the
 model was handed).
@@ -8906,12 +8906,12 @@ carries no sha.
 **Recorded 2026-08-24 by round-49 lane a.** Severity: cosmetic / decision recorded. **Measured, PHP 8.3.6.**
 
 **What.** E240 records that an ASK refused **at a terminal** writes two stderr lines and offers a cheap
-removal (drop `HeadlessPermissionPrompt`'s terse `sugarcrush: refused <tool>.`). MEASURED by driving a real
+removal (drop `HeadlessPermissionPrompt`'s terse `candy-code: refused <tool>.`). MEASURED by driving a real
 `EngineBackend` turn through a gate that ASKs, once per arm, in a child process with fd 2 on a plain file:
 
 | arm | bytes on fd 2 | lines | producers |
 |---|---|---|---|
-| tty, answered `n` | 266 | 8 | the 6-line question block, `sugarcrush: refused Bash.`, the observer's line |
+| tty, answered `n` | 266 | 8 | the 6-line question block, `candy-code: refused Bash.`, the observer's line |
 | no tty | 526 | 9 | the 8-line refusal block, the observer's line |
 | plain hook DENY | 66 | 1 | the observer's line only |
 
@@ -8999,7 +8999,7 @@ the same reason) rather than a total.
 `Chat` driven by an embedder — "the hosted-pane shape `Chat::withSize()`'s doc-block describes" —
 therefore never arms the mid-session seam's watcher. MEASURED by grepping `src/` and `bin/` for the call:
 there are **two** in-tree callers, and the second one is that very shape.
-`SugarCraft\Crush\App\App::init()` batches `$this->chat?->init()` with its own OSC 11 query, and
+`SugarCraft\Code\App\App::init()` batches `$this->chat?->init()` with its own OSC 11 query, and
 `App::delegateToChat()` returns `Chat::update()`'s Cmd through every branch untouched — so the shell that
 hosts the chat pane already discharges both halves of the obligation.
 
@@ -9122,7 +9122,7 @@ Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`).
 **What.** `constructionSites()` recognises exactly two construction shapes: `new Foo` (bare, qualified,
 fully-qualified) and the project's canonical `Foo::new()` factory. A class built through a
 DIFFERENTLY-NAMED static factory is invisible to it, and it answers `0` — which reads identically to the
-`0` that established `WorktreeManager`'s dormancy. Run over `src/` plus `bin/sugarcrush` it answers `0` for
+`0` that established `WorktreeManager`'s dormancy. Run over `src/` plus `bin/candy-code` it answers `0` for
 `SglangProvider`, which is constructed on every run through
 `SglangProvider::openAiCompatible()` (body: `return new self(...)`), selected out of a name-keyed `match`
 arm in `ProviderFactory::instantiateProvider()`. Neither the factory's name nor the string key is visible to
@@ -9243,7 +9243,7 @@ not be driven: a genuine fork failure needs `RLIMIT_NPROC` exhausted or the mach
 that arranged either would take the box down. That is a large part of how the branch went so long emitting
 nothing at all. The lesson generalises — an arm no test can reach accumulates defects silently — and
 `startAgent()` has more of them: the child branch (`$pid === 0`) is only ever exercised by a real fork, and
-an inline comment on that branch says it is "also currently unreachable from `bin/sugarcrush`'s
+an inline comment on that branch says it is "also currently unreachable from `bin/candy-code`'s
 live path" (the quoted text is exact; "doc-block" was wrong — it is a `//` comment inside
 `startAgent()`, corrected by round-49 lane b's review pass).
 
@@ -9274,7 +9274,7 @@ by.
 
 **Step.** Give the file loop a roster parameter (default: `phpSourceRoster($root)`), then add a fixture
 that points it at one unreadable scratch file and asserts the test-level failure. The same parameter also
-makes the existing roster control non-tautological for `bin/sugarcrush`.
+makes the existing roster control non-tautological for `bin/candy-code`.
 
 **CLOSED IN THE SAME ROUND, AND THE FIXTURE FOUND A SECOND HOLE IN THE ARM IT WAS WRITTEN FOR.** WHAT THIS
 ENTRY SAID: no fixture existed and the roster-parameter shape was too invasive while three lanes were
@@ -9346,7 +9346,7 @@ leading-backslash house style is general in this suite, not an idiosyncrasy of o
 pinned counts (they move on every merge, rule 18):
 
 ```sh
-cd sugar-crush
+cd candy-code
 grep -rlE '\\uniqid\(' tests/ | wc -l                 # files using the blind spelling
 grep -rhoE '\\uniqid\(' tests/ | wc -l                # call sites in it
 grep -rlE '\\(strlen|count|sprintf|dirname|implode|file_get_contents|preg_match|sort)\(' tests/ | wc -l
@@ -9772,10 +9772,10 @@ a copy is added.
 **Recorded 2026-08-24 by round-49 lane d.** Severity: cross-lane harness. **Observed**, then reproduced by
 elimination.
 
-**What.** `TeamTest::tearDown()` asserts that the real `~/.sugar-crush` footprint is unchanged across each
+**What.** `TeamTest::tearDown()` asserts that the real `~/.candy-code` footprint is unchanged across each
 test. During lane d's full run it failed in that `tearDown()` footprint assertion, on
 `testAddTeammateOverwritesExistingWithSameId`, with a diff listing **2,522** entries under
-`/home/my/.sugar-crush/teams/` named `throwing-*`. Re-run alone, the same file is green — 26 tests, 78
+`/home/my/.candy-code/teams/` named `throwing-*`. Re-run alone, the same file is green — 26 tests, 78
 assertions. Nothing in lane d touches `Agents/`.
 
 **Mechanism.** The guard compares a snapshot taken in `setUp()` against one taken in `tearDown()`. `HOME`
@@ -10017,7 +10017,7 @@ sibling suite ran; on a 48-core box at load 6, "not CPU-bound — that points at
 than scheduling", with the shared uid-keyed `TMPDIR` named as the most obvious candidate.
 
 **The diagnosis of the symptom was right and the candidate was wrong.** It is wall-clock waits. They come
-from descriptor 0. `bin/sugarcrush -p "hi"` with a sandbox HOME, timing only the fd-0 shape:
+from descriptor 0. `bin/candy-code -p "hi"` with a sandbox HOME, timing only the fd-0 shape:
 `/dev/null` 0.110s · closed 0.105s · **open, never-written pipe: blocks, SIGKILLed at 25s.** With a writer
 that sends one line after four seconds and then closes, the run ends at 4.1s and those bytes are
 PREPENDED TO THE PROMPT. The block is `stream_get_contents()` inside
@@ -10069,7 +10069,7 @@ own file runs alone or before that seam, red after it.
 full suite run anyone had done of it.** WHAT ATTEMPT 3 ASSUMED: that the only in-process reader of the
 `\STDIN` constant was `NonInteractiveStdinPinTest`'s known-positive control, so pointing that control at
 a fresh `php://stdin` handle made closing the descriptor free. WHAT IS TRUE: **the census behind that
-sentence looked in `sugar-crush/{src,bin,tests}`, and the reader that matters is in a SIBLING LIBRARY.**
+sentence looked in `candy-code/{src,bin,tests}`, and the reader that matters is in a SIBLING LIBRARY.**
 `SugarCraft\Mosaic\Detect` resolves its probe stream as `self::$probeStdin ?? STDIN` and hands it to <!-- @rename-keep historical provenance -->
 `drainStdin()` with no `is_resource()` guard; `Mosaic::auto()` catches the resulting throw and falls into
 `autoFromPalette()`, which references a `Capability` case candy-palette does not have. **MEASURED, full <!-- @rename-keep historical provenance -->
@@ -10088,11 +10088,11 @@ no in-process seam can reach it.
 
 **The lesson worth keeping, since four attempts is a lot for one line.** Both refutations were of the same
 kind: a claim of the form "nothing reaches X", verified by a grep whose scope was the directory the author
-was working in. Attempt 1/3's scope stopped at `sugar-crush/`; attempt 2's stopped at "the site I found"
+was working in. Attempt 1/3's scope stopped at `candy-code/`; attempt 2's stopped at "the site I found"
 rather than the SHAPE. Neither was refutable by reading — one needed a full suite run, the other needed
 the seam driven in isolation three times.
 
-**Residual, deliberately not fixed.** In PRODUCTION `sugarcrush -p` still blocks forever on a held-open
+**Residual, deliberately not fixed.** In PRODUCTION `candy-code -p` still blocks forever on a held-open
 stdin with no bound. That is arguably the correct read-stdin contract, but it is unbounded, and a caller
 that leaves the pipe open hangs the CLI with no message. Deciding that is a separate question from the
 suite's hermeticity.
@@ -10234,7 +10234,7 @@ test-hermeticity. **Measured, PHP 8.3.6.**
 **WHAT THIS ENTRY SAID.** That `tests/bootstrap.php` cleared `O_NONBLOCK` on descriptor 0 rather than
 replacing the descriptor, because replacing it closes the `\STDIN` constant and that reddens
 `NonInteractiveStdinPinTest` — and that a non-blocking read returns what is *available* rather than
-nothing, so bytes already on the runner's stdin still reach every spawned `bin/sugarcrush -p` child and
+nothing, so bytes already on the runner's stdin still reach every spawned `bin/candy-code -p` child and
 get prepended to its prompt. It offered two Steps and called (a) the better trade, declining it only
 because `tests/Cli/NonInteractive*Test.php` is lane a's file.
 
@@ -10242,10 +10242,10 @@ because `tests/Cli/NonInteractive*Test.php` is lane a's file.
 part.** Option (a) was taken: the known-positive was repointed at a fresh `php://stdin` handle and the
 repair went back to close + reopen `/dev/null`. **The first full suite run of that shape produced 107
 errors** — `SugarCraft\Mosaic\Detect` reads the `\STDIN` constant unguarded from a SIBLING library, which <!-- @rename-keep historical provenance -->
-no grep of `sugar-crush/` could see (E290's attempt 3, and E302). So option (a) is not merely a
+no grep of `candy-code/` could see (E290's attempt 3, and E302). So option (a) is not merely a
 trade, it is unavailable while any reachable library reads that constant without a guard. The repair is
 the flag again, and this residual is **live**: bytes already sitting on the runner's stdin still reach a
-spawned `bin/sugarcrush -p` child and get prepended to its prompt.
+spawned `bin/candy-code -p` child and get prepended to its prompt.
 
 **WHY IT IS SMALLER THAN IT WAS.** The reason the flag failed before — `new Tty(null, $injectedTermios)`
 clearing it via `PosixBackend::restore()` — is fixed at every site in the tree (E301), so the flag now
@@ -10255,7 +10255,7 @@ hangs a run for 60s a test with no message, is genuinely closed.
 **Step, revised.** Not "close the descriptor". Either (a) fix `SugarCraft\Mosaic\Detect` to guard its <!-- @rename-keep historical provenance -->
 `?? STDIN` with `is_resource()` and fix the fallback it falls into (E302), then re-try the descriptor
 replacement behind a full suite run — noting that the census must then cover every reachable
-`sugarcraft/*` lib, not `sugar-crush/` — or (b) pin the residual with a test proving bytes on the runner's
+`sugarcraft/*` lib, not `candy-code/` — or (b) pin the residual with a test proving bytes on the runner's
 stdin reach a spawned child, so the limit is a recorded fact rather than a gap. (b) is cheap and honest;
 (a) is the only thing that actually closes it.
 
@@ -10265,7 +10265,7 @@ stdin reach a spawned child, so the limit is a recorded fact rather than a gap. 
 
 ---
 
-### E297 [CLOSED] — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
+### E297 [CLOSED] — "eighteen test files spawn a real `bin/candy-code`" is not re-derivable
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy. **Measured. Fixed this
 round** in `tests/bootstrap.php` and `tests/SuiteChildStdinIsolationTest.php`.
@@ -10306,19 +10306,19 @@ the 18 are that, and were cleared by hand. Of the rest, all but one are inert da
 
 **The one that does.** `AuditHookTest::testExecuteCreatesDefaultLogFileWhenNoneProvided()` exercises
 `AuditHook`'s DEFAULT log path, which `src/Hooks/BuiltIn/AuditHook.php` builds as
-`sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name, on the machine's REAL temp directory
+`sys_get_temp_dir() . '/candy-code-audit.log'` — one fixed name, on the machine's REAL temp directory
 (the `TMPDIR` sandbox does not move `sys_get_temp_dir()` in-process; that is the finding this entry sits
 next to). The test asserts the file exists and then **unlinks it**. Two concurrent copies therefore race:
 one deletes the file between the other's write and its `assertFileExists`.
 
 **MEASURED, PHP 8.3.6, three takes of six concurrent single-test runs**, each take pointed at its own
 private launch-environment `TMPDIR` so the probe could not disturb a sibling lane: **3 of 6, 2 of 6, 2 of
-6 failed**, every failure `Failed asserting that file ".../sugar-crush-audit.log" exists`. That is the
+6 failed**, every failure `Failed asserting that file ".../candy-code-audit.log" exists`. That is the
 same signature class E242 reported once and could not reproduce, and unlike the `TMPDIR`-key hypothesis it
 reproduces on demand.
 
 **It is also cross-process vandalism, not only self-interference.** The name is `AuditHook`'s production
-default, so the suite deletes the audit log of any real `sugarcrush` running on the same box — and of any
+default, so the suite deletes the audit log of any real `candy-code` running on the same box — and of any
 sibling lane's suite.
 
 **Step.** Give the test its own `AuditHook` path derived from pid + entropy and assert the default is
@@ -10404,7 +10404,7 @@ went. Do NOT copy the literals.
 `@stream_set_blocking($this->stream, false)`; `restore()` runs the matching `(…, true)`. Both therefore
 land on the runner's fd 0 — for a test whose entire intent is to drive a PTY it opened itself.
 
-**The generator, not a count** (rule 18): `grep -rn 'new Tty(' src/ tests/ bin/` under `sugar-crush/`;
+**The generator, not a count** (rule 18): `grep -rn 'new Tty(' src/ tests/ bin/` under `candy-code/`;
 every hit whose first argument is `null` is an instance. At `5c5501f1` that is
 `tests/Backend/EngineBackendTest.php` (FIXED this round) and `tests/Support/ForkedChildTest.php` twice
 (lane d's file — not touched). `src/Tui/Renderer.php` passes `STDOUT` explicitly and is not an instance.
@@ -10478,19 +10478,19 @@ guard.
 **How it was found, and the generator.** Round 49 lane e's attempt to replace the suite's descriptor 0
 with `/dev/null` closes the `\STDIN` constant. **Full suite, PHP 8.3.6: `9500 tests, 107 errors, rc 2`,
 every error that undefined constant**, reached through
-`Mosaic.php:166 ← Mosaic.php:122 ← sugar-crush/src/ToolResult.php:280 ← :294 ← src/Cli/Bootstrap.php:1003`.
+`Mosaic.php:166 ← Mosaic.php:122 ← candy-code/src/ToolResult.php:280 ← :294 ← src/Cli/Bootstrap.php:1003`.
 To reproduce without that change: `fclose(\STDIN)` before anything calls `Mosaic::auto()`.
 
 **Two defects, not one.**
  1. `autoFromPalette()` cannot run at all — it references a nonexistent enum case. Anything reaching that
-    fallback in production (a `sugarcrush` invoked with a closed or unusable fd 0, which is an ordinary
+    fallback in production (a `candy-code` invoked with a closed or unusable fd 0, which is an ordinary
     thing for a daemon or a hook) gets a fatal instead of a HalfBlock renderer.
  2. `Detect::stdinFd()` hands an unguarded `?? STDIN` to stream functions. A closed descriptor 0 is a
     legitimate state for a process to be in; it should degrade, not throw.
 
 **Step.** Fix the case name in `candy-mosaic` (`ITerm2`, and check the rest of that method against the <!-- @rename-keep historical provenance -->
 enum the same way — one wrong name means nobody has executed the method). Guard `Detect::stdinFd()`'s
-consumers with `is_resource()`. Neither is a sugar-crush change; both are worth a PR of their own, and (1)
+consumers with `is_resource()`. Neither is a candy-code change; both are worth a PR of their own, and (1)
 should carry a test that drives `autoFromPalette()` directly rather than through a thrown probe, since
 the throw is what made it unreachable for so long.
 
@@ -10541,7 +10541,7 @@ mechanism, because the obvious mechanism was checked and did not hold.
 `9661 / 142162 / 1 skipped / Risky: 2 / rc 1`, both risky rows being
 `Cli\BootstrapSkillSkipsTest::testAOneShotRunReportsSkippedSkillsToo` and
 `::testACleanOneShotRunIsSilent`, each *"aborted after 60 seconds"* and *"did not perform any
-assertions"*. Both spawn a real `bin/sugarcrush` one-shot that inherits descriptor 0. Wall clock 06:50,
+assertions"*. Both spawn a real `bin/candy-code` one-shot that inherits descriptor 0. Wall clock 06:50,
 against a 04:45 baseline — **the extra time is the two 60s aborts almost exactly, so nothing else in the
 suite was slow.**
 
@@ -10580,7 +10580,7 @@ re-run, and it must NOT be cited as evidence for any fd-0 hypothesis.
 carries `@deprecated`, and nothing in the tree tells an embedder to move to the enum: a consumer
 grepping for `@deprecated` finds nothing, and a static analyser sees four supported symbols.
 
-**Step.** Add `@deprecated Use \SugarCraft\Crush\Permissions\DenialKind` to all four, and pin with a
+**Step.** Add `@deprecated Use \SugarCraft\Code\Permissions\DenialKind` to all four, and pin with a
 reflection test that every alias's doc-comment carries the tag AND that its value is still the enum's
 (so the tag cannot be added to something that has quietly become a second copy). Deliberately NOT done
 in round 49: `@deprecated` on a `public const` is an API-signalling decision with a release note
@@ -10632,7 +10632,7 @@ rather than its rendering crosses out to a consumer. Two gaps are left, both del
 
 1. `--output-format text` puts nothing on stdout about refusals at all — a decision with its own
    long justification in `NonInteractive::format()` — so the token is available only to a JSON consumer.
-2. `NonInteractive::noticeRefusal()`'s stderr line still says only `sugarcrush: <tool> was not run -
+2. `NonInteractive::noticeRefusal()`'s stderr line still says only `candy-code: <tool> was not run -
    <reason>`, and `RefusalStderrSurfaceTest` pins that BOTH `HeadlessPermissionPrompt` arms produce a
    `Permission denied:` reason, so stderr cannot distinguish "a person typed n" from "there was nobody
    at the keyboard" except through the prompt's own prose. The kind is now available at that call site
@@ -10818,7 +10818,7 @@ in the tree (E190's shape, one level up: there the commits were unreported, here
 
 **Step — DONE.** E243 is marked 🟢 and its Step is retired in place rather than deleted (a Step that is
 gone reads as a Step that was never written). The second place was
-`sugar-crush/tests/bootstrap.php`, whose "WHAT IT DOES TO E243 … E243 stays NARROWED, not closed"
+`candy-code/tests/bootstrap.php`, whose "WHAT IT DOES TO E243 … E243 stays NARROWED, not closed"
 paragraph said the terminal case was still live; it is not, because the default is the suite's
 `php://memory` pin whether or not fd 0 is a tty. Nothing in the code changed.
 
@@ -10870,13 +10870,13 @@ FIXED this round** by `tests/StdinConstantReaderCensusTest.php`.
 **What E296 needs and did not have.** Option (a) — replace descriptor 0 instead of flagging it — is the
 only repair that closes the PREPEND half. PHP has no `dup2`, so replacing fd 0 means `fclose(\STDIN)`,
 and the question that decides the cost is "what reads descriptor 0 in this process". Round 49 answered it
-twice by grepping `sugar-crush/`, and both times the reader that mattered was in a sibling library.
+twice by grepping `candy-code/`, and both times the reader that mattered was in a sibling library.
 
 **The scope is REACHABILITY, and the two numbers are what make that the right choice rather than a
 convenient one.** Measured, token-based, controls first: the whole monorepo has **15** libs naming the
 `STDIN` constant under `*/src` or `*/bin`; only **2** of them (`candy-core`, `candy-mosaic`) are in <!-- @rename-keep historical provenance -->
-`sugar-crush`'s 18-lib reachable closure. "The monorepo" would have added thirteen libraries that cannot
-run in this process; `sugar-crush/` dropped the two that can. Neither directory was the alphabet — the
+`candy-code`'s 18-lib reachable closure. "The monorepo" would have added thirteen libraries that cannot
+run in this process; `candy-code/` dropped the two that can. Neither directory was the alphabet — the
 DEPENDENCY CLOSURE was.
 
 **THE ALPHABET'S FOURTH SPELLING WAS FOUND BY THE SCANNER BEING WRONG, and that is the part worth
@@ -10935,7 +10935,7 @@ means someone closed the prepend half, which is the outcome E296 wants.
 ### E315 [CLOSED] — the prepend residual is a data path from the runner's stdin to a model provider
 
 🟢 **CLOSED for the SUITE in round 51 by lane a**, by the descriptor replacement E296 needed. NOT closed,
-and deliberately not, for a real `sugarcrush`: piped stdin reaching the prompt is that binary's documented
+and deliberately not, for a real `candy-code`: piped stdin reaching the prompt is that binary's documented
 contract. What changed is that the suite no longer inherits the runner's fd 0.
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: security shape, recorded not fixed
@@ -10943,7 +10943,7 @@ contract. What changed is that the suite no longer inherits the runner's fd 0.
 
 **What.** The residual is usually described as untidiness. It is also an unbounded read of whatever
 handed this process descriptor 0, concatenated into a prompt and sent to whatever provider is configured.
-Reproduced directly: `printf 'R49B-STDIN-MARKER\n' | php bin/sugarcrush -p "hi"` echoes
+Reproduced directly: `printf 'R49B-STDIN-MARKER\n' | php bin/candy-code -p "hi"` echoes
 `> R49B-STDIN-MARKER` back inside the turn. In a suite that is a hermeticity bug; on a CI runner that
 pipes a build log into `phpunit`, or any supervisor that passes its own stdin down, it is that content
 going to a provider — and `NonInteractive::MAX_STDIN_BYTES` is 10MB, so the bound is generous rather than
@@ -11021,7 +11021,7 @@ no longer short-circuits `isInteractiveTty()` to true. candy-mosaic suite: 451/7
 that straight into `stream_select()` with no `is_resource()`; `probeXtwinoSize()` and
 `probeXtwinoCellCount()` each spell `self::$probeStdin ?? STDIN` inline and hand it to
 `readStdinTimed()`. A closed descriptor 0 is a legitimate state for a process to be in — a daemon, a
-hook, a `sugarcrush` invoked with `0<&-` — and it should degrade rather than throw.
+hook, a `candy-code` invoked with `0<&-` — and it should degrade rather than throw.
 
 **Why it matters to E296 specifically.** With defect 1 fixed the throw is now CAUGHT and the fallback
 runs, so a closed `\STDIN` no longer fatals — but the library still leaves its normal path on an
@@ -11061,11 +11061,11 @@ each verified against the code beside it, where an `assertFalse($meta['blocked']
 (the flag SET) carries a message saying "did not clear O_NONBLOCK", and an `assertTrue($meta['blocked'])`
 after `restore()` (the flag CLEARED) carries "did not put O_NONBLOCK back":
 
- - `sugar-crush/tests/Support/ForkedChildTest.php` (×2)
- - `sugar-crush/tests/ChatTest.php` (×2)
- - `sugar-crush/tests/Backend/EngineBackendTest.php` (×2)
- - `sugar-crush/tests/SuiteChildStdinIsolationTest.php` (×2)
- - `sugar-crush/tests/bootstrap.php` — its measured table uses "clear" to mean *non-blocking*, the
+ - `candy-code/tests/Support/ForkedChildTest.php` (×2)
+ - `candy-code/tests/ChatTest.php` (×2)
+ - `candy-code/tests/Backend/EngineBackendTest.php` (×2)
+ - `candy-code/tests/SuiteChildStdinIsolationTest.php` (×2)
+ - `candy-code/tests/bootstrap.php` — its measured table uses "clear" to mean *non-blocking*, the
    opposite of the flag sense used two paragraphs earlier
 
 **Step.** One supervisor-level sweep after the merge, in three-part form. The convention that works:
@@ -11083,7 +11083,7 @@ re-reading — and the reader who "corrects" the code to match the prose deletes
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: E296 input, currently benign.
 **Generator:** `StdinConstantReaderCensusTest::fd0References()` (verbatim copy) over every
-`sugar-crush/vendor/**.php` outside `vendor/sugarcraft/` and outside any `tests/`|`Tests/` path — 8,247
+`candy-code/vendor/**.php` outside `vendor/sugarcraft/` and outside any `tests/`|`Tests/` path — 8,247
 files, PHP 8.3.6.
 
     sebastian/environment/src/Console.php                                    => STDIN
@@ -11163,7 +11163,7 @@ that must produce an offender and rows that must produce null. Neither half alon
 the null rows a classifier that reports everything passes; without the offender rows, one that reports
 nothing.
 
-**Step.** Apply the same check to every other census/roster guard in `sugar-crush/tests/`: for each
+**Step.** Apply the same check to every other census/roster guard in `candy-code/tests/`: for each
 branch that appends to an offender list, mutate it to `false &&` and confirm something goes red. A guard
 whose scanner is well-tested is where this hides, because the fixture table looks thorough.
 
@@ -11176,7 +11176,7 @@ re-worded, with the three-part history in its doc-block: what it said, the re-me
 inverse is worth holding rather than relaxing.
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: doc accuracy on the decision E296 turns
-on. **Out of this lane's file list** — `sugar-crush/tests/SuiteChildStdinIsolationTest.php` is lane e's.
+on. **Out of this lane's file list** — `candy-code/tests/SuiteChildStdinIsolationTest.php` is lane e's.
 
 Its `testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking` reads
 `tests/bootstrap.php closed the \STDIN constant; SugarCraft\Mosaic\Detect reads it unguarded and 107 <!-- @rename-keep historical provenance -->
@@ -11308,10 +11308,10 @@ REWRITTEN BELOW rather than deleted — E344 raised the objection, and round 49 
 this entry with a generator.** Severity: low, cross-process.
 
 E298 fixed the TEST that drove `AuditHook`'s production default, wrote the file and unlinked it. The
-default itself was unchanged and was `sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name,
+default itself was unchanged and was `sys_get_temp_dir() . '/candy-code-audit.log'` — one fixed name,
 world-writable temp dir, no pid and no entropy.
 
-**WHAT THIS ENTRY SAID.** "Two `sugarcrush` processes on one box append to one file (interleaved, and a
+**WHAT THIS ENTRY SAID.** "Two `candy-code` processes on one box append to one file (interleaved, and a
 partial write from either can split a record), and any local user can pre-create it as a symlink to
 somewhere else before the first run."
 
@@ -11319,7 +11319,7 @@ somewhere else before the first run."
 is false, and was false at the moment this entry was written** — not superseded by the fix. Two things
 were measured, PHP 8.3.6, generator `probe_append_r49b.php` in the round's scratchpad:
 
-- *The write already serialised.* `git show d881f552^:sugar-crush/src/Hooks/BuiltIn/AuditHook.php` — the
+- *The write already serialised.* `git show d881f552^:candy-code/src/Hooks/BuiltIn/AuditHook.php` — the
   commit immediately BEFORE the E328 fix — spells `file_put_contents($this->logFile, $entry,
   FILE_APPEND | LOCK_EX)`. `FILE_APPEND` never truncates and `LOCK_EX` serialises cooperating writers, so
   the flags this entry's hazard would have needed to be absent were present the whole time.
@@ -11351,7 +11351,7 @@ fixed, it just sits inside a per-user directory now. The site was carried in
 real-tree liveness control.
 
 **Step — DONE at round 51.** The default is
-`sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, the directory created 0700 and refused when
+`sys_get_temp_dir() . '/candy-code-audit-<euid>/audit.log'`, the directory created 0700 and refused when
 it is a symlink, a non-directory, not owned by this euid, or reachable by anybody else.
 
 ---
@@ -11592,7 +11592,7 @@ feels obvious.
 ### E338 [CLOSED] — the fd-0 replacement made `NonInteractive::readStdinIfPiped()` a latent `TypeError`, and guarding only the call the reviewer named would move the throw rather than remove it
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, latent — introduced by this
-lane's own change. **Measured, PHP 8.3.6. Out of lane — `sugar-crush/src/Cli/NonInteractive.php` is a `src/`
+lane's own change. **Measured, PHP 8.3.6. Out of lane — `candy-code/src/Cli/NonInteractive.php` is a `src/`
 file this lane does not own. Reported, not fixed.**
 
 `NonInteractive::stdinDefault()` is `self::$stdinDefault ?? \STDIN`. `readStdinIfPiped()` is
@@ -11629,13 +11629,13 @@ not fixed, and NOT to be removed.**
 
 `SugarCraft\Core\Util\Tty\EnvDetect::isConsoleStdin()` is a bare `return stream_isatty(STDIN);`. After
 E296's option (a) that call throws inside the suite (see E338 for the measurement). It is dormant rather
-than live: grepped across `sugar-crush`'s `src`, `bin` and `tests` and across `src`/`bin` of every sibling
+than live: grepped across `candy-code`'s `src`, `bin` and `tests` and across `src`/`bin` of every sibling
 in the 18-lib closure, the only occurrence of the name is its own declaration — `Tty::backend()` reaches
 `isWsl()`, `isMintty()` and `isCygwin()` from the same class but never this one.
 
 **Do not delete it** (standing no-removal rule): it is the native-Windows console probe the `WindowsBackend`
 path would use, and its own doc-block describes that role. The dormancy is now recorded as a judged row in
-`sugar-crush/tests/StdinConstantReaderCensusTest`'s doc-block, which is the guard that will surface it again
+`candy-code/tests/StdinConstantReaderCensusTest`'s doc-block, which is the guard that will surface it again
 if a caller appears.
 
 **Step.** Give it the same `is_resource()` guard the rest of the family has, so that wiring it later cannot
@@ -11660,7 +11660,7 @@ is the very thing it was guarding against.
 exception rather than by falling back, which is the opposite of the guard's stated intent.
 
 **Why it is dormant.** `runExec()` is private and driven only by an `ExecRequest` command, and `ExecRequest`
-appears nowhere in `sugar-crush`'s `src` or `bin` (verified). No test in this package reaches it.
+appears nowhere in `candy-code`'s `src` or `bin` (verified). No test in this package reaches it.
 
 **Step.** Fall back to a freshly opened `/dev/null` (or answer with an explicit error) rather than to a
 constant whose liveness is exactly what the guard already doubted. The same reasoning applies to the
@@ -11710,9 +11710,9 @@ that is wrong for the first:
 
 | File | inverted failure messages |
 | --- | --- |
-| `sugar-crush/tests/Support/ForkedChildTest.php` | **4** |
-| `sugar-crush/tests/ChatTest.php` | 2 |
-| `sugar-crush/tests/Backend/EngineBackendTest.php` | 2 |
+| `candy-code/tests/Support/ForkedChildTest.php` | **4** |
+| `candy-code/tests/ChatTest.php` | 2 |
+| `candy-code/tests/Backend/EngineBackendTest.php` | 2 |
 
 **AND `EngineBackendTest.php` CARRIES A THIRD, DIFFERENT DEFECT THAT THE COUNT ABOVE DOES NOT COVER**, of
 exactly the class this round has been closing elsewhere: its inline comment states that "the descriptor-0
@@ -11771,7 +11771,7 @@ plainly read came back unreadable.
 **Recorded 2026-08-24 by round-51 lane b, which fixed E328.** Severity: correction of a fixed entry.
 **Measured**, PHP 8.3.6, generator in the round's scratchpad (`probe_append.php`).
 
-E328 said two `sugarcrush` processes on one box "write and truncate each other's audit log
+E328 said two `candy-code` processes on one box "write and truncate each other's audit log
 (interleaved, and a partial write from either can split a record)". Neither half reproduces.
 `AuditHook::execute()` writes with `FILE_APPEND | LOCK_EX`: `FILE_APPEND` never truncates, and `LOCK_EX`
 serialises cooperating writers. **Measured**: 8 concurrent processes × 200 records × 9000 bytes each
@@ -11782,7 +11782,7 @@ split or interleaved records.
 (a) any other local user could pre-create it as a symlink and have the hook append through it, and (b)
 the file the hook creates is mode 0664 under the ordinary umask 0002 — **measured** — i.e. every other
 user on the box could READ a log carrying every tool's arguments and the first 200 bytes of its output.
-The default is now `sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, the directory created
+The default is now `sys_get_temp_dir() . '/candy-code-audit-<euid>/audit.log'`, the directory created
 0700 and refused when it is a symlink, a non-directory, or not owned by this euid.
 
 **Why this matters beyond bookkeeping.** A reader who trusted the recorded mechanism would have reached
@@ -11791,7 +11791,7 @@ for locking, which was already there, and left the reachability untouched.
 > **SETTLED IN THIS ENTRY'S FAVOUR at round 49 by lane b, which was sent to decide between this entry and
 > E328 and found one thing this entry did not have.** E344 argued from the CURRENT code, which leaves open
 > the reading that E328 was right when written and the fix made it stale. It was not:
-> `git show d881f552^:sugar-crush/src/Hooks/BuiltIn/AuditHook.php` — the commit immediately before the
+> `git show d881f552^:candy-code/src/Hooks/BuiltIn/AuditHook.php` — the commit immediately before the
 > per-user directory landed — already spells `file_put_contents($this->logFile, $entry,
 > FILE_APPEND | LOCK_EX)`. There was never a version of the class whose appends raced, so E328's first
 > clause was **false at the moment it was recorded**. Independently re-measured with a fresh generator
@@ -11955,7 +11955,7 @@ must not be forgotten.
 > arm now has an input only it can refuse.**
 
 (b) **A build without ext-posix shares one directory.** With no `posix_geteuid()` the scope falls back to
-a literal, so every such user on one box lands in `sugar-crush-audit-noposix`. The failure mode is the
+a literal, so every such user on one box lands in `candy-code-audit-noposix`. The failure mode is the
 SECOND user losing their audit log rather than the second user reading the first's. The alternatives were
 worse: `getmyuid()` answers the script file's owner, which for a shared installation is one answer for
 everybody and a wrong one.
@@ -11979,10 +11979,10 @@ everybody and a wrong one.
 **Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 10.** Severity: cross-process
 hygiene. Not fixed — the fix is a wiring change on `HookManager::registerBuiltIns()`, out of this lane.
 
-**Observed on this box during the round.** `/tmp/sugar-crush-audit-1000/` created 09:13, `drwx------`,
-its `audit.log` grown to 6808 bytes by 09:39 — written by the suite, not by any real `sugarcrush`. E328
+**Observed on this box during the round.** `/tmp/candy-code-audit-1000/` created 09:13, `drwx------`,
+its `audit.log` grown to 6808 bytes by 09:39 — written by the suite, not by any real `candy-code`. E328
 is a clear improvement on the shared world-readable leaf it replaced (which was still growing at
-`/tmp/sugar-crush-audit.log` from the lanes sitting at the pre-E328 commit), but the suite still drives
+`/tmp/candy-code-audit.log` from the lanes sitting at the pre-E328 commit), but the suite still drives
 `new AuditHook()` at the production default through `registerBuiltIns()`.
 
 **`TMPDIR` cannot move it, MEASURED (PHP 8.3.6):** `putenv('TMPDIR=…')` then `sys_get_temp_dir()` still
@@ -12021,7 +12021,7 @@ gives the same entropy with no period.
 
 ---
 
-### E353 [CLOSED] — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
+### E353 [CLOSED] — `candy-code/docs/HOOKS.md` documents runtime defaults and no test reads it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
 **Closed ROUND-70 (lane gd `8b639e092` → pick `80806b39f`) — CLOSED-BY-FOLD:** the guard/no-guard decision resolved as FOLD: HOOKS.md's built-in-hook and Events tables, entry/exit key/delimiter/exit-row sections, and drain/sweep/marker claims are now read LIVE by `DocFigureProseDriftTest` arms AC–AH (dynamic derivation, zero rosters; no golden file, no new test file). All adjudicated claims were TRUE — docs/HOOKS.md stayed byte-untouched. The E686 tranche-7 fold carried this row to closure in-step. Evidence: gd REPORT + gd/measures.md (22 claim rows), triage E353, worklog ROUND 70.
@@ -12053,7 +12053,7 @@ that shipped it the delta was **five**: the lane's own new `Support/NonBlockingV
 `testEveryContradictorySentenceIsOnTheRoster`, and `readOrFail()` asserts. That is rule 18 exactly — a
 cardinality measured over `tests/` is invalidated by the next commit, this lane's included.
 
-**So the claim, stated without a number.** Several censuses under `sugar-crush/tests/Support/` assert
+**So the claim, stated without a number.** Several censuses under `candy-code/tests/Support/` assert
 ONCE PER FILE in scope. The suite's assertion total is therefore a function of how many `.php` files
 `tests/` (and, for the scanners that also walk `src`, `src/`) contains — not of the tree's behaviour.
 **A floor figure is meaningful only with the commit it was taken at, and adjusting one arithmetically
@@ -12063,7 +12063,7 @@ across a commit that adds or removes a test FILE is wrong even when the arithmet
 deterministic (no seed — it is a whole-population walk, not a sample), three takes on the control side:
 
 ```sh
-cd sugar-crush
+cd candy-code
 vendor/bin/phpunit tests/Support tests/Cli tests/Config          # control
 printf '<?php\n' > tests/Support/<a name nothing else uses>.php  # exact-path create
 vendor/bin/phpunit tests/Support tests/Cli tests/Config          # probe
@@ -12095,7 +12095,7 @@ count.
 **Recorded 2026-08-24 by round-49 lane c.** Severity: guard coverage. **Measured, PHP 8.3.6. FIXED this
 round.**
 
-E322's step is "apply the same check to every other census/roster guard in `sugar-crush/tests/`: for each
+E322's step is "apply the same check to every other census/roster guard in `candy-code/tests/`: for each
 branch that appends to an offender list, mutate it to `false &&` and confirm something goes red." Run
 over this lane's files. `DuplicatedTestHelperDriftTest`'s two rule-14 branches are killed.
 `ProcessUniqueTempNameTest`'s two census arms and all three of
@@ -12229,7 +12229,7 @@ round** (E330).
 
 Heredoc/nowdoc bodies, class constants resolved within the declaring file, a scheme stripped before the
 anchored root match, and `proc_open` plus the two `stream_socket_*` builders. Over `tests`, `src` and
-`bin/sugarcrush`: **zero** new offenders, so the widening bought coverage rather than a roster.
+`bin/candy-code`: **zero** new offenders, so the widening bought coverage rather than a roster.
 
 The bound test now carries a positive row per closed hole and six negatives, because deleting a
 "cannot see" row is only half of closing one — without a row that reds when the widening is reverted, the
@@ -12495,7 +12495,7 @@ measurement in E365 (0 servers before a run, 4 after, reproduced).
 
 ⚠️ **NOT COVERED, and neither is an all-clear.** `candy-pty` was excluded on purpose: its suite spawns <!-- @rename-keep historical provenance -->
 PTYs through FFI and this project already knows `timeout` does not reliably kill a hung PTY child, so
-testing it needs a pid-scoped watchdog and three lanes were mid-round. `sugar-crush` was excluded as
+testing it needs a pid-scoped watchdog and three lanes were mid-round. `candy-code` was excluded as
 lane-owned and too much load during a measurement window — and it has by far the most sites, ~40.
 
 **Q2: is the fd-inheritance half local?** No. **No `proc_open()` descriptor spec anywhere in the monorepo
@@ -12506,36 +12506,36 @@ children ranked by exposure:
 **HIGH — long-lived child, only 0/1/2, and teardown that does not wait:**
 - `sugar-dash/src/Plugin/ExternalModule.php:152` — persistent third-party plugin daemon, **no <!-- @rename-keep -->
   `proc_terminate()` at all**; `__destruct()` does a bare `proc_close()`. Worst of the set.
-- `sugar-crush/src/ClaudeCodeMcpClient.php:105` — third-party stdio MCP server; `disconnect()` is fclose
+- `candy-code/src/ClaudeCodeMcpClient.php:105` — third-party stdio MCP server; `disconnect()` is fclose
   + bare `proc_close()`. The unfixed twin of `MCP/StdioMcpServer.php`, which already has SIGTERM → poll →
   SIGKILL.
-- `sugar-crush/src/LSP/LspConnection.php:60` — language server; `stopProcess()` terminates and
+- `candy-code/src/LSP/LspConnection.php:60` — language server; `stopProcess()` terminates and
   immediately closes. No `__destruct()`.
-- `sugar-crush/src/Sessions/BackgroundSupervisor.php:188` — STRING command (the dash mismatch is
+- `candy-code/src/Sessions/BackgroundSupervisor.php:188` — STRING command (the dash mismatch is
   acknowledged in its own comment at :226); deliberately double-forks; the happy path never reaps.
 - `sugar-reel/src/AudioPlayer.php:79` — ffplay/mpv; `stop()`/`pause()`/`resume()` all terminate-then-close <!-- @rename-keep -->
   with no wait. No `__destruct()`.
 
 **MEDIUM:** `sugar-reel/src/Decode/FfmpegDecoder.php:160` · `candy-core/src/WorkerPool.php:286` · <!-- @rename-keep -->
-`sugar-crush/src/Agents/ProcessExecutor.php:426` (split personality — `escalateAndKill()` is correct,
-`cancel()`/`cancelAll()` are not) · `sugar-crush/src/Providers/ClaudeCodeProvider.php:109` +
+`candy-code/src/Agents/ProcessExecutor.php:426` (split personality — `escalateAndKill()` is correct,
+`cancel()`/`cancelAll()` are not) · `candy-code/src/Providers/ClaudeCodeProvider.php:109` +
 `ClaudeCodeInvocation.php:109` (no deadline at all) · `candy-core/src/Program.php:792`. <!-- @rename-keep historical provenance -->
 
 **LOW / already correct:** candy-git-server's five sites are one-shot and drained (no timeout, string commands)
 · candy-pty is clean judged on its own PTY terms · `candy-git/src/Process.php` is correct · several <!-- @rename-keep historical provenance -->
-sugar-crush sites are already hardened reference implementations.
+candy-code sites are already hardened reference implementations.
 
-**The user-facing shape of this, stated plainly:** sugar-crush's MCP servers, language servers and
+**The user-facing shape of this, stated plainly:** candy-code's MCP servers, language servers and
 sugar-dash's plugin binaries are long-lived THIRD-PARTY children that inherit whatever descriptors the <!-- @rename-keep -->
 host had open at spawn. They are reaped correctly enough today that nothing hangs, so this is a
 handle-leak-into-untrusted-subprocess concern, not a live outage.
 
-**Best-in-tree pattern the HIGHs should adopt** — `sugar-crush/tests/Integration/BinSugarcrushDispatchTest.php:1999`:
+**Best-in-tree pattern the HIGHs should adopt** — `candy-code/tests/Integration/BinSugarcrushDispatchTest.php:1999`:
 `armWatchdog()` arms a detached watchdog WITH pid-reuse checking *before* calling `proc_terminate(9)`,
 precisely because `proc_close()` waits.
 
 **The mechanical repair, and why it beats fixing five call sites by hand.**
-`sugar-crush/tests/Support/ChildStderrCaptureScanner.php` is ALREADY a static scanner over `proc_open()`
+`candy-code/tests/Support/ChildStderrCaptureScanner.php` is ALREADY a static scanner over `proc_open()`
 descriptor-spec shapes. Extending it to flag "long-lived child + nothing said about fd ≥ 3" makes E365
 non-recurring instead of fixing today's five and meeting the sixth next year. **Do this before the hand
 fixes.**
@@ -12547,7 +12547,7 @@ fixes.**
 **Recorded 2026-08-24.** Severity: correctness (silent loss of a child's stderr).
 **FINDING ONLY — not fixed.** Found incidentally during E366's sweep, unrelated to descriptors.
 
-`sugar-crush/src/Providers/ClaudeCodeProvider.php` fcloses `$pipes[2]` at :155 and then reads it at :160
+`candy-code/src/Providers/ClaudeCodeProvider.php` fcloses `$pipes[2]` at :155 and then reads it at :160
 (verified at `e7c777b9`; line numbers rot — grep `pipes\[2\]`). A read from a closed stream yields
 nothing, so the throw immediately below it always reads
 
@@ -12687,7 +12687,7 @@ is the wrong number.
 **Closed ROUND-69 (fd, same SHAs):** the three stale rows rewritten rule-7 against tip facts (EnvDetect guarded :187-194 + zero prod callers + new probe caller; Program childDescriptor ladder); RawMode/Tty row already true → closed-claim cites `e163e7bfe` (verified live). Evidence: triage E369, fd REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: stale justification. **Out of lane —
-`sugar-crush/tests/StdinConstantReaderCensusTest.php` is on no lane's list this round. Reported, not
+`candy-code/tests/StdinConstantReaderCensusTest.php` is on no lane's list this round. Reported, not
 edited.**
 
 That file's class doc-block carries a judged row per entry in its roster, and this round's fixes make three
@@ -12930,7 +12930,7 @@ for ($n = 1; $n < 400; $n++) { $d = '/' . str_repeat('a', $n);
     if (strlen(sprintf($fmt, $d, 0755, $d)) > 400) { echo strlen($d); break; } }
 ```
 
-- production directory (`/tmp/sugar-crush-audit-1000`, 27 chars) → 224-char message, **not clipped**;
+- production directory (`/tmp/candy-code-audit-1000`, 27 chars) → 224-char message, **not clipped**;
 - the message crosses 400 at a directory path of **116 characters**, and because the remedy is the LAST
   clause it is the first thing to go.
 
@@ -12974,21 +12974,21 @@ No code change wanted.
 Lanes are told to OBSERVE their floor by re-running the suite at the round's base commit rather than
 inheriting the number, which is a good rule and produced an exact reproduction here
 (`9730 / 143168 / 1 / rc 0`). The base commit for round 49 is `b9abd2fb`, and
-`git show b9abd2fb:sugar-crush/tests/bootstrap.php | grep -c pinDefaultLogDirectory` answers **0** — the
+`git show b9abd2fb:candy-code/tests/bootstrap.php | grep -c pinDefaultLogDirectory` answers **0** — the
 audit-directory pin lands later in this very round. So the act of observing the floor runs a full suite
 with `HookManager::registerBuiltIns()` writing every tool call to
-`sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, which is precisely the leak E351 exists to
+`sys_get_temp_dir() . '/candy-code-audit-<euid>/audit.log'`, which is precisely the leak E351 exists to
 stop. The file was 29165 bytes when E351 was written and 52154 bytes after this lane's baseline run; some
 of that is sibling lanes at older commits and some of it is this observation.
 
 **Nothing is wrong with either rule.** They only conflict while the fix for the leak is younger than the
-commit the floor is measured at, which is a one-round window and is now closed for `sugar-crush`. It is
+commit the floor is measured at, which is a one-round window and is now closed for `candy-code`. It is
 written down because the shape recurs: any test-isolation fix whose landing round is also the round its
 baseline is measured in has the same property, and a reader finding a grown production file after a
 "read-only" baseline run should not go looking for a leak that was already fixed.
 
 **Step.** None on the code. When the lanes are merged, remove
-`/tmp/sugar-crush-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
+`/tmp/candy-code-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
 are still running suites at pre-pin commits, and no lane should glob-delete under `/tmp` in any case.
 ### E380 [NO-FIX] — E362's mechanism is refuted: a killed child produces a RED, and the RISKY comes from PHPUnit's own per-test limit
 
@@ -13077,7 +13077,7 @@ doc-block excused the narrow form on the grounds that "the launch child's exit s
 this file's business — it is a TUI process in a pipe". Both halves were wrong. **Measured:** pointing
 the one-shot helper at a nonexistent binary — a child that never ran, status 127 — left
 `testACleanOneShotRunIsSilent()` GREEN, `OK (1 test, 2 assertions)`; and the one-shot child is
-`bin/sugarcrush -p`, not a TUI in a pipe. Both children exit 0 on this host, three takes each, so the
+`bin/candy-code -p`, not a TUI in a pipe. Both children exit 0 on this host, three takes each, so the
 arm is now `assertSame(0, …)` and refuses 127 and 255 as well as 137. Re-mutated after the widening:
 the nonexistent-binary mutation is KILLED at 1 test / 2 assertions, in both helpers.
 
@@ -13123,7 +13123,7 @@ contained one.
 **So a single new file under `src/` reds two assertions there whatever its contents**, and a third
 (`testEverySourceFileDeclaresItsPsr4Symbol`) if it does not declare its PSR-4 symbol. Measured by
 creating one probe file at an exact path and deleting it: bare `<?php` reds three arms; a proper
-`final class` under `SugarCraft\Crush` still reds two.
+`final class` under `SugarCraft\Code` still reds two.
 
 This is not an argument for deleting the figures — they are derived-and-compared, which is the right
 shape, and E354's rule 18 is why they are computed rather than quoted in prose. It is a note that **a
@@ -13160,7 +13160,7 @@ Generator — one probe file, created and deleted at an EXACT path, never a glob
 verified empty by `git status --porcelain` before and after:
 
 ```sh
-cd sugar-crush
+cd candy-code
 vendor/bin/phpunit --log-junit control.xml                     # control
 printf '<?php\n' > tests/Support/<a name nothing else uses>.php
 vendor/bin/phpunit --log-junit testsprobe.xml
@@ -13487,7 +13487,7 @@ supplied resource, so the only correct answers are (a) carry the descriptor alon
 the constructor, or (b) resolve `STDIN`/`STDOUT`/`STDERR` to 0/1/2 and refuse an injected stream. Both
 change `PosixBackend::__construct()`, which `SugarCraft\Core\Util\Tty` and every `new Tty(null, …)` call
 site reach — a wider blast radius than the two one-line fixes shipped beside them, and one that
-`TtyStreamArgumentCensusTest` in `sugar-crush` already has opinions about.
+`TtyStreamArgumentCensusTest` in `candy-code` already has opinions about.
 
 Both now carry a judged roster row in
 `candy-core/tests/Util/Tty/DescriptorSinkArgumentCensusTest::ROSTER`, classified <!-- @rename-keep historical provenance -->
@@ -13897,7 +13897,7 @@ true and is why the helper takes a device path.
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: medium (duplication, not a live defect).
 
-E366's fix added `sugar-crush/src/Support/ProcessReaper.php` — one bounded
+E366's fix added `candy-code/src/Support/ProcessReaper.php` — one bounded
 SIGTERM → poll → signal 9 → `proc_close()` ladder — and put all four of this round's teardown sites on it
 (`ClaudeCodeMcpClient::disconnect()`, `LspConnection::stopProcess()`,
 `ClaudeCodeProvider`'s stream teardown, `BackgroundSupervisor`'s accept-failure path).
@@ -14043,17 +14043,17 @@ not the timing-dependent kind the round forbids, and they are correct usage. But
 macOS or Windows runner the count moves from 1 to several and any check pinned to the literal 1 reds for a
 reason that is not a defect.
 
-No action while `sugar-crush` is Linux-only in CI. **Trigger:** if `sugar-crush` is ever added to
+No action while `candy-code` is Linux-only in CI. **Trigger:** if `candy-code` is ever added to
 `MACOS_LIBS` or `WINDOWS_LIBS` in `ci.yml`, the skip-count invariant must be expressed per-platform first.
 
 ### E414 [CLOSED] — E366's mechanical repair is built: a lifetime scanner over `proc_open()`, and it found E366's own HIGH by machine
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: hygiene, mechanised. **BUILT + GUARDED this round.**
-Measured on PHP 8.3.6, `sugar-crush/src` only.
+Measured on PHP 8.3.6, `candy-code/src` only.
 
 E366 ended with a prescription: extending the existing descriptor-spec scanner to flag "long-lived child
 + nothing said about fd ≥ 3" makes E365 non-recurring instead of fixing today's five call sites by hand.
-That is now `sugar-crush/tests/Support/ChildLifetimeScanner.php`, with
+That is now `candy-code/tests/Support/ChildLifetimeScanner.php`, with
 `DescriptorInheritanceGuardTest` pointing it at `src/` and `ChildLifetimeScannerFixtureTest` pinning every
 rule against synthetic sources whose answer is known before the scanner is asked.
 
@@ -14099,7 +14099,7 @@ Both shapes are pinned in `ChildLifetimeScannerFixtureTest`, each in its own rig
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: process / merge hazard. **NOT A CODE FINDING.**
 
-Lane c's brief says under YOUR FILES: "`sugar-crush/tests/Support/ChildStderrCaptureScanner.php` and its
+Lane c's brief says under YOUR FILES: "`candy-code/tests/Support/ChildStderrCaptureScanner.php` and its
 own tests". The ownership map in the same brief lists `tests/Support/ChildStderrCapture*.php` under **lane
 d**, and lane c as "(censuses)" owning two `tests/Cli/` files its work items never mention. Two lanes were
 told they own one file.
@@ -14122,7 +14122,7 @@ other claimant is actually running before paying the cost of avoiding it.
 
 ---
 
-### E417 [CLOSED] — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
+### E417 [CLOSED] — DEFERRED: the seven rostered `candy-code/src` spawns still inherit fd 3+
 
 **Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`), CLOSED-WITH-EVIDENCE, zero code:** re-proved that a child inherits ALL non-cloexec parent fds regardless of spec — naming fds ADDS, never removes; stoppers are `O_CLOEXEC`/`'e'`, close-before-spawn, and reaping, and the guard file already carries that truth. Renote shipped at the round-67 close (this paragraph). Evidence: triage E417, worklog ROUND 67.
 
@@ -14145,16 +14145,16 @@ SIGKILL teardown.
 
 ---
 
-### E418 [CLOSED] — DEFERRED: the guard's scope is `sugar-crush/src` and nothing else
+### E418 [CLOSED] — DEFERRED: the guard's scope is `candy-code/src` and nothing else
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: coverage. Named so a green run is not misread.
 
-`DescriptorInheritanceGuardTest` walks `sugar-crush/src` only. **Not covered:** `sugar-crush/bin/` ·
-`sugar-crush/tests/` (spawn-heavy, and a test's child is short-lived by construction far more often) · and
+`DescriptorInheritanceGuardTest` walks `candy-code/src` only. **Not covered:** `candy-code/bin/` ·
+`candy-code/tests/` (spawn-heavy, and a test's child is short-lived by construction far more often) · and
 every other lib. E366's cross-lib HIGH/MEDIUM list — `sugar-dash/src/Plugin/ExternalModule.php`, <!-- @rename-keep -->
 `sugar-reel/src/AudioPlayer.php`, `sugar-reel/src/Decode/FfmpegDecoder.php`, <!-- @rename-keep -->
 `candy-core/src/WorkerPool.php`, `candy-core/src/Program.php` — has no equivalent guard, and the scanner is <!-- @rename-keep historical provenance -->
-a sugar-crush test-support class so pointing another lib at it means promoting it somewhere shared first.
+a candy-code test-support class so pointing another lib at it means promoting it somewhere shared first.
 
 ---
 
@@ -14718,7 +14718,7 @@ would not reproduce in a quiet tree — which is consistent with both failures t
 ### E436 [CLOSED] — `McpClient::startServer()` catches `\RuntimeException`, so any other throw defeats its own stated purpose
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: real. **Measured.** Out of lane b's file list
-(`sugar-crush/src/MCP/McpClient.php`).
+(`candy-code/src/MCP/McpClient.php`).
 
 `startServer()` wraps `$server->start()` in `catch (\RuntimeException) { return; }` under a comment that
 says "A single unreachable/misbehaving server must not abort loading the rest." Only `RuntimeException`
@@ -14757,12 +14757,12 @@ falsifies E413.**
 E413 said `BackgroundSupervisorReapTest` "moves the suite's skip count off 1 on any non-Linux runner" and
 asked for its `markTestSkipped()` calls to be replaced with doubles. Three measurements against the tree:
 
-1. **`sugar-crush` is in neither `WINDOWS_LIBS` nor `MACOS_LIBS`** in `scripts/affected-libs.php` — the
+1. **`candy-code` is in neither `WINDOWS_LIBS` nor `MACOS_LIBS`** in `scripts/affected-libs.php` — the
    hand-maintained opt-in pools that populate `ci.yml`'s `windows_matrix`/`macos_matrix`. The suite runs
    on `ubuntu-latest` and nowhere else, so no gate in that file can reach a runner without `/proc`.
 2. **The file holds 4 of the suite's skip sites, not all of them.** Generator, PHP 8.3.6, run BOTH in the
-   lane-b worktree and against the base commit (`git grep … 606a131c -- sugar-crush/tests/`), identical
-   answers: `grep -rnE '\$this->markTestSkipped\(' sugar-crush/tests/ | wc -l` → **149** call sites
+   lane-b worktree and against the base commit (`git grep … 606a131c -- candy-code/tests/`), identical
+   answers: `grep -rnE '\$this->markTestSkipped\(' candy-code/tests/ | wc -l` → **149** call sites
    across **51** files.
    ⚠️ THE OBVIOUS GENERATOR IS WRONG HERE, AND IT CAUGHT ME. Grepping the bare word `markTestSkipped`
    answers **164** at this HEAD and **162** at `606a131c` — the difference is prose. Doc-blocks that
@@ -14779,7 +14779,7 @@ asked for its `markTestSkipped()` calls to be replaced with doubles. Three measu
 
 **What was shipped instead:**
 `BackgroundSupervisorReapTest::testThisSuiteIsNotOptedIntoAnyNonLinuxCiRunner()` — a tripwire that reds
-the day `sugar-crush` is added to either pool, i.e. the day E413's premise becomes true, in the same
+the day `candy-code` is added to either pool, i.e. the day E413's premise becomes true, in the same
 change that would otherwise have moved the count silently. It carries a known-positive control
 (`candy-core` IS in both pools) and reds on a pool it cannot parse rather than passing. <!-- @rename-keep historical provenance -->
 
@@ -14971,15 +14971,15 @@ candy-core edit. Hence: not done, recorded. <!-- @rename-keep historical provena
 **STEP:** spell the spec where the call can see it, in candy-core, then widen <!-- @rename-keep historical provenance -->
 `testNoDescriptorSpecInSrcIsUnreadable()` to `LIB_SCOPE` alongside the exposure arm.
 
-### E448 [CLOSED] — three exposed spawns sit in libraries `sugar-crush` cannot reach
+### E448 [CLOSED] — three exposed spawns sit in libraries `candy-code` cannot reach
 
 **Closed ROUND-67 wave-1 (lane df — masters `aa2497e07`/`5b6bb6b1b`/`1a4c39fc4`):** the unreachable spawns got the bounded-reap mitigations in their own libs (dash/reel, see E366) and now sit on the repo-wide gate's ACCOUNTED roster as E366-mitigated rows. Evidence: triage E448, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: finding. **Measured.**
 
 The E418 widening reaches only what `vendor/sugarcraft` contains. Scanning every `*/src` in the monorepo
-with the same instrument found **35 sites, 13 exposed**; seven are sugar-crush's own and three are now
-rostered in `ACCOUNTED_FOR_IN_LIBS`. The remaining three are in packages sugar-crush does not require, so
+with the same instrument found **35 sites, 13 exposed**; seven are candy-code's own and three are now
+rostered in `ACCOUNTED_FOR_IN_LIBS`. The remaining three are in packages candy-code does not require, so
 no guard anywhere sees them:
 
 - `sugar-dash/src/Plugin/ExternalModule.php::startProcess` — long, spec 0,1,2 <!-- @rename-keep -->
@@ -14988,7 +14988,7 @@ no guard anywhere sees them:
 
 Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8.3.6.
 
-**STEP:** `ChildLifetimeScanner` is a `tests/Support/` class in sugar-crush and cannot be required by a
+**STEP:** `ChildLifetimeScanner` is a `tests/Support/` class in candy-code and cannot be required by a
 lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or <!-- @rename-keep -->
 copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that does not drift. <!-- @rename-keep -->
 
@@ -15002,7 +15002,7 @@ copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that doe
 genuinely cannot be loaded from this process. That derivation is right, and it is stated at the roster.
 What it leaves out is not `tests/`, and is worth a step of its own.
 
-Measured over the 18 libraries in `sugar-crush/vendor/sugarcraft`, PHP 8.3.6 on Linux 6.8.0-138-generic:
+Measured over the 18 libraries in `candy-code/vendor/sugarcraft`, PHP 8.3.6 on Linux 6.8.0-138-generic:
 every one declares `autoload.psr-4 => src` and nothing else, so the walk sees **438** `.php` files. Two
 kinds of real code sit outside that set:
 
@@ -15016,7 +15016,7 @@ kinds of real code sit outside that set:
   derived reason as `tests/` — but unlike `tests/`, an example is code a user is invited to run.
 
 Generator: `autoloadRoots()`'s own logic re-implemented standalone over
-`sugar-crush/vendor/sugarcraft/*/composer.json`, plus `ChildLifetimeScanner::scan()` over the non-autoload
+`candy-code/vendor/sugarcraft/*/composer.json`, plus `ChildLifetimeScanner::scan()` over the non-autoload
 paths. Both re-run at `c54172f09`.
 
 **STEP:** decide, once, whether "reachable" for this guard means *loadable* (today's answer, derived and
@@ -15068,7 +15068,7 @@ cheap relative to a fix, and a stale review is worse than no review because it l
 replaced it with `ps -eo args= | grep -c '[p]hp -S'`. That form is correct but it is still not a valid
 reading while a suite is in flight: the suites spawn `php -S` children legitimately and reap them within
 seconds. MEASURED at the round-54 merge, same host, same command, minutes apart: **3** while the
-sugar-crush suite was running, **2** moments after it finished, **0 / 0 / 0** on three consecutive
+candy-code suite was running, **2** moments after it finished, **0 / 0 / 0** on three consecutive
 samples once the tree was quiet. A supervisor sampling at either of the first two moments records a leak
 that does not exist, and — worse — one that will not reproduce.
 
@@ -15106,7 +15106,7 @@ NOT round-54 fallout — it predates the merge).
 
 ```
 Dead path-repo dependencies (candidates for pruning):
-sugar-crush:
+candy-code:
   - PRUNE_REQUIRE_AND_REPO  sugarcraft/candy-kit  tests_uses: no  (not reachable via other requires or require-dev) <!-- @rename-keep historical provenance -->
 1 finding(s). Read-only report
 ##[error]Process completed with exit code 1.
@@ -15123,7 +15123,7 @@ the standing rule is that dormant code gets WIRED or documented as an intentiona
 `candy-kit` is a foundation lib; a `sugar-crush` that cannot reach it is more likely to be missing a <!-- @rename-keep historical provenance -->
 wiring than carrying a stale require.
 
-**STEP:** decide which it is, with evidence. Either (a) find what `sugar-crush` was meant to use
+**STEP:** decide which it is, with evidence. Either (a) find what `candy-code` was meant to use
 `candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the <!-- @rename-keep historical provenance -->
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
@@ -15131,7 +15131,7 @@ Whichever way it goes, reconcile the two checks so the local merge checklist and
 **Decision record added 2026-10-07 (lane LL-kit-sprinkles) — the E453 STEP's two options were both the
 wrong frame, and the standing rule in this very section already names the third: dormant code is "WIRED or
 documented as an intentional seam, never deleted".** `candy-kit` is the documented seam. It stays in <!-- @rename-keep historical provenance -->
-`sugar-crush`'s require set UNWIRED, and `PRUNE_REQUIRE_AND_REPO` (option b) is explicitly refused — the
+`candy-code`'s require set UNWIRED, and `PRUNE_REQUIRE_AND_REPO` (option b) is explicitly refused — the
 dependency is not spent, it is deferred against one named restyle. What defers it is a genuine conflict of
 intent between the two libraries, not an oversight:
 
@@ -15139,8 +15139,8 @@ intent between the two libraries, not an oversight:
   `HelpText.php` and `Section.php`) strips the whole C0 range, **including `\n`**, because its presenters
   feed a frame-diff renderer that owns one row per line — a stray newline would knock a row out of a border
   box. The flattening is the library's contract, not a bug.
-- `sugar-crush`'s `--help` page decides the **opposite** on purpose: `Cli\Help::screen()`
-  (`sugar-crush/src/Cli/Help.php:41-46`) returns `cli.help.screen` as ONE catalogue entry, "translated as a
+- `candy-code`'s `--help` page decides the **opposite** on purpose: `Cli\Help::screen()`
+  (`candy-code/src/Cli/Help.php:41-46`) returns `cli.help.screen` as ONE catalogue entry, "translated as a
   page, column layout included", written straight to STDOUT where the terminal does the wrapping. Its line
   breaks and continuation indents are load-bearing content (`serve`'s option block,
   `session pin|unpin|…`).
@@ -15149,7 +15149,7 @@ Adopting `HelpText` for the help screen is therefore a **content-model rewrite, 
 presenter that guarantees one-line output cannot carry a multi-hundred-line page whose meaning lives in its
 breaks, and `HelpTest` asserts line-start anchors that any re-layout would break. `crush_libs.md` item 8
 asked for exactly this to be recorded so the item stops being costed as a restyle — done here; the matching
-analysis is at `crush_libs.md:348-349`. The by-hand confirmation lives in `sugar-crush/composer.json`'s
+analysis is at `crush_libs.md:348-349`. The by-hand confirmation lives in `candy-code/composer.json`'s
 `extra.sugarcraft.deferred-wiring` row (which `tools/check-path-repos.php --unused` reads, reporting
 DEFERRED_WIRING instead of a prune candidate), and that row — not this one — is what to delete when the
 wiring finally lands. Revisit only if the help page is ever restructured into per-row translatable keys.
@@ -15189,16 +15189,16 @@ LAST step, not after the tool** — the tool exiting 0 says nothing about `vendo
 
 **Reported 2026-08-25 by the user, typing normal space-separated words into the live TUI.** Severity:
 functional, user-visible, on the single most-used surface in the app. Not a round finding — this came
-from daily-driving `sugar-crush`.
+from daily-driving `candy-code`.
 
-> "when you are typing a long line in sugar-crush it keeps going past the end of the screen instead of
+> "when you are typing a long line in candy-code it keeps going past the end of the screen instead of
 > expanding the chat input to multiple lines and wrapping to the next line (im putting in diff words with
 > spaces .. so it should have wrapped)"
 
 The report explicitly rules out the usual excuse: the draft is ordinary words with spaces, so there is no
 unbreakable token and a word wrap has somewhere to break.
 
-**Diagnosis.** `Renderer::renderInput()` (`sugar-crush/src/Renderer.php:3776`) composes the draft as ONE
+**Diagnosis.** `Renderer::renderInput()` (`candy-code/src/Renderer.php:3776`) composes the draft as ONE
 string — `"> "` + the sanitized buffer with the block cursor spliced in at the cursor column — and hands
 it straight to a bordered `Style` with `padding(0, 1)` and **no `->width()` and no wrap call at all**:
 
@@ -15215,7 +15215,7 @@ box grows to the natural width of the draft and emits a single row far wider tha
 transcript goes through `fitToPane($body, $contentWidth)` at `Renderer.php:1067` — described in its own
 comment as "the single choke point where the pane-width invariant is enforced" — and even the permission
 prompt hand-rolls a `wordwrap()` at `Renderer.php:3748`. `InputPane::render()`
-(`sugar-crush/src/Tui/Components/InputPane.php:17`) computes `max(1, $cols - 4)` and sets a width, but
+(`candy-code/src/Tui/Components/InputPane.php:17`) computes `max(1, $cols - 4)` and sets a width, but
 that class only ever paints the *placeholder* box; the live input is painted here, and here nothing
 constrains it.
 
@@ -15267,7 +15267,7 @@ work, and the failure message actively misleads. Second user-reported bug of the
 > no progress"
 
 **The report is correct, and the mechanism is exact.** `Runtime::runStreaming()`
-(`sugar-crush/src/Runtime.php:380`):
+(`candy-code/src/Runtime.php:380`):
 
 ```php
 $buffer .= $response->content;
@@ -15416,7 +15416,7 @@ immediately in a `pcntl_fork()`ed child (owning pid captured at arm time).
 
 **Non-Linux, stated rather than discovered:** off Linux it REPORTS and does not fail, with a header
 naming the platform. That is safe because round 54's `testThisSuiteIsNotOptedIntoAnyNonLinuxCiRunner()`
-reds the day `sugar-crush` enters `WINDOWS_LIBS`/`MACOS_LIBS`. The two together are the pair E438 asked
+reds the day `candy-code` enters `WINDOWS_LIBS`/`MACOS_LIBS`. The two together are the pair E438 asked
 for.
 
 **THE ACCEPTANCE TEST IS THE ONE THAT MATTERS.** A second skip was injected into a real, unrelated test
@@ -15528,7 +15528,7 @@ right answer was to stop leaking, not to loosen the walk.
 **Recorded 2026-08-25 by round-55 lane a.** Severity: process. **Stated, not fixable by a lane.**
 
 The brief's own lane map says lane a owns `candy-core/src/Util/Tty/` and `candy-core/tests/Util/Tty/` and <!-- @rename-keep historical provenance -->
-gives `sugar-crush/tests/` to lanes b and c; the brief's YOUR FILES section gives lane a
+gives `candy-code/tests/` to lanes b and c; the brief's YOUR FILES section gives lane a
 `sugar-crush/tests/`, `candy-pty/tests/` and exactly one file under `candy-core/tests/Util/Tty/`. This is <!-- @rename-keep historical provenance -->
 E416 recurring in the round that rewrote the map to fix it. Work was done against YOUR FILES, widened
 where a guard or a real defect forced it, and every such edit is named at the top of the lane report.
@@ -15546,7 +15546,7 @@ A class that skips from `setUpBeforeClass()` (or on class-level `#[Requires…]`
 `TestSuite\Skipped` and then `return false` — MEASURED in
 `Framework/TestSuite.php::invokeMethodsBeforeFirstTest()` — so its test methods never run, never emit
 `Test\Prepared`, and never emit `Test\Skipped`. **MEASURED, PHP 8.3.6 / PHPUnit 10.5.64**, a child suite
-booted from `sugar-crush/tests/bootstrap.php` holding one two-method class skipping in
+booted from `candy-code/tests/bootstrap.php` holding one two-method class skipping in
 `setUpBeforeClass()` plus one ordinary passing test: `OK, but some tests were skipped! / Tests: 1,
 Assertions: 1, Skipped: 1`, **rc 0, no roster output** — two tests gone from the `Tests:` total while the
 printed skip figure moved by one, so even a guard asserting "exactly one skip" on the printed line is
@@ -15748,7 +15748,7 @@ Same defect and same fix in `LspConnection::stopProcess()`, where the close goes
 ### E473 [CLOSED] — `ClaudeCodeMcpClient::sendMessage()` is the LAST member of the E443 family, OUT OF LANE
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor-but-terminal. Out of lane b's file list
-(`sugar-crush/src/ClaudeCodeMcpClient.php`).
+(`candy-code/src/ClaudeCodeMcpClient.php`).
 
 E443 named two remaining sites. `LspConnection` is closed this round; this one is not, and it is
 unchanged from E443's description:
@@ -15832,7 +15832,7 @@ this is also why the EINTR branch cannot be tested with a closed fd (E471).
 ### E477 [CLOSED] — E436 is still open and is the reason E437 mattered
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: real. Out of lane b's file list
-(`sugar-crush/src/MCP/McpClient.php`).
+(`candy-code/src/MCP/McpClient.php`).
 
 Unchanged from E436: `startServer()` catches `\RuntimeException` only, under a comment saying "a single
 unreachable/misbehaving server must not abort loading the rest". This round widened what `parse()`
@@ -15921,12 +15921,12 @@ that its scope is deliberately private helpers and that duplicated fixtures/cons
 the first; the second at minimum, because the guard currently reads as though it covers duplication in
 general.
 
-### E482 [SUPERSEDED] — `Agents/TeamTest` asserts on the REAL `~/.sugar-crush`, so a concurrent lane reds it
+### E482 [SUPERSEDED] — `Agents/TeamTest` asserts on the REAL `~/.candy-code`, so a concurrent lane reds it
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real (CI/multi-lane flake). **Measured.**
 
 `TeamTest::tearDown()` asserts `$this->realHomeFootprint` is unchanged across every test, to catch a Team
-that wrote outside its sandbox HOME. The footprint it snapshots is the ACTUAL `~/.sugar-crush/teams/`,
+that wrote outside its sandbox HOME. The footprint it snapshots is the ACTUAL `~/.candy-code/teams/`,
 which is shared by every process on the box. MEASURED at the round-55 baseline: a full-suite run at
 `a8acfcc9` went rc 1 on this file while a SIBLING LANE's suite was creating `throwing-*` team directories
 in that same real home — timestamps inside the failing run's window, and 3100 leftover entries
@@ -15997,7 +15997,7 @@ and both arms carry the integer keys 0, 1, 2 — so which fds it names never dep
 and the scanner reads keys. It was refusing a shape nobody had taught it. Measured over the reachable
 closure: 8 sibling spawn sites, 1 unreadable → 0.
 
-The second half is the arm round 54 left narrow: unreadability was only ever asked of `sugar-crush/src`,
+The second half is the arm round 54 left narrow: unreadability was only ever asked of `candy-code/src`,
 which is the one place it could be answered by reading a diff. It is now asked across the closure.
 
 **A DIFFERENTIAL ORACLE BUILT FOR AN UNRELATED QUESTION FOUND THE REAL DEFECT.** Running the scanner
@@ -16014,7 +16014,7 @@ ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
 
 **Round 55, lane c.** NOT DONE. Costed, and the cost is the finding.
 
-E448's premise reproduces exactly. Scanning all 57 non-`sugar-crush` monorepo libs: **6 exposed spawns,
+E448's premise reproduces exactly. Scanning all 57 non-`candy-code` monorepo libs: **6 exposed spawns,
 3 of them in libraries outside sugar-crush's closure** — `sugar-dash/ExternalModule.php::startProcess`, <!-- @rename-keep -->
 `sugar-reel/FfmpegDecoder.php::open`, `sugar-reel/AudioPlayer.php::start`. All three are `long`, all <!-- @rename-keep -->
 three spec 0,1,2 only, and no guard anywhere sees them.
@@ -16058,22 +16058,22 @@ The tool's doc-block also claimed `--unused` is "NOT wired into CI", which was a
 was filed. Rewritten, not deleted.
 
 **STILL OPEN, and it is the general form:** three of the four `path-repo-check` steps have no local
-counterpart. `ManifestDependencyReachTest` closes the `--unused` one for `sugar-crush` only. Every other
+counterpart. `ManifestDependencyReachTest` closes the `--unused` one for `candy-code` only. Every other
 lib, and the closure and injection passes, remain checks the merge checklist cannot see.
 
 ### E488 [CLOSED] — the tool's `deferred-wiring` lookup never expires a row, for any of the other 57 libs
 
-Round 55's review found this in `sugar-crush`'s copy and it is fixed there; the same never-expires
+Round 55's review found this in `candy-code`'s copy and it is fixed there; the same never-expires
 property is still live in `tools/check-path-repos.php`. Its `$deferredWiring` closure is consulted only
 for a dependency the pass has ALREADY decided is dead, so nothing ever asks whether the row is still
 suppressing a real finding. Measured, in-lane, PHP 8.3.6: adding rows for `sugarcraft/candy-core` <!-- @rename-keep historical provenance -->
 (reached from `src/` on every page) and `sugarcraft/package-that-does-not-exist` (not even a require) to
-`sugar-crush/composer.json` left `--unused` at rc 0 saying nothing about either, and
+`candy-code/composer.json` left `--unused` at rc 0 saying nothing about either, and
 `ManifestDependencyReachTest` green at 2 tests / 26 assertions.
 
 `ManifestDependencyReachTest::idleDeferrals()` now reds on all four idle shapes — a row for a package
 this manifest does not require, a non-`sugarcraft/*` package, a dep `src/` already reaches, and a dep
-whose namespace does not resolve — but only for `sugar-crush`. A row in any of the other 57 manifests is
+whose namespace does not resolve — but only for `candy-code`. A row in any of the other 57 manifests is
 still an exemption nothing expires, which is rule 33's shape: an exemption written for correct code is a
 licence, and it is where the next real offender hides.
 
@@ -16371,7 +16371,7 @@ defect and is still pinned only by prose.
 **Recorded 2026-08-25 by lane a, from its own review.** Severity: low, merge hygiene.
 
 `StreamingDouble`, `BatchDouble`, `ThinkThenFailDouble` and `ScaledClockLoop` are declared at the top
-level of `SugarCraft\Crush\Tests\Backend`, in `tests/Backend/ReasoningProgressTest.php`. Nothing
+level of `SugarCraft\Code\Tests\Backend`, in `tests/Backend/ReasoningProgressTest.php`. Nothing
 collides in the tree today. The failure mode if something does is the nasty one: a sibling lane adding
 its own `StreamingDouble` in another file of the same namespace merges with no textual conflict and
 fatals at autoload, in a file neither author edited.
@@ -16388,13 +16388,13 @@ from a source file.**
 ### E498 [CLOSED] — `SymbolCitationDriftTest`'s alphabet cannot see a backticked cite, or anything in `tests/`
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real, instrument gap. **Measured.** Out of lane
-(`sugar-crush/tests/SymbolCitationDriftTest.php`, plus two `src/` files it would newly flag).
+(`candy-code/tests/SymbolCitationDriftTest.php`, plus two `src/` files it would newly flag).
 
 The guard scrapes `{@see …}` in `src/**.php` and backticked `` `FooTest::testBar()` `` in `docs/**.md`.
 It does not scrape `tests/**.php` at all, and it does not scrape backticked cites in PHP doc-blocks —
 where `src/` uses them freely. Generator: the guard's own `flatten()`, `parse()` and `resolve()` logic
-re-run over the two missing shapes, with `SugarCraft\Crush\Tests\` added as a third resolution candidate
-(the shipped resolver tries the bare token and `SugarCraft\Crush\` only, which alone reports twenty
+re-run over the two missing shapes, with `SugarCraft\Code\Tests\` added as a third resolution candidate
+(the shipped resolver tries the bare token and `SugarCraft\Code\` only, which alone reports twenty
 partially-qualified cites as dangling). PHP 8.3.6:
 
     shape             population
@@ -16423,14 +16423,14 @@ and the guard's own rule already says report-rather-than-guess; and several `Foo
 and write it so the pattern never appears literally.
 
 **STEP:** widen the scrape to `tests/**.php` and to backticked cites in PHP doc-blocks; add
-`trait_exists()`/`interface_exists()` and the `SugarCraft\Crush\Tests\` prefix to `resolve()`; exempt the
+`trait_exists()`/`interface_exists()` and the `SugarCraft\Code\Tests\` prefix to `resolve()`; exempt the
 guard's own file by path. Then fix the two `src/` cites above. The population figures here are provenance
 for this entry and must NOT be written into the test (rule 18) — the guard already asserts a floor.
 
 ### E499 [CLOSED] — E436's narrow catch has a live one-hop route, and the stdio half is closed
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real. **Measured end to end.** The remaining half
-is out of lane (`sugar-crush/src/MCP/McpClient.php`, `sugar-crush/src/MCP/HttpMcpServer.php`).
+is out of lane (`candy-code/src/MCP/McpClient.php`, `candy-code/src/MCP/HttpMcpServer.php`).
 
 E477 asked whether E436 is cheap to close. The answer is that E436 was understated: it is not a general
 robustness worry with no route. `parseTools()` filtered `is_array($def)` and nothing else, then handed
@@ -16472,7 +16472,7 @@ move E412's `TypeError` into `parseTools()`. (b) `HttpMcpServer::start()` wraps 
 ### E500 [CLOSED] — `readMessages()` dropped any reply that did not arrive whole in one call
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real. **Measured. Fixed this round.** In lane
-(`sugar-crush/src/ClaudeCodeMcpClient.php`).
+(`candy-code/src/ClaudeCodeMcpClient.php`).
 
 Found while confirming E473, and worse than E473 because it needs no oversized anything. The line
 accumulator was a LOCAL, so a reply whose line had not arrived whole by the time the method returned went
@@ -16495,7 +16495,7 @@ known-answer case through it. Rule 13, in a probe built to check rule 13's subje
 ### E501 [CLOSED] — E479's premise is false: `toArray()` was never a wire serialiser
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: finding-instrument correction. **Measured.
-Resolved this round.** In lane (`sugar-crush/src/McpMessage.php`).
+Resolved this round.** In lane (`candy-code/src/McpMessage.php`).
 
 E479 records that `toArray()` "NOW emits a key that is not JSON-RPC", meaning round 55's `resultSet`
 sentinel. `git log -L '/function toArray/,/^    }/'` on the method shows `isNotification` — equally not a
@@ -16515,7 +16515,7 @@ now has a row, in both polarities, because an always-true sentinel resolves noth
 ### E502 [CLOSED] — E476's site list was short, and the exception's discriminator is "selectable", not "valid"
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: latent. **Measured. Fixed this round.** In lane
-(`sugar-crush/src/MCP/StdioMcpServer.php`).
+(`candy-code/src/MCP/StdioMcpServer.php`).
 
 E476 named `readLine()` and `writeLine()`. `absorbStderr()`'s bare `fread($this->pipes[2], 8192)` is the
 same exposure and is the EXACT call `LspConnection::drainStderr()`'s doc-block cites E367 about. All
@@ -16564,7 +16564,7 @@ is about an EXCHANGE and an exchange is a write and a read.
 ### E504 [CLOSED] — `LspClient` carries pairs of character-identical method bodies
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: hygiene, with a measured cost to instruments. Out
-of lane (`sugar-crush/src/LSP/LspClient.php`).
+of lane (`candy-code/src/LSP/LspClient.php`).
 
 `references()` and `referencesFor()` differ only in their signature; their bodies are the same five lines,
 28 lines apart, and the same shape recurs across the `definitions`/`definitionsFor`, `hover`/`hoverFor`
@@ -16706,20 +16706,20 @@ here because the shape is syntactic; it needs a known-positive fixture like anyt
 
 ---
 
-### E511 [CLOSED] — 🔴 a test wrote 3 directories into the developer's REAL `~/.sugar-crush` on every suite run, and that is the cross-lane flake
+### E511 [CLOSED] — 🔴 a test wrote 3 directories into the developer's REAL `~/.candy-code` on every suite run, and that is the cross-lane flake
 
 **FIXED this round.** E482's premise was inverted. `Agents/TeamTest` does not "assert on the real
-`~/.sugar-crush`" in the sense meant: it sandboxes BOTH spellings of `HOME` and reads the real config dir
+`~/.candy-code`" in the sense meant: it sandboxes BOTH spellings of `HOME` and reads the real config dir
 only to assert in `tearDown()` that it stayed untouched. TeamTest is the **detector**, not the offender.
 
 **The offender, measured:** `Integration/MultiAgentRefactorTest` moved only `$_SERVER['HOME']` and not
 `getenv('HOME')`, while the readers it reaches resolve through `HomeDirectory`, which prefers `getenv()`.
-One `--filter MultiAgentRefactor` run took the real `~/.sugar-crush/teams/` from **3133 to 3136** entries
+One `--filter MultiAgentRefactor` run took the real `~/.candy-code/teams/` from **3133 to 3136** entries
 — `refactor-*`, `solo-*`, `throwing-*`, one per test that builds a Team. That directory's mtime was
 minutes old when this was found. With both spellings moved the per-run delta is **0**.
 
 **Why it is a flake and not litter.** Three lanes run this suite concurrently against ONE home directory.
-TeamTest snapshots the real `~/.sugar-crush` before each of its tests and compares after; another lane's
+TeamTest snapshots the real `~/.candy-code` before each of its tests and compares after; another lane's
 `MultiAgentRefactorTest` landing three directories in between reds a test that did nothing wrong, at a
 moment nobody can reproduce afterwards. This is the round-44 shared-`/tmp` collision one directory over.
 
@@ -16730,7 +16730,7 @@ BACKLOG checked in both directions — a new one-sided file reds, and a rostered
 reds — so it can only shrink. No row carries a reason, deliberately: there is no good reason to sandbox
 half of `HOME`, and a column for one would invite filling it in.
 
-**NOT DONE:** the ~3,133 already-leaked directories under `~/.sugar-crush/teams/` are left in place. That
+**NOT DONE:** the ~3,133 already-leaked directories under `~/.candy-code/teams/` are left in place. That
 is the user's home directory and deleting from it was not asked for. Someone should, with permission.
 
 ---
@@ -16818,7 +16818,7 @@ reasoning rewritten into the classifier's doc-block, not deleted.
 **FIXED this round (E488).** The brief's claim that the hatch "never expires a row" is **not true** —
 round 55's `ManifestDependencyReachTest` already retires one three ways, and its own doc-block records
 that an attack rather than a reading found that hole. **What is true is that the enforcement does not
-travel:** that guard is a PHPUnit test inside `sugar-crush` reading `sugar-crush`'s manifest, and it is
+travel:** that guard is a PHPUnit test inside `candy-code` reading `candy-code`'s manifest, and it is
 the only one of 58 libs that has it, while `tools/check-path-repos.php` honours the hatch for all of them
 and `ci.yml` gates on `--unused` with no `continue-on-error`.
 
@@ -17080,7 +17080,7 @@ whose fixtures all take one branch cannot notice a guard that moved into that br
 
 E495 fixed the eight in `src/Backend.php` and `src/Backend/`, and
 `tests/Backend/BackendSignatureNullabilityTest.php` pins that family. A token-level census of the whole of
-`sugar-crush/src` (295 files at the time) found **two more**, both in `src/Workflows/Workflow.php`
+`candy-code/src` (295 files at the time) found **two more**, both in `src/Workflows/Workflow.php`
 (`WorkflowStatus $workflowStatus = null` and `bool $stopOnFirstFailure = null`), which was not this lane's
 file. They are the same PHP 8.4 deprecation and the same one-character fix.
 
@@ -17106,7 +17106,7 @@ rather than trusting this paragraph.
 
 **The generator**, so this is a measurement and not a sentence: `implicitlyNullableParams()` invoked by
 reflection out of `tests/Backend/BackendSignatureNullabilityTest.php` over every `*.php` under
-`sugar-crush/src` via `RecursiveDirectoryIterator`, PHP 8.3.6, deterministic (no seed, no sampling).
+`candy-code/src` via `RecursiveDirectoryIterator`, PHP 8.3.6, deterministic (no seed, no sampling).
 
 ---
 
@@ -17684,7 +17684,7 @@ test rather than at the test class:
 | `tests/LSP/LspConnectionShutdownTest.php` | `{@see readResponse()}` |
 | `tests/Tools/BuiltIn/SkillPathScopingTest.php` | `{@see forPaths()}` |
 
-GENERATOR, reproducible from a clean checkout and not from anyone's scratchpad — walk `sugar-crush/tests`
+GENERATOR, reproducible from a clean checkout and not from anyone's scratchpad — walk `candy-code/tests`
 for `*.php`; flatten doc-comment continuations with `preg_replace('/\R\s*\*\s*/', ' ', $source)`; match
 `/\{@see\s+(\w+)\(\)\s*\}/`; collect every class-like symbol the file declares with
 `/^(?:final\s+|abstract\s+|readonly\s+)*(?:class|trait|interface|enum)\s+(\w+)/m` qualified by the
@@ -17733,7 +17733,7 @@ lane touched no `candy-*` file, verified with `git diff --name-only`), every tak
 - **Arm C — THE EXPERIMENT THAT HAD NEVER BEEN RUN: the full `sugar-crush` suite and then `candy-pty`, <!-- @rename-keep historical provenance -->
   back to back in one script, 4 cycles.** That is the only context the single observed hang occurred in.
   All four clean, and byte-identical: `10137 / 154739 / 1` then `630 / 1494 / 16 / 1w` every time.
-- Arm A ran CONCURRENTLY with the lane's own `sugar-crush` runs for most of its 49 takes, so a
+- Arm A ran CONCURRENTLY with the lane's own `candy-code` runs for most of its 49 takes, so a
   contended box is covered too.
 
 **53 takes, 0 events.** One-sided 95% upper bound on the per-take rate: `1 - 0.05^(1/53)` ≈ **5.5%**. The
@@ -17760,10 +17760,10 @@ one arm has reached ~230.
 **DEFERRED (round 57, lane c) — with the measurement that decides it.** Round 57 shipped a stacked
 doc-comment pair into `tools/tests/CheckPathReposTest.php` in the same round whose subject was the
 stacked-doc-comment guard, and nothing saw it: `RuntimeNoticeSinkDeliveryTest::phpSourceRoster()` walks
-`sugar-crush/{src,tests}` plus `bin/sugarcrush`, and `SymbolCitationDriftTest` walks `sugar-crush/{src,
+`candy-code/{src,tests}` plus `bin/candy-code`, and `SymbolCitationDriftTest` walks `candy-code/{src,
 tests,docs}`. `tools/` sits at the MONOREPO root, one level above both.
 
-**Why the one-line fix is wrong.** Adding `../../tools` to either roster makes a `sugar-crush` test
+**Why the one-line fix is wrong.** Adding `../../tools` to either roster makes a `candy-code` test
 reach outside its own package. Every lib is published standalone as `sugarcraft/<lib>`, and in that split
 clone `tools/` does not exist — so the guard would red (or need a silent `is_dir()` skip, which is a
 guard that scores zero in the environment CI publishes to). The same argument that forbids a
@@ -17834,7 +17834,7 @@ used for E521's census block, and the only one that distinguishes "looks attache
 ### E555 [CLOSED] — 🔴 the citation guard called a NAMESPACE a dangling class, and the classifier was the defect
 
 **MEASURED at the round-57 merge. Fixed and pinned in three directions.** Lane c's backtick widening
-(E498/E509) scraped `` `SugarCraft\Crush\Tests\Backend` `` out of the four test doubles lane a created —
+(E498/E509) scraped `` `SugarCraft\Code\Tests\Backend` `` out of the four test doubles lane a created —
 where the sentence explains which shared namespace they were lifted OUT of — and `resolve()` answered null,
 because no CLASS of that name exists. Four rows, all reported as "no such test class".
 
@@ -18004,8 +18004,8 @@ instead, where the real message is not quoted at all.
 **Round 58, lane a. Reported, not resolved.** The brief states the map and each lane's file list "were
 reconciled before launch, deliberately", so a disagreement is news. There is one:
 
-* **map, lane a bullet:** `sugar-crush/tests/Context/` — the whole directory
-* **lane a's own FILES section:** `sugar-crush/tests/Context/RepoMapBlockTest.php` — one file of eleven
+* **map, lane a bullet:** `candy-code/tests/Context/` — the whole directory
+* **lane a's own FILES section:** `candy-code/tests/Context/RepoMapBlockTest.php` — one file of eleven
 
 Lane a followed the intersection and touched only `RepoMapBlockTest.php`, so nothing was breached either
 way. **This is the same shape round 57's lane b found (`src/MCP/`), one round after the reconciliation
@@ -18057,11 +18057,11 @@ rendered byte totals, its description-length median and mean, and how many of it
 re-derived at the lane's HEAD and are correct**; none is asserted by anything, and the median in
 particular moves on a `description` edit in ANY sub-package's manifest.
 
-Generator (PHP 8.3.6, run from `sugar-crush/`, `<root>` = the monorepo root):
+Generator (PHP 8.3.6, run from `candy-code/`, `<root>` = the monorepo root):
 
 ```php
 php -r 'require "vendor/autoload.php";
-$b = \SugarCraft\Crush\Context\RepoMapBlock::capture("<root>");
+$b = \SugarCraft\Code\Context\RepoMapBlock::capture("<root>");
 $p = []; foreach (explode("\n", $b->render()) as $l)
     if (str_starts_with($l, "- ") && str_contains($l, "->")) $p[] = $l;
 $d = array_map(fn($x) => strlen($x["description"]), $b->packages()); sort($d); $n = count($d);
@@ -18110,7 +18110,7 @@ neighbour's blindness rather than a bug of its own, which is where rule 11 says 
 Test` had `T_FN` missing from a guard whose entire subject is parameter spellings. Generator:
 
 ```sh
-cd sugar-crush && for f in $(/usr/bin/grep -rl "T_FUNCTION" tests/ --include=*.php | sort); do
+cd candy-code && for f in $(/usr/bin/grep -rl "T_FUNCTION" tests/ --include=*.php | sort); do
   printf "%s T_FUNCTION=%s T_FN=%s\n" "$f" \
     "$(/usr/bin/grep -c T_FUNCTION "$f")" "$(/usr/bin/grep -c 'T_FN\b' "$f")"
 done
@@ -18210,7 +18210,7 @@ than a widening.
 ### E573 [NO-FIX] — the round-58 ownership map names a lane-c file that does not exist
 
 The map's preamble states that every path in it "was verified to exist at `535d721ff` before this brief was
-written (E334)". `git ls-tree 535d721ff sugar-crush/tests/` has no `StackedDocCommentTest.php`, which the
+written (E334)". `git ls-tree 535d721ff candy-code/tests/` has no `StackedDocCommentTest.php`, which the
 map lists among lane c's four test-root files. Round 57's map/brief disagreement was found by one lane of
 three; this round's was reconciled before launch and still carries one bad path. **The E334 check evidently
 does not cover the ownership block**, only the per-lane file lists.
@@ -18275,12 +18275,12 @@ turn an `[unclassified]` into a real verdict, never an offender into `safe`.
 
 That reasoning is written into the method's doc-block but nothing pins the direction it claims. A fixture
 asserting that the permissive fallback cannot produce a `safe` verdict for a type PHP would have failed to
-load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `sugar-crush/tests`
+load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `candy-code/tests`
 (463 files), so this is latent.
 
 ### E579 [CLOSED] — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
 
-`sugar-crush/tests/Config/GlobFigureDriftTest.php`'s class doc-block repeats one line verbatim:
+`candy-code/tests/Config/GlobFigureDriftTest.php`'s class doc-block repeats one line verbatim:
 
     * derives the TOOL SET the glob leaves. It holds the glob as a class constant
     * derives the TOOL SET the glob leaves. It holds the glob as a class constant
@@ -18332,23 +18332,23 @@ neither half survives contact:**
 
 1. **The zero-copy reach is impossible.** `.github/workflows/ci.yml`'s `path-repo-check` — the only job
    that runs `tools/tests/` — does NO `composer install` (that is why it installs a PHPUnit PHAR rather
-   than borrowing a lib's `vendor/bin`). There is no autoloader for `SugarCraft\Crush\Tests\*` there, and
+   than borrowing a lib's `vendor/bin`). There is no autoloader for `SugarCraft\Code\Tests\*` there, and
    `require`-ing the canonical guard to reflect its scanner fatals before PHPUnit reports anything:
-   VERIFIED, PHP 8.3.6, `Trait "SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait" not found`.
+   VERIFIED, PHP 8.3.6, `Trait "SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait" not found`.
 2. **`DuplicatedTestHelperDriftTest` would never have seen the copy.** The conclusion holds; the reason
-   first filed here did not. **WHAT THIS SAID:** "MEASURED: its roster is `sugar-crush/src` alone."
-   **WHAT IS TRUE NOW:** that guard's roster is `sugar-crush/tests/`, via
+   first filed here did not. **WHAT THIS SAID:** "MEASURED: its roster is `candy-code/src` alone."
+   **WHAT IS TRUE NOW:** that guard's roster is `candy-code/tests/`, via
    `TestFileWalkTrait::everyTestFile()` rooted at `\dirname(__DIR__)`; its one direct walk of `src/` is
    `declaredTypeNames()`, an auxiliary "is this name a class here" lookup, not the population it compares.
-   **WHY THE ENTRY STANDS:** `tools/` is outside `sugar-crush/tests/` exactly as it is outside
-   `sugar-crush/src/`, so the copy would have been unwatched drift under either roster — which is worse
+   **WHY THE ENTRY STANDS:** `tools/` is outside `candy-code/tests/` exactly as it is outside
+   `candy-code/src/`, so the copy would have been unwatched drift under either roster — which is worse
    than a pinned copy. Caught in review; the same wrong reason had also been written into
    `tools/tests/StackedDocCommentTest.php`'s class doc-block and is corrected there.
 
 So the scanner IS copied, and the copy is **pinned** rather than wished away: the new guard reads the
 canonical implementation as TEXT — needing no autoloader — and compares token streams, so reformatting is
 free and a behaviour change reds naming the file to port into. **Mutating the CANONICAL scanner in
-`sugar-crush` reds `tools/tests/` (M9, KILLED)**, which is the property that makes the copy defensible.
+`candy-code` reds `tools/tests/` (M9, KILLED)**, which is the property that makes the copy defensible.
 A real stacked pair injected into `tools/gen-docs.php` also reds (M14).
 
 ### E582 [CLOSED] — rule 18 demonstrated on itself, inside one round
@@ -18462,11 +18462,11 @@ that assertion reverted is **GREEN — 1 test, 2 assertions**. One line, and the
 ### E588 [CLOSED] — repo-root `tools/` env vars are on no roster at all
 
 `SUGARCRAFT_GEN_DOCS_ROOT` (added this round) and `SUGARCRAFT_CHECK_PATH_REPOS_ROOT` (pre-existing) are
-documented only in their own comments. `EnvRosterDriftTest`'s roster is `sugar-crush/src` +
-`sugar-crush/bin` under the `SUGARCRUSH_`/`SUGAR_CRUSH_` alphabet, so a `SUGARCRAFT_`-prefixed variable at
+documented only in their own comments. `EnvRosterDriftTest`'s roster is `candy-code/src` +
+`candy-code/bin` under the `SUGARCRUSH_`/`SUGAR_CRUSH_` alphabet, so a `SUGARCRAFT_`-prefixed variable at
 the monorepo root is covered by nothing — the new one is consistent with its sibling rather than a
 regression, which is why it was left. **Not deferred for cost: deferred because the roster is
-`sugar-crush`-rooted by design and reaching `tools/` from it is the same dependency inversion E581
+`candy-code`-rooted by design and reaching `tools/` from it is the same dependency inversion E581
 records.** A `tools/tests/` guard is the shape that would work, on the model of `StackedDocCommentTest`.
 
 ### E589 [CLOSED] — a manifest-policy CI job now reds on a test file's token stream
@@ -18528,10 +18528,10 @@ excusing one does. Rule 41 is written for survivors; this is the same rule for k
 one round after the supervisor's brief asserted that the map and every lane's file list "were reconciled
 before launch, deliberately":
 
-- **E561 (lane a)** — the map grants lane a `sugar-crush/tests/Context/`, **the whole directory**; lane a's
+- **E561 (lane a)** — the map grants lane a `candy-code/tests/Context/`, **the whole directory**; lane a's
   own FILES section names `tests/Context/RepoMapBlockTest.php`, **one file of eleven**. The lane followed
   the intersection, so nothing was breached. Same shape as round 57's `src/MCP/` disagreement.
-- **E573 (lane b)** — the map names `sugar-crush/tests/StackedDocCommentTest.php` among lane c's files, and
+- **E573 (lane b)** — the map names `candy-code/tests/StackedDocCommentTest.php` among lane c's files, and
   **`git ls-tree 535d721ff` says it does not exist.** The map's own preamble claims every path in it was
   verified to exist (E334). 🔴 **The E334 check covers the per-lane file lists and NOT the ownership block**,
   which nobody had noticed in three rounds of writing that preamble.
@@ -18747,7 +18747,7 @@ than copied into it, so what the table pins is the code that runs.
 re-derives it as a hole". **The entry does not say at what scope it was measured**, which is exactly rule
 21's gap: a filtered SURVIVED and a whole-suite SURVIVED are different claims.
 
-MEASURED this round at WHOLE-SUITE scope, sugar-crush, PHP 8.3.6: **SURVIVED**, `Tests: 10274, Assertions: 159290, Skipped: 1`, rc 0 — the same
+MEASURED this round at WHOLE-SUITE scope, candy-code, PHP 8.3.6: **SURVIVED**, `Tests: 10274, Assertions: 159290, Skipped: 1`, rc 0 — the same
 assertion total as the unmutated tree at that commit, so the deletion removes no assertion from any
 run. **The entry is CONFIRMED and now carries its scope.** The harness that produced it exercised all
 three of its verdict classes this round — a KILL, this SURVIVAL, and a `No tests executed` DISCARD —
@@ -18770,7 +18770,7 @@ every one of the twenty, not inherited.
 
 **IDIOM A — "the PREVIOUS significant token is `T_FUNCTION`, so this name is a declaration and not a
 call".** Eight files. Adding `T_FN` to these lists would be an arm that selects nothing, and that is
-measured rather than argued: over `sugar-crush/tests` on PHP 8.3.6 the next SIGNIFICANT token after
+measured rather than argued: over `candy-code/tests` on PHP 8.3.6 the next SIGNIFICANT token after
 every single `T_FN` is `(`. `fn` cannot be followed by a name, so it can never be the token this idiom
 tests for. Generator: `token_get_all()` over every `.php` under `tests/`, tallying the next
 non-whitespace, non-comment token after each `T_FN`.
@@ -18923,7 +18923,7 @@ assertions, reddening at the first root that stops contributing).
 ### E604 [CLOSED] — 🔴 a walk over `bin/` that had never read a file, under prose naming `bin/` as covered
 
 **Round 59, lane a. FIXED.** The same census walked `['src', 'bin']` and selected files by
-`str_ends_with($path, '.php')`. `sugar-crush/bin/` holds exactly one entry — `bin/sugarcrush`, 431 lines
+`str_ends_with($path, '.php')`. `candy-code/bin/` holds exactly one entry — `bin/candy-code`, 431 lines
 of PHP behind `#!/usr/bin/env php`, no extension — so the `bin/` root contributed **zero files** while the
 class doc-block stated the census was "MEASURED … over `tests/`, `src/` and `bin/`" and reported "exactly
 ONE site in the whole package". Rule 11 with the file extension as the alphabet: the one file it could
@@ -18951,7 +18951,7 @@ outside that, measured through the method itself on PHP 8.3.6:
     modifier made invisible a second time by an ampersand. The private alphabet is hit too —
     `private function &byRef()` files as unparseable.
   * 🔴 **A RESERVED WORD AS THE METHOD NAME**, legal since PHP 7.0 and lexed as the KEYWORD token, never
-    as `T_STRING`. Censused over `tests/`, `src/` and `bin/sugarcrush`: **30 declarations**, of which 22
+    as `T_STRING`. Censused over `tests/`, `src/` and `bin/candy-code`: **30 declarations**, of which 22
     are `::new()` — the default root factory this repo's own conventions mandate for every class — plus
     `list()`, `match()`, `echo()`, `default()`, `use()`, `empty()`. Two are PRIVATE (`Glob::match()`,
     `EchoProvider::echo()`), which is this guard's own population. All 30 are in `src/`, which this
@@ -19062,7 +19062,7 @@ already red-safe); proved both ways at base with an in-tree temp pair — green 
 identifier-shaped token. It does NOT skip comments, so `function /* x */ foo()` — legal PHP — still comes
 back unnamed.
 
-**Census on PHP 8.3.6 over `tests/`, `src/` and `bin/sugarcrush`: zero sites.** The failure mode is
+**Census on PHP 8.3.6 over `tests/`, `src/` and `bin/candy-code`: zero sites.** The failure mode is
 asymmetric and worth recording: with an explicit visibility keyword it reds as unparseable (rule 14,
 safe), and written implicitly-public it is **silently dropped** — the same unsafe half as the
 by-reference case in E605. One line in the skip list plus a fixture. Left out deliberately to keep
@@ -19079,8 +19079,8 @@ five items. Items 1 and 2 (E572, E577, E578) are entirely about two files:
 
 | file | owner per the round-59 ownership block |
 |---|---|
-| `sugar-crush/tests/SwallowingCatchCensusTest.php` | **nobody** — "NO LANE OWNS `sugar-crush/tests/` ROOT THIS ROUND except the two files named for lane a and the one named for lane b" |
-| `sugar-crush/tests/Support/AssertionSwallowingCatchTest.php` | **lane a** — `sugar-crush/tests/Support/` |
+| `candy-code/tests/SwallowingCatchCensusTest.php` | **nobody** — "NO LANE OWNS `candy-code/tests/` ROOT THIS ROUND except the two files named for lane a and the one named for lane b" |
+| `candy-code/tests/Support/AssertionSwallowingCatchTest.php` | **lane a** — `candy-code/tests/Support/` |
 
 Neither is in lane b's file list, and both are rejected by lane b's own scope regex (run: each prints as an
 out-of-lane path). So the brief's items 1 and 2 could not be implemented without breaching the map, and the
@@ -19131,7 +19131,7 @@ wide-first → reported).
 
 E572 records that the swallowing-catch census cannot see an assertion reached through a helper. It is now
 measured. Generator: `census_indirect_assert.php` (round 59 lane b scratchpad), PHP 8.3.6, run over
-`sugar-crush/tests` at `891b17ba7`. It reuses `bodyAsserts()`'s alphabet VERBATIM so the direct arm
+`candy-code/tests` at `891b17ba7`. It reuses `bodyAsserts()`'s alphabet VERBATIM so the direct arm
 reproduces the live census, and adds a transitive expansion over same-file method declarations
 (`$this->x()`, `self::x()`, `static::x()`), depth-bounded at 8 with a visited set.
 
@@ -19205,7 +19205,7 @@ with an exemption row, and an exemption row for correct code is a licence (rule 
 What would actually close E578: a fixture pinning BOTH rows above with the verdicts as measured, plus a
 sentence at `resolve()` saying the fallback answers for a name PHP would not have loaded, so its verdict
 describes the GLOBAL class and not the clause's real behaviour. Latent either way — zero bare-unimported
-catch types exist in `sugar-crush/tests`.
+catch types exist in `candy-code/tests`.
 
 ### E616 [CLOSED] — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
 
@@ -19227,7 +19227,7 @@ reported nowhere). Both directions need fixtures before either is chosen. No occ
 
 **Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** the reachability claim superseded — da re-measured and landed E577's `resolvedTypes` key in-lane, closing its own tracking row. Evidence: triage E617, worklog ROUND 67.
 
-`AssertionSwallowingCatchTest::swallowingCatchesIn()` lives in `sugar-crush/tests/Support/`, which is lane
+`AssertionSwallowingCatchTest::swallowingCatchesIn()` lives in `candy-code/tests/Support/`, which is lane
 a's directory, and lane a's file list names four specific paths that do not include it. So E577 (the `types`
 key records the AUTHOR's spelling while the failure message reads as the resolved one, and nothing at the
 definition says it is display-only) is untouched, and this entry does NOT restate round 58's measurement as
@@ -19424,7 +19424,7 @@ mutation table.
 
 This is **rule 47** with a second instance: a brief carries more authority than a review because
 nothing downstream is asked to falsify it. It is also the second consecutive round in which a lane's
-brief named an already-closed item as its headline work. **The file is `sugar-crush/tests/Support/`,
+brief named an already-closed item as its headline work. **The file is `candy-code/tests/Support/`,
 which is lane a's this round**, so the brief additionally directed lane c at a file lane c may not
 touch.
 
@@ -19433,8 +19433,8 @@ touch.
 E583 left the bare-citation alphabet question open for "a round where one lane owns `tests/`".
 **The alphabet was never the reachable half of it.** Every `.php` file under `tools/` and under
 `candy-pty/` sat outside every citation guard in the repo, for the plainest reason available: the <!-- @rename-keep historical provenance -->
-only such guard is `sugar-crush`'s `SymbolCitationDriftTest`, and neither tree is inside
-`sugar-crush`. Applying E583's *narrow* alphabet (test-shaped names only, the one whose answer is not
+only such guard is `candy-code`'s `SymbolCitationDriftTest`, and neither tree is inside
+`candy-code`. Applying E583's *narrow* alphabet (test-shaped names only, the one whose answer is not
 a judgement call) to that population reported **two** unresolvable citations, both real:
 
 - `tools/tests/ToolsEnvRosterTest.php` — `scriptRoster()` cited a sibling test method under its
@@ -19453,15 +19453,15 @@ is the defect, and it is the shape rule 8 exists for.
 **TWO CLAIMS IN THE FIRST VERSION OF THIS ENTRY WERE THEMSELVES WRONG, AND BOTH WERE MECHANISM
 CLAIMS WRITTEN WITHOUT MEASUREMENT — rule 8 landing on the entry that invokes it.**
 
-1. *"`SymbolCitationDriftTest` walks `sugar-crush/tests` and nothing else."* **False.** Its
+1. *"`SymbolCitationDriftTest` walks `candy-code/tests` and nothing else."* **False.** Its
    `citations()` reads `foreach ([['src', 'php'], ['tests', 'php'], ['docs', 'md']] as ...)` — all
    three. What is scoped to `tests/` is the bare-test-name **shape** only, in `scrape()`, and
    deliberately: its own comment gives the same reason this entry gives, that elsewhere the shape is
    overwhelmingly a production method on the class being documented. The conclusion above survives
    the correction; the reason does not. **The distinction is load-bearing:** the false version reads
-   as "`sugar-crush/src` is unguarded", and the round-59 implement stage duly filed a deferred
+   as "`candy-code/src` is unguarded", and the round-59 implement stage duly filed a deferred
    finding saying exactly that. **THAT DEFERRED FINDING IS WITHDRAWN.** `src/` is in
-   `SymbolCitationDriftTest`'s roster; adding `sugar-crush/src` to `BareCitationDriftTest::ROOTS` on
+   `SymbolCitationDriftTest`'s roster; adding `candy-code/src` to `BareCitationDriftTest::ROOTS` on
    the strength of it would red on precisely the class of correct citation this entry measures below
    (`spl_object_id()`, `budgetFromEnv()`).
 
@@ -19550,7 +19550,7 @@ and the body came back **truncated**: `$s = "a{$a}b"; return 1;` extracted as
 
 **Why that was a fail-open rather than a wrong answer.** Both callers are drift pins that compare
 two copies of one function for EQUALITY — `ToolsEnvRosterTest` against `candy-pty`'s <!-- @rename-keep historical provenance -->
-`envAccessesIn()`, `StackedDocCommentTest` against `sugar-crush`'s `stackedDocCommentLines()`.
+`envAccessesIn()`, `StackedDocCommentTest` against `candy-code`'s `stackedDocCommentLines()`.
 Truncate both sides at the same interpolation and a real divergence *after* it compares equal.
 MEASURED, filtered to the drift pin alone: with a genuine divergence (dropping
 `\T_NAME_FULLY_QUALIFIED` from one copy) **plus** `$note = "scanning {$source}";` added identically
@@ -19631,14 +19631,14 @@ construction, and `BuiltInToolCorpusTest::testAnExemptFileElsewhereIsReportedRat
 demonstrates exactly that — **on the synthetic probe tree, whose autoloader the test file itself
 declares with `require_once`, in a comment explaining that a plain `require` would fatal.**
 
-**MEASURED on the real tree, PHP 8.3.6, at `c3ddc7483`.** Drop one file into `sugar-crush/src/` whose
+**MEASURED on the real tree, PHP 8.3.6, at `c3ddc7483`.** Drop one file into `candy-code/src/` whose
 namespace does not match its path (`src/TeethSkewed.php` declaring
-`SugarCraft\Crush\Elsewhere\TeethSkewed`) and run `--filter testEverySourceFileDeclaresItsPsr4Symbol`
+`SugarCraft\Code\Elsewhere\TeethSkewed`) and run `--filter testEverySourceFileDeclaresItsPsr4Symbol`
 — a test that predates round 60 and was not touched by it. The whole PHPUnit process dies rc **255**
 before any assertion runs:
 
 ```
-PHP Fatal error:  Cannot declare class SugarCraft\Crush\Elsewhere\TeethSkewed,
+PHP Fatal error:  Cannot declare class SugarCraft\Code\Elsewhere\TeethSkewed,
 because the name is already in use in .../src/TeethSkewed.php on line 7
 ```
 
@@ -19759,7 +19759,7 @@ polarities. That does not make the suite's totals independent of the tree, and a
 a merged figure needs to know why.
 
 **MEASURED at `c3ddc7483` with `--list-tests`,** which enumerates without running: adding one
-`.php` file under `sugar-crush/src/` takes the collected total from 10,289 to 10,290, and `diff` names
+`.php` file under `candy-code/src/` takes the collected total from 10,289 to 10,290, and `diff` names
 the single arrival —
 `Integration\BinSugarcrushWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd` with the new
 filename as its data-set key.
@@ -19796,8 +19796,8 @@ from this entry or from E383. It depends on the SHAPE of the file added and on e
 the suite, so it is a measurement, not a property. Measure it at your own merge base:
 
 ```sh
-cd sugar-crush && vendor/bin/phpunit                      # baseline
-printf '<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Crush;\n\nfinal class Probe\n{\n}\n' > src/Probe.php
+cd candy-code && vendor/bin/phpunit                      # baseline
+printf '<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Code;\n\nfinal class Probe\n{\n}\n' > src/Probe.php
 vendor/bin/phpunit ; rm src/Probe.php                     # delta, for THIS probe shape
 ```
 
@@ -19910,7 +19910,7 @@ Round 60 removed the census literals; what replaced them are bounds, and three o
 claims about today's tree that a large enough tree will legitimately falsify. This entry states where,
 so nobody rediscovers it as a mystery red.
 
-MEASURED at `204c9cf58` on PHP 8.3.6, by adding well-formed `final class` files to `sugar-crush/src/`
+MEASURED at `204c9cf58` on PHP 8.3.6, by adding well-formed `final class` files to `candy-code/src/`
 and running `--filter BuiltInToolCorpusTest` (probe class names 30-33 B fully qualified, 14-17 B
 short — the bounds are BYTE bounds, so the file counts below move with the names you choose):
 
@@ -20259,7 +20259,7 @@ load-bearing.
 
 **What:** landed round 65 lane ba — `LspClient::pumpStderr()` fan-out (instanceof-gated; the interface never grows a pump method, in-memory fakes stay inert) mounted in all five `*For` operations after the language guard, before cache lookup; `diagnostics()` skipped (pure cache read); `LspClientDispatchPumpTest` pin: post-settled noise drained by the NEXT op, <2s bounded, zero timers, mount-order row. Drift fix `ce87e4e1d` aligned the copied `waitForFile` fail-message to canonical. **Conf:** MED. Lane `35b38ea5c` → masters `858614688`/`ce87e4e1d`. Evidence: triage E690.
 
-### E691 [CLOSED] — the coverage CI job is still serial for sugar-crush (the E671 seam)
+### E691 [CLOSED] — the coverage CI job is still serial for candy-code (the E671 seam)
 
 **What:** landed round 66 lane cc (lane `a2353660f` → master `a59d8a547`). The clover-merge story now
 exists: `scripts/parallel-tests.sh` gained an opt-in `--clover` (default OFF, the OFF-path byte-
@@ -20267,9 +20267,9 @@ compatible), new `scripts/merge-clover.php` unions per-shard clovers by summing 
 (crap scores recomputed from the merged lines, file/project metrics recomputed, fail-closed exit 2 on
 missing/malformed shards with nothing written, deterministic byte-identical re-merge), and new
 `scripts/test-merge-clover.php` (66 checks, zero suite files) runs FIRST in CI so a merger regression
-fails before any suite time is spent. The ci.yml coverage job split: serial for the non-sugar-crush
-matrix, sharded K=min(nproc,4) for sugar-crush with the conservation-vs-figure gate FAIL-CLOSED before
-the merge, and the merged artifact written to the SAME `sugar-crush/coverage.xml` path — Codecov,
+fails before any suite time is spent. The ci.yml coverage job split: serial for the non-candy-code
+matrix, sharded K=min(nproc,4) for candy-code with the conservation-vs-figure gate FAIL-CLOSED before
+the merge, and the merged artifact written to the SAME `candy-code/coverage.xml` path — Codecov,
 Codacy, the split-repo mirror and `coverage-final` consumers byte-untouched. Validation: pcov K=4
 conservation PASS 11,494T/176,293A delta +0/+0; serial-vs-merged covered-line drift gross 3 lines
 (net +1) — inherent process topology, zero merger loss. **Conf:** HIGH. Evidence: triage E691, worklog
@@ -20380,7 +20380,7 @@ assumes `LINES`/`COLUMNS` unset when stdout is piped) is carried in §0-NOW-69/e
 
 **What:** landed round 66 lane cd (lane `5b61bdb31` → master `7f352c691`) — the cosmetic ordering fixed inside the existing pin; the same pick carried the E687 census pairing and the r65 seam bundle. **Conf:** LOW. Evidence: triage E670.
 
-### E671 [CLOSED] — CI sugar-crush cell runs `scripts/parallel-tests.sh` at K=min(nproc,4)
+### E671 [CLOSED] — CI candy-code cell runs `scripts/parallel-tests.sh` at K=min(nproc,4)
 
 **What:** durations TSV committed; `--against-json` conservation vs `suite-figure.json` is FAIL-CLOSED; K=8 REFUTED by measurement (2–4 vCPU runners trip the lease/idle-ceiling races). Coverage-job sharding seam minted as E691. **Where:** `.github/workflows/ci.yml`, `scripts/`. **Conf:** MED. Evidence: triage E671.
 
@@ -20388,7 +20388,7 @@ assumes `LINES`/`COLUMNS` unset when stdout is piped) is carried in §0-NOW-69/e
 
 ### E672 [CLOSED] — `ProcessContainment` choke point routes all exec-spawn sites
 
-**What:** 10/10 measured spawn sites routed; the bogus-binary fail-fast lost through the wrapper was restored at LspConnection/StdioMcpServer/ClaudeCodeInvocation/ClaudeCodeProvider (sites 3–4 found ONLY by the full-suite gate). Lesson recorded: routed-site sweeps must grep start-failure contracts tree-wide. **Where:** `sugar-crush/src/Support/ProcessContainment.php`. **Conf:** HIGH. Evidence: triage E672.
+**What:** 10/10 measured spawn sites routed; the bogus-binary fail-fast lost through the wrapper was restored at LspConnection/StdioMcpServer/ClaudeCodeInvocation/ClaudeCodeProvider (sites 3–4 found ONLY by the full-suite gate). Lesson recorded: routed-site sweeps must grep start-failure contracts tree-wide. **Where:** `candy-code/src/Support/ProcessContainment.php`. **Conf:** HIGH. Evidence: triage E672.
 
 ### E673 [CLOSED] — terminate-with-container wired into the reaper
 
@@ -20408,7 +20408,7 @@ assumes `LINES`/`COLUMNS` unset when stdout is piped) is carried in §0-NOW-69/e
 
 ### E677 [CLOSED] — `pumpStderr()` mounts at the MCP dispatch entry (entry + timer)
 
-**What:** the idle-drain removed — the timer was the drain; the LSP-side dispatch-entry mount was out-of-ownership and minted onward as E690. **Where:** `sugar-crush/src/MCP/StdioMcpServer.php`. **Conf:** MED. Evidence: triage E677.
+**What:** the idle-drain removed — the timer was the drain; the LSP-side dispatch-entry mount was out-of-ownership and minted onward as E690. **Where:** `candy-code/src/MCP/StdioMcpServer.php`. **Conf:** MED. Evidence: triage E677.
 
 ### E678 [CLOSED] — MCP wire names: `crush mcp --json` rows DONE; `/mcp` panel deferred
 
@@ -20444,7 +20444,7 @@ assumes `LINES`/`COLUMNS` unset when stdout is piped) is carried in §0-NOW-69/e
 
 ### E686 [CLOSED] — repo-wide documentation-figure prose campaign
 
-**CLOSED ROUND-75 — CAMPAIGN CLOSED BY ORCHESTRATOR RULING (2026-09-13).** Tranche-11 (the FINAL execution tranche) shipped via ja (lane `51e5b9b39` → pick `99cc68e02`): arms AI–AO, DocFigure 63→71 (+8T; 71T/2451A) — bare-anchor absence guard over all 13 docs pages in three shapes with a bidirectional exemption roster (AI), Providers-table ↔ `availableTypes()` ordered both-directional (AJ), AA preset roster scandir/`TYPE_`/16-field reflection censuses (AK1/AK2), COMMANDS surface table vs `CommandRegistry::all()`/CONTROL_PLANE (AL), TEMPLATE_PATTERN char-walk branch census + word/ordinal pins (AM), slots == ARCHITECTURE cross-page (AN), tags ORDERED == `PromptFence::tags()` + `MAX_BREAKPOINTS=4` + register-six + five-git-subprocess word pin (AO). ARCHITECTURE five drifted anchors healed by DROPPING numerals (symbol cites kept); AGENTS_AUTHORING five patches (six→ALL SIXTEEN fields, permissionMode gating, phantom lines-136-159 cite, eleven→twelve built-ins + Task delegation). r75-rv-ja REQUEST-CHANGES 1 MAJOR: ja left ARCHITECTURE.md asserting eleven built-ins while AGENTS_AUTHORING now told twelve-truth — a builder-missed SIBLING-PAGE CONTRADICTION. Healed by fix-lane ja2 (lane `ddf761169` → pick `332e6fdd7`): :336 twelve-truth + Task delegation prose + the AK1 CROSS-PAGE AGREEMENT leg (both pages' word-numbers must equal the live registry count — a one-page lie can no longer survive the pair) + AI planted-mismatch leg + AGENTS_AUTHORING↔COMMANDS ordered-agreement leg; rv-ja erratum recorded: the digit row "12 built-ins + MCP bridges" EXISTS at ARCHITECTURE.md:31 (pinned by arm H) — the reviewer's "no digit-form row" claim was false; the defect was real anyway. Reviewer close condition (:336 heal + AK1) SATISFIED → orchestrator rules E686 CLOSED. Closeout companion `02c65e6eb` healed the src/Cli/Bootstrap.php tools() docblock ELEVEN→TWELVE-truth (census trio 117T/6408A green). r76 SEAM: live-false ELEVEN claims remain in the Bootstrap body (~:6371 wire-order, :6376 meta-note now contradicting its own healed docblock, :6546/:6552 disabledTools docblock) + sugar-crush/README.md:224/:233 + tests/Integration/ForeignAgentPresetWiringTest.php:273 "six" comment. Residuals HELD-with-reason: COMMANDS JIT dated, PROMPT_ENGINEERING `models` behavior, external §9.12 dated (6==6 today), AA three-layers narrative. prompt_expand.md IS tracked at the monorepo root (ie erratum — valid cite, still unguarded; candidate arm for any future re-opening). Campaign record: tranches 2–11, ≈334 figures judged, 71 live arms, docs seed list EMPTY at this coverage.
+**CLOSED ROUND-75 — CAMPAIGN CLOSED BY ORCHESTRATOR RULING (2026-09-13).** Tranche-11 (the FINAL execution tranche) shipped via ja (lane `51e5b9b39` → pick `99cc68e02`): arms AI–AO, DocFigure 63→71 (+8T; 71T/2451A) — bare-anchor absence guard over all 13 docs pages in three shapes with a bidirectional exemption roster (AI), Providers-table ↔ `availableTypes()` ordered both-directional (AJ), AA preset roster scandir/`TYPE_`/16-field reflection censuses (AK1/AK2), COMMANDS surface table vs `CommandRegistry::all()`/CONTROL_PLANE (AL), TEMPLATE_PATTERN char-walk branch census + word/ordinal pins (AM), slots == ARCHITECTURE cross-page (AN), tags ORDERED == `PromptFence::tags()` + `MAX_BREAKPOINTS=4` + register-six + five-git-subprocess word pin (AO). ARCHITECTURE five drifted anchors healed by DROPPING numerals (symbol cites kept); AGENTS_AUTHORING five patches (six→ALL SIXTEEN fields, permissionMode gating, phantom lines-136-159 cite, eleven→twelve built-ins + Task delegation). r75-rv-ja REQUEST-CHANGES 1 MAJOR: ja left ARCHITECTURE.md asserting eleven built-ins while AGENTS_AUTHORING now told twelve-truth — a builder-missed SIBLING-PAGE CONTRADICTION. Healed by fix-lane ja2 (lane `ddf761169` → pick `332e6fdd7`): :336 twelve-truth + Task delegation prose + the AK1 CROSS-PAGE AGREEMENT leg (both pages' word-numbers must equal the live registry count — a one-page lie can no longer survive the pair) + AI planted-mismatch leg + AGENTS_AUTHORING↔COMMANDS ordered-agreement leg; rv-ja erratum recorded: the digit row "12 built-ins + MCP bridges" EXISTS at ARCHITECTURE.md:31 (pinned by arm H) — the reviewer's "no digit-form row" claim was false; the defect was real anyway. Reviewer close condition (:336 heal + AK1) SATISFIED → orchestrator rules E686 CLOSED. Closeout companion `02c65e6eb` healed the src/Cli/Bootstrap.php tools() docblock ELEVEN→TWELVE-truth (census trio 117T/6408A green). r76 SEAM: live-false ELEVEN claims remain in the Bootstrap body (~:6371 wire-order, :6376 meta-note now contradicting its own healed docblock, :6546/:6552 disabledTools docblock) + candy-code/README.md:224/:233 + tests/Integration/ForeignAgentPresetWiringTest.php:273 "six" comment. Residuals HELD-with-reason: COMMANDS JIT dated, PROMPT_ENGINEERING `models` behavior, external §9.12 dated (6==6 today), AA three-layers narrative. prompt_expand.md IS tracked at the monorepo root (ie erratum — valid cite, still unguarded; candidate arm for any future re-opening). Campaign record: tranches 2–11, ≈334 figures judged, 71 live arms, docs seed list EMPTY at this coverage.
 
 **PARTIAL — tranche-11 RENUMBERED at the round-74 close (lane ie verdict, ZERO commits; CONFIRMED 8/9 by r74-rv-ie; execution ASSIGNED to round-75 lane ja):** ie's independent re-derivation at `f46c203d6` OVERTURNS hc's "docs seed list EMPTY" — the declaration rested on a false upstream judgment (gd/measures.md row 22 "figure-free / numeral-scan empty" is FALSE-to-tree: every flagged claim predates gd's base, blame-verified `8d15443c3`/`4b4ff3398`; the scan was empty-handed, not the pages). Findings: DocFigure's 63 arms parse exactly 10 pages — **AGENTS_AUTHORING.md, COMMANDS.md, PROMPT_ENGINEERING.md carry ZERO citations in any test** (SymbolCitationDrift resolves backticks only — proves nothing about numerals/anchors); **ARCHITECTURE.md** carries 5 confirmed-drifted bare line anchors (`Runtime.php:154`→:1171, `line 311`→:338, `lines 564-595`→:625, `line 601`→:662, `line 1292`→:2416) plus an unguarded figure-dense Providers section; 3 claim-sites CONFIRMED FALSE at tip. Work list: **T11-a** ARCHITECTURE (anchor heals per the ha law + Providers roster arm DERIVED from `availableTypes()` + NEW absence-guard failing bare `(line \d+)` AND `file.php:\d+` — BOTH shapes — exempting HOOKS.md:264-style self-narrative); **T11-b** AGENTS_AUTHORING + COMMANDS (2 prose heals — "no `Task` tool … eleven built-in tools" FALSE since E675 `b636591b6` (12 BuiltIn files; cross-page word-pin to ARCHITECTURE's live count), "not merely cosmetic" + "lines 136-159" anchor+quote FALSE; then roster arms — preset fields sixteen/six-read, tiers/layers/six built-in definitions, COMMANDS roster table vs `slashCommands()` bidirectional incl. the ce /notices row self-declared unguarded, TEMPLATE_PATTERN literal + branch counts, SHELL_BUDGET_SECONDS, websearch flag rosters); **T11-c** PROMPT_ENGINEERING (cross-page pair arms reusing arm AP's eleven-slot derivation + arm BE's tags roster — cross-page word-pins; MAX_BREAKPOINTS four; the no-production-caller absence claim per the hc vacuity law; `prompt_expand.md` §9.12 — **erratum E1: the file IS tracked at the monorepo root**, the cite is valid-but-unguarded — pin or HELD-external with stated reason). ~12–16 arms / ~6 prose fixes. Carries: AU/BD keep-duplication precedents (check for an existing pin BEFORE adding an arm), GlobDialect glued-literal law (131,765=365×361). **E686's CLOSE verdict rides ja's success.** Evidence: ie REPORT.md + verdicts.md (`/home/sites/crush-r61-artifacts/ie/`), r74-rv-ie, triage E686, worklog ROUND 74.
 
@@ -20542,7 +20542,7 @@ no-owner sentinel documented (rv-jb MINOR-1). Step 2's loud refusal SHIPPED-BY-A
 at project scope REFUSES while the repo store holds >=1 note — nothing is touched, `--force` is not
 parsed; rv-ka's item-2 ruling KEPT the entry-present polarity (the operation is `--confirm`-gated,
 TOTAL w.r.t. every visible project note, and an empty repo has no committed half to strand;
-store-present polarity rejected — this repo TRACKS `.sugar-crush/`, making the legacy byte-green test
+store-present polarity rejected — this repo TRACKS `.candy-code/`, making the legacy byte-green test
 env-dependent). Step 3 (agent memory tool) stays DECLINED-BY-RULING, moved to the trigger-watch
 roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
@@ -20584,7 +20584,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 **What:** `/mcp add` implements well-known discovery + client-credentials fetch only (src/Commands/McpAuthCommand.php:188-262); MCP servers requiring a browser auth-code flow cannot authenticate. Size L; sequenced behind E695 (attachment must exist before a richer flow means anything). Unassigned. **Conf:** HIGH.
 
-**CLOSED ROUND-79** (lane na `a14f613ec`+`9d19bd2b5`+`44adf5fe0` → picks `8ed8ada1d`+`7b83a6454`+`1b8cc7ce8`): acceptance met in full — `sugarcrush mcp auth login <server>` performs RFC 8414 discovery, RFC 7591 registration when needed, an RFC 8252 loopback + RFC 7636 S256 authorization-code exchange against a callback listener bound to 127.0.0.1 only, and persists a complete `AuthEntry` (access/refresh/expiry/scope + endpoint carries) that E695's request-time attachment consumes and refreshes via `grant_type=refresh_token` — with a state-checked, deadline-bounded (default 300 s, override flag), Ctrl-C-cancellable human wait that stores NOTHING on every failure arm; the in-chat `/mcp auth login` prints truthful shell guidance with zero Chat.php edits; no new composer dependency; every MCP.md prose addition armed IN-STEP (DocFigure arms BI/BJ/BK). +53T exact across 7 new test files (design predicted ~25T/4 files — honest deviation, recorded). Review r79-rv-na APPROVE-WITH-FIX 0C/0M/3MINOR all healed at `44adf5fe0` (live clock seam, canonical RFC 7636 Appendix-B vector, hash_equals source pin). Carried trigger-watch: `updateRegistration()` redirect-churn seam (design nd §2.2) for servers rejecting redirect updates — NOT implemented, deliberately out of slice.
+**CLOSED ROUND-79** (lane na `a14f613ec`+`9d19bd2b5`+`44adf5fe0` → picks `8ed8ada1d`+`7b83a6454`+`1b8cc7ce8`): acceptance met in full — `candy-code mcp auth login <server>` performs RFC 8414 discovery, RFC 7591 registration when needed, an RFC 8252 loopback + RFC 7636 S256 authorization-code exchange against a callback listener bound to 127.0.0.1 only, and persists a complete `AuthEntry` (access/refresh/expiry/scope + endpoint carries) that E695's request-time attachment consumes and refreshes via `grant_type=refresh_token` — with a state-checked, deadline-bounded (default 300 s, override flag), Ctrl-C-cancellable human wait that stores NOTHING on every failure arm; the in-chat `/mcp auth login` prints truthful shell guidance with zero Chat.php edits; no new composer dependency; every MCP.md prose addition armed IN-STEP (DocFigure arms BI/BJ/BK). +53T exact across 7 new test files (design predicted ~25T/4 files — honest deviation, recorded). Review r79-rv-na APPROVE-WITH-FIX 0C/0M/3MINOR all healed at `44adf5fe0` (live clock seam, canonical RFC 7636 Appendix-B vector, hash_equals source pin). Carried trigger-watch: `updateRegistration()` redirect-churn seam (design nd §2.2) for servers rejecting redirect updates — NOT implemented, deliberately out of slice.
 
 ### E702 [CLOSED] — SSE transport is spec-mentioned, unimplemented (throws), and nowhere listed as a supported-transport table
 
@@ -20607,7 +20607,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 **What:** the newline arm EXISTS and works — src/Chat.php:1794-1795 inserts `"\n"` for any modified Enter (pinned all three modifiers, tests/Renderer/KeyHelpTest.php:689-708) and the CSI-u `13;<mod>u` decoder exists (candy-core/src/InputReader.php:322-329,479-539; decode round-trip pinned :709-720) — but sugar-crush src/bin never pushes the Kitty protocol, so a terminal never sends the distinguishable sequence; on legacy terminals Ctrl/Shift+Enter are the identical `\r` bytes as Enter → unflagged `KeyMsg(Enter)` → submit arm. `Cmd::pushKittyKeyboard` already ships in candy-core (src/Cmd.php:320-338) with zero consumers; `modifyOtherKeys` is parsed nowhere repo-wide. Alt+Enter (ESC+CR) IS portable-today (candy-core/src/InputReader.php:187-203, pinned KeyHelpTest.php:405-414, documented KeyBindingRegistry.php:392). **Acceptance:** negotiate via `Cmd::pushKittyKeyboard` + consume the `KeyboardEnhancementsMsg` reply (candy-core/src/InputReader.php:316-320); Ctrl/Shift+Enter insert `\n` on capable terminals, fail-soft unchanged elsewhere; NEVER enable modifyOtherKeys alongside (the kitty `u` branch misparses `CSI 27;2;13u` as Escape); KEY-BINDINGS doc + KeyBindingDrift roster IN-STEP naming Alt+Enter the portable newline. **Conf:** HIGH. <!-- @rename-keep historical provenance -->
 
-**CLOSED 2026-09-14 (round 81, lane pe `c60b01005`+fix `f42ef1794` → picks `772ef1b03`+`2a33d175b`; rv APPROVE-WITH-FIX minor-only 0C/0M/2MINOR):** `App::init()` batch pushes `Cmd::pushKittyKeyboard(DISAMBIGUATE)`; the pop writes from `bin/sugarcrush` after the loop (every exit door — Quit, SIGINT, kill — skips a model turn, so it cannot be a Cmd); Ctrl/Shift+Enter insert newlines on capable terminals, fail-soft unchanged; `modifyOtherKeys` NEVER enabled (documented in-step). +9T (KittyKeyboardNegotiationTest 4T, KittyEnterNewlineTest 5T); KEY-BINDINGS + roster guards moved with the code.
+**CLOSED 2026-09-14 (round 81, lane pe `c60b01005`+fix `f42ef1794` → picks `772ef1b03`+`2a33d175b`; rv APPROVE-WITH-FIX minor-only 0C/0M/2MINOR):** `App::init()` batch pushes `Cmd::pushKittyKeyboard(DISAMBIGUATE)`; the pop writes from `bin/candy-code` after the loop (every exit door — Quit, SIGINT, kill — skips a model turn, so it cannot be a Cmd); Ctrl/Shift+Enter insert newlines on capable terminals, fail-soft unchanged; `modifyOtherKeys` NEVER enabled (documented in-step). +9T (KittyKeyboardNegotiationTest 4T, KittyEnterNewlineTest 5T); KEY-BINDINGS + roster guards moved with the code.
 ### E706 [CLOSED] — the 💭 reasoning display hard-truncates at 120 chars, settled and live alike — the operator rule on record is WRAP, never truncate
 
 **What:** phase-3 reasoning probe (bad-gold-ferret): the reported artifact's text before the `…` is EXACTLY 120 characters — `Renderer::REASONING_MAX_CHARS = 120` (src/Renderer.php:482); the settled transcript renders head-120+`…` (:2808-2818, site :2817) while the live ticker renders tail-120+`…` (`keepTail: true`, :1138-1141) — two caps anchored differently, eliding with indistinguishable ellipses. The FULL text is retained everywhere: unbounded accumulation (src/Chat.php:3388, carried across clones :6067), settled `Message::assistant(..., reasoning:)` (src/EngineBackend.php:889) serialized whole (:1464) — hidden, not lost. `fitToPane` WRAPS by law (src/Renderer.php:2296-2330); the 120-char bite is the deliberate display cap, contradicting the standing operator rule. Tests pin both caps deliberately: ReasoningPaintTest :546-589/:618-647, RendererTest.php:226-248. **Acceptance:** the settled transcript renders the full reasoning as dimmed WRAPPED rows via the fitToPane path; the live path keeps its bounded ticker WITH an honest count-suffixed trailer (house pattern TruncatesOutput.php:276 / ScriptHook.php:904); ReasoningPaintTest + RendererTest re-pinned honestly (row budgets grow with content); geometry captures regenerated from the FINAL tree immediately before pinning (lane-fj law). **Conf:** HIGH.
@@ -20625,14 +20625,14 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 **CLOSED 2026-09-14 (round 81, lane pb `18eacb4e1`+fix `1a7d67823` → picks `4b767f85c`+`56a71d134`; rv APPROVE-WITH-FIX 0C/1MAJOR+1MINOR, MAJOR healed in the fix-round):** `startServer()` normalizes BEFORE `buildServer()`: local→stdio, remote→http, command[]→command+args, environment→env, enabled:false→skip WITH a report — the silent class is closed; a verbatim opencode block builds servers indistinguishable from the translated block (`McpConfigToleranceTest` parity pin). DocFigure AX + E702 transport arms re-cut IN-STEP; StderrEmitterCensus measured. +16T +fix(+0T/+4A).
 ### E709 [CLOSED] — /mcp discovery UX: the only visible verb is auth — the declaration door is never named
 
-**What:** same compat probe (§B — this IS the reported "only registration-URL servers" impression, manufactured): `McpAuthCommand`'s empty-store state prints only "Run `mcp auth add` … to register a server" (src/Commands/McpAuthCommand.php:179-186) and `add` usage demands reg/token URLs (:233,:252-260); the `/mcp` panel (E689/E698/E703 surface) lists servers + liveness but never says how to DECLARE one; docs/MCP.md carries no "how to add a server" recipe; the CLI offers only `mcp list | auth login` (src/Cli/Subcommands.php:593,:889). **Acceptance:** docs/MCP.md "Adding servers" section with the opencode→sugar-crush translation table + the working 4-server snippet; the `/mcp` empty-state sentence names `<projectRoot>/.mcp.json`; a panel footer or guidance line; DocFigure/E702/AX arms + ReadmeRoster drift guards IN-STEP; the README MCP bullet rides the existing guards. **Conf:** HIGH.
+**What:** same compat probe (§B — this IS the reported "only registration-URL servers" impression, manufactured): `McpAuthCommand`'s empty-store state prints only "Run `mcp auth add` … to register a server" (src/Commands/McpAuthCommand.php:179-186) and `add` usage demands reg/token URLs (:233,:252-260); the `/mcp` panel (E689/E698/E703 surface) lists servers + liveness but never says how to DECLARE one; docs/MCP.md carries no "how to add a server" recipe; the CLI offers only `mcp list | auth login` (src/Cli/Subcommands.php:593,:889). **Acceptance:** docs/MCP.md "Adding servers" section with the opencode→candy-code translation table + the working 4-server snippet; the `/mcp` empty-state sentence names `<projectRoot>/.mcp.json`; a panel footer or guidance line; DocFigure/E702/AX arms + ReadmeRoster drift guards IN-STEP; the README MCP bullet rides the existing guards. **Conf:** HIGH.
 
-**CLOSED 2026-09-14 (round 81, lane pd `02b59b1bb` → pick `fea4b3b26`; rv APPROVE 0C/0M/2MINOR):** docs/MCP.md "Adding servers" section with the opencode→sugar-crush translation table and the working four-server snippet; the `/mcp` empty-state sentence names the declaration door `<projectRoot>/.mcp.json`; panel guidance line shipped. ReadmeRoster/DocFigure guards in-step. +3T.
-### E710 [CLOSED] — no foreign MCP importer: `sugarcrush mcp import claude|opencode <path>` does not exist
+**CLOSED 2026-09-14 (round 81, lane pd `02b59b1bb` → pick `fea4b3b26`; rv APPROVE 0C/0M/2MINOR):** docs/MCP.md "Adding servers" section with the opencode→candy-code translation table and the working four-server snippet; the `/mcp` empty-state sentence names the declaration door `<projectRoot>/.mcp.json`; panel guidance line shipped. ReadmeRoster/DocFigure guards in-step. +3T.
+### E710 [CLOSED] — no foreign MCP importer: `candy-code mcp import claude|opencode <path>` does not exist
 
-**What:** same compat probe: `.mcp.json` IS Claude-compatible as-is (src/Cli/Bootstrap.php:5468-5472) but nothing reads opencode's `mcp` block; `mcpServers` elsewhere is per-agent allowlist NAMES only (ForeignAgentPresetRegistry.php:508, AgentPreset.php:30, McpRouter.php:97-148). The in-house shape precedent is `/memory import claude|opencode` (src/Chat.php:11406-11445 — memory-only). **Acceptance:** `sugarcrush mcp import claude|opencode <path>` PRINTS the translated `.mcp.json` (never writes un-confirmed); Subcommands roster rows (:876,:889) + Help.php:63 IN-STEP; CommandRegistry untouched. **Conf:** MED.
+**What:** same compat probe: `.mcp.json` IS Claude-compatible as-is (src/Cli/Bootstrap.php:5468-5472) but nothing reads opencode's `mcp` block; `mcpServers` elsewhere is per-agent allowlist NAMES only (ForeignAgentPresetRegistry.php:508, AgentPreset.php:30, McpRouter.php:97-148). The in-house shape precedent is `/memory import claude|opencode` (src/Chat.php:11406-11445 — memory-only). **Acceptance:** `candy-code mcp import claude|opencode <path>` PRINTS the translated `.mcp.json` (never writes un-confirmed); Subcommands roster rows (:876,:889) + Help.php:63 IN-STEP; CommandRegistry untouched. **Conf:** MED.
 
-**CLOSED 2026-09-14 (round 81, lane pg `f73112e7b` → pick `0c347e995`; rv APPROVE 0C/0M/2MINOR):** `sugarcrush mcp import claude|opencode <path>` PRINTS the translated `.mcp.json` and never writes; renames narrate on stderr, the document rides stdout alone — stream separation pinned through the real binary. Subcommands roster + Help block + completion roster (`['list','auth','import']`) moved IN-STEP; both pg rv MINORs healed at merge (docblock 'structurally identical' reword `8dd48df9d`; MCP.md verb enumeration gains `import` in the closeout docs commit). +23T.
+**CLOSED 2026-09-14 (round 81, lane pg `f73112e7b` → pick `0c347e995`; rv APPROVE 0C/0M/2MINOR):** `candy-code mcp import claude|opencode <path>` PRINTS the translated `.mcp.json` and never writes; renames narrate on stderr, the document rides stdout alone — stream separation pinned through the real binary. Subcommands roster + Help block + completion roster (`['list','auth','import']`) moved IN-STEP; both pg rv MINORs healed at merge (docblock 'structurally identical' reword `8dd48df9d`; MCP.md verb enumeration gains `import` in the closeout docs commit). +23T.
 
 ### E711 [CLOSED] — sugar-forms Spinner forks the action with no wall-clock bound — a wedged child spins forever and a SIGKILLed parent orphans it
 
@@ -20658,7 +20658,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 ### E714 [CLOSED] — candy-mdview FileWatcher is pure polling — while(true){usleep} with no inotify offload
 
 **What:** phase-4 sibling sweep (§5 rank-11): `candy-mdview/src/FileWatcher.php:62` runs `while (true) { usleep }` — every tick re-stats the tree; no `inotify`/`evpoll` offload anywhere in the lib; the lib's suppression density is 1.4/file (sweep §3). **Acceptance:** an inotify path where the extension is available (availability-gated tests per the FFI-gating convention) with the polling loop kept as DOCUMENTED fallback, stopability proven (watcher halts within a bounded time of stop()), full candy-mdview suite green. **Conf:** LOW.
-**CLOSED 2026-09-15 (round 82, lane q13 `2960463a6` → pick `c66df93b9`; rv APPROVE 0C/0M):** The q3/E713 family SHIPPED — capped idle backoff + documented poll contract on the watch loop: pure static `idlePollDelayMicroseconds(sweeps, cap)` (1 ms floor `IDLE_POLL_MIN_MICROSECONDS`, ×2 per sweep, cap = caller `$intervalMs`, ladder shift clamped at `MAX_LADDER_SHIFT=50` for PHP_INT_MAX safety), snap-back to floor on ANY yielded change, pump clamps cap ≥ floor (zero interval ⇒ 1 ms cadence, never a `usleep(0)` spin). The inotify fast-path named in acceptance is DEFERRED per the brief's NO-new-deps ruling (seam on the record); the polling loop is now the documented, bounded, test-pinned pump — additive 3rd param `?callable $idleSleeper`, zero API break, 13 provider rows + 5 integration methods all timing-free via the seam, scripted drivers carry throwing sweep budgets (fail loud, never hang). Mutations 3/3 discriminating (neuter-ladder 11F; ignore-snapback exactly 2F; unclamp-shift 2F). candy-mdview suite 71T/115A → 89T/142A exit0 (linked, plain pipe; lib-local figures — no sugar-crush re-pin). Stopability: the generator is lazy, so the caller bounds by not pulling — the honest bounded hook, documented (E646 note: idle bound, no wall-clock kill).
+**CLOSED 2026-09-15 (round 82, lane q13 `2960463a6` → pick `c66df93b9`; rv APPROVE 0C/0M):** The q3/E713 family SHIPPED — capped idle backoff + documented poll contract on the watch loop: pure static `idlePollDelayMicroseconds(sweeps, cap)` (1 ms floor `IDLE_POLL_MIN_MICROSECONDS`, ×2 per sweep, cap = caller `$intervalMs`, ladder shift clamped at `MAX_LADDER_SHIFT=50` for PHP_INT_MAX safety), snap-back to floor on ANY yielded change, pump clamps cap ≥ floor (zero interval ⇒ 1 ms cadence, never a `usleep(0)` spin). The inotify fast-path named in acceptance is DEFERRED per the brief's NO-new-deps ruling (seam on the record); the polling loop is now the documented, bounded, test-pinned pump — additive 3rd param `?callable $idleSleeper`, zero API break, 13 provider rows + 5 integration methods all timing-free via the seam, scripted drivers carry throwing sweep budgets (fail loud, never hang). Mutations 3/3 discriminating (neuter-ladder 11F; ignore-snapback exactly 2F; unclamp-shift 2F). candy-mdview suite 71T/115A → 89T/142A exit0 (linked, plain pipe; lib-local figures — no candy-code re-pin). Stopability: the generator is lazy, so the caller bounds by not pulling — the honest bounded hook, documented (E646 note: idle bound, no wall-clock kill).
 
 ### E715 [CLOSED] — candy-input shells out `'tput ' . $capability` unescaped — literal-only callers today, the sweep's sole soft spot of the unescaped-CLI class <!-- @rename-keep historical provenance -->
 
@@ -20809,7 +20809,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 **CLOSED 2026-09-17 (round-89 wave-2; lane y6 tip `7c81b9010` → pick `82aec515c`; rv APPROVE 0C/0M/3MINOR).** The sole unbuilt plan row — candy-shine **7.2 Limited Emoji Shortcode Map** — landed: new `GithubEmoji` 1,837-entry map transcribed from the GitHub cheat sheet (duplicate-key scan clean, all codepoints byte-verified incl. 208 ZWJ + 260 regional-indicator entries), the house `:shortcode:` map wins its 34 collisions (4 byte-divergent spellings documented), sole lookup site in `Renderer` with `?? $m[0]` pass-through; shine **573→587T/1,119A** (+14T parity pins; consumers UNMOVED: glow 122/313, shell 334/694, crush `Shine|Glamour|Style` 24/813). Row **8.1 measured ALREADY-LANDED** (streaming render contract rode the r89 y4 picks). Every other row under this umbrella is now built or ruled (r86 declines, r87/r88 dispositions, r89 wave-1 cluster-A/phantom-redos). The remaining MATCHUPS 🟡/🔴 PORT-COMPLETION residual is the MATCHUPS board's per-row verdict pass — a product-completion campaign, not defect-hardening ledger work — and stays tracked there. Row CLOSED; schedule a port campaign as fresh rows if demand arrives. <!-- @rename-keep historical provenance -->
 ### E737 [CLOSED] — repo-root `.mcp.json` poisons BootstrapMcpLivenessTest only inside K=8 shard buckets (NEW hazard from the upstream-merge weld — root cause un-minted)
 
-**What:** PHASE-5-KICKOFF (merge-upstream REPORT.md, 2026-09-15, weld `61b28175c`→`052025282`): an operator repo-root `.mcp.json` (untracked, do-not-touch working-copy artifact) makes `sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php` red ONLY in the K=8 sharded shape — repo-root cwd + co-bucketed test order; serial, standalone, and pairwise runs are GREEN; CI and lane sandboxes (no repo-root `.mcp.json`) unaffected. The test already snapshots/restores the liveness memo around itself (`:31/:45/:51`) yet still falls in-bucket, so the pollution path is NOT the test's own memo hygiene — candidate mechanisms: an earlier bucket-mate warming `McpClient::create()`'s static client memo (pid+configPath keyed, lane-ce precedent) or the process-global decision cache BEFORE this test's cold-snapshot assert (`assertSame([], ...)` at :76). Root cause deliberately left un-minted during the merge closeout (merge-agent scope). **Acceptance:** reproduce deterministically in-bucket (plant a temp repo-root `.mcp.json` in a fixture harness, run the co-bucket subset), name the exact shared-state carrier, land the per-test reset (or an isolation seam) for it, K=8 shardcheck green WITH the operator `.mcp.json` present at the working root. **Conf:** MED (hazard real and repeatedly observed; mechanism not yet isolated).
+**What:** PHASE-5-KICKOFF (merge-upstream REPORT.md, 2026-09-15, weld `61b28175c`→`052025282`): an operator repo-root `.mcp.json` (untracked, do-not-touch working-copy artifact) makes `candy-code/tests/Cli/BootstrapMcpLivenessTest.php` red ONLY in the K=8 sharded shape — repo-root cwd + co-bucketed test order; serial, standalone, and pairwise runs are GREEN; CI and lane sandboxes (no repo-root `.mcp.json`) unaffected. The test already snapshots/restores the liveness memo around itself (`:31/:45/:51`) yet still falls in-bucket, so the pollution path is NOT the test's own memo hygiene — candidate mechanisms: an earlier bucket-mate warming `McpClient::create()`'s static client memo (pid+configPath keyed, lane-ce precedent) or the process-global decision cache BEFORE this test's cold-snapshot assert (`assertSame([], ...)` at :76). Root cause deliberately left un-minted during the merge closeout (merge-agent scope). **Acceptance:** reproduce deterministically in-bucket (plant a temp repo-root `.mcp.json` in a fixture harness, run the co-bucket subset), name the exact shared-state carrier, land the per-test reset (or an isolation seam) for it, K=8 shardcheck green WITH the operator `.mcp.json` present at the working root. **Conf:** MED (hazard real and repeatedly observed; mechanism not yet isolated).
 
 **PARTIAL 2026-09-15 (round 83; test half CLOSED via lane r4 `8725ea5ec` → pick `5c815306c`; rv APPROVE 0C/0M/2MINOR):** the TEST half landed. Mechanism NOW isolated (the mint row's "un-minted" is superseded): shard cwd IS the monorepo root (`parallel-tests.sh:173`), so a root `.mcp.json` + trusting HOME funnels through `getcwd()` and seeds FOREIGN pid-keyed memo/digest entries — the E698-era whole-pid `assertSame([], bucket)` asserts false-red on legitimate sibling keys in K=8 and only ever worked in serial. Fix is a guard-STRENGTHENING, not weakening: the three sites key-scope to the test's OWN decision-path key (derived via src's own `mcpConfigDecision`) and a NEW regression pin adds the cross-root property (foreign entries survive cold reads untouched; bucket demonstrably poisoned — non-vacuity proven by poison-delete mutation at the sanity line). Deterministic pre-fix repro re-proved at rv: pair run BASE file → exactly the 3 named asserts red; TIP file → 51T OK. r4 carried its own sextet re-pin IN-LANE (README:1161 + suite-figure.json → 12,009T/172,461A); weld serial EXACT: 12,009T/172,461A/0F/0E/1S exit0.
 
@@ -20820,7 +20820,7 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 
 **WAVE-2 HOUSEKEEPING 2026-09-15:** r11 `16249b740` → pick `30760dae6` landed (/.mcp.json gitignored, root-anchored — justified vs discovery code: mcpConfigDecision reads exactly one root file, Bootstrap:5518). The rv-r4 "+32A serial pollution" attribution is CORRECTED by r11 to the cold/warm `ensureFixtureRepo()` fixture rebuild (BaseSystemPromptTest + AgentTest: 2 tests × 16 gitRun asserts), NOT a .mcp.json census — the wave-2 weld re-proved the fingerprint (fresh-worktree serial +32 cold, EXACT 172,461 on warm re-run + shardcheck +0/+0). REMAINING OPEN: shard-launches-operator-servers ruling (orchestrator) + optional array_keys bucket-snapshot hardening (rv-r4 MINOR-1). Row STAYS [PARTIAL].
 
-**RESIDUAL-1 CLOSED 2026-09-16 (round 83 wave-3; lane s4 `12470eb32` → pick `757327bdd`; rv APPROVE 0C/0M):** the orchestrator BEHAVIOR ruling shipped as written — public `Bootstrap::MCP_DISABLE_ENV` = `SUGARCRUSH_MCP_DISABLE` ('1'/'true'/'yes', i-case; unset/'0'/other = enabled), gate at the top of `mcpConfigDecision()` returning the EXISTING MCP_ABSENT shape (zero new sprintf/emitter sites — format and stderr censuses rode unflipped), `scripts/parallel-tests.sh` carries it as a command PREFIX on the shard phpunit launch ONLY (serial keeps default-on behavior), and the ruling's un-foreseen collision — 37 pre-existing launch-asserting shard tests reddened by the global gate — resolved per-test via `tests/Support/McpLaunchEnabledTrait.php` (armed after `parent::setUp`, restored before `parent::tearDown`; the GrantTest arms AFTER its HOME sandbox per the lane-cf ordering law), with a NEW `BootstrapMcpDisableEnvTest` 17T/64A pinning both polarity families incl. the shell-level setter census. Weld sextet re-pin: **12,027T / 172,610A / 0F / 0E / 1S / exit0** serial (assertions +32 over the reviewer's 172,578 s4-tip reading — the documented cold/warm `ensureFixtureRepo()` fixture-rebuild wobble band, same family both readings); K=8 CONSERVATION now +0 tests (the durations row for the new file landed at this weld — s4's shard-sum −17 hole closed); MCP-family filter byte-identical 833T/3714A/1S to the in-lane run. The row EXITED CLOSED at triage; residual (3) (`array_keys` bucket-snapshot, rv-r4 MINOR-1) is ruled OPTIONAL-NOT-MINTED.
+**RESIDUAL-1 CLOSED 2026-09-16 (round 83 wave-3; lane s4 `12470eb32` → pick `757327bdd`; rv APPROVE 0C/0M):** the orchestrator BEHAVIOR ruling shipped as written — public `Bootstrap::MCP_DISABLE_ENV` = `CANDY_CODE_MCP_DISABLE` ('1'/'true'/'yes', i-case; unset/'0'/other = enabled), gate at the top of `mcpConfigDecision()` returning the EXISTING MCP_ABSENT shape (zero new sprintf/emitter sites — format and stderr censuses rode unflipped), `scripts/parallel-tests.sh` carries it as a command PREFIX on the shard phpunit launch ONLY (serial keeps default-on behavior), and the ruling's un-foreseen collision — 37 pre-existing launch-asserting shard tests reddened by the global gate — resolved per-test via `tests/Support/McpLaunchEnabledTrait.php` (armed after `parent::setUp`, restored before `parent::tearDown`; the GrantTest arms AFTER its HOME sandbox per the lane-cf ordering law), with a NEW `BootstrapMcpDisableEnvTest` 17T/64A pinning both polarity families incl. the shell-level setter census. Weld sextet re-pin: **12,027T / 172,610A / 0F / 0E / 1S / exit0** serial (assertions +32 over the reviewer's 172,578 s4-tip reading — the documented cold/warm `ensureFixtureRepo()` fixture-rebuild wobble band, same family both readings); K=8 CONSERVATION now +0 tests (the durations row for the new file landed at this weld — s4's shard-sum −17 hole closed); MCP-family filter byte-identical 833T/3714A/1S to the in-lane run. The row EXITED CLOSED at triage; residual (3) (`array_keys` bucket-snapshot, rv-r4 MINOR-1) is ruled OPTIONAL-NOT-MINTED.
 
 **CLOSEOUT RECORD 2026-09-16 (round 84):** heading-stamp lag healed — the row EXITED CLOSED at round-83 wave-3 (RESIDUAL-1 ruling shipped via s4; residual (3) `array_keys` bucket-snapshot ruled OPTIONAL-NOT-MINTED). Two carry items, record-only, deliberately NOT minted: (i) the §E739 zsh-asymmetry product call (direct `/usr/bin/zsh` path answers `text` while the shebang arms map shells) awaits an orchestrator ruling; (ii) `sugar-dash/examples/progressRing.php` imports `SugarCraft\Dash\Layout\Grid\ProgressRing` while the class lives at `src/Plot/Chart/ProgressRing.php` — the r5-seam broken example import is STILL unminted. <!-- @rename-keep -->
 ### E738 [CLOSED] — tree-wide `failOnWarning="true"` adoption: 5 of 58 libs carry the AGENTS skeleton-mandated attribute — 53 cheap measure-first lanes à la r3
@@ -20857,8 +20857,8 @@ roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
 **What:** MINTED at the r88 weld. `findings/plan_sugar-bits.md` row 3.1 (r86 verdict DECLINED, r88 operator re-opened as a build brief in lane x2) prescribes extracting the ~80 lines of near-identical `suffixCells`/`showSuffix`/`barWidth`/`filledCells`/`emptyCells` math across the Line/Slim/Block render branches of `Progress::view()` (`src/Progress/Progress.php:210-319`) into one `computeBarLayout()` helper with byte-identical output pinned by capture tests. Lane x2 phantom'd: reviewer r88-rv-x2 found NOTHING on disk (no branch, no worktree, no object, pickaxe-proved `computeBarLayout` never added anywhere); the extraction remains unbuilt tree-wide. **Acceptance:** helper extraction + per-mode byte-capture pins (render before/after md5-equal), bits suite re-green (514/1085 + new pins), consumers (crush window `Form|Input|Select|Cursor` unaffected — bits Progress is consumed by dash/crush panes; run `--filter 'Progress'` there). **Conf:** LOW (pure refactor; capture-proof mandatory per twin-law precedent). <!-- @rename-keep historical provenance -->
 
 **CLOSED 2026-09-17 (round-89 wave-1; lane y2 tips `8a408f088`/`c967b5ce7`/`ae2ed208f` → picks `2fc904421`/`e20ab706b`/`8058799b4`; rv APPROVE 0C/0M).** `Progress::view()` Line/Slim/Block branches now fold into ONE private `computeBarLayout()` site; two-way capture proof byte-identical across 485,509 B / 4,424 configurations (pre/post renders of a config sweep, both directions); a sole-site structural census pin guards re-duplication. candy-layout companion pick `8058799b4` truth-flips the `Expression` docblock (comment-only). bits **514→519T/1,097A**; layout 157/882 exact; forms consumer 2037/3526 green at lane. This lands what r88 x2 phantom'd (pickaxe had proved `computeBarLayout` never existed tree-wide; now it does, once). <!-- @rename-keep historical provenance -->
-### E744 [CLOSED] — sugar-crush cannot reach the r88 sugar-forms widget features (clipboard OSC52 + ItemList mouse) — host-side routing seam
+### E744 [CLOSED] — candy-code cannot reach the r88 sugar-forms widget features (clipboard OSC52 + ItemList mouse) — host-side routing seam
 
-**What:** MINTED at the r88 weld from rv-x5 MINOR-1. Lane x5 shipped the TEA-contract-correct halves (TextArea selection/clipboard arms emitting `SetClipboard`/OSC52 cmds, ItemList `MouseMsg` y→row mapping; live-proven on candy-scriptui's WriteModel wire), but sugar-crush discards the other half: `Chat::delegateToInput` (sugar-crush/src/Chat.php:12123) drops the widget's returned Cmd; Chat intercepts Ctrl+C into the quit flow BEFORE delegation; `PasteMsg` is consumed by `Chat::insertString` (:1586, E704) and never routed to the focused widget; the crush zone logic never forwards `MouseMsg` to ItemList; crush paints its input box from `Renderer` (Chat.php:4231 comment) rather than `TextArea::view()`. **Acceptance:** a crush-side lane deciding key-routing precedence (copy/paste vs quit vs newline), Cmd plumbing from widget turns into the frame (OSC52 writer), mouse forwarding into list panes, and view-surface convergence — product-shaped, NOT weld-auto-built. **Conf:** MED (touches Chat.php dispatch + Renderer; census families (StderrEmitter/NoRawAnsi) may need in-step flips).
+**What:** MINTED at the r88 weld from rv-x5 MINOR-1. Lane x5 shipped the TEA-contract-correct halves (TextArea selection/clipboard arms emitting `SetClipboard`/OSC52 cmds, ItemList `MouseMsg` y→row mapping; live-proven on candy-scriptui's WriteModel wire), but candy-code discards the other half: `Chat::delegateToInput` (candy-code/src/Chat.php:12123) drops the widget's returned Cmd; Chat intercepts Ctrl+C into the quit flow BEFORE delegation; `PasteMsg` is consumed by `Chat::insertString` (:1586, E704) and never routed to the focused widget; the crush zone logic never forwards `MouseMsg` to ItemList; crush paints its input box from `Renderer` (Chat.php:4231 comment) rather than `TextArea::view()`. **Acceptance:** a crush-side lane deciding key-routing precedence (copy/paste vs quit vs newline), Cmd plumbing from widget turns into the frame (OSC52 writer), mouse forwarding into list panes, and view-surface convergence — product-shaped, NOT weld-auto-built. **Conf:** MED (touches Chat.php dispatch + Renderer; census families (StderrEmitter/NoRawAnsi) may need in-step flips).
 
 **CLOSED 2026-09-17 (round-89 wave-2; lane y5 tips `f2ebd23e9`/`621ea3794` → picks `4e04ec035`/`e25a8b564`; rv APPROVE 0C/0M/3MINOR).** All five host-side halves landed per the lane's design rulings: **WS1** — `delegateToInput` relays the widget's Cmd through a lazy wrapper closure (never eagerly invoked; `Program::scheduleCmd` tick timing untouched); OSC52 `RawMsg` frames whose decoded payload exceeds `Chat::OSC52_MAX_CHARS = 65,536` chars are clipped and re-emitted through the Core `Ansi::setClipboard()` factory (zero new raw-escape literals/emitters — NoRawAnsi + StderrEmitter censuses rode byte-untouched) with a one-shot `RuntimeNoticeSink::record()` notice; unparseable frames pass through fail-soft. **WS2** — Ctrl+C with a draft selection routes copy INTO the TextArea (both encodings); `Cmd::quit()` byte-unchanged otherwise — the raw-rune escape hatch never depends on selection state. **WS3** — PasteMsg updates the draft widget (selection-replace preserved; same-instance fallback byte-identical to the legacy `insertString()` path). **WS4** — the session picker is the first crush pane whose own zones outrank the frame: `Renderer::SESSION_ROW_ZONE_PREFIX = 'session-row:'` triple-validated row zones, click-selects (activation stays `↵`), wheel scrolls the picker not the transcript, geometry single-sourced via `SessionPicker::overlayGeometry`. **WS5** — the `LoadMoreMsg` edge is consumed: the picker adopts `ItemList` + new `SessionRow implements Item`; paging is top-N re-widening (the store's `listSessions(limit)` has NO offset — documented, not silently faked). **WS6** — view convergence ruled: pixels stay, the widget is the editing authority, pinned by an executable projection-invariant tripwire. **ERRATUM:** the mint's `Chat.php:4231` comment cite is FACTUALLY WRONG (design.md:129) — recorded here instead of silently re-cited. 3 rv MINORs carried as seams: the `/keys` modal description column cannot carry the copy nuance (README owns it); the LoadMore arm comment wording nit; `updateClick`'s row↵line exactness rides the structural pan-0 configuration — a future fixed-height list needs an assertion at the construction site. crush **12,027→12,061T** (+34T, 4 new test files — WidgetCmdRelay/SessionPickerWidget/SessionPickerMouse/InputProjectionInvariant — durations rows rode the picks), weld serial **12,061T/170,810A/0F/0E/1S exit0**, K=8 conservation +0/+0.

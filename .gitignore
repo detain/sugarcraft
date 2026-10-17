@@ -20,8 +20,8 @@
 *.log
 .cache/
 .claude/settings.local.json
-.sugar-crush/memory
-.sugar-crush/settings.local.json
+.candy-code/memory
+.candy-code/settings.local.json
 .claude/shell-snapshots
 .claude/paste-cache
 .claude/file-history
@@ -39,8 +39,8 @@
 .claude/sessions/
 .php-cs-fixer.cache
 
-.sugar-crush-build/
-/.sugar-crush-prompt/
+.candy-code-build/
+/.candy-code-prompt/
 codacy-coverage-reporter
 # E737 housekeeping: the operator's repo-root MCP config is untracked local state that must never
 # enter a commit; discovery reads exactly one `$root/.mcp.json`, so the ignore is ROOT-ANCHORED —

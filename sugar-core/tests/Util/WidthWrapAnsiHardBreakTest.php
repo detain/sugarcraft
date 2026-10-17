@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Width;
  * whether it fit, so the last word before a hard break rode onto a full
  * line: `wrapAnsi("aaaa bbbb x\ny", 10)` returned an 11-cell first line
  * while the same text without the `\ny` tail wrapped correctly. The
- * over-wide-cluster branch had the same unconditional append. sugar-crush
+ * over-wide-cluster branch had the same unconditional append. candy-code
  * wraps on its hot render path, and the diff renderer owns exactly one
  * terminal row per line, so an over-wide line corrupts the frame.
  *

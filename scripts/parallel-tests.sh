@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sharded parallel PHPUnit runner for the sugar-crush suite.
+# Sharded parallel PHPUnit runner for the candy-code suite.
 #
 # Usage:
 #   scripts/parallel-tests.sh [K] [--junit <xml>] [--durations <tsv>]
@@ -38,7 +38,7 @@
 #   --timeout    per-shard wall guard in seconds (default: 900, via timeout(1))
 #   --manifest   (re)generate the deterministic LPT manifests, run nothing
 #   --clover     each shard additionally writes --coverage-clover <out>/clover-<i>.xml
-#                (E691 — the sharded sugar-crush coverage job). Default OFF: shard
+#                (E691 — the sharded candy-code coverage job). Default OFF: shard
 #                argv stays byte-identical to a plain run. Merge the reports after:
 #                  php scripts/merge-clover.php <out> <K> <dest.xml>
 #                Resume caveat: done-<i> markers are clover-agnostic — a shard marked
@@ -52,7 +52,7 @@
 #    manifests, so a resumed run rebuilds the same plan (done-markers).
 #  * Per shard: own --cache-directory, explicit file args, same -c config,
 #    </dev/null, --colors=never, no coverage unless --clover opts in (E691),
-#    and SUGARCRUSH_MCP_DISABLE=1 as a command prefix on the phpunit launch
+#    and CANDY_CODE_MCP_DISABLE=1 as a command prefix on the phpunit launch
 #    (E737 — shards run at the checkout root, where an operator's own trusted
 #    `.mcp.json` must not let the suite spawn its servers; serial launches do
 #    not go through this script and keep the default-on behavior). Each shard re-runs
@@ -175,7 +175,7 @@ if [ "$MODE" = --manifest ]; then
 fi
 
 cd "$REPO" || exit 1
-PHPUNIT="php sugar-crush/vendor/bin/phpunit"
+PHPUNIT="php candy-code/vendor/bin/phpunit"
 declare -a PIDS
 START=$(date -u +%s)
 
@@ -202,7 +202,7 @@ for i in $(seq 0 $((K - 1))); do
 		# shell — and it is set for shards ONLY: a serial run launched
 		# directly (`vendor/bin/phpunit`) keeps the documented default-on
 		# behavior, exactly as an operator's interactive launch does.
-		SUGARCRUSH_MCP_DISABLE=1 timeout "$SHARD_TIMEOUT" $PHPUNIT -c sugar-crush/phpunit.xml --colors=never \
+		CANDY_CODE_MCP_DISABLE=1 timeout "$SHARD_TIMEOUT" $PHPUNIT -c candy-code/phpunit.xml --colors=never \
 			--cache-directory "$OUT/cache-k$K-$i" \
 			--log-junit "$OUT/junit-$i.xml" \
 			"${COV_ARGS[@]}" \

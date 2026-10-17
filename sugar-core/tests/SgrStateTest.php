@@ -164,7 +164,7 @@ final class SgrStateTest extends TestCase
         }
         $s->apply(new Token(Token::OSC, '8;id=2;https://example.com/x'));
         // The id is deliberately NOT re-emitted — the byte contract of the
-        // delegating call site (sugar-crush balanceSgr) predates id tracking.
+        // delegating call site (candy-code balanceSgr) predates id tracking.
         $this->assertSame("\x1b[0;1m\x1b]8;;https://example.com/x\x1b\\", $s->rowOpen());
     }
 

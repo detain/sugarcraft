@@ -1,5 +1,5 @@
 # Node tooling output. `dist/` is deliberately NOT ignored: it is the committed
-# build that `sugarcrush serve` hands to the browser, and CI (web.yml) fails if
+# build that `candy-code serve` hands to the browser, and CI (web.yml) fails if
 # it drifts from `src-web/`.
 /node_modules/
 /playwright-report/

@@ -89,7 +89,7 @@ To implement an item:
 |---------|--------------|-------------------|
 | **candy-kv** | [research/libraries/candy-kv-research.md](libraries/candy-kv-research.md) | 1. JSON export, 2. Levenshtein, 3. TTL |
 | **candy-git** | [research/libraries/candy-git-research.md](libraries/candy-git-research.md) | 1. Context help, 2. Branch ops, 3. Diff panel |
-| **sugar-crush** | [research/libraries/sugar-crush-research.md](libraries/sugar-crush-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
+| **candy-code** | [research/libraries/candy-code-research.md](libraries/candy-code-research.md) | 1. Session persistence, 2. Streaming UI, 3. Context compaction |
 | **candy-mail** | [research/libraries/candy-mail-research.md](libraries/candy-mail-research.md) | 1. TUI infra, 2. Vim keys, 3. Mastodon API |
 | **candy-sql** | [research/libraries/candy-sql-research.md](libraries/candy-sql-research.md) | 1. Schema columns, 2. Pagination, 3. Cell editing |
 | **sugar-treelist** | [research/libraries/sugar-treelist-research.md](libraries/sugar-treelist-research.md) | 1. FilterFunc interface, 2. FuzzyMatch, 3. Match indices |
@@ -160,7 +160,7 @@ To implement an item:
 
 - **candy-scriptui**: Auto-discovery, ValueEnum, FlagSpec trait
 - **candy-git**: Diff panel, branch ops, context help
-- **sugar-crush**: Session persistence, streaming UI, context compaction
+- **candy-code**: Session persistence, streaming UI, context compaction
 - **super-candy**: Copy/move, bookmarks, preview
 
 ### Games

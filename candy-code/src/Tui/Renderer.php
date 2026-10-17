@@ -1,0 +1,2196 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tui;
+
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Tty;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\View;
+use SugarCraft\Code\Lang;
+use SugarCraft\Style\Bar\Segment;
+use SugarCraft\Style\Bar\StatusBar as BarStatusBar;
+use SugarCraft\Style\Layout;
+use SugarCraft\Style\Position;
+use SugarCraft\Style\Style;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Providers\ReportsServedModel;
+use SugarCraft\Code\Renderer as LiveRenderer;
+use SugarCraft\Code\Tui\Components\ChatPane;
+use SugarCraft\Code\Tui\Components\InputPane;
+use SugarCraft\Code\Tui\Components\SkillsPane;
+use SugarCraft\Code\Tui\Components\AgentDashboardPane;
+use SugarCraft\Code\Tui\Components\AgentSplitColumn;
+use SugarCraft\Code\Tui\Components\AgentsPane;
+use SugarCraft\Code\Tui\Components\FilesPane;
+use SugarCraft\Code\Tui\Components\SettingsPane;
+use SugarCraft\Code\Tui\Components\TodoPane;
+use SugarCraft\Code\Tui\Components\ToolsPane;
+use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Chat;
+use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Dock\Side;
+use SugarCraft\Constraints\Region;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Zone;
+
+/**
+ * Stateless renderer for the candy-code TUI shell.
+ * Composes multiple panes into a full terminal interface.
+ * Pure function - given the same App it always produces the same bytes.
+ *
+ * This is the body of {@see App::view()} (crush_feat.md §5 E7, merge branch).
+ * It renders the SHELL only — menu bar, sidebars, input line, status bar —
+ * and the chat pane it lays out delegates to the live
+ * {@see \SugarCraft\Code\Renderer} against the App's hosted `Chat`, so
+ * transcript content has exactly one implementation. `bin/candy-code` now
+ * boots this shell: {@see \SugarCraft\Code\Cli\Bootstrap::app()} is the
+ * production constructor of an App with a hosted chat.
+ */
+final class Renderer
+{
+    /** The one-cell divider {@see SplitLayout} draws between the two panes. */
+    private const SPLIT_DIVIDER_COLS = 1;
+
+    /** The {@see \SugarCraft\Code\App\App::paneScroll()} id of the live-agent column. */
+    public const SPLIT_SCROLL_ID = 'split';
+
+    /**
+     * Click-zone prefix for the seam between the content band and the
+     * live-agent column: `splitdiv:r<absRow>`, one per band row, so the
+     * column can be dragged wider or narrower like any side.
+     */
+    public const SPLIT_DIVIDER_ZONE_PREFIX = 'splitdiv:';
+
+    /**
+     * Narrowest terminal that gets a split content band at all.
+     *
+     * 80 is not a round number picked for looks, it is the smallest width at
+     * which BOTH panes clear their own floors:
+     * `intdiv(80, 3) = 26` for the agent column (over
+     * {@see SPLIT_MIN_AGENT_COLS}) leaves `80 - 26 - 1 = 53` for the shell
+     * band (over {@see SPLIT_MIN_BAND_COLS}). Below it the split is simply not
+     * offered and the frame is the single-band frame it has always been.
+     */
+    private const SPLIT_MIN_TOTAL_COLS = 80;
+
+    /**
+     * Narrowest agent column worth drawing, INCLUDING
+     * {@see AgentSplitColumn::PANE_CHROME} — so the tile inside it still gets
+     * 20 cells of text.
+     */
+    private const SPLIT_MIN_AGENT_COLS = 24;
+
+    /**
+     * Widest the agent column grows to, however wide the terminal. A peek tile
+     * is a header plus four lines; past this it is whitespace bought with the
+     * transcript's columns.
+     */
+    private const SPLIT_MAX_AGENT_COLS = 60;
+
+    /** The agent column's share of the terminal: one part in this many. */
+    private const SPLIT_AGENT_DIVISOR = 3;
+
+    /**
+     * Narrowest shell band that still holds a sidebar plus a usable chat
+     * column: {@see leftSidebar()}'s own floor of 20 plus the 24 the chat pane
+     * is floored at below. A band under this is why {@see agentSplitWidth()}
+     * can decline a split on a terminal that cleared
+     * {@see SPLIT_MIN_TOTAL_COLS}.
+     */
+    private const SPLIT_MIN_BAND_COLS = 44;
+
+    /**
+     * Render two panes in a split layout.
+     *
+     * This is the in-process split pane renderer: composes multiple pane
+     * contents into a tmux-like layout without external dependencies.
+     * Panes expand proportionally on resize based on the SplitLayout's
+     * stored ratio.
+     *
+     * @param string        $topOrLeft    Content of the first pane.
+     * @param string        $bottomOrRight Content of the second pane.
+     * @param SplitDirection $direction   Split orientation (horizontal/vertical).
+     * @param int           $topOrLeftNumerator   Proportion of first pane (default 1).
+     * @param int           $totalDenominator    Total proportion units (default 2).
+     * @param int           $cols  Authoritative width; 0 falls back to {@see getTerminalSize()}.
+     * @param int           $rows  Authoritative height; 0 falls back to {@see getTerminalSize()}.
+     * @return string Rendered split layout with divider.
+     *
+     * @see SplitLayout for proportional sizing and resize behavior.
+     */
+    public static function renderWithSplit(
+        string $topOrLeft,
+        string $bottomOrRight,
+        SplitDirection $direction,
+        int $topOrLeftNumerator = 1,
+        int $totalDenominator = 2,
+        int $cols = 0,
+        int $rows = 0,
+    ): string {
+        $layout = new SplitLayout(
+            $topOrLeft,
+            $bottomOrRight,
+            $direction,
+            $topOrLeftNumerator,
+            $totalDenominator,
+        );
+
+        // The caller's size WINS when it has one. `getTerminalSize()` is a
+        // one-shot probe cached in a never-invalidated static, so making it the
+        // only source lets this split render at a stale geometry after a
+        // SIGWINCH while the frame around it renders at the `WindowSizeMsg`
+        // one — invariant 2 on {@see renderView()}, which is why the size is
+        // threaded here at all.
+        if ($cols <= 0 || $rows <= 0) {
+            $size = self::getTerminalSize();
+            $cols = $cols > 0 ? $cols : $size['cols'];
+            $rows = $rows > 0 ? $rows : $size['rows'];
+        }
+
+        return $layout->render($cols, $rows);
+    }
+
+    /**
+     * Render two panes in a split layout, routing to multiplexer or in-process.
+     *
+     * This method detects whether a terminal multiplexer (TMUX or iTerm2)
+     * is active in the current environment and routes accordingly:
+     *
+     * - When multiplexer is active: delegates to MultiplexerSplitPane for
+     *   potential native multiplexer rendering (currently falls back to
+     *   in-process when native integration is unavailable).
+     *
+     * - When no multiplexer: uses the in-process SplitLayout renderer
+     *   directly (same as renderWithSplit).
+     *
+     * This is the preferred entry point for split pane rendering as it
+     * automatically adapts to the execution environment.
+     *
+     * THE DIVERGENCE THIS FIXED WAS SIZE, NOT PROPORTIONS. Before Phase 8
+     * item 4 this method's whole signature was
+     * `(string, string, SplitDirection, int $cols = 0, int $rows = 0)` — there
+     * were no proportion parameters to drop, and both branches rendered 1/2
+     * because that is {@see SplitLayout}'s constructor default. What the
+     * no-multiplexer branch DID drop was the two parameters that existed: it
+     * called a {@see renderWithSplit()} that took no size at all, so it
+     * re-probed {@see getTerminalSize()} while the multiplexer branch used the
+     * caller's `$cols`/`$rows`. The identical call therefore rendered at one
+     * geometry inside tmux and another outside it. Both branches now take all
+     * four, and the proportions are new here rather than restored.
+     *
+     * That was invisible while nothing called this; it is the first thing
+     * {@see renderView()}'s compositor hit.
+     *
+     * @param string         $topOrLeft    Content of the first pane.
+     * @param string         $bottomOrRight Content of the second pane.
+     * @param SplitDirection $direction   Split orientation.
+     * @param int            $cols         Available columns (0 = probe the terminal).
+     * @param int            $rows         Available rows (0 = probe the terminal).
+     * @param int            $topOrLeftNumerator Proportion of the first pane.
+     * @param int            $totalDenominator   Total proportion units.
+     * @return string Rendered split layout with divider.
+     *
+     * @see MultiplexerSplitPane::isActive()
+     * @see SplitLayout for the in-process implementation.
+     */
+    public static function renderForCurrentEnvironment(
+        string $topOrLeft,
+        string $bottomOrRight,
+        SplitDirection $direction,
+        int $cols = 0,
+        int $rows = 0,
+        int $topOrLeftNumerator = 1,
+        int $totalDenominator = 2,
+    ): string {
+        $multiplexer = new MultiplexerSplitPane();
+
+        if ($multiplexer->isActive()) {
+            if ($cols <= 0 || $rows <= 0) {
+                $size = self::getTerminalSize();
+                $cols = $cols > 0 ? $cols : $size['cols'];
+                $rows = $rows > 0 ? $rows : $size['rows'];
+            }
+
+            return $multiplexer->renderWithMultiplexer(
+                $topOrLeft,
+                $bottomOrRight,
+                $direction,
+                $cols,
+                $rows,
+                $topOrLeftNumerator,
+                $totalDenominator,
+            );
+        }
+
+        // No multiplexer - use in-process renderer directly
+        return self::renderWithSplit(
+            $topOrLeft,
+            $bottomOrRight,
+            $direction,
+            $topOrLeftNumerator,
+            $totalDenominator,
+            $cols,
+            $rows,
+        );
+    }
+
+    private static ?array $terminalSize = null;
+
+    public static function setSize(int $cols, int $rows): void
+    {
+        if ($cols > 0 && $rows > 0) {
+            self::$terminalSize = ['rows' => $rows, 'cols' => $cols];
+        }
+    }
+
+    public static function getTerminalSize(): array
+    {
+        if (self::$terminalSize !== null) {
+            return self::$terminalSize;
+        }
+
+        try {
+            $size = (new Tty(STDOUT))->size();
+            if ($size['cols'] > 0 && $size['rows'] > 0) {
+                self::$terminalSize = ['rows' => $size['rows'], 'cols' => $size['cols']];
+                return self::$terminalSize;
+            }
+        } catch (\Throwable) {
+            // Terminal size detection failed; fall back to defaults.
+        }
+
+        self::$terminalSize = ['rows' => 60, 'cols' => 200];
+        return self::$terminalSize;
+    }
+
+    public static function resetSizeCache(): void
+    {
+        self::$terminalSize = null;
+    }
+
+    /**
+     * Whether the process-ambient colour profile has been negotiated this
+     * process ({@see applyAmbientColorProfile()}). One-shot like the size
+     * cache above: capability does not change mid-session, and re-reading
+     * the environment on every frame would let a stray putenv() repaint the
+     * whole UI.
+     */
+    private static bool $colorProfileApplied = false;
+
+    /**
+     * Resolve the terminal's real colour capability once and pin it as the
+     * ambient default for every {@see Style} this process mints afterwards.
+     *
+     * Until rv-devops-1/rv-a11y-M1 only PaneFrame's border glyphs consulted
+     * sugar-core's detection ladder, so `NO_COLOR=1` still shipped full
+     * `38;2;r;g;b` sweeps in the rest of the frame. The single ladder lives
+     * in {@see ColorProfile::detect()} — this method only decides WHEN to
+     * consult it, it never re-implements the WHAT.
+     */
+    public static function applyAmbientColorProfile(): void
+    {
+        if (self::$colorProfileApplied) {
+            return;
+        }
+        self::$colorProfileApplied = true;
+
+        $profile = self::negotiateColorProfile(null, stream_isatty(STDOUT));
+        if ($profile !== null) {
+            Style::setDefaultProfile($profile);
+        }
+    }
+
+    /**
+     * The capability decision behind {@see applyAmbientColorProfile()},
+     * factored out so tests can drive the ladder without a real tty.
+     *
+     * A piped stdout answers `null` — "leave the ambient alone" — which
+     * keeps every redirected/captured frame on the historical TrueColor
+     * bytes the whole snapshot corpus was recorded against. That is the
+     * same law PaneFrame's NoTty-on-pipe doc pins; the difference is only
+     * which side of the Style default it is expressed from.
+     *
+     * @param ?array<string,string> $env environment override for tests; null reads the process env
+     * @return ?ColorProfile null = no negotiation (keep Style's TrueColor default)
+     */
+    public static function negotiateColorProfile(?array $env = null, bool $stdoutIsTty = true): ?ColorProfile
+    {
+        if (!$stdoutIsTty) {
+            return null;
+        }
+
+        return ColorProfile::detect($env);
+    }
+
+    /** Test seam mirroring {@see resetSizeCache()}: clears the one-shot and restores the TrueColor resting state. */
+    public static function resetColorProfileCacheForTesting(): void
+    {
+        self::$colorProfileApplied = false;
+        Style::setDefaultProfile(null);
+    }
+
+    /**
+     * Zone registry for the shell CHROME — today the menu bar's titles and
+     * the open menu's dropdown rows (crush_feat.md §8, whose E-list wired
+     * session tabs, panes, tool rows and the palette but never the bar).
+     *
+     * Deliberately NOT the hosted chat's registry
+     * ({@see \SugarCraft\Code\Renderer::scanner()}). The two live in
+     * different coordinate spaces: chat zones are recorded against the chat's
+     * own sub-frame and {@see Chat::zoneAt()} re-bases a pointer report by
+     * {@see \SugarCraft\Code\Renderer::zoneOrigin()} before hit-testing,
+     * while the menu bar is chrome ABOVE that origin — its zones are
+     * frame-absolute, which is the space a terminal mouse report already
+     * arrives in. Sharing one registry would mean one of the two sets was
+     * always off by the pane inset.
+     *
+     * Shared across renders for the same reason the chat's is: a mouse event
+     * arrives BETWEEN frames, so the only boxes a click can be tested
+     * against are the ones the frame currently on screen recorded.
+     */
+    private static ?Scanner $chromeScanner = null;
+
+    /** @see $chromeScanner */
+    public static function chromeScanner(): Scanner
+    {
+        return self::$chromeScanner ??= Scanner::new();
+    }
+
+    /**
+     * The chrome zone under a reported pointer cell, or null when there is
+     * none.
+     *
+     * `$col`/`$row` are terminal-absolute and are used as-is: the chrome is
+     * drawn by this class directly into the frame it composes, so the frame
+     * IS the terminal. Contrast {@see Chat::zoneAt()}, which must subtract
+     * the pane origin first.
+     *
+     * `CANDY_CODE_DISABLE_MOUSE_CLICKS` is honoured through the same
+     * {@see Chat::mouseClicksEnabled()} switch every other hit test reads, so
+     * the escape hatch stays a single decision rather than one per surface.
+     */
+    public static function chromeZoneAt(int $col, int $row): ?Zone
+    {
+        if (!Chat::mouseClicksEnabled()) {
+            return null;
+        }
+
+        return self::chromeScanner()->hit($col, $row);
+    }
+
+    /**
+     * The dock band exactly as the most recent {@see renderView()} laid it
+     * out — the geometry the phase-3 pointer maths resolve against.
+     *
+     * A drag's release cell must mean the same column the pointer sits on,
+     * and during an agent split or a chrome reflow that column count is NOT
+     * what `App::$cols` holds (the forward pointer on
+     * {@see App::seedSharesFromFrame()} names this as its live-band consumer).
+     * The renderer is the only place that knows what it painted, so it
+     * publishes the snapshot; {@see App::previewColumnResize()} and
+     * {@see App::commitDockDrop()} read it instead of re-deriving band maths
+     * a second way. 0-based columns / rows; `centerFrom`/`centerTo` bound the
+     * centre inclusive, `bandTop` is where pane row 0 paints.
+     *
+     * Null while the Agents dashboard owns the band (no side columns to
+     * resize) and before the first frame — a gesture with no snapshot does
+     * nothing, which is the same answer a click before the first frame gives.
+     *
+     * @var ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int}
+     */
+    private static ?array $lastDockFrame = null;
+
+    /**
+     * Each docked pane's per-body-line click keys as last painted, by pane
+     * id — what {@see renderView()} zones into `siderow:` targets. Written by
+     * {@see renderPane()} so the keys always describe the block that was
+     * actually painted (a measured-then-repainted pane overwrites them).
+     *
+     * @var array<string, list<?string>>
+     */
+    private static array $paneRowKeys = [];
+
+    /**
+     * How far each docked pane can scroll, and how many rows its block
+     * painted, by pane id — both as last painted ({@see renderPane()}).
+     *
+     * @var array<string, int>
+     */
+    private static array $paneScrollMax = [];
+
+    /** @var array<string, int> */
+    private static array $paneBlockRows = [];
+
+    /**
+     * The surfaces a wheel notch scrolls, as painted on the last frame:
+     * `id` is the {@see \SugarCraft\Code\App\App::paneScroll()} key, the
+     * box is in terminal cells (0-based, inclusive), and `max` is the
+     * furthest that surface can scroll. Rectangles, not mouse zones, on
+     * purpose: the wheel keeps working with clicks disabled, when the zone
+     * scanner is cleared. Empty when the frame lost rows off its top — a
+     * box measured against a frame that is not on screen would scroll the
+     * wrong thing.
+     *
+     * @var list<array{id: string, x0: int, x1: int, y0: int, y1: int, max: int}>
+     */
+    private static array $scrollRegions = [];
+
+    /**
+     * The scrollable surface under the pointer, or null — then the wheel is
+     * the transcript's, as it always was.
+     *
+     * @return ?array{id: string, x0: int, x1: int, y0: int, y1: int, max: int}
+     */
+    public static function scrollRegionAt(int $col, int $row): ?array
+    {
+        foreach (self::$scrollRegions as $region) {
+            if ($col >= $region['x0'] && $col <= $region['x1'] && $row >= $region['y0'] && $row <= $region['y1']) {
+                return $region;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int}
+     */
+    public static function lastDockFrame(): ?array
+    {
+        return self::$lastDockFrame;
+    }
+
+    /**
+     * Record the chrome's click zones for the frame just composed.
+     *
+     * Scans a SCRATCH copy of the bar (and, when it is painted, the dropdown
+     * panel padded to the column it is spliced at) rather than the frame
+     * itself: the frame must reach the terminal marker-free, and the marked
+     * copy exists only to be measured. Both copies come from the same layout
+     * arithmetic ({@see MenuBar::compose()}), so a column measured here is
+     * the column the title is painted at.
+     *
+     * The registry is CLEARED rather than populated when the frame lost rows
+     * off the top — `clipTail` keeps the bottom, so a dropped row means the
+     * bar is not on screen at all and a stale box would make dead cells
+     * clickable — and when clicks are disabled, where a registry nothing may
+     * read is pure waste.
+     *
+     * @param int $dropped   Rows `clipTail` removed from the top of the frame.
+     * @param int $frameRows Height of the composed frame; panel rows past it
+     *                       were never painted (see {@see overlayDropdown()},
+     *                       which stops at the same edge).
+     */
+    private static function scanChrome(
+        App $a,
+        int $cols,
+        string $menuBar,
+        int $dropped,
+        int $frameRows,
+        bool $withDropdown,
+        array $dockRows = [],
+    ): void {
+        if ($dropped > 0 || !Chat::mouseClicksEnabled()) {
+            self::chromeScanner()->clear();
+
+            return;
+        }
+
+        $lines = explode("\n", MenuBar::renderMarked($a, $cols));
+
+        if ($withDropdown) {
+            $col = MenuBar::activeMenuColumn();
+            $top = self::lineCount($menuBar);
+            foreach (MenuBar::renderDropdownMarked($a->theme()) as $i => $panelLine) {
+                if ($top + $i >= $frameRows) {
+                    break;
+                }
+                $lines[$top + $i] = str_repeat(' ', $col) . $panelLine;
+            }
+        }
+
+        // Dock divider rows share this coordinate space. A row already
+        // carrying a menu or dropdown mark keeps that mark: the float is the
+        // transient, the divider is repainted on the next frame after the
+        // menu closes.
+        foreach ($dockRows as $row => $line) {
+            if ($row >= $frameRows || (isset($lines[$row]) && $lines[$row] !== '')) {
+                continue;
+            }
+
+            while (count($lines) <= $row) {
+                $lines[] = '';
+            }
+
+            $lines[$row] = $line;
+        }
+
+        try {
+            self::chromeScanner()->scan(implode("\n", $lines), $cols);
+        } catch (\Throwable) {
+            // Same trade as the chat's root scan: a malformed marker costs an
+            // unclickable bar, never a crash out of view().
+            self::chromeScanner()->clear();
+        }
+    }
+
+    /**
+     * The shell frame's text bytes only.
+     *
+     * @param ?int $cols Authoritative terminal width (from `WindowSizeMsg`);
+     *                   null falls back to {@see getTerminalSize()}.
+     * @param ?int $rows @see $cols
+     */
+    public static function render(App $a, ?int $cols = null, ?int $rows = null): string
+    {
+        return self::renderView($a, $cols, $rows)->body;
+    }
+
+    /**
+     * The shell frame plus the hosted chat's pixel-graphics layer.
+     *
+     * Three invariants this method owns, the first two re-learned the hard way
+     * on the live path (PR #1403) and just as binding here:
+     *
+     * 1. The frame is CLIPPED to `$rows`, never merely padded. sugar-core's
+     *    `Renderer` repaints with an ABSOLUTE `cursorTo($row, 1)` and has no
+     *    concept of scrolling, so every line past the terminal's last row is
+     *    silently clamped onto it and distinct logical rows collide on one
+     *    physical line. Everything below is therefore laid out against a row
+     *    BUDGET (chrome first, whatever is left to the panes), and the tail
+     *    clip at the end is the backstop for a terminal too short to hold even
+     *    the chrome — it keeps the bottom, which is where the input line and
+     *    status bar live.
+     * 2. `$cols`/`$rows` come from the caller — {@see App::view()} passes the
+     *    size the App recorded from `WindowSizeMsg`, the one size sugar-core's
+     *    `Program` actually dispatches and re-dispatches on SIGWINCH.
+     *    {@see getTerminalSize()} is only the no-WindowSizeMsg-yet fallback: it
+     *    is a one-shot probe cached in a never-invalidated static, so making it
+     *    the primary path lets the shell chrome and the hosted chat render at
+     *    two disagreeing geometries after a live resize.
+     * 3. Every line is CLIPPED to `$cols` too. sugar-core's renderer does no
+     *    wrapping, so an over-wide line is wrapped by the TERMINAL, every later
+     *    row shifts down one, and the absolute `cursorTo()` repaint
+     *    desynchronises exactly as an over-tall frame does. The panes are sized
+     *    exactly, but the chrome was not: {@see MenuBar::render()} drew a
+     *    ~124-cell menu + tab strip whatever the terminal, so every terminal
+     *    narrower than that — 80 and 100 columns included — overflowed on the
+     *    frame's very first line. The bar now takes `$cols` and sheds menu
+     *    names to fit; {@see clipWidth()} is the backstop for anything else
+     *    that mis-sizes itself.
+     * 4. The hosted chat's mouse zones are re-based onto the terminal before
+     *    this returns. `Chat` scans its OWN frame for click zones, and here
+     *    that frame is a sub-frame inside the chat pane's box; mouse reports
+     *    stay terminal-absolute, so the offset has to be handed back or every
+     *    hosted click hit-tests against the wrong cell. It is computed from
+     *    the same measurements the layout above already made, after the row
+     *    clip, because that clip can slide the whole frame up.
+     */
+    public static function renderView(App $a, ?int $cols = null, ?int $rows = null): View
+    {
+        // First frame of the process negotiates the colour capability; every
+        // Style::new() below then renders within it (rv-devops-1).
+        self::applyAmbientColorProfile();
+
+        if ($cols === null || $rows === null || $cols <= 0 || $rows <= 0) {
+            $size = self::getTerminalSize();
+            $cols = ($cols !== null && $cols > 0) ? $cols : $size['cols'];
+            $rows = ($rows !== null && $rows > 0) ? $rows : $size['rows'];
+        }
+
+        $menuBar = MenuBar::render($a, $cols);
+
+        // A hosted Chat is a FULL content model: it draws its own input box and
+        // its own status bar (context usage, spinner, key hints), both of which
+        // carry the Wave 1/2 features the shell's placeholder InputPane and
+        // provider/model bar do not. Rendering the shell's copies alongside them
+        // would put two input boxes and two status bars in one frame, so the
+        // shell stands down and only keeps a one-line notice for the shell-level
+        // error/status text the content model has no way to show.
+        $hosted = $a->chat !== null;
+        $notice = $hosted ? self::hostedNotice($a) : '';
+        $bottom = $hosted ? '' : InputPane::render($a, $cols) . "\n" . self::statusBar($a);
+
+        $chrome = self::lineCount($menuBar)
+            + ($notice === '' ? 0 : self::lineCount($notice))
+            + ($bottom === '' ? 0 : self::lineCount($bottom));
+        $paneRows = max(3, $rows - $chrome);
+
+        // Pane::Agents is a FULL-pane view (crush_feat.md §5 E5): the whole
+        // content band becomes the dashboard, no sidebars and no chat column.
+        // A dashboard squeezed into a quarter-width sidebar cannot show the
+        // status/operation/elapsed/usage columns it exists to show.
+        // (Docking changes nothing here: the divert keys on FOCUS. A docked
+        // Pane::Agents is painted through renderSide()/AgentsPane while some
+        // other pane holds focus — the side-by-side seam the sidebar
+        // docblocks named — and focusing Agents still takes the full band.)
+        // The settings view (N-P1) takes the band the same way, ahead of any
+        // pane focus: it is modal while open, Agents included.
+        if ($a->settingsEditor !== null) {
+            return self::renderSettingsEditor($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
+        // The media generation form (crush-media W3.1, Shape A) takes the
+        // band on the same modal law, right beside the settings view.
+        if ($a->mediaForm !== null) {
+            return self::renderMediaForm($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
+        // The video player (crush-media W5.4) takes the band on the same
+        // modal law, right beside the form it plays the form's artifacts
+        // from — and like the form, ahead of any pane focus.
+        if ($a->videoPlayer !== null) {
+            return self::renderVideoPlayer($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
+        if ($a->pane === Pane::Agents) {
+            return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
+        // The split-pane compositor's activation decision, taken BEFORE the
+        // band is laid out because it changes the band's width. See
+        // {@see agentSplitWidth()} for the policy; 0 means "no split", and
+        // every measurement below then reduces to what it was before.
+        $liveAgents = self::liveAgentRuns($a);
+        $agentCols = self::agentSplitWidth($liveAgents, $cols, $a->agentSplitCols);
+        $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
+
+        [$leftPane, $leftMeta, $leftHeaders] = self::renderSide($a, Side::Left, $bandCols, $paneRows);
+        [$rightPane, $rightMeta, $rightHeaders] = self::renderSide($a, Side::Right, $bandCols, $paneRows);
+
+        // The chat pane gets the columns actually LEFT OVER, measured from the
+        // rendered sidebars. The old `$cols - 80` guess assumed two 40-column
+        // sidebars; the real ones are a quarter of the terminal each and the
+        // right one is usually absent, so on a 120-column terminal it handed
+        // the pane 40 columns out of an available 86 and then truncated
+        // everything wider than 40 to fit.
+        $paneCols = max(24, $bandCols - self::blockWidth($leftPane) - self::blockWidth($rightPane));
+
+        // Publish the band the pointer maths resolve against (see
+        // {@see $lastDockFrame}): exactly these widths, this frame, whether
+        // or not clicks are on — a read-only snapshot costs nothing and a
+        // gesture that begins the frame after clicks flip on still measures
+        // against what is painted.
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        self::$lastDockFrame = [
+            'cols' => $cols,
+            'bandTop' => $bandTop,
+            'bandCols' => $bandCols,
+            'paneRows' => $paneRows,
+            'centerFrom' => self::blockWidth($leftPane),
+            'centerTo' => self::blockWidth($leftPane) + $paneCols - 1,
+            // The live-agent column's width this frame (0 = no split): what a
+            // seam drag measures its travel against.
+            'agentCols' => $agentCols,
+        ];
+
+        [$chatPane, $images] = ChatPane::renderView($a, $paneCols, $paneRows);
+
+        // A sidebar taller than the pane budget would push the bottom chrome
+        // off-screen, so the joined band is held to the budget as well.
+        $middle = self::clipHead(
+            Layout::joinHorizontal(Position::TOP, $leftPane, $chatPane, $rightPane),
+            $paneRows,
+        );
+
+        if ($agentCols > 0) {
+            $middle = self::composeAgentSplit($a, $liveAgents, $middle, $bandCols, $agentCols, $cols, $paneRows);
+        }
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $middle;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+
+        // The open menu's dropdown floats OVER the composed frame rather than
+        // taking part in the layout above, so opening a menu cannot reflow the
+        // panes underneath it. Applied after the clips so it is never the thing
+        // that gets trimmed away.
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($a->theme()), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        self::$scrollRegions = $dropped > 0
+            ? []
+            : self::scrollRegions($leftHeaders, $rightHeaders, self::blockWidth($leftPane) + $paneCols, $bandTop, $bandCols, $cols, $paneRows, count($liveAgents), $agentCols);
+
+        // An armed dock drag outlines where its release would land, painted
+        // last so nothing composed above can cover it.
+        $frame = self::overlayDropTarget($a, $frame, $bandTop - $dropped, $paneRows);
+
+        // Dock click targets, phase 2+3 (dividers stamped by phase 2, pane
+        // headers consumed by the phase-3 gesture). Every occupied side
+        // contributes divider zones, so every side is grabbable: a stacked
+        // side grabs on its painted divider column and gap rows, while a
+        // single-pane side grabs on the boundary cell its box border already
+        // paints (Fix 2). The stackdiv gap seams stay stacked-only — a
+        // documented no-op for a lone pane. Neither shape changes frame
+        // bytes. Headers are the drag phase's press targets and stamp for
+        // any DOCKED pane, single or stacked. The marked rows are scanner
+        // scratch and never join the frame, mirroring the menu bar's
+        // marked/plain pair.
+        $dockRows = [];
+        if (Chat::mouseClicksEnabled()
+            && ($leftMeta !== null || $rightMeta !== null || $leftHeaders !== [] || $rightHeaders !== [] || $agentCols > 0)) {
+            $frameRowsTotal = self::lineCount($frame);
+            $rightStartX = self::blockWidth($leftPane) + $paneCols;
+            $byRow = self::dividerZones($leftMeta, Side::Left, 0, $bandTop, $cols, $frameRowsTotal, $paneRows);
+            $seenRowKeys = [];
+
+            foreach (self::dividerZones($rightMeta, Side::Right, $rightStartX, $bandTop, $cols, $frameRowsTotal, $paneRows) as $absRow => $spans) {
+                $byRow[$absRow] = array_merge($byRow[$absRow] ?? [], $spans);
+            }
+
+            foreach ([[$leftHeaders, 0], [$rightHeaders, $rightStartX]] as [$headers, $startX]) {
+                foreach ($headers as $header) {
+                    $absRow = $bandTop + $header['row'];
+                    $from = min($startX + $header['from'], $cols);
+                    $to = min($startX + $header['to'] + 1, $cols);
+
+                    if ($absRow >= $frameRowsTotal || $to <= $from) {
+                        continue;
+                    }
+
+                    $byRow[$absRow][] = [
+                        $from,
+                        $to,
+                        LiveRenderer::markDockedPaneHeader($header['paneId'], $absRow, $frameRowsTotal, $to - $from),
+                    ];
+
+                    // The pane's body rows, under the same column span as
+                    // its header (which already stays clear of every resize
+                    // seam): body line i sits one row below the top border.
+                    // First wins on a repeated key — a duplicate id makes the
+                    // scan throw, which would cost the frame every zone.
+                    foreach (self::$paneRowKeys[$header['paneId']] ?? [] as $i => $key) {
+                        $rowAbs = $absRow + 1 + $i;
+                        if ($key === null || $rowAbs >= $frameRowsTotal || isset($seenRowKeys[$header['paneId'] . ':' . $key])) {
+                            continue;
+                        }
+                        $seenRowKeys[$header['paneId'] . ':' . $key] = true;
+                        $byRow[$rowAbs][] = [
+                            $from,
+                            $to,
+                            LiveRenderer::markSideRow($header['paneId'], $key, $rowAbs, $frameRowsTotal, $to - $from),
+                        ];
+                    }
+                }
+            }
+
+            // The live-agent column's seam: the divider cell SplitLayout paints
+            // at $bandCols plus the tile's own left border beside it, on every
+            // band row — a one-cell target is a guessing game, and the box
+            // border is the line the eye reads as the edge. Nothing else zones
+            // these columns: every side and header span ends inside the band.
+            if ($agentCols > 0) {
+                for ($r = 0; $r < $paneRows; $r++) {
+                    $absRow = $bandTop + $r;
+                    if ($absRow >= $frameRowsTotal) {
+                        break;
+                    }
+                    $to = min($cols, $bandCols + self::SPLIT_DIVIDER_COLS + 1);
+                    $id = self::SPLIT_DIVIDER_ZONE_PREFIX . 'r' . $absRow;
+                    $byRow[$absRow][] = [$bandCols, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $bandCols))];
+                }
+            }
+
+            foreach ($byRow as $absRow => $spans) {
+                // Spans from both sides can share a row only where the two
+                // side seams do not overlap columns — the centre keeps at
+                // least its own interior between them — and a header never
+                // spans its side's seam, so ordering by start column
+                // is enough to keep the assembly non-overlapping.
+                usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
+
+                $dockRows[$absRow] = self::scratchRow($cols, $spans);
+            }
+        }
+
+        // The bar's own click zones, recorded against the frame that was just
+        // composed — the menu bar is chrome, so this is the terminal's own
+        // coordinate space and NOT the pane-local space declared below.
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $dockRows);
+
+        // The composite is final, so the hosted chat's zone registry — recorded
+        // against the chat's own body, one nesting level down — can be told
+        // where that body ended up on the terminal. Rows lost to the tail clip
+        // are subtracted because clipTail drops from the TOP, sliding
+        // everything below it up by that many rows.
+        LiveRenderer::setZoneOrigin(
+            self::blockWidth($leftPane) + ChatPane::BODY_COL_INSET,
+            self::lineCount($menuBar)
+                + ($notice === '' ? 0 : self::lineCount($notice))
+                + ChatPane::BODY_ROW_INSET
+                - $dropped,
+        );
+
+        return new View($frame, images: $images);
+    }
+
+    /**
+     * The {@see Pane::Agents} frame: shell chrome around the full-width
+     * {@see AgentDashboardPane}.
+     *
+     * Shares {@see renderView()}'s clipping discipline exactly — the frame is
+     * held to `$rows` and every line to `$cols`, for the reasons enumerated on
+     * that method.
+     *
+     * The hosted chat's click zones are DROPPED here rather than re-based.
+     * `Chat` records zones by scanning its own frame, and this frame does not
+     * contain that frame: leaving the registry populated would leave the
+     * previous chat frame's boxes hit-testable underneath a dashboard that
+     * never drew them, so a click on an agent row would fire whatever chat
+     * action last occupied that cell. The dashboard's own zones replace them:
+     * each run's row is an `agent:<runId>` zone in the chrome registry
+     * ({@see AgentDashboardPane::zones()}), beside the keyboard (Alt+1..9,
+     * Space, Enter, q).
+     */
+    private static function renderAgentDashboard(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $dashboard = self::clipHead(
+            AgentDashboardPane::render($a, $cols, $paneRows),
+            $paneRows,
+        );
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $dashboard;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+
+        LiveRenderer::clearZones();
+
+        // No side columns exist to resize or drag in a full-band dashboard.
+        self::$lastDockFrame = null;
+
+        // The dashboard drops the hosted chat's zones (above) but keeps the
+        // bar's: this frame DOES paint the menu titles, so a click on one has
+        // to work here too. No dropdown — this path never overlays one. Each
+        // run's row is an `agent:<runId>` zone in the same chrome registry
+        // (the settings view's technique), and a click opens its Agent View.
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $zoneRows = [];
+        foreach (AgentDashboardPane::zones($a, $cols, $paneRows) as [$row, $from, $to, $id]) {
+            $to = min($to, $cols);
+            if ($to > $from && $row < $paneRows) {
+                $zoneRows[$bandTop + $row] = self::scratchRow($cols, [[$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))]]);
+            }
+        }
+
+        self::scanChrome(
+            $a,
+            $cols,
+            $menuBar,
+            self::lineCount($joined) - self::lineCount($frame),
+            self::lineCount($frame),
+            false,
+            $zoneRows,
+        );
+
+        return new View($frame);
+    }
+
+    /**
+     * The media-form frame (crush-media W3.1): the settings band's shape
+     * applied to the full-band {@see \SugarCraft\Code\Tui\MediaForm\MediaForm}
+     * — held to `$rows`/`$cols`, its `media:` tab/row zones recorded in the
+     * chrome registry, the menu dropdown painted over it. Deliberately NOT a
+     * Veil overlay: the chat's composite chain (src/Renderer.php's
+     * painted==routed band) stays untouched while this modal is up.
+     */
+    private static function renderMediaForm(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $form = $a->mediaForm;
+        \assert($form !== null);
+        $theme = $a->theme();
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $form->view($theme, $cols, $paneRows);
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $byRow = [];
+        foreach ($form->zones($theme, $cols, $paneRows) as [$row, $from, $to, $id]) {
+            $to = min($to, $cols);
+            if ($to <= $from) {
+                continue;
+            }
+
+            $byRow[$bandTop + $row][] = [$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))];
+        }
+
+        $zoneRows = [];
+        foreach ($byRow as $absRow => $spans) {
+            usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
+            $zoneRows[$absRow] = self::scratchRow($cols, $spans);
+        }
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
+
+        return new View($frame);
+    }
+
+    /**
+     * The video-player frame (crush-media W5.4): shell chrome around the
+     * full-band {@see \SugarCraft\Code\Tui\VideoPlayer\VideoPlayerScreen}.
+     *
+     * Same discipline as {@see renderMediaForm()} with one ruling twist: a
+     * graphics-mode frame is protocol BYTES (sixel/kitty/iterm2 payloads),
+     * so the width clip is skipped for it — {@see
+     * \SugarCraft\Code\Tui\VideoPlayer\VideoPlayerScreen::clipsLines()}
+     * answers false and the geometry the shell asked the Player for at
+     * open stands. The v1 screen has no clickable zones, so `$zoneRows`
+     * stays empty and no dropdown rides over the picture.
+     */
+    private static function renderVideoPlayer(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $screen = $a->videoPlayer;
+        \assert($screen !== null);
+        $theme = $a->theme();
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $screen->view($theme, $cols, $paneRows);
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $clipped = self::clipTail($joined, $rows);
+        $frame = $screen->clipsLines() ? self::clipWidth($clipped, $cols) : $clipped;
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, []);
+
+        return new View($frame);
+    }
+
+    /**
+     * The settings-view frame (roadmap N-P1): shell chrome around the full-band
+     * {@see \SugarCraft\Code\Tui\Settings\SettingsEditor}.
+     *
+     * {@see renderAgentDashboard()}'s discipline — held to `$rows` and `$cols`,
+     * the hosted chat's zones dropped because its frame is not on screen — with
+     * two additions: the view's own tab and row zones are recorded in the
+     * chrome registry (as `settings:` ids, the dock-row technique), and the
+     * menu's dropdown is painted, because the menu bar stays live over the view.
+     */
+    private static function renderSettingsEditor(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $editor = $a->settingsEditor;
+        \assert($editor !== null);
+        $theme = $a->theme();
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $editor->view($theme, $cols, $paneRows);
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $byRow = [];
+        foreach ($editor->zones($theme, $cols, $paneRows) as [$row, $from, $to, $id]) {
+            $to = min($to, $cols);
+            if ($to <= $from) {
+                continue;
+            }
+
+            $byRow[$bandTop + $row][] = [$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))];
+        }
+
+        $zoneRows = [];
+        foreach ($byRow as $absRow => $spans) {
+            usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
+            $zoneRows[$absRow] = self::scratchRow($cols, $spans);
+        }
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
+
+        return new View($frame);
+    }
+
+    /**
+     * The shell's error/status text as a single line, or '' when there is
+     * neither.
+     *
+     * Only rendered while a Chat is hosted, where the shell's own status bar is
+     * stood down: dropping the bar must not silently swallow an engine-level
+     * error, but a permanently-present second bar is exactly the duplication
+     * standing it down was for.
+     */
+    private static function hostedNotice(App $a): string
+    {
+        $theme = $a->theme();
+
+        if ($a->error !== null && $a->error !== '') {
+            return Style::new()->foreground($theme->shellError)->bold()
+                ->render(' ' . Lang::t('tui.status.error', ['error' => $a->error]));
+        }
+
+        if ($a->status !== null && $a->status !== '') {
+            return Style::new()->foreground($theme->shellSuccess)->render(' ' . $a->status);
+        }
+
+        return '';
+    }
+
+    /** Visible width of the widest line in a rendered block ('' is 0 wide). */
+    private static function blockWidth(string $block): int
+    {
+        if ($block === '') {
+            return 0;
+        }
+
+        $widest = 0;
+        foreach (explode("\n", $block) as $line) {
+            $widest = max($widest, Width::string($line));
+        }
+
+        return $widest;
+    }
+
+    private static function lineCount(string $block): int
+    {
+        return substr_count($block, "\n") + 1;
+    }
+
+    /** Keep at most $rows lines from the TOP of $block. */
+    private static function clipHead(string $block, int $rows): string
+    {
+        $lines = explode("\n", $block);
+
+        return count($lines) <= $rows ? $block : implode("\n", array_slice($lines, 0, $rows));
+    }
+
+    /**
+     * Keep at most $cols visible cells of every line in $block.
+     *
+     * The row clip's twin (see invariant 3 on {@see renderView()}). Truncation
+     * is ANSI-aware — escape sequences carry no width and a trailing SGR reset
+     * survives the cut — so clipping a styled line cannot leak its colour onto
+     * the rest of the screen.
+     */
+    private static function clipWidth(string $block, int $cols): string
+    {
+        $lines = explode("\n", $block);
+        foreach ($lines as $i => $line) {
+            if (Width::string($line) > $cols) {
+                $lines[$i] = Width::truncateAnsi($line, $cols);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /** Keep at most $rows lines from the BOTTOM of $block. */
+    private static function clipTail(string $block, int $rows): string
+    {
+        $lines = explode("\n", $block);
+
+        return count($lines) <= $rows ? $block : implode("\n", array_slice($lines, -$rows));
+    }
+
+    /**
+     * Every run producing text right now, registered or not:
+     * {@see \SugarCraft\Code\Agents\AgentManager::liveRuns()} derives
+     * from the sub-agent map, which is where a workflow's ad-hoc agents live.
+     * Per run, not per agent name, so a batch of Task calls to one roster
+     * agent gets a tile each rather than one tile holding all their text.
+     *
+     * @return list<\SugarCraft\Code\Agents\SubAgent>
+     */
+    private static function liveAgentRuns(App $a): array
+    {
+        return $a->chat?->agentManager()?->liveRuns() ?? [];
+    }
+
+    /**
+     * The split-pane compositor's ACTIVATION POLICY and its width, in one
+     * place. `0` means no split.
+     *
+     * ## The policy: data, not configuration
+     *
+     * The split appears exactly when at least one agent has a NON-TERMINAL
+     * sub-agent that has produced text, and the terminal is wide enough to
+     * carry two panes. There is no toggle and no config key, and that is what
+     * {@see \SugarCraft\Code\Agents\AgentManager::liveOutputs()} was shaped
+     * for: it OMITS the silent ones — its docblock says in as many words that
+     * omitting them "is what keeps it from rendering a row of empty tiles — the
+     * exact reason that compositor was deferred rather than wired" — and, since
+     * this item's follow-up, the finished ones too, applying the same
+     * `!isComplete() && !isStopped()` predicate `active()` has always applied.
+     * A map that is empty whenever there is nothing to show IS the activation
+     * signal; a key defaulting to `false` would only ask the user to re-state
+     * it, and one defaulting to `true` would be this policy with an extra
+     * file.
+     *
+     * Without that liveness half the split would have been one-way: nothing
+     * clears `SubAgent::$output`, so the first workflow of a session would have
+     * opened a column that stayed open until the process exited.
+     *
+     * ## What this policy can and cannot do TODAY, measured
+     *
+     * The map is populated on a real launch. `/workflow run` reaches
+     * {@see \SugarCraft\Code\Workflows\WorkflowEngine::executeParallelStage()},
+     * which hands its `SubAgent`s to `AgentManager::executeAll()`; that files
+     * each one under the manager's sub-agent map, and `liveOutputs()` reads
+     * that map. (An earlier revision added "and settles
+     * streamed text onto its `output`" here. It settles the FINAL text, on
+     * completion — see "NOTHING TO PAINT" below, which is the whole reason
+     * that distinction cost this pane a release.) It
+     * did NOT before Phase 8 item 4's follow-up: `liveOutputs()` used to
+     * iterate the REGISTERED map, and a workflow's agents are ad-hoc, named
+     * `$task->name ?? $task->agentType` in
+     * `WorkflowEngine::executeParallelStage()` and never registered — with
+     * neither shipped workflow naming a parallel task after
+     * a roster entry, that map could never contain one.
+     *
+     * ## The frame, and the text to put in it
+     *
+     * Both used to be missing, and they were two separate defects rather than
+     * one. Recording both, because the first was documented here as the whole
+     * story and it was not.
+     *
+     * NO FRAME. `Chat::workflowRun()` called `$this->workflowEngine->run()`
+     * SYNCHRONOUSLY from inside `update()`, and sugar-core's `Program`
+     * repaints from a periodic timer on the ReactPHP loop
+     * (`Program.php:387`), so the tick could not fire until the whole workflow
+     * was over. It now runs in a `\Fiber` that a timer on that same loop
+     * steps, suspending at `AgentWorkerPool::idle()` — the one point where the
+     * PARENT is idle while workers run. (The blocking `stream_select()`s in
+     * `ProcessExecutor::execute()`/`ProcessExecutor::executeStream()` are in
+     * the CHILD, and never were the obstacle they were described as here.)
+     *
+     * NOTHING TO PAINT. Even with a frame, this map was empty for the whole
+     * of a run: on the pool path `SubAgent::$output` had exactly one writer,
+     * `AgentManager::drain()`, which settles the final text at the same moment
+     * it sets the status terminal. So a pool-executed sub-agent was always
+     * either running-and-silent or finished, and the liveness filter — the
+     * thing that correctly keeps this pane from showing stale tiles — could
+     * never see one. `AgentWorkerPool::pumpProgress()` is the fix: forked
+     * workers publish their `Streaming` chunks to a file in the pool's IPC
+     * directory and the parent mirrors it onto the SubAgent on every poll.
+     *
+     * ⚠️ This paragraph previously cited `Chat.php:6212` dispatched at
+     * `:5480`, and "KNOWN GAP issue #79". All of it was stale: the call sites
+     * had drifted to `:6478`/`:6390` — drifted again by the time you read
+     * this, hence symbols now: `Chat::workflowRun()`, dispatched from the
+     * 'run' arm of `Chat::handleWorkflowCommand()`. detain/sugarcraft #79 is
+     * a MERGED pull request about CandyMetrics telemetry. No open issue // @rename-keep historical PR-title citation
+     * tracked this.
+     *
+     * The OTHER route that would populate this map, a Task/Agent tool
+     * delegating from a model turn, still does not exist (crush_code.md #45).
+     * Beyond the live path, the split is exercised by
+     * `AgentSplitCompositorTest` and by an embedder driving the manager
+     * directly; the live one is exercised by `WorkflowLivePaneTest`.
+     *
+     * ## Width, and why it can still decline
+     *
+     * The agent column takes one part in {@see SPLIT_AGENT_DIVISOR}, clamped
+     * to [{@see SPLIT_MIN_AGENT_COLS}, {@see SPLIT_MAX_AGENT_COLS}].
+     *
+     * The band check after the clamp is REDUNDANT WITH
+     * {@see SPLIT_MIN_TOTAL_COLS} as the constants stand, and saying otherwise
+     * would be inventing a case: for every `$cols >= 80` the band works out to
+     * at least 53 cells — the minimum of `cols - min(60, max(24, intdiv(cols,
+     * 3))) - 1`, attained at `cols = 80` and brute-forced to 100000 — well over
+     * the 44 floor, so nothing reaching that line has ever failed it. It is kept as the invariant's guard rather
+     * than as live logic — the clamp's LOWER bound can hand back a column
+     * WIDER than the proportion asked for, so lowering
+     * {@see SPLIT_MIN_TOTAL_COLS} or raising {@see SPLIT_MIN_AGENT_COLS} is
+     * exactly the edit that starts starving the band, and this is what makes
+     * that a declined split instead of a chat column squeezed under its own
+     * floor. `AgentSplitCompositorTest` sweeps the widths that pin the
+     * relationship. Declining is always safe: the caller falls back to the
+     * full-width band.
+     *
+     * @param list<\SugarCraft\Code\Agents\SubAgent> $liveAgents as {@see liveAgentRuns()} returns it
+     */
+    private static function agentSplitWidth(array $liveAgents, int $cols, ?int $override = null): int
+    {
+        if ($liveAgents === [] || $cols < self::SPLIT_MIN_TOTAL_COLS) {
+            return 0;
+        }
+
+        // A width the user dragged the seam to wins over the proportion, held
+        // inside the same bounds a drag is clamped to (agentSplitBounds()) —
+        // so a terminal that shrank since cannot starve the band. The 60-cell
+        // cap is the DEFAULT's: a column dragged wider means it.
+        [$min, $max] = self::agentSplitBounds($cols);
+        $width = $override !== null
+            ? max($min, min($override, $max))
+            : min(
+                self::SPLIT_MAX_AGENT_COLS,
+                max(self::SPLIT_MIN_AGENT_COLS, intdiv($cols, self::SPLIT_AGENT_DIVISOR)),
+            );
+
+        if ($cols - $width - self::SPLIT_DIVIDER_COLS < self::SPLIT_MIN_BAND_COLS) {
+            return 0;
+        }
+
+        return $width;
+    }
+
+    /**
+     * Join the shell band and the live-agent column into one content band.
+     *
+     * Three things this method is responsible for, all of them width
+     * arithmetic that the render invariants make load-bearing:
+     *
+     * 1. The band is pre-clipped to `$bandCols` with the ANSI-AWARE
+     *    {@see clipWidth()}. {@see SplitLayout} has a truncator of its own, but
+     *    its slow path walks raw codepoints and its own docblock records that
+     *    it can cut a line mid-SGR; the band is styled, so a cut there would
+     *    leak a colour across the divider into the agent column. Handing it
+     *    content that already fits means that truncator never fires on it.
+     * 2. The proportions are handed over as numerator = `$bandCols`,
+     *    denominator = `$cols`, which makes `SplitLayout::splitPosition()`
+     *    return `round($bandCols / $cols * $cols)` = exactly `$bandCols`. The
+     *    ratio machinery is used for what it is, rather than approximated with
+     *    a 1/3 that rounds to a different cell on most widths.
+     * 3. `$bandCols + divider + $agentCols === $cols` is the invariant the
+     *    whole method rests on; it is established by the caller's
+     *    `$bandCols = $cols - $agentCols - SPLIT_DIVIDER_COLS` and is what
+     *    keeps every composed row exactly `$cols` wide instead of one border
+     *    over. `renderView()`'s own `clipWidth()` on the finished frame is the
+     *    backstop, not the mechanism.
+     *
+     * The entry point is {@see renderForCurrentEnvironment()} rather than
+     * {@see renderWithSplit()} because it is the one that asks
+     * {@see MultiplexerSplitPane} first — under tmux or iTerm2 the same call
+     * is the seam a future native-pane implementation takes over.
+     *
+     * @param list<\SugarCraft\Code\Agents\SubAgent> $liveAgents as {@see liveAgentRuns()} returns it
+     */
+    private static function composeAgentSplit(
+        App $a,
+        array $liveAgents,
+        string $band,
+        int $bandCols,
+        int $agentCols,
+        int $cols,
+        int $rows,
+    ): string {
+        $column = AgentSplitColumn::renderRuns(
+            $liveAgents,
+            $a->theme(),
+            $agentCols,
+            $rows,
+            $a->paneScroll(self::SPLIT_SCROLL_ID),
+        );
+
+        // Unreachable by construction — agentSplitWidth() returned non-zero, so
+        // the map is non-empty and both budgets are positive, which is every
+        // way AgentSplitColumn::render() can answer ''. Kept because the
+        // alternative to a narrower-than-usual band is a frame whose rows are
+        // `$agentCols + 1` cells short of the terminal with nothing drawn in
+        // them, and a degraded band is the cheaper of the two.
+        if ($column === '') {
+            return $band;
+        }
+
+        return self::renderForCurrentEnvironment(
+            self::clipWidth($band, $bandCols),
+            $column,
+            SplitDirection::Vertical,
+            $cols,
+            $rows,
+            $bandCols,
+            $cols,
+        );
+    }
+
+    /**
+     * The LEFT sidebar region of the band, as a composed block.
+     *
+     * Kept as a named entry point because test docblocks cite it; the pane
+     * branching it used to own now lives in {@see renderSide()} /
+     * {@see sidePanes()}, which consult the App's dock plus the transient
+     * focus rule rather than switching on `App::$pane` directly.
+     */
+    private static function leftSidebar(App $a, int $cols, int $rows): string
+    {
+        return self::renderSide($a, Side::Left, $cols, $rows)[0];
+    }
+
+    /**
+     * The RIGHT sidebar region of the band — `''` when neither the dock nor
+     * the focused pane puts anything there.
+     *
+     * Note on {@see AgentsPane}: the full-pane divert for a FOCUSED
+     * `Pane::Agents` in {@see renderView()} still wins before any sidebar is
+     * built, so the dashboard remains the focused-Agents frame. What docking
+     * changed (phase 2) is that the widget is no longer unreachable: an
+     * Agents slot in the dock paints through {@see renderPane()} while some
+     * other pane holds focus — the side-by-side re-entry this seam was
+     * preserved for. {@see \SugarCraft\Code\Renderer}'s class docblock
+     * records the same story from the transcript renderer's side; the two are
+     * meant to agree.
+     */
+    private static function rightSidebar(App $a, int $cols, int $rows): string
+    {
+        return self::renderSide($a, Side::Right, $cols, $rows)[0];
+    }
+
+    /**
+     * Compose one side of the frame from the panes it must show, returning
+     * the block plus the divider metadata the zone pass consumes (null
+     * metadata for the single-pane LEGACY shape — see below).
+     *
+     * ## The width question, settled deliberately
+     *
+     * Two regimes, joined by one invariant — see
+     * {@see sideWidth()} for the rule itself. While the dock is the
+     * UNTOUCHED {@see App::defaultDock()} the side keeps the legacy
+     * `max(20, floor(bandCols/4))` measure the shipped frame has always
+     * used, because byte-identity of the default frame is a hard
+     * requirement (the round-89 goldens constraint). The moment the user's
+     * first dock mutation hands the shares real pixels
+     * ({@see App::seedSharesFromFrame()}), the side width comes from
+     * {@see DockLayout::resolve()} instead — so resizing scales the panes
+     * proportionally at the size the eye last saw rather than snapping a
+     * seeded frame back to a fixed quarter. resolve() is additionally the
+     * sole source for the per-slot HEIGHTS of a vertical stack, which only
+     * it can produce.
+     *
+     * ## Two shapes
+     *
+     * One pane on the side renders exactly as today's sidebar did: one block,
+     * joined flush against the chat, no divider COLUMN. Two or more stack
+     * vertically at the resolved heights with a one-row `\u{2500}` gap
+     * between slots and an explicit one-column `\u{2502}` divider between
+     * the stack and the chat column — SplitLayout's own divider glyphs, the
+     * same pair {@see \SugarCraft\Code\Tui\SplitLayout} composes with.
+     * Both shapes carry divider CLICK metadata (Fix 2): a single-pane side
+     * stamps a per-row `divider:<side>:r<row>` zone on the boundary cell its
+     * own box border already paints, so the default one-pane-per-side layout
+     * is resizable. Because a legacy side gains no painted column, its frame
+     * stays byte-identical — the zones ride scanner-scratch rows that never
+     * join the frame — but a lone side is no longer the un-grabbable seam the
+     * Phase-3 cut left it.
+     *
+     * @return array{0: string, 1: ?array{width: int, dividerColLocal: int, grabFrom: int, grabTo: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>}, 2: list<array{paneId: string, row: int, from: int, to: int}>}
+     */
+    private static function renderSide(App $a, Side $side, int $cols, int $rows): array
+    {
+        $panes = self::sidePanes($a, $side);
+
+        if ($panes === []) {
+            return ['', null, []];
+        }
+
+        $width = self::sideWidth($a, $panes[0], $cols, $rows);
+
+        if (count($panes) === 1) {
+            $block = self::renderPane($a, $panes[0], $width, $rows);
+            $painted = self::blockWidth($block);
+
+            // Fix 2: the lone side is resizable, so hand the zone pass the
+            // same divider metadata a stacked side gets — but WITHOUT painting
+            // an extra divider column. The grab target is the boundary cell the
+            // pane's own box border already occupies: the rightmost column for
+            // a Left side, the leftmost for a Right side. The header spans stop
+            // one cell short of that border, mirroring the stacked rule that a
+            // header never spans its own divider cell, so the two zone families
+            // never collide on a column. Frame bytes are untouched: dividerZones
+            // builds scanner-scratch rows that never join the frame.
+            $meta = [
+                'width' => $painted,
+                'dividerColLocal' => $side === Side::Left ? $painted - 1 : 0,
+                'grabFrom' => $side === Side::Left ? $painted - 1 : -1,
+                'grabTo' => $side === Side::Left ? $painted + 1 : 1,
+                'blockRows' => self::lineCount($block),
+                'gaps' => [],
+            ];
+            $headerFrom = $side === Side::Left ? 0 : 1;
+            $headerTo = $side === Side::Left ? $painted - 2 : $painted - 1;
+
+            return [$block, $meta, self::paneHeaders($a, $panes, [0], $headerFrom, $headerTo)];
+        }
+
+        $blocks = self::fitStack($a, $panes, $width, self::stackHeights($a, $panes, $cols, $rows));
+
+        // Pane widgets paint their own box chrome, so a rendered block can be
+        // a few columns wider than the requested content `$width`. The gap
+        // rule and the divider column must follow the PAINTED extent: sizing
+        // them from the request left the `\u{2502}` jittering several cells
+        // sideways between box rows and gap rows, and put the stamped click
+        // zones beside the divider instead of on it.
+        $painted = $width;
+        foreach ($blocks as $block) {
+            $painted = max($painted, self::blockWidth($block));
+        }
+
+        $stacked = [];
+        $gaps = [];
+        $slotTops = [];
+        $row = 0;
+
+        foreach ($blocks as $i => $block) {
+            if ($i > 0) {
+                $gaps[] = ['row' => $row, 'slotIndex' => $i - 1];
+                $stacked[] = str_repeat(SplitDirection::Horizontal->divider(), $painted);
+                $row++;
+            }
+
+            $slotTops[$i] = $row;
+            $stacked[] = $block;
+            $row += self::lineCount($block);
+        }
+
+        $lines = explode("\n", implode("\n", $stacked));
+        $divider = SplitDirection::Vertical->divider();
+
+        if ($side === Side::Left) {
+            $block = implode("\n", array_map(static fn (string $l): string => $l . $divider, $lines));
+
+            return [$block, ['width' => $painted, 'dividerColLocal' => $painted, 'grabFrom' => $painted - 1, 'grabTo' => $painted + 2, 'blockRows' => count($lines), 'gaps' => $gaps], self::paneHeaders($a, $panes, $slotTops, 0, $painted - 2)];
+        }
+
+        $block = implode("\n", array_map(static fn (string $l): string => $divider . $l, $lines));
+
+        return [$block, ['width' => $painted, 'dividerColLocal' => 0, 'grabFrom' => -1, 'grabTo' => 2, 'blockRows' => count($lines), 'gaps' => $gaps], self::paneHeaders($a, $panes, $slotTops, 2, $painted)];
+    }
+
+    /**
+     * Press targets for the dock-drag gesture: one header row per DOCKED
+     * pane this side paints, at the block-relative row its slot starts on,
+     * spanning the pane's columns and never its divider cell (that column
+     * belongs to the resize zone). A transiently-focused, undocked pane gets
+     * no header — there is nothing to drag off the dock, and stamping one
+     * would make its click a gesture that can never arm.
+     *
+     * @param list<Pane> $panes
+     * @param list<int>  $tops  block-relative row of each pane's first line
+     *
+     * @return list<array{paneId: string, row: int, from: int, to: int}>
+     */
+    private static function paneHeaders(App $a, array $panes, array $tops, int $from, int $to): array
+    {
+        $headers = [];
+
+        foreach ($panes as $i => $pane) {
+            if ($a->isDocked($pane)) {
+                $headers[] = ['paneId' => $pane->value, 'row' => $tops[$i], 'from' => $from, 'to' => $to];
+            }
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Columns the side paints into.
+     *
+     * The default frame must stay byte-identical to the pre-docking shipped
+     * frame — that is a goldens constraint, not a preference — while a dock
+     * the user has mutated has to honour real, resizable widths. Hence two
+     * regimes:
+     *
+     *  - Untouched {@see App::defaultDock()} → the legacy
+     *    `max(20, floor(bandCols/4))`, to the cell. This covers stacked
+     *    DEFAULT frames too (a transient focus on Tools stacks two boxes at
+     *    the same legacy width), so no frame anyone has never docked into
+     *    shifts a pixel.
+     *  - Any other dock → the side's width from
+     *    {@see DockLayout::resolve()} output: {@see App::seedSharesFromFrame()}
+     *    planted the legacy measurement into the column shares at the first
+     *    mutation, so those shares carry real pixels and scale with every
+     *    later resize.
+     *  - Resolve answers with no region for the first pane (the degradation
+     *    ladder dropped this side at this frame size, or the pane is only
+     *    TRANSIENTLY focused on an otherwise-empty side, whose share was
+     *    never seeded because seeding runs at dock mutations, not at focus) →
+     *    fall back to the legacy measure. Something has to width the box;
+     *    the number the frame always used is the honest answer.
+     */
+    private static function sideWidth(App $a, Pane $firstPane, int $cols, int $rows): int
+    {
+        $legacy = max(20, (int) floor($cols / 4));
+
+        if (App::isUntouchedDefaultDock($a->dock())) {
+            return $legacy;
+        }
+
+        return $a->dock()->resolve(new Region(0, 0, $cols, $rows))->regionFor($firstPane->value)?->width ?? $legacy;
+    }
+
+    /**
+     * Which panes this side must paint, in order: the dock's slots for the
+     * side first, then — when the focused pane belongs to this side and is
+     * docked NOWHERE — the focused pane appended transiently. The transient
+     * arm is what keeps the pre-docking behavior intact: focusing Tools used
+     * to paint Tools left, and it still does, without a single dock write.
+     *
+     * A docked slot paints on whichever side the DOCK holds it, not on the
+     * pane's home {@see Pane::dockSide()}: the home side only decides where a
+     * transient focus or a first click-to-dock lands. Filtering slots by home
+     * side made every cross-side move (a header drag across the centre, or
+     * `/pane dock right files`) persist a slot the frame then never painted —
+     * the pane simply vanished.
+     *
+     * @return list<Pane>
+     */
+    private static function sidePanes(App $a, Side $side): array
+    {
+        $panes = [];
+
+        foreach ($a->dock()->slots($side) as $slot) {
+            $pane = Pane::tryFrom($slot->paneId);
+            if ($pane !== null && $pane->dockable() && !in_array($pane, $panes, true)) {
+                $panes[] = $pane;
+            }
+        }
+
+        $focus = $a->pane;
+
+        if ($focus->dockable() && $focus->dockSide() === $side && !$a->isDocked($focus)) {
+            $panes[] = $focus;
+        }
+
+        return $panes;
+    }
+
+    /**
+     * The dock as the RENDERER sees it: the stored layout plus the transient
+     * focused slot. Height resolution runs against this view so a stacked
+     * side's rows match what is painted even when one of its slots is the
+     * focus rather than a docked pane.
+     */
+    private static function dockView(App $a): DockLayout
+    {
+        $dock = $a->dock();
+        $focus = $a->pane;
+        $side = $focus->dockSide();
+
+        if ($side === null || $a->isDocked($focus)) {
+            return $dock;
+        }
+
+        return $dock->withSlotAdded($side, $focus->value);
+    }
+
+    /**
+     * Per-slot heights for a stacked side, straight from the dock's own
+     * geometry: resolve the band and read each pane's region. If the
+     * degradation ladder dropped this side's column at this width (regions
+     * missing), fall back to the library's stack rule spelled locally: an
+     * even split of `rows - gaps`, residual to the last slot.
+     *
+     * @param list<Pane> $panes
+     *
+     * @return list<int>
+     */
+    private static function stackHeights(App $a, array $panes, int $cols, int $rows): array
+    {
+        $geometry = self::dockView($a)->resolve(new Region(0, 0, $cols, $rows));
+        $heights = [];
+
+        foreach ($panes as $pane) {
+            $heights[] = $geometry->regionFor($pane->value)?->height;
+        }
+
+        if (in_array(null, $heights, true)) {
+            return self::evenStackHeights(count($panes), $rows);
+        }
+
+        /** @var list<int> $heights */
+        return $heights;
+    }
+
+    /**
+     * Paint a stacked side's panes, letting a pane that overflows its share
+     * take the rows a neighbour's share leaves blank.
+     *
+     * The dock's weights split the column evenly, but side panes are only as
+     * tall as their content: a Tools pane with two calls in a half-height slot
+     * left most of that half blank while the Agents pane below it was cut
+     * off at its own half with "+N more". So each pane is measured at the
+     * whole budget (its natural height, capped there), then:
+     *
+     *  1. every pane gets min(natural, share) — a weight is still a floor for
+     *     any pane that wants it, so an overflowing neighbour can never eat
+     *     into another overflowing pane's share;
+     *  2. the rows that frees are handed to the panes still cut short, in
+     *     proportion to their shares, never past what each one wants; and
+     *     repeated until nobody is short or nothing is left.
+     *
+     * The total never exceeds the shares' total, so the side keeps the exact
+     * height the dock gave it. A pane whose natural height fits is painted
+     * once (the measurement IS its paint); only a pane that grew or shrank
+     * from the measured height is painted again, at its final size.
+     *
+     * @param list<Pane> $panes
+     * @param list<int>  $shares
+     *
+     * @return list<string>
+     */
+    private static function fitStack(App $a, array $panes, int $width, array $shares): array
+    {
+        $budget = max(1, array_sum($shares));
+        $measured = [];
+        $demand = [];
+        foreach ($panes as $i => $pane) {
+            $measured[$i] = self::renderPane($a, $pane, $width, $budget);
+            $demand[$i] = min($budget, self::lineCount($measured[$i]));
+        }
+
+        $alloc = [];
+        foreach ($panes as $i => $_) {
+            $alloc[$i] = max(1, min($demand[$i], $shares[$i] ?? 1));
+        }
+
+        $left = $budget - array_sum($alloc);
+        while ($left > 0) {
+            $short = array_keys(array_filter($alloc, static fn (int $h, int $i): bool => $h < $demand[$i], ARRAY_FILTER_USE_BOTH));
+            if ($short === []) {
+                break;
+            }
+
+            $weight = 0;
+            foreach ($short as $i) {
+                $weight += max(1, $shares[$i] ?? 1);
+            }
+
+            $given = 0;
+            foreach ($short as $n => $i) {
+                $want = $demand[$i] - $alloc[$i];
+                // Proportional, rounded down; the last short pane takes the
+                // rounding remainder so a single row is never stranded.
+                $slice = $n === count($short) - 1
+                    ? $left - $given
+                    : intdiv($left * max(1, $shares[$i] ?? 1), $weight);
+                $take = min($want, max(0, $slice));
+                $alloc[$i] += $take;
+                $given += $take;
+            }
+
+            if ($given === 0) {
+                break;
+            }
+            $left -= $given;
+        }
+
+        $blocks = [];
+        foreach ($panes as $i => $pane) {
+            $blocks[] = $alloc[$i] >= $demand[$i]
+                ? $measured[$i]
+                : self::renderPane($a, $pane, $width, $alloc[$i]);
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function evenStackHeights(int $n, int $rows): array
+    {
+        $budget = max($n, $rows - ($n - 1));
+        $each = max(1, intdiv($budget, $n));
+        $heights = array_fill(0, max(0, $n - 1), $each);
+        $heights[] = max(1, $budget - $each * ($n - 1));
+
+        return $heights;
+    }
+
+    /**
+     * The narrowest and widest the live-agent column may be on a $cols-wide
+     * terminal: never under its floor, and never so wide the content band
+     * falls under ITS floor.
+     *
+     * @return array{0: int, 1: int}
+     */
+    public static function agentSplitBounds(int $cols): array
+    {
+        return [
+            self::SPLIT_MIN_AGENT_COLS,
+            max(self::SPLIT_MIN_AGENT_COLS, $cols - self::SPLIT_DIVIDER_COLS - self::SPLIT_MIN_BAND_COLS),
+        ];
+    }
+
+    /**
+     * The wheel's targets for this frame — see {@see $scrollRegions}. Each
+     * docked pane that reports a scroll range is one box (its header's
+     * column span, its painted rows); the live-agent column is another,
+     * scrolling one tile per notch.
+     *
+     * @param list<array{paneId: string, row: int, from: int, to: int}> $leftHeaders
+     * @param list<array{paneId: string, row: int, from: int, to: int}> $rightHeaders
+     * @return list<array{id: string, x0: int, x1: int, y0: int, y1: int, max: int}>
+     */
+    private static function scrollRegions(
+        array $leftHeaders,
+        array $rightHeaders,
+        int $rightStartX,
+        int $bandTop,
+        int $bandCols,
+        int $cols,
+        int $paneRows,
+        int $liveRuns,
+        int $agentCols,
+    ): array {
+        $regions = [];
+        foreach ([[$leftHeaders, 0], [$rightHeaders, $rightStartX]] as [$headers, $startX]) {
+            foreach ($headers as $header) {
+                $paneId = $header['paneId'];
+                $rows = self::$paneBlockRows[$paneId] ?? 0;
+                if (!isset(self::$paneScrollMax[$paneId]) || $rows < 1) {
+                    continue;
+                }
+                $regions[] = [
+                    'id' => LiveRenderer::PANE_ZONE_PREFIX . $paneId,
+                    'x0' => $startX + $header['from'],
+                    'x1' => min($cols - 1, $startX + $header['to']),
+                    'y0' => $bandTop + $header['row'],
+                    'y1' => $bandTop + $header['row'] + $rows - 1,
+                    'max' => self::$paneScrollMax[$paneId],
+                ];
+            }
+        }
+
+        if ($agentCols > 0 && $liveRuns > 0) {
+            $regions[] = [
+                'id' => self::SPLIT_SCROLL_ID,
+                'x0' => $bandCols + self::SPLIT_DIVIDER_COLS,
+                'x1' => $cols - 1,
+                'y0' => $bandTop,
+                'y1' => $bandTop + $paneRows - 1,
+                'max' => $liveRuns - 1,
+            ];
+        }
+
+        return $regions;
+    }
+
+    /**
+     * Keep a layout's row keys for the zone pass and hand back its block.
+     *
+     * @param array{0: string, 1: list<?string>, 2?: int} $layout
+     */
+    private static function keyed(Pane $pane, array $layout): string
+    {
+        self::$paneRowKeys[$pane->value] = $layout[1];
+        self::$paneScrollMax[$pane->value] = $layout[2] ?? 0;
+        self::$paneBlockRows[$pane->value] = self::lineCount($layout[0]);
+
+        return $layout[0];
+    }
+
+    /**
+     * Paint one sidebar pane at the given box size. The six component
+     * renderers share this signature; anything else has no sidebar form and
+     * paints nothing.
+     */
+    private static function renderPane(App $a, Pane $pane, int $width, int $rows): string
+    {
+        unset(self::$paneRowKeys[$pane->value], self::$paneScrollMax[$pane->value], self::$paneBlockRows[$pane->value]);
+
+        return match ($pane) {
+            Pane::Files => FilesPane::render($a, $width, $rows),
+            Pane::Tools => self::keyed($pane, ToolsPane::layout($a, $width, $rows)),
+            Pane::Skills => SkillsPane::render($a, $width, $rows),
+            Pane::Settings => SettingsPane::render($a, $width, $rows),
+            Pane::Agents => self::keyed($pane, AgentsPane::layout($a, $width, $rows)),
+            Pane::Todo => TodoPane::render($a, $width, $rows),
+            default => '',
+        };
+    }
+
+    /**
+     * The scanner-scratch rows carrying this side's divider click targets.
+     *
+     * Every band row gets a `divider:<side>:r<absRow>` grab span — not just
+     * the rows the side's boxes happen to fill. Side panes are only as tall
+     * as their content, so a divider stamped over `blockRows` alone left the
+     * boundary grabbable on a handful of rows at the top of the frame while
+     * the chat pane's border, the line the eye reads as "the side", ran
+     * inert down the rest of the screen. The span is the boundary's whole
+     * painted seam (`grabFrom`..`grabTo`, block-local and allowed to reach
+     * one cell into the centre): the side box's own border, the stacked
+     * divider column when there is one, and the centre pane's border — a
+     * one-cell target between two look-alike `│` columns was a guessing game.
+     *
+     * One zone per line per id, strictly (the invariant on
+     * {@see LiveRenderer::DIVIDER_ZONE_PREFIX}). A gap row carries its
+     * `stackdiv:<side>:<slotIndex>:r<absRow>` zone across the rest of the
+     * row, but yields the seam cells to the divider: the gap drag is still
+     * the documented no-op follow-up on {@see PaneDragController}, and a
+     * press on the seam there must resize like on every other row rather
+     * than be swallowed.
+     *
+     * @param ?array{width: int, dividerColLocal: int, grabFrom: int, grabTo: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>} $meta
+     *
+     * @return array<int, list<array{0: int, 1: int, 2: string}>> absolute frame row => segments
+     */
+    private static function dividerZones(
+        ?array $meta,
+        Side $side,
+        int $startX,
+        int $bandTop,
+        int $cols,
+        int $frameRows,
+        int $paneRows,
+    ): array {
+        if ($meta === null) {
+            return [];
+        }
+
+        $sideValue = strtolower($side->name);
+        $gapRows = [];
+
+        foreach ($meta['gaps'] as $gap) {
+            $gapRows[$gap['row']] = $gap['slotIndex'];
+        }
+
+        $grabFrom = max(0, $startX + $meta['grabFrom']);
+        $grabTo = min($startX + $meta['grabTo'], $cols);
+        $rows = [];
+
+        for ($r = 0, $bandRows = max($meta['blockRows'], $paneRows); $r < $bandRows; $r++) {
+            $absRow = $bandTop + $r;
+
+            if ($absRow >= $frameRows) {
+                break;
+            }
+
+            $spans = [];
+
+            if (isset($gapRows[$r])) {
+                // The ─ run of a stacked gap row spans the block; the seam
+                // end of it belongs to the divider (see the docblock).
+                [$from, $to] = $side === Side::Left
+                    ? [$startX, min($grabFrom, $cols)]
+                    : [$grabTo, min($startX + $meta['width'] + 1, $cols)];
+
+                if ($to > $from) {
+                    $spans[] = [$from, $to, LiveRenderer::markStackGapRow($sideValue, $gapRows[$r], $absRow, $frameRows, $to - $from)];
+                }
+            }
+
+            if ($grabTo > $grabFrom) {
+                $spans[] = [$grabFrom, $grabTo, LiveRenderer::markDividerCell($sideValue, $absRow, $frameRows, $grabTo - $grabFrom)];
+            }
+
+            $rows[$absRow] = $spans;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Lay marked segments onto an otherwise-blank $cols-wide scan line.
+     *
+     * @param list<array{0: int, 1: int, 2: string}> $segments non-overlapping, ordered, each segment already cell-clamped
+     */
+    private static function scratchRow(int $cols, array $segments): string
+    {
+        $line = '';
+        $cursor = 0;
+
+        foreach ($segments as [$from, $to, $segment]) {
+            $line .= str_repeat(' ', max(0, $from - $cursor));
+            $line .= $segment;
+            $cursor = max($cursor, $to);
+        }
+
+        return $line . str_repeat(' ', max(0, $cols - $cursor));
+    }
+
+    /**
+     * The model id the TUI labels show — this status bar's model segment and
+     * the Settings pane's `Model` row — preferring the model requests ACTUALLY
+     * go to over the configured id the App was built with (audit 15b-35).
+     *
+     * An SGLang provider built on its default id adopts the server's served
+     * model (audit A26), so {@see App::$model} — the static default — named a
+     * model nothing was sent to. The hosted Chat's backend is asked first,
+     * because it is the instance whose provider does the talking: it learns
+     * the served name from its own discovery or from the forked turn child's
+     * result frame ({@see EngineBackend::servedModel()}). The App's own
+     * provider is the fallback for a shell with no Chat. Neither ask performs
+     * I/O, so this is safe on every frame.
+     */
+    public static function modelLabel(App $a): string
+    {
+        $backend = $a->chat?->backend();
+        $served = $backend instanceof EngineBackend ? $backend->servedModel() : null;
+        $served ??= $a->provider instanceof ReportsServedModel ? $a->provider->servedModel() : null;
+
+        return $served ?? $a->model;
+    }
+
+    /**
+     * The live bottom status bar.
+     *
+     * Delegates segment joining, the `' | '` separator and the leading-space
+     * edge cap to the shared {@see BarStatusBar} (sugar-style) primitive —
+     * the same primitive sugar-dashboard and sugar-quickpick's status bars sit on top
+     * of — so there is a single status-bar implementation. This class only
+     * supplies the crush theme (per-segment colours) and the segment set,
+     * including the literal `[Tab] Switch Pane` hint. The provider / model
+     * ROLES (`shellSuccess` / `shellWarning`) and the error (`shellError` bold)
+     * vs. status (`shellSuccess`) precedence are unchanged from the previous
+     * hand-rolled string; the literals those roles replaced were #9ece6a /
+     * #e0af68 / #f7768e, i.e. tokyoNight's success/warning/error, hardcoded
+     * whatever palette the user picked.
+     *
+     * Behaviour note: the primitive skips an empty segment, so when there is
+     * neither an error nor a status the previous hand-rolled template's trailing
+     * dangling `' | '` separator (an empty final slot) is no longer emitted — the
+     * bar simply ends at `[Tab] Switch Pane`. All populated cases stay byte-exact.
+     */
+    private static function statusBar(App $a): string
+    {
+        $theme = $a->theme();
+        $segments = [
+            Segment::of($a->provider->name(), Style::new()->foreground($theme->shellSuccess)),
+            Segment::of(self::modelLabel($a), Style::new()->foreground($theme->shellWarning)),
+            Segment::of(Lang::t('tui.status.switch_pane')),
+        ];
+
+        if ($a->error) {
+            $segments[] = Segment::of(
+                Lang::t('tui.status.error', ['error' => $a->error]),
+                Style::new()->foreground($theme->shellError)->bold(),
+            );
+        } elseif ($a->status) {
+            $segments[] = Segment::of(
+                $a->status,
+                Style::new()->foreground($theme->shellSuccess),
+            );
+        }
+
+        return BarStatusBar::new()
+            ->separator(' | ')
+            ->caps(' ', '')
+            ->left(...$segments)
+            ->render();
+    }
+
+    /**
+     * Paint the menu dropdown onto an already-composed frame.
+     *
+     * A floating overlay, in the same spirit as the palette's Veil: it
+     * replaces cells rather than inserting rows, so the panes below keep the
+     * geometry the layout gave them and the zone origin computed after this
+     * stays correct.
+     *
+     * @param list<string> $panel
+     */
+    private static function overlayDropdown(string $frame, array $panel, int $col, int $topRow): string
+    {
+        if ($panel === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        foreach ($panel as $i => $panelLine) {
+            $row = $topRow + $i;
+            if (!isset($lines[$row])) {
+                break;
+            }
+            $lines[$row] = self::spliceInto($lines[$row], $panelLine, $col);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Outline the drop target of the dock drag in flight.
+     *
+     * Without it a header drag had no visible answer until the release —
+     * the pane either moved or it did not, and the user could only learn
+     * the drop rule by trial. The target is resolved from the controller's
+     * last pointer through {@see PaneDragController::dockDropSide()}, the
+     * exact rule the release runs, so the outline can never promise a side
+     * the release will not deliver. The outline spans the whole region that
+     * docks to that side (its band plus the facing third of the centre,
+     * {@see PaneDragController::dropEdgeCols()}), over the band's rows.
+     *
+     * Hollow and heavy-lined: the four edges are painted over the frame and
+     * the interior is left alone, so the content the pane will sit beside
+     * stays readable, and the heavy `┏━┓` set cannot be mistaken for a pane's
+     * own rounded frame. Over the centre's middle third, where a release
+     * cancels, a one-line hint says so instead.
+     *
+     * Only an ARMED drag paints: an unarmed one may still end as the plain
+     * click its press began, and flashing an outline under every header
+     * click would be noise.
+     */
+    private static function overlayDropTarget(App $a, string $frame, int $bandTop, int $paneRows): string
+    {
+        $drag = App::paneDragController();
+        $geometry = self::$lastDockFrame;
+
+        if (!$drag->isDockDragging() || !$drag->isArmed() || $geometry === null || $paneRows < 2 || $bandTop < 0) {
+            return $frame;
+        }
+
+        $pane = Pane::tryFrom((string) $drag->dragPaneId());
+
+        if ($pane === null) {
+            return $frame;
+        }
+
+        [$pointerX] = $drag->pointer();
+        $centerFrom = $geometry['centerFrom'];
+        $centerTo = $geometry['centerTo'];
+        $side = $drag->dockDropSide($pointerX, $centerFrom, $centerTo);
+        $theme = $a->theme();
+        $lines = explode("\n", $frame);
+
+        if ($side === null) {
+            $hint = Width::truncate(' ' . Lang::t('tui.dock.release_to_cancel') . ' ', max(0, $centerTo - $centerFrom - 1));
+            $row = $bandTop + intdiv($paneRows, 2);
+
+            if ($hint !== '' && isset($lines[$row])) {
+                $col = $centerFrom + intdiv($centerTo - $centerFrom + 1 - Width::string($hint), 2);
+                $lines[$row] = self::paintCells($lines[$row], $col, Style::new()->foreground($theme->shellMuted)->reverse()->render($hint));
+            }
+
+            return implode("\n", $lines);
+        }
+
+        $edge = PaneDragController::dropEdgeCols($centerFrom, $centerTo);
+        [$from, $to] = $side === Side::Left
+            ? [0, $centerFrom + $edge - 1]
+            : [$centerTo - $edge + 1, $geometry['bandCols'] - 1];
+        $inner = $to - $from - 1;
+
+        if ($inner < 2) {
+            return $frame;
+        }
+
+        $st = Style::new()->foreground($theme->shellPrimary)->bold();
+        $label = Width::truncate(' ' . $pane->icon() . ' ' . Lang::t($side === Side::Left ? 'tui.dock.label_left' : 'tui.dock.label_right', ['pane' => $pane->label()]) . ' ', max(0, $inner - 2));
+        $top = "\u{250F}\u{2501}" . $label . str_repeat("\u{2501}", max(0, $inner - 1 - Width::string($label))) . "\u{2513}";
+        $bottom = "\u{2517}" . str_repeat("\u{2501}", $inner) . "\u{251B}";
+        $last = $bandTop + $paneRows - 1;
+
+        for ($row = $bandTop; $row <= $last && isset($lines[$row]); $row++) {
+            if ($row === $bandTop || $row === $last) {
+                $lines[$row] = self::paintCells($lines[$row], $from, $st->render($row === $bandTop ? $top : $bottom));
+                continue;
+            }
+
+            $lines[$row] = self::paintCells($lines[$row], $from, $st->render("\u{2503}"));
+            $lines[$row] = self::paintCells($lines[$row], $to, $st->render("\u{2503}"));
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Paint $patch over the cells starting at $col, keeping the styling of
+     * everything on both sides — {@see spliceInto()} strips the tail's SGR,
+     * which a dropdown's single splice per row can afford but an outline
+     * that cuts every band row twice cannot.
+     */
+    private static function paintCells(string $line, int $col, string $patch): string
+    {
+        $head = Width::truncateAnsi($line, $col);
+        $pad = str_repeat(' ', max(0, $col - Width::string($head)));
+
+        return $head . "\e[0m" . $pad . $patch . "\e[0m" . Width::dropAnsi($line, $col + Width::string($patch));
+    }
+
+    /**
+     * Replace the run of cells starting at $col in $line with $patch,
+     * preserving whatever the line had on either side of it.
+     */
+    private static function spliceInto(string $line, string $patch, int $col): string
+    {
+        $plainWidth = Width::string($patch);
+        $head = Width::truncateAnsi($line, $col);
+        $headPad = str_repeat(' ', max(0, $col - Width::string($head)));
+        $tailStart = $col + $plainWidth;
+        $lineWidth = Width::string($line);
+        $tail = $lineWidth > $tailStart
+            ? Width::truncateAnsi($line, $lineWidth) // keep styling reset simple
+            : '';
+
+        // Drop the overlapped run from the tail by re-truncating from the left.
+        if ($tail !== '') {
+            $tail = mb_substr(preg_replace('/\e\[[0-9;]*m/', '', $tail) ?? '', $tailStart);
+        }
+
+        return $head . $headPad . $patch . $tail;
+    }
+}

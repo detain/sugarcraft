@@ -10,7 +10,7 @@ use SugarCraft\McpClient\McpServer;
 use SugarCraft\McpClient\McpTool;
 
 /**
- * Lifted from sugar-crush/tests/MCP/McpRouterTest with the one substitution
+ * Lifted from candy-code/tests/MCP/McpRouterTest with the one substitution
  * the port requires: where the product passes an AgentPreset, this library
  * receives the already-extracted allow-list array. All ordering, glob and
  * fail-loud semantics are pinned unchanged.
@@ -190,7 +190,7 @@ final class McpRouterTest extends TestCase
             } catch (\RuntimeException $thrown) {
                 self::assertStringContainsString('non-empty string', $thrown->getMessage());
                 // The fail-loud WHY rides the message itself (lane-A2 fold of
-                // the sugar-crush wording): the refusal is a policy, not a
+                // the candy-code wording): the refusal is a policy, not a
                 // parse error, and the operator reading the log gets the
                 // argument for it.
                 self::assertStringContainsString(
@@ -203,7 +203,7 @@ final class McpRouterTest extends TestCase
 
     /**
      * The deny law, exposed as a public static — carried verbatim from the
-     * sugar-crush original with the lane-A2 fold. Only the exact action
+     * candy-code original with the lane-A2 fold. Only the exact action
      * string "deny" acts; patterns are `fnmatch` against RAW config keys.
      */
     public function testServerDeniedStaticSemantics(): void
@@ -234,7 +234,7 @@ final class McpRouterTest extends TestCase
 
     public function testTheCrushConfigSpellingOfStringDenySpecsBlocks(): void
     {
-        // sugar-crush feeds deny rules as pattern => action STRING (its
+        // candy-code feeds deny rules as pattern => action STRING (its
         // McpRouter docblock and McpClient::setDenyPatterns(array<string,
         // string>)). Reading that spelling as a spec array turned every
         // incoming deny rule inert — a silently WIDENED boundary, the exact

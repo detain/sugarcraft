@@ -26371,33 +26371,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/1-sugar-crush-crusher.ansi": {
-        "name": "1-sugar-crush-crusher.ansi",
-        "category": "sugar-crush",
+    "candy-code/1-candy-code-crusher.ansi": {
+        "name": "1-candy-code-crusher.ansi",
+        "category": "candy-code",
         "resolution": "58x16",
         "width": 58,
         "height": 16,
         "depth": "truecolor",
         "colors": 70,
-        "description": "sugar-crush terminal splash — glowing CRUSH letters pressed between plates over a live agent prompt",
+        "description": "candy-code terminal splash — glowing CRUSH letters pressed between plates over a live agent prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/1-sugar-crush-rain.ansi": {
-        "name": "1-sugar-crush-rain.ansi",
-        "category": "sugar-crush",
+    "candy-code/1-candy-code-rain.ansi": {
+        "name": "1-candy-code-rain.ansi",
+        "category": "candy-code",
         "resolution": "54x16",
         "width": 54,
         "height": 16,
         "depth": "truecolor",
         "colors": 74,
-        "description": "candy code-rain in mint, berry and gold with a fogged sugar-crush label panel",
+        "description": "candy code-rain in mint, berry and gold with a fogged candy-code label panel",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/2-sugar-crush-cube.ansi": {
-        "name": "2-sugar-crush-cube.ansi",
-        "category": "sugar-crush",
+    "candy-code/2-candy-code-cube.ansi": {
+        "name": "2-candy-code-cube.ansi",
+        "category": "candy-code",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
@@ -26407,33 +26407,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/2-terminal-sweet-tooth.ansi": {
+    "candy-code/2-terminal-sweet-tooth.ansi": {
         "name": "2-terminal-sweet-tooth.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x12",
         "width": 58,
         "height": 12,
         "depth": "truecolor",
         "colors": 27,
-        "description": "Terminal window splash: traffic-light titlebar, sugar-crush prompt, candy-cane stripe, magenta-to-gold \"100% sweet\" progress bar and tiny lollipops",
+        "description": "Terminal window splash: traffic-light titlebar, candy-code prompt, candy-cane stripe, magenta-to-gold \"100% sweet\" progress bar and tiny lollipops",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/3-crush-agent-terminal.ansi": {
+    "candy-code/3-crush-agent-terminal.ansi": {
         "name": "3-crush-agent-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x20",
         "width": 62,
         "height": 20,
         "depth": "truecolor",
         "colors": 175,
-        "description": "Framed sugar-crush splash: hovering robot agent with pink earmuffs, feature bullets, code rain, thinking divider, progress bar and prompt cursor",
+        "description": "Framed candy-code splash: hovering robot agent with pink earmuffs, feature bullets, code rain, thinking divider, progress bar and prompt cursor",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/3-sugar-crush-wordmark.ansi": {
-        "name": "3-sugar-crush-wordmark.ansi",
-        "category": "sugar-crush",
+    "candy-code/3-candy-code-wordmark.ansi": {
+        "name": "3-candy-code-wordmark.ansi",
+        "category": "candy-code",
         "resolution": "57x10",
         "width": 57,
         "height": 10,
@@ -26443,45 +26443,45 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/4-crush-sugarcubes.ansi": {
+    "candy-code/4-crush-sugarcubes.ansi": {
         "name": "4-crush-sugarcubes.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "49x13",
         "width": 49,
         "height": 13,
         "depth": "truecolor",
         "colors": 23,
-        "description": "falling sugar cubes shattering in a crackle burst into rainbow shards with sugar-crush tagline",
+        "description": "falling sugar cubes shattering in a crackle burst into rainbow shards with candy-code tagline",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/4-sugarcrush-session.ansi": {
-        "name": "4-sugarcrush-session.ansi",
-        "category": "sugar-crush",
+    "candy-code/4-candy-code-session.ansi": {
+        "name": "4-candy-code-session.ansi",
+        "category": "candy-code",
         "resolution": "54x11",
         "width": 54,
         "height": 11,
         "depth": "truecolor",
         "colors": 11,
-        "description": "mock terminal window of a sugar-crush --fix run with progress bar, warning and passing tests",
+        "description": "mock terminal window of a candy-code --fix run with progress bar, warning and passing tests",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/4-sugarcrush-skull.ansi": {
-        "name": "4-sugarcrush-skull.ansi",
-        "category": "sugar-crush",
+    "candy-code/4-candy-code-skull.ansi": {
+        "name": "4-candy-code-skull.ansi",
+        "category": "candy-code",
         "resolution": "47x16",
         "width": 47,
         "height": 16,
         "depth": "truecolor",
         "colors": 53,
-        "description": "neon violet-cyan skull with deep glowing sockets over the sugar-crush wordmark and a $ crush --fix prompt",
+        "description": "neon violet-cyan skull with deep glowing sockets over the candy-code wordmark and a $ crush --fix prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/5-sugar-crush-soda.ansi": {
-        "name": "5-sugar-crush-soda.ansi",
-        "category": "sugar-crush",
+    "candy-code/5-candy-code-soda.ansi": {
+        "name": "5-candy-code-soda.ansi",
+        "category": "candy-code",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
@@ -26491,21 +26491,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/5-sugar-crush-terminal-splash.ansi": {
-        "name": "5-sugar-crush-terminal-splash.ansi",
-        "category": "sugar-crush",
+    "candy-code/5-candy-code-terminal-splash.ansi": {
+        "name": "5-candy-code-terminal-splash.ansi",
+        "category": "candy-code",
         "resolution": "62x13",
         "width": 62,
         "height": 13,
         "depth": "truecolor",
         "colors": 33,
-        "description": "CRT boot splash for SugarCraft x sugar-crush: prompt, loading bar, hearts and cursor",
+        "description": "CRT boot splash for SugarCraft x candy-code: prompt, loading bar, hearts and cursor",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/5-sugar-crush-wordmark.ansi": {
-        "name": "5-sugar-crush-wordmark.ansi",
-        "category": "sugar-crush",
+    "candy-code/5-candy-code-wordmark.ansi": {
+        "name": "5-candy-code-wordmark.ansi",
+        "category": "candy-code",
         "resolution": "62x15",
         "width": 62,
         "height": 15,
@@ -26515,9 +26515,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/6-candy-crush-boom.ansi": {
+    "candy-code/6-candy-crush-boom.ansi": {
         "name": "6-candy-crush-boom.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x15",
         "width": 58,
         "height": 15,
@@ -26527,21 +26527,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/6-skull-terminal.ansi": {
+    "candy-code/6-skull-terminal.ansi": {
         "name": "6-skull-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x12",
         "width": 56,
         "height": 12,
         "depth": "truecolor",
         "colors": 44,
-        "description": "sugar-crush terminal window: neon candy skull in a truecolor TUI frame with agent log lines",
+        "description": "candy-code terminal window: neon candy skull in a truecolor TUI frame with agent log lines",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/7-sugarcrush-terminal.ansi": {
-        "name": "7-sugarcrush-terminal.ansi",
-        "category": "sugar-crush",
+    "candy-code/7-candy-code-terminal.ansi": {
+        "name": "7-candy-code-terminal.ansi",
+        "category": "candy-code",
         "resolution": "68x14",
         "width": 68,
         "height": 14,
@@ -26551,57 +26551,57 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/8-candy-crusher-splash.ansi": {
+    "candy-code/8-candy-crusher-splash.ansi": {
         "name": "8-candy-crusher-splash.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
         "depth": "truecolor",
         "colors": 196,
-        "description": "sugar-crush splash: candy-striped SUGAR/CRUSH wordmark in pink-to-gold gradient with drop shadows and a crack through the CRUSH",
+        "description": "candy-code splash: candy-striped SUGAR/CRUSH wordmark in pink-to-gold gradient with drop shadows and a crack through the CRUSH",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/9-lollipop-crush.ansi": {
+    "candy-code/9-lollipop-crush.ansi": {
         "name": "9-lollipop-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "64x16",
         "width": 64,
         "height": 16,
         "depth": "truecolor",
         "colors": 15,
-        "description": "Truecolor swirl lollipop (magenta-pink-white-orange spiral, glass highlight, grape rim) beside the sugar-crush mini wordmark with a white dash and a rainbow candy underline, sugar sprinkles scattered right",
+        "description": "Truecolor swirl lollipop (magenta-pink-white-orange spiral, glass highlight, grape rim) beside the candy-code mini wordmark with a white dash and a rainbow candy underline, sugar sprinkles scattered right",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/9-sugar-crush-combined.ansi": {
-        "name": "9-sugar-crush-combined.ansi",
-        "category": "sugar-crush",
+    "candy-code/9-candy-code-combined.ansi": {
+        "name": "9-candy-code-combined.ansi",
+        "category": "candy-code",
         "resolution": "48x20",
         "width": 48,
         "height": 20,
         "depth": "truecolor",
         "colors": 106,
-        "description": "Combined SugarCraft x sugar-crush logo: big SUGAR in a pink-to-gold icing sweep stacked over CRUSH in a cyan-to-magenta sweep, deep-grape drop shadows, twinkling sparkles, rainbow mini caption \"SWEET TERMINAL AI\"",
+        "description": "Combined SugarCraft x candy-code logo: big SUGAR in a pink-to-gold icing sweep stacked over CRUSH in a cyan-to-magenta sweep, deep-grape drop shadows, twinkling sparkles, rainbow mini caption \"SWEET TERMINAL AI\"",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/9-terminal-agent-splash.ansi": {
+    "candy-code/9-terminal-agent-splash.ansi": {
         "name": "9-terminal-agent-splash.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x16",
         "width": 58,
         "height": 16,
         "depth": "truecolor",
         "colors": 55,
-        "description": "sugar-crush splash as an 8-bit rounded terminal window with pink frame, candy-dot bullets, rainbow SUGAR block wordmark, mini CRUSH, pixel candy-cane, and a multicolor gradient loading bar at 98%",
+        "description": "candy-code splash as an 8-bit rounded terminal window with pink frame, candy-dot bullets, rainbow SUGAR block wordmark, mini CRUSH, pixel candy-cane, and a multicolor gradient loading bar at 98%",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/10-sugar-crush-bot.ansi": {
-        "name": "10-sugar-crush-bot.ansi",
-        "category": "sugar-crush",
+    "candy-code/10-candy-code-bot.ansi": {
+        "name": "10-candy-code-bot.ansi",
+        "category": "candy-code",
         "resolution": "41x14",
         "width": 41,
         "height": 14,
@@ -26611,21 +26611,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/11-03-sugar-crush-crystal.ansi": {
-        "name": "11-03-sugar-crush-crystal.ansi",
-        "category": "sugar-crush",
+    "candy-code/11-03-candy-code-crystal.ansi": {
+        "name": "11-03-candy-code-crystal.ansi",
+        "category": "candy-code",
         "resolution": "68x20",
         "width": 68,
         "height": 20,
         "depth": "truecolor",
         "colors": 93,
-        "description": "faceted violet-cyan sugar crystal being crushed with warm spray shards, settling dust and a $ sugar-crush prompt",
+        "description": "faceted violet-cyan sugar crystal being crushed with warm spray shards, settling dust and a $ candy-code prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/12-neon-crush-sign.ansi": {
+    "candy-code/12-neon-crush-sign.ansi": {
         "name": "12-neon-crush-sign.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -26635,9 +26635,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/12-sugar-packet.ansi": {
+    "candy-code/12-sugar-packet.ansi": {
         "name": "12-sugar-packet.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "55x14",
         "width": 55,
         "height": 14,
@@ -26647,21 +26647,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/13-candy-rain-prompt.ansi": {
+    "candy-code/13-candy-rain-prompt.ansi": {
         "name": "13-candy-rain-prompt.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x16",
         "width": 56,
         "height": 16,
         "depth": "truecolor",
         "colors": 282,
-        "description": "pastel candy sprinkles raining into a melting rainbow puddle above a glowing sugar-crush shell prompt and italic tagline",
+        "description": "pastel candy sprinkles raining into a melting rainbow puddle above a glowing candy-code shell prompt and italic tagline",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/13-sugar-crush-gem.ansi": {
-        "name": "13-sugar-crush-gem.ansi",
-        "category": "sugar-crush",
+    "candy-code/13-candy-code-gem.ansi": {
+        "name": "13-candy-code-gem.ansi",
+        "category": "candy-code",
         "resolution": "64x19",
         "width": 64,
         "height": 19,
@@ -26671,9 +26671,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/14-sugarcrush-crystal.ansi": {
-        "name": "14-sugarcrush-crystal.ansi",
-        "category": "sugar-crush",
+    "candy-code/14-candy-code-crystal.ansi": {
+        "name": "14-candy-code-crystal.ansi",
+        "category": "candy-code",
         "resolution": "61x17",
         "width": 61,
         "height": 17,
@@ -26683,9 +26683,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/14-sugarcrush-hammer.ansi": {
-        "name": "14-sugarcrush-hammer.ansi",
-        "category": "sugar-crush",
+    "candy-code/14-candy-code-hammer.ansi": {
+        "name": "14-candy-code-hammer.ansi",
+        "category": "candy-code",
         "resolution": "60x13",
         "width": 60,
         "height": 13,
@@ -26695,21 +26695,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/15-sugar-crush-gem.ansi": {
-        "name": "15-sugar-crush-gem.ansi",
-        "category": "sugar-crush",
+    "candy-code/15-candy-code-gem.ansi": {
+        "name": "15-candy-code-gem.ansi",
+        "category": "candy-code",
         "resolution": "67x16",
         "width": 67,
         "height": 16,
         "depth": "truecolor",
         "colors": 166,
-        "description": "sugar-crush splash: icy faceted sugar gem with crown/pavilion facets and sparkle crushing into candy-colored grit under a violet wordmark",
+        "description": "candy-code splash: icy faceted sugar gem with crown/pavilion facets and sparkle crushing into candy-colored grit under a violet wordmark",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/16-crush-impact.ansi": {
+    "candy-code/16-crush-impact.ansi": {
         "name": "16-crush-impact.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -26719,21 +26719,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/17-crush-terminal.ansi": {
+    "candy-code/17-crush-terminal.ansi": {
         "name": "17-crush-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "68x8",
         "width": 68,
         "height": 8,
         "depth": "truecolor",
         "colors": 58,
-        "description": "Faux terminal window running sugar-crush: traffic lights, candy-coat prompt, rainbow compile bar, glowing cursor",
+        "description": "Faux terminal window running candy-code: traffic lights, candy-coat prompt, rainbow compile bar, glowing cursor",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/17-sugar-crush-crystal.ansi": {
-        "name": "17-sugar-crush-crystal.ansi",
-        "category": "sugar-crush",
+    "candy-code/17-candy-code-crystal.ansi": {
+        "name": "17-candy-code-crystal.ansi",
+        "category": "candy-code",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -26743,9 +26743,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/17-sugar-crush-wordmark.ansi": {
-        "name": "17-sugar-crush-wordmark.ansi",
-        "category": "sugar-crush",
+    "candy-code/17-candy-code-wordmark.ansi": {
+        "name": "17-candy-code-wordmark.ansi",
+        "category": "candy-code",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -26755,9 +26755,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/18-craft-into-crush.ansi": {
+    "candy-code/18-craft-into-crush.ansi": {
         "name": "18-craft-into-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x18",
         "width": 56,
         "height": 18,
@@ -26767,9 +26767,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/18-sugar-crush-heart.ansi": {
-        "name": "18-sugar-crush-heart.ansi",
-        "category": "sugar-crush",
+    "candy-code/18-candy-code-heart.ansi": {
+        "name": "18-candy-code-heart.ansi",
+        "category": "candy-code",
         "resolution": "61x19",
         "width": 61,
         "height": 19,
@@ -26779,81 +26779,81 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/18-terminal-crush.ansi": {
+    "candy-code/18-terminal-crush.ansi": {
         "name": "18-terminal-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x18",
         "width": 62,
         "height": 18,
         "depth": "truecolor",
         "colors": 58,
-        "description": "sugar-crush window splash — traffic-light titlebar, gradient boot log, candy progress bars and prompt cursor",
+        "description": "candy-code window splash — traffic-light titlebar, gradient boot log, candy progress bars and prompt cursor",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/19-sugar-crush-mortar.ansi": {
-        "name": "19-sugar-crush-mortar.ansi",
-        "category": "sugar-crush",
+    "candy-code/19-candy-code-mortar.ansi": {
+        "name": "19-candy-code-mortar.ansi",
+        "category": "candy-code",
         "resolution": "66x20",
         "width": 66,
         "height": 20,
         "depth": "truecolor",
         "colors": 308,
-        "description": "stone mortar and tilted pestle glowing with crushed sugar crystals, light rays and sparkles, over a sugar-crush wordmark and live prompt on a grid-dim terminal field",
+        "description": "stone mortar and tilted pestle glowing with crushed sugar crystals, light rays and sparkles, over a candy-code wordmark and live prompt on a grid-dim terminal field",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/20-sugar-crush-terminal.ansi": {
-        "name": "20-sugar-crush-terminal.ansi",
-        "category": "sugar-crush",
+    "candy-code/20-candy-code-terminal.ansi": {
+        "name": "20-candy-code-terminal.ansi",
+        "category": "candy-code",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
         "depth": "truecolor",
         "colors": 36,
-        "description": "sugar-crush terminal window with green code rain, glowing chevron prompt and rock candy crystals",
+        "description": "candy-code terminal window with green code rain, glowing chevron prompt and rock candy crystals",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/21-crush-session-meta.ansi": {
+    "candy-code/21-crush-session-meta.ansi": {
         "name": "21-crush-session-meta.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x18",
         "width": 62,
         "height": 18,
         "depth": "truecolor",
         "colors": 75,
-        "description": "a sugar-crush agent session rendering the SugarCraft logo — spiral candy mark, gradient wordmark, tool log and prompt",
+        "description": "a candy-code agent session rendering the SugarCraft logo — spiral candy mark, gradient wordmark, tool log and prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/21-gumball-crush.ansi": {
+    "candy-code/21-gumball-crush.ansi": {
         "name": "21-gumball-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "68x17",
         "width": 68,
         "height": 17,
         "depth": "truecolor",
         "colors": 201,
-        "description": "sugar-crush as a giant pink spiral lollipop mid-bite on a line of code, sparkles and crumbs tumbling from its mouth",
+        "description": "candy-code as a giant pink spiral lollipop mid-bite on a line of code, sparkles and crumbs tumbling from its mouth",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/22-crush-bot.ansi": {
+    "candy-code/22-crush-bot.ansi": {
         "name": "22-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
         "depth": "truecolor",
         "colors": 15,
-        "description": "sugar-crush agent splash: grinning candy-bot head inside a terminal window surrounded by code sparks, wordmark, live prompt and tool-run log",
+        "description": "candy-code agent splash: grinning candy-bot head inside a terminal window surrounded by code sparks, wordmark, live prompt and tool-run log",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/22-crush-strip.ansi": {
+    "candy-code/22-crush-strip.ansi": {
         "name": "22-crush-strip.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x9",
         "width": 56,
         "height": 9,
@@ -26863,165 +26863,165 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/23-agent-mochi.ansi": {
+    "candy-code/23-agent-mochi.ansi": {
         "name": "23-agent-mochi.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "51x16",
         "width": 51,
         "height": 16,
         "depth": "truecolor",
         "colors": 25,
-        "description": "Kawaii mochi agent mascot with antenna, blush and lollipop, saying \"sweet dreams in ANSI\" above a SugarCraft x sugar-crush caption",
+        "description": "Kawaii mochi agent mascot with antenna, blush and lollipop, saying \"sweet dreams in ANSI\" above a SugarCraft x candy-code caption",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/23-crush-geode.ansi": {
+    "candy-code/23-crush-geode.ansi": {
         "name": "23-crush-geode.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x16",
         "width": 62,
         "height": 16,
         "depth": "truecolor",
         "colors": 27,
-        "description": "sugar-crush terminal frame around a cracked candy geode with concentric sweet bands, lightning seam, prompt line and flying shards",
+        "description": "candy-code terminal frame around a cracked candy geode with concentric sweet bands, lightning seam, prompt line and flying shards",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/24-crush-bot.ansi": {
+    "candy-code/24-crush-bot.ansi": {
         "name": "24-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x17",
         "width": 60,
         "height": 17,
         "depth": "truecolor",
         "colors": 29,
-        "description": "chocolate terminal-bot crunching a rainbow jawbreaker while it runs sugar-crush tool calls",
+        "description": "chocolate terminal-bot crunching a rainbow jawbreaker while it runs candy-code tool calls",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/24-jawbreaker.ansi": {
+    "candy-code/24-jawbreaker.ansi": {
         "name": "24-jawbreaker.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
         "depth": "truecolor",
         "colors": 91,
-        "description": "a cracked rainbow jawbreaker thrown into CRUSH block letters beside the sugar-crush agent prompt",
+        "description": "a cracked rainbow jawbreaker thrown into CRUSH block letters beside the candy-code agent prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/25-crush-bot.ansi": {
+    "candy-code/25-crush-bot.ansi": {
         "name": "25-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
         "depth": "truecolor",
         "colors": 11,
-        "description": "SugarCrush terminal window: antenna-topped candy bot beside a live chat pane running tool calls and a pink cursor prompt",
+        "description": "CandyCode terminal window: antenna-topped candy bot beside a live chat pane running tool calls and a pink cursor prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/25-midnight-crush.ansi": {
+    "candy-code/25-midnight-crush.ansi": {
         "name": "25-midnight-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "64x19",
         "width": 64,
         "height": 19,
         "depth": "truecolor",
         "colors": 162,
-        "description": "Night sky with a glowing cracked candy moon (pink-to-orange sphere), shard scatter, block CRUSH and spaced sugar-crush caption",
+        "description": "Night sky with a glowing cracked candy moon (pink-to-orange sphere), shard scatter, block CRUSH and spaced candy-code caption",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/26-crush-loader.ansi": {
+    "candy-code/26-crush-loader.ansi": {
         "name": "26-crush-loader.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "50x14",
         "width": 50,
         "height": 14,
         "depth": "truecolor",
         "colors": 88,
-        "description": "sugar-crush boot splash: rainbow truecolor wordmark, \"70% caramelized\" gradient progress bar, candy-block wall and a spectrum wave footer over a pre-rename sugarcraft wordmark caption",
+        "description": "candy-code boot splash: rainbow truecolor wordmark, \"70% caramelized\" gradient progress bar, candy-block wall and a spectrum wave footer over a pre-rename sugarcraft wordmark caption",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/26-crush-terminal.ansi": {
+    "candy-code/26-crush-terminal.ansi": {
         "name": "26-crush-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "49x18",
         "width": 49,
         "height": 18,
         "depth": "truecolor",
         "colors": 64,
-        "description": "sugar-crush terminal-window mock with rainbow frame: \"make the terminal taste like candy\" prompt, mint candy-bot sprite, Read/Edit tool log and \"done — shipped 4 pieces of sugar\"",
+        "description": "candy-code terminal-window mock with rainbow frame: \"make the terminal taste like candy\" prompt, mint candy-bot sprite, Read/Edit tool log and \"done — shipped 4 pieces of sugar\"",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/27-comet.ansi": {
+    "candy-code/27-comet.ansi": {
         "name": "27-comet.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "64x20",
         "width": 64,
         "height": 20,
         "depth": "truecolor",
         "colors": 79,
-        "description": "rainbow gumball comet with shaded sphere and fading trail CRUNCHes into a php bin/sugarcrush terminal, SUGARCRAFT tiles below",
+        "description": "rainbow gumball comet with shaded sphere and fading trail CRUNCHes into a php bin/candy-code terminal, SUGARCRAFT tiles below",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/27-crushbot.ansi": {
+    "candy-code/27-crushbot.ansi": {
         "name": "27-crushbot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x18",
         "width": 58,
         "height": 18,
         "depth": "truecolor",
         "colors": 23,
-        "description": "mint candy-bot agent peeking out of a sugar-crush chat pane running read/edit/bash tools with blinking prompt and letter-tile logo",
+        "description": "mint candy-bot agent peeking out of a candy-code chat pane running read/edit/bash tools with blinking prompt and letter-tile logo",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/28-crush-bot.ansi": {
+    "candy-code/28-crush-bot.ansi": {
         "name": "28-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "64x18",
         "width": 64,
         "height": 18,
         "depth": "truecolor",
         "colors": 219,
-        "description": "the sugar-crush robot chomps a stream of `<?php` tokens into candy sparks inside a terminal frame, block-letter CRUSH below",
+        "description": "the candy-code robot chomps a stream of `<?php` tokens into candy sparks inside a terminal frame, block-letter CRUSH below",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/29-crush-bot-window.ansi": {
+    "candy-code/29-crush-bot-window.ansi": {
         "name": "29-crush-bot-window.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x20",
         "width": 62,
         "height": 20,
         "depth": "truecolor",
         "colors": 39,
-        "description": "sugar-crush agent in its teal terminal window — candy-antenna bot, live tool-call transcript, CRUSH wordmark in pink/amber/teal below the frame",
+        "description": "candy-code agent in its teal terminal window — candy-antenna bot, live tool-call transcript, CRUSH wordmark in pink/amber/teal below the frame",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/30-crush-terminal.ansi": {
+    "candy-code/30-crush-terminal.ansi": {
         "name": "30-crush-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "68x18",
         "width": 68,
         "height": 18,
         "depth": "truecolor",
         "colors": 25,
-        "description": "sugar-crush splash - framed terminal window with block-letter CRUSH, a candy-pink bot and a live coding exchange",
+        "description": "candy-code splash - framed terminal window with block-letter CRUSH, a candy-pink bot and a live coding exchange",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/31-crush-press.ansi": {
+    "candy-code/31-crush-press.ansi": {
         "name": "31-crush-press.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x16",
         "width": 60,
         "height": 16,
@@ -27031,45 +27031,45 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/31-gummy-coder.ansi": {
+    "candy-code/31-gummy-coder.ansi": {
         "name": "31-gummy-coder.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "66x20",
         "width": 66,
         "height": 20,
         "depth": "truecolor",
         "colors": 31,
-        "description": "Gummy-bear agent beside a live sugar-crush terminal window: tool-call log, blinking cursor, candy-colored roster of the agent's powers",
+        "description": "Gummy-bear agent beside a live candy-code terminal window: tool-call log, blinking cursor, candy-colored roster of the agent's powers",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/31-honeycomb-net.ansi": {
+    "candy-code/31-honeycomb-net.ansi": {
         "name": "31-honeycomb-net.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
         "depth": "truecolor",
         "colors": 42,
-        "description": "Glowing honeycomb of hexed candy letters spelling SUGARCRUSH, amber comb row and dripping honey over the SugarCraft × sugar-crush twin wordmark",
+        "description": "Glowing honeycomb of hexed candy letters spelling SUGARCRUSH, amber comb row and dripping honey over the SugarCraft × candy-code twin wordmark",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/32-sugar-crush-candy-bot.ansi": {
-        "name": "32-sugar-crush-candy-bot.ansi",
-        "category": "sugar-crush",
+    "candy-code/32-candy-code-candy-bot.ansi": {
+        "name": "32-candy-code-candy-bot.ansi",
+        "category": "candy-code",
         "resolution": "61x19",
         "width": 61,
         "height": 19,
         "depth": "truecolor",
         "colors": 13,
-        "description": "pastel sugar-crush bot framed in a live terminal pane reading, editing and green-ticking code",
+        "description": "pastel candy-code bot framed in a live terminal pane reading, editing and green-ticking code",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/32-sugar-crush-midnight-crystals.ansi": {
-        "name": "32-sugar-crush-midnight-crystals.ansi",
-        "category": "sugar-crush",
+    "candy-code/32-candy-code-midnight-crystals.ansi": {
+        "name": "32-candy-code-midnight-crystals.ansi",
+        "category": "candy-code",
         "resolution": "64x13",
         "width": 64,
         "height": 13,
@@ -27079,93 +27079,93 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/33-crush-agent.ansi": {
+    "candy-code/33-crush-agent.ansi": {
         "name": "33-crush-agent.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "54x15",
         "width": 54,
         "height": 15,
         "depth": "truecolor",
         "colors": 33,
-        "description": "candy-blue robot mascot with a live sugar-crush terminal beside it (tool-call log, gradient caption)",
+        "description": "candy-blue robot mascot with a live candy-code terminal beside it (tool-call log, gradient caption)",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/34-crush-slush.ansi": {
+    "candy-code/34-crush-slush.ansi": {
         "name": "34-crush-slush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "48x18",
         "width": 48,
         "height": 18,
         "depth": "truecolor",
         "colors": 117,
-        "description": "neon truecolor slush cup with ice, bubbles, straw and a SUGAR/CRUSH label band, glowing on a dark counter above a \"$ sugarcrush > write me something sweet\" prompt",
+        "description": "neon truecolor slush cup with ice, bubbles, straw and a SUGAR/CRUSH label band, glowing on a dark counter above a \"$ candy-code > write me something sweet\" prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/34-moth-to-the-glow.ansi": {
+    "candy-code/34-moth-to-the-glow.ansi": {
         "name": "34-moth-to-the-glow.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x12",
         "width": 60,
         "height": 12,
         "depth": "truecolor",
         "colors": 52,
-        "description": "nocturne: candy-striped moon, wavering dotted flight path, pixel-art moth with gold/rose wings and glow dust, caption box \"sugar-crush - drawn to the glow of your code\" over SugarCraft credit",
+        "description": "nocturne: candy-striped moon, wavering dotted flight path, pixel-art moth with gold/rose wings and glow dust, caption box \"candy-code - drawn to the glow of your code\" over SugarCraft credit",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/35-midnight-crush.ansi": {
+    "candy-code/35-midnight-crush.ansi": {
         "name": "35-midnight-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x18",
         "width": 62,
         "height": 18,
         "depth": "truecolor",
         "colors": 105,
-        "description": "Night-sky terminal frame holding a truecolor swirling lollipop under stars and a crescent moon, \"crush>\" prompt with cursor block, sugar-crush caption below",
+        "description": "Night-sky terminal frame holding a truecolor swirling lollipop under stars and a crescent moon, \"crush>\" prompt with cursor block, candy-code caption below",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/36-crush-bot-terminal.ansi": {
+    "candy-code/36-crush-bot-terminal.ansi": {
         "name": "36-crush-bot-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x16",
         "width": 56,
         "height": 16,
         "depth": "truecolor",
         "colors": 72,
-        "description": "mint sugar-bot mascot inside a violet terminal frame, agent log stream, confetti, pink-to-violet gradient status bar reading sugar-crush",
+        "description": "mint sugar-bot mascot inside a violet terminal frame, agent log stream, confetti, pink-to-violet gradient status bar reading candy-code",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/36-midnight-prompt.ansi": {
+    "candy-code/36-midnight-prompt.ansi": {
         "name": "36-midnight-prompt.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
         "depth": "truecolor",
         "colors": 71,
-        "description": "rainy neon night scene, glowing pink sugar-crush prompt with cursor and braille thinking spinner, moon reflection in puddles",
+        "description": "rainy neon night scene, glowing pink candy-code prompt with cursor and braille thinking spinner, moon reflection in puddles",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/37-crush-agent.ansi": {
+    "candy-code/37-crush-agent.ansi": {
         "name": "37-crush-agent.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "61x15",
         "width": 61,
         "height": 15,
         "depth": "truecolor",
         "colors": 10,
-        "description": "blocky cyan sugar-crush agent bot munching a striped candy bar beside its live tool-call chat window and confetti sparkles",
+        "description": "blocky cyan candy-code agent bot munching a striped candy bar beside its live tool-call chat window and confetti sparkles",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/37-tea-window.ansi": {
+    "candy-code/37-tea-window.ansi": {
         "name": "37-tea-window.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "46x12",
         "width": 46,
         "height": 12,
@@ -27175,33 +27175,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/38-crush-bot.ansi": {
+    "candy-code/38-crush-bot.ansi": {
         "name": "38-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "66x17",
         "width": 66,
         "height": 17,
         "depth": "truecolor",
         "colors": 30,
-        "description": "mint candy-bot crushing a floating sugar cube beside a sugar-crush chat pane with tool-call gears and a blinking prompt",
+        "description": "mint candy-bot crushing a floating sugar cube beside a candy-code chat pane with tool-call gears and a blinking prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/39-crush-bot.ansi": {
+    "candy-code/39-crush-bot.ansi": {
         "name": "39-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x20",
         "width": 58,
         "height": 20,
         "depth": "truecolor",
         "colors": 62,
-        "description": "sugar-crush robot in a terminal frame swinging a candy-striped mallet onto a bug pile, speech bubble and > prompt",
+        "description": "candy-code robot in a terminal frame swinging a candy-striped mallet onto a bug pile, speech bubble and > prompt",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/40-candy-crusher.ansi": {
+    "candy-code/40-candy-crusher.ansi": {
         "name": "40-candy-crusher.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "48x17",
         "width": 48,
         "height": 17,
@@ -27211,9 +27211,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/40-crush-terminal.ansi": {
+    "candy-code/40-crush-terminal.ansi": {
         "name": "40-crush-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "52x19",
         "width": 52,
         "height": 19,
@@ -27223,33 +27223,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/41-sugar-crush-agent.ansi": {
-        "name": "41-sugar-crush-agent.ansi",
-        "category": "sugar-crush",
+    "candy-code/41-candy-code-agent.ansi": {
+        "name": "41-candy-code-agent.ansi",
+        "category": "candy-code",
         "resolution": "56x18",
         "width": 56,
         "height": 18,
         "depth": "truecolor",
         "colors": 25,
-        "description": "sugar-crush terminal chat window where a blue robot agent runs read/edit/test steps, lollipop in hand, cursor blinking",
+        "description": "candy-code terminal chat window where a blue robot agent runs read/edit/test steps, lollipop in hand, cursor blinking",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/42-candy-terminal.ansi": {
+    "candy-code/42-candy-terminal.ansi": {
         "name": "42-candy-terminal.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x11",
         "width": 62,
         "height": 11,
         "depth": "truecolor",
         "colors": 70,
-        "description": "sugar-crush chat window mock with rainbow candy palette bar, tool-call lines and a \"part of SugarCraft\" footer",
+        "description": "candy-code chat window mock with rainbow candy palette bar, tool-call lines and a \"part of SugarCraft\" footer",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/42-crush-bot.ansi": {
+    "candy-code/42-crush-bot.ansi": {
         "name": "42-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x18",
         "width": 56,
         "height": 18,
@@ -27259,21 +27259,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/43-crush-agent.ansi": {
+    "candy-code/43-crush-agent.ansi": {
         "name": "43-crush-agent.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "63x14",
         "width": 63,
         "height": 14,
         "depth": "truecolor",
         "colors": 16,
-        "description": "purple candy-striped robot with glowing cyan screen-face standing beside a live sugar-crush chat terminal",
+        "description": "purple candy-striped robot with glowing cyan screen-face standing beside a live candy-code chat terminal",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/43-donut-crush.ansi": {
+    "candy-code/43-donut-crush.ansi": {
         "name": "43-donut-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "49x16",
         "width": 49,
         "height": 16,
@@ -27283,9 +27283,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/44-crush-bot.ansi": {
+    "candy-code/44-crush-bot.ansi": {
         "name": "44-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "67x19",
         "width": 67,
         "height": 19,
@@ -27295,21 +27295,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/45-crush-bot.ansi": {
+    "candy-code/45-crush-bot.ansi": {
         "name": "45-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x18",
         "width": 56,
         "height": 18,
         "depth": "truecolor",
         "colors": 66,
-        "description": "sugar-crush terminal-window splash: a mint gummy agent bot with wand chats beside user turns, braille spinners and a crushing-bugs status line",
+        "description": "candy-code terminal-window splash: a mint gummy agent bot with wand chats beside user turns, braille spinners and a crushing-bugs status line",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/45-crush-heart.ansi": {
+    "candy-code/45-crush-heart.ansi": {
         "name": "45-crush-heart.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "60x19",
         "width": 60,
         "height": 19,
@@ -27319,33 +27319,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/46-crush-bot.ansi": {
+    "candy-code/46-crush-bot.ansi": {
         "name": "46-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "45x16",
         "width": 45,
         "height": 16,
         "depth": "truecolor",
         "colors": 11,
-        "description": "cyan robot with pink eyes crunching a row of candy hearts above a CRUSH block wordmark — sugar-crush splash",
+        "description": "cyan robot with pink eyes crunching a row of candy hearts above a CRUSH block wordmark — candy-code splash",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/46-midnight-crush.ansi": {
+    "candy-code/46-midnight-crush.ansi": {
         "name": "46-midnight-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x15",
         "width": 56,
         "height": 15,
         "depth": "truecolor",
         "colors": 9,
-        "description": "starry indigo night with striped candy moon beside a floating sugar-crush terminal window running tests",
+        "description": "starry indigo night with striped candy moon beside a floating candy-code terminal window running tests",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/47-candy-crusher.ansi": {
+    "candy-code/47-candy-crusher.ansi": {
         "name": "47-candy-crusher.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "66x15",
         "width": 66,
         "height": 15,
@@ -27355,21 +27355,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/47-crush-agent.ansi": {
+    "candy-code/47-crush-agent.ansi": {
         "name": "47-crush-agent.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "58x18",
         "width": 58,
         "height": 18,
         "depth": "truecolor",
         "colors": 22,
-        "description": "mint robot peeking out of a Tokyo Night terminal window as sugar-crush sweetly refactors a candy-cane parser",
+        "description": "mint robot peeking out of a Tokyo Night terminal window as candy-code sweetly refactors a candy-cane parser",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/48-crush-bot.ansi": {
+    "candy-code/48-crush-bot.ansi": {
         "name": "48-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "64x18",
         "width": 64,
         "height": 18,
@@ -27379,21 +27379,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/49-crush-agent.ansi": {
+    "candy-code/49-crush-agent.ansi": {
         "name": "49-crush-agent.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "66x20",
         "width": 66,
         "height": 20,
         "depth": "truecolor",
         "colors": 29,
-        "description": "sugar-crush window with traffic-light titlebar: rose-pink robot and speech bubble, ⚙ Read/Edit/Run tool log, green 22-assertions tick, \"> crush this bug\" prompt, keybinding footer",
+        "description": "candy-code window with traffic-light titlebar: rose-pink robot and speech bubble, ⚙ Read/Edit/Run tool log, green 22-assertions tick, \"> crush this bug\" prompt, keybinding footer",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/49-swirl-crush.ansi": {
+    "candy-code/49-swirl-crush.ansi": {
         "name": "49-swirl-crush.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "56x19",
         "width": 56,
         "height": 19,
@@ -27403,33 +27403,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/50-crush-bot.ansi": {
+    "candy-code/50-crush-bot.ansi": {
         "name": "50-crush-bot.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "62x17",
         "width": 62,
         "height": 17,
         "depth": "truecolor",
         "colors": 42,
-        "description": "Confection-bot robot waving a swirl lollipop beside a live sugar-crush chat pane (tool calls, 60% sugar meter, cursor) over a pink-violet SUGARCRUSH wordmark",
+        "description": "Confection-bot robot waving a swirl lollipop beside a live candy-code chat pane (tool calls, 60% sugar meter, cursor) over a pink-violet SUGARCRUSH wordmark",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/50-sugar-forms.ansi": {
+    "candy-code/50-sugar-forms.ansi": {
         "name": "50-sugar-forms.ansi",
-        "category": "sugar-crush",
+        "category": "candy-code",
         "resolution": "52x9",
         "width": 52,
         "height": 9,
         "depth": "truecolor",
         "colors": 16,
-        "description": "Warm berry boot splash: `php bin/sugarcrush` streams 52 candy libraries loading and ends on a pink block cursor",
+        "description": "Warm berry boot splash: `php bin/candy-code` streams 52 candy libraries loading and ends on a pink block cursor",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-16-l-1.ansi": {
-        "name": "sugar-crush-1-16-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-16-l-1.ansi": {
+        "name": "candy-code-1-16-l-1.ansi",
+        "category": "candy-code",
         "resolution": "150x30",
         "width": 150,
         "height": 30,
@@ -27439,9 +27439,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-16-m-1.ansi": {
-        "name": "sugar-crush-1-16-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-16-m-1.ansi": {
+        "name": "candy-code-1-16-m-1.ansi",
+        "category": "candy-code",
         "resolution": "80x21",
         "width": 80,
         "height": 21,
@@ -27451,9 +27451,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-16-m-2.ansi": {
-        "name": "sugar-crush-1-16-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-16-m-2.ansi": {
+        "name": "candy-code-1-16-m-2.ansi",
+        "category": "candy-code",
         "resolution": "80x23",
         "width": 80,
         "height": 23,
@@ -27465,9 +27465,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-1-16-s-1.ansi": {
-        "name": "sugar-crush-1-16-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-16-s-1.ansi": {
+        "name": "candy-code-1-16-s-1.ansi",
+        "category": "candy-code",
         "resolution": "69x13",
         "width": 69,
         "height": 13,
@@ -27479,9 +27479,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-1-16-s-2.ansi": {
-        "name": "sugar-crush-1-16-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-16-s-2.ansi": {
+        "name": "candy-code-1-16-s-2.ansi",
+        "category": "candy-code",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -27491,9 +27491,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-256-l-1.ansi": {
-        "name": "sugar-crush-1-256-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-256-l-1.ansi": {
+        "name": "candy-code-1-256-l-1.ansi",
+        "category": "candy-code",
         "resolution": "170x36",
         "width": 170,
         "height": 36,
@@ -27503,9 +27503,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-256-l-2.ansi": {
-        "name": "sugar-crush-1-256-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-256-l-2.ansi": {
+        "name": "candy-code-1-256-l-2.ansi",
+        "category": "candy-code",
         "resolution": "146x33",
         "width": 146,
         "height": 33,
@@ -27515,9 +27515,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-256-m-1.ansi": {
-        "name": "sugar-crush-1-256-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-256-m-1.ansi": {
+        "name": "candy-code-1-256-m-1.ansi",
+        "category": "candy-code",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -27527,9 +27527,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-256-m-2.ansi": {
-        "name": "sugar-crush-1-256-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-256-m-2.ansi": {
+        "name": "candy-code-1-256-m-2.ansi",
+        "category": "candy-code",
         "resolution": "80x24",
         "width": 80,
         "height": 24,
@@ -27539,9 +27539,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-256-s-1.ansi": {
-        "name": "sugar-crush-1-256-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-256-s-1.ansi": {
+        "name": "candy-code-1-256-s-1.ansi",
+        "category": "candy-code",
         "resolution": "55x14",
         "width": 55,
         "height": 14,
@@ -27551,9 +27551,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-256-s-2.ansi": {
-        "name": "sugar-crush-1-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-256-s-2.ansi": {
+        "name": "candy-code-1-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "58x14",
         "width": 58,
         "height": 14,
@@ -27563,9 +27563,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-tc-l-1.ansi": {
-        "name": "sugar-crush-1-tc-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-tc-l-1.ansi": {
+        "name": "candy-code-1-tc-l-1.ansi",
+        "category": "candy-code",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -27575,9 +27575,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-tc-l-2.ansi": {
-        "name": "sugar-crush-1-tc-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-tc-l-2.ansi": {
+        "name": "candy-code-1-tc-l-2.ansi",
+        "category": "candy-code",
         "resolution": "170x38",
         "width": 170,
         "height": 38,
@@ -27587,9 +27587,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-tc-m-1.ansi": {
-        "name": "sugar-crush-1-tc-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-tc-m-1.ansi": {
+        "name": "candy-code-1-tc-m-1.ansi",
+        "category": "candy-code",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -27599,9 +27599,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-tc-m-2.ansi": {
-        "name": "sugar-crush-1-tc-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-tc-m-2.ansi": {
+        "name": "candy-code-1-tc-m-2.ansi",
+        "category": "candy-code",
         "resolution": "79x24",
         "width": 79,
         "height": 24,
@@ -27611,9 +27611,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-tc-s-1.ansi": {
-        "name": "sugar-crush-1-tc-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-tc-s-1.ansi": {
+        "name": "candy-code-1-tc-s-1.ansi",
+        "category": "candy-code",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -27623,9 +27623,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-1-tc-s-2.ansi": {
-        "name": "sugar-crush-1-tc-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-1-tc-s-2.ansi": {
+        "name": "candy-code-1-tc-s-2.ansi",
+        "category": "candy-code",
         "resolution": "55x14",
         "width": 55,
         "height": 14,
@@ -27635,9 +27635,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-16-l-1.ansi": {
-        "name": "sugar-crush-2-16-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-16-l-1.ansi": {
+        "name": "candy-code-2-16-l-1.ansi",
+        "category": "candy-code",
         "resolution": "167x28",
         "width": 167,
         "height": 28,
@@ -27649,9 +27649,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-2-16-l-2.ansi": {
-        "name": "sugar-crush-2-16-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-16-l-2.ansi": {
+        "name": "candy-code-2-16-l-2.ansi",
+        "category": "candy-code",
         "resolution": "120x31",
         "width": 120,
         "height": 31,
@@ -27661,9 +27661,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-16-m-1.ansi": {
-        "name": "sugar-crush-2-16-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-16-m-1.ansi": {
+        "name": "candy-code-2-16-m-1.ansi",
+        "category": "candy-code",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -27673,9 +27673,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-16-m-2.ansi": {
-        "name": "sugar-crush-2-16-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-16-m-2.ansi": {
+        "name": "candy-code-2-16-m-2.ansi",
+        "category": "candy-code",
         "resolution": "81x18",
         "width": 81,
         "height": 18,
@@ -27687,9 +27687,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-2-16-s-1.ansi": {
-        "name": "sugar-crush-2-16-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-16-s-1.ansi": {
+        "name": "candy-code-2-16-s-1.ansi",
+        "category": "candy-code",
         "resolution": "57x9",
         "width": 57,
         "height": 9,
@@ -27701,9 +27701,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-2-16-s-2.ansi": {
-        "name": "sugar-crush-2-16-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-16-s-2.ansi": {
+        "name": "candy-code-2-16-s-2.ansi",
+        "category": "candy-code",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -27713,21 +27713,21 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-256-l-1.ansi": {
-        "name": "sugar-crush-2-256-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-256-l-1.ansi": {
+        "name": "candy-code-2-256-l-1.ansi",
+        "category": "candy-code",
         "resolution": "138x28",
         "width": 138,
         "height": 28,
         "depth": "256",
         "colors": 13,
-        "description": "sugarcrush doctor wall: four gauges, 14 checks, event log, sweetness meter",
+        "description": "candy-code doctor wall: four gauges, 14 checks, event log, sweetness meter",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-256-l-2.ansi": {
-        "name": "sugar-crush-2-256-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-256-l-2.ansi": {
+        "name": "candy-code-2-256-l-2.ansi",
+        "category": "candy-code",
         "resolution": "160x34",
         "width": 160,
         "height": 34,
@@ -27737,9 +27737,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-256-m-1.ansi": {
-        "name": "sugar-crush-2-256-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-256-m-1.ansi": {
+        "name": "candy-code-2-256-m-1.ansi",
+        "category": "candy-code",
         "resolution": "85x18",
         "width": 85,
         "height": 18,
@@ -27749,9 +27749,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-256-m-2.ansi": {
-        "name": "sugar-crush-2-256-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-256-m-2.ansi": {
+        "name": "candy-code-2-256-m-2.ansi",
+        "category": "candy-code",
         "resolution": "81x18",
         "width": 81,
         "height": 18,
@@ -27761,9 +27761,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-256-s-1.ansi": {
-        "name": "sugar-crush-2-256-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-256-s-1.ansi": {
+        "name": "candy-code-2-256-s-1.ansi",
+        "category": "candy-code",
         "resolution": "66x7",
         "width": 66,
         "height": 7,
@@ -27773,9 +27773,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-256-s-2.ansi": {
-        "name": "sugar-crush-2-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-256-s-2.ansi": {
+        "name": "candy-code-2-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "49x9",
         "width": 49,
         "height": 9,
@@ -27785,9 +27785,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-tc-l-1.ansi": {
-        "name": "sugar-crush-2-tc-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-tc-l-1.ansi": {
+        "name": "candy-code-2-tc-l-1.ansi",
+        "category": "candy-code",
         "resolution": "194x28",
         "width": 194,
         "height": 28,
@@ -27797,9 +27797,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-tc-l-2.ansi": {
-        "name": "sugar-crush-2-tc-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-tc-l-2.ansi": {
+        "name": "candy-code-2-tc-l-2.ansi",
+        "category": "candy-code",
         "resolution": "156x29",
         "width": 156,
         "height": 29,
@@ -27809,9 +27809,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-tc-m-1.ansi": {
-        "name": "sugar-crush-2-tc-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-tc-m-1.ansi": {
+        "name": "candy-code-2-tc-m-1.ansi",
+        "category": "candy-code",
         "resolution": "83x18",
         "width": 83,
         "height": 18,
@@ -27821,9 +27821,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-tc-m-2.ansi": {
-        "name": "sugar-crush-2-tc-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-tc-m-2.ansi": {
+        "name": "candy-code-2-tc-m-2.ansi",
+        "category": "candy-code",
         "resolution": "85x18",
         "width": 85,
         "height": 18,
@@ -27833,9 +27833,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-tc-s-1.ansi": {
-        "name": "sugar-crush-2-tc-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-tc-s-1.ansi": {
+        "name": "candy-code-2-tc-s-1.ansi",
+        "category": "candy-code",
         "resolution": "57x5",
         "width": 57,
         "height": 5,
@@ -27845,9 +27845,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-2-tc-s-2.ansi": {
-        "name": "sugar-crush-2-tc-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-2-tc-s-2.ansi": {
+        "name": "candy-code-2-tc-s-2.ansi",
+        "category": "candy-code",
         "resolution": "62x12",
         "width": 62,
         "height": 12,
@@ -27857,9 +27857,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-16-l-1.ansi": {
-        "name": "sugar-crush-3-16-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-16-l-1.ansi": {
+        "name": "candy-code-3-16-l-1.ansi",
+        "category": "candy-code",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -27869,9 +27869,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-16-l-2.ansi": {
-        "name": "sugar-crush-3-16-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-16-l-2.ansi": {
+        "name": "candy-code-3-16-l-2.ansi",
+        "category": "candy-code",
         "resolution": "160x29",
         "width": 160,
         "height": 29,
@@ -27881,9 +27881,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-16-m-1.ansi": {
-        "name": "sugar-crush-3-16-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-16-m-1.ansi": {
+        "name": "candy-code-3-16-m-1.ansi",
+        "category": "candy-code",
         "resolution": "80x18",
         "width": 80,
         "height": 18,
@@ -27893,9 +27893,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-16-m-2.ansi": {
-        "name": "sugar-crush-3-16-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-16-m-2.ansi": {
+        "name": "candy-code-3-16-m-2.ansi",
+        "category": "candy-code",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -27905,9 +27905,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-16-s-1.ansi": {
-        "name": "sugar-crush-3-16-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-16-s-1.ansi": {
+        "name": "candy-code-3-16-s-1.ansi",
+        "category": "candy-code",
         "resolution": "62x7",
         "width": 62,
         "height": 7,
@@ -27917,9 +27917,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-16-s-2.ansi": {
-        "name": "sugar-crush-3-16-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-16-s-2.ansi": {
+        "name": "candy-code-3-16-s-2.ansi",
+        "category": "candy-code",
         "resolution": "60x8",
         "width": 60,
         "height": 8,
@@ -27929,9 +27929,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-256-l-1.ansi": {
-        "name": "sugar-crush-3-256-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-256-l-1.ansi": {
+        "name": "candy-code-3-256-l-1.ansi",
+        "category": "candy-code",
         "resolution": "140x28",
         "width": 140,
         "height": 28,
@@ -27941,9 +27941,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-256-l-2.ansi": {
-        "name": "sugar-crush-3-256-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-256-l-2.ansi": {
+        "name": "candy-code-3-256-l-2.ansi",
+        "category": "candy-code",
         "resolution": "160x28",
         "width": 160,
         "height": 28,
@@ -27953,9 +27953,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-256-m-1.ansi": {
-        "name": "sugar-crush-3-256-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-256-m-1.ansi": {
+        "name": "candy-code-3-256-m-1.ansi",
+        "category": "candy-code",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -27965,9 +27965,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-256-m-2.ansi": {
-        "name": "sugar-crush-3-256-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-256-m-2.ansi": {
+        "name": "candy-code-3-256-m-2.ansi",
+        "category": "candy-code",
         "resolution": "86x18",
         "width": 86,
         "height": 18,
@@ -27977,9 +27977,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-256-s-1.ansi": {
-        "name": "sugar-crush-3-256-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-256-s-1.ansi": {
+        "name": "candy-code-3-256-s-1.ansi",
+        "category": "candy-code",
         "resolution": "66x8",
         "width": 66,
         "height": 8,
@@ -27989,9 +27989,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-256-s-2.ansi": {
-        "name": "sugar-crush-3-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-256-s-2.ansi": {
+        "name": "candy-code-3-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -28001,9 +28001,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-tc-l-1.ansi": {
-        "name": "sugar-crush-3-tc-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-tc-l-1.ansi": {
+        "name": "candy-code-3-tc-l-1.ansi",
+        "category": "candy-code",
         "resolution": "184x41",
         "width": 184,
         "height": 41,
@@ -28013,9 +28013,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-tc-l-2.ansi": {
-        "name": "sugar-crush-3-tc-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-tc-l-2.ansi": {
+        "name": "candy-code-3-tc-l-2.ansi",
+        "category": "candy-code",
         "resolution": "168x38",
         "width": 168,
         "height": 38,
@@ -28025,9 +28025,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-tc-m-1.ansi": {
-        "name": "sugar-crush-3-tc-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-tc-m-1.ansi": {
+        "name": "candy-code-3-tc-m-1.ansi",
+        "category": "candy-code",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -28037,9 +28037,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-tc-m-2.ansi": {
-        "name": "sugar-crush-3-tc-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-tc-m-2.ansi": {
+        "name": "candy-code-3-tc-m-2.ansi",
+        "category": "candy-code",
         "resolution": "88x18",
         "width": 88,
         "height": 18,
@@ -28049,9 +28049,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-tc-s-1.ansi": {
-        "name": "sugar-crush-3-tc-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-tc-s-1.ansi": {
+        "name": "candy-code-3-tc-s-1.ansi",
+        "category": "candy-code",
         "resolution": "57x7",
         "width": 57,
         "height": 7,
@@ -28061,9 +28061,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-3-tc-s-2.ansi": {
-        "name": "sugar-crush-3-tc-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-3-tc-s-2.ansi": {
+        "name": "candy-code-3-tc-s-2.ansi",
+        "category": "candy-code",
         "resolution": "63x14",
         "width": 63,
         "height": 14,
@@ -28073,9 +28073,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-16-l-1.ansi": {
-        "name": "sugar-crush-4-16-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-16-l-1.ansi": {
+        "name": "candy-code-4-16-l-1.ansi",
+        "category": "candy-code",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -28087,9 +28087,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-4-16-m-1.ansi": {
-        "name": "sugar-crush-4-16-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-16-m-1.ansi": {
+        "name": "candy-code-4-16-m-1.ansi",
+        "category": "candy-code",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -28099,9 +28099,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-16-m-2.ansi": {
-        "name": "sugar-crush-4-16-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-16-m-2.ansi": {
+        "name": "candy-code-4-16-m-2.ansi",
+        "category": "candy-code",
         "resolution": "86x20",
         "width": 86,
         "height": 20,
@@ -28111,9 +28111,9 @@
         "rating": 3,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-16-s-1.ansi": {
-        "name": "sugar-crush-4-16-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-16-s-1.ansi": {
+        "name": "candy-code-4-16-s-1.ansi",
+        "category": "candy-code",
         "resolution": "64x12",
         "width": 64,
         "height": 12,
@@ -28125,9 +28125,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-4-16-s-2.ansi": {
-        "name": "sugar-crush-4-16-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-16-s-2.ansi": {
+        "name": "candy-code-4-16-s-2.ansi",
+        "category": "candy-code",
         "resolution": "58x10",
         "width": 58,
         "height": 10,
@@ -28137,9 +28137,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-256-l-1.ansi": {
-        "name": "sugar-crush-4-256-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-256-l-1.ansi": {
+        "name": "candy-code-4-256-l-1.ansi",
+        "category": "candy-code",
         "resolution": "172x28",
         "width": 172,
         "height": 28,
@@ -28149,9 +28149,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-256-l-2.ansi": {
-        "name": "sugar-crush-4-256-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-256-l-2.ansi": {
+        "name": "candy-code-4-256-l-2.ansi",
+        "category": "candy-code",
         "resolution": "172x34",
         "width": 172,
         "height": 34,
@@ -28161,9 +28161,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-256-m-1.ansi": {
-        "name": "sugar-crush-4-256-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-256-m-1.ansi": {
+        "name": "candy-code-4-256-m-1.ansi",
+        "category": "candy-code",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -28173,9 +28173,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-256-m-2.ansi": {
-        "name": "sugar-crush-4-256-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-256-m-2.ansi": {
+        "name": "candy-code-4-256-m-2.ansi",
+        "category": "candy-code",
         "resolution": "79x24",
         "width": 79,
         "height": 24,
@@ -28185,9 +28185,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-256-s-1.ansi": {
-        "name": "sugar-crush-4-256-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-256-s-1.ansi": {
+        "name": "candy-code-4-256-s-1.ansi",
+        "category": "candy-code",
         "resolution": "52x12",
         "width": 52,
         "height": 12,
@@ -28197,9 +28197,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-256-s-2.ansi": {
-        "name": "sugar-crush-4-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-256-s-2.ansi": {
+        "name": "candy-code-4-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "60x11",
         "width": 60,
         "height": 11,
@@ -28209,9 +28209,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-tc-l-1.ansi": {
-        "name": "sugar-crush-4-tc-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-tc-l-1.ansi": {
+        "name": "candy-code-4-tc-l-1.ansi",
+        "category": "candy-code",
         "resolution": "182x36",
         "width": 182,
         "height": 36,
@@ -28221,9 +28221,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-tc-l-2.ansi": {
-        "name": "sugar-crush-4-tc-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-tc-l-2.ansi": {
+        "name": "candy-code-4-tc-l-2.ansi",
+        "category": "candy-code",
         "resolution": "190x40",
         "width": 190,
         "height": 40,
@@ -28233,9 +28233,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-tc-m-1.ansi": {
-        "name": "sugar-crush-4-tc-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-tc-m-1.ansi": {
+        "name": "candy-code-4-tc-m-1.ansi",
+        "category": "candy-code",
         "resolution": "88x21",
         "width": 88,
         "height": 21,
@@ -28245,9 +28245,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-tc-m-2.ansi": {
-        "name": "sugar-crush-4-tc-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-tc-m-2.ansi": {
+        "name": "candy-code-4-tc-m-2.ansi",
+        "category": "candy-code",
         "resolution": "86x21",
         "width": 86,
         "height": 21,
@@ -28257,9 +28257,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-tc-s-1.ansi": {
-        "name": "sugar-crush-4-tc-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-tc-s-1.ansi": {
+        "name": "candy-code-4-tc-s-1.ansi",
+        "category": "candy-code",
         "resolution": "51x15",
         "width": 51,
         "height": 15,
@@ -28269,9 +28269,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-4-tc-s-2.ansi": {
-        "name": "sugar-crush-4-tc-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-4-tc-s-2.ansi": {
+        "name": "candy-code-4-tc-s-2.ansi",
+        "category": "candy-code",
         "resolution": "52x11",
         "width": 52,
         "height": 11,
@@ -28281,9 +28281,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-16-l-2.ansi": {
-        "name": "sugar-crush-5-16-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-16-l-2.ansi": {
+        "name": "candy-code-5-16-l-2.ansi",
+        "category": "candy-code",
         "resolution": "120x31",
         "width": 120,
         "height": 31,
@@ -28293,9 +28293,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-16-m-1.ansi": {
-        "name": "sugar-crush-5-16-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-16-m-1.ansi": {
+        "name": "candy-code-5-16-m-1.ansi",
+        "category": "candy-code",
         "resolution": "78x19",
         "width": 78,
         "height": 19,
@@ -28305,9 +28305,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-16-m-2.ansi": {
-        "name": "sugar-crush-5-16-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-16-m-2.ansi": {
+        "name": "candy-code-5-16-m-2.ansi",
+        "category": "candy-code",
         "resolution": "76x18",
         "width": 76,
         "height": 18,
@@ -28317,9 +28317,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-16-s-1.ansi": {
-        "name": "sugar-crush-5-16-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-16-s-1.ansi": {
+        "name": "candy-code-5-16-s-1.ansi",
+        "category": "candy-code",
         "resolution": "50x12",
         "width": 50,
         "height": 12,
@@ -28329,9 +28329,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-16-s-2.ansi": {
-        "name": "sugar-crush-5-16-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-16-s-2.ansi": {
+        "name": "candy-code-5-16-s-2.ansi",
+        "category": "candy-code",
         "resolution": "48x14",
         "width": 48,
         "height": 14,
@@ -28341,9 +28341,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-256-l-1.ansi": {
-        "name": "sugar-crush-5-256-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-256-l-1.ansi": {
+        "name": "candy-code-5-256-l-1.ansi",
+        "category": "candy-code",
         "resolution": "150x28",
         "width": 150,
         "height": 28,
@@ -28353,9 +28353,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-256-l-2.ansi": {
-        "name": "sugar-crush-5-256-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-256-l-2.ansi": {
+        "name": "candy-code-5-256-l-2.ansi",
+        "category": "candy-code",
         "resolution": "146x33",
         "width": 146,
         "height": 33,
@@ -28365,9 +28365,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-256-m-1.ansi": {
-        "name": "sugar-crush-5-256-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-256-m-1.ansi": {
+        "name": "candy-code-5-256-m-1.ansi",
+        "category": "candy-code",
         "resolution": "82x19",
         "width": 82,
         "height": 19,
@@ -28377,9 +28377,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-256-m-2.ansi": {
-        "name": "sugar-crush-5-256-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-256-m-2.ansi": {
+        "name": "candy-code-5-256-m-2.ansi",
+        "category": "candy-code",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -28389,9 +28389,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-256-s-1.ansi": {
-        "name": "sugar-crush-5-256-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-256-s-1.ansi": {
+        "name": "candy-code-5-256-s-1.ansi",
+        "category": "candy-code",
         "resolution": "52x11",
         "width": 52,
         "height": 11,
@@ -28401,9 +28401,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-256-s-2.ansi": {
-        "name": "sugar-crush-5-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-256-s-2.ansi": {
+        "name": "candy-code-5-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "54x10",
         "width": 54,
         "height": 10,
@@ -28413,9 +28413,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-tc-l-1.ansi": {
-        "name": "sugar-crush-5-tc-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-tc-l-1.ansi": {
+        "name": "candy-code-5-tc-l-1.ansi",
+        "category": "candy-code",
         "resolution": "172x28",
         "width": 172,
         "height": 28,
@@ -28425,9 +28425,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-tc-l-2.ansi": {
-        "name": "sugar-crush-5-tc-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-tc-l-2.ansi": {
+        "name": "candy-code-5-tc-l-2.ansi",
+        "category": "candy-code",
         "resolution": "166x32",
         "width": 166,
         "height": 32,
@@ -28437,9 +28437,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-tc-m-1.ansi": {
-        "name": "sugar-crush-5-tc-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-tc-m-1.ansi": {
+        "name": "candy-code-5-tc-m-1.ansi",
+        "category": "candy-code",
         "resolution": "84x21",
         "width": 84,
         "height": 21,
@@ -28449,9 +28449,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-tc-m-2.ansi": {
-        "name": "sugar-crush-5-tc-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-tc-m-2.ansi": {
+        "name": "candy-code-5-tc-m-2.ansi",
+        "category": "candy-code",
         "resolution": "82x21",
         "width": 82,
         "height": 21,
@@ -28461,33 +28461,33 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-tc-s-1.ansi": {
-        "name": "sugar-crush-5-tc-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-tc-s-1.ansi": {
+        "name": "candy-code-5-tc-s-1.ansi",
+        "category": "candy-code",
         "resolution": "52x13",
         "width": 52,
         "height": 13,
         "depth": "truecolor",
         "colors": 9,
-        "description": "Pocket trophy case with three gold medals on the SugarCrush leaderboard",
+        "description": "Pocket trophy case with three gold medals on the CandyCode leaderboard",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-5-tc-s-2.ansi": {
-        "name": "sugar-crush-5-tc-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-5-tc-s-2.ansi": {
+        "name": "candy-code-5-tc-s-2.ansi",
+        "category": "candy-code",
         "resolution": "54x11",
         "width": 54,
         "height": 11,
         "depth": "truecolor",
         "colors": 6,
-        "description": "Departure board of SugarCrush Air sessions boarding their gates",
+        "description": "Departure board of CandyCode Air sessions boarding their gates",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-16-l-11.ansi": {
-        "name": "sugar-crush-6-16-l-11.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-16-l-11.ansi": {
+        "name": "candy-code-6-16-l-11.ansi",
+        "category": "candy-code",
         "resolution": "140x34",
         "width": 140,
         "height": 34,
@@ -28499,9 +28499,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-6-16-l-12.ansi": {
-        "name": "sugar-crush-6-16-l-12.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-16-l-12.ansi": {
+        "name": "candy-code-6-16-l-12.ansi",
+        "category": "candy-code",
         "resolution": "199x28",
         "width": 199,
         "height": 28,
@@ -28511,9 +28511,9 @@
         "rating": 2,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-16-m-5.ansi": {
-        "name": "sugar-crush-6-16-m-5.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-16-m-5.ansi": {
+        "name": "candy-code-6-16-m-5.ansi",
+        "category": "candy-code",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -28525,9 +28525,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-6-16-m-6.ansi": {
-        "name": "sugar-crush-6-16-m-6.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-16-m-6.ansi": {
+        "name": "candy-code-6-16-m-6.ansi",
+        "category": "candy-code",
         "resolution": "80x19",
         "width": 80,
         "height": 19,
@@ -28539,9 +28539,9 @@
             "alignment-fix"
         ]
     },
-    "sugar-crush/sugar-crush-6-256-l-13.ansi": {
-        "name": "sugar-crush-6-256-l-13.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-256-l-13.ansi": {
+        "name": "candy-code-6-256-l-13.ansi",
+        "category": "candy-code",
         "resolution": "160x29",
         "width": 160,
         "height": 29,
@@ -28551,9 +28551,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-256-l-14.ansi": {
-        "name": "sugar-crush-6-256-l-14.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-256-l-14.ansi": {
+        "name": "candy-code-6-256-l-14.ansi",
+        "category": "candy-code",
         "resolution": "170x28",
         "width": 170,
         "height": 28,
@@ -28563,9 +28563,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-256-m-7.ansi": {
-        "name": "sugar-crush-6-256-m-7.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-256-m-7.ansi": {
+        "name": "candy-code-6-256-m-7.ansi",
+        "category": "candy-code",
         "resolution": "84x18",
         "width": 84,
         "height": 18,
@@ -28575,9 +28575,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-256-m-8.ansi": {
-        "name": "sugar-crush-6-256-m-8.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-256-m-8.ansi": {
+        "name": "candy-code-6-256-m-8.ansi",
+        "category": "candy-code",
         "resolution": "88x19",
         "width": 88,
         "height": 19,
@@ -28587,9 +28587,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-256-s-2.ansi": {
-        "name": "sugar-crush-6-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-256-s-2.ansi": {
+        "name": "candy-code-6-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "70x13",
         "width": 70,
         "height": 13,
@@ -28599,9 +28599,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-256-s-17.ansi": {
-        "name": "sugar-crush-6-256-s-17.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-256-s-17.ansi": {
+        "name": "candy-code-6-256-s-17.ansi",
+        "category": "candy-code",
         "resolution": "63x15",
         "width": 63,
         "height": 15,
@@ -28611,9 +28611,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-tc-l-15.ansi": {
-        "name": "sugar-crush-6-tc-l-15.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-tc-l-15.ansi": {
+        "name": "candy-code-6-tc-l-15.ansi",
+        "category": "candy-code",
         "resolution": "150x41",
         "width": 150,
         "height": 41,
@@ -28623,9 +28623,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-tc-l-16.ansi": {
-        "name": "sugar-crush-6-tc-l-16.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-tc-l-16.ansi": {
+        "name": "candy-code-6-tc-l-16.ansi",
+        "category": "candy-code",
         "resolution": "180x29",
         "width": 180,
         "height": 29,
@@ -28635,9 +28635,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-tc-m-9.ansi": {
-        "name": "sugar-crush-6-tc-m-9.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-tc-m-9.ansi": {
+        "name": "candy-code-6-tc-m-9.ansi",
+        "category": "candy-code",
         "resolution": "80x22",
         "width": 80,
         "height": 22,
@@ -28647,9 +28647,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-tc-m-10.ansi": {
-        "name": "sugar-crush-6-tc-m-10.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-tc-m-10.ansi": {
+        "name": "candy-code-6-tc-m-10.ansi",
+        "category": "candy-code",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -28659,9 +28659,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-tc-s-3.ansi": {
-        "name": "sugar-crush-6-tc-s-3.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-tc-s-3.ansi": {
+        "name": "candy-code-6-tc-s-3.ansi",
+        "category": "candy-code",
         "resolution": "66x11",
         "width": 66,
         "height": 11,
@@ -28671,9 +28671,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-6-tc-s-4.ansi": {
-        "name": "sugar-crush-6-tc-s-4.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-6-tc-s-4.ansi": {
+        "name": "candy-code-6-tc-s-4.ansi",
+        "category": "candy-code",
         "resolution": "55x15",
         "width": 55,
         "height": 15,
@@ -28683,9 +28683,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-256-l-15.ansi": {
-        "name": "sugar-crush-7-256-l-15.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-256-l-15.ansi": {
+        "name": "candy-code-7-256-l-15.ansi",
+        "category": "candy-code",
         "resolution": "165x38",
         "width": 165,
         "height": 38,
@@ -28695,9 +28695,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-256-l-16.ansi": {
-        "name": "sugar-crush-7-256-l-16.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-256-l-16.ansi": {
+        "name": "candy-code-7-256-l-16.ansi",
+        "category": "candy-code",
         "resolution": "150x34",
         "width": 150,
         "height": 34,
@@ -28707,9 +28707,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-256-m-9.ansi": {
-        "name": "sugar-crush-7-256-m-9.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-256-m-9.ansi": {
+        "name": "candy-code-7-256-m-9.ansi",
+        "category": "candy-code",
         "resolution": "88x23",
         "width": 88,
         "height": 23,
@@ -28719,9 +28719,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-256-m-10.ansi": {
-        "name": "sugar-crush-7-256-m-10.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-256-m-10.ansi": {
+        "name": "candy-code-7-256-m-10.ansi",
+        "category": "candy-code",
         "resolution": "72x25",
         "width": 72,
         "height": 25,
@@ -28731,9 +28731,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-256-s-3.ansi": {
-        "name": "sugar-crush-7-256-s-3.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-256-s-3.ansi": {
+        "name": "candy-code-7-256-s-3.ansi",
+        "category": "candy-code",
         "resolution": "52x15",
         "width": 52,
         "height": 15,
@@ -28743,9 +28743,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-256-s-4.ansi": {
-        "name": "sugar-crush-7-256-s-4.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-256-s-4.ansi": {
+        "name": "candy-code-7-256-s-4.ansi",
+        "category": "candy-code",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -28755,9 +28755,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-tc-l-17.ansi": {
-        "name": "sugar-crush-7-tc-l-17.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-tc-l-17.ansi": {
+        "name": "candy-code-7-tc-l-17.ansi",
+        "category": "candy-code",
         "resolution": "175x36",
         "width": 175,
         "height": 36,
@@ -28767,9 +28767,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-tc-l-18.ansi": {
-        "name": "sugar-crush-7-tc-l-18.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-tc-l-18.ansi": {
+        "name": "candy-code-7-tc-l-18.ansi",
+        "category": "candy-code",
         "resolution": "200x34",
         "width": 200,
         "height": 34,
@@ -28779,9 +28779,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-tc-m-11.ansi": {
-        "name": "sugar-crush-7-tc-m-11.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-tc-m-11.ansi": {
+        "name": "candy-code-7-tc-m-11.ansi",
+        "category": "candy-code",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -28791,9 +28791,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-tc-m-12.ansi": {
-        "name": "sugar-crush-7-tc-m-12.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-tc-m-12.ansi": {
+        "name": "candy-code-7-tc-m-12.ansi",
+        "category": "candy-code",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -28803,9 +28803,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-tc-s-5.ansi": {
-        "name": "sugar-crush-7-tc-s-5.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-tc-s-5.ansi": {
+        "name": "candy-code-7-tc-s-5.ansi",
+        "category": "candy-code",
         "resolution": "60x15",
         "width": 60,
         "height": 15,
@@ -28815,9 +28815,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-7-tc-s-6.ansi": {
-        "name": "sugar-crush-7-tc-s-6.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-7-tc-s-6.ansi": {
+        "name": "candy-code-7-tc-s-6.ansi",
+        "category": "candy-code",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -28827,9 +28827,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-256-l-15.ansi": {
-        "name": "sugar-crush-8-256-l-15.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-256-l-15.ansi": {
+        "name": "candy-code-8-256-l-15.ansi",
+        "category": "candy-code",
         "resolution": "168x36",
         "width": 168,
         "height": 36,
@@ -28839,9 +28839,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-256-l-16.ansi": {
-        "name": "sugar-crush-8-256-l-16.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-256-l-16.ansi": {
+        "name": "candy-code-8-256-l-16.ansi",
+        "category": "candy-code",
         "resolution": "176x34",
         "width": 176,
         "height": 34,
@@ -28851,9 +28851,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-256-m-9.ansi": {
-        "name": "sugar-crush-8-256-m-9.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-256-m-9.ansi": {
+        "name": "candy-code-8-256-m-9.ansi",
+        "category": "candy-code",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -28863,9 +28863,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-256-m-10.ansi": {
-        "name": "sugar-crush-8-256-m-10.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-256-m-10.ansi": {
+        "name": "candy-code-8-256-m-10.ansi",
+        "category": "candy-code",
         "resolution": "82x25",
         "width": 82,
         "height": 25,
@@ -28875,9 +28875,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-256-s-3.ansi": {
-        "name": "sugar-crush-8-256-s-3.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-256-s-3.ansi": {
+        "name": "candy-code-8-256-s-3.ansi",
+        "category": "candy-code",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -28887,9 +28887,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-256-s-4.ansi": {
-        "name": "sugar-crush-8-256-s-4.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-256-s-4.ansi": {
+        "name": "candy-code-8-256-s-4.ansi",
+        "category": "candy-code",
         "resolution": "66x12",
         "width": 66,
         "height": 12,
@@ -28899,9 +28899,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-tc-l-17.ansi": {
-        "name": "sugar-crush-8-tc-l-17.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-tc-l-17.ansi": {
+        "name": "candy-code-8-tc-l-17.ansi",
+        "category": "candy-code",
         "resolution": "190x38",
         "width": 190,
         "height": 38,
@@ -28911,9 +28911,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-tc-l-18.ansi": {
-        "name": "sugar-crush-8-tc-l-18.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-tc-l-18.ansi": {
+        "name": "candy-code-8-tc-l-18.ansi",
+        "category": "candy-code",
         "resolution": "200x36",
         "width": 200,
         "height": 36,
@@ -28923,9 +28923,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-tc-m-11.ansi": {
-        "name": "sugar-crush-8-tc-m-11.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-tc-m-11.ansi": {
+        "name": "candy-code-8-tc-m-11.ansi",
+        "category": "candy-code",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -28935,9 +28935,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-tc-m-12.ansi": {
-        "name": "sugar-crush-8-tc-m-12.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-tc-m-12.ansi": {
+        "name": "candy-code-8-tc-m-12.ansi",
+        "category": "candy-code",
         "resolution": "84x23",
         "width": 84,
         "height": 23,
@@ -28947,9 +28947,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-tc-s-5.ansi": {
-        "name": "sugar-crush-8-tc-s-5.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-tc-s-5.ansi": {
+        "name": "candy-code-8-tc-s-5.ansi",
+        "category": "candy-code",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -28959,9 +28959,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-8-tc-s-6.ansi": {
-        "name": "sugar-crush-8-tc-s-6.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-8-tc-s-6.ansi": {
+        "name": "candy-code-8-tc-s-6.ansi",
+        "category": "candy-code",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -28971,9 +28971,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-256-l-15.ansi": {
-        "name": "sugar-crush-9-256-l-15.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-256-l-15.ansi": {
+        "name": "candy-code-9-256-l-15.ansi",
+        "category": "candy-code",
         "resolution": "160x36",
         "width": 160,
         "height": 36,
@@ -28983,9 +28983,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-256-l-16.ansi": {
-        "name": "sugar-crush-9-256-l-16.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-256-l-16.ansi": {
+        "name": "candy-code-9-256-l-16.ansi",
+        "category": "candy-code",
         "resolution": "168x34",
         "width": 168,
         "height": 34,
@@ -28995,9 +28995,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-256-m-9.ansi": {
-        "name": "sugar-crush-9-256-m-9.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-256-m-9.ansi": {
+        "name": "candy-code-9-256-m-9.ansi",
+        "category": "candy-code",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -29007,9 +29007,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-256-m-10.ansi": {
-        "name": "sugar-crush-9-256-m-10.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-256-m-10.ansi": {
+        "name": "candy-code-9-256-m-10.ansi",
+        "category": "candy-code",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -29019,9 +29019,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-256-s-3.ansi": {
-        "name": "sugar-crush-9-256-s-3.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-256-s-3.ansi": {
+        "name": "candy-code-9-256-s-3.ansi",
+        "category": "candy-code",
         "resolution": "62x14",
         "width": 62,
         "height": 14,
@@ -29031,9 +29031,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-256-s-4.ansi": {
-        "name": "sugar-crush-9-256-s-4.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-256-s-4.ansi": {
+        "name": "candy-code-9-256-s-4.ansi",
+        "category": "candy-code",
         "resolution": "58x13",
         "width": 58,
         "height": 13,
@@ -29043,9 +29043,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-tc-l-17.ansi": {
-        "name": "sugar-crush-9-tc-l-17.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-tc-l-17.ansi": {
+        "name": "candy-code-9-tc-l-17.ansi",
+        "category": "candy-code",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
@@ -29055,9 +29055,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-tc-l-18.ansi": {
-        "name": "sugar-crush-9-tc-l-18.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-tc-l-18.ansi": {
+        "name": "candy-code-9-tc-l-18.ansi",
+        "category": "candy-code",
         "resolution": "180x38",
         "width": 180,
         "height": 38,
@@ -29067,9 +29067,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-tc-m-11.ansi": {
-        "name": "sugar-crush-9-tc-m-11.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-tc-m-11.ansi": {
+        "name": "candy-code-9-tc-m-11.ansi",
+        "category": "candy-code",
         "resolution": "86x23",
         "width": 86,
         "height": 23,
@@ -29079,9 +29079,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-tc-m-12.ansi": {
-        "name": "sugar-crush-9-tc-m-12.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-tc-m-12.ansi": {
+        "name": "candy-code-9-tc-m-12.ansi",
+        "category": "candy-code",
         "resolution": "84x22",
         "width": 84,
         "height": 22,
@@ -29091,9 +29091,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-tc-s-5.ansi": {
-        "name": "sugar-crush-9-tc-s-5.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-tc-s-5.ansi": {
+        "name": "candy-code-9-tc-s-5.ansi",
+        "category": "candy-code",
         "resolution": "56x13",
         "width": 56,
         "height": 13,
@@ -29103,9 +29103,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-9-tc-s-6.ansi": {
-        "name": "sugar-crush-9-tc-s-6.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-9-tc-s-6.ansi": {
+        "name": "candy-code-9-tc-s-6.ansi",
+        "category": "candy-code",
         "resolution": "60x14",
         "width": 60,
         "height": 14,
@@ -29115,9 +29115,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-256-l-1.ansi": {
-        "name": "sugar-crush-10-256-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-256-l-1.ansi": {
+        "name": "candy-code-10-256-l-1.ansi",
+        "category": "candy-code",
         "resolution": "184x40",
         "width": 184,
         "height": 40,
@@ -29127,9 +29127,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-256-l-2.ansi": {
-        "name": "sugar-crush-10-256-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-256-l-2.ansi": {
+        "name": "candy-code-10-256-l-2.ansi",
+        "category": "candy-code",
         "resolution": "176x36",
         "width": 176,
         "height": 36,
@@ -29139,9 +29139,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-256-m-1.ansi": {
-        "name": "sugar-crush-10-256-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-256-m-1.ansi": {
+        "name": "candy-code-10-256-m-1.ansi",
+        "category": "candy-code",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -29151,9 +29151,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-256-m-2.ansi": {
-        "name": "sugar-crush-10-256-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-256-m-2.ansi": {
+        "name": "candy-code-10-256-m-2.ansi",
+        "category": "candy-code",
         "resolution": "84x24",
         "width": 84,
         "height": 24,
@@ -29163,9 +29163,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-256-s-1.ansi": {
-        "name": "sugar-crush-10-256-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-256-s-1.ansi": {
+        "name": "candy-code-10-256-s-1.ansi",
+        "category": "candy-code",
         "resolution": "68x14",
         "width": 68,
         "height": 14,
@@ -29175,9 +29175,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-256-s-2.ansi": {
-        "name": "sugar-crush-10-256-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-256-s-2.ansi": {
+        "name": "candy-code-10-256-s-2.ansi",
+        "category": "candy-code",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -29187,9 +29187,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-tc-l-1.ansi": {
-        "name": "sugar-crush-10-tc-l-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-tc-l-1.ansi": {
+        "name": "candy-code-10-tc-l-1.ansi",
+        "category": "candy-code",
         "resolution": "200x40",
         "width": 200,
         "height": 40,
@@ -29199,9 +29199,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-tc-l-2.ansi": {
-        "name": "sugar-crush-10-tc-l-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-tc-l-2.ansi": {
+        "name": "candy-code-10-tc-l-2.ansi",
+        "category": "candy-code",
         "resolution": "196x38",
         "width": 196,
         "height": 38,
@@ -29211,9 +29211,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-tc-m-1.ansi": {
-        "name": "sugar-crush-10-tc-m-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-tc-m-1.ansi": {
+        "name": "candy-code-10-tc-m-1.ansi",
+        "category": "candy-code",
         "resolution": "86x24",
         "width": 86,
         "height": 24,
@@ -29223,9 +29223,9 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-tc-m-2.ansi": {
-        "name": "sugar-crush-10-tc-m-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-tc-m-2.ansi": {
+        "name": "candy-code-10-tc-m-2.ansi",
+        "category": "candy-code",
         "resolution": "88x24",
         "width": 88,
         "height": 24,
@@ -29235,21 +29235,21 @@
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-tc-s-1.ansi": {
-        "name": "sugar-crush-10-tc-s-1.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-tc-s-1.ansi": {
+        "name": "candy-code-10-tc-s-1.ansi",
+        "category": "candy-code",
         "resolution": "68x15",
         "width": 68,
         "height": 15,
         "depth": "truecolor",
         "colors": 102,
-        "description": "Glass-blowing studio: blowpipe gathering a molten context-128k sphere, radial furnace glow, SugarCrush word in ember gradient",
+        "description": "Glass-blowing studio: blowpipe gathering a molten context-128k sphere, radial furnace glow, CandyCode word in ember gradient",
         "rating": null,
         "tags": []
     },
-    "sugar-crush/sugar-crush-10-tc-s-2.ansi": {
-        "name": "sugar-crush-10-tc-s-2.ansi",
-        "category": "sugar-crush",
+    "candy-code/candy-code-10-tc-s-2.ansi": {
+        "name": "candy-code-10-tc-s-2.ansi",
+        "category": "candy-code",
         "resolution": "66x14",
         "width": 66,
         "height": 14,
@@ -39599,15 +39599,15 @@
         "rating": null,
         "tags": []
     },
-    "sugarcraft/4-sugarcraft-crush-volcano.ansi": {
-        "name": "4-sugarcraft-crush-volcano.ansi",
+    "sugarcraft/4-candy-code-volcano.ansi": {
+        "name": "4-candy-code-volcano.ansi",
         "category": "sugarcraft",
         "resolution": "70x20",
         "width": 70,
         "height": 20,
         "depth": "truecolor",
         "colors": 36,
-        "description": "candy volcano erupting rainbow code glyphs, uniting SugarCraft x sugar-crush lockups at the base",
+        "description": "candy volcano erupting rainbow code glyphs, uniting SugarCraft x candy-code lockups at the base",
         "rating": null,
         "tags": []
     },
@@ -39751,7 +39751,7 @@
         "height": 6,
         "depth": "truecolor",
         "colors": 34,
-        "description": "compact dual-logo lockup: SugarCraft over sugar-crush in gradient letter-spaced type between candy-stripe rules",
+        "description": "compact dual-logo lockup: SugarCraft over candy-code in gradient letter-spaced type between candy-stripe rules",
         "rating": null,
         "tags": []
     },
@@ -39787,7 +39787,7 @@
         "height": 17,
         "depth": "truecolor",
         "colors": 193,
-        "description": "Gumdrop stars linked by sugar-wire constellations over an indigo gradient night sky with a sugar-crush charting prompt",
+        "description": "Gumdrop stars linked by sugar-wire constellations over an indigo gradient night sky with a candy-code charting prompt",
         "rating": null,
         "tags": []
     },
@@ -39883,7 +39883,7 @@
         "height": 9,
         "depth": "truecolor",
         "colors": 13,
-        "description": "SugarCraft x sugar-crush combo splash inside a candy-striped terminal window with live prompt and cursor",
+        "description": "SugarCraft x candy-code combo splash inside a candy-striped terminal window with live prompt and cursor",
         "rating": null,
         "tags": []
     },
@@ -39979,7 +39979,7 @@
         "height": 17,
         "depth": "truecolor",
         "colors": 98,
-        "description": "Cast-iron cauldron brewing a rainbow candy melt under flickering flames, code glyphs riding the steam, joining SugarCraft x sugar-crush in one pot",
+        "description": "Cast-iron cauldron brewing a rainbow candy melt under flickering flames, code glyphs riding the steam, joining SugarCraft x candy-code in one pot",
         "rating": null,
         "tags": []
     },
@@ -40027,7 +40027,7 @@
         "height": 9,
         "depth": "truecolor",
         "colors": 34,
-        "description": "diagonal candy-stripe ribbon banner in pink/cyan/gold framing \"SugarCraft × sugar-crush\" on a dark plaque with bonbon corners",
+        "description": "diagonal candy-stripe ribbon banner in pink/cyan/gold framing \"SugarCraft × candy-code\" on a dark plaque with bonbon corners",
         "rating": null,
         "tags": []
     },
@@ -40171,7 +40171,7 @@
         "height": 20,
         "depth": "truecolor",
         "colors": 418,
-        "description": "two-armed candy galaxy of pink-to-cyan stars around a white sugar-crystal core with striped bonbon planets and a comet, SugarCraft x sugar-crush banner above",
+        "description": "two-armed candy galaxy of pink-to-cyan stars around a white sugar-crystal core with striped bonbon planets and a comet, SugarCraft x candy-code banner above",
         "rating": null,
         "tags": []
     },
@@ -40387,7 +40387,7 @@
         "height": 18,
         "depth": "truecolor",
         "colors": 72,
-        "description": "Candy dunes at dusk: truecolor violet-to-pink gradient sky with stars over rolling pink dunes, a floating crush terminal window, captions naming SugarCraft's 52 libraries and sugar-crush the code-writing agent",
+        "description": "Candy dunes at dusk: truecolor violet-to-pink gradient sky with stars over rolling pink dunes, a floating crush terminal window, captions naming SugarCraft's 52 libraries and candy-code the code-writing agent",
         "rating": null,
         "tags": []
     },
@@ -40435,7 +40435,7 @@
         "height": 18,
         "depth": "truecolor",
         "colors": 137,
-        "description": "a candy-bokeh night sky with crescent moon, the SugarCraft wordmark in per-letter gradient text over a sugar-crush tagline",
+        "description": "a candy-bokeh night sky with crescent moon, the SugarCraft wordmark in per-letter gradient text over a candy-code tagline",
         "rating": null,
         "tags": []
     },
@@ -40459,7 +40459,7 @@
         "height": 18,
         "depth": "truecolor",
         "colors": 194,
-        "description": "a sweetshop signboard on a wood wall: SUGARCRAFT in rainbow blocks, three concentric-ring jawbreaker jars on a shelf, sugar-crush the agent behind the counter",
+        "description": "a sweetshop signboard on a wood wall: SUGARCRAFT in rainbow blocks, three concentric-ring jawbreaker jars on a shelf, candy-code the agent behind the counter",
         "rating": null,
         "tags": []
     },
@@ -40495,7 +40495,7 @@
         "height": 16,
         "depth": "truecolor",
         "colors": 189,
-        "description": "molten sugar poured from a glowing stream into a six-hue spectrum ribbon, CARAMEL headline with sugar-craft / sugar-crush captions",
+        "description": "molten sugar poured from a glowing stream into a six-hue spectrum ribbon, CARAMEL headline with sugar-craft / candy-code captions",
         "rating": null,
         "tags": []
     },
@@ -40507,7 +40507,7 @@
         "height": 12,
         "depth": "truecolor",
         "colors": 660,
-        "description": "candy floss field - truecolor spun-sugar haze with sugarcraft pressed into the fluff and sugar-crush glowing through",
+        "description": "candy floss field - truecolor spun-sugar haze with sugarcraft pressed into the fluff and candy-code glowing through",
         "rating": null,
         "tags": []
     },
@@ -40531,7 +40531,7 @@
         "height": 14,
         "depth": "truecolor",
         "colors": 37,
-        "description": "SugarCraft + sugar-crush - an oreo moon with a bite taken, over a midnight sky with gold-blue block letters",
+        "description": "SugarCraft + candy-code - an oreo moon with a bite taken, over a midnight sky with gold-blue block letters",
         "rating": null,
         "tags": []
     },
@@ -40603,7 +40603,7 @@
         "height": 18,
         "depth": "truecolor",
         "colors": 32,
-        "description": "a swirl lollipop woven with code glyphs on a stick, beside a flavour.txt tag naming sugar-crush and SUGARCRAFT",
+        "description": "a swirl lollipop woven with code glyphs on a stick, beside a flavour.txt tag naming candy-code and SUGARCRAFT",
         "rating": null,
         "tags": []
     },
@@ -40759,7 +40759,7 @@
         "height": 15,
         "depth": "truecolor",
         "colors": 101,
-        "description": "moonlit terminal night sky: candy moon, sugar-dust stars, moonstone-gradient SUGARCRAFT lettering above a SugarCraft x sugar-crush caption",
+        "description": "moonlit terminal night sky: candy moon, sugar-dust stars, moonstone-gradient SUGARCRAFT lettering above a SugarCraft x candy-code caption",
         "rating": null,
         "tags": []
     },
@@ -40783,7 +40783,7 @@
         "height": 20,
         "depth": "truecolor",
         "colors": 135,
-        "description": "SUGAR sculpted from glowing blocks in a truecolor rain of PHP glyphs, puddles below, \"SugarCraft × sugar-crush\" caption",
+        "description": "SUGAR sculpted from glowing blocks in a truecolor rain of PHP glyphs, puddles below, \"SugarCraft × candy-code\" caption",
         "rating": null,
         "tags": []
     },
@@ -40795,7 +40795,7 @@
         "height": 18,
         "depth": "truecolor",
         "colors": 122,
-        "description": "neon SUGAR/CRAFT sign over a candy-shop storefront at night, crescent moon, lit windows, \"open · sugar-crush on the grill\" caption",
+        "description": "neon SUGAR/CRAFT sign over a candy-shop storefront at night, crescent moon, lit windows, \"open · candy-code on the grill\" caption",
         "rating": null,
         "tags": []
     },
@@ -40927,7 +40927,7 @@
         "height": 15,
         "depth": "truecolor",
         "colors": 43,
-        "description": "Dusk-pink candy skyline: snow settles on sugar-confection factories with lit yellow windows and chimney smoke, stars above, letter-spaced SUGAR CRAFT / sugar-crush captions",
+        "description": "Dusk-pink candy skyline: snow settles on sugar-confection factories with lit yellow windows and chimney smoke, stars above, letter-spaced SUGAR CRAFT / candy-code captions",
         "rating": null,
         "tags": []
     },
@@ -40951,7 +40951,7 @@
         "height": 13,
         "depth": "truecolor",
         "colors": 24,
-        "description": "A terminal window titled sugarcraft x sweetshop framing a two-row shelf of 16 candy-colored library tiles, a composer require line, and a sugar-crush agent session mid-task",
+        "description": "A terminal window titled sugarcraft x sweetshop framing a two-row shelf of 16 candy-colored library tiles, a composer require line, and a candy-code agent session mid-task",
         "rating": null,
         "tags": []
     },
@@ -40963,7 +40963,7 @@
         "height": 16,
         "depth": "truecolor",
         "colors": 225,
-        "description": "candy-rainbow night arch over chocolate sprinkle hills with glowing moon, a comet trailing sugar-crush, and SUGARCRAFT neon logo",
+        "description": "candy-rainbow night arch over chocolate sprinkle hills with glowing moon, a comet trailing candy-code, and SUGARCRAFT neon logo",
         "rating": null,
         "tags": []
     },
@@ -41047,7 +41047,7 @@
         "height": 20,
         "depth": "truecolor",
         "colors": 250,
-        "description": "vaporwave slit-sun setting over a neon perspective grid with horizon bleed, cyan-white-magenta \"SugarCraft\" above and magenta \"sugar-crush\" on the grid floor, \"ride the neon sugar wave\" tagline",
+        "description": "vaporwave slit-sun setting over a neon perspective grid with horizon bleed, cyan-white-magenta \"SugarCraft\" above and magenta \"candy-code\" on the grid floor, \"ride the neon sugar wave\" tagline",
         "rating": null,
         "tags": []
     },
@@ -41059,7 +41059,7 @@
         "height": 18,
         "depth": "truecolor",
         "colors": 415,
-        "description": "two lit wooden shelves of rainbow candy jars and bottles in a dark sweetshop with spilled candy dots, amber gradient \"The SugarCraft sweetshop\" title and \"sugar-crush shops here - 52 jars on the shelf\" caption",
+        "description": "two lit wooden shelves of rainbow candy jars and bottles in a dark sweetshop with spilled candy dots, amber gradient \"The SugarCraft sweetshop\" title and \"candy-code shops here - 52 jars on the shelf\" caption",
         "rating": null,
         "tags": []
     },

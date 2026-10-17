@@ -41,7 +41,7 @@ Source: ai/sugar-constraints-solver-deprecate
 - **GreedySolver NOT reused.** Dock columns/rows are pure rational arithmetic
   (floor + residual-to-last); routing through constraint objects would add
   indirection with no expressive gain. Region is reused as the sole geometry VO.
-- **Rational shares [num,denom]** echo sugar-crush Tui/SplitLayout in prose,
+- **Rational shares [num,denom]** echo candy-code Tui/SplitLayout in prose,
   not dependency. The 1/2 pair ceiling is a *mutator policy* of
   withColumnShare() (clamps, never throws) — deliberately NOT a state
   invariant, because new()-thirds (1/3+1/3 = 2/3 > 1/2) and verbatim

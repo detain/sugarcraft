@@ -6,14 +6,14 @@ declare(strict_types=1);
  * Child-lifetime accounting across every library in the monorepo.
  *
  * WHY THIS SCRIPT EXISTS (E486, closing E448). The canonical instrument for
- * this question is `sugar-crush/tests/Support/ChildLifetimeScanner.php`, and
- * the canonical gate that runs it is sugar-crush's
+ * this question is `candy-code/tests/Support/ChildLifetimeScanner.php`, and
+ * the canonical gate that runs it is candy-code's
  * `DescriptorInheritanceGuardTest`. Both were built to answer "what does a
- * sugar-crush child inherit", so both read through `vendor/sugarcraft` — the
- * eighteen libraries sugar-crush actually requires. That reach is correct for
+ * candy-code child inherit", so both read through `vendor/sugarcraft` — the
+ * eighteen libraries candy-code actually requires. That reach is correct for
  * the question it answers and it is NOT the whole tree: E448 measured three
  * long-lived exposed spawns (`sugar-dashboard` ExternalModule, `sugar-video`
- * AudioPlayer and FfmpegDecoder) sitting in libraries no sugar-crush test can
+ * AudioPlayer and FfmpegDecoder) sitting in libraries no candy-code test can
  * see, where a new one could appear, move, or multiply with nothing saying
  * so. The filed options were to promote the scanner into `sugar-testing` or
  * copy the guard into each lib; E486 measured both as weaker — promotion
@@ -45,11 +45,11 @@ declare(strict_types=1);
  * WHAT IS IN SCOPE. Every first-level directory that carries a
  * `composer.json` with an `autoload` section — a lib's REAL autoload roots
  * (psr-4, classmap, files), read from its manifest exactly the way
- * sugar-crush's guard reads them, never an assumed `src/`. `autoload-dev` is
+ * candy-code's guard reads them, never an assumed `src/`. `autoload-dev` is
  * deliberately not read for the same stated reason the guard gives: Composer
  * registers it for the root package only, so a lib's own tests are
  * unreachables for inheritance purposes and scanning them would only measure
- * fixtures. `sugar-crush` itself is excluded: its guard owns those sites,
+ * fixtures. `candy-code` itself is excluded: its guard owns those sites,
  * holds local fix authority over them, and a second verdict on the same code
  * is how two rosters drift apart.
  *
@@ -67,7 +67,7 @@ declare(strict_types=1);
  *
  * WHAT A ROW MEANS, per kind (rule 7 — this is the judgement record, not an
  * exemption list): for the two `sugar-pty` rows and the `sugar-core` row, the
- * same REPORT sugar-crush's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
+ * same REPORT candy-code's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
  * a package this repo's CI does not own, so the row buys visibility, not
  * silence. For the three `sugar-dashboard`/`sugar-video` rows, E366 shipped a
  * bounded TERM→KILL reap ladder at each site's teardown in this same round,
@@ -84,16 +84,16 @@ declare(strict_types=1);
  *     2  fatal (bad --root, unreadable manifest)
  */
 
-use SugarCraft\Crush\Tests\Support\ChildLifetimeScanner;
+use SugarCraft\Code\Tests\Support\ChildLifetimeScanner;
 
-require_once __DIR__ . '/../sugar-crush/tests/Support/TokenFunctionRanges.php';
+require_once __DIR__ . '/../candy-code/tests/Support/TokenFunctionRanges.php';
 // Required BEFORE the scanner: its class body declares `use
 // SplitsTopLevelArgumentsTrait` (E174), same namespace, no import — with no
 // autoloader here, the trait must already be declared or the scanner file
 // fatals at declaration time. Keep this list in sync with the scanner's
 // trait graph; see the class doc-block above for why.
-require_once __DIR__ . '/../sugar-crush/tests/Support/SplitsTopLevelArgumentsTrait.php';
-require_once __DIR__ . '/../sugar-crush/tests/Support/ChildLifetimeScanner.php';
+require_once __DIR__ . '/../candy-code/tests/Support/SplitsTopLevelArgumentsTrait.php';
+require_once __DIR__ . '/../candy-code/tests/Support/ChildLifetimeScanner.php';
 
 final class CheckChildLifetimes
 {
@@ -111,21 +111,21 @@ final class CheckChildLifetimes
             'reason' => 'pool worker held in $this->workers and drained from the ReactPHP loop, '
                 . 'so it outlives spawnWorker() by design; the scanner reads it as UNCLASSIFIED '
                 . 'because the handle goes to is_resource() first. Spec is 0,1,2 only. Same site '
-                . 'sugar-crush\'s ACCOUNTED_FOR_IN_LIBS reports — sugar-core owns the fix.',
+                . 'candy-code\'s ACCOUNTED_FOR_IN_LIBS reports — sugar-core owns the fix.',
         ],
         'sugar-pty/src/Spawn.php::proc' => [
             'count' => 1,
             'reason' => 'the PTY child, whose three stdio descriptors are all the one open slave '
                 . 'stream; the handle is kept for the life of the pty, so silence above fd 2 is '
                 . 'the shape of the library, not an oversight in it. Report row — NOT FIXABLE '
-                . 'FROM REPO GUARD; mirrors sugar-crush\'s ACCOUNTED_FOR_IN_LIBS.',
+                . 'FROM REPO GUARD; mirrors candy-code\'s ACCOUNTED_FOR_IN_LIBS.',
         ],
         'sugar-pty/src/Posix/PosixProcess.php::spawn' => [
             'count' => 1,
             'reason' => 'the same shape one layer down: the spec names fd 0 as a file and routes '
                 . '1 and 2 to pipes or the real STDOUT/STDERR — the author thought about '
                 . 'descriptors and still says nothing about 3+. Report row — NOT FIXABLE FROM '
-                . 'REPO GUARD; mirrors sugar-crush\'s ACCOUNTED_FOR_IN_LIBS.',
+                . 'REPO GUARD; mirrors candy-code\'s ACCOUNTED_FOR_IN_LIBS.',
         ],
         'sugar-dashboard/src/Plugin/ExternalModule.php::startProcess' => [
             'count' => 1,
@@ -295,7 +295,7 @@ final class CheckChildLifetimes
 
     /**
      * First-level directories that are libraries: a composer.json with an
-     * autoload section. sugar-crush is skipped — its own guard owns it
+     * autoload section. candy-code is skipped — its own guard owns it
      * (see the class doc-block) — and skipping it is stated, not defaulted.
      *
      * @return list<string> sorted
@@ -309,7 +309,7 @@ final class CheckChildLifetimes
             }
 
             if (
-                $entry === 'sugar-crush'
+                $entry === 'candy-code'
                 || !is_dir("$root/$entry")
                 || !is_file("$root/$entry/composer.json")
             ) {

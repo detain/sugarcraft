@@ -1,0 +1,472 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Tui;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Code\App\App;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Providers\ReportsServedModel;
+use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\Tui\Renderer;
+use SugarCraft\Style\Bar\Segment;
+use SugarCraft\Style\Bar\StatusBar as BarStatusBar;
+use SugarCraft\Style\Style;
+
+/**
+ * @see Renderer
+ * @see Renderer::setSize()
+ * @see Renderer::getTerminalSize()
+ * @see Renderer::resetSizeCache()
+ * @see Renderer::render()
+ */
+final class RendererTest extends TestCase
+{
+    private ProviderInterface $provider;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Reset the static cache before each test to prevent cross-test pollution
+        Renderer::resetSizeCache();
+
+        // Create a mock provider with a known name
+        $this->provider = $this->createMock(ProviderInterface::class);
+        $this->provider->method('name')->willReturn('TestProvider');
+    }
+
+    protected function tearDown(): void
+    {
+        Renderer::resetSizeCache();
+        parent::tearDown();
+    }
+
+    /**
+     * @return array{0: App, 1: int, 1: int}
+     */
+    private function makeAppWithSize(int $cols = 120, int $rows = 40): array
+    {
+        Renderer::setSize($cols, $rows);
+        $app = App::new($this->provider, 'test-model');
+        return [$app, $cols, $rows];
+    }
+
+    // =========================================================================
+    // Renderer::setSize() Tests
+    // =========================================================================
+
+    public function testSetSizeSetsTerminalSizeCorrectly(): void
+    {
+        Renderer::setSize(100, 50);
+
+        $size = Renderer::getTerminalSize();
+
+        $this->assertSame(50, $size['rows']);
+        $this->assertSame(100, $size['cols']);
+    }
+
+    public function testSetSizeWithValidPositiveValues(): void
+    {
+        Renderer::setSize(80, 24);
+
+        $size = Renderer::getTerminalSize();
+
+        $this->assertSame(24, $size['rows']);
+        $this->assertSame(80, $size['cols']);
+    }
+
+    public function testSetSizeIgnoresZeroColumns(): void
+    {
+        Renderer::resetSizeCache();
+        // Set a valid size first
+        Renderer::setSize(100, 50);
+
+        // Try to set with zero columns - should be ignored
+        Renderer::setSize(0, 30);
+
+        $size = Renderer::getTerminalSize();
+        // Should still be the previous valid size (100x50)
+        $this->assertSame(50, $size['rows']);
+        $this->assertSame(100, $size['cols']);
+    }
+
+    public function testSetSizeIgnoresZeroRows(): void
+    {
+        Renderer::resetSizeCache();
+        Renderer::setSize(100, 50);
+
+        // Try to set with zero rows - should be ignored
+        Renderer::setSize(100, 0);
+
+        $size = Renderer::getTerminalSize();
+        // Should still be the previous valid size (100x50)
+        $this->assertSame(50, $size['rows']);
+        $this->assertSame(100, $size['cols']);
+    }
+
+    public function testSetSizeIgnoresNegativeValues(): void
+    {
+        Renderer::resetSizeCache();
+        Renderer::setSize(100, 50);
+
+        // Try to set with negative values - should be ignored
+        Renderer::setSize(-10, 30);
+        Renderer::setSize(100, -5);
+
+        $size = Renderer::getTerminalSize();
+        // Should still be the previous valid size (100x50)
+        $this->assertSame(50, $size['rows']);
+        $this->assertSame(100, $size['cols']);
+    }
+
+    // =========================================================================
+    // Renderer::getTerminalSize() Tests
+    // =========================================================================
+
+    public function testGetTerminalSizeReturnsCachedSize(): void
+    {
+        Renderer::setSize(150, 60);
+
+        // First call
+        $size1 = Renderer::getTerminalSize();
+        // Second call - should return cached value
+        $size2 = Renderer::getTerminalSize();
+
+        $this->assertSame($size1, $size2);
+        $this->assertSame(60, $size1['rows']);
+        $this->assertSame(150, $size1['cols']);
+    }
+
+    public function testGetTerminalSizeWithNoCacheFallsBackToDefaults(): void
+    {
+        // No setSize() call, so it will try to get from Tty and fall back to defaults
+        // We can't reliably test Tty failure, but we can verify the method returns an array
+        $size = Renderer::getTerminalSize();
+
+        $this->assertIsArray($size);
+        $this->assertArrayHasKey('rows', $size);
+        $this->assertArrayHasKey('cols', $size);
+        $this->assertGreaterThan(0, $size['rows']);
+        $this->assertGreaterThan(0, $size['cols']);
+    }
+
+    // =========================================================================
+    // Renderer::resetSizeCache() Tests
+    // =========================================================================
+
+    public function testResetSizeCacheClearsTheCache(): void
+    {
+        // Set a size to populate cache
+        Renderer::setSize(120, 40);
+        $this->assertSame(40, Renderer::getTerminalSize()['rows']);
+
+        // Reset the cache
+        Renderer::resetSizeCache();
+
+        // Cache is cleared, next getTerminalSize() will try to get fresh size
+        // Since we cleared it, the next call should either get from Tty or default
+        // We just verify the cache is null after reset by checking that a new setSize works
+        Renderer::setSize(200, 80);
+        $size = Renderer::getTerminalSize();
+        $this->assertSame(80, $size['rows']);
+        $this->assertSame(200, $size['cols']);
+    }
+
+    public function testResetSizeCacheAllowsFreshSizeAfterCache(): void
+    {
+        // First, cache a size
+        Renderer::setSize(100, 50);
+        $this->assertSame(50, Renderer::getTerminalSize()['rows']);
+
+        // Reset and set new size
+        Renderer::resetSizeCache();
+        Renderer::setSize(200, 100);
+
+        $size = Renderer::getTerminalSize();
+        $this->assertSame(100, $size['rows']);
+        $this->assertSame(200, $size['cols']);
+    }
+
+    // =========================================================================
+    // Renderer::render() Tests
+    // =========================================================================
+
+    public function testRenderProducesNonEmptyString(): void
+    {
+        [$app] = $this->makeAppWithSize(120, 40);
+
+        $output = Renderer::render($app);
+
+        $this->assertIsString($output);
+        $this->assertNotEmpty($output);
+    }
+
+    public function testRenderOutputContainsProviderName(): void
+    {
+        [$app] = $this->makeAppWithSize(120, 40);
+
+        $output = Renderer::render($app);
+
+        $this->assertStringContainsString('TestProvider', $output);
+    }
+
+    public function testRenderOutputContainsModel(): void
+    {
+        [$app] = $this->makeAppWithSize(120, 40);
+
+        $output = Renderer::render($app);
+
+        $this->assertStringContainsString('test-model', $output);
+    }
+
+    public function testRenderOutputContainsPaneLabel(): void
+    {
+        [$app] = $this->makeAppWithSize(120, 40);
+
+        $output = Renderer::render($app);
+
+        // Default pane is Chat
+        $this->assertStringContainsString('Chat', $output);
+    }
+
+    public function testRenderOutputContainsMenuBarTabs(): void
+    {
+        [$app] = $this->makeAppWithSize(120, 40);
+
+        $output = Renderer::render($app);
+
+        // Menu bar should contain these tabs
+        $this->assertStringContainsString('[' . Pane::Chat->icon() . ' Chat]', $output);
+        $this->assertStringContainsString('[' . Pane::Files->icon() . ' Files]', $output);
+        $this->assertStringContainsString('[' . Pane::Tools->icon() . ' Tools]', $output);
+    }
+
+    public function testRenderOutputContainsSwitchPaneHint(): void
+    {
+        [$app] = $this->makeAppWithSize(120, 40);
+
+        $output = Renderer::render($app);
+
+        $this->assertStringContainsString('[Tab] Switch Pane', $output);
+    }
+
+    /**
+     * SELECTING A PANE HAS TO CHANGE THE PANE, not just the caption above it.
+     *
+     * WHAT THIS TEST USED TO BE: `testRenderWithDifferentPaneShowsCorrectLabel()`,
+     * asserting `Skills` and `Currently: Skills` are somewhere in the frame.
+     * Both come from {@see \SugarCraft\Code\Tui\Components\MenuBar}'s caption,
+     * which is painted from `$app->pane` before any pane body is built — so the
+     * whole of {@see Renderer::rightSidebar()} could return `''` for every pane
+     * and the test stayed green. Its NAME promised pane rendering and its body
+     * checked a label, which is worse than having no test at all: a name that
+     * overstates its coverage is what stops the next person looking.
+     *
+     * WHAT IT CHECKS NOW: the pane's own BODY, differentially. `Skills` renders
+     * {@see \SugarCraft\Code\Tui\Components\SkillsPane}, whose empty state
+     * is the string `(no skills enabled)`; `Tools` renders `ToolsPane`, titled
+     * ` tools `. Neither string is in the default `Chat` frame, and asserting
+     * their ABSENCE there is the half that makes the presence assertions mean
+     * something — a needle that also matched the chat frame would be pinning
+     * chrome, which is exactly the defect being fixed.
+     *
+     * The caption assertions are KEPT rather than replaced. They were not wrong,
+     * only insufficient, and the caption is a real claim: it is how a user knows
+     * which pane they are in.
+     *
+     * MEASURED, on PHP 8.3.6: deleting the `Pane::Skills` arm from
+     * `Renderer::rightSidebar()` leaves the old assertions green and reds this
+     * one on `(no skills enabled)`.
+     *
+     * The HOSTED shape — the same question asked of an `App` that is hosting a
+     * live `Chat` — is
+     * {@see \SugarCraft\Code\Tests\App\HostedFrameReadsThePaneTest}'s and is not
+     * duplicated here.
+     */
+    public function testRenderWithADifferentPaneRendersThatPanesBodyAndNotJustItsCaption(): void
+    {
+        Renderer::setSize(120, 40);
+
+        $chat = Renderer::render(App::new($this->provider, 'test-model')->withPane(Pane::Chat));
+        $skills = Renderer::render(App::new($this->provider, 'test-model')->withPane(Pane::Skills));
+        $tools = Renderer::render(App::new($this->provider, 'test-model')->withPane(Pane::Tools));
+
+        // The caption — the original claim, kept.
+        $this->assertStringContainsString('Skills', $skills);
+        $this->assertStringContainsString('Currently: Skills', $skills);
+        $this->assertStringContainsString('Currently: Tools', $tools);
+
+        // The body, and the differential that gives the body assertion its teeth.
+        $this->assertStringContainsString(
+            '(no skills enabled)',
+            $skills,
+            'Pane::Skills renders the caption but not SkillsPane itself',
+        );
+        $this->assertStringNotContainsString(
+            '(no skills enabled)',
+            $chat,
+            'this needle also matches the chat frame, so it pins chrome rather than the pane',
+        );
+
+        // `(tool history empty)` and not ToolsPane's ` tools ` TITLE, which is
+        // what this assertion first used: a title needle carrying its own
+        // padding is a change-detector waiting for a restyle, and it sits one
+        // space away from the bracketed `[icon Tools]` menu-bar caption this test is trying to
+        // distinguish itself from. The empty-state string is body content, has
+        // no whitespace contract, and mirrors `(no skills enabled)` above.
+        $this->assertStringContainsString(
+            '(tool history empty)',
+            $tools,
+            'Pane::Tools renders the caption but not ToolsPane itself',
+        );
+        $this->assertStringNotContainsString(
+            '(tool history empty)',
+            $chat,
+            'this needle also matches the chat frame, so it pins chrome rather than the pane',
+        );
+    }
+
+    public function testRenderWithErrorShowsErrorInStatusBar(): void
+    {
+        Renderer::setSize(120, 40);
+        $app = App::new($this->provider, 'test-model')->withError('Something went wrong');
+
+        $output = Renderer::render($app);
+
+        $this->assertStringContainsString('error:', $output);
+        $this->assertStringContainsString('Something went wrong', $output);
+    }
+
+    public function testRenderWithStatusShowsStatusInStatusBar(): void
+    {
+        Renderer::setSize(120, 40);
+        $app = App::new($this->provider, 'test-model')->withStatus('Processing...');
+
+        $output = Renderer::render($app);
+
+        $this->assertStringContainsString('Processing...', $output);
+    }
+
+    // =========================================================================
+    // Renderer::statusBar() migration onto Sprinkles\Bar\StatusBar
+    //
+    // The live status bar was migrated off a hand-rolled string concat onto the
+    // shared SugarCraft\Style\Bar\StatusBar primitive (the same one behind
+    // sugar-dashboard / sugar-quickpick). These tests lock BOTH facets: (1) byte-parity
+    // with the previous hand-rolled output for every populated case, and (2)
+    // that the bytes are genuinely produced by the primitive with the expected
+    // segment structure — so the migration is real, not just visually equal.
+    // =========================================================================
+
+    /** Invoke the private static statusBar() for exact-byte assertions. */
+    private static function statusBar(App $app): string
+    {
+        $m = new \ReflectionMethod(Renderer::class, 'statusBar');
+        $m->setAccessible(true);
+
+        return (string) $m->invoke(null, $app);
+    }
+
+    /**
+     * Status case: byte-identical to the pre-migration hand-rolled template
+     * `" $provider | $model | [Tab] Switch Pane | $status"` with the crush
+     * colours. Reverting to the hand-rolled concat would keep this green only
+     * because the migration reproduces the exact same bytes — which is the point.
+     *
+     * The three colours are now read off the App's own {@see Theme} rather than
+     * written as hex: the legacy literals (#9ece6a/#e0af68/#f7768e) were
+     * tokyoNight's success/warning/error, so hardcoding them here would assert
+     * that the status bar ignores `/theme` — which was the W3 bug.
+     */
+    public function testStatusBarStatusCaseIsByteIdenticalToLegacy(): void
+    {
+        $app = App::new($this->provider, 'test-model')->withStatus('Working');
+
+        $legacy = ' '
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
+            . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
+            . ' | [Tab] Switch Pane | '
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('Working');
+
+        $this->assertSame($legacy, self::statusBar($app));
+    }
+
+    /**
+     * Error case: byte-identical to the legacy template, error styled red+bold
+     * and taking precedence over any status.
+     */
+    public function testStatusBarErrorCaseIsByteIdenticalToLegacy(): void
+    {
+        $app = App::new($this->provider, 'test-model')->withError('Boom')->withStatus('ignored');
+
+        $legacy = ' '
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
+            . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
+            . ' | [Tab] Switch Pane | '
+            . Style::new()->foreground($app->theme()->shellError)->bold()->render('error: Boom');
+
+        $this->assertSame($legacy, self::statusBar($app));
+        $this->assertStringNotContainsString('ignored', self::statusBar($app));
+    }
+
+    /**
+     * Audit 15b-35: a provider that talks to a model other than its configured
+     * id — SGLang's default id adopting the served model — is labelled with
+     * the model requests actually go to, not the static default.
+     */
+    public function testStatusBarNamesTheServedModelOverTheConfiguredId(): void
+    {
+        $served = $this->createMockForIntersectionOfInterfaces([ProviderInterface::class, ReportsServedModel::class]);
+        $served->method('name')->willReturn('sglang');
+        $served->method('servedModel')->willReturn('Qwen/Qwen3.8-Served');
+
+        $bar = self::statusBar(App::new($served, 'static-default-id'));
+
+        $this->assertStringContainsString('Qwen/Qwen3.8-Served', $bar);
+        $this->assertStringNotContainsString('static-default-id', $bar);
+    }
+
+    /**
+     * Proves the migration is real: the live bytes are exactly what the shared
+     * primitive emits for the crush segment set (leading-space cap, `' | '`
+     * separator, per-segment colours, `[Tab] Switch Pane` hint segment).
+     */
+    public function testStatusBarBytesAreProducedByTheSprinklesPrimitive(): void
+    {
+        $app = App::new($this->provider, 'test-model')->withStatus('Working');
+
+        $expected = BarStatusBar::new()
+            ->separator(' | ')
+            ->caps(' ', '')
+            ->left(
+                Segment::of('TestProvider', Style::new()->foreground($app->theme()->shellSuccess)),
+                Segment::of('test-model', Style::new()->foreground($app->theme()->shellWarning)),
+                Segment::of('[Tab] Switch Pane'),
+                Segment::of('Working', Style::new()->foreground($app->theme()->shellSuccess)),
+            )
+            ->render();
+
+        $this->assertSame($expected, self::statusBar($app));
+    }
+
+    /**
+     * The one intentional divergence: with neither error nor status, the
+     * primitive skips the empty final segment, so the legacy template's trailing
+     * dangling `' | '` (an empty status slot) is dropped. The visible bytes are
+     * otherwise identical — the bar just ends at `[Tab] Switch Pane`.
+     */
+    public function testStatusBarDefaultCaseDropsLegacyTrailingSeparator(): void
+    {
+        $app = App::new($this->provider, 'test-model');
+
+        $legacy = ' '
+            . Style::new()->foreground($app->theme()->shellSuccess)->render('TestProvider')
+            . ' | ' . Style::new()->foreground($app->theme()->shellWarning)->render('test-model')
+            . ' | [Tab] Switch Pane | ';
+
+        // New output == legacy minus the trailing 3-byte ' | ' dangling separator.
+        $this->assertSame(substr($legacy, 0, -3), self::statusBar($app));
+    }
+}

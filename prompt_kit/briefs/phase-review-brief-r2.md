@@ -11,8 +11,8 @@ tests could leave, verify `git -C <worktree> status --porcelain` prints nothing 
 Worktree `/home/sites/prompt-step-P3.CLOSE-r2`, branch `prompt/P3.CLOSE-r2`, HEAD `470e43569`
 (= current master tip). `git status --porcelain` must be EMPTY when you start — verify it first.
 vendor/ is a hardlinked copy (`cp -al`); PSR-4 verified to print the WORKTREE paths:
-`SugarCraft\Crush\ => /home/sites/prompt-step-P3.CLOSE-r2/sugar-crush/src` and
-`SugarCraft\Crush\Tests\ => .../tests`. NEVER run `composer install` here — it de-symlinks/
+`SugarCraft\Code\ => /home/sites/prompt-step-P3.CLOSE-r2/candy-code/src` and
+`SugarCraft\Code\Tests\ => .../tests`. NEVER run `composer install` here — it de-symlinks/
 replaces vendor and breaks the sandbox.
 
 ## Your scratchpad
@@ -40,7 +40,7 @@ replaces vendor and breaks the sandbox.
 - §17 (3274+) invariants; §18 (3461+) deliberately-not-built.
 
 ## The change-set
-`git -C /home/sites/sugarcraft diff 924c71a0d..470e43569 -- sugar-crush/` =
+`git -C /home/sites/sugarcraft diff 924c71a0d..470e43569 -- candy-code/` =
 **27 files changed, 19,768 insertions(+), 598 deletions(-)** — re-derived 2026-09-01. If your
 number differs, the tree moved: report that BEFORE reviewing anything.
 
@@ -87,19 +87,19 @@ yourself. Do not trust any figure in this brief; every one of them is yours to f
 **10,547 tests / 163,710 assertions / 1 skipped** — measured by the orchestrator at `980670c0b`.
 `470e43569` differs from `980670c0b` only under prompt_kit/ and the three prompt_*.md files
 (verify: `git -C /home/sites/sugarcraft diff --stat 980670c0b 470e43569` shows nothing under
-sugar-crush/) — so the figure is claimed to describe your HEAD. Delta vs the never-edited P0.S1
+candy-code/) — so the figure is claimed to describe your HEAD. Delta vs the never-edited P0.S1
 baseline `10351 / 160648 / 1`: **+196 tests, +3,062 assertions**.
 
 ## Census — now DERIVED, and that is the thing to attack
 The guard roster is no longer a hand-maintained nine-file list. `tests/TreeWideGuardRosterTest.php`
-walks every test file under sugar-crush/tests/ and asserts each test that scans src/ or tests/
+walks every test file under candy-code/tests/ and asserts each test that scans src/ or tests/
 wholesale is on the roster. Claimed figures at `980670c0b` (the roster test itself: 16 tests,
 1,082 assertions, green in this sandbox): **roster 67 guards, candidates 83, walker files 181,
 test files 440, unaccounted 0**. Your census duty is to attack THE DERIVATION: what kind of
 tree-wide guard could escape the walker's recognition — a guard that builds its file list through
 a helper, a differently-spelled scan, a symlinked directory, a non-.php file, a dynamic glob?
 The old nine-file census set survives as an ASSERTED subset; as a pre-check expect
-`OK (176 tests, 31245 assertions)` (cwd: the sandbox's sugar-crush/).
+`OK (176 tests, 31245 assertions)` (cwd: the sandbox's candy-code/).
 
 ## Claims to attack (MEASURE each; a failed claim IS a finding)
 1. **Goldens.** `tests/fixtures/prompt/golden-system-prompt.txt` md5
@@ -108,7 +108,7 @@ The old nine-file census set survives as an ASSERTED subset; as a pre-check expe
    of Phase 3 the system golden moved 3 times and the agent golden 2 times, each claimed legit:
    P3.S1 and P3.S3 goldens-moving-was-the-point; the third system move was fixture hermeticity
    (`OS version: <host>`) introduced by `33df838d0` (P2.audit-fix-1), NOT P3.S5. Verify with
-   `git log --oneline -- sugar-crush/tests/fixtures/prompt/` plus a look at each move's diff.
+   `git log --oneline -- candy-code/tests/fixtures/prompt/` plus a look at each move's diff.
 2. **Assembly.** `Runtime::buildSystemPrompt()` emits 7 layers into `CompleteRequest::$systemPrompt`;
    all seven providers transmit it; on the golden fixture context assembled == golden == wire bytes
    (measured 5,099 B), `messages[0].role=system`; `<env>` LAST in BOTH assemblers (Runtime and Agent).
@@ -142,7 +142,7 @@ forged via diff bodies — an unstaged edit to any tracked file can inject the c
 by construction since P3.S5 merged; (ii) A6 branch-name raw interpolation (the one git read not
 through `gitField()`). PermissionGate.php:691 hard-codes `'mcp__'` where Runtime reads the
 authority (diverges in the PERMISSIVE direction). ChildStderrCaptureTest.php:199-204 keys
-`'Context/'` by prefix with no count. sugar-crush/phpunit.xml doc comment says 'all 6465 tests'
+`'Context/'` by prefix with no count. candy-code/phpunit.xml doc comment says 'all 6465 tests'
 (stale). TWO SURVIVING MUTATIONS declared in the tree: removing the `closeOverDelegates()` call
 site changes nothing; dropping only the token-class filter in `namesOneOf()` while comparing exact
 token text. F2: `gitSubprocessesDuring()` in AgentTest.php — DuplicatedTestHelperDriftTest

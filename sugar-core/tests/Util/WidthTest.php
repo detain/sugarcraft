@@ -47,7 +47,7 @@ final class WidthTest extends TestCase
      * `isEmojiPresentation()` carries the union and this test carries its
      * edges: both endpoints of every range count 2, the codepoint just
      * outside each boundary still counts 1 (the table may not quietly widen),
-     * and the double-oracle law from the sugar-crush L5 fix holds — where
+     * and the double-oracle law from the candy-code L5 fix holds — where
      * PHP's `mb_strwidth` agrees it corroborates, and the roster rows it
      * lags on are the block-shaped ranges' unassigned tails, never a
      * disagreement against the terminal truth this class exists to model.

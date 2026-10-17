@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { login, logout, ticket, wsUrl } from '../protocol/auth'
-import { SugarCrushClient, type ClientOptions, type ClientStatus, type HelloResult } from '../protocol/client'
+import { CandyCodeClient, type ClientOptions, type ClientStatus, type HelloResult } from '../protocol/client'
 import type { EventEnvelope, MethodName, MethodParams, MethodResult, Subscription } from '../protocol/generated'
 
 export type { ClientStatus as ConnectionStatus }
@@ -77,7 +77,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const canGenerateImage = computed(() => capabilitiesMedia.value?.image === true)
   const canGenerateVideo = computed(() => capabilitiesMedia.value?.video === true)
 
-  let client: SugarCrushClient | null = null
+  let client: CandyCodeClient | null = null
   let overrides: Partial<ClientOptions> = {}
   let scheduler: Scheduler = defaultScheduler
   let queued: EventEnvelope[] = []
@@ -86,7 +86,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const listeners = new Set<(envelope: EventEnvelope) => void>()
   const helloListeners = new Set<(hello: HelloResult) => void>()
 
-  function sync(source: SugarCrushClient): void {
+  function sync(source: CandyCodeClient): void {
     status.value = source.status
     rttMs.value = source.rttMs
     retryAt.value = source.retryAt
@@ -113,9 +113,9 @@ export const useConnectionStore = defineStore('connection', () => {
     }
   }
 
-  function ensureClient(): SugarCrushClient {
+  function ensureClient(): CandyCodeClient {
     if (client !== null) return client
-    const created = new SugarCrushClient({
+    const created = new CandyCodeClient({
       connectUrl: async () => wsUrl(await ticket()),
       client: { name: 'sugar-crush-web', version: __APP_VERSION__, instanceId: instanceId() },
       resume: () => {

@@ -568,16 +568,16 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.28 · PR#797 · candy-ssh-launcher: SSH config import (SshConfigParser + importFromSshConfig + Host* global defaults)
     review for step 10.28 · clean · PR#797
     docs for step 10.28 · PR#798 · README: add import-from-ssh-config section + SSH config mapping table; CALIBER_LEARNINGS: add SSH config parsing patterns
-    step 10.29 · PR#799 · sugar-crush: session persistence (Session.php + withCwd/withSelected/withFilter/withSort/withActivePane)
+    step 10.29 · PR#799 · candy-code: session persistence (Session.php + withCwd/withSelected/withFilter/withSort/withActivePane)
     fix for step 10.29 · PR#800 · resolved 1 major (Session not integrated with Crush model lifecycle) + 2 minor (phpunit.xml missing failOnWarning/cacheDirectory)
     docs for step 10.29 · PR#801 · README: add Session to architecture table + "Session persistence" section; CALIBER_LEARNINGS: new file
-    step 10.30 · PR#802 · sugar-crush: streaming directory listing (Generator-based StreamingDirectoryLister + Compactor for small-file grouping by extension)
+    step 10.30 · PR#802 · candy-code: streaming directory listing (Generator-based StreamingDirectoryLister + Compactor for small-file grouping by extension)
     review for step 10.30 · clean · PR#802
     docs for step 10.30 · PR#803 · README: add StreamingDirectoryLister/Compactor/CompactedGroup to architecture; CALIBER_LEARNINGS: add generator-based directory listing + file compaction patterns
-    step 10.31 · PR#804 · sugar-crush: tools + syntax-aware slash command parsing (CommandParser + ToolRegistry + 5 built-in tools)
+    step 10.31 · PR#804 · candy-code: tools + syntax-aware slash command parsing (CommandParser + ToolRegistry + 5 built-in tools)
     review for step 10.31 · clean · PR#804
     docs for step 10.31 · PR#805 · README: add CommandParser/ToolRegistry/Tool/ToolSignature/ToolCall/ToolResult to architecture table; CALIBER_LEARNINGS: add slash-command parsing + tool registry patterns
-    step 10.32 · PR#806 · sugar-crush: MCP client (McpClient + McpMessage JSON-RPC 2.0 + tools/list + tools/call + stdio transport)
+    step 10.32 · PR#806 · candy-code: MCP client (McpClient + McpMessage JSON-RPC 2.0 + tools/list + tools/call + stdio transport)
     fix for step 10.32 · PR#807 · resolved 1 critical (proc_get_status pipes not accessible on Linux) + 1 minor (unused constructor param)
     docs for step 10.32 · PR#808 · README: add McpMessage/McpClient to architecture table; CALIBER_LEARNINGS: add MCP client patterns
     step 10.33 · PR#809 · candy-git-server: OSC 52 clipboard (Osc52.php) + HTTP smart protocol server (HttpSmartProtocol/Server.php)

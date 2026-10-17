@@ -6,7 +6,7 @@ import { useLayoutStore } from '../../stores/layout'
 import { useSessionsStore } from '../../stores/sessions'
 import { useSettingsStore } from '../../stores/settings'
 
-const BRAND = 'SugarCrush'
+const BRAND = 'CandyCode'
 
 /** Statuses a session is "working" in; leaving them for `idle` is a finished turn. */
 const WORKING = new Set(['busy', 'waiting_permission'])
@@ -26,7 +26,7 @@ export interface AttentionOptions {
 
 /**
  * The attention model (Appendix O §7.4): the tab title counts the open
- * questions — `(2) SugarCrush` — and, when the viewer turned notifications
+ * questions — `(2) CandyCode` — and, when the viewer turned notifications
  * on, the browser says so when
  * - a question arrives in a session that is not on screen, or while the page
  *   is out of sight;

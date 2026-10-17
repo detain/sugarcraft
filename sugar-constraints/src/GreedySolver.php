@@ -147,7 +147,7 @@ final class GreedySolver implements LayoutSolver
      * (`$totalWidth * $c->n / 100`, `... * $c->numerator / $c->denominator`), so
      * the same inputs always yield the same cell widths on every build; the
      * floor-vs-round POLICY is the only divergence, and it is chosen solely by
-     * this flag (opt-in — sugar-crush never enables it, its path is floor-only).
+     * this flag (opt-in — candy-code never enables it, its path is floor-only).
      * Pinned by WidthSumInvariantSweepTest::testRoundSplitRoundsHalfAwayFromZero.
      */
     public function withRoundSplit(bool $on = true): self

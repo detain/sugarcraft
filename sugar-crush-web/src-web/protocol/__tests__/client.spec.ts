@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FakeSocket, FakeTimers, flush, helloResult } from '../../__tests__/fakes'
 import { AuthError } from '../auth'
-import { SugarCrushClient } from '../client'
+import { CandyCodeClient } from '../client'
 import type { EventEnvelope } from '../generated'
 import { ProtocolError } from '../jsonrpc'
 import { Backoff } from '../reconnect'
@@ -9,7 +9,7 @@ import { Backoff } from '../reconnect'
 function harness(options: { resume?: () => Record<string, number>; connectUrl?: () => Promise<string> } = {}) {
   const sockets: FakeSocket[] = []
   const timers = new FakeTimers()
-  const client = new SugarCrushClient({
+  const client = new CandyCodeClient({
     connectUrl: options.connectUrl ?? (async () => `ws://x/ws?ticket=t${sockets.length + 1}`),
     socket: (url, protocols) => {
       const socket = new FakeSocket(url, protocols)
@@ -33,12 +33,12 @@ function harness(options: { resume?: () => Record<string, number>; connectUrl?: 
   return { client, sockets, timers, socket, handshake }
 }
 
-describe('SugarCrushClient', () => {
-  it('offers the sugarcrush.v1 subprotocol and opens with server.hello carrying the resume cursors', async () => {
+describe('CandyCodeClient', () => {
+  it('offers the candy-code.v1 subprotocol and opens with server.hello carrying the resume cursors', async () => {
     const { client, socket } = harness({ resume: () => ({ s1: 42 }) })
     client.start()
     await flush()
-    expect(socket().protocols).toEqual(['sugarcrush.v1'])
+    expect(socket().protocols).toEqual(['candy-code.v1'])
     expect(socket().url).toBe('ws://x/ws?ticket=t1')
     socket().open()
     const hello = socket().last()

@@ -10,7 +10,7 @@ namespace SugarCraft\Diff;
  * The backing values are the source implementation's op tags so a reader
  * holding legacy `['eq'|'del'|'ins']` tuples maps onto them without a table.
  *
- * Mirrors the op vocabulary of sugar-crush/src/Tools/Concerns/BuildsUnifiedDiff.php.
+ * Mirrors the op vocabulary of candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php.
  */
 enum LineKind: string
 {

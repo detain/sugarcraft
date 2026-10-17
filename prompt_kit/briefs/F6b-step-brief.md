@@ -24,7 +24,7 @@ each coherent change (never leave work uncommitted).
 Full suite (cwd checkout root, serial, </dev/null, box-quiet probe
 `ps -eo cmd | /usr/bin/grep -c '^php .*phpunit'` = 0): Tests 10644 / Assertions 165010
 (MMG-198 arm; 165013 at the 201 arm — never adjudicate the 3 by headline) / Skipped 1 / 0 fail.
-Nine-file census (cwd sugar-crush/): OK 176 / 31461. Roster derivation 67/83/181/440/0,
+Nine-file census (cwd candy-code/): OK 176 / 31461. Roster derivation 67/83/181/440/0,
 roster file 17/1101 — YOU ADD NO FILES, so any move is itself a finding. Goldens
 32ea749d84938811ac9331419cae7380 / ef0326dd38535aaa2f1d715919bff26e must stay byte-identical.
 Path-repo gate FROM REPO ROOT: php tools/check-path-repos.php --no-lib-path-repos -> exit 0.
@@ -32,15 +32,15 @@ Path-repo gate FROM REPO ROOT: php tools/check-path-repos.php --no-lib-path-repo
 ## Scope — all numbers below are AS-RECORDED and EXPECTED-ROTTED; re-derive each by
 ## CONTENT-GREP at your tip, never by arithmetic from the record. Cite by function/table
 ## NAME plus line number wherever possible (the durable form).
-1. sugar-crush/tests/RuntimeTest.php — a comment/assertSame-message region (~:6929-6942 as
+1. candy-code/tests/RuntimeTest.php — a comment/assertSame-message region (~:6929-6942 as
    recorded) carries self-citations into the same file: a ":4001-4003" range pointing at the
    write-primitive blind-spot table, a ":3921" citation, and a list ":4931/:4967/:5156"
    recorded as pre-rotted (targets are the "php -l clean and RUN" doctrine sites ~:4958/:4986,
    :5022, :5211 at last derivation). ONE of these sits inside an assertSame() MESSAGE STRING
    — treat it as a disclosed string change, not a comment. Verify each target by reading it.
-2. sugar-crush/src/Providers/VertexProvider.php ~:331-332 docblock quotes pre-P4.S2 emit
+2. candy-code/src/Providers/VertexProvider.php ~:331-332 docblock quotes pre-P4.S2 emit
    literals that no longer match what the code emits. Comment-only refresh.
-3. sugar-crush/tests/Providers/ProviderRequestResponseTest.php ~:46 and ~:686 cite
+3. candy-code/tests/Providers/ProviderRequestResponseTest.php ~:46 and ~:686 cite
    VertexProvider.php:904-919 for the usage-event reads; the truth (last measured) is the
    reads now live ~:1006-1019. Comment-only refresh.
 4. prompt_plan.md:1606 and the §18 escalation row (~:3480) cite WorkflowEngine loop lines
@@ -54,13 +54,13 @@ Path-repo gate FROM REPO ROOT: php tools/check-path-repos.php --no-lib-path-repo
   significant-stream ELEMENTWISE identity (strip T_COMMENT/T_DOC_COMMENT/T_WHITESPACE) —
   paste the comparison output into your report — plus php -l clean.
 - KEEP per-file LINE COUNTS UNCHANGED (a census-scanned file's line count moves
-  GlobFigureDriftTest; replace lines in place, never add/delete lines in sugar-crush files).
+  GlobFigureDriftTest; replace lines in place, never add/delete lines in candy-code files).
 - NEVER weaken/skip/rename/delete a test; §1.10: touch no dormant code logic.
 - For each refreshed citation, paste the target line(s) as evidence the new numbers hit.
 - Scratchpad: ONLY /home/sites/prompt-scratch/F6b/lead/ for your files; private backups
   inside it; rm -rf never outside it. No git init/config outside the sandbox scratchpad.
 
-## Verify before finishing (cwd sugar-crush unless noted; serial; </dev/null)
+## Verify before finishing (cwd candy-code unless noted; serial; </dev/null)
 vendor/bin/phpunit tests/RuntimeTest.php; tests/Providers/ProviderRequestResponseTest.php;
 tests/Providers/VertexProviderTest.php; tests/SymbolCitationDriftTest.php; then the nine-file
 census set; expect figures equal to base (line counts unchanged) or explained in the SAME

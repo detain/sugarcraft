@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * Non-spawning transport pins lifted from sugar-crush/tests/MCP:
+ * Non-spawning transport pins lifted from candy-code/tests/MCP:
  * construction coercion, idle-state shapes, the parseTools guard matrix
  * (via reflection, as in the product suite), and the frame-cap refusal pair.
  */

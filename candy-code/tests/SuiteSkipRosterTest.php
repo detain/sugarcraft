@@ -1,0 +1,1164 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests;
+
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Integration\LiveSglangSmokeTest;
+use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
+use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
+
+/**
+ * {@see SuiteSkipRoster} -- the assertion that this suite skips the tests it is
+ * supposed to skip, and no others.
+ *
+ * ## What this file has to prove, and why the obvious version proves nothing
+ *
+ * The roster's job is to notice an ABSENCE turning into a presence. A guard of
+ * that shape is green in a tree where it is completely dead: delete the
+ * subscriber registration, or mutate `report()` to return null unconditionally,
+ * and a suite with one legitimate skip stays exactly as green as before. So
+ * every test here is built around something whose answer is already known:
+ *
+ *  - the verdict logic is driven directly with SYNTHETIC recordings in both
+ *    polarities -- a clean run, an off-roster skip, a rostered test that stopped
+ *    skipping, a duplicate skip event, a filtered run;
+ *  - the LIVE roster of the run executing this very file is asked whether it saw
+ *    this test prepared. If the bootstrap's `install()` were removed or the
+ *    subscriber registration were to start throwing, that is null or false;
+ *  - and the whole mechanism -- registration from the real bootstrap, event
+ *    accumulation, verdict, shutdown handler, process exit status -- is run END
+ *    TO END in a child `phpunit` over a synthetic suite, once with an off-roster
+ *    skip in it (must exit non-zero, must name the test) and once without (must
+ *    exit zero). One without the other is half a control: "the child failed" is
+ *    also what a broken harness says, and "the child passed" is also what a
+ *    child that never started says.
+ *
+ * Two further child-run shapes extend that mechanism test (E469): a run whose
+ * only test class skips wholesale, and a run that `pcntl_fork()`s mid-flight —
+ * the fork arm pins that the inherited shutdown handler neither prints the
+ * banner twice nor overwrites the child's chosen exit status. And two pins
+ * drive the verdict logic on the REAL roster instead of the synthetic one,
+ * because a one-key synthetic roster cannot distinguish `rosterWasFullyReached()`
+ * from "the only key was reached".
+ */
+#[CoversClass(SuiteSkipRoster::class)]
+final class SuiteSkipRosterTest extends TestCase
+{
+    use SlicesDeclaredMethodsTrait;
+
+    private const SYNTHETIC_ROSTER = [
+        'Acme\\Tests\\ExampleTest::testAlwaysSkips' => 'a placeholder, for the fixture',
+    ];
+
+    /**
+     * The three real roster keys, written out in full so a rename inside
+     * `SuiteSkipRoster::EXPECTED` reddens the layout tests below (via an
+     * undefined index) rather than quietly aiming them at a stale key.
+     */
+    private const MCP_ENTRY =
+        'SugarCraft\\Code\\Tests\\MCP\\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails';
+
+    /** The layout-conditional key -- the private `SuiteSkipRoster::CONDITIONAL`, by literal. */
+    private const GITIGNORE_ENTRY =
+        'SugarCraft\\Code\\Tests\\Tools\\BuiltIn\\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
+
+    /** The env-conditional key -- the private `SuiteSkipRoster::LIVE_SGLANG_SMOKE`, by literal. */
+    private const LIVE_SGLANG_ENTRY =
+        'SugarCraft\\Code\\Tests\\Integration\\LiveSglangSmokeTest::testTheLiveDiscoveryLadderNamesSglangDiffusion';
+
+    /**
+     * Runs $body with CANDY_CODE_LIVE_SGLANG forced UNARMED and restores the
+     * caller's shell state exactly, so the layout pins stay deterministic no
+     * matter whether the suite itself is running under an armed operator shell.
+     *
+     * @template T
+     *
+     * @param  callable():T  $body
+     * @return T
+     */
+    private static function withLiveGateUnarmed(callable $body): mixed
+    {
+        $prior = getenv('CANDY_CODE_LIVE_SGLANG');
+
+        putenv('CANDY_CODE_LIVE_SGLANG');
+
+        try {
+            return $body();
+        } finally {
+            $prior === false ? putenv('CANDY_CODE_LIVE_SGLANG') : putenv('CANDY_CODE_LIVE_SGLANG=' . $prior);
+        }
+    }
+
+    /**
+     * Every roster entry names a test that EXISTS.
+     *
+     * A roster is a set of names, and a name rots. If the method is renamed the
+     * roster silently starts describing nothing: check 3 in `report()` would not
+     * fire (the old name is never prepared), check 1 would fire on the new name,
+     * and the resolution text would send the reader looking for a method that is
+     * not there. Cheaper to red here, with the reason.
+     */
+    public function testEveryRosterEntryNamesATestThatExists(): void
+    {
+        self::assertNotSame([], SuiteSkipRoster::EXPECTED, 'the roster is empty');
+
+        foreach (SuiteSkipRoster::EXPECTED as $entry => $why) {
+            self::assertNotSame('', trim($why), $entry . ' is on the roster with no reason given');
+
+            [$class, $method] = explode('::', $entry, 2);
+            self::assertTrue(
+                class_exists($class),
+                'the skip roster names class ' . $class . ', which does not exist. A rostered test was '
+                . 'renamed or deleted: update ' . SuiteSkipRoster::class . '::EXPECTED.',
+            );
+            self::assertTrue(
+                method_exists($class, $method),
+                'the skip roster names ' . $entry . ', which does not exist. A rostered test was renamed '
+                . 'or deleted: update ' . SuiteSkipRoster::class . '::EXPECTED.',
+            );
+        }
+    }
+
+    /**
+     * hasPathRepoSymlinks() on an ABSENT farm reads false -- the mirror of the
+     * test's own `!is_dir()` skip, which is why the entry stays rostered there.
+     */
+    public function testHasPathRepoSymlinksIsFalseForALinkFarmThatDoesNotExist(): void
+    {
+        $dir = $this->createFarmSandbox();
+
+        try {
+            self::assertFalse(
+                SuiteSkipRoster::hasPathRepoSymlinks($dir . '/never-created'),
+                'an absent vendor/sugarcraft must read as "no path-repo symlinks": the test skips '
+                . 'itself on !is_dir(), so the roster entry has to stay',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The packagist layout: real directories and real files, zero links -> false.
+     * A dangling-LOOKING entry that is not a link must not satisfy the predicate
+     * either -- is_link() is a property of the entry, not of whether its target
+     * resolves, and only a real symlink makes the test run.
+     */
+    public function testHasPathRepoSymlinksIsFalseForAFarmOfRealDirectoriesOnly(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/sugar-core');
+        file_put_contents($farm . '/not-a-link.txt', 'a real file, not a link');
+
+        try {
+            self::assertFalse(
+                SuiteSkipRoster::hasPathRepoSymlinks($farm),
+                'a farm of packagist real directories contains no path-repo symlinks; the predicate '
+                . 'must not be satisfied by entries that merely exist',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /** CI's layout: one injected path-repo symlink -> true. */
+    public function testHasPathRepoSymlinksIsTrueForAFarmWithOneSymlink(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/sugar-core-real');
+        mkdir($farm . '/sugar-spring');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
+
+        try {
+            self::assertTrue(
+                SuiteSkipRoster::hasPathRepoSymlinks($farm),
+                "a farm holding even one path-repo symlink is CI's layout: the conditional test "
+                . 'runs and asserts there, so it must not be rostered',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * Over a symlink farm with the live gate unarmed the effective roster is
+     * EXACTLY the unconditional entry plus the dormant smoke -- the structure is
+     * pinned, not just the count.
+     */
+    public function testExpectedForLayoutDropsTheConditionalEntryOverSymlinks(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/sugar-core-real');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
+
+        try {
+            self::assertSame(
+                self::withLiveGateUnarmed(
+                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                ),
+                [
+                    self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY],
+                    self::LIVE_SGLANG_ENTRY => SuiteSkipRoster::EXPECTED[self::LIVE_SGLANG_ENTRY],
+                ],
+                'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
+                . 'smoke stays rostered, so the effective roster must be the const minus exactly '
+                . 'its GitignoreAwareness key, reasons intact',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /** Over a packagist farm with the gate unarmed the roster is the FULL const. */
+    public function testExpectedForLayoutKeepsTheFullRosterOverRealDirectories(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/sugar-core');
+
+        try {
+            self::assertSame(
+                SuiteSkipRoster::EXPECTED,
+                self::withLiveGateUnarmed(
+                    static fn () => SuiteSkipRoster::expectedForLayout($farm),
+                ),
+                'over a packagist farm the layout-conditional test skips and the unarmed smoke '
+                . 'skips too, so the effective roster must be the full const -- all three keys, '
+                . 'all three reasons, same order',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The live gate's BOTH polarities, each dropping exactly its own key and no
+     * other's. The armed arm over a symlink farm is the operator's W7.7 shape:
+     * the roster collapses to the lone canary while both real tests run.
+     */
+    public function testTheLiveSmokeGateDropsOnlyItsOwnEntryAndOnlyWhenArmed(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/sugar-core');
+
+        $prior = getenv('CANDY_CODE_LIVE_SGLANG');
+
+        try {
+            putenv('CANDY_CODE_LIVE_SGLANG=1');
+            self::assertTrue(SuiteSkipRoster::liveSglangSmokeArmed(), 'the predicate must read the armed env');
+            $armed = SuiteSkipRoster::expectedForLayout($farm);
+            self::assertArrayNotHasKey(self::LIVE_SGLANG_ENTRY, $armed, 'an armed smoke RUNS, so it may not sit on the roster');
+            self::assertArrayHasKey(self::GITIGNORE_ENTRY, $armed, 'the live gate may not lift the LAYOUT entry');
+
+            putenv('CANDY_CODE_LIVE_SGLANG');
+            self::assertFalse(SuiteSkipRoster::liveSglangSmokeArmed(), 'an unset gate reads unarmed');
+            self::assertSame(
+                SuiteSkipRoster::EXPECTED,
+                SuiteSkipRoster::expectedForLayout($farm),
+                'the unarmed gate may not lift anything -- the smoke skips and stays rostered',
+            );
+
+            putenv('CANDY_CODE_LIVE_SGLANG=0');
+            self::assertFalse(SuiteSkipRoster::liveSglangSmokeArmed(), 'only the literal 1 arms the smoke');
+        } finally {
+            $prior === false ? putenv('CANDY_CODE_LIVE_SGLANG') : putenv('CANDY_CODE_LIVE_SGLANG=' . $prior);
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The premise under the live gate: the roster predicate and the test body
+     * must read the SAME variable with the SAME arm value, or one polarity here
+     * judges against a roster the other never produces. Literal textual pin —
+     * the mirror of the layout arm's "mirrors the test body's own gate" claim.
+     */
+    public function testTheSmokeTestsOwnGateReadsTheVariableTheRosterPredicateReads(): void
+    {
+        $reflection = new \ReflectionClass(LiveSglangSmokeTest::class);
+        $body       = implode('', (array) file($reflection->getFileName()));
+
+        self::assertSame(
+            1,
+            substr_count($body, "getenv('CANDY_CODE_LIVE_SGLANG') !== '1'"),
+            'the smoke body no longer gates on the literal the roster predicate reads; move both '
+            . 'together or the armed/unarmed rosters stop matching the skips',
+        );
+    }
+
+    /**
+     * CI-shape at the constructor seam with the live gate unarmed: the
+     * layout-computed roster of 2 (canary + dormant smoke), ALL THREE roster
+     * names prepared, the layout-conditional one running -- the run is CLEAN.
+     *
+     * This is the exact event shape CI was printing as a violation before the
+     * roster computed its condition: check 3 must not see the non-rostered
+     * conditional key's non-skip, and the event count must match the EFFECTIVE
+     * roster, not the const.
+     */
+    public function testTheCiShapeRosterJudgesACiRunClean(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/sugar-core-real');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
+
+        try {
+            $roster = self::withLiveGateUnarmed(
+                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+            );
+            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
+            $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
+            $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
+            $roster->recordPrepared(self::GITIGNORE_ENTRY);
+
+            self::assertSame(
+                [],
+                $roster->rosterEntriesThatStoppedSkipping(),
+                'the conditional key is off the CI-shape roster, so its non-skip must not read as '
+                . 'a roster entry that stopped skipping',
+            );
+            self::assertNull(
+                $roster->report(),
+                'a CI-layout run (roster of 2, two skips, layout-conditional test running and '
+                . 'passing) was judged a violation -- this is the regression this fix exists to end',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * Packagist-shape mirror through the same seam: the layout-computed roster
+     * of 3 with all three rostered skips is clean -- the shape of every local
+     * run on a real-directory farm and of the suite floor.
+     */
+    public function testThePackagistShapeRosterJudgesAPackagistRunClean(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/sugar-core');
+
+        try {
+            $roster = self::withLiveGateUnarmed(
+                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+            );
+            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
+            $roster->recordPrepared(self::GITIGNORE_ENTRY);
+            $roster->recordSkip(
+                self::GITIGNORE_ENTRY,
+                self::GITIGNORE_ENTRY,
+                'no path-repo symlinks in this checkout',
+            );
+            $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
+            $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
+
+            self::assertSame(3, $roster->skipEventCount());
+            self::assertNull(
+                $roster->report(),
+                'the packagist-shape run no longer matches its roster -- the local floor of three '
+                . 'skips against three entries has to stay green',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The CI shape does not disarm the guard: with the conditional key
+     * legitimately lifted, the UNCONDITIONAL key prepared-but-not-skipped must
+     * still fire check 3. Dropping an entry from the effective roster may not
+     * take the bite out of the ones that remain.
+     */
+    public function testTheCiShapeRosterStillRedsTheUnconditionalKeyThatStoppedSkipping(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/sugar-core-real');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
+
+        try {
+            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
+            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster->recordPrepared(self::GITIGNORE_ENTRY);
+
+            self::assertSame(
+                [self::MCP_ENTRY],
+                $roster->rosterEntriesThatStoppedSkipping(),
+                'check 3 lost its bite on the one key that stayed rostered',
+            );
+            self::assertStringContainsString(
+                'ON THE ROSTER BUT RAN WITHOUT SKIPPING: ' . self::MCP_ENTRY,
+                (string) $roster->report(),
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The live roster installed by `tests/bootstrap.php` is alive in THIS
+     * process and saw THIS test prepared.
+     *
+     * This is the liveness half. `install()` swallows a registration failure on
+     * purpose -- against a SEALED facade, or a PHPUnit that moved the class, a
+     * throw here would be a fatal in every process that loads the bootstrap --
+     * so a subscriber that silently stopped registering inside a real run would
+     * leave no trace anywhere except here.
+     *
+     * WHAT THIS USED TO SAY: that the swallow was needed "because several test
+     * files load the bootstrap in a plain child PHP process where there is no
+     * event facade at all". WHAT IS TRUE NOW: there is one, and registration
+     * succeeds in those children -- MEASURED, PHP 8.3.6, and pinned by
+     * {@see testAPlainChildProcessThatRequiresTheBootstrapExitsZero()}. They are
+     * harmless because nothing is ever prepared in them, not because nothing is
+     * ever armed.
+     */
+    public function testTheLiveRosterIsInstalledAndIsReceivingEvents(): void
+    {
+        $live = SuiteSkipRoster::live();
+
+        self::assertInstanceOf(
+            SuiteSkipRoster::class,
+            $live,
+            'no roster was installed by tests/bootstrap.php - the skip invariant is unguarded for this '
+            . 'whole run. Check the SuiteSkipRoster::install() call in the bootstrap.',
+        );
+        self::assertGreaterThan(
+            0,
+            $live->preparedCount(),
+            'the roster is installed but has recorded no prepared test, including this one - its '
+            . 'PreparedSubscriber is not being notified.',
+        );
+        self::assertTrue(
+            $live->enforces() === (\PHP_OS_FAMILY === 'Linux'),
+            'the live roster disagrees with PHP_OS_FAMILY about whether it enforces',
+        );
+    }
+
+    /** A run whose only skip is the rostered one has no report. */
+    public function testACleanRunReportsNothing(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordPrepared('Acme\\Tests\\ExampleTest::testAlwaysSkips');
+        $roster->recordSkip(
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+            'placeholder',
+        );
+        $roster->recordPrepared('Acme\\Tests\\ExampleTest::testRunsNormally');
+
+        self::assertNull($roster->report());
+        self::assertSame([], $roster->unexpectedSkips());
+        self::assertSame([], $roster->rosterEntriesThatStoppedSkipping());
+    }
+
+    /** Check 1: a skip nobody put on the roster. */
+    public function testAnOffRosterSkipIsReportedAndNamed(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordPrepared('Acme\\Tests\\ExampleTest::testAlwaysSkips');
+        $roster->recordSkip(
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+            'placeholder',
+        );
+        $roster->recordPrepared('Acme\\Tests\\OtherTest::testNeedsProcfs');
+        $roster->recordSkip(
+            'Acme\\Tests\\OtherTest::testNeedsProcfs',
+            'Acme\\Tests\\OtherTest::testNeedsProcfs',
+            'no /proc on this kernel',
+        );
+
+        self::assertSame(['Acme\\Tests\\OtherTest::testNeedsProcfs'], $roster->unexpectedSkips());
+
+        $report = (string) $roster->report();
+        self::assertStringContainsString('SKIPPED BUT NOT ON THE ROSTER', $report);
+        self::assertStringContainsString('Acme\\Tests\\OtherTest::testNeedsProcfs', $report);
+        self::assertStringContainsString('if the new skip is LEGITIMATE', $report);
+    }
+
+    /**
+     * Check 3: the count moving DOWN is a re-base too.
+     *
+     * And it is the more insidious direction, because it removes the roster's
+     * only positive evidence that its SkippedSubscriber works at all.
+     */
+    public function testARosteredTestThatRanWithoutSkippingIsReported(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordPrepared('Acme\\Tests\\ExampleTest::testAlwaysSkips');
+
+        self::assertSame(
+            ['Acme\\Tests\\ExampleTest::testAlwaysSkips'],
+            $roster->rosterEntriesThatStoppedSkipping(),
+        );
+        self::assertStringContainsString(
+            'ON THE ROSTER BUT RAN WITHOUT SKIPPING',
+            (string) $roster->report(),
+        );
+    }
+
+    /**
+     * Check 2: two skip EVENTS for one rostered method.
+     *
+     * Data-provider rows collapse to a single `Class::method` key, so check 1
+     * cannot see a second row of an already-rostered method skipping. The event
+     * count can.
+     */
+    public function testASecondSkipEventForOneRosteredMethodIsReported(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordPrepared('Acme\\Tests\\ExampleTest::testAlwaysSkips');
+        $roster->recordSkip(
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips#0',
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+            'row 0',
+        );
+        $roster->recordSkip(
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips#1',
+            'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+            'row 1',
+        );
+
+        self::assertSame([], $roster->unexpectedSkips(), 'check 1 is not the one that catches this');
+        self::assertSame(2, $roster->skipEventCount());
+
+        $report = (string) $roster->report();
+        self::assertStringContainsString('SKIP EVENT COUNT IS 2, ROSTER SIZE IS 1', $report);
+        self::assertStringContainsString('row 1', $report);
+    }
+
+    /**
+     * The same counts check, driven on the REAL roster shape (E469).
+     *
+     * `rosterWasFullyReached()` — the AND half of the counts check — is
+     * untestable against a one-key synthetic roster: reaching "every expected
+     * key prepared" and reaching "the one expected key prepared" are the same
+     * statement. With the real two-key roster this proves the check arms only
+     * AFTER the last rostered method has been prepared, and fires when a
+     * rostered method then skips in a second data-provider row.
+     */
+    public function testTheRealRosterShapeReportsWhenARosteredMethodSkipsTwice(): void
+    {
+        $keys = array_keys(SuiteSkipRoster::EXPECTED);
+        self::assertGreaterThan(1, count($keys), 'the roster shrank to one key and lost its discriminating power');
+
+        $roster = new SuiteSkipRoster(SuiteSkipRoster::EXPECTED, 'Linux');
+        foreach ($keys as $key) {
+            $roster->recordPrepared($key);
+            $roster->recordSkip($key . '#0', $key, 'first row of ' . $key);
+        }
+
+        self::assertNull(
+            $roster->report(),
+            'a complete run of the real roster — every key prepared, every key skipping exactly once — '
+            . 'was judged dirty; the counts check cannot tell a full run from a broken one',
+        );
+
+        $roster->recordSkip($keys[0] . '#1', $keys[0], 'a second data-provider row for ' . $keys[0]);
+
+        $report = (string) $roster->report();
+        self::assertStringContainsString(
+            'SKIP EVENT COUNT IS ' . (count($keys) + 1) . ', ROSTER SIZE IS ' . count($keys),
+            $report,
+            'the real-shape roster accepted a duplicate skip silently',
+        );
+        self::assertStringContainsString($keys[0] . '#1', $report);
+    }
+
+    /**
+     * The premise under the counts check: every rostered skip must be
+     * PREPARABLE (E469).
+     *
+     * `report()`'s counts arm only fires once `rosterWasFullyReached()`, which
+     * reads the `Test\Prepared` stream — and a `#[Requires…]`-attribute skip is
+     * emitted ABOVE preparation (measured in `vendor/phpunit/phpunit/src/Framework/TestCase.php`,
+     * per the roster class's own doc-block). So an attribute-gated or
+     * `setUpBeforeClass()`-gated test on the roster would leave the counts
+     * check permanently disarmed for it, and a second skip row could never be
+     * named. This pins the layout premise against the real rostered files —
+     * body-level `markTestSkipped()` inside the method, no Requires attribute,
+     * no class-level gate. It reads by reflection only; it runs nothing.
+     */
+    public function testEveryRosteredSkipIsPreparableSoTheCountsCheckIsLive(): void
+    {
+        foreach (array_keys(SuiteSkipRoster::EXPECTED) as $entry) {
+            [$class, $method] = explode('::', $entry, 2);
+            $reflection = new \ReflectionClass($class);
+
+            foreach ([...$reflection->getAttributes(), ...$reflection->getMethod($method)->getAttributes()] as $attribute) {
+                self::assertStringNotContainsString(
+                    'Requires',
+                    $attribute->getName(),
+                    $entry . ' is gated by ' . $attribute->getName()
+                    . ' — attribute skips are emitted above Test\\Prepared, which permanently disarms'
+                    . ' the roster counts check for it. Move the gate into the test body.',
+                );
+            }
+
+            $rostered = $reflection->getMethod($method);
+            $body = self::declaredSlice(
+                (array) file($reflection->getFileName()),
+                $method,
+                $rostered->getStartLine(),
+                $rostered->getEndLine(),
+            );
+            self::assertStringContainsString(
+                'markTestSkipped',
+                $body,
+                $entry . ' no longer skips from inside its own body, yet stays on the roster — the '
+                . 'run either never prepares it (filter trap) or never reaches it (layout trap).',
+            );
+
+            if ($reflection->hasMethod('setUpBeforeClass')) {
+                $gate = $reflection->getMethod('setUpBeforeClass');
+                // The gate is INHERITED for both rostered classes today, so the
+                // slice reads the gate's own declaring file, not the class's —
+                // reflection's line numbers are that file's lines.
+                $gateBody = self::declaredSlice(
+                    (array) file($gate->getFileName()),
+                    'setUpBeforeClass',
+                    $gate->getStartLine(),
+                    $gate->getEndLine(),
+                );
+                self::assertStringNotContainsString(
+                    'markTestSkipped',
+                    $gateBody,
+                    $entry . "'s class skips in setUpBeforeClass() — a class-level gate prepares "
+                    . 'nothing and is not rosterable (check 4 reports it as a violation instead).',
+                );
+            }
+        }
+    }
+
+    /**
+     * A `--filter`ed run that never reaches the rostered test is silent.
+     *
+     * Without this the guard would red on every partial run a developer makes,
+     * which is how a guard gets switched off.
+     */
+    public function testAFilteredRunThatNeverReachesTheRosteredTestIsSilent(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordPrepared('Acme\\Tests\\SomethingElseTest::testOne');
+
+        self::assertSame([], $roster->rosterEntriesThatStoppedSkipping());
+        self::assertNull($roster->report(), 'a filtered run was reported as a roster violation');
+    }
+
+    /** Nothing prepared and nothing skipped at all is "nothing to judge". */
+    public function testARunWithNoPreparedTestIsNotJudged(): void
+    {
+        $roster = $this->syntheticRoster();
+
+        self::assertSame(0, $roster->preparedCount());
+        self::assertSame([], $roster->suiteSkips());
+        self::assertNull($roster->report());
+    }
+
+    /**
+     * Check 4's verdict logic: a skipped CLASS is red even though the roster has
+     * no key it could ever match, and even though NOTHING was prepared.
+     *
+     * The second half is not a detail. A class that skips in
+     * `setUpBeforeClass()` prepares none of its methods, so a `report()` that
+     * short-circuits on an empty `preparedKeys` -- which is what it did -- calls
+     * the run unjudged and returns null. A run consisting of one skipped class
+     * is precisely the case this has to catch.
+     */
+    public function testASkippedClassIsReportedEvenWithNothingPrepared(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordSuiteSkip('Acme\\Tests\\WholeClassTest', 'setUpBeforeClass opted out');
+
+        self::assertSame(0, $roster->preparedCount());
+        self::assertSame(
+            ['Acme\\Tests\\WholeClassTest' => 'setUpBeforeClass opted out'],
+            $roster->suiteSkips(),
+        );
+        self::assertSame([], $roster->unexpectedSkips(), 'check 1 is not the one that catches this');
+        self::assertSame(0, $roster->skipEventCount(), 'a suite skip is not a test-skip EVENT');
+
+        $report = (string) $roster->report();
+        self::assertStringContainsString('AN ENTIRE TEST CLASS SKIPPED', $report);
+        self::assertStringContainsString('Acme\\Tests\\WholeClassTest', $report);
+        self::assertStringContainsString('MISSING FROM THE "Tests:" TOTAL', $report);
+        self::assertStringContainsString('cannot be put on the roster', $report);
+    }
+
+    /**
+     * A skip with no preparation before it is judged, not waved through.
+     *
+     * `TestCase::runBare()` runs `checkRequirements()` above
+     * `$emitter->testPrepared()`, so a `--filter` that selects only a
+     * `#[Requires…]`-skipped test produces a skip event and no preparation at
+     * all. Under the original early return that run reported nothing.
+     */
+    public function testASkipWithNothingPreparedIsStillJudged(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordSkip(
+            'Acme\\Tests\\OtherTest::testNeedsAnExtension',
+            'Acme\\Tests\\OtherTest::testNeedsAnExtension',
+            'the ext-foo extension is not loaded',
+        );
+
+        self::assertSame(0, $roster->preparedCount());
+        self::assertStringContainsString(
+            'SKIPPED BUT NOT ON THE ROSTER: Acme\\Tests\\OtherTest::testNeedsAnExtension',
+            (string) $roster->report(),
+        );
+    }
+
+    /**
+     * The non-Linux arm, reachable on this Linux box only because the OS family
+     * is a constructor parameter.
+     *
+     * Both halves are asserted: the diagnostic is still produced, and it is
+     * marked as not enforced and says which platform it is on.
+     */
+    public function testOffLinuxTheSameViolationIsReportedButNotEnforced(): void
+    {
+        foreach (['Darwin', 'Windows', 'BSD'] as $family) {
+            $roster = new SuiteSkipRoster(self::SYNTHETIC_ROSTER, $family);
+            $roster->recordPrepared('Acme\\Tests\\ExampleTest::testAlwaysSkips');
+            $roster->recordSkip(
+                'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+                'Acme\\Tests\\ExampleTest::testAlwaysSkips',
+                'placeholder',
+            );
+            $roster->recordPrepared('Acme\\Tests\\OtherTest::testNeedsProcfs');
+            $roster->recordSkip(
+                'Acme\\Tests\\OtherTest::testNeedsProcfs',
+                'Acme\\Tests\\OtherTest::testNeedsProcfs',
+                'no /proc',
+            );
+
+            self::assertFalse($roster->enforces(), $family . ' was treated as an enforcing platform');
+
+            $report = (string) $roster->report();
+            self::assertStringContainsString('NOT enforced on ' . $family, $report);
+            self::assertStringContainsString('Acme\\Tests\\OtherTest::testNeedsProcfs', $report);
+        }
+
+        $linux = new SuiteSkipRoster(self::SYNTHETIC_ROSTER, 'Linux');
+        self::assertTrue($linux->enforces(), 'Linux was treated as a non-enforcing platform');
+    }
+
+    /**
+     * END TO END, in a real child `phpunit`: an off-roster skip fails the run,
+     * and an otherwise identical run without one does not.
+     *
+     * This is the only test here that exercises the parts no synthetic recording
+     * can reach -- that `tests/bootstrap.php` really registers the subscribers
+     * against a live facade, that PHPUnit really delivers the events, that the
+     * shutdown handler really runs, and that `exit(1)` from it really reaches
+     * the shell. Both polarities in one test on purpose: the negative control is
+     * what separates "the guard fired" from "the harness cannot start a child".
+     *
+     * The child suite does not contain the rostered test, so check 3 and the
+     * event-count check are both silent by construction (a filtered run) and the
+     * only thing under test is check 1.
+     */
+    public function testAChildRunSkippingOffRosterExitsNonZeroAndACleanOneDoesNot(): void
+    {
+        $root = \dirname(__DIR__);
+
+        $dirty = $this->runChildSuite(
+            $root,
+            <<<'PHP'
+                public function testSomethingWeSuddenlyStoppedRunning(): void
+                {
+                    $this->markTestSkipped('a brand-new environment gate nobody put on the roster');
+                }
+                PHP,
+        );
+        $clean = $this->runChildSuite(
+            $root,
+            <<<'PHP'
+                public function testSomethingWeSuddenlyStoppedRunning(): void
+                {
+                    $this->assertTrue(true);
+                }
+                PHP,
+        );
+
+        self::assertSame(
+            0,
+            $clean['rc'],
+            "the NEGATIVE control failed, so the positive one below proves nothing about the roster.\n"
+            . $clean['output'],
+        );
+        self::assertStringNotContainsString('SUITE SKIP ROSTER', $clean['output']);
+
+        self::assertNotSame(
+            0,
+            $dirty['rc'],
+            "an off-roster skip did not fail a real child run. The roster is installed but is not "
+            . "reaching the exit code - suspect the shutdown handler or install()'s registration.\n"
+            . $dirty['output'],
+        );
+        self::assertStringContainsString('SUITE SKIP ROSTER VIOLATION', $dirty['output']);
+        self::assertStringContainsString(
+            'SkipRosterProbeTest::testSomethingWeSuddenlyStoppedRunning',
+            $dirty['output'],
+        );
+    }
+
+    /**
+     * Check 4, END TO END: an entire class opting out fails a real child run.
+     *
+     * This is the acceptance test for the fix, not for the defect -- a synthetic
+     * `recordSuiteSkip()` would pass just as happily against a roster that never
+     * registers the subscriber, which is exactly the hole this closes. So the
+     * event has to come from PHPUnit itself.
+     *
+     * The measurement that made it necessary, on this box, PHP 8.3.6, PHPUnit
+     * 10.5.64: before the `TestSuite\SkippedSubscriber` existed, this very child
+     * printed `Tests: 1, Assertions: 1, Skipped: 1` and exited 0 -- the probe
+     * class's TWO test methods absent from the total, and no roster output. The
+     * `Skipped: 1` came from the suite-skip half of PHPUnit's summary sum, so
+     * even a guard that asserted "exactly one skip" on the printed line would
+     * have been satisfied by it.
+     */
+    public function testAChildRunWhoseWholeClassSkipsExitsNonZero(): void
+    {
+        $result = $this->runChildSuite(
+            \dirname(__DIR__),
+            <<<'PHP'
+                public static function setUpBeforeClass(): void
+                {
+                    self::markTestSkipped('a class-level gate nobody can put on the roster');
+                }
+
+                public function testOne(): void
+                {
+                    $this->assertTrue(true);
+                }
+
+                public function testTwo(): void
+                {
+                    $this->assertTrue(true);
+                }
+                PHP,
+        );
+
+        self::assertNotSame(
+            0,
+            $result['rc'],
+            "an entire test CLASS skipped and the run still exited 0. PHPUnit emits TestSuite\\Skipped "
+            . "for a setUpBeforeClass() skip and NO per-test Skipped, so a roster watching only "
+            . "Test\\Skipped is blind to it - and the class's tests vanish from the Tests: total "
+            . "while the printed Skipped: figure moves by one.\n"
+            . $result['output'],
+        );
+        self::assertStringContainsString('SUITE SKIP ROSTER VIOLATION', $result['output']);
+        self::assertStringContainsString('AN ENTIRE TEST CLASS SKIPPED', $result['output']);
+        self::assertStringContainsString('SkipRosterProbeTest', $result['output']);
+        self::assertStringContainsString(
+            'a class-level gate nobody can put on the roster',
+            $result['output'],
+        );
+        self::assertStringContainsString('cannot be put on the roster', $result['output']);
+    }
+
+    /**
+     * A pcntl child must not inherit the roster's shutdown verdict (E469).
+     *
+     * `install()` registers the shutdown handler BEFORE any test runs, and
+     * `pcntl_fork()` copies it into the child along with the whole accumulated
+     * roster. This suite forks for real — the worker pools do — so an
+     * unguarded child would judge the PARENT's events at its own exit: a
+     * second banner on the wire and, worse, the child's `exit()` status
+     * rewritten to 1, turning a deliberate fork result into a bogus roster
+     * violation at its parent's `pcntl_waitpid()`.
+     *
+     * The probe makes the run dirty FIRST (an off-roster body skip, exactly
+     * the shape the pair test above proves is caught), so the parent's own
+     * banner is guaranteed, and only then forks a child that exits 7.
+     * MEASURED on this box (pcntl present): with the pid guard in place the
+     * banner prints exactly once and the waitpid reads 7; with the guard's
+     * condition mutated away the child prints the banner a second time and
+     * its shutdown `exit(1)` overwrites the 7. The box-shape fallback (no
+     * pcntl — `composer.json` carries no ext-pcntl requirement) keeps the
+     * single-banner assertion, which is all it can prove. The parent test
+     * never calls `markTestSkipped()`: this suite is itself under the guard,
+     * and an off-roster skip HERE would red the very run hosting the pin.
+     */
+    public function testAForkedChildDoesNotCarryTheRostersShutdownVerdict(): void
+    {
+        $result = $this->runChildSuite(
+            \dirname(__DIR__),
+            <<<'PHP'
+                public function testTheRunIsDirtyBeforeTheFork(): void
+                {
+                    $this->markTestSkipped('an off-roster skip armed BEFORE any fork happens');
+                }
+
+                public function testTheChildKeepsItsOwnExitStatus(): void
+                {
+                    if (!function_exists('pcntl_fork')) {
+                        echo "CHILD-EXIT: no-pcntl\n";
+                        $this->assertTrue(true);
+
+                        return;
+                    }
+
+                    $pid = pcntl_fork();
+                    if ($pid === 0) {
+                        // The inherited shutdown handler runs RIGHT HERE.
+                        exit(7);
+                    }
+
+                    pcntl_waitpid($pid, $status);
+                    echo 'CHILD-EXIT: ' . (pcntl_wifexited($status) ? pcntl_wexitstatus($status) : 'signalled') . "\n";
+                    $this->assertTrue(true);
+                }
+                PHP,
+        );
+
+        self::assertNotSame(
+            0,
+            $result['rc'],
+            "the parent's off-roster skip stopped failing the run once a fork joined it.\n"
+            . $result['output'],
+        );
+        self::assertSame(
+            1,
+            substr_count($result['output'], 'SUITE SKIP ROSTER VIOLATION'),
+            "the banner printed a number of times other than once — a second copy means a forked "
+            . "child ran the parent's shutdown report, which is exactly the leak this pins.\n"
+            . $result['output'],
+        );
+
+        if (!str_contains($result['output'], 'CHILD-EXIT: no-pcntl')) {
+            self::assertStringContainsString(
+                'CHILD-EXIT: 7',
+                $result['output'],
+                "the forked child did not exit with the status it chose — the roster's shutdown "
+                . "handler overwrote it (enforced exit 1 is what this measured under mutation).\n"
+                . $result['output'],
+            );
+        }
+    }
+
+    /**
+     * A plain child PHP process that merely `require`s the bootstrap exits 0.
+     *
+     * The class doc-block used to claim such a child "arms nothing" because the
+     * event facade is absent. MEASURED, PHP 8.3.6: it is present, registration
+     * SUCCEEDS, and `live()` comes back non-null -- so the safety property is
+     * not the one that was written down. What actually keeps these children
+     * harmless is `report()` returning null with nothing prepared, and this pins
+     * THAT: several test files in this suite spawn exactly this shape of child,
+     * and a roster that started exiting 1 from their shutdown handlers would
+     * fail them all with a diagnostic about a run that never happened.
+     */
+    public function testAPlainChildProcessThatRequiresTheBootstrapExitsZero(): void
+    {
+        $root = \dirname(__DIR__);
+        $stem = tempnam(sys_get_temp_dir(), 'sc_skiproster_plain_');
+        self::assertIsString($stem);
+        $script = $stem . '.php';
+
+        try {
+            file_put_contents(
+                $script,
+                "<?php\n\ndeclare(strict_types=1);\n\n"
+                . 'require ' . var_export($root . '/tests/bootstrap.php', true) . ";\n"
+                . 'echo \SugarCraft\Code\Tests\Support\SuiteSkipRoster::live() === null'
+                . " ? 'NULL' : 'INSTALLED';\n",
+            );
+
+            $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+            $process = proc_open(
+                [\PHP_BINARY, '-d', 'auto_prepend_file=', $script],
+                $descriptors,
+                $pipes,
+                $root,
+            );
+            self::assertIsResource($process, 'could not start the plain child');
+
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $rc = proc_close($process);
+
+            self::assertSame(
+                0,
+                $rc,
+                "a plain child that only requires tests/bootstrap.php exited non-zero. The roster's "
+                . "shutdown handler is firing where there is nothing to judge.\n" . $stdout . $stderr,
+            );
+            self::assertStringNotContainsString('SUITE SKIP ROSTER', $stderr);
+            self::assertSame(
+                'INSTALLED',
+                $stdout,
+                'the roster did NOT install in a plain child. That is not a failure of the guard, but '
+                . 'it does mean this test is no longer pinning what it says it pins, and the '
+                . "doc-blocks that describe registration succeeding here are now wrong.\n" . $stderr,
+            );
+        } finally {
+            @unlink($script);
+            @unlink($stem);
+        }
+    }
+
+    private function syntheticRoster(): SuiteSkipRoster
+    {
+        return new SuiteSkipRoster(self::SYNTHETIC_ROSTER, 'Linux');
+    }
+
+    /**
+     * An empty sandbox directory standing in for a synthetic `vendor/sugarcraft`
+     * farm (the tests build their own layout inside it and purge by exact path).
+     *
+     * Named with `tempnam()` so it cannot collide with a sibling checkout on
+     * this shared box -- same discipline as {@see runChildSuite()}.
+     */
+    private function createFarmSandbox(): string
+    {
+        $stem = tempnam(sys_get_temp_dir(), 'sc_skiproster_farm_');
+        self::assertIsString($stem);
+        unlink($stem);
+        $dir = $stem . '.d';
+        self::assertTrue(mkdir($dir, 0o700), 'could not create the link-farm sandbox');
+
+        return $dir;
+    }
+
+    /**
+     * Remove a farm sandbox two levels deep -- links first (is_link before
+     * is_dir: a link to a directory answers to both), then files, then the
+     * real dirs, then the root. Exact paths only, never a glob.
+     */
+    private function purgeFarmSandbox(string $dir): void
+    {
+        foreach ((array) scandir($dir) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $dir . '/' . $entry;
+            if (is_link($path) || !is_dir($path)) {
+                @unlink($path);
+                continue;
+            }
+
+            foreach ((array) scandir($path) as $child) {
+                if ($child !== '.' && $child !== '..') {
+                    @unlink($path . '/' . $child);
+                }
+            }
+            @rmdir($path);
+        }
+
+        @rmdir($dir);
+    }
+
+    /**
+     * Run one synthetic test class through a real child `phpunit` that boots
+     * from THIS suite's `tests/bootstrap.php`.
+     *
+     * The sandbox is named with `tempnam()` so it cannot collide with a sibling
+     * checkout running its own suite on this shared box, and it is removed by
+     * exact path - never by glob.
+     *
+     * @return array{rc:int, output:string}
+     */
+    private function runChildSuite(string $root, string $body): array
+    {
+        $stem = tempnam(sys_get_temp_dir(), 'sc_skiproster_');
+        self::assertIsString($stem);
+        unlink($stem);
+        $dir = $stem . '.d';
+        self::assertTrue(mkdir($dir, 0o700), 'could not create the child suite sandbox');
+
+        $created = [];
+
+        try {
+            $testFile = $dir . '/SkipRosterProbeTest.php';
+            file_put_contents(
+                $testFile,
+                "<?php\n\ndeclare(strict_types=1);\n\n"
+                . "namespace SugarCraft\\Code\\Tests\\SkipRosterProbe;\n\n"
+                . "use PHPUnit\\Framework\\TestCase;\n\n"
+                . "final class SkipRosterProbeTest extends TestCase\n{\n"
+                . $body . "\n}\n",
+            );
+            $created[] = $testFile;
+
+            $configFile = $dir . '/phpunit.xml';
+            file_put_contents(
+                $configFile,
+                '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+                . '<phpunit bootstrap="' . htmlspecialchars($root . '/tests/bootstrap.php', \ENT_XML1)
+                . '" colors="false" cacheDirectory="' . htmlspecialchars($dir . '/.cache', \ENT_XML1) . '">'
+                . "\n  <testsuites><testsuite name=\"probe\"><directory>"
+                . htmlspecialchars($dir, \ENT_XML1)
+                . "</directory></testsuite></testsuites>\n</phpunit>\n",
+            );
+            $created[] = $configFile;
+
+            // The probe class lives outside any PSR-4 root, so it is required
+            // explicitly rather than autoloaded.
+            $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+            $process = proc_open(
+                [
+                    \PHP_BINARY,
+                    '-d',
+                    'auto_prepend_file=',
+                    $root . '/vendor/phpunit/phpunit/phpunit',
+                    '--configuration',
+                    $configFile,
+                    '--no-progress',
+                ],
+                $descriptors,
+                $pipes,
+                $root,
+            );
+            self::assertIsResource($process, 'could not start the child phpunit');
+
+            $output = (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $rc = proc_close($process);
+
+            return ['rc' => $rc, 'output' => $output];
+        } finally {
+            foreach ($created as $path) {
+                @unlink($path);
+            }
+            // The cache directory PHPUnit made for the child, removed by exact
+            // path and one level deep - this sandbox holds nothing else.
+            $cache = $dir . '/.cache';
+            if (is_dir($cache)) {
+                foreach ((array) scandir($cache) as $entry) {
+                    if ($entry !== '.' && $entry !== '..') {
+                        @unlink($cache . '/' . $entry);
+                    }
+                }
+                @rmdir($cache);
+            }
+            @rmdir($dir);
+        }
+    }
+}

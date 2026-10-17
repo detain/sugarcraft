@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2e84c08d38d58cdfa72ee2b9bd1be45e",
+    "content-hash": "01ce28677d5bd60a422df213bf3672eb",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3438,6 +3438,106 @@
             }
         },
         {
+            "name": "sugarcraft/candy-code",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-code",
+                "reference": "56a143532973045ff065c108ded838aedfd3dda9"
+            },
+            "require": {
+                "aws/aws-sdk-php": "^3.300",
+                "ext-intl": "*",
+                "ext-mbstring": "*",
+                "ext-pdo_sqlite": "*",
+                "ext-sqlite3": "*",
+                "google/cloud-ai-platform": "^1.0",
+                "guzzlehttp/guzzle": "^7.12.1",
+                "openai-php/client": "^0.10",
+                "php": "^8.3",
+                "ratchet/rfc6455": "^0.4",
+                "react/http": "^1.11",
+                "react/promise": "^3.3",
+                "react/socket": "^1.16",
+                "sugarcraft/sugar-cli": "@dev",
+                "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-core": "dev-master",
+                "sugarcraft/sugar-diff": "dev-master",
+                "sugarcraft/sugar-focus": "@dev",
+                "sugarcraft/sugar-forms": "dev-master",
+                "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-image": "dev-master",
+                "sugarcraft/sugar-markdown": "dev-master",
+                "sugarcraft/sugar-mcp-client": "dev-master",
+                "sugarcraft/sugar-mouse": "dev-master",
+                "sugarcraft/sugar-overlay": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
+                "sugarcraft/sugar-style": "dev-master",
+                "sugarcraft/sugar-toast": "dev-master",
+                "sugarcraft/sugar-video": "@dev",
+                "symfony/yaml": "^7.4"
+            },
+            "require-dev": {
+                "mockery/mockery": "^1.6",
+                "phpunit/phpunit": "^10.5",
+                "ratchet/pawl": "^0.4"
+            },
+            "suggest": {
+                "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom).",
+                "ext-ffi": "Required by `candy-code serve`: a forked turn child closes the server's inherited sockets through libc close(2).",
+                "ext-pcntl": "Required by `candy-code serve`: every turn runs in a forked child, and the blocking fallback would stall every session on the server.",
+                "ext-posix": "Required by `candy-code serve` (process identity and signals for the forked turn children).",
+                "sugarcraft/sugar-crush-web": "The browser UI `candy-code serve` serves on its own port (Vite + Vue build shipped as a composer package)."
+            },
+            "bin": [
+                "bin/candy-code"
+            ],
+            "type": "project",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Code\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Code\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Chat-shell TUI for AI coding assistants — port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarWidgets TextArea.",
+            "homepage": "https://github.com/sugarcraft/candy-code",
+            "keywords": [
+                "ai",
+                "anthropic",
+                "candy-code",
+                "chat",
+                "crush",
+                "llm",
+                "ollama",
+                "openai",
+                "sugarcraft",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-code/issues",
+                "source": "https://github.com/sugarcraft/candy-code",
+                "docs": "https://sugarcraft.github.io/lib/candy-code.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-codeshot",
             "version": "dev-master",
             "dist": {
@@ -5178,112 +5278,12 @@
             }
         },
         {
-            "name": "sugarcraft/sugar-crush",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "sugar-crush",
-                "reference": "a27134af48250fba9513602561f263ffe1aa8520"
-            },
-            "require": {
-                "aws/aws-sdk-php": "^3.300",
-                "ext-intl": "*",
-                "ext-mbstring": "*",
-                "ext-pdo_sqlite": "*",
-                "ext-sqlite3": "*",
-                "google/cloud-ai-platform": "^1.0",
-                "guzzlehttp/guzzle": "^7.12.1",
-                "openai-php/client": "^0.10",
-                "php": "^8.3",
-                "ratchet/rfc6455": "^0.4",
-                "react/http": "^1.11",
-                "react/promise": "^3.3",
-                "react/socket": "^1.16",
-                "sugarcraft/sugar-cli": "@dev",
-                "sugarcraft/sugar-constraints": "dev-master",
-                "sugarcraft/sugar-core": "dev-master",
-                "sugarcraft/sugar-diff": "dev-master",
-                "sugarcraft/sugar-focus": "@dev",
-                "sugarcraft/sugar-forms": "dev-master",
-                "sugarcraft/sugar-fuzzy": "dev-master",
-                "sugarcraft/sugar-image": "dev-master",
-                "sugarcraft/sugar-markdown": "dev-master",
-                "sugarcraft/sugar-mcp-client": "dev-master",
-                "sugarcraft/sugar-mouse": "dev-master",
-                "sugarcraft/sugar-overlay": "dev-master",
-                "sugarcraft/sugar-pty": "dev-master",
-                "sugarcraft/sugar-style": "dev-master",
-                "sugarcraft/sugar-toast": "dev-master",
-                "sugarcraft/sugar-video": "@dev",
-                "symfony/yaml": "^7.4"
-            },
-            "require-dev": {
-                "mockery/mockery": "^1.6",
-                "phpunit/phpunit": "^10.5",
-                "ratchet/pawl": "^0.4"
-            },
-            "suggest": {
-                "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom).",
-                "ext-ffi": "Required by `sugarcrush serve`: a forked turn child closes the server's inherited sockets through libc close(2).",
-                "ext-pcntl": "Required by `sugarcrush serve`: every turn runs in a forked child, and the blocking fallback would stall every session on the server.",
-                "ext-posix": "Required by `sugarcrush serve` (process identity and signals for the forked turn children).",
-                "sugarcraft/sugar-crush-web": "The browser UI `sugarcrush serve` serves on its own port (Vite + Vue build shipped as a composer package)."
-            },
-            "bin": [
-                "bin/sugarcrush"
-            ],
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Crush\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Crush\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Chat-shell TUI for AI coding assistants — port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarWidgets TextArea.",
-            "homepage": "https://github.com/sugarcraft/sugar-crush",
-            "keywords": [
-                "ai",
-                "anthropic",
-                "chat",
-                "crush",
-                "llm",
-                "ollama",
-                "openai",
-                "sugarcraft",
-                "sugarcrush",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/sugar-crush/issues",
-                "source": "https://github.com/sugarcraft/sugar-crush",
-                "docs": "https://sugarcraft.github.io/lib/sugar-crush.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/sugar-crush-web",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-crush-web",
-                "reference": "d884e93b35857ddcf4e50fd22d6e143689a569dc"
+                "reference": "2124955c5d27d84cbb0372e8dad5e8e50cb43ad2"
             },
             "require": {
                 "php": "^8.3"
@@ -5336,13 +5336,13 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Browser UI for sugar-crush's WebSocket server mode, shipped as a pre-built Vite + Vue 3 bundle with a one-class PHP shim that locates it. `sugarcrush serve` serves it on the same port, so PHP users need no Node.",
+            "description": "Browser UI for candy-code's WebSocket server mode, shipped as a pre-built Vite + Vue 3 bundle with a one-class PHP shim that locates it. `candy-code serve` serves it on the same port, so PHP users need no Node.",
             "homepage": "https://github.com/sugarcraft/sugar-crush-web",
             "keywords": [
                 "ai",
+                "candy-code",
                 "crush",
                 "sugarcraft",
-                "sugarcrush",
                 "vite",
                 "vue",
                 "web-ui",
@@ -5492,7 +5492,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-diff",
-                "reference": "b72f3064f0e06819f5c232bcc2cd51ab73488cf0"
+                "reference": "f97b3487da4d54571240a67f7c7dcc460cd8589b"
             },
             "require": {
                 "ext-mbstring": "*",
@@ -5522,7 +5522,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and scanner. Extracted from sugar-crush.",
+            "description": "Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and scanner. Extracted from candy-code.",
             "homepage": "https://github.com/sugarcraft/sugar-diff",
             "keywords": [
                 "diff",
@@ -6091,7 +6091,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-mcp-client",
-                "reference": "c786be142dd966ca23773177c03879561e3b819b"
+                "reference": "bf7eb20b10b8942e26a32db08855f2cf7e523c67"
             },
             "require": {
                 "php": "^8.3",
@@ -6121,7 +6121,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "MCP client core — JSON-RPC 2.0 codec, newline-delimited stdio transport and initialize/tools protocol layer. Extracted from sugar-crush.",
+            "description": "MCP client core — JSON-RPC 2.0 codec, newline-delimited stdio transport and initialize/tools protocol layer. Extracted from candy-code.",
             "homepage": "https://github.com/sugarcraft/sugar-mcp-client",
             "keywords": [
                 "json-rpc",
@@ -8587,6 +8587,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "sugarcraft/candy-ansi-inspect": 20,
+        "sugarcraft/candy-code": 20,
         "sugarcraft/candy-codeshot": 20,
         "sugarcraft/candy-codetime": 20,
         "sugarcraft/candy-files": 20,
@@ -8613,7 +8614,6 @@
         "sugarcraft/sugar-cli": 20,
         "sugarcraft/sugar-colorprofile": 20,
         "sugarcraft/sugar-core": 20,
-        "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dashboard": 20,
         "sugarcraft/sugar-datepicker": 20,

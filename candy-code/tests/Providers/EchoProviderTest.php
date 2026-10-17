@@ -1,0 +1,147 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Providers;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\Pruning\RefTag;
+use SugarCraft\Code\Messages\AssistantMessage;
+use SugarCraft\Code\Messages\SystemMessage;
+use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Providers\EchoProvider;
+use SugarCraft\Code\Providers\EmbeddingsRequest;
+use SugarCraft\Code\Providers\ProviderInterface;
+
+/**
+ * @see EchoProvider
+ */
+final class EchoProviderTest extends TestCase
+{
+    private EchoProvider $provider;
+
+    protected function setUp(): void
+    {
+        $this->provider = new EchoProvider();
+    }
+
+    public function testImplementsProviderInterface(): void
+    {
+        $this->assertInstanceOf(ProviderInterface::class, $this->provider);
+    }
+
+    public function testName(): void
+    {
+        $this->assertSame('echo', $this->provider->name());
+    }
+
+    public function testCapabilities(): void
+    {
+        $this->assertTrue($this->provider->supportsStreaming());
+        $this->assertFalse($this->provider->supportsFunctionCalling());
+        $this->assertFalse($this->provider->supportsVision());
+        $this->assertFalse($this->provider->supportsJsonSchema());
+        // 0 is the UNKNOWN sentinel, not a degenerate value: this provider has
+        // no model behind it, and crush_code.md Phase 5 item 4 made
+        // contextWindow() the denominator of every context tier in Chat. The
+        // 1,000,000 that used to sit here was a stand-in for "unlimited" from
+        // when nothing read the method; measured, it put the live offline
+        // tiers at 700,000/850,000/950,000/1,000,000 estimated tokens instead
+        // of 70,000/85,000/95,000/100,000 - i.e. off. assertSame(0) rather
+        // than a range, because "unknown" is the specific answer
+        // ContextWindow::resolve() is looking for; anything positive is taken
+        // as authoritative and used as-is.
+        $this->assertSame(0, $this->provider->contextWindow());
+    }
+
+    public function testCostIsAlwaysZero(): void
+    {
+        $this->assertSame(0.0, $this->provider->costPer1kTokens('echo', 'input'));
+        $this->assertSame(0.0, $this->provider->costPer1kTokens('echo', 'output'));
+    }
+
+    public function testCompleteEchoesLastUserMessageAsBlockquote(): void
+    {
+        $request = new CompleteRequest(
+            model: 'echo',
+            messages: [
+                new SystemMessage('be helpful'),
+                new UserMessage('first'),
+                new AssistantMessage('ok'),
+                new UserMessage('hello world'),
+            ],
+        );
+
+        $response = $this->provider->complete($request);
+
+        $this->assertStringContainsString('You said:', $response->content);
+        $this->assertStringContainsString('> hello world', $response->content);
+        $this->assertStringNotContainsString('first', $response->content);
+        $this->assertNull($response->toolCalls);
+    }
+
+    public function testCompleteWithNoUserMessage(): void
+    {
+        $request = new CompleteRequest(model: 'echo', messages: [new SystemMessage('x')]);
+
+        $response = $this->provider->complete($request);
+
+        $this->assertStringContainsString('nothing to echo', $response->content);
+    }
+
+    public function testCompleteQuotesEveryLine(): void
+    {
+        $request = new CompleteRequest(
+            model: 'echo',
+            messages: [new UserMessage("line one\nline two")],
+        );
+
+        $response = $this->provider->complete($request);
+
+        $this->assertStringContainsString('> line one', $response->content);
+        $this->assertStringContainsString('> line two', $response->content);
+    }
+
+    public function testCompleteDoesNotEchoTheEngineRefTag(): void
+    {
+        $request = new CompleteRequest(
+            model: 'echo',
+            messages: [new UserMessage("hello\n" . RefTag::render(1))],
+        );
+
+        $response = $this->provider->complete($request);
+
+        $this->assertSame("You said:\n\n> hello", $response->content);
+    }
+
+    public function testCompleteStreamYieldsPiecesThatReassemble(): void
+    {
+        $request = new CompleteRequest(model: 'echo', messages: [new UserMessage('alpha beta')]);
+
+        $pieces = [];
+        foreach ($this->provider->completeStream($request) as $chunk) {
+            $pieces[] = $chunk->content;
+        }
+
+        $this->assertNotEmpty($pieces);
+        $reassembled = implode('', $pieces);
+        $this->assertSame($this->provider->complete($request)->content, $reassembled);
+    }
+
+    public function testEmbeddingsReturnsOneVectorPerStringInput(): void
+    {
+        $response = $this->provider->embeddings(new EmbeddingsRequest('echo', ['ab', 'abcd']));
+
+        $this->assertCount(2, $response->embeddings);
+        $this->assertSame([2.0], $response->embeddings[0]);
+        $this->assertSame([4.0], $response->embeddings[1]);
+    }
+
+    public function testEmbeddingsAcceptsScalarInput(): void
+    {
+        $response = $this->provider->embeddings(new EmbeddingsRequest('echo', 'hi'));
+
+        $this->assertSame([[2.0]], $response->embeddings);
+    }
+}

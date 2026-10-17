@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Width;
  * A normalised, inclusive range of cells a mouse text selection covers over a
  * painted frame — the frozen product of a {@see Selection} gesture.
  *
- * Ported upstream from sugar-crush's `Tui\TextSelection` (scout item S12,
+ * Ported upstream from candy-code's `Tui\TextSelection` (scout item S12,
  * docs/plans upstream-port campaign): with SGR mouse tracking on, the terminal
  * runs NO copy-on-select of its own, so every mouse-tracking app that wants
  * the drag gesture terminal users expect has to own it — the way tmux
@@ -29,7 +29,7 @@ use SugarCraft\Core\Util\Width;
  * Coordinates are 1-based terminal cells — the same space {@see Zone}
  * bounding boxes and {@see MouseEvent::$x} use, which is the space SGR mouse
  * reports arrive in, so an app wires its pointer straight in with no
- * rebasing. (Downstream sugar-crush once indexed frame cells from 0; its
+ * rebasing. (Downstream candy-code once indexed frame cells from 0; its
  * `Tui\TextSelection` now runs on this class with 1-based cells end to end.)
  * In {@see extract()} the frame line for row R is `$lines[R - 1]`.
  */
@@ -133,7 +133,7 @@ final class SelectionRange
     /**
      * The text this range covers, read from the frame's lines.
      *
-     * The release-half ported from sugar-crush: escapes are stripped,
+     * The release-half ported from candy-code: escapes are stripped,
      * trailing padding is trimmed from every row, and blank rows at either
      * end are dropped — a drag that started in a transcript's padding row
      * must not copy a leading newline. Rows join with "\n": the frame does

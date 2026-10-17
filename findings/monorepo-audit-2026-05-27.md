@@ -172,12 +172,12 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| sugar-crush | 158 ✓ | APPROVE | 0 | 0 | 2 | 0 |
+| candy-code | 158 ✓ | APPROVE | 0 | 0 | 2 | 0 |
 | sugar-navstack | 75 ✓ | REQUEST_CHANGES | 0 | 0 | 3 | 0 |
 | sugar-dash | 5409 ✓ | APPROVE | 0 | 0 | 2 | 0 | <!-- @rename-keep -->
 | candy-mail | 54 ⚠️ | BLOCKED | 2 | 2 | 3 | 0 |
 
-**sugar-crush** — Chat TUI. Clean, 158 tests. Minor: `@proc_open` suppressions; no PHP version guard for `bypass_shell`.
+**candy-code** — Chat TUI. Clean, 158 tests. Minor: `@proc_open` suppressions; no PHP version guard for `bypass_shell`.
 
 **sugar-navstack** — Navigation components. Issues: `NavStack::updateTop()` and `setItems()` mutate internal state instead of returning clones — inconsistent with stated immutable pattern.
 

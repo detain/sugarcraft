@@ -34,7 +34,7 @@ async function create(): Promise<void> {
 
 <template>
   <section class="dashboard" data-testid="dashboard">
-    <h1>SugarCrush</h1>
+    <h1>CandyCode</h1>
     <p v-if="connection.hello?.server.root" class="root">
       Serving <code>{{ connection.hello.server.root }}</code>
     </p>
