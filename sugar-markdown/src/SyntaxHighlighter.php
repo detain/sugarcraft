@@ -13,7 +13,7 @@ use SugarCraft\Core\Syntax\TokenKind;
  * and styles each via the matching {@see Theme} slot. Falls back to
  * the plain code-block style for unknown / empty languages.
  *
- * The lexing itself now lives in candy-core's
+ * The lexing itself now lives in sugar-core's
  * {@see \SugarCraft\Core\Syntax\RegexHighlighter} — a pure, style-agnostic
  * primitive shared with other consumers (e.g. candy-codeshot). This class is
  * the render half: it maps each {@see \SugarCraft\Core\Syntax\TokenSpan} onto
@@ -70,7 +70,7 @@ final class SyntaxHighlighter
     }
 
     /**
-     * Delegate tokenisation to candy-core's pure lexer, then style each span
+     * Delegate tokenisation to sugar-core's pure lexer, then style each span
      * via the matching {@see Theme} slot. Byte-for-byte equivalent to the old
      * inline tokeniser: a {@see TokenKind::Plain} span (gap/tail text, or the
      * whole input for an unknown language / degraded regex) styles through the

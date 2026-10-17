@@ -1302,15 +1302,15 @@ final class BackgroundSupervisorReapTest extends TestCase
             // THE KNOWN-POSITIVE CONTROL. The absence assertion above is
             // satisfied by a `$body` that is empty, or by a pool that no longer
             // names anything — which is also what a gutted generator looks
-            // like. `candy-core` is in BOTH pools, so requiring it proves the
+            // like. `sugar-core` is in BOTH pools, so requiring it proves the
             // extraction returned real content before an absence is allowed to
             // mean anything. It is matched through the SAME quote-agnostic
             // regex as the absence, so the two cannot drift into testing
             // different alphabets.
             $this->assertSame(
                 1,
-                preg_match('/([\'"])candy-core\1/', $body),
-                "the $pool extraction came back without candy-core, which IS in that pool — the "
+                preg_match('/([\'"])sugar-core\1/', $body),
+                "the $pool extraction came back without sugar-core, which IS in that pool — the "
                 . 'scanner is dead and its "sugar-crush is absent" answer means nothing'
             );
         }

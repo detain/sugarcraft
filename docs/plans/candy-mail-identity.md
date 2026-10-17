@@ -139,7 +139,7 @@ interactive TUI.
 
 | Item | Effort | Notes |
 |---|---|---|
-| **Bubble Tea-style Model** with `state` enum (`Idle` / `PickingFile` / `Sending`) | 1 d | candy-core Model/Update/View already exists |
+| **Bubble Tea-style Model** with `state` enum (`Idle` / `PickingFile` / `Sending`) | 1 d | sugar-core Model/Update/View already exists |
 | **Form fields** (from / to / subject / body textarea) using `sugar-forms` TextInput + Textarea | 1 d | textarea component already in sugar-forms; check coverage |
 | **CC/BCC toggle** (show on user request — matches Pop) | ½ d | keybinding `c` to reveal |
 | **Filepicker** for attachments | 1 d | use existing `super-candy` Picker, or build a thin wrapper |
@@ -180,7 +180,7 @@ roadmap).
 - Tests stay intact.
 - `MATCHUPS.md` row stays 🟢; only sub-status moves from "library
   surface complete" to "library surface + TUI complete."
-- No dependency churn — candy-mail stays on `candy-core` and gains
+- No dependency churn — candy-mail stays on `sugar-core` and gains
   `sugar-forms` / `candy-mdview` / `sugar-style` (all already
   monorepo siblings).
 

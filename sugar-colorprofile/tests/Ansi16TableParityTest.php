@@ -10,7 +10,7 @@ use SugarCraft\ColorProfile\Color;
 use SugarCraft\ColorProfile\StandardColors;
 
 /**
- * Tripwire pinning sugar-colorprofile's ANSI-16 entry table to candy-core's
+ * Tripwire pinning sugar-colorprofile's ANSI-16 entry table to sugar-core's
  * canonical xterm-modern table.
  *
  * Both libraries publish the same 16-slot RGB table and both feed it to a
@@ -27,7 +27,7 @@ use SugarCraft\ColorProfile\StandardColors;
 final class Ansi16TableParityTest extends TestCase
 {
     /**
-     * Every one of the 16 slots must be byte-identical to candy-core's table.
+     * Every one of the 16 slots must be byte-identical to sugar-core's table.
      */
     public function testTableIsElementWiseEqualToCore(): void
     {
@@ -44,7 +44,7 @@ final class Ansi16TableParityTest extends TestCase
             self::assertSame(
                 [$r, $g, $b],
                 $palette[$slot],
-                "slot {$slot} diverged from candy-core",
+                "slot {$slot} diverged from sugar-core",
             );
         }
     }

@@ -212,7 +212,7 @@ final class Breadcrumb
     }
 
     /**
-     * Full ANSI + C0/C1 strip via candy-core Sanitize (SSOT), then collapse the
+     * Full ANSI + C0/C1 strip via sugar-core Sanitize (SSOT), then collapse the
      * whitespace controls it deliberately preserves (\n \r \t) to spaces so an
      * untrusted title cannot inject a newline into the single-line breadcrumb.
      */
@@ -223,7 +223,7 @@ final class Breadcrumb
 
     /**
      * Ellipsis-truncate a single crumb so its visible width fits $budget.
-     * Grapheme-aware via candy-core Width. Used only for the lone surviving
+     * Grapheme-aware via sugar-core Width. Used only for the lone surviving
      * (most-recent) crumb when even it alone overflows maxWidth.
      */
     private function truncateSegment(string $segment, int $budget): string
@@ -295,7 +295,7 @@ final class Breadcrumb
         return \implode($this->separator, $wrapped);
     }
 
-    /** Visible cell width — delegates to candy-core's grapheme-aware util. */
+    /** Visible cell width — delegates to sugar-core's grapheme-aware util. */
     private function effectiveWidth(string $s): int
     {
         return Width::string($s);

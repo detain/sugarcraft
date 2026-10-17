@@ -62,7 +62,7 @@ Per-Sugarcraft package/app docs:
 
 Examples:
 
-* `docs/repo_map/sugarcraft_candy-core.md`
+* `docs/repo_map/sugarcraft_sugar-core.md`
 * `docs/repo_map/sugarcraft_terminal-ui.md`
 
 Each Sugarcraft lib/app directory also contains:
@@ -458,7 +458,7 @@ For each Sugarcraft dir create:
 
 Example:
 
-* `docs/repo_map/update_sugarcraft_candy-core.md`
+* `docs/repo_map/update_sugarcraft_sugar-core.md`
 
 ---
 

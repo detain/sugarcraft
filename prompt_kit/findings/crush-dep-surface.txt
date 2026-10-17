@@ -1,6 +1,6 @@
 scanned 2166 sugar-crush php files (vendor + caches excluded)
 
-=== candy-core (SugarCraft\Core) ===
+=== candy-core (SugarCraft\Core) === @rename-keep historical provenance
   referencing files: 373  (src=109, tests=260, other=4)
   distinct symbols imported: 46
     - KeyType  x176

@@ -124,7 +124,7 @@ $program = new Program(
     App::programOptions($config),
 );
 // btop's SIGTERM / SIGHUP handlers run clean_quit (config save included);
-// candy-core's Program traps only SIGINT, so stop its loop here and let
+// sugar-core's Program traps only SIGINT, so stop its loop here and let
 // the post-run save below do the write after the terminal is restored.
 $trapped = function_exists('pcntl_signal') ? [SIGTERM, SIGHUP] : [];
 if ($trapped !== [] && function_exists('pcntl_async_signals')) {

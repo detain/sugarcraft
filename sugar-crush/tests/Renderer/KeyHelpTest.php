@@ -41,7 +41,7 @@ use SugarCraft\Crush\Tui\SessionPicker;
  * The in-app keybinding reference (crush_code.md Phase 8 item 2): how it is
  * opened, how it is dismissed, and the two render invariants a frame in this
  * app may never break — no line wider than the terminal, no frame taller than
- * it, because candy-core's renderer repaints with an absolute cursorTo() and
+ * it, because sugar-core's renderer repaints with an absolute cursorTo() and
  * paints exactly one logical line per physical row.
  *
  * @see Renderer::renderKeyHelp()
@@ -381,7 +381,7 @@ final class KeyHelpTest extends TestCase
     public function testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft(): void
     {
         // The decoding facts the reachability bullet above rests on, driven rather
-        // than reasoned about — candy-core's decoder and Chat's own arms.
+        // than reasoned about — sugar-core's decoder and Chat's own arms.
         $this->assertSame(
             [[KeyType::Tab->name, '']],
             self::decode("\t"),
@@ -693,7 +693,7 @@ final class KeyHelpTest extends TestCase
         }
 
         // The COMPOSED route, likewise. THREE producers of a "\n" draft, not one:
-        // Chat's arm accepts `Enter` with any of alt/shift/ctrl, and candy-core's
+        // Chat's arm accepts `Enter` with any of alt/shift/ctrl, and sugar-core's
         // decoder emits all three — `\x1b\r` is Alt+Enter, `\x1b[13;2u` is
         // Shift+Enter and `\x1b[13;5u` is Ctrl+Enter (asserted below). A previous
         // revision said "Alt+Enter is the only producer" beside an assertion that
@@ -736,7 +736,7 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * What candy-core's terminal decoder makes of a byte string, as
+     * What sugar-core's terminal decoder makes of a byte string, as
      * `[[KeyType name, rune], …]` — the instrument behind the "no keystroke can
      * TYPE this draft" claims above, so they are measured at the decoder
      * rather than argued from reading it.

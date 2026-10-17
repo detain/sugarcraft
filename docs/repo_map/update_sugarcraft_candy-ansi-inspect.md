@@ -4,7 +4,7 @@
 
 **candy-ansi-inspect** is a PHP port of `charmbracelet/sequin` — a human-readable ANSI escape-sequence inspector/debugger for TUI development. It serves as the SugarCraft ecosystem's dedicated **ANSI debugging tool**, allowing developers to pipe styled terminal output through it and see each escape sequence decoded into labelled, descriptive lines.
 
-**Ecosystem Position:** candy-ansi-inspect occupies a unique niche as a *diagnostic tool* rather than a *rendering* or *framework* library. Unlike sugar-vterm (terminal emulation with cell grid output) or candy-core (TUI runtime), candy-ansi-inspect is purely about parsing and explaining ANSI byte streams in human-readable form. This makes it valuable across the entire ecosystem as a debugging companion.
+**Ecosystem Position:** candy-ansi-inspect occupies a unique niche as a *diagnostic tool* rather than a *rendering* or *framework* library. Unlike sugar-vterm (terminal emulation with cell grid output) or sugar-core (TUI runtime), candy-ansi-inspect is purely about parsing and explaining ANSI byte streams in human-readable form. This makes it valuable across the entire ecosystem as a debugging companion.
 
 **Biggest Opportunity Areas:**
 
@@ -104,7 +104,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 5. **JSON output** — Machine-readable format for tooling integration
 6. **i18n ready** — 16 locales via SugarCraft i18n system
 7. **Clean API** — `parse()`, `report()`, `reportAsJson()` are simple, composable
-8. **Lightweight** — No external dependencies beyond candy-core
+8. **Lightweight** — No external dependencies beyond sugar-core
 9. **Pure PHP** — No FFI, no native extensions required
 10. **Well-tested** — 116 unit tests covering all major paths
 
@@ -286,7 +286,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 
 **Implementation ideas:**
 
-- Create `candy-ansi-inspect-tui` example using `candy-core`
+- Create `candy-ansi-inspect-tui` example using `sugar-core`
 - Scroll through sequences, search/filter, expand details
 - Show hexdump view alongside description
 
@@ -563,7 +563,7 @@ final class OscSegment implements Segment { ... }
 **Content:**
 
 - Debugging TUI output: ` candy-ansi-inspect < file.ansi`
-- Piping from other tools: `candy-core-app | candy-ansi-inspect`
+- Piping from other tools: `sugar-core-app | candy-ansi-inspect`
 - Interpreting SGR sequences
 - Common patterns in bubble tea output
 
@@ -628,7 +628,7 @@ candy-ansi-inspect> help
 Available commands: help, exit, stats, clear, load <file>
 ```
 
-**Implementation:** Uses `candy-core` for TUI, `StreamingInspector` for incremental input
+**Implementation:** Uses `sugar-core` for TUI, `StreamingInspector` for incremental input
 
 ### 2. Colorized Output (--color=auto)
 
@@ -875,7 +875,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
    - **Impact:** Developer experience
 
 10. **Interactive REPL**
-    - TUI-based inspector using `candy-core`
+    - TUI-based inspector using `sugar-core`
     - Search, filter, expand details
     - **Impact:** Usability for complex sequences
 
@@ -920,7 +920,7 @@ candy-ansi-inspect is a mature, well-tested PHP port of Go sequin that provides 
 The manual byte-by-byte parsing approach, while functional, differs from the state-machine approach used by both Go sequin (`charmbracelet/x/ansi`) and the ecosystem's own `sugar-vterm`. Migrating to a state machine would improve maintainability and align with the VT500 standard, but carries risk of regression. A phased approach (parallel operation, then migration) is recommended.
 
 **Ecosystem positioning:**
-candy-ansi-inspect is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `candy-core` (TUI runtime), `sugar-vterm` (terminal emulation), `sugar-pty` (PTY execution), and `sugar-markdown` (styling). The primary opportunity is integration with `sugar-pty` to provide the PTY execution that makes Go sequin so powerful.
+candy-ansi-inspect is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `sugar-core` (TUI runtime), `sugar-vterm` (terminal emulation), `sugar-pty` (PTY execution), and `sugar-markdown` (styling). The primary opportunity is integration with `sugar-pty` to provide the PTY execution that makes Go sequin so powerful.
 
 **Recommended focus:**
 

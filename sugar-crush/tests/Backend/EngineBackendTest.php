@@ -362,7 +362,7 @@ final class EngineBackendTest extends TestCase
         // Injected Termios test seam (see Tty's constructor docblock) -
         // exercises the real PosixBackend raw-mode/restore machinery against
         // a real fd. The (int)-cast fd resolution this seam was written to
-        // bypass no longer exists: candy-core resolves streams through
+        // bypass no longer exists: sugar-core resolves streams through
         // descriptorForStream() now (E368). The seam still pins the termios
         // work to the fd it is handed, instead of one PHP estimated -
         // which is what a test of a real PTY slave wants either way.
@@ -382,7 +382,7 @@ final class EngineBackendTest extends TestCase
         // test in the run". WHAT IS TRUE NOW, re-derived against the code: the
         // shipped repair is `fclose(\STDIN)` plus a `/dev/null` reopen - it
         // holds no flag - and `PosixBackend::restore()`'s
-        // `stream_set_blocking(…, true)` is `is_resource()`-guarded (candy-core
+        // `stream_set_blocking(…, true)` is `is_resource()`-guarded (sugar-core
         // `PosixBackend.php:716`), so it cannot reach the closed constant, for
         // this test or any later one. WHY THE TEST STILL EARNS ITS PLACE: the
         // property is "the seam writes to the stream it was GIVEN" - the pair

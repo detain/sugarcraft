@@ -341,7 +341,7 @@ final class Readline
     }
 
     /**
-     * Emit `CSI ?2004h` (mirrors candy-core Ansi::bracketedPasteOn()) so the
+     * Emit `CSI ?2004h` (mirrors sugar-core Ansi::bracketedPasteOn()) so the
      * terminal wraps pastes in ESC[200~ / ESC[201~ markers that sugar-input's
      * decoder turns into PasteEvents.
      *

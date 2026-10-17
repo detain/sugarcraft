@@ -31,7 +31,7 @@ Corollaries:
   defect. When one OpenAI-compatible provider has a wire bug, check the others
   before declaring it fixed.
 
-## candy-core key normalization — Ctrl+C is `ctrl` + rune `c`
+## sugar-core key normalization — Ctrl+C is `ctrl` + rune `c`
 
 `InputReader` normalizes every control byte `0x01`–`0x1a` into
 `(KeyType::Char, chr(0x60 + code), ctrl: true)`. A real terminal therefore
@@ -56,7 +56,7 @@ next one failing in CI rather than in someone's terminal.
 
 ## Private-use block collision: image markers vs mouse zones
 
-candy-core's image placeholders and sugar-mouse's zone sentinels **both**
+sugar-core's image placeholders and sugar-mouse's zone sentinels **both**
 allocate out of U+E000–U+F8FF. `Renderer::maskImageMarkers()` exists solely to
 mask that block out of the copy the mouse `Scanner` reads, so an image is not
 parsed as a zone. Any new rendered glyph must stay outside U+E000–U+F8FF.

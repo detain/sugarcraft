@@ -275,7 +275,7 @@ final class KittyStreamTest extends TestCase
         // closer. All four must collapse into ONE image. (This shape is
         // protocol-legal lenience, not a sugar-image transcript — mosaic's
         // begin frame carries no data and spells PNG `f=100`; see
-        // `testDecodesCandyCoreAnsiChunkedEmitterWithPngPassthrough`.)
+        // `testDecodesSugarCoreAnsiChunkedEmitterWithPngPassthrough`.)
         $frames = str_split(base64_encode($this->redPng()), 40);
         $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . array_shift($frames) . "\x1b\\";
         while (count($frames) > 1) {
@@ -540,7 +540,7 @@ final class KittyStreamTest extends TestCase
         self::assertSame($this->redPng(), $image->rawPayload());
     }
 
-    public function testDecodesCandyCoreAnsiChunkedEmitterWithPngPassthrough(): void
+    public function testDecodesSugarCoreAnsiChunkedEmitterWithPngPassthrough(): void
     {
         // Producer/consumer interop: the frames `Ansi::kittyGraphicsBegin()` +
         // `kittyGraphicsChunk()` emit (exactly what sugar-image renders) decode

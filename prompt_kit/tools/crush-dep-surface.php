@@ -14,7 +14,7 @@ declare(strict_types=1);
  */
 
 $libs = [
-    'candy-core' => 'Core',
+    'sugar-core' => 'Core',
     'sugar-forms' => 'Forms',
     'sugar-style' => 'Style',
     'sugar-markdown' => 'Shine',

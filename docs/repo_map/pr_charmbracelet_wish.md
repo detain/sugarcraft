@@ -21,11 +21,11 @@ From `repo_map/charmbracelet_wish.md`:
 | Wish Component | SugarCraft Equivalent | Status |
 |---|---|---|
 | `bubbletea.Middleware` (serve TUI over SSH) | `sugar-widgets`, `sugar-forms` | **Gap:** No SSH transport layer exists |
-| `git.Middleware` (git server with hooks) | `candy-core` (process execution) | **Gap:** No git server equivalent |
+| `git.Middleware` (git server with hooks) | `sugar-core` (process execution) | **Gap:** No git server equivalent |
 | `logging.Middleware` (connection logging) | `(none)` | No SSH server library in SugarCraft |
 | `ratelimiter.Middleware` (per-IP throttling) | `(none)` | No SSH-level rate limiting |
 | `accesscontrol.Middleware` (command allowlist) | `(none)` | No SSH command restriction |
-| `recover.Middleware` (panic recovery) | `candy-core` error handling | Partial - worth reviewing |
+| `recover.Middleware` (panic recovery) | `sugar-core` error handling | Partial - worth reviewing |
 | `scp.Middleware` (file transfer) | `sugar-widgets` file components | **Gap:** SCP is a specific protocol |
 | `Cmd` / PTY execution helper | `sugar-pty` (FFI/syscall PTY wrappers) | **Opportunity:** ssh-wrapped version |
 | `WithAuthorizedKeys` (public key auth) | `SugarCraft\Core\Auth` | Different credential systems |

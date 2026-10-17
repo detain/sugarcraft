@@ -10,7 +10,7 @@ It is the "which panel has focus" state for a TUI layout. Register each
 focusable region (sidebar, content grid, filter bar…), map **Tab** to `next()`
 and **Shift-Tab** to `previous()`, and give the region returned by `current()`
 an accent border when you render. The ring carries no rendering or key decoding
-of its own, so it composes with any candy-core model without pulling in
+of its own, so it composes with any sugar-core model without pulling in
 dependencies.
 
 ## Install
@@ -36,7 +36,7 @@ $ring->current();             // 'grid'
 $ring->isFocused('grid');     // true
 ```
 
-Wire it into a candy-core model's `update()`:
+Wire it into a sugar-core model's `update()`:
 
 ```php
 if ($msg instanceof KeyMsg && $msg->type === KeyType::Tab) {

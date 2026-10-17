@@ -338,7 +338,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      * SuggestionsReadyMsg and only the newest keystroke's settlement is
      * honoured (superseded fetches settle quietly with null, 6.6). Streaming
      * partial suggestion lists (6.1) would need a public AsyncCmd extension
-     * in candy-core and stay out of scope for this library. A unified
+     * in sugar-core and stay out of scope for this library. A unified
      * cross-field AsyncSuggestionRequest object (6.2) was judged
      * unnecessary: Input and Select each own their debounce/cancel pair and
      * share no state to reconcile today. Many short-lived debounce timers
@@ -595,7 +595,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
 
             // E736-F2/6.6 (round 85): cancellation resolves the deferred with
             // NULL instead of rejecting. The consumer program discards a null
-            // resolution (candy-core Program only dispatches non-null msgs),
+            // resolution (sugar-core Program only dispatches non-null msgs),
             // while a rejection rides AsyncCmd's otherwise-arm as an
             // ExceptionMsg + error log PER REPLACED KEYSTROKE — the old shape
             // turned ordinary rapid typing into a spurious error storm. A

@@ -14,12 +14,12 @@ git clone https://github.com/detain/sugarcraft.git
 cd sugarcraft
 
 # Install deps + run tests for one library:
-cd candy-core
+cd sugar-core
 composer install
 vendor/bin/phpunit
 
 # Or, for the whole monorepo (from the repo root):
-cd ..   # the one-library run above left you inside candy-core/
+cd ..   # the one-library run above left you inside sugar-core/
 for d in candy-* sugar-* honey-*; do
     [ -f "$d/phpunit.xml" ] || continue
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
@@ -34,7 +34,7 @@ refuses a path url that does not exist. So per-lib manifests carry no
 `repositories[]` block at all; only the root does, because the monorepo
 root is the directory those `../` urls resolve against.
 
-To get local wiring back — so an edit to `candy-core/src/Util/Width.php`
+To get local wiring back — so an edit to `sugar-core/src/Util/Width.php`
 shows up in `sugar-markdown`'s test run — inject the path repos, then throw
 them away:
 
@@ -90,7 +90,7 @@ The first line wants a PHPUnit 10 PHAR on `PATH` (CI installs one via
 was measured green on PHP 8.3.6, and the run prints its own totals:
 
 ```sh
-candy-core/vendor/bin/phpunit --no-configuration tools/tests/
+sugar-core/vendor/bin/phpunit --no-configuration tools/tests/
 ```
 
 Do not commit a per-lib `composer.lock` (`/*/composer.lock` is gitignored;
@@ -178,7 +178,7 @@ To run coverage locally you need pcov (or xdebug):
 pecl install pcov
 echo 'extension=pcov.so' | sudo tee /etc/php/8.3/cli/conf.d/20-pcov.ini
 echo 'pcov.enabled=1'    | sudo tee -a /etc/php/8.3/cli/conf.d/20-pcov.ini
-cd candy-core && vendor/bin/phpunit --coverage-text
+cd sugar-core && vendor/bin/phpunit --coverage-text
 ```
 
 ## Bootstrapping the sugarcraft org repos

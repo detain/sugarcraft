@@ -128,7 +128,7 @@ final class AgentSplitCompositorTest extends TestCase
         $runs = [];
         // Full task literals: the old 'Audit candy-' . $lib split-concat was
         // rename-hostile (R3 flips the assert side but not the glued prefix).
-        $tasks = ['core' => 'Audit candy-core', 'ansi' => 'Audit sugar-ansi-parser'];
+        $tasks = ['core' => 'Audit sugar-core', 'ansi' => 'Audit sugar-ansi-parser'];
         foreach (['core' => 'core findings', 'ansi' => 'ansi findings'] as $lib => $output) {
             $run = new SubAgent(id: 'run-' . $lib, agent: $reviewer, task: $tasks[$lib]);
             $run->status = SubAgent::STATUS_STREAMING;
@@ -144,7 +144,7 @@ final class AgentSplitCompositorTest extends TestCase
         self::assertSame(2, substr_count($column, '╭ reviewer '), 'one tile per run, not one per agent name');
         self::assertStringContainsString('core findings', $column);
         self::assertStringContainsString('ansi findings', $column);
-        self::assertStringContainsString('Audit candy-core', $column);
+        self::assertStringContainsString('Audit sugar-core', $column);
         self::assertStringContainsString('Audit sugar-ansi-parser', $column);
     }
 
@@ -539,7 +539,7 @@ final class AgentSplitCompositorTest extends TestCase
     {
         // Agent output is model- and tool-authored. A CR would return the
         // cursor to column 0 and let the buffer overwrite the tile border; a
-        // U+E000 is where candy-core's image markers and sugar-mouse's zone
+        // U+E000 is where sugar-core's image markers and sugar-mouse's zone
         // sentinels both begin.
         $manager = $this->managerWithLiveAgent('reviewer', "clean\u{E000}text\rOVERWRITE\x1b[2J");
 

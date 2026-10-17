@@ -1,6 +1,6 @@
 # Overview
 
-**sugar-markdown** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`sugar-style`, `candy-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `candy-mdview`).
+**sugar-markdown** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`sugar-style`, `sugar-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `candy-mdview`).
 
 **Biggest opportunity areas:**
 
@@ -89,7 +89,7 @@
 ## Dependencies
 
 - `league/commonmark: ^2.4`
-- `sugarcraft/candy-core` (Width, Ansi utilities)
+- `sugarcraft/sugar-core` (Width, Ansi utilities)
 - `sugarcraft/sugar-style` (Style, Border, Table)
 
 ## Consumer

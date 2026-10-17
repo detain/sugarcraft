@@ -179,7 +179,7 @@ SugarCraft already has a direct port: **`sugar-table`**
 
 - **`sugar-forms`:** Shares `KeyMap` concept and some input handling patterns
 - **`sugar-charts`:** For rendering data visualizations alongside tables
-- **`candy-core`:** Lower-level ANSI rendering primitives (`Ansi` utility class)
+- **`sugar-core`:** Lower-level ANSI rendering primitives (`Ansi` utility class)
 
 ## Analysis
 

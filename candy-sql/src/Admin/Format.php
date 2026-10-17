@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\Format as CoreFormat;
  * Formatting utilities for displaying database metrics.
  *
  * Thin delegate over {@see \SugarCraft\Core\Util\Format} — the byte/duration/
- * scale logic moved to candy-core so the whole ecosystem can share it. This
+ * scale logic moved to sugar-core so the whole ecosystem can share it. This
  * class is retained as the established candy-sql entry point; prefer
  * `SugarCraft\Core\Util\Format` directly in new code.
  *

@@ -20,7 +20,7 @@ use SugarCraft\Video\Subtitle\WebVtt;
  * No single upstream: the decode → render → pace pipeline draws on prior art in
  * maxcurzi/tplay, seatedro/glyph, and joelibaceta/video-to-ascii. The rendering
  * stack is reused from the SugarCraft ecosystem (sugar-image image renderers,
- * sugar-animation downsampling, sugar-colorprofile color mapping, candy-core TEA runtime)
+ * sugar-animation downsampling, sugar-colorprofile color mapping, sugar-core TEA runtime)
  * rather than reinvented.
  *
  * Usage:
@@ -437,7 +437,7 @@ final class Reel
      * Build the playback Model from the configured options WITHOUT running it.
      *
      * This is the embed-without-owning-the-loop seam. A host that already drives
-     * its own candy-core Program — a dashboard, a kiosk shell, a multi-pane TUI —
+     * its own sugar-core Program — a dashboard, a kiosk shell, a multi-pane TUI —
      * calls `toPlayer()` to get the fully configured {@see Player} Model and mounts
      * it inside ITS program (as a sub-Model, or by forwarding messages to it),
      * instead of handing the terminal to {@see play()}'s blocking `Program::run()`.

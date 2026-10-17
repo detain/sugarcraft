@@ -162,7 +162,7 @@ The architecture maps well to SugarCraft's TUI component philosophy:
 | `menu.Model` (list selection) | `sugar-widgets` (base components) | Menu/select widget building on bubbles/list |
 | `breadcrumb.Model` (trail rendering) | `sugar-widgets` or `sugar-markdown` | View component rendering hierarchical context |
 | `shell.Model` (composite shell) | `candy-scriptui` (shell wrapper) | Composite component managing child views |
-| `window.Model` (dimension management) | `candy-core` | Layout/dimension tracking utilities |
+| `window.Model` (dimension management) | `sugar-core` | Layout/dimension tracking utilities |
 | `styles`, `lipgloss` usage | `sugar-markdown` | Lipgloss-based styling/theme system |
 | `tea.Model` interface pattern | All SugarCraft libs | Immutable + fluent `Model` pattern with Init/Update/View |
 | `Closable` interface | Resource cleanup patterns | Similar to disposal/cleanup patterns in view components |

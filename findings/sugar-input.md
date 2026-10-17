@@ -186,7 +186,7 @@ public function equals(self $other): bool
 
 ### 2. No ReactPHP/Async Streaming Integration
 
-This is a ReactPHP-based ecosystem (`php: ^8.3` with `candy-core` which uses ReactPHP), yet `StreamInputDriver` is purely blocking I/O via `stream_select()`. There is no:
+This is a ReactPHP-based ecosystem (`php: ^8.3` with `sugar-core` which uses ReactPHP), yet `StreamInputDriver` is purely blocking I/O via `stream_select()`. There is no:
 - `ReadableStreamInterface` implementation from ReactPHP
 - Async event loop integration
 - Async iterable of events
@@ -324,9 +324,9 @@ An empty marker interface provides minimal value beyond using a docblock tag. Ho
 
 **Problem:** `sugar-widgets` (component library) has no dependency on `sugar-input`. The TUI component ecosystem (`sugar-widgets`, `candy-scriptui`) likely needs keyboard/mouse input but there is no integration example.
 
-### 3. Hard Dependency on `sugarcraft/candy-core`
+### 3. Hard Dependency on `sugarcraft/sugar-core`
 
-`composer.json:31` requires `"sugarcraft/candy-core": "dev-master"` with a path repository. This is a hard development dependency that makes the library unusable without the full monorepo. This is by design per AGENTS.md but worth noting for users who want to use it standalone.
+`composer.json:31` requires `"sugarcraft/sugar-core": "dev-master"` with a path repository. This is a hard development dependency that makes the library unusable without the full monorepo. This is by design per AGENTS.md but worth noting for users who want to use it standalone.
 
 ### 4. No Windows/FFI Support Path
 

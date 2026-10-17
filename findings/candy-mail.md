@@ -123,7 +123,7 @@ For modern PHP 8.3+, `$_ENV` or `getenv('VAR', false)` is preferred.
 
 ## Compatibility Issues with Other SugarCraft Libs
 
-### 16. Depends on `dev-master` of `sugar-async` and `candy-core`
+### 16. Depends on `dev-master` of `sugar-async` and `sugar-core`
 
 Using `dev-master` as a version constraint means the library could break if those packages make breaking changes.
 

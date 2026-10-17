@@ -1,6 +1,6 @@
 # candy-top
 
-A full-screen terminal system monitor for PHP 8.3+, built on the SugarCraft TUI stack. candy-top shows live CPU, memory, disk, network, process and container panels with braille, block or sextant graphs, gradient meters and themes in the btop tradition, and follows the feature set of aristocratos/btop v1.4.7 plus a set of adopted upstream pull requests. Everything runs on the [candy-core](../candy-core) Model/Cmd runtime, and the drawing uses [sugar-dashboard](../sugar-dashboard), [sugar-widgets](../sugar-widgets) and [sugar-style](../sugar-style).
+A full-screen terminal system monitor for PHP 8.3+, built on the SugarCraft TUI stack. candy-top shows live CPU, memory, disk, network, process and container panels with braille, block or sextant graphs, gradient meters and themes in the btop tradition, and follows the feature set of aristocratos/btop v1.4.7 plus a set of adopted upstream pull requests. Everything runs on the [sugar-core](../sugar-core) Model/Cmd runtime, and the drawing uses [sugar-dashboard](../sugar-dashboard), [sugar-widgets](../sugar-widgets) and [sugar-style](../sugar-style).
 
 ![candy-top demo](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif)
 

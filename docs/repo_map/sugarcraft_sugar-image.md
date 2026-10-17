@@ -14,7 +14,7 @@
 
 - **ext-gd:** Required
 
-- **Key Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `react/promise`
+- **Key Dependencies:** `sugarcraft/sugar-core`, `sugarcraft/sugar-style`, `react/promise`
 
 ---
 
@@ -28,7 +28,7 @@ SugarImage is a PHP port of `charmbracelet/x/mosaic` that renders images (PNG/JP
 sugar-image/src/
 ├── AdaptiveImage.php              # LRU memoizing wrapper (key: "WxH")
 ├── Animation.php                  # Immutable frame sequence value object
-├── AnimationDriver.php             # Model implementing candy-core tick() API
+├── AnimationDriver.php             # Model implementing sugar-core tick() API
 ├── AsyncRenderer.php               # Interface for async rendering
 ├── Capability.php                  # Immutable terminal capability snapshot
 ├── CellSize.php                   # Font-size value object (cellW × cellH)
@@ -100,7 +100,7 @@ sugar-image/src/
 
 **SugarCraft differentiators vs upstream:**
 
-- `renderFrame()` + `delete()` form a clean animation API matched to candy-core's `Model::update()/view()` cycle
+- `renderFrame()` + `delete()` form a clean animation API matched to sugar-core's `Model::update()/view()` cycle
 
 - `KittyOptions` value object with fluent `withZIndex()`, `withCompression()`, `withUseVirtual()` mirrors the builder pattern but as immutable value
 
@@ -394,7 +394,7 @@ public static function fixed(array $frames, int $delayMs): self;  // uniform del
 public function withFrame(int $index, ImageSource $frame, int $delayMs): self;  // replace one frame
 ```
 
-**`AnimationDriver`** — candy-core `Model` implementation:
+**`AnimationDriver`** — sugar-core `Model` implementation:
 - `init()`: Returns `Cmd::tick($delaySec, FrameTickMsg::class)` when not paused
 
 - `update(FrameTickMsg)` — advances `$index = ($index + 1) % $animation->frameCount()`, schedules next tick
@@ -485,7 +485,7 @@ enum Scale {
 | Protocols | Kitty, Sixel | Kitty, iTerm2, Sixel, HalfBlock, QuarterBlock, Chafa |
 | Terminal detection | Basic env-var only | Full DA1 + XTWINOPS probing with caching |
 | tmux passthrough | Not mentioned | Full decorator implementation |
-| Animation driver | None | AnimationDriver as candy-core Model |
+| Animation driver | None | AnimationDriver as sugar-core Model |
 | LRU cache | None | AdaptiveImage with configurable maxCache |
 | Scale modes | None | Full Scale enum (Fit/Fill/Stretch/None/Crop) |
 | Dithering | None (external) | Floyd-Steinberg, Stucki, Atkinson via Dither enum |
@@ -511,7 +511,7 @@ enum Scale {
 | Async rendering | AsyncRenderWorker + request coalescing | SyncAsyncRenderer (futureTick) |
 | Protocol precedence | Kitty > iTerm2 > Sixel > Halfblocks | Same |
 | tmux passthrough | Yes (DCS envelope) | Yes (TmuxPassthroughDecorator) |
-| TUI integration | ImageWidget for Bubbletea | AnimationDriver for candy-core |
+| TUI integration | ImageWidget for Bubbletea | AnimationDriver for sugar-core |
 | WebP support | Planned (not implemented) | Not supported (ext-gd limitation) |
 | Image formats | PNG, JPEG, GIF, WebP (planned) | PNG, JPEG, GIF only |
 
@@ -605,7 +605,7 @@ $jpegBytes = imagejpeg($img, null, 85);  // 85% quality
 | `src/PixelGrid.php` | 171 | GD→RGB cell grid conversion |
 | `src/AdaptiveImage.php` | 154 | LRU memoizing wrapper |
 | `src/Animation.php` | 101 | Immutable frame sequence |
-| `src/AnimationDriver.php` | 146 | candy-core Model for animation |
+| `src/AnimationDriver.php` | 146 | sugar-core Model for animation |
 | `src/TmuxPassthroughDecorator.php` | 164 | tmux DCS envelope wrapper |
 | `src/Scale.php` | 137 | Scale mode enum + computeDimensions |
 | `src/Dither.php` | 36 | Error-diffusion enum |
@@ -645,7 +645,7 @@ $jpegBytes = imagejpeg($img, null, 85);  // 85% quality
 
 2. **Clean Renderer interface** — each protocol implements `render()`, `name()`, `supportsAlpha()`, `delete()` providing a consistent contract for the `Mosaic` facade.
 
-3. **Superior to upstream in TUI integration** — `AnimationDriver` as a candy-core `Model` enables direct use in Bubble Tea-style programs, something the Go upstream lacks entirely.
+3. **Superior to upstream in TUI integration** — `AnimationDriver` as a sugar-core `Model` enables direct use in Bubble Tea-style programs, something the Go upstream lacks entirely.
 
 4. **Performance gap vs go-termimg** — missing parallel base64 encoding, smaller LRU (4 vs 100 entries), no request coalescing in async pipeline. PHP's single-threaded nature makes parallel encoding harder but not impossible with ReactPHP.
 

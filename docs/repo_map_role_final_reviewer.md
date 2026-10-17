@@ -46,7 +46,7 @@ The supervisor uses these strings verbatim — get the casing and emoji right.
 - Run phpunit yourself — don't trust the TestEngineer's summary.
 - If the diff is empty (e.g., the step was a no-op like step-00), accept it and emit `SHIP ✅` with a note that there's nothing to ship.
 - If `docs/repo_map_updates.md` has gained a `BLOCKING:` line during this step, halt and emit `BLOCK ❌` with the line copied verbatim into your report.
-- Don't second-guess decisions the supervisor already approved in `docs/repo_map_updates.md` (e.g., "Vim mode lives in candy-core per step-24 update note").
+- Don't second-guess decisions the supervisor already approved in `docs/repo_map_updates.md` (e.g., "Vim mode lives in sugar-core per step-24 update note").
 
 ## Loop termination
 

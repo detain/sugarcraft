@@ -19,7 +19,7 @@ use SugarCraft\Top\Lang;
  *
  * The state is a convenience, never worth a failed start: a missing,
  * unreadable, oversized or corrupt file loads as the empty state. Writes
- * go through candy-core's {@see AtomicJsonFile} (temp + fsync + rename,
+ * go through sugar-core's {@see AtomicJsonFile} (temp + fsync + rename,
  * 0700 directory, 0600 file), the same publish contract as
  * {@see \SugarCraft\Top\Config\ConfigFile::write()}.
  */

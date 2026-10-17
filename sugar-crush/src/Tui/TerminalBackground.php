@@ -27,7 +27,7 @@ use SugarCraft\Core\Util\Color;
  *      translucent background over a light desktop, a screen-sharing session,
  *      a colour-vision preference).
  *
- *   2. **The terminal's own answer.** candy-core asks over OSC 11
+ *   2. **The terminal's own answer.** sugar-core asks over OSC 11
  *      ({@see \SugarCraft\Core\Cmd::requestBackgroundColor()}, batched into
  *      {@see \SugarCraft\Crush\App\App::init()}); the reply comes back as a
  *      {@see BackgroundColorMsg}, whose `isDark()` is a real luminance test on

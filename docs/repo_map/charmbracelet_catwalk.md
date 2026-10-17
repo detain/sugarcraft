@@ -112,7 +112,7 @@ Catwalk is a **provider registry / model database**, not a TUI component. It doe
 | `sugar-charts` (data viz) | **Potential consumer** | Could visualize pricing comparisons across models/providers using catwalk's `cost_per_1m_in/out` data |
 | `sugar-log` (logging) | **Potential consumer** | The catwalk server uses `log.Printf` — a SugarCraft `SugarLog` integration would improve observability |
 | `sugar-metrics` (Prometheus) | **Already aligned** | Catwalk already exposes Prometheus metrics (`catwalk_providers_requests_total`); a PHP port could use `SugarMetrics` for the same pattern |
-| `candy-core` (TUI runtime) | **Reference architecture** | The Elm-style `Model/Update/View` pattern used in `candy-core` is similar to how catwalk organizes provider state — could inform a model-selector component architecture |
+| `sugar-core` (TUI runtime) | **Reference architecture** | The Elm-style `Model/Update/View` pattern used in `sugar-core` is similar to how catwalk organizes provider state — could inform a model-selector component architecture |
 
 **No direct port candidate exists today** because catwalk's core value proposition (a structured provider/model database) is fundamentally a data-management problem, not a TUI rendering problem. The closest analog would be a **SugarCraft model-selector** or **AI provider browser** TUI component that _uses_ catwalk-style metadata — but that would be a consumer of the data, not a port of catwalk itself.
 

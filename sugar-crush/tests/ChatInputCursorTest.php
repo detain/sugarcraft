@@ -858,7 +858,7 @@ final class ChatInputCursorTest extends TestCase
 
     /**
      * The frame must never grow a row wider than the terminal or taller than
-     * it: candy-core's renderer repaints with an absolute `cursorTo()` and
+     * it: sugar-core's renderer repaints with an absolute `cursorTo()` and
      * paints one logical line per physical row.
      *
      * Measured over a multi-row draft, which is the shape this change makes

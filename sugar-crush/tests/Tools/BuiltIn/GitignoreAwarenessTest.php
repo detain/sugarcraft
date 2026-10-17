@@ -239,8 +239,8 @@ final class GitignoreAwarenessTest extends TestCase
 
     /**
      * Not hypothetical, and not synthetic: SugarCraft is a composer path-repo
-     * monorepo, so `sugar-crush/vendor/sugarcraft/candy-core` is a symlink to
-     * `../../../candy-core`, whose own `vendor/sugarcraft/` links back out to
+     * monorepo, so `sugar-crush/vendor/sugarcraft/sugar-core` is a symlink to
+     * `../../../sugar-core`, whose own `vendor/sugarcraft/` links back out to
      * more siblings. Following those is a genuine cycle, so this runs against
      * the real tree rather than a fixture of one.
      */

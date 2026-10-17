@@ -620,7 +620,7 @@ final class HttpMcpServerTest extends TestCase
         if ($this->e695AuthFile !== null) {
             $dir = dirname($this->e695AuthFile);
             // The store file plus BOTH lock sidecars: the MCP-7 exchange lock
-            // (`auth.json.lock`) and candy-core AtomicJsonFile's dot-sidecar
+            // (`auth.json.lock`) and sugar-core AtomicJsonFile's dot-sidecar
             // (`.auth.json.lock`, `dirname/.basename.lock`) are created and
             // never unlinked, so a bare rmdir left the dir non-empty and the
             // temp tree behind. Each removal tolerates absence — a failed

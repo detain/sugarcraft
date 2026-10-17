@@ -1,6 +1,6 @@
 ---
 name: sugarcraft-model-pattern
-description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, a private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters that return a new instance, bare accessors (no `get`), and (for TUI roots) the candy-core `Model` contract `init()`/`update(Msg): [Model, ?Cmd]`/`view()`/`subscriptions()`. Mirror `sugar-style/src/Style.php` (value object) or `sugar-widgets/src/Stopwatch/Stopwatch.php` (Model). Use when the user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing an existing class (use direct Edit), tests-only changes (use write-phpunit-test), scaffolding a whole new library skeleton (use scaffold-library), or non-SugarCraft repos.
+description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, a private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters that return a new instance, bare accessors (no `get`), and (for TUI roots) the sugar-core `Model` contract `init()`/`update(Msg): [Model, ?Cmd]`/`view()`/`subscriptions()`. Mirror `sugar-style/src/Style.php` (value object) or `sugar-widgets/src/Stopwatch/Stopwatch.php` (Model). Use when the user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing an existing class (use direct Edit), tests-only changes (use write-phpunit-test), scaffolding a whole new library skeleton (use scaffold-library), or non-SugarCraft repos.
 paths:
   - "*/src/**/*.php"
 ---
@@ -16,7 +16,7 @@ Scaffold a new immutable+fluent class that looks byte-identical to the rest of t
 - **Accessors are bare** — `elapsed()`, not `getElapsed()`.
 - **Nullable fields that a `with*()` can set need a paired `bool $XSet` sentinel** — `mutate()` cannot tell a passed `null` from an omitted arg. See `sugar-widgets/src/TextInput/TextInput.php`.
 - **Side effects go in a `Cmd` (a `Closure(): ?Msg`), never in `view()`.** `view()` is pure.
-- **Namespace = slug mapped**: `sugar-markdown/` → `SugarCraft\Markdown\`; quirk: `candy-core/` → `SugarCraft\Core\`. Subdir classes nest, e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php` → `SugarCraft\Widgets\Stopwatch\`.
+- **Namespace = slug mapped**: `sugar-markdown/` → `SugarCraft\Markdown\`; quirk: `sugar-core/` → `SugarCraft\Core\`. Subdir classes nest, e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php` → `SugarCraft\Widgets\Stopwatch\`.
 - **Doc-comment cites upstream**: `Mirrors charmbracelet/<repo>.<Method>` or `Mirror of {@see X}`. Comment WHY, not WHAT.
 - **Validation throws** `\InvalidArgumentException` (with `Lang::t('<key>')`), never returns `null` for bad input.
 
@@ -76,7 +76,7 @@ final class <Class>
     public function fg(): ?Color { return $this->fg; }
 }
 ```
-For a class with **many** props, use the `Mutable` trait (`candy-core/src/Concerns/Mutable.php`) instead of hand-writing each `new self(...)`:
+For a class with **many** props, use the `Mutable` trait (`sugar-core/src/Concerns/Mutable.php`) instead of hand-writing each `new self(...)`:
 ```php
 use SugarCraft\Core\Concerns\Mutable;
 
@@ -202,7 +202,7 @@ Exception messages and rendered labels go through `Lang::t('<slug>.<key>', [...]
 
 - **`Too few arguments to function __construct()` from `mutate()`**: a constructor param name doesn't match its property name, so `get_object_vars()` can't supply it. Rename so promoted param == property, or hand-write `new self(...)` instead of using the `Mutable` trait.
 - **A `withFoo(null)` silently keeps the old value**: you're missing the sentinel. Add `bool $fooSet` to the constructor and pass `true` in that setter's `mutate(['foo' => $foo, 'fooSet' => true])`.
-- **`Class SugarCraft\... not found` at test time**: namespace doesn't match the PSR-4 map for the slug. Run `head -6 <slug>/src/<AnyExisting>.php` and copy its `namespace` line's prefix. Remember `candy-core` → `SugarCraft\Core`, not `SugarCraft\CandyCore`.
+- **`Class SugarCraft\... not found` at test time**: namespace doesn't match the PSR-4 map for the slug. Run `head -6 <slug>/src/<AnyExisting>.php` and copy its `namespace` line's prefix. Remember `sugar-core` → `SugarCraft\Core`, not `SugarCraft\SugarCore`.
 - **`update()` return type error / `Cannot use [...] as array`**: `update()` must return the tuple `[$model, $cmd]`. Return `[$this, null]` for unhandled messages, never a bare `$this` or `void`.
 - **Effect fires during render / duplicated tick chains**: you put a side effect in `view()`, or `start()` isn't idempotent and spawns parallel tick loops. Move the effect into a `Cmd` returned from `update()`/`init()`, and early-return `[$this, null]` when already running.
 - **`vendor/bin/phpunit` fails on code you didn't touch**: stale per-lib `composer.lock`/`vendor/` (gitignored, CI unaffected). Run `cd <slug> && composer update` before trusting the failure.

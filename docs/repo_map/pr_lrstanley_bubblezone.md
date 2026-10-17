@@ -22,10 +22,10 @@ From `repo_map/lrstanley_bubblezone.md`:
 | bubblezone concept | SugarCraft lib | Status |
 |---|---|---|
 | `zone.Mark(id, v)` | `sugar-widgets` (focus/mouse zone tracking) | Partial |
-| `zone.Get(id).InBounds(msg)` collision | `candy-core` (BubbleTea model port) | Partial |
+| `zone.Get(id).InBounds(msg)` collision | `sugar-core` (BubbleTea model port) | Partial |
 | `zone.Scan()` ANSI marker stripping | `sugar-forms` / lipgloss port | Not started |
 | `zone.NewPrefix()` unique ID generation | `candy-scriptui` | Partial |
-| Mouse tracking constants | `sugar-widgets` + `candy-core` | Partial |
+| Mouse tracking constants | `sugar-widgets` + `sugar-core` | Partial |
 | `ZoneInfo.Pos()` relative coordinates | `sugar-widgets` | Partial |
 
 **Suggested new leaf:** `sugar-zone` — standalone zone scanning/marking/bounds-checking component.

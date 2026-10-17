@@ -230,7 +230,7 @@ final class Slider implements \SugarCraft\Forms\Field
     /**
      * Host-callable zone drag (crush_media W3.2, plan :417-431). This is the
      * Shape-A-vs-B of widget mouse support and the ruling lands on B-plus-A:
-     * Slider stays dependency-free — it types candy-core's own `MouseMsg`
+     * Slider stays dependency-free — it types sugar-core's own `MouseMsg`
      * (already a required sibling, zero new composer requires), so a host on
      * the TEA channel just forwards messages to {@see update()}, while a
      * host that owns the layout geometry (sugar-crush runs sugar-mouse and

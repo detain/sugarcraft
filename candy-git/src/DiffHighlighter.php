@@ -15,7 +15,7 @@ use SugarCraft\Core\Syntax\TokenSpan;
  * The 780920291 Phase-4 commit shipped the four rebase/stash/cherry-pick/
  * worktree surfaces with inline whole-line ANSI and explicitly deferred the
  * syntax pass ("candy-mdview integration deferred"). Step 10.24 has since
- * landed the highlighting pipeline; its reusable surface is candy-core's
+ * landed the highlighting pipeline; its reusable surface is sugar-core's
  * pure {@see RegexHighlighter} lexer — the same primitive candy-mdview /
  * sugar-markdown render through (via Markdown\SyntaxHighlighter's Theme slots) and
  * candy-codeshot consumes directly (CodeShot\CodeHighlighter). candy-mdview itself

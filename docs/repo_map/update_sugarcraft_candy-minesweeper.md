@@ -1,6 +1,6 @@
 # Overview
 
-`candy-minesweeper` is a Minesweeper clone ported from Go (`maxpaulus43/go-sweep`) to PHP, running on the SugarCraft TUI stack (`candy-core` + `sugar-style`). It faithfully reproduces the upstream experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support across 16 locales.
+`candy-minesweeper` is a Minesweeper clone ported from Go (`maxpaulus43/go-sweep`) to PHP, running on the SugarCraft TUI stack (`sugar-core` + `sugar-style`). It faithfully reproduces the upstream experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support across 16 locales.
 
 **Biggest opportunity areas:**
 
@@ -725,7 +725,7 @@ public function testRendererOutput(): void
 ### Issue #1599 / #1690: Data Races
 
 **Summary:** Shared state between render loop and input handlers caused races.
-**Relevance:** candy-minesweeper uses immutable objects but candy-core renderer could have similar issues.
+**Relevance:** candy-minesweeper uses immutable objects but sugar-core renderer could have similar issues.
 **Lessons learned:** All shared state between loops must be mutex-protected.
 
 ## From textualize/textual (via pr_textualize_textual.md)

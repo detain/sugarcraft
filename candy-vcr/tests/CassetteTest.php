@@ -41,13 +41,13 @@ final class CassetteTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
         );
         $this->assertSame(1, $h->version);
         $this->assertSame('2026-05-07T10:00:00Z', $h->createdAt);
         $this->assertSame(80, $h->cols);
         $this->assertSame(24, $h->rows);
-        $this->assertSame('sugarcraft/candy-core@dev', $h->runtime);
+        $this->assertSame('sugarcraft/sugar-core@dev', $h->runtime);
     }
 
     public function testHeaderRejectsBadVersion(): void
@@ -114,7 +114,7 @@ final class CassetteTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
         );
     }
 }

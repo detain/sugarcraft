@@ -42,7 +42,7 @@ final class PosixMasterPtyTest extends TestCase
      *
      * MEASURED before the fix, PHP 8.3.6, this box: five open/write/close
      * cycles leaked 1, 2, 3, 4, 5 `/dev/ptmx` descriptors -- linear in the
-     * number of closes. It was found from candy-core, where an un-skipped
+     * number of closes. It was found from sugar-core, where an un-skipped
      * test drove one such cycle and the NEXT test's `/proc/self/fd` walk
      * found two descriptors on one device where it requires exactly one.
      *

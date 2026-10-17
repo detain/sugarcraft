@@ -463,7 +463,7 @@ Build on mods' `stream.Client` pattern but add:
 | mods Issue | SugarCraft Gap |
 |-----------|---------------|
 | #635 streaming perf | `candy-scriptui` viewport needs delta rendering |
-| #316 LocalAI key required | `candy-core` config needs provider-aware validation |
+| #316 LocalAI key required | `sugar-core` config needs provider-aware validation |
 | #197 persistent TUI | `candy-scriptui` needs session model concept |
 | #352 cross-provider fallback | `sugar-forms` needs multi-provider router |
 | #675 --return-id | `sugar-forms` needs scriptable ConversationManager |

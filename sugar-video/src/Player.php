@@ -34,11 +34,11 @@ use SugarCraft\Video\Subtitle\WebVtt;
  * TEA Model for terminal video playback.
  *
  * The Player implements the Elm Architecture (Model-View-Update) via
- * the TEA runtime in candy-core. It pulls frames from a Decoder iterator,
+ * the TEA runtime in sugar-core. It pulls frames from a Decoder iterator,
  * paces them using wall-clock time and the Sync engine, and renders via
  * FrameRenderer (ascii/ansi256/truecolor/half-block).
  *
- * Repaint: view() returns the FULL current frame every call. candy-core's
+ * Repaint: view() returns the FULL current frame every call. sugar-core's
  * Renderer already diffs each frame against the previously rendered one and
  * emits only the minimal terminal update, so the Player does not (and must
  * not) diff inside view() — doing so would double-diff and corrupt output.
@@ -699,7 +699,7 @@ final class Player implements Model
     {
         // Quit: Escape, q, or ctrl+c. Same teardown a host screen performs via
         // stop() — stop the audio companion and close the decoder (killing its
-        // ffmpeg child) — then ask candy-core to exit the program.
+        // ffmpeg child) — then ask sugar-core to exit the program.
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
@@ -856,7 +856,7 @@ final class Player implements Model
     /**
      * Render the current frame to a full ANSI string.
      *
-     * view() always emits the COMPLETE current frame. candy-core's Renderer
+     * view() always emits the COMPLETE current frame. sugar-core's Renderer
      * diffs it against the previously rendered frame and writes only the
      * minimal terminal update, so there is intentionally no cell-diff here —
      * diffing inside view() would double-diff the framework's own diff and

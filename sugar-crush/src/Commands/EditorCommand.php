@@ -17,7 +17,7 @@ use SugarCraft\Crush\Lang;
  * the precedence git and every other Unix tool that opens an editor uses.
  *
  * HOW IT RUNS. {@see cmd()} writes the starting text (the command's argument,
- * if any) to an owner-only temp file and returns candy-core's {@see Cmd::exec()}
+ * if any) to an owner-only temp file and returns sugar-core's {@see Cmd::exec()}
  * for `<editor> <file>`: the Program hands the terminal over — raw mode, the
  * alternate screen and the hidden cursor are all torn down — runs the editor
  * in the foreground with the real TTY, and restores the frame when it exits.

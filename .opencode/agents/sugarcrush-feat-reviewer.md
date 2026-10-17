@@ -32,7 +32,7 @@ You were given a `<STEP_ID>`, a pointer to that step's specification inside `cru
 
 8. **Security** — any new file-path handling is checked against path traversal; any new shell command construction uses `escapeshellarg()` on every variable piece; any new SQL uses parameter binding, never string interpolation; any new external response is handled without blind deserialization or eval.
 
-9. **Could it be done better** — is there a simpler way using a helper that already exists in `candy-core`/`sugar-style`; is naming consistent with sibling classes; is there an obvious performance problem (N+1 SQLite queries, unnecessary large-array copies, synchronous I/O in a hot loop)?
+9. **Could it be done better** — is there a simpler way using a helper that already exists in `sugar-core`/`sugar-style`; is naming consistent with sibling classes; is there an obvious performance problem (N+1 SQLite queries, unnecessary large-array copies, synchronous I/O in a hot loop)?
 
 10. **Documentation** — in-code doc-comments present on new public classes/methods per this repo's convention; if the step's manifest row named a `.md` doc target, confirm it was actually updated and that the update is accurate against what the code now does, not merely present.
 

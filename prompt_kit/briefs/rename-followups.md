@@ -187,3 +187,13 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   `candy-pty` component row (`*.ansi` content is C.3-excluded). Redraw at the ansi tagger pass. <!-- @rename-keep -->
 - `media/icons/sugar-pty.png` + `docs/img/icons/sugar-pty.png` — bytes unchanged (old-brand <!-- @rename-keep -->
   artwork moved to the new path). <!-- @rename-keep -->
+
+## e13 candy-core → sugar-core (2026-10-16, lane rename/e13) <!-- @rename-keep -->
+- 43 `ansi/**/*.ansi` pieces (mostly `ansi/sugar-crush/` + `ansi/sugarcraft/`) render the pre-rename <!-- @rename-keep -->
+  `candy-core` wordmark/label bytes (`*.ansi` content is C.3-excluded; paths untouched). The four <!-- @rename-keep -->
+  ansi.json captions that quoted those labels verbatim were reworded wordmark-neutral in this lane; <!-- @rename-keep -->
+  restore explicit naming when the art is redrawn at the ansi tagger pass. <!-- @rename-keep -->
+- `sugar-core/.vhs/counter.gif` + `timer.gif` recorded frames show the pre-rename example invocation; <!-- @rename-keep -->
+  CI `vhs.yml` re-renders from the already-rewritten `.tape` on the next tape run. <!-- @rename-keep -->
+- `media/icons/sugar-core.png` + `docs/img/icons/sugar-core.png` — bytes unchanged (old-brand <!-- @rename-keep -->
+  artwork moved to the new path); `scripts/generate_icons.py` slug row already flipped for regen. <!-- @rename-keep -->

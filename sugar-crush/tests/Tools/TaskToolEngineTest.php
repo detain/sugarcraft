@@ -58,7 +58,7 @@ final class TaskToolEngineTest extends TestCase
     {
         $probe = self::probe('probe');
         $provider = new ScriptedProvider([
-            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['path' => 'candy-core'])]),
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['path' => 'sugar-core'])]),
             new CompleteResponse(content: 'the audit report'),
         ]);
         $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 5));
@@ -68,13 +68,13 @@ final class TaskToolEngineTest extends TestCase
 
         $this->assertFalse($result->isError(), $result->content());
         $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the audit report') . "\n\n[sub-agent \"coder\" finished;", $result->content());
-        $this->assertSame([['path' => 'candy-core']], $probe->calls, 'the sub-agent\'s tool call was executed');
+        $this->assertSame([['path' => 'sugar-core']], $probe->calls, 'the sub-agent\'s tool call was executed');
         $this->assertCount(2, $provider->requests, 'one step for the tool call, one for the report');
 
         $first = $provider->requests[0];
         $this->assertSame(['probe'], self::toolNames($first), 'the preset grant, and no Task');
         $this->assertContains(['system', 'You are coder.'], self::turns($first));
-        $this->assertContains(['user', 'Audit candy-core and report the findings'], self::turns($first));
+        $this->assertContains(['user', 'Audit sugar-core and report the findings'], self::turns($first));
         $this->assertContains('tool', array_column(self::turns($provider->requests[1]), 0), 'the tool result was fed back');
     }
 
@@ -232,7 +232,7 @@ final class TaskToolEngineTest extends TestCase
 
         $turns = self::turns($provider->requests[2]);
         $this->assertSame(['system', 'You are coder.'], $turns[0], 'the preset prompt was carried, not re-added');
-        $this->assertSame(['user', 'Audit candy-core and report the findings'], $turns[1]);
+        $this->assertSame(['user', 'Audit sugar-core and report the findings'], $turns[1]);
         $this->assertSame('assistant', $turns[2][0]);
         $this->assertSame(['tool', 'probe ok'], $turns[3], 'the earlier tool result is in the resumed context');
         $this->assertSame('user', $turns[4][0]);
@@ -352,8 +352,8 @@ final class TaskToolEngineTest extends TestCase
     private static function call(array $overrides = []): array
     {
         return $overrides + [
-            'description' => 'Audit candy-core',
-            'prompt' => 'Audit candy-core and report the findings',
+            'description' => 'Audit sugar-core',
+            'prompt' => 'Audit sugar-core and report the findings',
             'agent' => 'coder',
         ];
     }

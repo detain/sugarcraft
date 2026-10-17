@@ -121,10 +121,10 @@
 
 ## SugarCraft Mapping
 
-### candy-core
+### sugar-core
 
-- **Relevant**: Yes — candy-core is the foundational TUI library for SugarCraft
-- **Mapping**: The spinner architecture (especially `Driver`, `Renderer`, `SequenceStateWriter`) provides patterns for rendering ANSI terminal output that could inform candy-core's TTY rendering infrastructure
+- **Relevant**: Yes — sugar-core is the foundational TUI library for SugarCraft
+- **Mapping**: The spinner architecture (especially `Driver`, `Renderer`, `SequenceStateWriter`) provides patterns for rendering ANSI terminal output that could inform sugar-core's TTY rendering infrastructure
 - **Note**: The `ConsoleCursor` and cursor hide/show management (`\e[?25l`, `\e[?25h`) is directly applicable
 
 ### sugar-widgets

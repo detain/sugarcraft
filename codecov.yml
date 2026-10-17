@@ -33,8 +33,8 @@ flag_management:
   default_rules:
     carryforward: true
   individual_flags:
-    - name: candy-core
-      paths: ["candy-core/src/**"]
+    - name: sugar-core
+      paths: ["sugar-core/src/**"]
       carryforward: true
     - name: sugar-ansi-parser
       paths: ["sugar-ansi-parser/src/**"]
@@ -223,12 +223,12 @@ component_management:
         target: 80%
         threshold: 1%
   individual_components:
-    - component_id: candy-core
-      name: candy-core
+    - component_id: sugar-core
+      name: sugar-core
       paths:
-        - "candy-core/src/**"
+        - "sugar-core/src/**"
       flag_regexes:
-        - "^candy-core$"
+        - "^sugar-core$"
     - component_id: sugar-ansi-parser
       name: sugar-ansi-parser
       paths:

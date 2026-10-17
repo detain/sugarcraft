@@ -81,7 +81,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 08 — Create candy-async](repo_map_step_08.md) — branch: `ai/candy-async-new` <!-- @rename-keep historical provenance -->
 
 ### Phase 2 — Enhance existing foundation packages (5)
-- [x] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
+- [x] [Step 09 — sugar-core enhancements](repo_map_step_09.md) — branch: `ai/sugar-core-foundations`
 - [x] [Step 10 — sugar-style uses sugar-constraints](repo_map_step_10.md) — branch: `ai/sugar-style-layout`
 - [x] [Step 11 — sugar-markdown StyleSheet + BlockStack](repo_map_step_11.md) — branch: `ai/sugar-markdown-blockstack`
 - [x] [Step 12 — sugar-vterm delegates to sugar-ansi-parser](repo_map_step_12.md) — branch: `ai/sugar-vterm-uses-ansi`

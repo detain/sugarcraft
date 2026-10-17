@@ -7,7 +7,7 @@
 - **Location**: `/home/sites/sugarcraft/sugar-animation/src/`
 - **Status**: 🟢 v1 ready (per MATCHUPS.md)
 - **PHP version**: >=8.3, requires ext-gd
-- **Stack**: Uses SugarCraft's Elm-architecture TUI runtime (candy-core)
+- **Stack**: Uses SugarCraft's Elm-architecture TUI runtime (sugar-core)
 
 ---
 

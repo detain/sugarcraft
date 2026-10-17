@@ -55,13 +55,13 @@ use PHPUnit\Framework\TestCase;
  *    that swaps which loop it passes, which is what the old sentence would
  *    have had a reader watch for.
  *  - PLAIN EXIT. An inherited destructor with a real OS-level side effect
- *    fires in the child: candy-core's `Tty`/`PosixBackend` putting the SHARED
+ *    fires in the child: sugar-core's `Tty`/`PosixBackend` putting the SHARED
  *    kernel tty back into cooked mode is the one that cost this project a
  *    four-round bug hunt ({@see \SugarCraft\Crush\Support\ForkedChild}).
  *  - PLAIN EXIT. THE CHILD REPUBLISHES THE PARENT'S OUTPUT BUFFER. This one
  *    was in no doc-block in this tree until round 48 measured it, and it is
  *    the consequence that survives every mitigation the tree already has -
- *    the two above are each defused by something (candy-core's PID-aware
+ *    the two above are each defused by something (sugar-core's PID-aware
  *    `restore()`, and `tests/bootstrap.php`'s loop choice), and nothing
  *    defuses this. `runBare()` opens an output buffer before it invokes the
  *    test method, the child inherits a COPY of it holding everything echoed
@@ -132,7 +132,7 @@ final class ForkedChildExitConventionTest extends TestCase
             'reason' =>
                 'DELIBERATE, and the bare exit IS the assertion: '
                 . 'testPlainExitInAForkedChildNoLongerClobbersRawMode() exists to prove that '
-                . 'candy-core\'s PID-aware PosixBackend::restore() makes a bare exit() safe for the '
+                . 'sugar-core\'s PID-aware PosixBackend::restore() makes a bare exit() safe for the '
                 . 'termios case specifically. Rewriting it to exitNow() would delete the test.',
         ],
 
@@ -201,7 +201,7 @@ final class ForkedChildExitConventionTest extends TestCase
                 . 'path. The site is already the argued shape: storeResult() runs first, the '
                 . 'inherited output-buffer levels are DRAINED without flushing (the '
                 . 'BackgroundSessionRunner exitWorker() shape) before the clean exit, and the '
-                . 'raw-tty half is fixed at the root by candy-core\'s PID-aware restore(). The '
+                . 'raw-tty half is fixed at the root by sugar-core\'s PID-aware restore(). The '
                 . 'E295 comment at the site carries all three.',
         ],
     ];
@@ -614,7 +614,7 @@ final class ForkedChildExitConventionTest extends TestCase
      * scanners, and this one is not a shape a scanner can see at all - it is
      * a property of the interpreter, and the only honest way to assert it is
      * to run both endings and count. It is also the consequence that survives
-     * every INDEPENDENT mitigation the tree already has: candy-core's
+     * every INDEPENDENT mitigation the tree already has: sugar-core's
      * PID-aware `PosixBackend::restore()` defuses the termios destructor, and
      * `tests/bootstrap.php`'s `Loop::set()` CALL defuses React's shutdown
      * hook - both of which hold whatever ending the child takes. (WHAT THIS

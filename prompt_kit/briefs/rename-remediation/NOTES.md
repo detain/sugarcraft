@@ -6,7 +6,7 @@ d034580dc→4d6f81799, adopted and committed). NEVER pushed (operator authority)
 
 ## T1 — DescriptorSinkArgumentCensus roster row — DONE
 
-Commit 52b0ce279 `candy-core: census roster row for candy-gifview SizeIoctl::query`.
+Commit 52b0ce279 `candy-core: census roster row for candy-gifview SizeIoctl::query`. <!-- @rename-keep historical provenance -->
 - Row shape mirrors the closest sibling (candy-flip Renderer query(1) row): <!-- @rename-keep -->
   LITERAL_INT + judgement prose naming viewportCells(), the stream_isatty(STDOUT)
   gate, and BinSizeQueryPolarityTest (exists in candy-gifview/tests — disk-verified).
@@ -62,8 +62,8 @@ Commit `1239d87a8` `candy-top: NTFS-safe fixture paths (colon dirs)`.
 
 ## T4 — PHPStan (CI family 4) — DONE (verdict: ALL PRE-EXISTING, nothing to fix)
 
-CI shape reproduced exactly: `php candy-core/vendor/bin/phpstan analyse
---level=5 --no-progress -c candy-core/phpstan.neon` from repo root (candy-core
+CI shape reproduced exactly: `php candy-core/vendor/bin/phpstan analyse <!-- @rename-keep historical provenance -->
+--level=5 --no-progress -c candy-core/phpstan.neon` from repo root (candy-core <!-- @rename-keep historical provenance -->
 is the only phpstan.neon lib affected in 40a4919fc..92ee5eaf5 — candy-palette/ <!-- @rename-keep historical provenance -->
 vcr/vt untouched in the range, candy-gifview has no phpstan.neon so CI never
 analyses it). Result: 10 errors, 4 files:
@@ -77,9 +77,9 @@ line traces to 1df355903/e4c36bff8/3ec7bd421, all ancestors of 40a4919fc;
 errors at the SAME line:col. ZERO campaign-introduced findings — LegacyEnv.php
 and LegacyPaths.php are clean under level 5; gifview Cli.php is outside every
 phpstan matrix. Per law: recorded, not fixed, no baseline widening, no skips.
-RECOMMEND minting this as a separate pre-campaign candy-core debt item (owner
+RECOMMEND minting this as a separate pre-campaign candy-core debt item (owner <!-- @rename-keep historical provenance -->
 call — it predates the rename era and only surfaced now because the chain
-re-touched candy-core inside the diff window).
+re-touched candy-core inside the diff window). <!-- @rename-keep historical provenance -->
 
 ## T5 — CI families via live logs (run 38764012635, master @92ee5eaf5) — DONE
 
@@ -88,16 +88,16 @@ Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcra
 - F1 Windows checkout (11 jobs): FIXED-pending-push — log shows exactly
   `error: invalid path 'candy-top/tests/fixtures/.../intel_vpu/0000:00:0b.0/device'`
   exit 128; cured by 143b615bd (git ls-files colon sweep empty at tip).
-- F2 candy-core census (Test 8.3/8.4 + Coverage): FIXED — CI failure names the
+- F2 candy-core census (Test 8.3/8.4 + Coverage): FIXED — CI failure names the <!-- @rename-keep historical provenance -->
   exact site `candy-gifview/src/Cli.php::SizeIoctl::query(1)` @CensusTest:627;
   cured by 52b0ce279.
-- F3 macOS candy-core (2F): PRE-EXISTING-RECORDED — f1 =
+- F3 macOS candy-core (2F): PRE-EXISTING-RECORDED — f1 = <!-- @rename-keep historical provenance -->
   ProgramRuntimeTeardownTest::testPendingEscapeFlushDoesNotFireAfterRun
   ("the ESC flush fired after run() returned"), the known macOS timing flake
   (rename-2.5 NOTES family 3); f2 = the F2 census site (fixed by T1).
-- F4 PHPStan 8.3+8.4 candy-core: PRE-EXISTING-RECORDED — see T4 block; all 10
+- F4 PHPStan 8.3+8.4 candy-core: PRE-EXISTING-RECORDED — see T4 block; all 10 <!-- @rename-keep historical provenance -->
   errors reproduce identically at 40a4919fc; zero campaign-introduced; no
-  baseline widening performed. Recommend minting a pre-campaign candy-core
+  baseline widening performed. Recommend minting a pre-campaign candy-core <!-- @rename-keep historical provenance -->
   debt item.
 - F5 candy-mines DifficultyStatsTest::testSaveLeavesNoTempArtifacts: <!-- @rename-keep -->
   PRE-EXISTING-RECORDED — byte-matches rename-baseline.md catalog item 1
@@ -125,7 +125,7 @@ Verdict lines (evidence: `gh run view --log-failed --job <id> -R detain/sugarcra
 
 ## Finish gates — ALL GREEN at tip (this block's commit)
 
-- tools/tests: OK 422T/1434A (exact baseline) via `candy-core/vendor/bin/phpunit
+- tools/tests: OK 422T/1434A (exact baseline) via `candy-core/vendor/bin/phpunit <!-- @rename-keep historical provenance -->
   --no-configuration tools/tests/` — includes GenDocsTest stub-byte pins, green
   without test edits (sentinel placed inside <body> so the page still ends
   `</body></html>`; title-line sentinel passes the contains-string needles).

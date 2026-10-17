@@ -7,7 +7,7 @@ namespace SugarCraft\Video\Source;
 /**
  * Probes the host environment for FFmpeg toolchain binaries.
  *
- * Mirrors the which() pattern from candy-core/src/Util/Editor.php:154 —
+ * Mirrors the which() pattern from sugar-core/src/Util/Editor.php:154 —
  * Windows uses "where", Unix uses "command -v". Every external-CLI argument
  * passes through escapeshellarg() to prevent injection.
  *
@@ -22,7 +22,7 @@ class Probe
     /**
      * Path to the ffmpeg binary, or null if not found.
      *
-     * @see candy-core/src/Util/Editor.php:154
+     * @see sugar-core/src/Util/Editor.php:154
      */
     public static function ffmpeg(): ?string
     {
@@ -32,7 +32,7 @@ class Probe
     /**
      * Path to the ffprobe binary, or null if not found.
      *
-     * @see candy-core/src/Util/Editor.php:154
+     * @see sugar-core/src/Util/Editor.php:154
      */
     public static function ffprobe(): ?string
     {
@@ -42,7 +42,7 @@ class Probe
     /**
      * Path to the ffplay binary, or null if not found.
      *
-     * @see candy-core/src/Util/Editor.php:154
+     * @see sugar-core/src/Util/Editor.php:154
      */
     public static function ffplay(): ?string
     {
@@ -52,7 +52,7 @@ class Probe
     /**
      * Path to the mpv binary, or null if not found.
      *
-     * @see candy-core/src/Util/Editor.php:154
+     * @see sugar-core/src/Util/Editor.php:154
      */
     public static function mpv(): ?string
     {
@@ -76,7 +76,7 @@ class Probe
      * If the command already contains a path separator, only verifies
      * that it is an existing executable file (no PATH lookup).
      *
-     * @see candy-core/src/Util/Editor.php:154
+     * @see sugar-core/src/Util/Editor.php:154
      */
     protected static function which(string $cmd): ?string
     {

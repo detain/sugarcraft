@@ -137,7 +137,7 @@ candy-git-server/
 
 **Implementation ideas:**
 
-- Port the upstream Go TUI to PHP using `candy-core` (Bubble Tea equivalent)
+- Port the upstream Go TUI to PHP using `sugar-core` (Bubble Tea equivalent)
 - Implement `RepoView` component for browsing files and commits
 - Add syntax highlighting via `sugar-markdown` (Glamour port)
 - Use `sugar-mouse` for mouse interactions in the TUI
@@ -805,7 +805,7 @@ Implement webhook-driven notifications:
    - Add rate limiting per-IP
 
 8. **TUI Implementation**
-   - Port upstream Go TUI to PHP using `candy-core`
+   - Port upstream Go TUI to PHP using `sugar-core`
    - Implement repo browser, file viewer, commit history
    - Add syntax highlighting via `sugar-markdown`
 
@@ -862,7 +862,7 @@ However, the package has significant gaps compared to its upstream:
 
 3. **Integration points are incomplete** — hooks, webhooks, metrics, and mirror automation are all absent.
 
-The immediate priority should be adding **SQLite persistence** and **HTTP server integration** to make candy-git-server a viable production option. The **TUI implementation** should be the long-term goal, leveraging `candy-core` and other SugarCraft TUI libraries.
+The immediate priority should be adding **SQLite persistence** and **HTTP server integration** to make candy-git-server a viable production option. The **TUI implementation** should be the long-term goal, leveraging `sugar-core` and other SugarCraft TUI libraries.
 
 The **LFS implementation** is close to complete — only the upload/download endpoints are missing, which is a well-defined scope following the `git-lfs-transfer` spec.
 

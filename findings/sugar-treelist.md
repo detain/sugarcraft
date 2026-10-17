@@ -316,7 +316,7 @@ Scoring all N candidates in a single synchronous loop blocks for large lists. No
 
 ## Code Quality / Refactoring
 
-### 24. `DefaultPrefixer::ansiWidth()` duplicates `Width::string()` from candy-core
+### 24. `DefaultPrefixer::ansiWidth()` duplicates `Width::string()` from sugar-core
 
 **File:** `src/DefaultPrefixer.php:104-107`
 
@@ -446,7 +446,7 @@ The test `testItemIdsAreUniqueAndIncreasing` needs to inspect private state. Thi
 
 **File:** `src/Model.php:593-600`
 
-Using byte-level `strlen`/`substr` splitting at `$maxWidth` byte boundaries will produce invalid UTF-8 sequences when the input contains characters larger than 1 byte. Since `Width::string()` from `candy-core` correctly handles grapheme boundaries, this function should use `grapheme_extract()` or `Width::truncate()` approach instead.
+Using byte-level `strlen`/`substr` splitting at `$maxWidth` byte boundaries will produce invalid UTF-8 sequences when the input contains characters larger than 1 byte. Since `Width::string()` from `sugar-core` correctly handles grapheme boundaries, this function should use `grapheme_extract()` or `Width::truncate()` approach instead.
 
 **Recommendation:** Replace with a grapheme-aware splitting loop using `grapheme_str_split()` or `mb_substr()` with character counting.
 
@@ -470,7 +470,7 @@ The following are well-implemented and worth preserving:
 - **Smith-Waterman two-row DP** (`src/FuzzyMatch.php:46-83`): Memory-efficient O(c) scoring where c is candidate length. Well-commented algorithm.
 - **Filter state machine** (`src/FilterState.php`, `src/Model.php:181-224`): The `originalItems` preservation for `withoutFilter()` is a solid pattern.
 - **Diff-based `View()` output** (`src/Model.php:448-477`): The first-frame full emit + subsequent delta approach correctly handles resize and filter boundary resets.
-- **`Width` grapheme-aware width calculation**: Correctly handles CJK, emoji, and zero-width combiners via `candy-core`.
+- **`Width` grapheme-aware width calculation**: Correctly handles CJK, emoji, and zero-width combiners via `sugar-core`.
 - **Good test coverage**: 6 test files covering unit, integration, edge cases. Immutable operations are well-tested.
 - **Clean interface segregation**: `Prefixer` and `Suffixer` interfaces are minimal and focused.
 - **`Item::$id` for stable identity**: Using a counter-based ID rather than object identity allows items to remain identifiable even after transformation.

@@ -1,30 +1,30 @@
-# Step 09 — candy-core foundation enhancements
+# Step 09 — sugar-core foundation enhancements
 
-**Branch:** `ai/candy-core-foundations`
+**Branch:** `ai/sugar-core-foundations`
 **Depends on:** step-04 (sugar-testing exists — for the WithTestableIo trait integration)
 **Blocks:** step-15 (sugar-forms uses ProgressReporter), step-23 (consumers of withLogger/withExceptionHandler)
 
 ## Goal
 
-Enhance `candy-core` with the foundation primitives §326.1 calls for: `ProgramOptions::builder()` (16-param ctor → builder), `Program::withLogger()`, `Program::withExceptionHandler()`, exposed `$lastFrameDuration` (enables adaptive framerate per §387), `ProgressReporter` interface (§345.10), and `UndoActionType` enum (§345.8 — replaces string-based undo routing across super-candy/candy-minesweeper/candy-tetris).
+Enhance `sugar-core` with the foundation primitives §326.1 calls for: `ProgramOptions::builder()` (16-param ctor → builder), `Program::withLogger()`, `Program::withExceptionHandler()`, exposed `$lastFrameDuration` (enables adaptive framerate per §387), `ProgressReporter` interface (§345.10), and `UndoActionType` enum (§345.8 — replaces string-based undo routing across super-candy/candy-minesweeper/candy-tetris).
 
 Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoActionType), §345.10 (ProgressReporter), §387.10 (god-class precursor).
 
 ## Files expected to be created
 
-- `candy-core/src/ProgramOptions/ProgramOptionsBuilder.php`
-- `candy-core/src/ProgressReporter.php` — interface.
-- `candy-core/src/Progress/CallbackProgressReporter.php` — default impl wrapping a callable.
-- `candy-core/src/Progress/SilentProgressReporter.php` — no-op.
-- `candy-core/src/Undo/UndoActionType.php` — enum (Delete, Move, Rename, Copy, Custom).
-- `candy-core/src/Undo/UndoAction.php` — readonly (type: UndoActionType, payload: array, label: string).
+- `sugar-core/src/ProgramOptions/ProgramOptionsBuilder.php`
+- `sugar-core/src/ProgressReporter.php` — interface.
+- `sugar-core/src/Progress/CallbackProgressReporter.php` — default impl wrapping a callable.
+- `sugar-core/src/Progress/SilentProgressReporter.php` — no-op.
+- `sugar-core/src/Undo/UndoActionType.php` — enum (Delete, Move, Rename, Copy, Custom).
+- `sugar-core/src/Undo/UndoAction.php` — readonly (type: UndoActionType, payload: array, label: string).
 
 ## Files expected to be modified
 
-- `candy-core/src/ProgramOptions.php` — keep existing ctor; add `static builder(): ProgramOptionsBuilder`.
-- `candy-core/src/Program.php` — add `withLogger(LoggerInterface): self`, `withExceptionHandler(callable): self`, expose `lastFrameDuration(): float` getter.
-- `candy-core/src/Util/Width.php` — confirm `Width::of(string): int` exists; if not, add it (sugar-cellbuffer step-02 needs this).
-- `candy-core/tests/ProgramOptionsBuilderTest.php`, `ProgressReporterTest.php`, `UndoActionTypeTest.php`.
+- `sugar-core/src/ProgramOptions.php` — keep existing ctor; add `static builder(): ProgramOptionsBuilder`.
+- `sugar-core/src/Program.php` — add `withLogger(LoggerInterface): self`, `withExceptionHandler(callable): self`, expose `lastFrameDuration(): float` getter.
+- `sugar-core/src/Util/Width.php` — confirm `Width::of(string): int` exists; if not, add it (sugar-cellbuffer step-02 needs this).
+- `sugar-core/tests/ProgramOptionsBuilderTest.php`, `ProgressReporterTest.php`, `UndoActionTypeTest.php`.
 
 ## Acceptance criteria
 
@@ -38,13 +38,13 @@ Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoA
 - [ ] `UndoActionType` enum with 5 cases minimum (Delete, Move, Rename, Copy, Custom).
 - [ ] `UndoAction::new(UndoActionType $type, array $payload, string $label): self` readonly.
 - [ ] `Width::of(string $s): int` exists and handles ASCII (1 per char), CJK (2), zero-width (0), emoji ZWJ sequences (composite width).
-- [ ] No semver break: every previously-passing candy-core test continues to pass.
+- [ ] No semver break: every previously-passing sugar-core test continues to pass.
 - [ ] ≥95 % coverage on the new types.
 - [ ] `git status` clean on master.
 
 ## Coder brief
 
-1. **Confirm current ProgramOptions signature** — delegate to an Explore agent: "Open `candy-core/src/ProgramOptions.php` and list every ctor parameter with its type + default. Confirm the count is around 16."
+1. **Confirm current ProgramOptions signature** — delegate to an Explore agent: "Open `sugar-core/src/ProgramOptions.php` and list every ctor parameter with its type + default. Confirm the count is around 16."
 2. **Build the Builder** — `with*()` per param, all fluent + immutable returning new builder instances. `build()` returns `ProgramOptions` via the existing ctor. Validate required fields.
 3. **withLogger / withExceptionHandler** on Program: use the `mutate()` helper. Default logger is `Psr\Log\NullLogger`. Default exception handler is `static fn(\Throwable $t) => throw $t`.
 4. **$lastFrameDuration**: in the render loop, capture `microtime(true)` before/after the view+flush cycle; store on the Program instance. Expose via `lastFrameDuration()` accessor.
@@ -65,14 +65,14 @@ Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoA
 
 ## Scribe brief
 
-- `candy-core/README.md`: add a section on the Builder + new Program helpers + ProgressReporter + UndoActionType. Code example for each.
-- `candy-core/CALIBER_LEARNINGS.md`: "ProgramOptions kept 16-arg ctor for back-compat; new code uses Builder. UndoActionType replaces 4+ ad-hoc string-prefix detection schemes."
-- MATCHUPS unchanged — candy-core's parity is unaffected.
+- `sugar-core/README.md`: add a section on the Builder + new Program helpers + ProgressReporter + UndoActionType. Code example for each.
+- `sugar-core/CALIBER_LEARNINGS.md`: "ProgramOptions kept 16-arg ctor for back-compat; new code uses Builder. UndoActionType replaces 4+ ad-hoc string-prefix detection schemes."
+- MATCHUPS unchanged — sugar-core's parity is unaffected.
 - Docblocks on new public classes citing the relevant repo_map sections.
 
 ## Ship brief
 
-- **PR title**: `candy-core: ProgramOptions builder + ProgressReporter + UndoActionType + Program helpers`
+- **PR title**: `sugar-core: ProgramOptions builder + ProgressReporter + UndoActionType + Program helpers`
 - **PR body**:
   ```
   ## Summary
@@ -84,9 +84,9 @@ Reference: `docs/repo_map_update.md` §327.1 (Core enhancements), §345.8 (UndoA
   - Fully back-compatible: existing ctor + API surface untouched.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-core (≥95% coverage on new types, existing tests still pass)
+  - [x] vendor/bin/phpunit in sugar-core (≥95% coverage on new types, existing tests still pass)
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_09.md, docs/repo_map_update.md §327.1, §345.8, §345.10
   ```
-- Commit subject: `candy-core: ProgramOptions builder + Program helpers + UndoActionType`.
+- Commit subject: `sugar-core: ProgramOptions builder + Program helpers + UndoActionType`.

@@ -11,7 +11,7 @@ namespace SugarCraft\Crush\Support;
  * {@see exitNow()} instead of a plain `exit()`.
  *
  * A forked child inherits a full copy of the parent's PHP object graph -
- * including, when running under `bin/sugarcrush`, candy-core's `Tty`/
+ * including, when running under `bin/sugarcrush`, sugar-core's `Tty`/
  * `PosixBackend` object that put the real terminal into raw mode (it holds
  * the ORIGINAL, pre-raw-mode termios as `$saved`, ready to `restore()` it).
  * Termios settings live on the shared kernel TTY device, not per-process -

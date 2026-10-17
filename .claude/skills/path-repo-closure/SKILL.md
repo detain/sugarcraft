@@ -36,7 +36,7 @@ So wiring a new `sugarcraft/<dep>` is **one edit**: the `require` line. Do not a
    ```json
    "require": {
        "php": "^8.3",
-       "sugarcraft/candy-core": "dev-master",
+       "sugarcraft/sugar-core": "dev-master",
        "sugarcraft/<dep>": "dev-master"
    },
    ```

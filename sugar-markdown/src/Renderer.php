@@ -849,7 +849,7 @@ final class Renderer
      * multi-byte character whose continuation bytes land in that range (→,
      * 👍), so well-formed sequences are matched first and skipped
      * (`(*SKIP)(*FAIL)`), and only a 0x80–0x9F byte left over is removed —
-     * the rule candy-core's `Ansi::strip()` applies for
+     * the rule sugar-core's `Ansi::strip()` applies for
      * `Sanitize::untrusted()`. It runs BEFORE the C0 sweep on purpose:
      * removing an ASCII byte first could splice `\xC2 \x00 \x9B` into a
      * fresh, well-formed `\xC2\x9B` that the skip would then protect. The
@@ -857,7 +857,7 @@ final class Renderer
      * surviving 0x80–0x9F byte continues a lead that sits right before it,
      * and the C0 sweep removes only ASCII bytes and whole `\xC2` pairs.
      *
-     * The marker step (audit 15b-28) is candy-core's
+     * The marker step (audit 15b-28) is sugar-core's
      * `Sanitize::markInvisibleFormatting()`: a U+202E RIGHT-TO-LEFT OVERRIDE
      * in a code block would otherwise paint the rest of the line reversed
      * ("Trojan Source"), and a zero-width space would make two different
@@ -906,7 +906,7 @@ final class Renderer
      * `UnexpectedEncodingException`, so markdown carrying one raw `\x9B`
      * (audit 15b-29) never reached the per-node sweep — it threw out of
      * {@see render()} instead. Removing the C1 byte (rather than repairing it
-     * to U+FFFD) matches candy-core's `Sanitize::untrusted()`, so the same
+     * to U+FFFD) matches sugar-core's `Sanitize::untrusted()`, so the same
      * text reads the same through both. Every step is byte-local and never
      * crosses a newline, so {@see renderSection()} applying it per section
      * keeps `stream() === render()`.

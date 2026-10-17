@@ -364,7 +364,7 @@ final class BootstrapTest extends TestCase
 
         // Invariant 1/3 of Renderer::renderView(): the frame is clipped, never
         // merely padded — an over-tall or over-wide frame desynchronises
-        // candy-core's absolute-cursor repaint (PR #1403).
+        // sugar-core's absolute-cursor repaint (PR #1403).
         $lines = explode("\n", $plain);
         $this->assertLessThanOrEqual(40, count($lines));
         foreach ($lines as $line) {

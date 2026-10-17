@@ -121,17 +121,17 @@ Segment (abstract)
 
 Both implement `raw()` (verbatim bytes) and `describe()` (human-readable).
 
-### 2.4 Dependency on candy-core
+### 2.4 Dependency on sugar-core
 
 The `composer.json` shows:
 ```json
 "require": {
     "php": "^8.3",
-    "sugarcraft/candy-core": "dev-master"
+    "sugarcraft/sugar-core": "dev-master"
 }
 ```
 
-However, unlike Go sequin which uses `charmbracelet/x/ansi` for parsing, candy-ansi-inspect implements its own manual byte-parsing. The `candy-core` dependency appears to be for future integration rather than current parsing needs.
+However, unlike Go sequin which uses `charmbracelet/x/ansi` for parsing, candy-ansi-inspect implements its own manual byte-parsing. The `sugar-core` dependency appears to be for future integration rather than current parsing needs.
 
 ---
 
@@ -607,7 +607,7 @@ Sleep 5s
 
 ### 12.2 Architectural Strengths
 
-1. **Lightweight** — No external dependencies beyond candy-core
+1. **Lightweight** — No external dependencies beyond sugar-core
 
 2. **Pure PHP** — No FFI, no native extensions required
 
@@ -637,7 +637,7 @@ candy-ansi-inspect is a mature, well-tested PHP port of Go sequin that provides 
 
 The implementation is clean and portable (pure PHP, no native deps), though it lacks some upstream features (PTY execution, theme support, golden file tests). The manual byte-by-byte parsing approach, while functional, differs from the state-machine approach used by Go sequin and sugar-vterm.
 
-As a debugging tool within the SugarCraft ecosystem, candy-ansi-inspect plays a crucial role in understanding what ANSI sequences the TUI libraries generate — serving as a mirror to the raw output that `candy-core` and other libraries produce.
+As a debugging tool within the SugarCraft ecosystem, candy-ansi-inspect plays a crucial role in understanding what ANSI sequences the TUI libraries generate — serving as a mirror to the raw output that `sugar-core` and other libraries produce.
 
 ---
 

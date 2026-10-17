@@ -29,7 +29,7 @@
 
 From the first-stage analysis, `colorprofile` maps indirectly to:
 
-- **`candy-core`**: Terminal capability detection and color management would be foundational in the core TUI rendering layer
+- **`sugar-core`**: Terminal capability detection and color management would be foundational in the core TUI rendering layer
 - **`sugar-widgets`**: Utility service available to components
 - **`sugar-markdown`**: Complementary - `sugar-markdown` produces styled ANSI output, `colorprofile` detects capabilities
 
@@ -774,7 +774,7 @@ func Convert(c color.Color) color.Color {
 
 `charmbracelet/bubbletea` (the flagship TUI framework) uses colorprofile for all rendering. This validates that terminal detection is foundational infrastructure.
 
-**SugarCraft Parallel**: `candy-core` would depend on terminal detection.
+**SugarCraft Parallel**: `sugar-core` would depend on terminal detection.
 
 ### 24.3 Gum (Go)
 

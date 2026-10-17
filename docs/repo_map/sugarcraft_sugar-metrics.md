@@ -561,7 +561,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 ### Dependency Chain
 
-- `sugar-metrics` depends on `candy-core` (base TUI primitives)
+- `sugar-metrics` depends on `sugar-core` (base TUI primitives)
 
 - `sugar-metrics` is a peer of `sugar-ssh-server` (SSH server); `SessionMetrics` middleware bridges them
 
@@ -569,13 +569,13 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 - `sugar-log` — Logging primitives (observability sibling — different axis)
 
-- `candy-core` — Provides `SugarCraft\Core\I18n\Lang` which `sugar-metrics\Lang` extends
+- `sugar-core` — Provides `SugarCraft\Core\I18n\Lang` which `sugar-metrics\Lang` extends
 
 - `sugar-ssh-server` — SSH server whose middleware stack `SessionMetrics` integrates into
 
 ### Dependency Order in Monorepo
 
-`candy-core` → `sugar-style` → `sugar-spring` → `sugar-mouse` → `sugar-widgets` → leaf libs including `sugar-metrics`
+`sugar-core` → `sugar-style` → `sugar-spring` → `sugar-mouse` → `sugar-widgets` → leaf libs including `sugar-metrics`
 
 ---
 

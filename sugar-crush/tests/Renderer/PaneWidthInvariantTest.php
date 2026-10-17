@@ -32,7 +32,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * Why that is corruption rather than an ugly line, in both directions:
  *
  * - STANDALONE (`Chat::view()`): the over-wide row is soft-wrapped by the
- *   TERMINAL. candy-core's `Renderer` repaints rows with an absolute
+ *   TERMINAL. sugar-core's `Renderer` repaints rows with an absolute
  *   `cursorTo($row, 1)` and has no concept of scrolling, so every row after
  *   the wrap slides down one physical line and later repaints land on stale
  *   coordinates — the "text ends up in the status bar" family.
@@ -375,7 +375,7 @@ final class PaneWidthInvariantTest extends TestCase
      * observable one, which is worth stating because the first is what an
      * `isDefault()` check would look for and it never fires:
      *
-     * - candy-core repaints only the rows that CHANGED, so a continuation row
+     * - sugar-core repaints only the rows that CHANGED, so a continuation row
      *   repainted alone inherits whatever styling was last on the wire.
      * - measured, the shell's own border closes every row (`Style::render()`
      *   emits the border glyph plus a reset), so an unbalanced row does not
@@ -553,7 +553,7 @@ final class PaneWidthInvariantTest extends TestCase
      * Wrapping makes the transcript TALLER — the same prose that was one row is
      * now three — so the height clip is load-bearing in a way it was not
      * before. An earlier fix established that the frame must CLIP to the
-     * terminal height rather than merely pad to it, because candy-core's
+     * terminal height rather than merely pad to it, because sugar-core's
      * absolute `cursorTo()` is clamped by the terminal and distinct rows then
      * collide on the last physical line.
      *
@@ -735,7 +735,7 @@ final class PaneWidthInvariantTest extends TestCase
      *     row 3 opens=1 closes=0 |… See <ESC>]8;;https://example.com/x<ST><ESC>[4m…|
      *     row 4 opens=-1 closes=1 |…wrap across two rows of the pane<ESC>[0m<ESC>]8;;<ST>|
      *
-     * candy-core repaints only the rows that CHANGED, so row 3 painted alone
+     * sugar-core repaints only the rows that CHANGED, so row 3 painted alone
      * opens a link and never closes it and every later cell on the screen joins
      * the link — in iTerm2, WezTerm, VTE and Kitty alike.
      *
@@ -1271,7 +1271,7 @@ final class PaneWidthInvariantTest extends TestCase
     {
         // E68, fixed: the cluster disagreement this test was written on is
         // gone. Pinned so a regression of it fails HERE too, not only in
-        // candy-core.
+        // sugar-core.
         $flags = str_repeat("\u{1F1FA}\u{1F1F8}", 10);
         self::assertSame(
             10,
@@ -1285,7 +1285,7 @@ final class PaneWidthInvariantTest extends TestCase
         self::assertGreaterThan(
             1,
             Width::of(Width::truncateAnsi($escFe, 1)),
-            'candy-core stopped disagreeing with itself, so this backstop may be reconsidered',
+            'sugar-core stopped disagreeing with itself, so this backstop may be reconsidered',
         );
 
         $hardFit = new \ReflectionMethod(Renderer::class, 'hardFit');
@@ -1309,7 +1309,7 @@ final class PaneWidthInvariantTest extends TestCase
      * The tempting simplification is to drop the branch and run every row
      * through `Width::truncateAnsi($row, $width)`: a row that already fits
      * cannot be cut, so the two must be the same thing. They are not, and the
-     * reason is a THIRD disagreement between candy-core's two width
+     * reason is a THIRD disagreement between sugar-core's two width
      * accountings — one the cluster measurements in
      * {@see Renderer::wrapToPane()} do not cover, and the ONLY one still live
      * after round 40's E68 fix gave `Width` a single ICU segmentation on every
@@ -1346,7 +1346,7 @@ final class PaneWidthInvariantTest extends TestCase
         $fit = new \ReflectionMethod(Renderer::class, 'fitToPane');
 
         // Units are [fixture, label]. The bare `ESC P` unit that lived here
-        // until the ANSI audit fix (candy-core strip, defect #9) is GONE on
+        // until the ANSI audit fix (sugar-core strip, defect #9) is GONE on
         // purpose: `ESC P` is a DCS STRING OPENER, and an unterminated one
         // now swallows the rest of the row instead of reading as a
         // zero-width two-byte escape. The terminated DCS frame below keeps
@@ -1369,7 +1369,7 @@ final class PaneWidthInvariantTest extends TestCase
             self::assertLessThan(
                 $width,
                 Width::of(Width::truncateAnsi($row, $width)),
-                "candy-core stopped disagreeing with itself about {$escape}, so this branch may be reconsidered",
+                "sugar-core stopped disagreeing with itself about {$escape}, so this branch may be reconsidered",
             );
             self::assertSame(
                 $row,

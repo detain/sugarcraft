@@ -749,7 +749,7 @@ final class WorkflowEngineTest extends TestCase
         // Audit M4: the pre-fix pause mkdir'ed 0755 and file_put_contents'ed
         // the live path while IGNORING the return — a lost pause was silent
         // and a crash mid-write tore the file resume() reads. It now goes
-        // through candy-core AtomicJsonFile: parent created 0700, payload
+        // through sugar-core AtomicJsonFile: parent created 0700, payload
         // 0600, published by rename, every failure a throw.
         $workflow = (new WorkflowBuilder())
             ->name('perm-pause-test')
@@ -1736,7 +1736,7 @@ final class WorkflowEngineTest extends TestCase
 
     /**
      * run() must put the caller's SIGINT/SIGTERM handlers BACK, not reset them
-     * to the default. candy-core's `Program` installs a SIGINT closure that
+     * to the default. sugar-core's `Program` installs a SIGINT closure that
      * stops the loop so PHP's shutdown sequence — `PosixBackend`'s destructor,
      * which puts termios back, among it — gets to run; since `/workflow run` executes inside
      * that process, resetting to SIG_DFL here left an external `kill -INT`

@@ -221,8 +221,8 @@ final class SubAgentProviderErrorSurfacingTest extends TestCase
             $result = (new TaskTool($manager, suspended: new SuspendedDelegations($storeDir)))
                 ->withEngine($engine)
                 ->execute([
-                    'description' => 'Audit candy-core',
-                    'prompt' => 'Audit candy-core and report the findings',
+                    'description' => 'Audit sugar-core',
+                    'prompt' => 'Audit sugar-core and report the findings',
                     'agent' => 'coder',
                 ]);
         } finally {

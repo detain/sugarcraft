@@ -117,7 +117,7 @@ final class Color
      * wrong at primary source: real VGA/EGA text-mode DAC blue is #0000AA with
      * bright #5555FF, and #0000CD/#0000FF were never VGA at all — they were
      * xterm's own abandoned pre-2009 defaults (X11 `blue3`/`blue`). The
-     * divergence from candy-core was thus justified by a myth; unifying both
+     * divergence from sugar-core was thus justified by a myth; unifying both
      * libs on the live xterm defaults removes it.
      *
      * The property this table always relied on is preserved: slots 0-15 are
@@ -174,7 +174,7 @@ final class Color
      * 232-255: 24-step grey ramp (8, 18, …, 238)
      *
      * Picks whichever of the two candidates is nearer in squared RGB, the
-     * same rule candy-core's Color::nearest256() uses, so the cube/grey
+     * same rule sugar-core's Color::nearest256() uses, so the cube/grey
      * overlap region is stable across the monorepo. Truecolor red maps to
      * 196, not to the themeable basic slot 1: RGB is only ever quantised
      * onto the fixed part of the palette (16-255).
@@ -226,7 +226,7 @@ final class Color
      * Index of the nearest cube level for one channel (0-5).
      *
      * Level midpoints are 48/115/155/195/235; exact midpoints round UP, the
-     * same convention as candy-core's Color::nearest256().
+     * same convention as sugar-core's Color::nearest256().
      */
     private static function nearestCubeLevel(int $v): int
     {

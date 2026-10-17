@@ -22,7 +22,7 @@ use SugarCraft\Cli\AutoWidth;
  *    resort so behaviour under a discoverable-but-quiet environment stays
  *    byte-for-byte what it was before width resolution existed.
  *
- * WHY ENV-ONLY, NOT A `Tty::size()`-style ioctl probe: candy-core's full TTY
+ * WHY ENV-ONLY, NOT A `Tty::size()`-style ioctl probe: sugar-core's full TTY
  * size query shells out to `stty` and opens `/dev/tty` as fallbacks. On a
  * shared render path that turns every omitted `width` into a subprocess or a
  * device open, and — worse for output authors — makes rendered bytes depend

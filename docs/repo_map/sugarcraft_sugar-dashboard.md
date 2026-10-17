@@ -20,7 +20,7 @@
 
 - **PHP**: ^8.3
 
-- **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/sugar-style`, `sugarcraft/sugar-pty`
+- **Dependencies**: `sugarcraft/sugar-core`, `sugarcraft/sugar-style`, `sugarcraft/sugar-pty`
 
 - **Dev Dependencies**: `sugarcraft/candy-vcr`, `phpunit/phpunit` ^10.5
 
@@ -654,9 +654,9 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 
 **Critical Architectural Note** (from README):
 
-> Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`candy-core`/`sugar-vterm`. The lineage differs (charmbracelet/inline-termui for sugar-dashboard, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge.
+> Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The lineage differs (charmbracelet/inline-termui for sugar-dashboard, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge.
 
-| sugar-dashboard Class | sugar-style Class | candy-core Class |
+| sugar-dashboard Class | sugar-style Class | sugar-core Class |
 |---|---|---|
 | `SugarCraft\Dashboard\Foundation\Style` | `SugarCraft\Style\Style` | -- |
 | `SugarCraft\Dashboard\Foundation\Theme` | `SugarCraft\Style\Theme` | -- |
@@ -673,7 +673,7 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 
 | Dependency | Role in sugar-dashboard |
 |---|---|
-| `sugarcraft/candy-core` | Elm-arch `Model`, ANSI utilities, Width, Color |
+| `sugarcraft/sugar-core` | Elm-arch `Model`, ANSI utilities, Width, Color |
 | `sugarcraft/sugar-style` | `Border`, `Style`, `Layout`, `Position`, `VAlign` |
 | `sugarcraft/sugar-pty` | PTY primitives for any terminal interactions |
 
@@ -682,11 +682,11 @@ Universal draw contract with `getRect()`, `setRect()`, `draw(Buffer)` -- used fo
 All path-repo entries in `composer.json`:
 ```
 sugar-dashboard
-├── candy-core (path repo)
+├── sugar-core (path repo)
 ├── sugar-style (path repo)
-│   └── candy-core (implicit)
+│   └── sugar-core (implicit)
 └── sugar-pty (path repo)
-    └── candy-core (implicit)
+    └── sugar-core (implicit)
 ```
 
 ---
@@ -892,7 +892,7 @@ public function withTheme(Theme $theme): self
 
 8. **Gap distribution**: FlexLayout's space-around and space-evenly implementations are simplified/stubbed
 
-9. **Event handling**: Components are pure render-only; events handled externally in candy-core runtime
+9. **Event handling**: Components are pure render-only; events handled externally in sugar-core runtime
 10. **Composition pattern**: No `compose()` generator interface for declarative child declaration
 
 ---

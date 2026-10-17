@@ -32,7 +32,7 @@ use SugarCraft\Crush\Media\MediaKind;
  * `sd.savePattern` degrades visibly instead of silently.
  *
  * PERMISSIONS ride the temp inode, settled by chmod BEFORE a payload byte is
- * written and long before the publish rename (the candy-core
+ * written and long before the publish rename (the sugar-core
  * AtomicJsonFile ordering law, mirrored structurally — rename carries the
  * temp's mode onto the target, so no published path ever exists with looser
  * bits and the tests' structural pin reddens a chmod-after-rename

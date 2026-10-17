@@ -455,7 +455,7 @@ final class ThemeTest extends TestCase
 
     /**
      * Every slot of the rich named themes is re-sourced from
-     * {@see Palettes} in candy-core. Pin each slot's rendered hex against the
+     * {@see Palettes} in sugar-core. Pin each slot's rendered hex against the
      * corresponding palette constant so an upstream palette edit that silently
      * drifts from this port (or vice-versa) fails loudly.
      */

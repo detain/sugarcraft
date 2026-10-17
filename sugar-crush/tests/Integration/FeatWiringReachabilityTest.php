@@ -186,7 +186,7 @@ final class FeatWiringReachabilityTest extends TestCase
     // =========================================================================
     // Row: session tabs / Ctrl+Tab cycling
     // "Chat::cycleSessionTab() is correctly implemented and tested but a
-    //  guaranteed no-op — and separately, candy-core's InputReader doesn't
+    //  guaranteed no-op — and separately, sugar-core's InputReader doesn't
     //  yet decode the CSI 1;5I (Ctrl+Tab) sequence most terminals actually
     //  send, so the binding is doubly unreachable."
     // =========================================================================
@@ -844,7 +844,7 @@ final class FeatWiringReachabilityTest extends TestCase
      * `bin/sugarcrush` hands `Chat::programOptions()` to `Program`, so this is
      * literally the value the terminal's tracking mode is set from. Against
      * the pre-wiring code the entrypoint constructed `new ProgramOptions(...)`
-     * without a `mouseMode`, leaving candy-core's `MouseMode::Off` default —
+     * without a `mouseMode`, leaving sugar-core's `MouseMode::Off` default —
      * asserted alongside so the test fails if the wiring ever regresses back
      * to "whatever ProgramOptions defaults to".
      */
@@ -875,7 +875,7 @@ final class FeatWiringReachabilityTest extends TestCase
      *
      * The markers themselves must not survive into the painted frame: they
      * are Private-Use codepoints a terminal renders as replacement glyphs and
-     * candy-core's line diff counts as content.
+     * sugar-core's line diff counts as content.
      */
     public function testAPlainLaunchsFirstFrameRegistersClickZonesAndPaintsNoMarkers(): void
     {

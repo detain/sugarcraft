@@ -63,7 +63,7 @@ both faithfully:
   reconstitutes the nested `list<list<int>>` grouping in one call. SGR 58/59
   (underline colour set/unset) and the ambiguous `21` are pure handler
   concerns — this library guarantees the parameter structure they need,
-  including lossless round-trips of what `candy-core`'s
+  including lossless round-trips of what `sugar-core`'s
   `Util\Color::toUnderline()` emits (`58;2;r;g;b`, `58;5;n`).
 - `SubparamsAwareHandler` is the **push** route: a `Handler` that implements this
   one-method capability (`setSubparams(array $subparams): void`) receives the

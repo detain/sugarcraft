@@ -96,7 +96,7 @@ final class PlayerPrologueLeakTest extends TestCase
 }
 
 /**
- * Minimal candy-core Model for the clean-replay leg — mirrors the shape of
+ * Minimal sugar-core Model for the clean-replay leg — mirrors the shape of
  * examples/replay.php's CounterModel.
  */
 final class LeakSmokeModel implements Model

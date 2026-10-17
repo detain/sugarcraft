@@ -9,7 +9,7 @@ prompt_kit/findings/btop-upstream-prs.md. Conventions: AGENTS.md + candy-top/CAL
 ## Hard rules
 - NEVER run git stash/checkout/reset/clean/commit/add. The supervisor commits. Other agents are editing other
   panels in the same working tree concurrently — touch ONLY your own files plus the shared-file edits below.
-- Don't touch sugar-crush, candy-core, or App.php. A phase is: your own Panel file(s) under candy-top/src/Panel/
+- Don't touch sugar-crush, candy-core, or App.php. A phase is: your own Panel file(s) under candy-top/src/Panel/ <!-- @rename-keep historical provenance -->
   (subdir per box is fine, e.g. src/Panel/Cpu/), your own view/helper files, your own Fake source updates under
   src/Source/Fake/ (only your box's fake), your own tests, and your own fixtures dir tests/fixtures/panels/<box>/.
 - If App.php or the seam genuinely can't express something, STOP and report it rather than editing App.php.

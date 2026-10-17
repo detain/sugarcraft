@@ -1,4 +1,4 @@
-# Step 01.05 — Drop stty shell-outs from candy-core::PosixBackend
+# Step 01.05 — Drop stty shell-outs from sugar-core::PosixBackend
 
 **Source:** `leftover_updates.md` P1-LO-01 + P1-LO-02 (bundle)
 **Branch:** `ai/posixbackend-no-stty`
@@ -6,7 +6,7 @@
 
 ## Deliverable
 
-`candy-core/src/Util/Tty/PosixBackend.php` still shell-outs to
+`sugar-core/src/Util/Tty/PosixBackend.php` still shell-outs to
 `stty size`, `stty -g`, `stty $saved`, and `command -v stty`. The PTY
 consolidation plan said this should leave the primary path. Rewire
 both `size()` and `restoreLast()` to use sugar-pty primitives.
@@ -15,7 +15,7 @@ both `size()` and `restoreLast()` to use sugar-pty primitives.
 
 **Modify:**
 
-- `candy-core/src/Util/Tty/PosixBackend.php`:
+- `sugar-core/src/Util/Tty/PosixBackend.php`:
   - `size()` — when `posix_isatty($this->stream)` is false, try
     `openTty()` → `SizeIoctl::query($fd)` against `/dev/tty`. Drop
     the `shell_exec('stty size')` branch. Keep env-var
@@ -26,15 +26,15 @@ both `size()` and `restoreLast()` to use sugar-pty primitives.
     obtained via `TermiosFactory::open(STDIN)`. First call saves;
     second+ calls apply.
   - Drop `private static function hasStty()` and its `static $cached`.
-- `candy-core/composer.json` — verify `sugarcraft/sugar-pty` is already
+- `sugar-core/composer.json` — verify `sugarcraft/sugar-pty` is already
   in `require` (should be from P1.4 of the original PTY plan). If not,
   add it + path-repo per `tools/check-path-repos.php`.
 
 ## Tests
 
-- `candy-core/tests/Util/Tty/PosixBackendTest.php` — verify `size()`
+- `sugar-core/tests/Util/Tty/PosixBackendTest.php` — verify `size()`
   on a non-TTY stream falls back via env vars, not stty.
-- New `candy-core/tests/Util/Tty/PosixBackendRestoreLastTest.php` —
+- New `sugar-core/tests/Util/Tty/PosixBackendRestoreLastTest.php` —
   call `restoreLast()` twice; verify termios round-trips identically
   without invoking `stty -g`.
 - `SUGARCRAFT_TERMIOS=stty vendor/bin/phpunit` still green (forces
@@ -42,16 +42,16 @@ both `size()` and `restoreLast()` to use sugar-pty primitives.
 
 ## Acceptance
 
-- `grep -n "shell_exec\|exec.*stty\|hasStty" candy-core/src` returns
+- `grep -n "shell_exec\|exec.*stty\|hasStty" sugar-core/src` returns
   nothing.
-- `cd candy-core && vendor/bin/phpunit` green.
+- `cd sugar-core && vendor/bin/phpunit` green.
 - Visual confirmation that an interactive `php examples/program.php`
-  in candy-core still gives sane raw mode + sane restore on exit.
+  in sugar-core still gives sane raw mode + sane restore on exit.
 
 ## Notes
 
 - The `SttyTermios` class in sugar-pty is where the stty fallback now
-  lives — single rescue path. candy-core no longer has its own.
+  lives — single rescue path. sugar-core no longer has its own.
 - The `Backend` interface contract is unchanged; this is purely
   implementation cleanup.
 - If `TermiosFactory::open(STDIN)` throws because STDIN is closed

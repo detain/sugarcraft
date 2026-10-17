@@ -135,7 +135,7 @@ final class Buffer implements \JsonSerializable
             // contract (see its docblock; repo-wide callers are the
             // sugar-cellbuffer and sugar-overlay test suites only, zero production
             // call sites). The canonical display-width primitive is
-            // SugarCraft\Core\Util\Width (candy-core — UAX isWide table,
+            // SugarCraft\Core\Util\Width (sugar-core — UAX isWide table,
             // ANSI-aware); it is not consulted here because byte-wise width
             // pinning is this fixture factory's documented contract, not an
             // oversight. Wide characters are already correct where cells are

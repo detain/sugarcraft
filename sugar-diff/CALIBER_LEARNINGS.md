@@ -39,5 +39,5 @@ and deliberately stays downstream in sugar-crush.
 
 - Pure engine: zero user-facing strings → no `lang/` directory (sugar-fuzzy
   precedent). Non-visual → exempt from `.vhs/` demos; README/docs promise none.
-- Zero sibling deps (not even candy-core) — the lib is standalone PHP +
+- Zero sibling deps (not even sugar-core) — the lib is standalone PHP +
   ext-mbstring, so its composer.json carries no `repositories[]` block.

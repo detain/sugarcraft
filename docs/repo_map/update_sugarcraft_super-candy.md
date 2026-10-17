@@ -335,7 +335,7 @@ super-candy is a dual-pane terminal file manager built on the SugarCraft TUI sta
 - More complex renderer implementation
 - Must handle terminal capability detection for graceful degradation
 
-**Applicability to super-candy:** HIGH — candy's existing cell-buffer concept in `candy-core` View could be extended. super-candy's `Renderer` is already pure (no side effects), making delta computation feasible.
+**Applicability to super-candy:** HIGH — candy's existing cell-buffer concept in `sugar-core` View could be extended. super-candy's `Renderer` is already pure (no side effects), making delta computation feasible.
 
 **Implementation path:**
 
@@ -793,7 +793,7 @@ Simulator-based testing with `SendKey()`, `Type()`, `Resize()` and golden snapsh
 
 `signal.Notify(c, ...)` without `signal.Stop(c)` on exit causes channel leak.
 
-**Direct risk to super-candy:** YES — if any signal handling exists in candy-core/pty. Must ensure all signal handlers are deregistered.
+**Direct risk to super-candy:** YES — if any signal handling exists in sugar-core/pty. Must ensure all signal handlers are deregistered.
 
 ### Issue #1690: Data Race Between Mouse Events and Cursed Renderer
 

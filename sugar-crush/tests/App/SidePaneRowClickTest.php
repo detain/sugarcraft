@@ -241,7 +241,7 @@ final class SidePaneRowClickTest extends TestCase
     {
         $manager = new AgentManager($this->provider, new SkillRegistry());
         $manager->register(RosterAgent::named('reviewer')->withActive(false));
-        $manager->projectRemoteSubAgent(new SubAgentActivity('started', 'run-1', 'reviewer', 'Audit candy-core', 1, ''));
+        $manager->projectRemoteSubAgent(new SubAgentActivity('started', 'run-1', 'reviewer', 'Audit sugar-core', 1, ''));
         $manager->projectRemoteSubAgent(new SubAgentActivity('progress', 'run-1', 'reviewer', '', 2, '-> Grep(pattern: "TODO")'));
 
         $history = [
@@ -280,7 +280,7 @@ final class SidePaneRowClickTest extends TestCase
     {
         $manager = new AgentManager($this->provider, new SkillRegistry());
         $manager->register(RosterAgent::named('reviewer')->withActive(false));
-        $manager->projectRemoteSubAgent(new SubAgentActivity('started', 'run-1', 'reviewer', 'Audit candy-core', 1, ''));
+        $manager->projectRemoteSubAgent(new SubAgentActivity('started', 'run-1', 'reviewer', 'Audit sugar-core', 1, ''));
         $manager->projectRemoteSubAgent(new SubAgentActivity('progress', 'run-1', 'reviewer', '', 2, '-> Read(path: "a")'));
         $dock = DockLayout::new('chat')->withSlotAdded(Side::Right, 'tools');
 

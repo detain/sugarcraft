@@ -20,7 +20,7 @@ exist — the lib is healthy; scope is polish, not rescue.
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | All §1 bug claims are **reproduced** on PHP 8.3.6 at master c489210e6 (not inferred) | verify-script evidence at `/home/sites/crush-r61-artifacts/q6/` (V1-V11); baseline suite green 206T/427A | `findings/candy-kv.md` §1-§2 |
-| symfony/yaml is **not** a dependency, so the fallback emitter/parser is the shipped default | `composer.json` requires only php/candy-core/sugar-fuzzy/ext-sqlite3; `YamlFallbackTest` header says so | `candy-kv/composer.json:26-31` |
+| symfony/yaml is **not** a dependency, so the fallback emitter/parser is the shipped default | `composer.json` requires only php/sugar-core/sugar-fuzzy/ext-sqlite3; `YamlFallbackTest` header says so | `candy-kv/composer.json:26-31` |
 | Fix emitter+parser pair in lockstep — never fix only one side (round-trip contract) | fallback parser rejects fallback emitter's own newline output today | `ExportCommand.php:151`, `YamlImporter.php:191-212` |
 | `_ttl` reservation: reject at `Store::set`/import boundary (fail-fast) rather than rename the format | renaming needs an import back-compat reader; reject is one guard + two messages | `findings/candy-kv.md:1.4` |
 | Binary export: side-map marker `"_skate_binary": [keys]` in JSON, `skate_binary_<key>: b64` in YAML — same philosophy as existing `_ttl`/`skate_ttl_` | keeps plain values plain; importers already strip metadata maps | `JsonImporter.php:74-79`, `ExportCommand.php:107-124` |

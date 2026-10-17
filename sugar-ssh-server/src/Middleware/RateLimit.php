@@ -241,7 +241,7 @@ final class RateLimit implements Middleware
     private function writeBack(array $data): void
     {
         // AtomicJsonFile sets 0600 on the temp inode BEFORE the payload
-        // and before the publishing rename (candy-core a32c4faae), so the
+        // and before the publishing rename (sugar-core a32c4faae), so the
         // bucket map — which reveals who has been connecting — is never
         // briefly world/group readable the way chmod-after-write allowed
         // (audit LOW-19). The caller's flock on the original handle still

@@ -59,7 +59,7 @@
 use SugarCraft\Testing\Input\ScriptedInput;
 use SugarCraft\Testing\Snapshot\Assertions;
 
-// Script terminal input: keys, plus a bracketed paste decoded by candy-core's
+// Script terminal input: keys, plus a bracketed paste decoded by sugar-core's
 // real InputReader (sanitised by default, as at runtime).
 $script = ScriptedInput::new()
     -&gt;key('+')
@@ -87,7 +87,7 @@ echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
     <h3 style="margin-top: 32px;">ScriptedInput</h3>
     <div class="feature-grid">
       <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces; <code>build()</code> returns the list.</span></div>
-      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by candy-core's real <code>InputReader</code>, one argument per read (split into 4096-byte reads like the runtime), with the runtime's idle recovery afterwards: a lone ESC becomes an Escape key and an unterminated paste is closed.</span></div>
+      <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read (split into 4096-byte reads like the runtime), with the runtime's idle recovery afterwards: a lone ESC becomes an Escape key and an unterminated paste is closed.</span></div>
       <div class="feature"><strong>paste(content)</strong><span>A bracketed paste sent through <code>bytes()</code>, so the model sees the same PasteStartMsg, PasteEndMsg, PasteMsg sequence as at runtime (longer pastes arrive in several PasteMsg chunks).</span></div>
       <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitised by default, as at runtime; pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
     </div>

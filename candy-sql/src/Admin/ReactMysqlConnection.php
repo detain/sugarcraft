@@ -14,7 +14,7 @@ use SugarCraft\Async\CancellationToken;
 /**
  * Async MySQL connection wrapper using react/mysql.
  *
- * Runs natively on the same ReactPHP event loop that candy-core's Program
+ * Runs natively on the same ReactPHP event loop that sugar-core's Program
  * already drives — no Revolt loop, no fibers, no loop bridging. (Supersedes an
  * earlier amphp/mysql attempt that needed amphp's Revolt loop bridged onto
  * React's; that bridge class never existed, so the admin pane crashed on open.)

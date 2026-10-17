@@ -35,7 +35,7 @@ From `repo_map/erikgeiser_promptkit.md`:
 | Template-based rendering | `sugar-forms` | View system |
 | KeyMap/keybindings | `sugar-forms` | Key binding config |
 | Lipgloss styling | `sugar-markdown` | Style system |
-| BubbleTea Model pattern | `candy-core` | MVC pattern |
+| BubbleTea Model pattern | `sugar-core` | MVC pattern |
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-widgets` | Text utilities |
 
 ---

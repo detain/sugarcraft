@@ -253,10 +253,10 @@ final class IgnoreRules
      * A symlinked directory is a hard stop by default, and the reason is not
      * hypothetical: SugarCraft is built on composer path repositories, so
      * every lib's `vendor/sugarcraft/` is a fan of symlinks back to its
-     * SIBLING libraries — `sugar-crush/vendor/sugarcraft/candy-core` →
-     * `../../../candy-core`. Following those from the monorepo root means
-     * `candy-core` is walked once per lib that depends on it, and
-     * `candy-core/vendor/sugarcraft/sugar-ansi-parser/vendor/…` is a cycle with no
+     * SIBLING libraries — `sugar-crush/vendor/sugarcraft/sugar-core` →
+     * `../../../sugar-core`. Following those from the monorepo root means
+     * `sugar-core` is walked once per lib that depends on it, and
+     * `sugar-core/vendor/sugarcraft/sugar-ansi-parser/vendor/…` is a cycle with no
      * termination condition at all.
      *
      * There is no `follow_symlinks` tool argument to turn this off, on

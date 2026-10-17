@@ -252,7 +252,7 @@ The implementation lives in `sugar-forms/src/` with re-exports in `sugar-forms/s
 - **Current approach:** Full re-render on every frame
 - **External approach:** Ratatui/php-tui compute cell-level diff and only write changed cells
 - **Why external is better:** Massive reduction in terminal I/O for complex forms
-- **Tradeoffs:** Requires double-buffering infrastructure in `candy-core` renderer
+- **Tradeoffs:** Requires double-buffering infrastructure in `sugar-core` renderer
 - **Applicability:** Would benefit any form with static sections (notes, descriptions)
 
 ### 5. Cassowary Constraint Solver (Layout)
@@ -526,7 +526,7 @@ The most critical gaps are testing-related: **snapshot tests** and **FuzzyMatche
 
 The medium-term roadmap should focus on UX polish: **auto-pagination**, **common prefix auto-complete**, and **history persistence** are all low-risk improvements that significantly enhance the CLI user experience. The **Closable interface** is a simple addition that enables important embedded use cases.
 
-The most ambitious architectural opportunities—**buffer diffing** and **Cassowary layout**—would bring SugarCraft's rendering infrastructure to parity with ratatui and php-tui. However, these belong in `candy-core` (renderer) and `sugar-markdown` (layout) respectively, not directly in sugar-forms. Their value to sugar-forms is indirect—better rendering for all fields.
+The most ambitious architectural opportunities—**buffer diffing** and **Cassowary layout**—would bring SugarCraft's rendering infrastructure to parity with ratatui and php-tui. However, these belong in `sugar-core` (renderer) and `sugar-markdown` (layout) respectively, not directly in sugar-forms. Their value to sugar-forms is indirect—better rendering for all fields.
 
 The strategic positioning of sugar-forms is strong: it's the canonical form library for the SugarCraft ecosystem, living atop the foundational `sugar-forms` layer. As the ecosystem matures, sugar-forms will benefit from improvements in all dependent libraries. The deprecation path (direct `SugarCraft\Forms\*` usage) is already clear, making sugar-forms a stable API surface for users.
 
@@ -535,5 +535,5 @@ The strategic positioning of sugar-forms is strong: it's the canonical form libr
 1. **Immediately** add snapshot tests and FuzzyMatcher indices
 2. **Focus on** auto-pagination and common prefix for CLI UX parity
 3. **Invest in** documentation and cookbook examples for common patterns
-4. **Plan for** buffer diffing as part of candy-core renderer improvements
+4. **Plan for** buffer diffing as part of sugar-core renderer improvements
 5. **Monitor** upstream huh for features to port (per-form KeyMap already done)

@@ -89,10 +89,10 @@ tests-ci for step 01.03 · clean
 step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor <!-- @rename-keep historical provenance -->
 review for step 01.04 · clean · PR#496
 docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html <!-- @rename-keep historical provenance -->
-step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
+step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend <!-- @rename-keep historical provenance -->
 review for step 01.05 · clean · PR#498
 step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible) <!-- @rename-keep historical provenance -->
-candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue)
+candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue) <!-- @rename-keep historical provenance -->
 path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02) <!-- @rename-keep historical provenance -->
 step 01.07 · PR#502 · candy-scriptui: RealProcess kept as deprecated alias; Process interface aligned with candy-pty/Contract <!-- @rename-keep historical provenance -->
 review for step 01.07 · clean · PR#502
@@ -119,7 +119,7 @@ tests-ci for step 01.12 · clean
 step 01.13 · PR#516 · candy-mosaic + candy-core: TtyDetect static helper (TermiosFactory::open->isAtty) + WezTerm detection fix (Kitty only, not both Kitty+iTerm2) + tests <!-- @rename-keep historical provenance -->
 review for step 01.13 · clean · PR#516
 docs for step 01.13 · clean
-step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14)
+step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14) <!-- @rename-keep historical provenance -->
 review for step 01.14 · clean · PR#517
 step 02.01 · PR#519 · candy-sprinkles: Theme class (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized* + with* + adaptive) <!-- @rename-keep -->
 docs for step 02.01 · PR#520 · document Theme in README/end-user docs/PHPDoc/CALIBER_LEARNINGS.md
@@ -206,11 +206,11 @@ step 05.01 · PR#570 · sugar-datepicker: add i18n via Lang::t() (lang/en.php + 
 review for step 05.01 · clean · PR#570
 tests-ci for step 05.01 · clean
 docs for step 05.01 · clean
-step 05.02 · PR#571 · sugar-table: add i18n via Lang::t() (Lang.php + lang/en.php + PageFooter + LangCoverageTest + candy-core dep)
+step 05.02 · PR#571 · sugar-table: add i18n via Lang::t() (Lang.php + lang/en.php + PageFooter + LangCoverageTest + candy-core dep) <!-- @rename-keep historical provenance -->
 review for step 05.02 · clean · PR#571
 tests-ci for step 05.02 · clean
 docs for step 05.02 · PR#572 · add i18n section to README (Lang::t() pattern + keys) + fix pagination example + create CALIBER_LEARNINGS.md
-step 05.03 · PR#573 · sugar-toast: add i18n via Lang::t() (Lang.php facade + lang/en.php + ToastType::label() + LangCoverageTest + candy-core dep)
+step 05.03 · PR#573 · sugar-toast: add i18n via Lang::t() (Lang.php facade + lang/en.php + ToastType::label() + LangCoverageTest + candy-core dep) <!-- @rename-keep historical provenance -->
 review for step 05.03 · clean · PR#573
 tests-ci for step 05.03 · clean
 docs for step 05.03 · PR#574 · document i18n surface in README + CALIBER_LEARNINGS.md + docs/lib/sugar-toast.html
@@ -231,17 +231,17 @@ step 05.08 · PR#580 · sugar-flexbox: add i18n infrastructure (Lang.php facade 
 review for step 05.08 · clean · PR#580
 tests-ci for step 05.08 · clean
 docs for step 05.08 · clean
-step 06.01 · PR#581 · candy-core: Elm-style Subscription value object + Subscriptions fluent collection (withTick/withKey/withSignal/withCustom) + Cmd/SubscribeCmd + Program reconciliation after each update cycle + Model::subscriptions() (commit d5d9409cc; signal-cancel restore d94e92f49; --filter Subscription scope 14T/38A, class alone 12T/36A)
+step 06.01 · PR#581 · candy-core: Elm-style Subscription value object + Subscriptions fluent collection (withTick/withKey/withSignal/withCustom) + Cmd/SubscribeCmd + Program reconciliation after each update cycle + Model::subscriptions() (commit d5d9409cc; signal-cancel restore d94e92f49; --filter Subscription scope 14T/38A, class alone 12T/36A) <!-- @rename-keep historical provenance -->
 review for step 06.01 · clean · PR#581
 tests-ci for step 06.01 · clean
 docs for step 06.01 · clean · PR#582
 fix for step 06.02 · PR#584 · resolved 2 findings (add ScreenStack CALIBER entries + fix heredoc style)
 tests-ci for step 06.02 · clean
 docs for step 06.02 · PR#586 · document ScreenStack API in README (Architecture + new section + example) + end-user doc feature grid + PHPDoc @see cross-refs
-step 06.03 · PR#587 · candy-core: Component interface (onMount/onUnmount) + Composite Model + lifecycle draining in Program + ComponentLifecycleTest
+step 06.03 · PR#587 · candy-core: Component interface (onMount/onUnmount) + Composite Model + lifecycle draining in Program + ComponentLifecycleTest <!-- @rename-keep historical provenance -->
 fix for step 06.03 · PR#588 · resolved 3 findings (@return ?Closure fix + [pattern:component-lifecycle] CALIBER entry + Component/Composite README docs)
 tests-ci for step 06.03 · clean
-docs for step 06.03 · PR#590 · add Component/Composite to candy-core end-user page feature grid
+docs for step 06.03 · PR#590 · add Component/Composite to candy-core end-user page feature grid <!-- @rename-keep historical provenance -->
 fix for step 06.04 · PR#591 · resolved 3 findings (error_log removed; WorkerResultMsg already had correct ?Throwable; WorkerState kept mutable — readonly requires architectural refactoring)
 tests-ci for step 06.04 · clean
 docs for step 06.04 · clean · PR#593
@@ -323,7 +323,7 @@ fix for step 11.01 · PR#651 · resolved 4 findings (locale count 17→16, bin/c
 tests-ci for step 11.01 · clean
 docs for step 11.01 · clean
 step 11.02 · PR#653 · plans: candy-git-server-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
-fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-panels SugarPanels; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
+fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-panels SugarPanels; Repo $isPublic property + withDescription(); candy-git 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/) <!-- @rename-keep historical provenance -->
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
 step 11.03 · PR#658 · plans: sugar-vterm-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)

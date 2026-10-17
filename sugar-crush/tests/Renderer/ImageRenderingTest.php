@@ -47,7 +47,7 @@ use SugarCraft\Image\TmuxPassthroughDecorator;
  */
 final class ImageRenderingTest extends TestCase
 {
-    /** First Private-Use-Area codepoint candy-core's ImageOverlay uses as a marker (U+E000/U+E001 belong to the zone sentinels). */
+    /** First Private-Use-Area codepoint sugar-core's ImageOverlay uses as a marker (U+E000/U+E001 belong to the zone sentinels). */
     private const MARKER = "\u{E002}";
 
     /** The tmux passthrough envelope's opening bytes: `ESC P tmux ;`. */
@@ -109,7 +109,7 @@ final class ImageRenderingTest extends TestCase
      * Wrapping must not change WHERE the blob goes. The envelope is still an
      * out-of-band DCS sequence, so it stays on the image layer and the text
      * frame keeps only the one-cell marker block — concatenating it into the
-     * body would corrupt candy-core's line diff exactly as the unwrapped blob
+     * body would corrupt sugar-core's line diff exactly as the unwrapped blob
      * would.
      */
     public function testTheEnvelopeStaysOnTheImageLayerAndOutOfTheDiffedBody(): void

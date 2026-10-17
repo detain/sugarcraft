@@ -28,19 +28,19 @@ From `charmbracelet_sequin.md` (first-pass analysis):
 
 | Sequin Feature | SugarCraft Library | Mapping Rationale |
 |----------------|-------------------|-------------------|
-| ANSI sequence parsing (SGR, CSI, OSC) | `candy-core` | Core TUI rendering foundation |
+| ANSI sequence parsing (SGR, CSI, OSC) | `sugar-core` | Core TUI rendering foundation |
 | 24-bit color, ANSI256, basic colors | `sugar-markdown` | Color handling and rendering |
 | Text styling (bold, italic, underline) | `sugar-markdown` | Text attribute rendering |
-| Cursor movement/positioning | `candy-core` | Cursor management |
-| Screen erase/scroll operations | `candy-core` | Screen buffer management |
-| Terminal mode handling (mouse, bracketed paste) | `candy-core` | Terminal capability negotiation |
+| Cursor movement/positioning | `sugar-core` | Cursor management |
+| Screen erase/scroll operations | `sugar-core` | Screen buffer management |
+| Terminal mode handling (mouse, bracketed paste) | `sugar-core` | Terminal capability negotiation |
 | Theme support (dark/light) | `sugar-markdown` | Theme system |
 | Golden file comparison for ANSI output | `sugar-widgets` | Snapshot testing patterns |
 | PTY execution for command output capture | `sugar-pty` | PTY/sudo process handling |
 
-**Primary Mapping**: `candy-core` for ANSI parsing/rendering primitives, `sugar-markdown` for visual styling/color handling
+**Primary Mapping**: `sugar-core` for ANSI parsing/rendering primitives, `sugar-markdown` for visual styling/color handling
 
-**Indirect Mapping**: Sequin is a debugging/development tool that *consumes* sequences SugarCraft generates. SugarCraft's equivalent is the internal ANSI rendering pipeline within `candy-core`.
+**Indirect Mapping**: Sequin is a debugging/development tool that *consumes* sequences SugarCraft generates. SugarCraft's equivalent is the internal ANSI rendering pipeline within `sugar-core`.
 
 ---
 
@@ -77,7 +77,7 @@ First-pass analysis documented these known gaps:
 
 **Signal**: Community contributor willing to submit PR—this is a real usability gap
 
-**SugarCraft Relevance**: `candy-core` would benefit from emitting well-formed sequences that are properly round-trip describable. SugarCraft should ensure combined-mode sequences are correctly parseable.
+**SugarCraft Relevance**: `sugar-core` would benefit from emitting well-formed sequences that are properly round-trip describable. SugarCraft should ensure combined-mode sequences are correctly parseable.
 
 ---
 
@@ -191,7 +191,7 @@ $ tput rs2 | sequin
 
 **Root Cause**: ANSI specification is vast and many sequences are rare. The "obvious" sequences (common SGR, cursor) are handled; edge cases remain unimplemented.
 
-**SugarCraft Implication**: `candy-core` ANSI rendering must prioritize correctness for common sequences but cannot claim completeness. Document known gaps.
+**SugarCraft Implication**: `sugar-core` ANSI rendering must prioritize correctness for common sequences but cannot claim completeness. Document known gaps.
 
 ---
 
@@ -389,7 +389,7 @@ $ tput rs2 | sequin
 
 **Complaint**: Private modes show generic names like "Enable private mode 'cursor keys'" without distinguishing which specific mode
 
-**SugarCraft Implication**: `candy-core` should provide more descriptive mode names, not just numeric lookup
+**SugarCraft Implication**: `sugar-core` should provide more descriptive mode names, not just numeric lookup
 
 ---
 
@@ -537,7 +537,7 @@ setenv -g COLORTERM "truecolor"
 
 **Description**: TODO comments for unhandled sequences scattered through codebase
 
-**Direct Risk to SugarCraft**: `candy-core` ANSI rendering may emit sequences that sequin-equivalent cannot describe
+**Direct Risk to SugarCraft**: `sugar-core` ANSI rendering may emit sequences that sequin-equivalent cannot describe
 
 **Mitigation**: Prioritize correctness over completeness; document known gaps
 
@@ -587,7 +587,7 @@ setenv -g COLORTERM "truecolor"
 
 3. **DECSTR Handler**
    - Problem: Terminal reset sequences show "TODO"
-   - Solution: Implement full DECSTR handler in `candy-core`
+   - Solution: Implement full DECSTR handler in `sugar-core`
 
 4. **Multiplexer Compatibility Documentation**
    - Problem: OSC queries fail in tmux < 3.4, GNU Screen < 4.99.0
@@ -841,7 +841,7 @@ defer ansi.PutParser(p)
 
 ## 25. High ROI Recommendations
 
-### 1. Implement ANSI Sequence Parser (`candy-core`)
+### 1. Implement ANSI Sequence Parser (`sugar-core`)
 
 **Impact**: Foundation for all other SugarCraft ANSI work
 
@@ -877,7 +877,7 @@ defer ansi.PutParser(p)
 
 **Effort**: Low (documentation)
 
-**Approach**: Collect known compatibility issues; publish in `candy-core` docs
+**Approach**: Collect known compatibility issues; publish in `sugar-core` docs
 
 ---
 
@@ -897,7 +897,7 @@ defer ansi.PutParser(p)
 
 **Effort**: Low (single handler)
 
-**Approach**: Reference Issue #77 for spec; implement handler in `candy-core`
+**Approach**: Reference Issue #77 for spec; implement handler in `sugar-core`
 
 ---
 

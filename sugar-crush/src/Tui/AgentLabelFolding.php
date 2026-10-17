@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\Width;
  * The rule set is deliberately conservative:
  *
  * - only groups of >= 2 labels whose FIRST TWO WORDS are identical fold
- *   (a one-word prefix like "Audit candy-core" stays byte-identical);
+ *   (a one-word prefix like "Audit sugar-core" stays byte-identical);
  * - every member of a group must have words beyond the shared prefix, so
  *   identical labels — and truncated 2-word labels — never fold;
  * - a member keeps its plain label when folding would not shorten it.

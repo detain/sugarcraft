@@ -2,7 +2,7 @@
 
 SugarCharts (`sugar-charts`) is a comprehensive PHP terminal charting library providing ASCII/Unicode chart rendering with ANSI SGR color support for the SugarCraft TUI ecosystem. It ports the NimbleMarkets/ntcharts API to PHP with meaningful extensions including BrailleCanvas integration, Theme support, and multi-dataset charts.
 
-**Ecosystem Positioning**: sugar-charts is a mid-layer component that sits above `candy-core` (Style/Color/ANSI primitives) and `sugar-style` (Theme/input) but depends on `sugar-dashboard` for the BrailleCanvas bridge. It is a consumer of canvas primitives and a producer of chart output for dashboards.
+**Ecosystem Positioning**: sugar-charts is a mid-layer component that sits above `sugar-core` (Style/Color/ANSI primitives) and `sugar-style` (Theme/input) but depends on `sugar-dashboard` for the BrailleCanvas bridge. It is a consumer of canvas primitives and a producer of chart output for dashboards.
 
 **Biggest Opportunity Areas**:
 
@@ -32,7 +32,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
          ↓
    Canvas Primitives (Canvas, Graph, BrailleGrid, Cell)
          ↓
-  sugar-style Style / candy-core Color / ColorProfile
+  sugar-style Style / sugar-core Color / ColorProfile
 ```
 
 **Canvas Primitives** (`SugarCraft\Charts\Canvas`):
@@ -456,7 +456,7 @@ $chart = $chart->withColorProfile($profile);
 **Why it matters**: Clicking a series to isolate it is common interactive behavior.
 **Source**: Standard in interactive chart libraries.
 
-**Proposed**: Add `withInteractive(bool)` and emit click events via candy-core message system.
+**Proposed**: Add `withInteractive(bool)` and emit click events via sugar-core message system.
 
 ## 3. Axis Label Truncation
 
@@ -690,7 +690,7 @@ sugar-charts is a **well-structured, mature charting library** that successfully
 3. **Implement Gauge** — fills common dashboard need, matches ecosystem expectations
 4. **Wire up ReactPHP animation** — enables live data dashboards, differentiates from competitors
 
-**Dependency health**: The bridge to sugar-dashboard via BrailleCanvas is experimental but functional. The pure-PHP Sixel encoder is a strong differentiator — no GD/Imagick dependency. Dependencies on candy-core and sugar-style are stable.
+**Dependency health**: The bridge to sugar-dashboard via BrailleCanvas is experimental but functional. The pure-PHP Sixel encoder is a strong differentiator — no GD/Imagick dependency. Dependencies on sugar-core and sugar-style are stable.
 
 **Pre-1.0 opportunities**: The v11 breaking changes in ratatui-image demonstrate that pre-1.0 is the time for API cleanup. sugar-charts should consider:
 

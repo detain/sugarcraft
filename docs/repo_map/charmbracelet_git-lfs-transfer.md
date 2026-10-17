@@ -133,15 +133,15 @@ This is an LFS transfer server — it has **no direct equivalent** in SugarCraft
 
 | git-lfs-transfer | SugarCraft | Relationship |
 |-----------------|------------|--------------|
-| `Pktline` / packet protocol | `candy-core` (buffered I/O) | Both handle framed byte protocols |
+| `Pktline` / packet protocol | `sugar-core` (buffered I/O) | Both handle framed byte protocols |
 | `Processor` command dispatch | `sugar-widgets` (event handling) | Message → action routing |
-| `VerifyingReader` integrity check | `candy-core` (data integrity) | End-to-end verification |
+| `VerifyingReader` integrity check | `sugar-core` (data integrity) | End-to-end verification |
 | `LocalBackend` storage | `sugar-charts` (data backend) | Backend abstraction pattern |
 | `LockBackend` / `Lock` | `sugar-markdown` (state management) | Distributed state coordination |
 | Protocol state machine | `sugar-forms` (readline state) | State-driven command processing |
-| File-based lock atomicity | `candy-core` (atomic ops) | Ensuring consistent state |
+| File-based lock atomicity | `sugar-core` (atomic ops) | Ensuring consistent state |
 
-**Primary mapping**: `candy-core` for buffered I/O and data integrity primitives (VerifyingReader pattern → immutable stream processing). The `transfer.Backend` interface abstraction maps to `sugar-charts` data backend pattern.
+**Primary mapping**: `sugar-core` for buffered I/O and data integrity primitives (VerifyingReader pattern → immutable stream processing). The `transfer.Backend` interface abstraction maps to `sugar-charts` data backend pattern.
 
 **Note**: SugarCraft does not currently have and would need to build `sugar-lfs` or similar for Git LFS SSH transfer functionality.
 

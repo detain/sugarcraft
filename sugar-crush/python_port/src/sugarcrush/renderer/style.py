@@ -265,7 +265,7 @@ def string_width(s: str) -> int:
     """
     Compute the display width of a string (counting ANSI escape sequences as zero width).
 
-    This mimics candy-core's Width::string().
+    This mimics sugar-core's Width::string().
     """
     # Strip ANSI escape sequences
     import re
@@ -286,7 +286,7 @@ def truncate(s: str, max_width: int) -> str:
     Truncate string to max_width display columns, preserving the last character
     if it would be cut in half.
 
-    Mimics candy-core's Width::truncate().
+    Mimics sugar-core's Width::truncate().
     """
     import re
     stripped = re.sub(r'\x1b\[[0-9;]*m', '', s)

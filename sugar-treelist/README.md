@@ -54,7 +54,7 @@ echo $model->view();
 
 ## Item Types
 
-**Note:** Item values are rendered through the candy-core sanitize choke point
+**Note:** Item values are rendered through the sugar-core sanitize choke point
 (`Sanitize::untrusted`): C0/C1 control bytes, DEL, and any ANSI embedded in the
 item text are stripped at render time. The only styles that reach the output
 are the SGR parameters you pass to `setLineStyle()`/`setCurrentStyle()` (both

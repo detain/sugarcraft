@@ -23,7 +23,7 @@ maps each package back to the Go projects that sparked its design.
 Each row shows the package's subdir; the Composer name is always
 `sugarcraft/<subdir>` and the namespace follows the naming rulebook
 (`sugar-style/` → `sugarcraft/sugar-style` → `SugarCraft\Style\`).
-Two namespaces intentionally don't read off their slug — `candy-core/`
+Two namespaces intentionally don't read off their slug — `sugar-core/`
 ships as `SugarCraft\Core\`, and `candy-starter/` ships as `App\` — both are
 called out in the table below.
 
@@ -34,7 +34,7 @@ called out in the table below.
 | Library | Status | Notes |
 |---|:---:|---|
 | **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
-| **SugarCraft** (`candy-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
+| **SugarCraft** (`sugar-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace is `SugarCraft\Core\` (exception to the naming rule). |
 | **SugarStyle** (`sugar-style/`) | 🟢 ready | Declarative styling + layout. |
 | **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
 | **SugarMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
@@ -52,7 +52,7 @@ called out in the table below.
 | **SugarVterm** (`sugar-vterm/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
 | **SugarAnsiParser** (`sugar-ansi-parser/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into SugarVterm for cell-grid rendering. |
 | **SugarCellbuffer** (`sugar-cellbuffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
-| **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay candy-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
+| **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **SugarPty** (`sugar-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Spawn`, `Child`) remain @deprecated through v1.x. Windows ConPTY planned. |
 | **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
 | **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
@@ -72,7 +72,7 @@ called out in the table below.
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
 | **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + simple sort/filter table — ratio-based sizing, gap, justify, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter region model). |
-| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via candy-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from sugar-crush MCP stack; protocol per Model Context Protocol spec. |
+| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from sugar-crush MCP stack; protocol per Model Context Protocol spec. |
 
 ## Apps
 
@@ -189,7 +189,7 @@ reference projects supplied the ideas, not the code.
 | SugarPanels (sugar-panels/) | [bubbleboxer](https://github.com/treilik/bubbleboxer) |
 | SugarDatepicker (sugar-datepicker/) | [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) |
 | SugarCharts (sugar-charts/) | [ntcharts](https://github.com/NimbleMarkets/ntcharts) |
-| SugarCraft (candy-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
+| SugarCraft (sugar-core/) | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
 | SugarCrush (sugar-crush/) | [Crush](https://github.com/charmbracelet/crush) |
 | SugarCrushWeb (sugar-crush-web/) | [opencode](https://github.com/sst/opencode) web UI · OpenClaw Control UI (loosely) |
 | SugarNavstack (sugar-navstack/) | [bubbleo](https://github.com/KevM/bubbleo) |

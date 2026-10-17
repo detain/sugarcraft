@@ -181,7 +181,7 @@ final class StandardColors {
 }
 ```
 
-Static initialization uses xterm's compiled-in default palette values (identical to `candy-core`'s `\SugarCraft\Core\Util\Color::ANSI16_RGB`, not the Windows console defaults):
+Static initialization uses xterm's compiled-in default palette values (identical to `sugar-core`'s `\SugarCraft\Core\Util\Color::ANSI16_RGB`, not the Windows console defaults):
 - Black: `#000000`, Red: `#cd0000`, Green: `#00cd00`, Yellow: `#cdcd00`
 
 - Blue: `#0000ee` (xterm `blue2`), Magenta: `#cd00cd`, Cyan: `#00cdcd`, White: `#e5e5e5`

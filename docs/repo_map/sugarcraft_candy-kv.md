@@ -385,7 +385,7 @@ Beyond the upstream `charmbracelet/skate`, several other projects in the ecosyst
 
 3. **symfony/cache** (optional dependency): Could theoretically back candy-kv, but would add significant weight for a CLI tool.
 
-4. **sugarcraft/candy-core** (dependency): Provides `SugarCraft\Core\I18n\T` for i18n — not a storage dependency.
+4. **sugarcraft/sugar-core** (dependency): Provides `SugarCraft\Core\I18n\T` for i18n — not a storage dependency.
 
 ### Notable Patterns
 

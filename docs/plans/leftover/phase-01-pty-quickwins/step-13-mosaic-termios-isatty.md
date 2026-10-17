@@ -30,11 +30,11 @@ WezTerm detection bug (bundle)
   - Lines ~386-400 — for `TERM_PROGRAM=WezTerm`, return Kitty
     protocol family only; do not also list iTerm2 candidate.
 - `sugar-image/composer.json` — confirm `sugarcraft/sugar-pty` is
-  in `require` (likely transitive via candy-core).
+  in `require` (likely transitive via sugar-core).
 
 **Create (recommended):**
 
-- `candy-core/src/Util/TtyDetect.php` — static helper:
+- `sugar-core/src/Util/TtyDetect.php` — static helper:
   `isAtty(resource $stream): bool` delegating to sugar-pty. Single
   call site for every lib that needs "is this a TTY?". Other libs
   (sugar-animation, candy-codeshot) can adopt later.
@@ -60,9 +60,9 @@ WezTerm detection bug (bundle)
 - The WezTerm fix is a behaviour change — if anyone depended on the
   "WezTerm is also iTerm2" classification, this breaks them. Verify
   with `grep -rn "TERM_PROGRAM=WezTerm" /home/sites/sugarcraft` first.
-- TtyDetect goes in candy-core because other consumers (sugar-widgets,
+- TtyDetect goes in sugar-core because other consumers (sugar-widgets,
   sugar-forms, sugar-log) will want it without taking a direct
-  sugar-pty dep. candy-core already depends on sugar-pty.
+  sugar-pty dep. sugar-core already depends on sugar-pty.
 
 ---
 

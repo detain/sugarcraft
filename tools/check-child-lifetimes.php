@@ -66,7 +66,7 @@ declare(strict_types=1);
  * count reds the other way. Unaccounted findings exit 1.
  *
  * WHAT A ROW MEANS, per kind (rule 7 — this is the judgement record, not an
- * exemption list): for the two `sugar-pty` rows and the `candy-core` row, the
+ * exemption list): for the two `sugar-pty` rows and the `sugar-core` row, the
  * same REPORT sugar-crush's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
  * a package this repo's CI does not own, so the row buys visibility, not
  * silence. For the three `sugar-dashboard`/`sugar-video` rows, E366 shipped a
@@ -106,12 +106,12 @@ final class CheckChildLifetimes
      * @var array<string, array{count: int, reason: string}>
      */
     public const ACCOUNTED = [
-        'candy-core/src/WorkerPool.php::spawnWorker' => [
+        'sugar-core/src/WorkerPool.php::spawnWorker' => [
             'count' => 1,
             'reason' => 'pool worker held in $this->workers and drained from the ReactPHP loop, '
                 . 'so it outlives spawnWorker() by design; the scanner reads it as UNCLASSIFIED '
                 . 'because the handle goes to is_resource() first. Spec is 0,1,2 only. Same site '
-                . 'sugar-crush\'s ACCOUNTED_FOR_IN_LIBS reports — candy-core owns the fix.',
+                . 'sugar-crush\'s ACCOUNTED_FOR_IN_LIBS reports — sugar-core owns the fix.',
         ],
         'sugar-pty/src/Spawn.php::proc' => [
             'count' => 1,
@@ -138,14 +138,14 @@ final class CheckChildLifetimes
             'count' => 1,
             'reason' => 'ffplay/mpv companion with all-/dev/null FILE sinks (no parent-side pipe '
                 . 'at all — closing a reader-less stderr pipe SIGPIPEs the child). E366 shipped '
-                . '__destruct + a bounded reap ladder (round-90 folded it onto candy-core '
+                . '__destruct + a bounded reap ladder (round-90 folded it onto sugar-core '
                 . 'BoundedShutdown), closing the orphan half; the fd≥3 exposure stands '
                 . 'for sugar-video to own.',
         ],
         'sugar-video/src/Decode/FfmpegDecoder.php::open' => [
             'count' => 1,
             'reason' => 'ffmpeg decode child. close() now walks a bounded grace-then-escalate ladder '
-                . '(candy-core BoundedShutdown, folded from the per-lib BoundedReaper copy) '
+                . '(sugar-core BoundedShutdown, folded from the per-lib BoundedReaper copy) '
                 . 'before proc_close() and __destruct() calls close() (E366); the fd≥3 exposure '
                 . 'stands for sugar-video to own.',
         ],
@@ -153,7 +153,7 @@ final class CheckChildLifetimes
             'count' => 1,
             'reason' => 'persistent MCP server child, pipes on 0,1,2 — the handle lives between '
                 . 'start() and stop() by protocol design (a tool call is long work). stop() '
-                . 'closes pipes first (graceful EOF exit) then walks candy-core '
+                . 'closes pipes first (graceful EOF exit) then walks sugar-core '
                 . 'BoundedShutdown::terminateBounded (TERM→KILL→reap), and __destruct calls '
                 . 'stop(), so no child outlives the object; the fd≥3 inheritance exposure '
                 . 'stands for sugar-mcp-client to own.',

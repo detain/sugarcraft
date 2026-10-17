@@ -306,7 +306,7 @@ final class ExternalModule implements LegacyModule
 
         if ($this->process !== null && is_resource($this->process)) {
             $this->running = false;
-            // The ladder now lives once, upstream, in candy-core's
+            // The ladder now lives once, upstream, in sugar-core's
             // BoundedShutdown (f7a579e5b); terminateBounded also performs the
             // reap (proc_close), so do NOT close again here. The polite EOF
             // grace rung is caller-side by design there ("budgets stay with

@@ -1,7 +1,7 @@
 # Step 25 — God-class refactors (super-candy Manager + candy-sql App)
 
 **Branch:** `ai/god-class-builders`
-**Depends on:** step-09 (candy-core UndoActionType + ProgressReporter)
+**Depends on:** step-09 (sugar-core UndoActionType + ProgressReporter)
 **Blocks:** —
 
 ## Goal
@@ -13,7 +13,7 @@ Reference: §345.7 (DatabaseInterface), §345.8 (UndoActionType), §387.10 (god 
 ## Files expected to be created
 
 - `super-candy/src/Manager/ManagerBuilder.php` — fluent builder with `with*()` per param, `build(): Manager`.
-- `super-candy/src/Undo/UndoActionFactory.php` — replaces string-based detection; uses `UndoActionType` enum from candy-core.
+- `super-candy/src/Undo/UndoActionFactory.php` — replaces string-based detection; uses `UndoActionType` enum from sugar-core.
 - `candy-sql/src/Db/DatabaseInterface.php` — interface (7-method per §270).
 - `candy-sql/src/Db/SqliteDatabase.php` — current concrete impl (extracted from existing App's direct sqlite use).
 - `candy-sql/src/App/AppBuilder.php` — fluent builder for App.
@@ -21,7 +21,7 @@ Reference: §345.7 (DatabaseInterface), §345.8 (UndoActionType), §387.10 (god 
 ## Files expected to be modified
 
 - `super-candy/src/Manager.php` — keep 15-param ctor for back-compat, add `static builder(): ManagerBuilder`. Internal string-based undo detection replaced with UndoAction enum routing.
-- `super-candy/composer.json` — confirm depends on candy-core (for UndoActionType). Add via `path-repo-closure` if missing.
+- `super-candy/composer.json` — confirm depends on sugar-core (for UndoActionType). Add via `path-repo-closure` if missing.
 - `candy-sql/src/App.php` — keep 12-arg ctor; add `static builder()`. Replace direct sqlite usage with `DatabaseInterface`.
 - `candy-sql/composer.json` — no new deps unless `path-repo-closure` says so.
 
@@ -70,7 +70,7 @@ Reference: §345.7 (DatabaseInterface), §345.8 (UndoActionType), §387.10 (god 
   ```
   ## Summary
   - super-candy/Manager::builder() relieves 15-param ctor (kept for back-compat).
-  - super-candy undo routing uses UndoActionType enum (candy-core) — no more str_starts_with string-prefix detection.
+  - super-candy undo routing uses UndoActionType enum (sugar-core) — no more str_starts_with string-prefix detection.
   - candy-sql/App::builder() relieves 12-arg ctor.
   - candy-sql/DatabaseInterface extracted with SqliteDatabase as the current impl; MySQL/Postgres drivers now unblocked for future work.
 

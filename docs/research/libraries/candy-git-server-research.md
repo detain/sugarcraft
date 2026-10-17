@@ -170,7 +170,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 
 **Dependencies:**
 
-- `candy-core` (BubbleTea port) ✅ exists
+- `sugar-core` (BubbleTea port) ✅ exists
 - `sugar-style` (styling) ✅ exists  
 - `sugar-markdown` (markdown rendering) ✅ exists
 
@@ -263,7 +263,7 @@ The TUI should be a separate entry point callable via SSH forced command:
 
 **Existing infrastructure to leverage:**
 
-- `candy-core` — BubbleTea runtime port
+- `sugar-core` — BubbleTea runtime port
 - `sugar-style` — styling system
 - `sugar-markdown` — markdown/syntax rendering
 
@@ -301,7 +301,7 @@ src/
 - [gitui-org/gitui](https://github.com/gitui-org/gitui) — 21k stars, Rust TUI Git client
 - [altsem/gitu](https://github.com/altsem/gitu) — Magit-inspired, 2.7k stars
 
-**Key insight from gitui:** Uses `ratatui` (Rust TUI library) and `git2-rs` (libgit2 bindings). For PHP, we'll use BubbleTea (candy-core) and shell out to `git` commands (already done in Repo.php).
+**Key insight from gitui:** Uses `ratatui` (Rust TUI library) and `git2-rs` (libgit2 bindings). For PHP, we'll use BubbleTea (sugar-core) and shell out to `git` commands (already done in Repo.php).
 
 ---
 
@@ -318,7 +318,7 @@ src/
 **Reference patterns from existing libs:**
 
 - `sugar-widgets/tests/` — snapshot testing for views
-- `candy-core/tests/` — BubbleTea component tests
+- `sugar-core/tests/` — BubbleTea component tests
 
 ---
 
@@ -348,7 +348,7 @@ src/
 
 ### Existing Monorepo Libraries to Leverage
 
-- `candy-core/` — BubbleTea TUI runtime
+- `sugar-core/` — BubbleTea TUI runtime
 - `sugar-style/` — Lipgloss styling port
 - `sugar-markdown/` — Markdown/syntax rendering
 
@@ -358,4 +358,4 @@ src/
 
 Candy-serve has a solid foundation with proper SSH Git protocol handling, access control, and user management. The **single largest missing piece is the interactive SSH TUI** that makes soft-serve unique — the ability to browse repos, view files, and navigate commits directly over SSH.
 
-**Recommended next step:** Implement the TUI session manager and repo list view as the first phase of TUI development, leveraging the existing BubbleTea (candy-core) and styling (sugar-style) infrastructure already in the monorepo.
+**Recommended next step:** Implement the TUI session manager and repo list view as the first phase of TUI development, leveraging the existing BubbleTea (sugar-core) and styling (sugar-style) infrastructure already in the monorepo.

@@ -28,7 +28,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
- * Serializer for the candy-core Msg classes commonly produced by the
+ * Serializer for the sugar-core Msg classes commonly produced by the
  * input parser. Coverage:
  *
  * - KeyMsg

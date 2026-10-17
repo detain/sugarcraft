@@ -168,7 +168,7 @@ use SugarCraft\CodeTime\Store;
 **Investigation Notes:**
 
 - Finding references `src/Tick.php` which does not exist
-- The `Dashboard` model uses the SugarCraft TUI framework (candy-core)
+- The `Dashboard` model uses the SugarCraft TUI framework (sugar-core)
 - No `usleep()` or blocking sleep observed in the source
 
 **What is expected:**

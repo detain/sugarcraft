@@ -326,7 +326,7 @@ final class Node
      * Rebuild with the given overrides.
      *
      * House XSet law (AGENTS "nullable fields use a paired bool $XSet
-     * sentinel", canonical sugar-style Style / candy-core Mutable): each
+     * sentinel", canonical sugar-style Style / sugar-core Mutable): each
      * clearable nullable field has a paired `...Set` flag. Omitting both keeps
      * the current value; passing `field: $v, fieldSet: true` WRITES $v even
      * when $v is null/''/[0,0,0,0] — so an explicit clear is observable

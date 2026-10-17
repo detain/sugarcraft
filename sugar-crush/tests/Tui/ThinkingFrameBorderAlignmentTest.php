@@ -23,7 +23,7 @@ use SugarCraft\Constraints\Dock\Side;
  * right ToolsPane lost its closing border on the rows whose chat content
  * carried a default-emoji-presentation glyph (the ✅ in "1. ✅ the p-arm is
  * gated…"). The user's terminal wraps a row the moment its PHYSICAL width
- * exceeds cols, and candy-core's width table — the classic Markus-Kuhn
+ * exceeds cols, and sugar-core's width table — the classic Markus-Kuhn
  * ranges — scores U+2705 (and its BMP emoji-presentation siblings) as 1 cell
  * where every modern terminal lays out 2. A row composed to exactly 200
  * LOGICAL cells was therefore 201 PHYSICAL cells: the wrap slid every

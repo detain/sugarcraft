@@ -92,15 +92,15 @@
 | bubblezone concept | SugarCraft lib | Notes |
 |---|---|---|
 | `zone.Mark(id, v)` wrapping zone content | `sugar-widgets` (focus/mouse zone tracking) | sugar-widgets handles viewport/layout + focus management; mouse zones would be a sub-concern |
-| `zone.Get(id).InBounds(msg)` collision | `candy-core` (BubbleTea model port) | The `Model::update()` + `KeyMsg`/`MouseMsg` dispatch loop in `candy-core` provides the TEA message bus; zones would integrate there |
+| `zone.Get(id).InBounds(msg)` collision | `sugar-core` (BubbleTea model port) | The `Model::update()` + `KeyMsg`/`MouseMsg` dispatch loop in `sugar-core` provides the TEA message bus; zones would integrate there |
 | `zone.Scan()` stripping ANSI markers | `sugar-forms` / lipgloss port (TBD) | If/when a lipgloss-style styling library is ported, zone scanning for marker stripping would live there |
 | `zone.NewPrefix()` unique ID generation | `candy-scriptui` (BubbleShell port) | Shell-level component ID generation for nested components would use prefix pattern |
-| Mouse tracking (`tea.MouseModeCellMotion`) | `sugar-widgets` + `candy-core` | `candy-core` would carry the mouse event constants (`MouseButtonLeft`, `MouseMotionMsg`, etc.) |
+| Mouse tracking (`tea.MouseModeCellMotion`) | `sugar-widgets` + `sugar-core` | `sugar-core` would carry the mouse event constants (`MouseButtonLeft`, `MouseMotionMsg`, etc.) |
 | `ZoneInfo.Pos()` relative coordinates | `sugar-widgets` (cursor/selection tracking) | Relative mouse position within a focused region |
 
 **Many-to-many mapping:**
 
-- `candy-core` — Ports the BubbleTea `Model`/`Msg`/`Cmd` architecture; would be the natural host for mouse event handling and zone dispatch
+- `sugar-core` — Ports the BubbleTea `Model`/`Msg`/`Cmd` architecture; would be the natural host for mouse event handling and zone dispatch
 - `sugar-widgets` — Ports bubbletea components (list, spinner, etc.); would need zone integration for interactive child components
 - `sugar-charts` — If it has interactive/clickable chart elements, would use zone-based hit testing
 - A potential new `sugar-zone` leaf library could encapsulate the zone scanning/marking/bounds-checking as a standalone component, usable by any TUI component
@@ -113,4 +113,4 @@ The implementation quality is high. The state-machine scanner is efficient (sing
 
 The library's main limitation is its collision model: simple AABB box testing. For buttons, list items, and dialog boxes this is perfectly adequate, but for organically-shaped UI elements (circles, triangles, irregular borders), users must manually pad zones to the bounding box, causing false-positive hits on corner regions. The library acknowledges this but doesn't propose a solution. Additionally, the v2 release notes' candid statement that bubblezone may not work with lipgloss v2's canvas/compositor features, combined with the author's stated plan to release a replacement library, suggests this package is in maintenance mode rather than active development — a consideration for projects choosing it as a dependency.
 
-From a SugarCraft porting perspective, bubblezone maps most naturally to the event-dispatch layer that would live in `candy-core` (the BubbleTea port). The `Mark()`/`Scan()`/`Get()` API is straightforward to port to PHP, and the state-machine scanner pattern translates well. The main challenge would be PHP's lack of goroutines — the channel-based worker pattern for asynchronous zone storage would need reimplementing as ReactPHP-based async or a synchronous inline approach. The lipgloss v2 incompatibility warning is also instructive: SugarCraft should avoid tight coupling between the styling library and mouse-tracking zone logic, keeping them as separate, loosely-coupled components.
+From a SugarCraft porting perspective, bubblezone maps most naturally to the event-dispatch layer that would live in `sugar-core` (the BubbleTea port). The `Mark()`/`Scan()`/`Get()` API is straightforward to port to PHP, and the state-machine scanner pattern translates well. The main challenge would be PHP's lack of goroutines — the channel-based worker pattern for asynchronous zone storage would need reimplementing as ReactPHP-based async or a synchronous inline approach. The lipgloss v2 incompatibility warning is also instructive: SugarCraft should avoid tight coupling between the styling library and mouse-tracking zone logic, keeping them as separate, loosely-coupled components.

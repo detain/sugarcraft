@@ -35,8 +35,8 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 
 | textual Component | SugarCraft Lib | Mapping Status |
 |---|---|---|
-| App, Widget, Screen, DOMNode, MessagePump | `candy-core/` | ✅ Mapped |
-| Reactive, var(), watch_*() | `candy-core/` + `sugar-widgets/` | ✅ Mapped |
+| App, Widget, Screen, DOMNode, MessagePump | `sugar-core/` | ✅ Mapped |
+| Reactive, var(), watch_*() | `sugar-core/` + `sugar-widgets/` | ✅ Mapped |
 | Widget library (Button, Input, Tree, etc.) | `sugar-widgets/` | ✅ Mapped |
 | TCSS Stylesheet, CSS properties | `sugar-style/` | ✅ Mapped |
 | Layout, VerticalLayout, HorizontalLayout, GridLayout | `sugar-style/` + `sugar-panels/` | ✅ Mapped |
@@ -53,13 +53,13 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Button | `sugar-widgets/` | ✅ Mapped |
 | Toast, Notification | `sugar-toast/` | ✅ Mapped |
 | _xterm_parser | `sugar-vterm/` | ✅ Mapped |
-| timer.Timer, worker.Worker | `candy-core/` | ✅ Mapped |
+| timer.Timer, worker.Worker | `sugar-core/` | ✅ Mapped |
 | command.CommandPalette, Provider | `sugar-cli/` | ✅ Mapped |
 | binding.Binding | `candy-scriptui/` | ✅ Mapped |
 | Pilot (testing) | `candy-vcr/` | ✅ Mapped |
 | Logger + log() | `sugar-log/` | ✅ Mapped |
 | Web driver/rendering | _no equivalent_ | 🔴 Gap |
-| Signal | _partial in candy-core_ | 🟡 Partial |
+| Signal | _partial in sugar-core_ | 🟡 Partial |
 
 ---
 
@@ -1004,7 +1004,7 @@ TEXTUAL_DEBUG=1 textual run --dev ./app.py
 ### Immediate Priority (Do First)
 
 1. **Audit Weak Reference Usage in Core**
-   - Check if `candy-core` DOM nodes use weakrefs for parent links
+   - Check if `sugar-core` DOM nodes use weakrefs for parent links
    - Check if `sugar-style` styles hold strong references to owner widgets
    - **Rationale**: Avoid repeating issue #4964/#6381 GC problems
    - **Effort**: Medium | **Impact**: HIGH

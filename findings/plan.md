@@ -8,17 +8,17 @@ updated: 2026-06-30
 
 ## Goal
 
-Consolidate all 60 individual library audit plans into 6 concurrent-safe execution groups, sequenced by dependency order (candy-core/sugar-vterm foundation → consumer libs → leaf libs → DRY extraction last), then dispatch subagents phase-by-phase to implement all fixes.
+Consolidate all 60 individual library audit plans into 6 concurrent-safe execution groups, sequenced by dependency order (sugar-core/sugar-vterm foundation → consumer libs → leaf libs → DRY extraction last), then dispatch subagents phase-by-phase to implement all fixes.
 
 ## Context & Decisions
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| candy-core Phase 1 runs first | 10+ libs depend on `InputReader.php` (undefined `$len_of_buf` bug); breaks UTF-8 multi-byte parsing | `ref:candy-core-investigation` |
+| sugar-core Phase 1 runs first | 10+ libs depend on `InputReader.php` (undefined `$len_of_buf` bug); breaks UTF-8 multi-byte parsing | `ref:sugar-core-investigation` |
 | sugar-vterm Phase 1 (thread-safety) runs before all VT consumers | `Transitions::$table` and `Theme::$fgIndexMap` lazy init races affect any concurrent VT usage | `ref:sugar-vterm-audit` |
 | sugar-dashboard Phase 1 runs in Group A | Parse error in `Stack.php:78` (missing space before `&&`) blocks compilation of the largest sugar-* lib | `ref:sugar-dashboard-audit` |
 | sugar-video runs in Group B | 55 findings (most of any lib); `AudioPlayer::pause()` SIGSTOP ineffective in PTY (critical) | `ref:sugar-video-audit` |
-| repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to candy-core after all dependent plans complete | `ref:repeated-logic-audit` |
+| repeated_logic runs last | Extracts `Clamp.php` and `validateNonNeg()` to sugar-core after all dependent plans complete | `ref:repeated-logic-audit` |
 | sugar-spring runs early in Group C | `SpringChain::tick()` and `SpringCollection::tick()` must return new instances (not mutate in place) — dependencies for candy-starter | `ref:sugar-spring-audit` |
 | candy-git path-repo closure check deferred | sugar-fuzzy is a leaf lib with no sugarcraft deps — verification needed before assuming clean | `ref:candy-git-audit` |
 | candy-codetime plan has false positives | Finds non-existent `src/Tick.php`; actual lib is a time-tracking app, not a TUI component — skip | `ref:candy-codetime-audit` |
@@ -26,7 +26,7 @@ Consolidate all 60 individual library audit plans into 6 concurrent-safe executi
 ## Dependency Graph (Summary)
 
 ```
-candy-core (Phase 1 critical: InputReader undefined var)
+sugar-core (Phase 1 critical: InputReader undefined var)
     └── all candy-* and sugar-* libs using InputReader / Model contract
 
 sugar-vterm (Phase 1 thread-safety: Transitions::$table, Theme::$fgIndexMap)
@@ -47,7 +47,7 @@ sugar-spring (Phase 1: Spring tick mutates in place)
 sugar-charts (Phase 1: Extract ChartExtras trait — DRY)
     └── Independent
 
-repeated_logic (extracts clamp/validateNonNeg to candy-core)
+repeated_logic (extracts clamp/validateNonNeg to sugar-core)
     └── Runs LAST after all consumers complete
 ```
 
@@ -59,7 +59,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 
 | Lib | Phase | Items | Key Critical Fix |
 |-----|-------|-------|------------------|
-| candy-core | P1 | 2 | InputReader.php:195 `$len_of_buf` undefined var |
+| sugar-core | P1 | 2 | InputReader.php:195 `$len_of_buf` undefined var |
 | sugar-vterm | P1 | 2 | Transitions::$table thread-safe lazy init; Theme::$fgIndexMap race |
 | sugar-dashboard | P1 | 2 | Stack.php:78 parse error; RingBuffer::oldest() wrapped buffer bug |
 
@@ -85,9 +85,9 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 |-----|-------|-------|---------|
 | sugar-spring | P1 | 2 | SpringChain::tick() and SpringCollection::tick() must return new instances |
 | sugar-charts | P1 | 2 | Extract ChartExtras trait (DRY across BarChart/Scatter/OHLCChart ~200 lines) |
-| sugar-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to candy-core after sugar-spring |
+| sugar-async | P1 | 2 | AsyncOps duplicated across 3 libs — extract to sugar-core after sugar-spring |
 | sugar-cellbuffer | P1 | 2 | AsyncOps duplication (same as sugar-async) |
-| sugar-style | P1 | 1 | Style value object — finalize after candy-core foundation stable |
+| sugar-style | P1 | 1 | Style value object — finalize after sugar-core foundation stable |
 | candy-mdview | P1 | 2 | Glow Renderer animation timing |
 
 **Concurrency:** 6 libs — spawn 6 subagents in parallel.
@@ -137,7 +137,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | candy-ansi-inspect | P1 | 2 | Empty data set guard |
 | sugar-toast | P1 | 2 | Viewport overflow; non-cancellable timer |
 | candy-kv | P1 | 2 | YAML fallback newline/CR round-trip corruption; README Quick Start example (E719 first-ever audit) |
-| repeated_logic | P1 | 10 | Extract Clamp.php + validateNonNeg() to candy-core; remove 35+ duplicate mutate() implementations |
+| repeated_logic | P1 | 10 | Extract Clamp.php + validateNonNeg() to sugar-core; remove 35+ duplicate mutate() implementations |
 
 **Concurrency:** 9 libs + repeated_logic — spawn 6 subagents, process in sub-batches of 6.
 
@@ -149,7 +149,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 
 ### Group A Source Plans
 
-- `findings/plan_candy-core.md` — Phase 1 (items 1.1–1.2), Phase 2 (items 2.1–2.2)
+- `findings/plan_sugar-core.md` — Phase 1 (items 1.1–1.2), Phase 2 (items 2.1–2.2)
 - `findings/plan_sugar-vterm.md` — Phase 1 (items 1.1–1.2), Phase 2–12 (deferred after P1)
 - `findings/plan_sugar-dashboard.md` — Phase 1 (parse error + RingBuffer bug; full plan ~52KB)
 
@@ -197,14 +197,14 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_candy-ansi-inspect.md` — Phase 1 (empty data set guard)
 - `findings/plan_sugar-toast.md` — Phase 1 (viewport overflow, non-cancellable timer)
 - `findings/plan_sugar-skate.md` — Phase 1 (YAML fallback newline round-trip corruption; README Quick Start data-corrupting example; P2/P3 lists carried — E719 first-ever audit, 2026-09-15)
-- `findings/plan_repeated_logic.md` — Phase 1 (extract Clamp.php + validateNonNeg() to candy-core; deduplicate mutate() across 35+ libs)
+- `findings/plan_repeated_logic.md` — Phase 1 (extract Clamp.php + validateNonNeg() to sugar-core; deduplicate mutate() across 35+ libs)
 
 ## Phase 1 Implementation Steps
 
 ### Step 1: Execute Group A
 
 1. Spawn 3 subagents in parallel:
-   - **Subagent A1:** Implement candy-core Phase 1.1 (InputReader undefined var) + Phase 1.2 + Phase 2
+   - **Subagent A1:** Implement sugar-core Phase 1.1 (InputReader undefined var) + Phase 1.2 + Phase 2
    - **Subagent A2:** Implement sugar-vterm Phase 1.1 (Transitions thread-safe) + Phase 1.2 (Theme maps)
    - **Subagent A3:** Implement sugar-dashboard Phase 1 (Stack.php parse error + RingBuffer oldest())
 2. Each subagent: review → implement → run tests → fix any issues → commit
@@ -253,9 +253,9 @@ The following plans have findings marked as no-action — only documentation/cla
 
 | Lib | Finding | Reason |
 |-----|---------|--------|
-| candy-core | Mutable trait `get_object_vars()` allocation | Standard PHP pattern; negligible performance impact |
-| candy-core | Renderer token cache growth | Monitor for memory issues; add LRU cap if needed |
-| candy-core | reconcileWantedSubscriptions() double-call | Pre-loop call handles edge cases; removing could break timing |
+| sugar-core | Mutable trait `get_object_vars()` allocation | Standard PHP pattern; negligible performance impact |
+| sugar-core | Renderer token cache growth | Monitor for memory issues; add LRU cap if needed |
+| sugar-core | reconcileWantedSubscriptions() double-call | Pre-loop call handles edge cases; removing could break timing |
 | sugar-vterm | `mutate()` helper extraction (Phase 9.1) | Current explicit pattern is documented as intentional |
 | candy-codetime | Entire plan | False positive — no `src/Tick.php`; not a TUI component |
 
@@ -272,13 +272,13 @@ The following plans have findings marked as no-action — only documentation/cla
 ```bash
 # Run tests for all libs in the group
 
-cd candy-core && composer install && vendor/bin/phpunit
+cd sugar-core && composer install && vendor/bin/phpunit
 cd ../sugar-vterm && composer install && vendor/bin/phpunit
 cd ../sugar-dashboard && composer install && vendor/bin/phpunit
 
 # PHPStan level 9
 
-cd candy-core && vendor/bin/phpstan analyse --level=9 src/
+cd sugar-core && vendor/bin/phpstan analyse --level=9 src/
 cd ../sugar-vterm && vendor/bin/phpstan analyse --level=9 src/
 cd ../sugar-dashboard && vendor/bin/phpstan analyse --level=9 src/
 ```

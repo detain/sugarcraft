@@ -36,7 +36,7 @@ candy-mail/lang/      — 16 locales (en.php + 15 translations)
 
 ```
 candy-mail
-  └── sugarcraft/candy-core  (dev-master, path-repo)
+  └── sugarcraft/sugar-core  (dev-master, path-repo)
        └── sugarcraft/sugar-markdown (styling)
 ```
 

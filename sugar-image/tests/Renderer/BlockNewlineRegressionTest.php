@@ -15,7 +15,7 @@ use SugarCraft\Image\Renderer\QuarterBlockRenderer;
  *
  * The half-block / quarter-block renderers historically joined their output
  * rows with "\r\n". A stray carriage return is harmful in the TUI pipeline
- * (sugar-panels / candy-core / phlix-console-client) which splits on "\n" and
+ * (sugar-panels / sugar-core / phlix-console-client) which splits on "\n" and
  * positions every line itself:
  *
  *   - a consumer doing explode("\n", $poster) keeps a trailing "\r" on every

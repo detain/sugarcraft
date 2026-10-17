@@ -541,7 +541,7 @@ final class TeamManager
         // Audit M2: the pre-fix write was a direct file_put_contents(LOCK_EX)
         // onto the live path — a crash mid-write tore the registry, and the
         // loader read any torn file as a FULL reset, silently losing every
-        // team. candy-core's AtomicJsonFile is this package's canonical answer
+        // team. sugar-core's AtomicJsonFile is this package's canonical answer
         // (adopted at Session.php for exactly this reason): full payload into
         // a same-dir temp, mode settled before the first byte, one rename to
         // publish. 0600 because the registry names teams, leads and inbox

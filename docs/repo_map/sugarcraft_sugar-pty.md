@@ -12,7 +12,7 @@
 | **PHP** | `^8.3` |
 | **FFI** | `ext-ffi` (required), `ext-pcntl` (optional, for signal handling) |
 | **Platforms** | Linux (glibc/musl), macOS (Darwin/xnu) |
-| **Dependencies** | `sugarcraft/candy-core` (dev: `sugar-vterm`, `candy-vcr`) |
+| **Dependencies** | `sugarcraft/sugar-core` (dev: `sugar-vterm`, `candy-vcr`) |
 
 ---
 
@@ -568,7 +568,7 @@ The pump integration with `SugarCraft\Core\Recorder` (for candy-vcr session reco
 
 ### 12.1 Internal Dependencies
 
-- `sugarcraft/candy-core` — Only required dependency. Provides `SugarCraft\Core\I18n\Lang` for `Lang::t()`, `SugarCraft\Core\Recorder` for pump tap.
+- `sugarcraft/sugar-core` — Only required dependency. Provides `SugarCraft\Core\I18n\Lang` for `Lang::t()`, `SugarCraft\Core\Recorder` for pump tap.
 
 ### 12.2 Consumer Libraries
 

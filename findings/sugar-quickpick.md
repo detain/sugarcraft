@@ -325,7 +325,7 @@ Every setter does: `$clone = clone $this; $clone->property = $value; return $clo
 
 **Suggestion:**
 
-Use the existing mutable trait pattern from `candy-core` (`SugarCraft\Core\Concerns\Mutable`).
+Use the existing mutable trait pattern from `sugar-core` (`SugarCraft\Core\Concerns\Mutable`).
 
 ---
 

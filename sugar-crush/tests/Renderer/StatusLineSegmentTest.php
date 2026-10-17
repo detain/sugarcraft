@@ -396,7 +396,7 @@ final class StatusLineSegmentTest extends TestCase
         self::assertSame($closes, preg_match_all('/\x{E001}/u', $raw), 'the segment contributed a CLOSE sentinel');
 
         // And nothing anywhere in the Private-Use block, which is also where
-        // candy-core's image markers live (`ImageOverlay::MARKER_BASE` is
+        // sugar-core's image markers live (`ImageOverlay::MARKER_BASE` is
         // U+E002 and a marker is MARKER_BASE + id).
         $segment = substr($raw, (int) strrpos($raw, ' · ') + \strlen(' · '));
         self::assertSame(

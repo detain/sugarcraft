@@ -169,16 +169,16 @@ The Manager model in the example demonstrates proper update delegation:
 | bubbletea-overlay Feature | SugarCraft Library | Notes |
 |---------------------------|-------------------|-------|
 | Overlay compositing | `sugar-widgets` or new `sugar-overlay` | Could be a standalone overlay/modal library |
-| tea.Model integration | `candy-core` | Core TUI framework port (if it exists) |
+| tea.Model integration | `sugar-core` | Core TUI framework port (if it exists) |
 | Positioning system | `sugar-widgets` | If sugar-widgets has layout/position utilities |
-| ANSI-aware string ops | `candy-core` | FFI/raw terminal handling |
+| ANSI-aware string ops | `sugar-core` | FFI/raw terminal handling |
 
 ### Analysis
 
 This library represents a **modal/overlay system** for TUI applications. In SugarCraft terms:
 
 - **Could map to:** A new `sugar-overlay` library (or `sugar-modal`) focused on overlay positioning and compositing
-- **Depends on:** `candy-core` (for TUI framework) and `sugar-widgets` (for rendering primitives)
+- **Depends on:** `sugar-core` (for TUI framework) and `sugar-widgets` (for rendering primitives)
 - **Alternative:** Could be merged into `sugar-widgets` if SugarCraft has a component-focused layout system
 
 The **key value** this provides is the compositing algorithm using `lipgloss.Size()` to measure rendered dimensions, then combining foreground/background line-by-line with proper ANSI handling. This pattern could be valuable for:

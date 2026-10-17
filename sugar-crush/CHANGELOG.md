@@ -29,7 +29,7 @@ were fixed in six grouped changes:
   transcript; piped stdout output is unchanged.
 - **Terminal recovery.** A crash or fatal inside the TUI now runs teardown
   through `try/finally`, so the terminal is left usable (modes restored)
-  after candy-core `Program` failures; `SIGTERM`/`SIGHUP` stop the loop
+  after sugar-core `Program` failures; `SIGTERM`/`SIGHUP` stop the loop
   through the same recovery path.
 - **Session locks are private.** Session lock files are created `0600`
   instead of relying on the caller's umask.
@@ -124,7 +124,7 @@ happen to share the numbers 1–4.
   `Support\ParentProcessGuard` is the shared orphan check for it and `Task`.
 - **`composer.json` / `composer.lock` are no longer protected** by
   `ProtectFilesHook`. The unanchored patterns were judged against Read paths
-  and whole Bash strings, so they denied even `grep -c . candy-core/composer.json`
+  and whole Bash strings, so they denied even `grep -c . sugar-core/composer.json`
   and `[ -f "$d/composer.json" ]`. Neither file is a secret or policy.
 
 ### Skills — precedence, bounded reads, the moved monorepo skills (2026-10)
@@ -270,7 +270,7 @@ happen to share the numbers 1–4.
   the `App`/`Tui\Renderer` layer as dead code. That was superseded mid-wave
   (commit `beacaace`) once it became clear `App` is the live engine's state
   object, not dead TUI scaffolding. The merge branch was taken instead: `App`
-  became a candy-core `Model` hosting `Chat`, `ChatPane` delegates to the live
+  became a sugar-core `Model` hosting `Chat`, `ChatPane` delegates to the live
   `Renderer`, shell keys route through `KeyboardHandler`, `bin/sugarcrush`
   boots via `Bootstrap::app()`, the remaining panes were wired to real data,
   and mouse events were rebased into the zone registry's coordinate space.
@@ -287,7 +287,7 @@ happen to share the numbers 1–4.
 - **Live-run fixes found by actually using it** — a 400 Bad Request on *every*
   SGLang message (an empty PHP tool-schema array encodes as `[]`, not `{}`);
   a second 400 on any turn that called a tool (`tool_calls` encoded as `{}`);
-  `Ctrl+C` not exiting (candy-core normalizes control bytes, so `^C` arrives as
+  `Ctrl+C` not exiting (sugar-core normalizes control bytes, so `^C` arrives as
   `ctrl+rune c`, never the raw `\x03` the code tested for); tool stderr leaking
   onto the terminal under the TUI; `Tab` stranding the user on panes the strip
   never offered; the menu bar being unopenable; and `Page Up`/`Page Down`
@@ -591,7 +591,7 @@ One continuous, internally-ordered track (data layer before TUI):
 
 ## Original build (P0–P7)
 
-Built on the existing SugarCraft chassis (`candy-core`'s `Model`/`Program`,
+Built on the existing SugarCraft chassis (`sugar-core`'s `Model`/`Program`,
 buffer-diff `Renderer`), with [`charmbracelet/crush`](https://github.com/charmbracelet/crush)
 as the design reference for the agent's shape. Absorbed the former experimental
 `candy-crush` codebase partway through — there is now a single `SugarCraft\Crush` library.

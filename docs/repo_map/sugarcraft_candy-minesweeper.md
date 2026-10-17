@@ -22,7 +22,7 @@
 
 ## Overview
 
-`candy-minesweeper` is a Minesweeper clone ported from Go to PHP, running on the SugarCraft TUI stack (`candy-core` + `sugar-style`). It faithfully reproduces the upstream `go-sweep` experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support.
+`candy-minesweeper` is a Minesweeper clone ported from Go to PHP, running on the SugarCraft TUI stack (`sugar-core` + `sugar-style`). It faithfully reproduces the upstream `go-sweep` experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support.
 
 ---
 
@@ -408,7 +408,7 @@ This prevents corruption if a crash occurs mid-write.
 | Aspect | go-sweep | candy-minesweeper |
 |---|---|---|
 | Language | Go | PHP 8.3+ |
-| Framework | Bubble Tea | candy-core (ReactPHP) |
+| Framework | Bubble Tea | sugar-core (ReactPHP) |
 | First-click safety | TODO comment (unimplemented) | ✅ Implemented |
 | Win detection | O(n) grid scan | O(1) via `revealedCount` |
 | Mine placement | Shuffle all cells upfront | Deferred until first click, safe-zone exclusion |

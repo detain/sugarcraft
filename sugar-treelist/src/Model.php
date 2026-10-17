@@ -915,7 +915,7 @@ final class Model
     /**
      * Split a word that exceeds maxWidth into cell-budgeted chunks.
      *
-     * Chunks accumulate whole graphemes while their DISPLAY WIDTH (CandyCore
+     * Chunks accumulate whole graphemes while their DISPLAY WIDTH (SugarCore
      * Width — CJK/emoji count 2 cells) fits maxWidth; the previous
      * grapheme-count chunking let a CJK word of width 16 through a 12-cell
      * viewport unsplitted (audit M5 fix wave). A grapheme wider than the whole

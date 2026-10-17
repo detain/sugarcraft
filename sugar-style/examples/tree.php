@@ -17,7 +17,7 @@ use SugarCraft\Style\Tree\Tree;
 $buildTree = static fn() => Tree::new()
     ->root('sugarcraft/')
     ->children(
-        Tree::new()->root('candy-core/')->children('src/', 'tests/', 'examples/'),
+        Tree::new()->root('sugar-core/')->children('src/', 'tests/', 'examples/'),
         Tree::new()->root('sugar-style/')->children('src/', 'tests/', 'examples/'),
         Tree::new()->root('sugar-widgets/')->children('src/', 'tests/', 'examples/'),
         'README.md',

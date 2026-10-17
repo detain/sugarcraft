@@ -206,7 +206,7 @@
 | `ui/` package (Bubble Tea) | `sugar-style` | Sprinkles provides Bubble Tea components. The TUI pattern matches. |
 | `server/` package | (no direct equivalent) | Server-side components not applicable to SugarCraft TUI libs. |
 | `cmd/` package (CLI) | `candy-scriptui` | Command-line interface patterns; shell provides CLI primitives. |
-| Overall architecture | `candy-core` | The Elm-style update/model/view pattern for TUI applications. |
+| Overall architecture | `sugar-core` | The Elm-style update/model/view pattern for TUI applications. |
 
 **SugarCraft libs that could be built on this:**
 

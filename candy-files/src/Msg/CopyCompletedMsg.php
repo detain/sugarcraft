@@ -9,7 +9,7 @@ use SugarCraft\Core\Msg;
 /**
  * Message broadcast when an async copy operation completes.
  *
- * Implements the {@see Msg} marker because candy-core's Program dispatches
+ * Implements the {@see Msg} marker because sugar-core's Program dispatches
  * promise resolutions through a `?Msg`-typed callback
  * ({@see \SugarCraft\Core\Program}): a class that is not a Msg turns the
  * resolution into an "Unhandled promise rejection" TypeError, so the Model

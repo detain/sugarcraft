@@ -22,14 +22,14 @@ declare(strict_types=1);
  *   --mode=linked. Inject the path-repo closure, update, then discard the
  *     scratch manifests, leaving `vendor/sugarcraft/*` as symlinks into the
  *     monorepo. This is the DEVELOPMENT state and what CI does before every
- *     install: it is the only way an edit to `candy-core/src/Util/Width.php`
+ *     install: it is the only way an edit to `sugar-core/src/Util/Width.php`
  *     shows up in `sugar-markdown`'s test run, and the only reason a PR that
  *     breaks a sibling fails the dependent lib's job. Before injecting, it
  *     purges stale non-symlink `vendor/sugarcraft/*` copies of the targets
  *     (see `$purgeStaleSiblings`) — composer will not relink them on its own.
  *
  * WHY THE MODE MUST BE EXPLICIT. Measured 2026-08-22: a `composer update` in
- * `sugar-crush` replaced a symlinked `candy-core` with a Packagist copy two
+ * `sugar-crush` replaced a symlinked `sugar-core` with a Packagist copy two
  * audit rounds old — because master had 22 UNPUSHED commits, so Packagist
  * could not have had them. The suite still passed and still printed a total;
  * it had simply stopped testing the working tree. That is not an argument
@@ -185,8 +185,8 @@ $closureOf = static function (string $lib) use ($manifestOf, $siblingsIn): array
         }
     }
 
-    // A lib can reach ITSELF through a dependency's own requires (candy-core →
-    // sugar-pty → candy-core). Injecting `../<self>` would be circular.
+    // A lib can reach ITSELF through a dependency's own requires (sugar-core →
+    // sugar-pty → sugar-core). Injecting `../<self>` would be circular.
     unset($seen[$lib]);
 
     return \array_keys($seen);

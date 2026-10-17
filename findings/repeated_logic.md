@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This audit identified **10 major categories** of repeated logic patterns across the SugarCraft PHP monorepo. Several patterns are well-centralized in `candy-core`, while others show significant duplication that could benefit from extraction into shared utilities.
+This audit identified **10 major categories** of repeated logic patterns across the SugarCraft PHP monorepo. Several patterns are well-centralized in `sugar-core`, while others show significant duplication that could benefit from extraction into shared utilities.
 
 ---
 
@@ -20,13 +20,13 @@ The Elm-architecture-inspired immutable builder pattern where setter methods ret
 
 ### Statistics
 
-- **Direct use of `Mutable` trait from candy-core:** 13 classes
+- **Direct use of `Mutable` trait from sugar-core:** 13 classes
 - **Classes with local `private function mutate()` implementations:** 35 classes
 - **`with*()` method calls:** 10,246 occurrences
 
 ### Canonical Implementation
 
-**Source:** `candy-core/src/Concerns/Mutable.php:L27-L39`
+**Source:** `sugar-core/src/Concerns/Mutable.php:L27-L39`
 
 ```php
 trait Mutable
@@ -81,7 +81,7 @@ private function mutate(?TextInput $input = null, ?string $title = null, ?string
 
 ### Key Insight
 
-The `Mutable` trait exists in `candy-core` but **35 projects re-implement their own `mutate()` locally** rather than using the trait. This suggests either:
+The `Mutable` trait exists in `sugar-core` but **35 projects re-implement their own `mutate()` locally** rather than using the trait. This suggests either:
 1. The trait doesn't handle edge cases (sentinel bools for nullable fields)
 2. The trait isn't widely known/discoverable
 3. The trait was added after many libraries were already written
@@ -97,11 +97,11 @@ The `Model` interface enforces the TEA (The Elm Architecture) pattern: `init()`,
 ### Statistics
 
 - **Classes implementing Model:** 92 (79 `final class`, 13 in tests/examples)
-- **Interface definition:** `candy-core/src/Model.php`
+- **Interface definition:** `sugar-core/src/Model.php`
 
 ### Interface Definition
 
-**Source:** `candy-core/src/Model.php:L26-L62`
+**Source:** `sugar-core/src/Model.php:L26-L62`
 
 ```php
 interface Model
@@ -115,7 +115,7 @@ interface Model
 
 ### Implementation Distribution
 
-**candy-core (9):**
+**sugar-core (9):**
 
 - `Composite`, `RootModelWithScreenStack`, `Panes`
 
@@ -160,7 +160,7 @@ Each library has a `Lang` facade class that extends `SugarCraft\Core\I18n\Lang` 
 
 ### Central i18n Infrastructure
 
-**`candy-core/src/I18n/T.php`** - The translation registry (lines 1-324)
+**`sugar-core/src/I18n/T.php`** - The translation registry (lines 1-324)
 ```php
 final class T
 {
@@ -176,7 +176,7 @@ final class T
 }
 ```
 
-**`candy-core/src/I18n/Lang.php`** - Base class for per-library facades (lines 1-38)
+**`sugar-core/src/I18n/Lang.php`** - Base class for per-library facades (lines 1-38)
 ```php
 abstract class Lang
 {
@@ -353,7 +353,7 @@ final class AsyncOps
 
 ### Cmd Factory Pattern
 
-**`candy-core/src/Cmd.php:L18-L136`**
+**`sugar-core/src/Cmd.php:L18-L136`**
 
 ```php
 final class Cmd
@@ -432,7 +432,7 @@ The `::new()` factory is **ubiquitous** (3,042 uses). Some factories include val
 
 ### Location
 
-**`candy-core/src/Util/Width.php`** (736 lines)
+**`sugar-core/src/Util/Width.php`** (736 lines)
 
 ### Capabilities
 
@@ -455,7 +455,7 @@ final class Width
 
 ### Key Insight
 
-This utility is **well-centralized in candy-core** and handles complex Unicode/grapheme width calculation. It is used extensively by styled text rendering libraries.
+This utility is **well-centralized in sugar-core** and handles complex Unicode/grapheme width calculation. It is used extensively by styled text rendering libraries.
 
 ---
 
@@ -567,7 +567,7 @@ private function clamp(): self
 
 ### Key Insight
 
-Clamping logic is **duplicated across 4+ libraries** with different implementations. A shared `clamp(int $value, int $min, int $max): int` utility in `candy-core` could eliminate this duplication.
+Clamping logic is **duplicated across 4+ libraries** with different implementations. A shared `clamp(int $value, int $min, int $max): int` utility in `sugar-core` could eliminate this duplication.
 
 ---
 
@@ -579,7 +579,7 @@ Shared ANSI escape sequence handling in `SugarCraft\Core\Util\Ansi`.
 
 ### Location
 
-**`candy-core/src/Util/Ansi.php`**
+**`sugar-core/src/Util/Ansi.php`**
 
 ### Capabilities
 
@@ -591,13 +591,13 @@ Shared ANSI escape sequence handling in `SugarCraft\Core\Util\Ansi`.
 ### Usage Pattern
 
 ```php
-// candy-core/src/Util/Width.php:L21
+// sugar-core/src/Util/Width.php:L21
 $clean = Ansi::strip($s);
 ```
 
 ### Key Insight
 
-This is **well-centralized in candy-core** and used by the Width utility and various renderers. No duplication detected.
+This is **well-centralized in sugar-core** and used by the Width utility and various renderers. No duplication detected.
 
 ---
 
@@ -613,7 +613,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 | ::new() factory | Yes | None (convention) | Document as required pattern |
 | Width utility | Yes | None (well-centralized) | Continue current approach |
 | Validator interface | Yes | Low | Already well-structured |
-| Clamping | No | Medium | Extract to candy-core utility |
+| Clamping | No | Medium | Extract to sugar-core utility |
 
 ---
 
@@ -630,7 +630,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 
 ### Medium Priority
 
-3. **Create shared clamping utility** - Extract `clamp(int $min, int $max, int $value): int` into `candy-core/src/Util/` for use across the monorepo.
+3. **Create shared clamping utility** - Extract `clamp(int $min, int $max, int $value): int` into `sugar-core/src/Util/` for use across the monorepo.
 
 4. **Document the `::new()` factory contract** - With 3,000+ uses, this is a de facto standard. Consider adding it to CALIBER_LEARNINGS.md as a required pattern.
 
@@ -642,16 +642,16 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 
 ## Files Referenced
 
-### candy-core (Foundation)
+### sugar-core (Foundation)
 
-- `candy-core/src/Concerns/Mutable.php` - Mutable trait
-- `candy-core/src/Model.php` - Model interface
-- `candy-core/src/Cmd.php` - Cmd factory
-- `candy-core/src/I18n/T.php` - Translation registry
-- `candy-core/src/I18n/Lang.php` - Base Lang class
-- `candy-core/src/Util/Width.php` - Terminal width utilities
-- `candy-core/src/Util/Ansi.php` - ANSI utilities
-- `candy-core/src/AsyncCmd.php` - Async command wrapper
+- `sugar-core/src/Concerns/Mutable.php` - Mutable trait
+- `sugar-core/src/Model.php` - Model interface
+- `sugar-core/src/Cmd.php` - Cmd factory
+- `sugar-core/src/I18n/T.php` - Translation registry
+- `sugar-core/src/I18n/Lang.php` - Base Lang class
+- `sugar-core/src/Util/Width.php` - Terminal width utilities
+- `sugar-core/src/Util/Ansi.php` - ANSI utilities
+- `sugar-core/src/AsyncCmd.php` - Async command wrapper
 
 ### sugar-async
 

@@ -42,7 +42,7 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 
 **Dependencies:**
 
-- `sugarcraft/candy-core` — ANSI primitives (Ansi class)
+- `sugarcraft/sugar-core` — ANSI primitives (Ansi class)
 - `sugarcraft/sugar-widgets` — Viewport, Scrollbar (SSOT inner types)
 
 ## Current Features
@@ -469,7 +469,7 @@ Sugar-stickers is a foundational TUI layout library providing two primary compon
 **Tradeoffs:**
 
 - Full re-render is simpler and correct for most cases
-- SugarCraft's retained-mode approach (candy-core Model) already handles diffing at the view level
+- SugarCraft's retained-mode approach (sugar-core Model) already handles diffing at the view level
 
 **Applicability:** Medium — sugar-core's rendering model already handles diffing at a higher level
 

@@ -57,4 +57,4 @@ Return a structured findings document:
 - **No new files.** Append to `docs/repo_map_updates.md` only if your research uncovers something every later step needs to know.
 - **Time-box yourself**: if the question is research-heavy (>5 fetches), report what you have and flag the gap. Don't disappear chasing one detail.
 - **Cite sources.** A finding without a URL or file:line is not actionable.
-- **Don't recommend dependencies the project would reject** — no Composer packages without permissive licenses; no PHP extensions beyond what `candy-core/composer.json` already requires (ext-mbstring, ext-json, etc.); FFI is OK because `sugar-pty` already uses it.
+- **Don't recommend dependencies the project would reject** — no Composer packages without permissive licenses; no PHP extensions beyond what `sugar-core/composer.json` already requires (ext-mbstring, ext-json, etc.); FFI is OK because `sugar-pty` already uses it.

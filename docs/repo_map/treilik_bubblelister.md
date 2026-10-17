@@ -172,19 +172,19 @@ SugarCraft is a PHP monorepo of Charmbracelet TUI library ports. This mapping id
 
 | treilik/bubblelister Feature | SugarCraft Lib(s) | Notes |
 |---|---|---|
-| List Model rendering (lines, viewport, cursor) | `candy-core` (foundation) | Core TUI model infrastructure |
-| Word wrapping / text formatting | `candy-core` (StringUtil / WordWrap) | Reflow-based text wrapping |
-| tea.Model interface compliance | `candy-core` (Model trait) | init/update/view lifecycle |
+| List Model rendering (lines, viewport, cursor) | `sugar-core` (foundation) | Core TUI model infrastructure |
+| Word wrapping / text formatting | `sugar-core` (StringUtil / WordWrap) | Reflow-based text wrapping |
+| tea.Model interface compliance | `sugar-core` (Model trait) | init/update/view lifecycle |
 | Line number prefixes, tree prefixes | `sugar-widgets` (Border / Frameless) | Box-drawing chars and border rendering |
 | Multi-line item support | `sugar-forms` (TextArea / input) | Multi-line input handling |
 | Item sorting, LessFunc/EqualsFunc | `sugar-widgets` (ListModel) | Sortable list data structure |
 | Current item styling (reverse video) | `sugar-widgets` (CurrentItem) | Highlighted selection state |
-| Prefix/Suffix interfaces | `candy-core` (Decorator pattern) | Surrounding content hooks |
+| Prefix/Suffix interfaces | `sugar-core` (Decorator pattern) | Surrounding content hooks |
 | Viewport cursor offset (margin from edge) | `sugar-widgets` (ScrollMargins) | Viewport margin management |
 | Concurrent item search | `sugar-widgets` (parallel find) | Parallel search in lists |
 | Custom sort functions | `sugar-widgets` (Comparator) | Sort function injection |
 
-**Primary mapping**: `sugar-widgets` as the target for a bubblelister port, as it already contains list/listbox primitives. The Model infrastructure, viewport management, and word-wrapping belong in `candy-core`.
+**Primary mapping**: `sugar-widgets` as the target for a bubblelister port, as it already contains list/listbox primitives. The Model infrastructure, viewport management, and word-wrapping belong in `sugar-core`.
 
 ## Analysis
 
@@ -194,4 +194,4 @@ The design philosophy emphasizes "inherent correctness" per the README — the a
 
 The architecture follows the Elm pattern strictly: Model is copied on Update/View calls, so the author explicitly warns that very large lists will be slow. This is a fundamental constraint of Bubbletea's architecture, not a bug. The library handles this by providing efficient operations (MoveCursorItemBy instead of Remove+Add) and suggesting users handle item updates outside the tea.Msg loop when possible.
 
-For SugarCraft, this maps cleanly to `sugar-widgets` (list widget with cursor navigation) and `candy-core` (core model infrastructure, text wrapping). A port would need to reimplement the word-wrap (using bubbletea's reflow fork), viewport cursor-offset management, and the sort.Interface pattern. The concurrent GetIndex approach would need adaptation since ReactPHP (SugarCraft's async runtime) doesn't use goroutines.
+For SugarCraft, this maps cleanly to `sugar-widgets` (list widget with cursor navigation) and `sugar-core` (core model infrastructure, text wrapping). A port would need to reimplement the word-wrap (using bubbletea's reflow fork), viewport cursor-offset management, and the sort.Interface pattern. The concurrent GetIndex approach would need adaptation since ReactPHP (SugarCraft's async runtime) doesn't use goroutines.

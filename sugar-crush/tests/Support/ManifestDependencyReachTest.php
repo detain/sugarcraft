@@ -153,7 +153,7 @@ final class ManifestDependencyReachTest extends TestCase
      * consulted only for a package this test had already decided was dead, and
      * `tools/check-path-repos.php`'s own lookup does the same - so neither ever
      * asked whether a row still had work to do. Adding rows for
-     * `sugarcraft/candy-core` (reached from `src/` on every page) and for
+     * `sugarcraft/sugar-core` (reached from `src/` on every page) and for
      * `sugarcraft/package-that-does-not-exist` (not even a require) left this
      * file GREEN at 2 tests / 26 assertions, and `--unused` said nothing about
      * either.
@@ -412,12 +412,12 @@ final class ManifestDependencyReachTest extends TestCase
 
         // Rule 15: the walk above is what decides the absence below, and a walk
         // that reached nothing would report every require as dead - loudly, but
-        // a walk that reached EVERYTHING reports none, silently. candy-core is
+        // a walk that reached EVERYTHING reports none, silently. sugar-core is
         // the floor: this package cannot run without it.
         self::assertArrayHasKey(
-            'sugarcraft/candy-core',
+            'sugarcraft/sugar-core',
             $reached,
-            'src/ does not appear to reference candy-core, which is impossible for this package '
+            'src/ does not appear to reference sugar-core, which is impossible for this package '
                 . '- the prefix matching is dead and the absence below is worthless.',
         );
 

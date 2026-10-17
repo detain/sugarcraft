@@ -334,7 +334,7 @@ public function withUnderline(bool $on = true): self
 
 ### 18. No async / streaming rendering support
 
-This is a ReactPHP-based ecosystem (`sugar-cellbuffer` depends on `candy-core` which is ReactPHP-based). The library provides no async rendering path:
+This is a ReactPHP-based ecosystem (`sugar-cellbuffer` depends on `sugar-core` which is ReactPHP-based). The library provides no async rendering path:
 - No `Generator`-based streaming rendering for large buffers
 - No async observable/subscription model for buffer updates
 - No integration with `react/stream`
@@ -379,12 +379,12 @@ public function copy(Region $region): self  // extract sub-buffer
 
 ## 🔌 Compatibility Notes
 
-### 22. Dependency: `sugarcraft/candy-core` is `dev-master`
+### 22. Dependency: `sugarcraft/sugar-core` is `dev-master`
 
 **File:** `composer.json:31`
 
 ```json
-"sugarcraft/candy-core": "dev-master"
+"sugarcraft/sugar-core": "dev-master"
 ```
 
 Using `dev-master` for a required dependency is unstable. This should be pinned to a specific version or use a stable branch alias.
@@ -415,7 +415,7 @@ This is optional but would reduce boilerplate.
 - **Hyperlink security** — `Hyperlink` validates URLs/IDs for C0 control characters, preventing ANSI escape injection (documented at line 11-13).
 - **Diff optimization** — `DiffOptimiser` correctly collapses redundant `SetStyleOp` sequences and merges cell spans.
 - **Well-documented invariants** — wide character continuation cell requirements, buffer dimension constraints, and lossy hyperlink reconstruction are all clearly documented.
-- **Minimal dependencies** — only `php: ^8.3` required for production; `candy-core` and `phpunit` are dev-only.
+- **Minimal dependencies** — only `php: ^8.3` required for production; `sugar-core` and `phpunit` are dev-only.
 
 ---
 

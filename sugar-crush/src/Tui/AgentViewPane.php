@@ -442,12 +442,12 @@ final class AgentViewPane
      * WHAT CHANGED. This paragraph previously argued a VERSION case: that
      * `grapheme_str_split()` is PHP 8.4+ while the tree targets 8.3, that
      * `grapheme_extract()` ships with intl on 8.3 but "intl is not a declared
-     * dependency of sugar-crush or of candy-core", and that reaching for it
+     * dependency of sugar-crush or of sugar-core", and that reaching for it
      * would therefore split one way on a build that has intl and another on a
      * build that does not. Every clause of that is now stale: `Width` no
      * longer calls `grapheme_str_split()` on ANY version (it walks ICU via
      * `grapheme_extract()` on both, which is what closed E68), and
-     * `candy-core` now declares `ext-intl` in its manifest, so sugar-crush
+     * `sugar-core` now declares `ext-intl` in its manifest, so sugar-crush
      * requires intl transitively whether or not its own manifest names it.
      *
      * This still runs on `preg_split('//u')` and so still needs no extension,
@@ -527,7 +527,7 @@ final class AgentViewPane
      *
      * The two emoji ranges are matched on UTF-8 BYTES rather than on a decoded
      * codepoint so that this needs neither mbstring's `mb_ord()` nor a second
-     * copy of candy-core's hand-rolled decoder. U+1F3FB..U+1F3FF encode as
+     * copy of sugar-core's hand-rolled decoder. U+1F3FB..U+1F3FF encode as
      * `F0 9F 8F BB..BF` and U+1F1E6..U+1F1FF as `F0 9F 87 A6..BF`; both are
      * four bytes behind a fixed three-byte prefix, so the prefix plus a range
      * check on the final byte identifies them exactly.

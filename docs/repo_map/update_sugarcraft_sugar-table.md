@@ -410,7 +410,7 @@ For tables displaying chart data (metrics, statistics), sugar-charts could provi
 
 ### 4. ReactPHP Integration Pattern
 
-SugarCraft uses ReactPHP for async. sugar-table could provide a `TableModel` class implementing the `Model` interface from `candy-core` for proper TEA loop integration:
+SugarCraft uses ReactPHP for async. sugar-table could provide a `TableModel` class implementing the `Model` interface from `sugar-core` for proper TEA loop integration:
 
 ```php
 final class TableModel implements Model

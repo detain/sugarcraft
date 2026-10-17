@@ -13,7 +13,7 @@ use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 
 /**
- * Decodes recorded raw mouse byte sequences into candy-core mouse Msgs
+ * Decodes recorded raw mouse byte sequences into sugar-core mouse Msgs
  * using the encoding the program actually enabled, as tracked by
  * {@see MouseModeTracker}.
  *

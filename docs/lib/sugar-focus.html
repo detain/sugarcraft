@@ -49,7 +49,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-focus"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-focus" alt="SugarFocus code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any candy-core model without pulling in dependencies. Original SugarCraft component.</p>
+    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any sugar-core model without pulling in dependencies. Original SugarCraft component.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-focus</code></pre>
@@ -68,7 +68,7 @@ $ring = $ring->focus('grid'); // jump straight to a region
 $ring->current();             // 'grid'
 $ring->isFocused('grid');     // true</code></pre>
 
-    <p>Wire it into a candy-core model's <code>update()</code>, then let each region style itself in <code>view()</code>:</p>
+    <p>Wire it into a sugar-core model's <code>update()</code>, then let each region style itself in <code>view()</code>:</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 
@@ -91,7 +91,7 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
       <div class="feature"><strong>Disabled regions</strong><span><code>disable()</code> keeps a region registered but makes traversal skip it; <code>enable()</code> puts it back. Disabling the focused region does not move focus — the next <code>next()</code> / <code>previous()</code> carries it to the nearest enabled region. <code>register()</code> always adds an enabled region, and a region dropped while disabled comes back enabled.</span></div>
       <div class="feature"><strong>Iterable, countable, serialisable</strong><span>Implements <code>IteratorAggregate</code>, <code>Countable</code> and <code>JsonSerializable</code>: <code>foreach</code> walks every registered id, <code>count($ring)</code> counts them, and <code>json_encode($ring)</code> gives <code>{"ids":[…],"index":n,"disabled":[…]}</code> with string ids you can feed back in to restore a session.</span></div>
       <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new <code>FocusRing</code> and leaves the receiver untouched, so it slots into the immutable Model–Update–View pattern. No-op calls return the <em>same</em> instance, so <code>$new === $old</code> cheaply detects "nothing changed".</span></div>
-      <div class="feature"><strong>Dependency-free</strong><span>No rendering or key decoding of its own — the owning model wires keys to it and reads <code>isFocused()</code> when drawing. Composes with any candy-core model.</span></div>
+      <div class="feature"><strong>Dependency-free</strong><span>No rendering or key decoding of its own — the owning model wires keys to it and reads <code>isFocused()</code> when drawing. Composes with any sugar-core model.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>

@@ -20,9 +20,9 @@ This plan maps each finding to actual code locations where the described functio
 |----------|-----------|--------|
 | sugar-crush is crush port, not bubbletea | The actual sugar-crush ports charmbracelet/crush (chat-shell), not bubbletea input handling | `sugar-crush/README.md:L16` |
 | Input handling exists in sugar-input | EscapeDecoder.php handles escape sequences including mouse/paste | `sugar-input/src/EscapeDecoder.php` |
-| InputReader in candy-core parses bytes | InputReader.php parses byte streams into typed Msg objects | `candy-core/src/InputReader.php` |
+| InputReader in sugar-core parses bytes | InputReader.php parses byte streams into typed Msg objects | `sugar-core/src/InputReader.php` |
 | Debounce/throttle in sugar-async | AsyncOps.php provides debounce() and throttle() | `sugar-async/src/AsyncOps.php:L159-204` |
-| WindowSizeMsg exists in candy-core | Resize events are handled via WindowSizeMsg | `candy-core/src/Msg/WindowSizeMsg.php` |
+| WindowSizeMsg exists in sugar-core | Resize events are handled via WindowSizeMsg | `sugar-core/src/Msg/WindowSizeMsg.php` |
 | Findings describe expected but non-existent library | Files at specified paths do not exist in repository | Investigation 2026-06-30 |
 
 ---
@@ -59,7 +59,7 @@ The findings file describes a `sugar-crush` library that:
 
 - `sugar-crush/src/Tui/KeyboardHandler.php` — actual keyboard handler for sugar-crush app
 - `sugar-input/src/EscapeDecoder.php` — escape sequence decoder (bubbletea-style input)
-- `candy-core/src/InputReader.php` — byte stream parser into typed Msg
+- `sugar-core/src/InputReader.php` — byte stream parser into typed Msg
 
 **Investigation notes:**
 
@@ -91,7 +91,7 @@ If a user types "hello" then presses Ctrl+D, the "hello" might be lost if the ha
 **Actual code location:**
 
 - `sugar-crush/src/Tui/KeyboardHandler.php:81-94` — handles Ctrl+key combinations
-- `candy-core/src/InputReader.php` — parses byte stream (could drain buffer here)
+- `sugar-core/src/InputReader.php` — parses byte stream (could drain buffer here)
 
 **Investigation notes:**
 
@@ -120,13 +120,13 @@ Terminal resizes need to trigger layout recalculation and full frame repaint.
 
 **Actual code location:**
 
-- `candy-core/src/Msg/WindowSizeMsg.php` — exists and represents resize event
+- `sugar-core/src/Msg/WindowSizeMsg.php` — exists and represents resize event
 - `sugar-crush/src/Chat.php:53,212` — has resize detection and resets diff state
 - `sugar-crush/src/Tui/Renderer.php:30-35` — `setSize()` is called on resize
 
 **Investigation notes:**
 
-- `WindowSizeMsg` exists in candy-core and is used by multiple libraries
+- `WindowSizeMsg` exists in sugar-core and is used by multiple libraries
 - `Chat.php:212` shows resize detection logic
 - `Renderer::setSize()` caches terminal size
 - The actual sugar-crush app DOES handle resize via WindowSizeMsg
@@ -156,7 +156,7 @@ Users cannot click on the first column or last column of the terminal.
 
 - `sugar-input/src/EscapeDecoder.php:268-331` — handles SGR 1006 mouse decoding
 - `sugar-input/src/Event/MouseEvent.php:35-47` — MouseEvent is 1-based per docstring
-- `candy-core/src/InputReader.php:569-617` — `decodeSgrMouse()` also handles mouse
+- `sugar-core/src/InputReader.php:569-617` — `decodeSgrMouse()` also handles mouse
 
 **Investigation notes:**
 
@@ -194,7 +194,7 @@ Changing debounce settings mid-operation could cause stale timers to fire with o
 
 - `sugar-async/src/AsyncOps.php:159-175` — `debounce()` creates timer closures
 - `sugar-forms/src/Field/Input.php:248-449` — async suggestions with debounce
-- `candy-core/src/Program.php` — uses `Loop::addTimer()`
+- `sugar-core/src/Program.php` — uses `Loop::addTimer()`
 
 **Investigation notes:**
 
@@ -224,7 +224,7 @@ Abandoned timer references could prevent garbage collection or fire after cleanu
 **Actual code location:**
 
 - `sugar-async/src/AsyncOps.php` — debounce/throttle use timers
-- `candy-core/src/Program.php:310` — mentions block until loop stops
+- `sugar-core/src/Program.php:310` — mentions block until loop stops
 
 **Investigation notes:**
 
@@ -257,7 +257,7 @@ Paste could fail silently instead of crashing.
 
 - `sugar-input/src/EscapeDecoder.php:542-591` — handles paste events
 - `sugar-input/src/Event/PasteEvent.php` — PasteEvent with MAX_SIZE truncation
-- `candy-core/src/InputReader.php:60-76` — handles paste via PasteStartMsg/PasteEndMsg
+- `sugar-core/src/InputReader.php:60-76` — handles paste via PasteStartMsg/PasteEndMsg
 
 **Investigation notes:**
 
@@ -287,15 +287,15 @@ Bracketed paste mode sends start/end markers that should be handled separately.
 
 **Actual code location:**
 
-- `candy-core/src/Msg/PasteStartMsg.php` — EXISTS
-- `candy-core/src/Msg/PasteEndMsg.php` — EXISTS
-- `candy-core/src/Msg/PasteMsg.php` — EXISTS
-- `candy-core/src/InputReader.php:104-109` — emits PasteStartMsg
+- `sugar-core/src/Msg/PasteStartMsg.php` — EXISTS
+- `sugar-core/src/Msg/PasteEndMsg.php` — EXISTS
+- `sugar-core/src/Msg/PasteMsg.php` — EXISTS
+- `sugar-core/src/InputReader.php:104-109` — emits PasteStartMsg
 - `sugar-input/src/EscapeDecoder.php:31-45, 542-591` — handles paste buffering
 
 **Investigation notes:**
 
-- All three message types exist in candy-core
+- All three message types exist in sugar-core
 - `InputReader.php:104-109` shows PasteStartMsg being emitted when CSI 200~ is seen
 - `EscapeDecoder.php` has `PASTE_START = "\x1b[200~"` and `PASTE_END = "\x1b[201~"` constants
 - Paste start/end IS handled in the actual codebase

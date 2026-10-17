@@ -296,7 +296,7 @@ final class RelativeFormatTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
             timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
         );
     }
@@ -308,7 +308,7 @@ final class RelativeFormatTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
         );
     }
 
@@ -319,7 +319,7 @@ final class RelativeFormatTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
             timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
         );
     }

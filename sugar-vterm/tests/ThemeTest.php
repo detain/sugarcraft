@@ -87,7 +87,7 @@ final class ThemeTest extends TestCase
 
     /**
      * The seven overlapping Dracula slots must stay byte-identical to
-     * candy-core's Palettes SSOT so the two never drift apart.
+     * sugar-core's Palettes SSOT so the two never drift apart.
      */
     public function testDraculaOverlapMatchesCorePalettesSsot(): void
     {

@@ -2158,12 +2158,12 @@ A permission setting that is **present but unusable stops the launch** (exit 2 �
 
 ## Architecture
 
-SugarCrush keeps the proven sugar-crush **chassis** (the `Chat` candy-core `Model`, buffer-diff `Renderer`) and runs its full agent **engine** behind it. The interactive binary boots the **pane shell** that hosts that chassis:
+SugarCrush keeps the proven sugar-crush **chassis** (the `Chat` sugar-core `Model`, buffer-diff `Renderer`) and runs its full agent **engine** behind it. The interactive binary boots the **pane shell** that hosts that chassis:
 
 ```
 bin/sugarcrush
   └─ Bootstrap::app()
-       └─ Program → App (root candy-core Model: menu bar, pane focus, session tabs)
+       └─ Program → App (root sugar-core Model: menu bar, pane focus, session tabs)
             ├─ Tui\Renderer → ChatPane ─┐
             │                            └→ Renderer (the live buffer-diff chat renderer)
             └─ Chat (Model: input, scrollback, inFlight gate, permissions, zones)

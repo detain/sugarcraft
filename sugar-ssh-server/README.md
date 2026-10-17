@@ -52,7 +52,7 @@ simply not covered).
 ## Shared foundations
 
 SugarSshServer builds on **sugar-pty** (the PTY supervisor `InProcessTransport`
-spawns children through) and **candy-core** (`Lang` i18n wrapper,
+spawns children through) and **sugar-core** (`Lang` i18n wrapper,
 `AtomicJsonFile` persistence). It performs no terminal-capability probing of
 its own — `Session::fromEnvironment()` reads SSH environment variables
 (`TERM`, `SSH_CONNECTION`, …) purely as session *metadata*, never as a

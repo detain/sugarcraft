@@ -14,7 +14,7 @@ types, then fetch.
 
 - `sugar-forms/src/Select.php` and `sugar-forms/src/TextInput.php` —
   `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`.
-- Uses candy-core's `WorkerPool` (step 06.04) for the async fetch.
+- Uses sugar-core's `WorkerPool` (step 06.04) for the async fetch.
 
 ## Tests
 

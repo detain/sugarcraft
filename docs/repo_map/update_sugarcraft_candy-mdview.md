@@ -741,6 +741,6 @@ For the PHP ecosystem, candy-mdview fills an important niche as the only product
 2. Adding the missing TUI pager features (line numbers, clipboard, help overlay)
 3. Implementing configuration persistence
 
-The package's position in the SugarCraft ecosystem is as a **leaf library** consuming core infrastructure (candy-core, sugar-markdown, sugar-widgets). This means enhancements to core libraries automatically benefit candy-mdview, but candy-mdview-specific features (like GitHub fetching) require independent implementation.
+The package's position in the SugarCraft ecosystem is as a **leaf library** consuming core infrastructure (sugar-core, sugar-markdown, sugar-widgets). This means enhancements to core libraries automatically benefit candy-mdview, but candy-mdview-specific features (like GitHub fetching) require independent implementation.
 
 **Overall verdict:** Candy-mdview is production-ready for its current feature set (single-file markdown rendering/paging) but requires significant investment to close the gap with upstream glow. The highest-ROI next step is adding GitHub/GitLab integration.

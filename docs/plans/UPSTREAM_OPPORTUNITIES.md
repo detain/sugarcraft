@@ -16,11 +16,11 @@ SugarCraft ports. Use this to prioritize the next port wave.
 
 ---
 
-## charmbracelet/bubbletea → candy-core
+## charmbracelet/bubbletea → sugar-core
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-core | Notes |
+| Upstream | Title | Status in sugar-core | Notes |
 |---|---|:--:|---|
 | [#1680](https://github.com/charmbracelet/bubbletea/pull/1680) (2026-04-20) | fix: avoid Exec restore panic with WithInput(nil) | 🟡 | PHP side likely has similar issue with input lifecycle — needs investigation |
 | [#1611](https://github.com/charmbracelet/bubbletea/pull/1611) (2026-04-13) | Change KeyMsg to KeyPressMsg in Update function | ⚪ | v2 work — deferred per CONVERSION.md |
@@ -144,7 +144,7 @@ No high-comment open issues found. Repo is very quiet.
 | Upstream | Title | Applicability | Recommendation |
 |---|---|---|---|
 | [#679](https://github.com/charmbracelet/huh/issues/679) (5c) | Select doesn't render elements before selected if Value is set | 🟡 | May be PHP-specific issue to investigate |
-| [#286](https://github.com/charmbracelet/huh/issues/286) (4c) | Windows: Tab/Enter keys not handled correctly | 🟡 | Windows key handling — may affect candy-core Windows backend |
+| [#286](https://github.com/charmbracelet/huh/issues/286) (4c) | Windows: Tab/Enter keys not handled correctly | 🟡 | Windows key handling — may affect sugar-core Windows backend |
 
 ---
 
@@ -379,7 +379,7 @@ No high-comment open issues.
    - **Effort**: 2-3h **Benefit**: Medium — common markdown extension
    - **Downside**: Parse tree modification
 
-4. **bubbletea extended keyboard enhancements** → candy-core
+4. **bubbletea extended keyboard enhancements** → sugar-core
    - **Effort**: 2-3h **Benefit**: Medium — better key detection for special keys
    - **Downside**: May interact with existing key handling
 
@@ -396,7 +396,7 @@ No high-comment open issues.
 
 ### Plan candidates surfaced
 
-- `plans/x-windows.md` already covers Windows console backend for candy-core
+- `plans/x-windows.md` already covers Windows console backend for sugar-core
 - `plans/x-mosaic.md` covers image rendering which overlaps with bubbletea "Displaying images" issue
 - `plans/x-vt.md` covers virtual terminal which may relate to sequin escape sequence work
 

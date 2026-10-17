@@ -30,7 +30,7 @@ final class RelativeTimestampTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
         );
         $this->assertSame(CassetteHeader::TIMESTAMP_MODE_ABSOLUTE, $header->timestampMode);
     }
@@ -42,7 +42,7 @@ final class RelativeTimestampTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
             timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
         );
         $this->assertSame(CassetteHeader::TIMESTAMP_MODE_RELATIVE, $header->timestampMode);
@@ -67,7 +67,7 @@ final class RelativeTimestampTest extends TestCase
             'createdAt' => '2026-05-07T10:00:00Z',
             'cols' => 80,
             'rows' => 24,
-            'runtime' => 'sugarcraft/candy-core@dev',
+            'runtime' => 'sugarcraft/sugar-core@dev',
             'timestampMode' => 'invalid',
         ]);
     }
@@ -138,7 +138,7 @@ final class RelativeTimestampTest extends TestCase
             'created' => '2026-05-07T10:00:00Z',
             'cols' => 80,
             'rows' => 24,
-            'runtime' => 'sugarcraft/candy-core@dev',
+            'runtime' => 'sugarcraft/sugar-core@dev',
             'timestampMode' => 'relative',
         ]) . "\n";
         $contents .= json_encode(['t' => 0.0, 'k' => 'resize', 'cols' => 80, 'rows' => 24]) . "\n";
@@ -254,7 +254,7 @@ final class RelativeTimestampTest extends TestCase
             'created' => '2026-05-07T10:00:00Z',
             'cols' => 80,
             'rows' => 24,
-            'runtime' => 'sugarcraft/candy-core@dev',
+            'runtime' => 'sugarcraft/sugar-core@dev',
             // no timestampMode key
         ]) . "\n";
         $contents .= json_encode(['t' => 1.5, 'k' => 'quit']) . "\n";
@@ -369,7 +369,7 @@ final class RelativeTimestampTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
         );
     }
 
@@ -380,7 +380,7 @@ final class RelativeTimestampTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
             timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
         );
     }

@@ -30,7 +30,7 @@
     "require": {
         "php": ">=8.3",
         "sugarcraft/sugar-cellbuffer": "dev-master",
-        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master"
     },
     "require-dev": {

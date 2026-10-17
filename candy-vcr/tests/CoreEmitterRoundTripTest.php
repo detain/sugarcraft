@@ -15,10 +15,10 @@ use SugarCraft\Vterm\Terminal\Terminal as EmulatorTerminal;
 
 /**
  * Round-trip guard between the two halves of the ANSI wire that live in
- * different libs: the byte strings candy-core emits ({@see Ansi}) and what
+ * different libs: the byte strings sugar-core emits ({@see Ansi}) and what
  * sugar-vterm's VT500 parser + emulator actually make of them.
  *
- * Why the test lives HERE: sugar-vterm `require`s candy-core, so core can never
+ * Why the test lives HERE: sugar-vterm `require`s sugar-core, so core can never
  * depend back on the emulator without a cycle — the only suites that can see
  * both sides are the ones that already dev-depend on vt. Same reason
  * {@see VtParityTest} lives here rather than in sugar-vterm.
@@ -319,12 +319,12 @@ final class CoreEmitterRoundTripTest extends TestCase
             // pass with the mapping silently retired. Demand the names first.
             $this->assertTrue(
                 $core->hasConstant($coreConstant) && $emulator->hasConstant($emulatorConstant),
-                "candy-core Ansi::{$coreConstant} and sugar-vterm Charsets::{$emulatorConstant} must both exist",
+                "sugar-core Ansi::{$coreConstant} and sugar-vterm Charsets::{$emulatorConstant} must both exist",
             );
             $this->assertSame(
                 $emulator->getConstant($emulatorConstant),
                 $core->getConstant($coreConstant),
-                "candy-core Ansi::{$coreConstant} must name the same designator as sugar-vterm Charsets::{$emulatorConstant}",
+                "sugar-core Ansi::{$coreConstant} must name the same designator as sugar-vterm Charsets::{$emulatorConstant}",
             );
         }
 
@@ -389,7 +389,7 @@ final class CoreEmitterRoundTripTest extends TestCase
 
     public function testScsG2AndG3DesignationsTakeEffectOnSingleShift(): void
     {
-        // SS2/SS3 are the C1 bytes 0x8E/0x8F. candy-core deliberately has no
+        // SS2/SS3 are the C1 bytes 0x8E/0x8F. sugar-core deliberately has no
         // emitter for them: the audit shows sugar-input still mis-decodes the
         // 7-bit ESC N / ESC O spellings, so single shifts stay a raw-byte
         // concern here until that lands.
@@ -434,7 +434,7 @@ final class CoreEmitterRoundTripTest extends TestCase
     public function testAComposedFrameRoundTripsThroughTheEmulator(): void
     {
         // The realistic call pattern: designate, draw a rule, restore ASCII,
-        // then tear the session down with RIS — every step emitted by candy-core.
+        // then tear the session down with RIS — every step emitted by sugar-core.
         $frame = Ansi::decSpecialGraphics()
             . 'lqqqqk'
             . Ansi::asciiCharset()

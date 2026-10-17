@@ -233,12 +233,12 @@ No `.php-cs-fixer.dist.php` or similar code style enforcement, despite being men
 ```json
 "require": {
     "php": "^8.3",
-    "sugarcraft/candy-core": "dev-master",
+    "sugarcraft/sugar-core": "dev-master",
     "sugarcraft/sugar-style": "dev-master"
 }
 ```
 
-For a terminal color detection library, having two internal dependencies (candy-core for i18n Lang facade, sugar-style for what appears to be theming) may be heavier than necessary. A color profile library should ideally have minimal dependencies.
+For a terminal color detection library, having two internal dependencies (sugar-core for i18n Lang facade, sugar-style for what appears to be theming) may be heavier than necessary. A color profile library should ideally have minimal dependencies.
 
 ---
 
@@ -362,7 +362,7 @@ Using `** 2` is slower than `$this->r * $this->r`. For a color library called fr
 use SugarCraft\Core\I18n\Lang as BaseLang;
 ```
 
-`sugar-colorprofile` depends on `candy-core` solely for the `Lang` i18n facade. If `Lang::t()` calls are minimal (only one at StandardColors.php:77), could consider using a simpler translation approach or inlining the error message.
+`sugar-colorprofile` depends on `sugar-core` solely for the `Lang` i18n facade. If `Lang::t()` calls are minimal (only one at StandardColors.php:77), could consider using a simpler translation approach or inlining the error message.
 
 ---
 
@@ -459,4 +459,4 @@ In a ReactPHP ecosystem, a library doing terminal detection should ideally:
 - `tests/Probe/ProbeReportTest.php` — ProbeReport value object tests
 - `tests/Probe/TerminalProbeTest.php` — TerminalProbe integration tests
 
-**Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-style` (both dev-master path repos)
+**Dependencies:** `sugarcraft/sugar-core`, `sugarcraft/sugar-style` (both dev-master path repos)

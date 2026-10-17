@@ -15,7 +15,7 @@
 
 SugarCli provides a set of focused, single-responsibility CLI presentation primitives that turn ordinary command-line output into consistent, branded terminal output. It is library-only — drop it into any Composer project without requiring Symfony Console or any other framework.
 
-The package implements 7 components: `Theme`, `StatusLine`, `Banner`, `Section`, `Stage`, `HelpText`, and `Logo`. Each is a `final` class with static factory methods, no instance state beyond configuration, and output that composes cleanly with the rest of the SugarCraft stack via `sugar-style` (styling) and `candy-core` (utilities).
+The package implements 7 components: `Theme`, `StatusLine`, `Banner`, `Section`, `Stage`, `HelpText`, and `Logo`. Each is a `final` class with static factory methods, no instance state beyond configuration, and output that composes cleanly with the rest of the SugarCraft stack via `sugar-style` (styling) and `sugar-core` (utilities).
 
 **Primary upstream:** `charmbracelet/fang` — CLI starter kit for Cobra applications, providing styled help/errors, automatic `--version`, manpage generation, shell completions, and themeable output.
 
@@ -253,12 +253,12 @@ The `sugarcraft()` preset renders a box-drawing character logo:
 
 ```
 sugar-cli/
-├── depends on: candy-core (Width utility, Color utilities)
+├── depends on: sugar-core (Width utility, Color utilities)
 ├── depends on: sugar-style (Style, Border)
 └── provides: CLI presentation helpers
 ```
 
-No circular dependencies. sugar-cli is a leaf in the dependency tree (it depends on candy-core and sugar-style but nothing depends on it within the monorepo).
+No circular dependencies. sugar-cli is a leaf in the dependency tree (it depends on sugar-core and sugar-style but nothing depends on it within the monorepo).
 
 ### Immutability Pattern
 
@@ -316,7 +316,7 @@ This is distinct from `sugar-markdown` (markdown rendering) and `sugar-log` (tim
 
 Unlike the upstream `charmbracelet/fang` which uses `lipgloss.LightDarkFunc` for automatic light/dark detection, sugar-cli does not implement automatic terminal background detection. The design chooses to make the theme explicit rather than auto-detected.
 
-**Rationale:** PHP CLI scripts often run in contexts where terminal detection is unreliable (cron, CI/CD, Docker). Making the theme explicit at call site is more predictable. Users who want auto-detection can implement it themselves using `candy-core`'s `ColorProfile::detect()` and pass the appropriate `Theme` to each component.
+**Rationale:** PHP CLI scripts often run in contexts where terminal detection is unreliable (cron, CI/CD, Docker). Making the theme explicit at call site is more predictable. Users who want auto-detection can implement it themselves using `sugar-core`'s `ColorProfile::detect()` and pass the appropriate `Theme` to each component.
 
 ### Theme Factory Pattern
 
@@ -350,11 +350,11 @@ func enableVirtualTerminalProcessing(w io.Writer) {
 ```
 
 SugarCli does **not** include platform-specific Windows VT processing because:
-1. It depends on `candy-core` for terminal utilities, which handles this at a lower level
-2. The PHP port of the TTY raw mode handling is in `candy-core` and `sugar-pty`
+1. It depends on `sugar-core` for terminal utilities, which handles this at a lower level
+2. The PHP port of the TTY raw mode handling is in `sugar-core` and `sugar-pty`
 3. As a pure presentation library (output only, no input handling), sugar-cli doesn't directly interact with the terminal device
 
-**Implication:** Applications using sugar-cli should ensure Windows VT processing is enabled at the application level (typically via `candy-core`'s terminal initialization) before producing styled output.
+**Implication:** Applications using sugar-cli should ensure Windows VT processing is enabled at the application level (typically via `sugar-core`'s terminal initialization) before producing styled output.
 
 ### ANSI Safety Across Platforms
 
@@ -410,7 +410,7 @@ Sections are rendered in the order supplied in the `$sections` associative array
 | Shell completion generation | ❌ | Not implemented (requires CLI framework) |
 | Manpage generation | ❌ | Not implemented |
 | Automatic --version wiring | ❌ | Not implemented |
-| Windows VT processing | ❌ | Delegated to candy-core |
+| Windows VT processing | ❌ | Delegated to sugar-core |
 
 ---
 
@@ -460,7 +460,7 @@ Sections are rendered in the order supplied in the `$sections` associative array
 | Shell completions generation | ✅ | ❌ | No CLI framework integration |
 | Automatic --version wiring | ✅ | ❌ | No CLI framework integration |
 | Manpage generation | ✅ | ❌ | Not applicable to library |
-| Windows VT processing | ✅ | ❌ | Delegated to candy-core |
+| Windows VT processing | ✅ | ❌ | Delegated to sugar-core |
 | Command grouping | ✅ | ❌ | No Cobra integration |
 | Error handler with styled header | ✅ | ❌ | Only StatusLine::error() for output |
 | `fang.Execute()` entry point | ✅ | ❌ | Pure library, no opinion on CLI framework |
@@ -594,7 +594,7 @@ Gum generates shell completions via a hidden `completion` command. While sugar-c
 
 ### Width-aware section fill
 
-`Section::header()` uses `Width::string()` from `candy-core` to compute the visual width of the styled label before filling with runes:
+`Section::header()` uses `Width::string()` from `sugar-core` to compute the visual width of the styled label before filling with runes:
 
 ```php
 // src/Section.php:39

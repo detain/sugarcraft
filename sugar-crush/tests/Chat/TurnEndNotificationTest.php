@@ -32,7 +32,7 @@ use SugarCraft\Crush\Tui\TerminalNotifier;
  * Roadmap 5.14a: the `notify` setting rings the terminal — BEL, or an OSC 9
  * desktop notification — when a turn ends and when the agent stops to wait
  * for an approval. Off by default, and never from `view()`: the bytes leave as
- * a candy-core `Cmd::raw()`.
+ * a sugar-core `Cmd::raw()`.
  *
  * @see TerminalNotifier
  */

@@ -10,7 +10,7 @@ Address findings in sugar-style library, mapping each issue to actual file locat
 |----------|-----------|--------|
 | Findings file references non-existent files | 8 files in findings do not exist in sugar-style | investigation |
 | ANSI Parser in candy-codeshot | Actual AnsiParser is in candy-codeshot/src/AnsiParser.php | investigation |
-| Width utility in candy-core | Actual Width is in candy-core/src/Util/Width.php | investigation |
+| Width utility in sugar-core | Actual Width is in sugar-core/src/Util/Width.php | investigation |
 | Upstream is lipgloss not bubbles | sugar-style ports charmbracelet/lipgloss | composer.json |
 | Border/BoxDrawing.php does not exist | Only Border.php and related exist | glob search |
 | Lipstick.php and Background.php do not exist | No such classes in entire monorepo | grep search |
@@ -21,7 +21,7 @@ Address findings in sugar-style library, mapping each issue to actual file locat
 
 ## Phase 2: Bugs [CLOSED — all misreferenced]
 
-- [x] 2.1 Width OOB Access — ⏭️ N/A (misreferenced; belongs to candy-core Util/Width, no OOB reproduced — verified 2026-07-04)
+- [x] 2.1 Width OOB Access — ⏭️ N/A (misreferenced; belongs to sugar-core Util/Width, no OOB reproduced — verified 2026-07-04)
 - [x] 2.2 Border Corner Off-by-One — ⏭️ N/A (file never existed; only sugar-dashboard has a BoxDrawing.php — verified 2026-07-04)
 - [x] 2.3 Spinner Animation Frames — ⏭️ N/A (misreferenced; Spinner lives in sugar-forms — verified 2026-07-04)
 - [x] 2.4 ProgressBar ETA Division — ⏭️ N/A (no ETA code exists in sugar-style — verified 2026-07-04)
@@ -43,7 +43,7 @@ Address findings in sugar-style library, mapping each issue to actual file locat
 
 The findings file for sugar-style has significant discrepancies:
 - 8 referenced files do not exist in sugar-style
-- Actual issues are in candy-codeshot, candy-core, sugar-forms, and sugar-dashboard
+- Actual issues are in candy-codeshot, sugar-core, sugar-forms, and sugar-dashboard
 - Upstream is incorrectly stated as bubbles instead of lipgloss
 
 ## Files Verified as Existing in sugar-style

@@ -618,7 +618,7 @@ cd candy-mail && php bin/candy-mail --help
 
 ## Phase 5: Compatibility Issues [PENDING]
 
-### 5.1 Depends on dev-master of sugar-async and candy-core
+### 5.1 Depends on dev-master of sugar-async and sugar-core
 
 **Severity:** Medium
 
@@ -628,13 +628,13 @@ cd candy-mail && php bin/candy-mail --help
 
 **Investigation Notes:**
 
-- Lines 28-29: `"sugarcraft/sugar-async": "dev-master"`, `"sugarcraft/candy-core": "dev-master"`
+- Lines 28-29: `"sugarcraft/sugar-async": "dev-master"`, `"sugarcraft/sugar-core": "dev-master"`
 - Path repositories are set up correctly for local development
 - However, if these packages publish proper releases, candy-mail should depend on versioned releases
 
 **What Is Expected:**
 
-1. Check if sugar-async and candy-core have released versions
+1. Check if sugar-async and sugar-core have released versions
 2. If so, update composer.json to use `^1.0` or similar versioned constraints
 3. If not, document why dev-master is necessary and add TODO comment
 

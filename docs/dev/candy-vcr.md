@@ -103,11 +103,11 @@ $recorder = Recorder::open('/tmp/session.cas')
 
 ### Msg serializers
 
-`SugarCraft\Vcr\Msg\Registry` handles encoding/decoding of candy-core `Msg`
+`SugarCraft\Vcr\Msg\Registry` handles encoding/decoding of sugar-core `Msg`
 objects into the cassette `input` event envelope format. The default
 registry ships with:
 
-- **`BuiltinSerializer`** — handles 14 built-in candy-core Msgs: `KeyMsg`,
+- **`BuiltinSerializer`** — handles 14 built-in sugar-core Msgs: `KeyMsg`,
   `MouseClickMsg / MotionMsg / WheelMsg / ReleaseMsg`, `WindowSizeMsg`,
   `FocusMsg`, `BlurMsg`, `PasteStartMsg / EndMsg / Msg`,
   `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorPositionMsg`.

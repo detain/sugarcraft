@@ -67,12 +67,12 @@ require __DIR__ . '/../vendor/autoload.php';
  * StreamSelectLoop recomputes microtime(true) every iteration, so it has no
  * stale-clock window at all: the same probe at 4s and 11s of idle returns
  * 10.0003s and 10.0010s. Production is unaffected either way — there
- * candy-core's Program::run() drives one continuous uv_run(), which keeps
+ * sugar-core's Program::run() drives one continuous uv_run(), which keeps
  * libuv's cached clock fresh, so this is a test-harness concern only and the
  * pin deliberately does not reach into src/.
  *
  * The one global side effect to know about: StreamSelectLoop's constructor
- * calls pcntl_async_signals(true) process-wide. That is what candy-core's
+ * calls pcntl_async_signals(true) process-wide. That is what sugar-core's
  * Program::run() does in production anyway, nothing in this repo uses
  * Loop::addSignal(), and 30 runs of tests/Agents with and 30 without the pin
  * were identical, so it is recorded rather than worked around.
@@ -101,7 +101,7 @@ putenv('SUGARCRUSH_BACKGROUND');
 putenv('COLORFGBG');
 
 /*
- * The same hermeticity for the colour TIER. On a pipe candy-core's
+ * The same hermeticity for the colour TIER. On a pipe sugar-core's
  * ColorProfile::detect() answers NoTty, and PaneFrame's side-frame fade stays
  * off - unless `FORCE_COLOR` or `CLICOLOR_FORCE` is truthy, which forces
  * TrueColor through the pipe. Some shells export `FORCE_COLOR=3`, and a suite

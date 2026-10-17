@@ -13,7 +13,7 @@ use SugarCraft\Crush\Lang;
  * Opens a settings file in the user's own editor from the settings view
  * (roadmap N-P5; Appendix N §5.4 "open file in $EDITOR") — the editor `/editor`
  * uses ({@see EditorCommand::editor()}: `$VISUAL`, else `$EDITOR`, else the
- * platform default), run through candy-core's {@see Cmd::exec()}, which hands
+ * platform default), run through sugar-core's {@see Cmd::exec()}, which hands
  * the terminal over and restores the frame when it exits.
  *
  * The file itself is the operand, through `escapeshellarg()` — the editor line

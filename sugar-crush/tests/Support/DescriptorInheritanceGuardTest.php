@@ -283,16 +283,16 @@ final class DescriptorInheritanceGuardTest extends TestCase
      */
     private const LIB_HORIZON = [
         // WALKED. Not in any autoload section, and executed in THIS process
-        // all the same: `candy-core/src/I18n/T.php::load()` spells the load
+        // all the same: `sugar-core/src/I18n/T.php::load()` spells the load
         // `$data = require $path;` where $path is `<lang dir>/<locale>.php`,
         // and every lib registers its own directory through `T::register()`.
         // A `require` is not an autoload, so no manifest mentions these files
         // and the derivation could never have reached them.
         'lang' => [
             'walked' => true,
-            'reason' => 'executed in this process by a runtime require in candy-core '
+            'reason' => 'executed in this process by a runtime require in sugar-core '
                 . 'I18n\T::load(), not by the autoloader, so no autoload root names it',
-            'mechanism' => ['candy-core/src/I18n/T.php', 'require $path'],
+            'mechanism' => ['sugar-core/src/I18n/T.php', 'require $path'],
         ],
 
         // WALKED, and for a DIFFERENT reachability - this one is the gap
@@ -338,7 +338,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // licence". WHAT IS TRUE NOW: the measurement was right - there is no
         // `.php` under any `docs/` in the closure - and that is exactly what
         // made the row a licence. It pre-approved a directory kind that does
-        // not exist, and an unreadable spec planted under `candy-core/docs/`
+        // not exist, and an unreadable spec planted under `sugar-core/docs/`
         // ran green through this entire test. WHY THE REASONING STILL EARNS ITS
         // PLACE, rather than being deleted with the row: the argument it wanted
         // somebody to make one day is now FORCED to happen - with no row, the
@@ -442,12 +442,12 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * @var array<string, array{count:int, reason:string}>
      */
     private const ACCOUNTED_FOR_IN_LIBS = [
-        'candy-core/WorkerPool.php::spawnWorker' => [
+        'sugar-core/WorkerPool.php::spawnWorker' => [
             'count' => 1,
             'reason' => 'pool worker held in $this->workers and drained from the ReactPHP loop, '
                 . 'so it outlives spawnWorker() by design. The scanner reads it as unclassified '
                 . 'rather than long because the handle goes to is_resource() first. Spec is '
-                . '0,1,2 only. NOT FIXABLE FROM THIS PACKAGE - candy-core owns it.',
+                . '0,1,2 only. NOT FIXABLE FROM THIS PACKAGE - sugar-core owns it.',
         ],
         'sugar-pty/Spawn.php::proc' => [
             'count' => 1,
@@ -469,7 +469,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'made `sugarcraft/sugar-mcp-client` a requirement — the product adapter '
                 . '(src/MCP/StdioMcpServer.php) delegates its spawn to it. The handle is kept '
                 . 'for the life of the server; the lifecycle half is accounted in '
-                . 'tools/check-child-lifetimes.php (teardown via candy-core BoundedShutdown in '
+                . 'tools/check-child-lifetimes.php (teardown via sugar-core BoundedShutdown in '
                 . 'the lib, containment wrap via the embedder\'s spawnPlanner). This row is the '
                 .             'DESCRIPTOR half: spec names 0,1,2 only and says nothing about 3+, the same '
                 . 'shape as the sugar-pty rows above. NOT FIXABLE FROM THIS PACKAGE.',
@@ -923,7 +923,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
             YOU ARE PROBABLY RESOLVING A MERGE. This guard reads through
             vendor/sugarcraft, which in the monorepo is a symlink into the tree, so
-            a change in sugar-pty or candy-core reds THIS suite. That is deliberate
+            a change in sugar-pty or sugar-core reds THIS suite. That is deliberate
             (E418) and the diff in front of you is very likely not the cause.
 
             THE RESOLUTION IS ALWAYS BOTH HALVES:
@@ -1601,7 +1601,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      *
      * EMPTY, AND THE EMPTINESS IS THE ROUND'S RESULT RATHER THAN ITS
      * PREMISE. When this arm was written there was exactly one member -
-     * `candy-core/Program.php::runExec`, whose spec is
+     * `sugar-core/Program.php::runExec`, whose spec is
      * `$req->captureOutput ? [...] : [...]` - and E447 offered two ways out:
      * make it readable, or make the unreadability explicit and rostered. It
      * turned out to be the first: the refusal was correct and the DIAGNOSIS
@@ -1679,7 +1679,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             reported accurately, because the instrument has no opinion to report.
 
             YOU ARE PROBABLY RESOLVING A MERGE. This walk reads through
-            vendor/sugarcraft, so a change in candy-core or sugar-pty reds THIS
+            vendor/sugarcraft, so a change in sugar-core or sugar-pty reds THIS
             suite and the diff in front of you is very likely not the cause.
 
             THE RESOLUTIONS, best first:
@@ -2297,7 +2297,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             proc_close(). That is allowed. It is not allowed to be invisible.
 
             YOU ARE PROBABLY RESOLVING A MERGE. This arm reads through
-            vendor/sugarcraft, so a change in sugar-pty or candy-core reds THIS
+            vendor/sugarcraft, so a change in sugar-pty or sugar-core reds THIS
             suite and the diff in front of you is very likely not the cause.
 
             NOT RECORDED AT ALL: a CLOSING_HELPERS row was added, or a library

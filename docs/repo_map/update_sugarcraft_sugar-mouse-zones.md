@@ -2,7 +2,7 @@
 
 **sugar-mouse** is a complete, production-ready PHP port of lrstanley/bubblezone — providing invisible ANSI APC marker-based mouse zone tracking for TUI applications. It solves the fundamental problem of routing mouse events to the correct UI component without requiring every component to manually track its screen coordinates.
 
-**Ecosystem positioning:** sugar-mouse sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `sugar-style` (styling system), and `sugar-widgets` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
+**Ecosystem positioning:** sugar-mouse sits at the event-handling layer, integrating with `sugar-core` (TEA runtime via `MouseMsg`), `sugar-style` (styling system), and `sugar-widgets` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
 
 **Biggest opportunity areas:**
 
@@ -136,7 +136,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 
 1. **Elegant problem decomposition** — Components call `mark(id, content)`; root calls `scan(frame)` once; handlers call `anyInBounds()`. No coordinate math in components.
 
-2. **Zero-width markers are layout-safe** — APC sequences don't affect `Width::string()` measurement from candy-core/sugar-style. Integration tested and documented.
+2. **Zero-width markers are layout-safe** — APC sequences don't affect `Width::string()` measurement from sugar-core/sugar-style. Integration tested and documented.
 
 3. **Synchronous scan is PHP-idiomatic** — No goroutine/channel complexity. Zone map ready immediately after `scan()` returns.
 

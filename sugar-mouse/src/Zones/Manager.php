@@ -139,7 +139,7 @@ final class Manager
      * and return the cleaned frame ready for the terminal.
      *
      * Bounding-box computation is delegated to {@see \SugarCraft\Mouse\Scan}
-     * (CJK-width aware via candy-core's Width), then the discovered zones are
+     * (CJK-width aware via sugar-core's Width), then the discovered zones are
      * upserted into this manager's registry as {@see Zone} adapters — same id,
      * same bounds. The registry merges rather than replaces: ids seen this
      * scan overwrite prior entries; other ids persist.

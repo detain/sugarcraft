@@ -7,7 +7,7 @@
 - **Composer**: `sugarcraft/sugar-toast`
 - **Namespace**: `SugarCraft\Toast`
 - **PHP**: `^8.3`
-- **Dependencies**: `sugarcraft/candy-core` (dev-master)
+- **Dependencies**: `sugarcraft/sugar-core` (dev-master)
 - **Status**: 🟢 v1 ready
 - **Upstream Primary**: [daltonsw/bubbleup](https://github.com/daltonsw/bubbleup) (Go, ~43 stars, MIT)
 - **Upstream Secondary**: [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) (progress bar reference)
@@ -189,7 +189,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 
 **Implementation Ideas**:
 
-- Implement LAB color space conversion in `candy-core` or `sugar-colorprofile`
+- Implement LAB color space conversion in `sugar-core` or `sugar-colorprofile`
 - Use `SugarCraft\Core\Color\Lab` value object with `blend(Lab $other, float $t)` method
 - Apply to background/border colors during fade animation
 
@@ -400,7 +400,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 1. **Decouple rendering from timing**: Animation timing should be injectable, not tied to render cycle
 2. **Add Model interface**: Implement `SugarCraft\Core\Model` for TEA integration (matching sugar-widgets components)
-3. **Separate display-cell utilities**: Extract `Width` and `Ansi` helpers to reusable interfaces in candy-core
+3. **Separate display-cell utilities**: Extract `Width` and `Ansi` helpers to reusable interfaces in sugar-core
 4. **Plugin system for custom alert types**: Registry pattern for user-defined ToastType extensions
 
 ---
@@ -419,7 +419,7 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 
 1. **Animation cookbook**: Document how to wire sugar-spring for fade animations
 2. **Queue management guide**: Explain overflow strategies with visual examples
-3. **Integration patterns**: Show how to integrate with candy-core, sugar-overlay for complex overlays
+3. **Integration patterns**: Show how to integrate with sugar-core, sugar-overlay for complex overlays
 4. **i18n guide**: How to add new locales beyond English
 5. **Keyboard handling reference**: How to wire action buttons in a Bubble Tea program
 

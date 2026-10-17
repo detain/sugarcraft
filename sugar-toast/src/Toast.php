@@ -631,7 +631,7 @@ final class Toast
         // Inner content width (between the two vertical borders).
         $inner = \max(1, $width - 2);
 
-        // SGR prefix routed through candy-core Ansi so the icon's colour
+        // SGR prefix routed through sugar-core Ansi so the icon's colour
         // is emitted byte-identically to a hand-built CSI sequence.
         $prefix = Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
 
@@ -773,7 +773,7 @@ final class Toast
     }
 
     /**
-     * Pack a candy-core {@see Color} into a 24-bit 0xRRGGBB int, the shape
+     * Pack a sugar-core {@see Color} into a 24-bit 0xRRGGBB int, the shape
      * sugar-cellbuffer's {@see Style} stores fg/bg colours in.
      */
     private function colorToRgb(Color $color): int
@@ -839,7 +839,7 @@ final class Toast
     /**
      * Extract the next UTF-8 grapheme cluster from string $s at position $i.
      *
-     * Delegates to candy-core's canonical {@see Width::nextCluster()}. This
+     * Delegates to sugar-core's canonical {@see Width::nextCluster()}. This
      * used to be the sanctioned verbatim fork (@c5cce07d7, kept because the
      * core splitter was private); the duplicated body is deleted now that
      * core promotes it to a public entry point, so both invalid-UTF-8 guards
@@ -875,7 +875,7 @@ final class Toast
      * family were silently dropped — and `38;2;10;20;30` even mis-parsed its
      * payload as a palette index, painting text black. Supported now:
      * 1-9/53 on, 22-29/55 off, 30-37/90-97/39 foreground, 40-47/100-107/49
-     * background, 38/48 extended colours (index 5 → candy-core's canonical
+     * background, 38/48 extended colours (index 5 → sugar-core's canonical
      * xterm-256 table, index 2 → packed truecolor). An empty parameter list
      * means SGR 0 (reset) per spec; a malformed extended-colour payload stops
      * the walk fail-soft like a real terminal, and unknown codes are skipped
@@ -1002,7 +1002,7 @@ final class Toast
     }
 
     /**
-     * xterm-256 index → packed RGB via candy-core's canonical table, so the
+     * xterm-256 index → packed RGB via sugar-core's canonical table, so the
      * 16-colour slots can never fork away from {@see ansiColorToRgb()}.
      */
     private function ansi256ToRgb(int $idx): int
@@ -1013,7 +1013,7 @@ final class Toast
 
     /**
      * Map an SGR colour index (0-7, bright variant when {@see $bright}) to a
-     * packed 24-bit RGB int. The triples come from candy-core's canonical
+     * packed 24-bit RGB int. The triples come from sugar-core's canonical
      * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
      * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
      * {@see Color::ANSI16_RGB} so this decode can never fork its own blues
@@ -1031,7 +1031,7 @@ final class Toast
     /**
      * Display width of one grapheme cluster in cells: 0, 1, or 2.
      *
-     * Delegates to candy-core's canonical {@see Width} oracle (audit M8) — the
+     * Delegates to sugar-core's canonical {@see Width} oracle (audit M8) — the
      * old local fork measured emoji (U+1F300+) and other EAW-wide ranges as
      * 1 cell, desynchronising box padding from every other SugarCraft
      * renderer (a padded row then overflowed its own border by one cell).

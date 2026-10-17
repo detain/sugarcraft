@@ -432,7 +432,7 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             [0, 1],
         ];
 
-        // E447. A TERNARY WHOSE ARMS AGREE. `candy-core/src/Program.php::runExec()`
+        // E447. A TERNARY WHOSE ARMS AGREE. `sugar-core/src/Program.php::runExec()`
         // spells its spec `$req->captureOutput ? [0 => $childIn, 1 => ['pipe','w'],
         // 2 => ['pipe','w']] : [0 => $childIn, 1 => $childOut, 2 => $childErr]`
         // - copied from the source rather than paraphrased, because a quotation

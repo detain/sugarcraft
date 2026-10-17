@@ -13,7 +13,7 @@ use SugarCraft\Core\Util\Palettes;
  *
  * candy-codeshot already colours code from ANSI SGR present in its input; this
  * class fills the OTHER gap — raw, unstyled source. It delegates lexing to
- * candy-core's shared {@see RegexHighlighter} primitive and maps each returned
+ * sugar-core's shared {@see RegexHighlighter} primitive and maps each returned
  * {@see \SugarCraft\Core\Syntax\TokenSpan} onto a hex colour, emitting a
  * truecolor-SGR-annotated string. That string flows through the existing
  * {@see AnsiParser} → SVG/PNG path unchanged, so the two renderers need no
@@ -25,7 +25,7 @@ use SugarCraft\Core\Util\Palettes;
  * unrecognised language returns the input byte-for-byte. Plain text therefore
  * inherits the renderer's foreground fill exactly as un-highlighted input does.
  *
- * The default palette is Dracula-ish, sourced from candy-core's
+ * The default palette is Dracula-ish, sourced from sugar-core's
  * {@see Palettes} so the hex literals live in one place across the monorepo.
  */
 final class CodeHighlighter
@@ -68,7 +68,7 @@ final class CodeHighlighter
      * wrapping each recognised token.
      *
      * {@see TokenKind::Plain} spans are emitted verbatim (no SGR), so an
-     * unknown/empty language — which candy-core tokenises as a single Plain
+     * unknown/empty language — which sugar-core tokenises as a single Plain
      * span — round-trips the input unchanged. Concatenating every span's text
      * reproduces the original bytes, so the added SGR is purely additive.
      */

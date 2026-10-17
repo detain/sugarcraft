@@ -31,7 +31,7 @@ Source: ai/sugar-constraints-solver-deprecate
 
 ## 2026-09-22 — Dock layout primitive (src/Dock/*)
 
-- **Leaf-package immutable-fluent without candy-core.** composer.json requires
+- **Leaf-package immutable-fluent without sugar-core.** composer.json requires
   only `php ^8.3`, so the `Mutable` trait is off the table: each Dock class
   hand-rolls `private function mutate(array $changes): self` as
   `new self(...array_merge(get_object_vars($this), $changes))` over a private

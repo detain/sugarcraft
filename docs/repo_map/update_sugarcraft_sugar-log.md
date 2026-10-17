@@ -553,7 +553,7 @@ $log->info('User logged in', (new FieldBag())->string('user', $user)->int('attem
 
 ## 2. Tutorial: Logging in TUI Apps
 
-- Integrating with Bubble Tea (candy-core)
+- Integrating with Bubble Tea (sugar-core)
 
 - Capturing logs to file with tea.LogToFile pattern
 

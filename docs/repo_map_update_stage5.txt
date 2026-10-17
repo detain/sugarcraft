@@ -35,7 +35,7 @@ Affected: super-candy (critical), candy-mail (large attachment send).
 ### A. God Classes with 10-15 Constructor Parameters
 super-candy's `Manager` at 915 lines has 15 constructor params.
 candy-sql's `App` has 12 args. This pattern repeats across apps built on
-candy-core TEA. The fix is well-understood: extract value objects
+sugar-core TEA. The fix is well-understood: extract value objects
 (SearchState, TabManager, PaneState, ManagerState) and use a Builder pattern.
 No package has addressed this proactively.
 

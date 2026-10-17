@@ -199,7 +199,7 @@
 | Theming | `sugar-markdown` | Lip Gloss analog for ANSI styling |
 | Spinner | `sugar-spin` | Loading indicator |
 | Bubble Tea integration | `candy-scriptui` | TUI framework foundation |
-| KeyMap / Keyboard | `candy-core` | Keyboard handling utilities |
+| KeyMap / Keyboard | `sugar-core` | Keyboard handling utilities |
 | Dynamic forms | sugar-forms | *Func pattern with binding invalidation |
 | Validation | `candy-validate` (hypothetical) | Per-field validation |
 | Eval/Cache | sugar-forms internal | Reactive update caching |
@@ -216,7 +216,7 @@
 - `huh/field_filepicker.go` → `sugar-file-picker`
 - `huh/field_note.go` → `sugar-note` (display only)
 - `huh/theme.go` → `sugar-markdown`
-- `huh/keymap.go` → `candy-core` (keyboard handling)
+- `huh/keymap.go` → `sugar-core` (keyboard handling)
 - `huh/spinner/spinner.go` → `sugar-spin`
 - `huh/field_filepicker.go` + `examples/filepicker/` → `sugar-file-picker`
 - `huh/eval.go` → sugar-forms internal reactive system

@@ -21,10 +21,10 @@ use PHPUnit\Framework\TestCase;
  * destructor fired during PHP's normal shutdown sequence and termios lives
  * on the shared kernel TTY device, not per-process.
  *
- * This is now fixed at the ROOT, in candy-core itself:
+ * This is now fixed at the ROOT, in sugar-core itself:
  * `PosixBackend::restore()` records the PID that called `enableRawMode()`
  * and skips the real syscall when called from a different one (see that
- * method's docblock, and `candy-core/tests/Util/Tty/PosixBackendTest::
+ * method's docblock, and `sugar-core/tests/Util/Tty/PosixBackendTest::
  * testChildProcessExitingDoesNotResetTheParentsRawMode()` for the
  * equivalent proof at that layer) - so a forked child ending in a bare
  * `exit()` is safe regardless of what calls it, with no special handling
@@ -248,7 +248,7 @@ final class ForkedChildTest extends TestCase
     }
 
     /**
-     * With the candy-core-level fix (PosixBackend::restore() is now
+     * With the sugar-core-level fix (PosixBackend::restore() is now
      * PID-aware), even a BARE exit() in the forked child - no
      * ForkedChild::exitNow(), no special handling at all - is safe.
      */
@@ -325,7 +325,7 @@ final class ForkedChildTest extends TestCase
             $this->assertTrue(
                 $this->isRaw($slavePath),
                 'the real terminal was knocked out of raw mode by a plain exit() in the forked child - ' .
-                'the candy-core-level PID-aware restore() fix did not hold',
+                'the sugar-core-level PID-aware restore() fix did not hold',
             );
         } finally {
             $tty->restore();

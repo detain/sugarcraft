@@ -26,7 +26,7 @@ style attributes.
 **Paired `bool $XSet` sentinel to distinguish "do not change" from explicit clear.**
 
 The house law (AGENTS: "nullable fields use a paired bool $XSet sentinel",
-canonical sugar-style `Style`, trait candy-core `Concerns\Mutable`) is that
+canonical sugar-style `Style`, trait sugar-core `Concerns\Mutable`) is that
 every clearable field of `Node::with()` carries a companion flag:
 
 ```php
@@ -81,7 +81,7 @@ preserving the Boundary between the layout engine and the styling system.
 **Source:** ai/boxer-flex-fill
 
 ### 2026-06-23 — ansi-aware-content-placement
-**Pattern:** Place leaf content one *visible cell* at a time, where a cell = its leading ANSI escape sequences + one grapheme. Group escapes with the grapheme they style (escapes are zero-width and must not consume a column), advance the cursor by the grapheme's visible width (candy-core `Util\Width`), and blank the continuation cell of a wide grapheme. Apply the SAME visible-column measure to any truncation (`splitWord`) — never byte/codepoint offsets (`mb_substr`/`preg_split('//u')`).
+**Pattern:** Place leaf content one *visible cell* at a time, where a cell = its leading ANSI escape sequences + one grapheme. Group escapes with the grapheme they style (escapes are zero-width and must not consume a column), advance the cursor by the grapheme's visible width (sugar-core `Util\Width`), and blank the continuation cell of a wide grapheme. Apply the SAME visible-column measure to any truncation (`splitWord`) — never byte/codepoint offsets (`mb_substr`/`preg_split('//u')`).
 **Anti-pattern:** Splitting a line per-codepoint and writing each byte into its own cell — every escape byte (`\e`, `[`, `7`, `m`) steals a column, so styled bodies mis-width and clip, and a clipped reverse-video span loses its reset and bleeds colour into the border / next row.
 **Reset safety:** track SGR open/closed across the placed escapes (skip the params of `38/48;5;n` and `38/48;2;r;g;b` colour selectors so a colour index of `0` isn't read as a reset) and emit a trailing reset on the last placed cell whenever a span is left open — by an unbalanced source or by width truncation. A redundant reset is harmless; a missing one bleeds.
 **Source:** ai/boxer-ansi-placement

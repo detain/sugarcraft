@@ -28,7 +28,7 @@ final class CompressedJsonlFormatTest extends TestCase
         $this->assertSame(80, $decoded['cols']);
         $this->assertSame(24, $decoded['rows']);
         $this->assertSame('2026-05-07T10:00:00Z', $decoded['created']);
-        $this->assertSame('sugarcraft/candy-core@dev', $decoded['runtime']);
+        $this->assertSame('sugarcraft/sugar-core@dev', $decoded['runtime']);
     }
 
     public function testEachEventEncodesAsLine(): void
@@ -79,7 +79,7 @@ final class CompressedJsonlFormatTest extends TestCase
         $this->assertSame(1, $loaded->header->version);
         $this->assertSame(80, $loaded->header->cols);
         $this->assertSame(24, $loaded->header->rows);
-        $this->assertSame('sugarcraft/candy-core@dev', $loaded->header->runtime);
+        $this->assertSame('sugarcraft/sugar-core@dev', $loaded->header->runtime);
 
         $this->assertSame(4, $loaded->eventCount());
         $this->assertSame(EventKind::Resize, $loaded->events[0]->kind);
@@ -272,7 +272,7 @@ final class CompressedJsonlFormatTest extends TestCase
             createdAt: '2026-05-07T10:00:00Z',
             cols: 80,
             rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
+            runtime: 'sugarcraft/sugar-core@dev',
         );
     }
 }

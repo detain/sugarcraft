@@ -1,6 +1,6 @@
-# Step 06.02 — candy-core ScreenStack
+# Step 06.02 — sugar-core ScreenStack
 
-**Source:** `leftover_updates_later.md` candy-core §3.2
+**Source:** `leftover_updates_later.md` sugar-core §3.2
 **Branch:** `ai/core-screen-stack`
 
 ## Deliverable
@@ -13,28 +13,28 @@ breadcrumb tracking.
 
 **Create:**
 
-- `candy-core/src/Screen.php` — value object: `Model`, optional title,
+- `sugar-core/src/Screen.php` — value object: `Model`, optional title,
   `onEnter` / `onExit` lifecycle closures.
-- `candy-core/src/ScreenStack.php` — immutable stack with `push(Screen)`,
+- `sugar-core/src/ScreenStack.php` — immutable stack with `push(Screen)`,
   `pop(): self`, `current(): Screen`, `breadcrumb(): array<string>`. <!-- @rename-keep -->
-- `candy-core/src/Cmd/PushScreenCmd.php` + `PopScreenCmd.php`.
+- `sugar-core/src/Cmd/PushScreenCmd.php` + `PopScreenCmd.php`.
 
 **Modify:**
 
-- `candy-core/src/Program.php` — recognises ScreenStack-aware models
+- `sugar-core/src/Program.php` — recognises ScreenStack-aware models
   by checking for a `screens(): ScreenStack` method; if present, drives
   the active screen's Model.
 
 **Tests:**
 
-- `candy-core/tests/ScreenStackTest.php`.
-- `candy-core/tests/ProgramScreenStackIntegrationTest.php` — push three
+- `sugar-core/tests/ScreenStackTest.php`.
+- `sugar-core/tests/ProgramScreenStackIntegrationTest.php` — push three
   screens, pop two, verify state and breadcrumb.
 
 ## Acceptance
 
-- `cd candy-core && vendor/bin/phpunit --filter Screen` green.
-- Example added: `candy-core/examples/screen-stack.php` showing a 3-deep
+- `cd sugar-core && vendor/bin/phpunit --filter Screen` green.
+- Example added: `sugar-core/examples/screen-stack.php` showing a 3-deep
   drill-down.
 
 ---

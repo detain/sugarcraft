@@ -37,7 +37,7 @@ sugar-datepicker/
 └── tests/                   — 57 tests across 5 files
 ```
 
-**Dependency:** `sugarcraft/candy-core` for `Ansi` helpers and `Lang` i18n facade.
+**Dependency:** `sugarcraft/sugar-core` for `Ansi` helpers and `Lang` i18n facade.
 
 ## Core State Properties
 
@@ -692,7 +692,7 @@ ratatui's Calendar widget uses a `DateStyler` trait enabling custom per-day styl
 
 # Final Strategic Assessment
 
-SugarDatepicker is a well-architected PHP port that meaningfully enhances its upstream Go source through immutable patterns, date range selection, and localization support. The pure ANSI renderer design is strategically sound — it decouples the calendar from any specific TUI framework, making it composable with both candy-core and standalone use.
+SugarDatepicker is a well-architected PHP port that meaningfully enhances its upstream Go source through immutable patterns, date range selection, and localization support. The pure ANSI renderer design is strategically sound — it decouples the calendar from any specific TUI framework, making it composable with both sugar-core and standalone use.
 
 **Key differentiators from upstream:**
 

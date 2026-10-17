@@ -38,7 +38,7 @@ Files using ReactPHP (excluding vendor/):
 
 Existing ReactPHP versions pinned:
 - `react/event-loop: ^1.6` (candy-core, candy-pty, candy-wish) <!-- @rename-keep -->
-- `react/promise: ^3.3` (candy-core, sugar-image, sugar-crush, super-candy)
+- `react/promise: ^3.3` (sugar-core, sugar-image, sugar-crush, super-candy)
 - `react/promise-timer: ^1.9` (candy-wish) <!-- @rename-keep -->
 
 Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async): <!-- @rename-keep historical provenance -->

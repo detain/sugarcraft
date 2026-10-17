@@ -7,14 +7,14 @@
     "prefer-stable": true,
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "@dev",
+        "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-forms": "@dev",
         "sugarcraft/sugar-table": "@dev",
         "sugarcraft/sugar-charts": "@dev",
         "sugarcraft/sugar-toast": "@dev"
     },
     "repositories": [
-        { "type": "path", "url": "../../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../../sugar-core",      "options": { "symlink": true } },
         { "type": "path", "url": "../../sugar-style",  "options": { "symlink": true } },
         { "type": "path", "url": "../../sugar-forms",      "options": { "symlink": true } },
         { "type": "path", "url": "../../sugar-table",      "options": { "symlink": true } },

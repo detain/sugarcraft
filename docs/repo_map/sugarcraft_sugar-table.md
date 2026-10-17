@@ -42,7 +42,7 @@ sugar-table/
 
 ```json
 {
-  "sugarcraft/candy-core": "dev-master",     // ANSI rendering primitives (Ansi class)
+  "sugarcraft/sugar-core": "dev-master",     // ANSI rendering primitives (Ansi class)
   "sugarcraft/sugar-style": "dev-master"   // Border family for table borders
 }
 ```

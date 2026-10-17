@@ -95,7 +95,7 @@ final class Game implements Model
             throw new \RuntimeException("Cannot read high score file: {$path}");
         }
         try {
-            // Delegate decode + top-level array guard to the candy-core SSOT
+            // Delegate decode + top-level array guard to the sugar-core SSOT
             // so a corrupt/non-array saved-state file cannot masquerade as
             // valid []-shaped data or surface as a raw TypeError downstream.
             $decoded = Json::decodeArray($contents);

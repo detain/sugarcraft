@@ -314,7 +314,7 @@ final class PortReadinessTest extends TestCase
         $this->assertStringContainsString('n1', $shrunk->View());
     }
 
-    // ---- finding #10: candy-core Width is the only measurement oracle --------
+    // ---- finding #10: sugar-core Width is the only measurement oracle --------
 
     public function testTableCarriesNoLocalWidthFork(): void
     {

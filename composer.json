@@ -44,7 +44,7 @@
         "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-async": "dev-master",
         "sugarcraft/sugar-cellbuffer": "dev-master",
-        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-animation": "dev-master",
         "sugarcraft/sugar-focus": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
@@ -125,7 +125,7 @@
         },
         {
             "type": "path",
-            "url": "candy-core",
+            "url": "sugar-core",
             "options": {
                 "symlink": true
             }

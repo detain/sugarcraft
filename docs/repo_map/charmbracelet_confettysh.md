@@ -70,7 +70,7 @@
 This is a **wrapper application** (not a library), so it does not map directly to a single SugarCraft library. The mapping is conceptual:
 
 - **`sugar-widgets`**: The Bubble Tea TUI integration pattern — confettysh uses `tea.Model`, `tea.Update()`, `tea.View()` cycle which sugar-widgets also uses for its own TUI rendering
-- **`candy-core`** (potential): The SSH server infrastructure (`wish`, `ssh`) could inspire a SugarCraft SSH/Telnet wrapper library if needed
+- **`sugar-core`** (potential): The SSH server infrastructure (`wish`, `ssh`) could inspire a SugarCraft SSH/Telnet wrapper library if needed
 - **`sugar-spring`** (conceptual): Particle system physics (velocity, acceleration, gravity) — confetti uses gravity-based particle trajectories; fireworks use explosive radial velocity with decay
 - **`sugar-charts`** (loose): Color palette management and ANSI color rendering for terminal output — both use color to convey visual information
 - **`sugar-markdown`** (very loose): Progress indicators/status displays — confetti is a "delightful" output effect similar in spirit to progress spinners

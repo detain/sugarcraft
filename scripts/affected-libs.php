@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * Affected = directly-changed libs ∪ transitive closure of dependents (via
  * `require[sugarcraft/*]` only — `require-dev` is intentionally ignored so
- * a test-helper bump in candy-core does not retest every downstream).
+ * a test-helper bump in sugar-core does not retest every downstream).
  *
  * Why this exists: the ci.yml matrices were hand-maintained — adding a lib
  * meant editing two lockstep lists. This script auto-discovers libs from
@@ -28,7 +28,7 @@ const ROOT = __DIR__ . '/..';
 
 /** Per-job lib pools (hand-maintained — opt-in for OS-specific runners). */
 const WINDOWS_LIBS = [
-    'candy-core', 'sugar-forms', 'sugar-widgets', 'candy-scriptui', 'sugar-markdown',
+    'sugar-core', 'sugar-forms', 'sugar-widgets', 'candy-scriptui', 'sugar-markdown',
 ];
 const MACOS_LIBS = [
     // sugar-pty held out of the macOS pool. The split-job debug
@@ -43,11 +43,11 @@ const MACOS_LIBS = [
     // auto-convert FFI\CData arrays for variadic params. Real fix
     // needs either a Darwin-specific shell-out to `stty` for resize
     // or a different FFI binding. Until then, sugar-pty's macOS
-    // coverage flows through its consumers (candy-core's PosixBackend
+    // coverage flows through its consumers (sugar-core's PosixBackend
     // and sugar-ssh-server's InProcessTransport — both exercise the same
     // posix_openpt + grantpt + TIOCSWINSZ chain, and sugar-ssh-server's
     // tests fail visibly enough to flag regressions).
-    'candy-core',
+    'sugar-core',
     'sugar-ssh-server',
 ];
 

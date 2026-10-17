@@ -23,7 +23,7 @@ env:
 
   # CI checks the repo out at a detached merge ref, so each lib's root package
   # versions as `dev-<sha>`. Libs with a circular intra-monorepo dependency
-  # (e.g. candy-core ⇆ sugar-pty) then fail install because the sibling's
+  # (e.g. sugar-core ⇆ sugar-pty) then fail install because the sibling's
   # back-requirement on `dev-master` doesn't match the root's `dev-<sha>`.
   # Pin the root version so composer treats every lib-under-test as dev-master.
   COMPOSER_ROOT_VERSION: dev-master
@@ -32,7 +32,7 @@ jobs:
   # Compute every job's matrix by diffing the change-set and walking the
   # reverse-dep graph from each lib's composer.json (see scripts/affected-libs.php).
   # Only libs whose own files changed — plus the transitive closure of libs that
-  # require them — get tested. A `candy-core` change fans out to ~40 libs; a
+  # require them — get tested. A `sugar-core` change fans out to ~40 libs; a
   # `sugar-crush` change scopes down to one cell.
   #
   # Force-all triggers (script-side): root composer.json/composer.lock change,
@@ -495,7 +495,7 @@ jobs:
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
 
   # Windows test job — verifies Windows-native TTY paths (FFI/kernel32 paths
-  # in candy-core) pass on windows-latest. Uses a small matrix of the most
+  # in sugar-core) pass on windows-latest. Uses a small matrix of the most
   # TTY-sensitive libs to keep wall-clock time reasonable.
   windows-test:
     name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
@@ -542,7 +542,7 @@ jobs:
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
 
-      # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
+      # sugar-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  Downstream libs (sugar-forms, sugar-widgets, candy-scriptui,
       # sugar-markdown): run full suite — any failures there are pre-existing and
       # unrelated to the x/windows changes.

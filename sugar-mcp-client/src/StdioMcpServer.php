@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * are given — and embedders that need containment pass a $spawnPlanner
  * closure deciding the exact proc_open command and env per launch.
  *
- * DELTA — teardown goes through candy-core's BoundedShutdown instead of the
+ * DELTA — teardown goes through sugar-core's BoundedShutdown instead of the
  * product's ProcessReaper+ProcessContainment::groupId pair.
  *
  * WHY the argv-ARRAY form of proc_open and never a shell string: with a shell
@@ -951,7 +951,7 @@ final class StdioMcpServer implements McpServer
     /**
      * Monotonic seconds for deadline arithmetic. Wall clock (microtime) steps
      * with NTP/manual date changes; a handshake bound must ride a clock that
-     * only moves forward, matching candy-core BoundedShutdown's own hrtime basis.
+     * only moves forward, matching sugar-core BoundedShutdown's own hrtime basis.
      */
     private static function nowSeconds(): float
     {

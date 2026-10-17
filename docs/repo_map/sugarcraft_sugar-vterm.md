@@ -401,18 +401,18 @@ final readonly class Mode {
 
 ---
 
-## 6. How It Differs From/Integrates With candy-core
+## 6. How It Differs From/Integrates With sugar-core
 
-sugar-vterm is **orthogonal** to candy-core's renderer:
+sugar-vterm is **orthogonal** to sugar-core's renderer:
 
-- **candy-core** is the TUI runtime (Model/View/Update loop, event handling)
+- **sugar-core** is the TUI runtime (Model/View/Update loop, event handling)
 
 - **sugar-vterm** is the ANSI byte stream → cell grid emulator
 
 **Integration point:** `candy-vcr` (VHS cassette recorder/player) uses sugar-vterm's `Terminal` + `Snapshot` to drive every rendered frame. The vcr pipeline feeds raw ANSI bytes into a `Terminal` instance and captures `Snapshot::of($terminal, $time)` for each frame.
 
-**No direct dependency** from candy-core on sugar-vterm. They serve different purposes:
-- candy-core: renders to terminal
+**No direct dependency** from sugar-core on sugar-vterm. They serve different purposes:
+- sugar-core: renders to terminal
 
 - sugar-vterm: parses terminal output
 

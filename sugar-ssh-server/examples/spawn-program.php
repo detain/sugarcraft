@@ -12,7 +12,7 @@
  *      script that runs the actual Program.
  *
  *   2. `run-program.php` (the wrapper) — a few lines that
- *      autoload candy-core, instantiate the user's Model, and
+ *      autoload sugar-core, instantiate the user's Model, and
  *      call `(new Program($model))->run()`. Lives next to this
  *      file in production deployments.
  *

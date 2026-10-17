@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\AtomicJsonFile;
 /**
  * Atomic persistence for dashboard panel/tab state.
  *
- * Delegates the durable-state save/load to candy-core's AtomicJsonFile
+ * Delegates the durable-state save/load to sugar-core's AtomicJsonFile
  * (tmp+flock+rename SSOT) so a reader never observes a partially-written file,
  * while keeping this class's `{version, data}` wrapper as the on-disk shape.
  */

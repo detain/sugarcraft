@@ -47,7 +47,7 @@ Write the retrospective in `docs/repo_map_update.md`:
 _The shared-foundation refactor outlined above ran across <N> PRs, creating <8> new foundation packages and migrating <M> consumer libs. Below is the final accounting against the analysis sections._
 
 ### §326 Shared Internal Frameworks
-- ✅ candy-core enhancements (step-09, PR #<n>)
+- ✅ sugar-core enhancements (step-09, PR #<n>)
 - ✅ sugar-constraints (step-03, PR #<n>)
 - ✅ sugar-cellbuffer (step-02, PR #<n>)
 - ✅ sugar-testing (step-04, PR #<n>)

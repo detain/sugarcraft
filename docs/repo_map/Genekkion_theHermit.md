@@ -160,7 +160,7 @@ items = model.items[model.offset : model.offset+model.height-1]
 | Overlay rendering (centered on background) | `candy-scriptui` | Viewport/window management, fullscreen overlay |
 | Background view preservation | `sugar-widgets` (renderer) | BubbleTea's concurrent view update pattern |
 | Keyboard navigation (up/down) | `sugar-forms` | Input handling, cursor movement |
-| tea.Model interface (Init/Update/View) | `candy-core` | Core TUI component contract |
+| tea.Model interface (Init/Update/View) | `sugar-core` | Core TUI component contract |
 
 **Mapping Notes:**
 

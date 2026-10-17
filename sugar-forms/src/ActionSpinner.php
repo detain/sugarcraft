@@ -217,7 +217,7 @@ final class ActionSpinner
                 // this used to hand its fate to, and this handler is the
                 // parent's LAST chance to guarantee it does not outlive the
                 // spin. (Round-95 folded the per-lib BoundedReaper copy onto
-                // candy-core BoundedShutdown, the sugar-video precedent.)
+                // sugar-core BoundedShutdown, the sugar-video precedent.)
                 BoundedShutdown::terminatePidBounded($pid);
                 if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");

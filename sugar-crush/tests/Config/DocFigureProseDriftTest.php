@@ -2697,7 +2697,7 @@ final class DocFigureProseDriftTest extends TestCase
      * is not an oversight" - and asserted the dev side was non-empty. It WAS
      * the oversight (crush_libs.md sugar-pty #5): `CapturesProcessOutput`
      * opens `\SugarCraft\Pty\Pty` from `src/`, so a `--no-dev` install
-     * leaned on candy-core's transitive pin to keep interactive capture
+     * leaned on sugar-core's transitive pin to keep interactive capture
      * working. The property that actually matters is the one that split was
      * standing in for, so that is what is pinned now: every sibling namespace
      * `src/` names in code (not comments, not strings) belongs to a package in
@@ -2766,7 +2766,7 @@ final class DocFigureProseDriftTest extends TestCase
             }
         }
         self::assertSame([], array_map(static fn (array $files): array => array_keys($files), $unowned), 'src/ names a SugarCraft namespace no installed sugarcraft/* package declares');
-        self::assertArrayHasKey('sugarcraft/candy-core', $reached, 'src/ no longer names SugarCraft\\Core in code — the token walk is broken, not the dependency');
+        self::assertArrayHasKey('sugarcraft/sugar-core', $reached, 'src/ no longer names SugarCraft\\Core in code — the token walk is broken, not the dependency');
 
         foreach ($reached as $package => $files) {
             self::assertArrayHasKey(

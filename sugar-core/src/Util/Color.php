@@ -1,0 +1,659 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Core\Util;
+
+use SugarCraft\Core\Lang;
+
+/**
+ * A color value, expressed as RGB internally — plus, for the two constructors
+ * that name a palette SLOT rather than a colour, which slot that was.
+ *
+ * Construct via {@see Color::rgb()}, {@see Color::hex()}, {@see Color::ansi()},
+ * or {@see Color::ansi256()}. Render to an SGR escape via {@see toFg()} /
+ * {@see toBg()}, downsampling automatically to fit the supplied
+ * {@see ColorProfile}.
+ *
+ * The slot memory ({@see $ansiIndex}) exists because "RGB internally" was
+ * lossy in exactly one direction that mattered. `Color::ansi(8)` collapsed to
+ * [127,127,127] and forgot it had ever been index 8, so on a terminal
+ * advertising more than 16 colours it came back out as `\e[38;5;244m` (the
+ * nearest 256-cube grey) or `\e[38;2;127;127;127m` (absolute RGB) instead of
+ * `\e[90m`. That defeats the whole point of a 16-colour theme:
+ * {@see \SugarCraft\Style\Theme::ansi()} is built exclusively from
+ * `Color::ansi(0..8)` precisely so the app DEFERS to the terminal's own
+ * palette, and a user who picks it to make an app match their terminal got
+ * absolute values that ignore it.
+ *
+ * Only {@see ansi()} and {@see ansi256()} record a slot. Every derived colour
+ * loses it, and must: a lightened palette-8 is not palette 8 any more, and
+ * emitting `\e[90m` for it would silently discard the adjustment. That falls
+ * out of the arithmetic rather than needing a rule — {@see lighten()},
+ * {@see darken()} and {@see complementary()} route through {@see hsl()} to
+ * {@see rgb()}, and {@see alpha()}/{@see blend()} construct directly, so none
+ * of them carries an index forward.
+ */
+final class Color
+{
+    /**
+     * Standard 16-color ANSI palette as 24-bit RGB triples — xterm's
+     * compiled-in defaults for slots 0-15.
+     *
+     * Published as public API so downstream consumers and cross-lib equality
+     * tests reference ONE canonical table rather than each forking a copy.
+     * (Sibling palettes that deliberately diverge are governed by the project
+     * color-quantization rule and are out of scope for this const.)
+     *
+     * WHY THESE EXACT NUMBERS. Slots 0-15 are THEMEABLE: a terminal owner's
+     * config, not these bytes, decides what the user sees. So this table is
+     * not the source of any wire value — it exists for colour-SPACE questions
+     * (distance maths in {@see nearestAnsi16()}, luminance, downsampling) and
+     * for DECODING a slot back to a representative RGB. {@see ansi()} remembers
+     * the index and {@see toSgr()} emits the palette code for slots 0-15, never
+     * these triples. VERIFIED TRUTH about literal bytes: the foreground/background
+     * path never spells a slot 0-15 colour as `38;2;r;g;b`, but
+     * {@see toUnderline()} at the TrueColor profile DOES emit `58;2;r;g;b` built
+     * from these very triples (SGR 58 has no 4-bit form — see that method's
+     * docblock). So "no wire bytes" holds for fg/bg, not for the underline
+     * exception.
+     *
+     * WHY xterm AND NOT charmbracelet. This is deliberately xterm's own default
+     * set: slot 4 = `DEF_COLOR4 "blue2"` (#0000EE) and slot 12 =
+     * `DEF_COLOR12 "rgb:5c/5c/ff"` (#5C5CFF), the compiled-in defaults in xterm's
+     * `main.h`. Note that charmbracelet/x/ansi's `ansiHex` uses DIFFERENT blues
+     * (#000080 / #0000FF); this table is NOT in parity with upstream
+     * charmbracelet and must NOT be "corrected" toward it — the xterm values are
+     * the intended canon.
+     *
+     * @var array<int,array{int,int,int}>
+     */
+    public const ANSI16_RGB = [
+         0 => [  0,   0,   0],   1 => [205,   0,   0],   2 => [  0, 205,   0],   3 => [205, 205,   0],
+         4 => [  0,   0, 238],   5 => [205,   0, 205],   6 => [  0, 205, 205],   7 => [229, 229, 229],
+         8 => [127, 127, 127],   9 => [255,   0,   0],  10 => [  0, 255,   0],  11 => [255, 255,   0],
+        12 => [ 92,  92, 255],  13 => [255,   0, 255],  14 => [  0, 255, 255],  15 => [255, 255, 255],
+    ];
+
+    /**
+     * @param ?int $ansiIndex The palette slot this colour WAS named as (0-255),
+     *                        or null for a colour named as RGB. See the class
+     *                        docblock. {@see toSgr()} is the only reader INSIDE
+     *                        this class; the property is `public readonly`, so
+     *                        it is new public API and callers read it directly
+     *                        (sugar-core's own ColorTest does, and sugar-crush's
+     *                        contrast suite asserts on it to tell a palette
+     *                        slot from a nudged absolute colour).
+     */
+    private function __construct(
+        public readonly int $r,
+        public readonly int $g,
+        public readonly int $b,
+        public readonly ?int $ansiIndex = null,
+    ) {
+    }
+
+    /**
+     * Construct from 24-bit RGB. Each component must be in `[0, 255]`
+     * — out-of-range values throw {@see \InvalidArgumentException}.
+     */
+    public static function rgb(int $r, int $g, int $b): self
+    {
+        foreach ([$r, $g, $b] as $v) {
+            if ($v < 0 || $v > 255) {
+                throw new \InvalidArgumentException(Lang::t('color.rgb_out_of_range', ['value' => $v]));
+            }
+        }
+        return new self($r, $g, $b);
+    }
+
+    /**
+     * Construct from a CSS-style hex string. Accepts 3- or 6-digit forms,
+     * with or without leading `#`: `'#ff5'`, `'ff5'`, `'#ff5500'`,
+     * `'ff5500'`. Invalid input throws {@see \InvalidArgumentException}.
+     */
+    public static function hex(string $hex): self
+    {
+        $h = ltrim($hex, '#');
+        if (strlen($h) === 3) {
+            $h = $h[0] . $h[0] . $h[1] . $h[1] . $h[2] . $h[2];
+        }
+        if (strlen($h) !== 6 || !ctype_xdigit($h)) {
+            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $hex]));
+        }
+        return new self(
+            hexdec(substr($h, 0, 2)),
+            hexdec(substr($h, 2, 2)),
+            hexdec(substr($h, 4, 2)),
+        );
+    }
+
+    /**
+     * Construct from a standard ANSI-16 index (0-15).
+     *
+     * The RGB stored alongside is xterm's default for that slot, used for every
+     * colour-space question ({@see luminance()}, {@see toHex()}, downsampling
+     * distance). It is NOT what gets emitted: the index is remembered and
+     * {@see toSgr()} writes the palette code, so the terminal's own value for
+     * the slot is what the user actually sees.
+     */
+    public static function ansi(int $index): self
+    {
+        if (!isset(self::ANSI16_RGB[$index])) {
+            throw new \InvalidArgumentException(Lang::t('color.ansi_out_of_range', ['index' => $index]));
+        }
+        [$r, $g, $b] = self::ANSI16_RGB[$index];
+        return new self($r, $g, $b, $index);
+    }
+
+    /**
+     * Construct from an xterm-256 palette index (0-255).
+     *
+     * Records the slot for the same reason {@see ansi()} does: a 256-colour index
+     * is the terminal's to resolve, and its RGB here is only xterm's default for
+     * the slot.
+     *
+     * What that buys, precisely, is the TrueColor profile. {@see toSgr()} emits
+     * `38;5;n` for a remembered slot instead of up-converting to `38;2;r;g;b`,
+     * which is the difference between deferring to the user's palette and
+     * overriding it. It is NOT about the RGB round trip being lossy: MEASURED
+     * over all 240 slots 16-255 through this class's own {@see nearest256()},
+     * `nearest256(ansi256(i)) === i` for every one of them — zero non-identity
+     * round trips, cube/greyscale overlap included. An earlier version of this
+     * docblock claimed the opposite; it was a justification measured on a path
+     * that does not exist.
+     */
+    public static function ansi256(int $index): self
+    {
+        if ($index < 0 || $index > 255) {
+            throw new \InvalidArgumentException(Lang::t('color.ansi256_out_of_range', ['index' => $index]));
+        }
+        if ($index < 16) {
+            return self::ansi($index);
+        }
+        if ($index < 232) {
+            $i = $index - 16;
+            $levels = [0, 95, 135, 175, 215, 255];
+            return new self(
+                $levels[intdiv($i, 36)],
+                $levels[intdiv($i, 6) % 6],
+                $levels[$i % 6],
+                $index,
+            );
+        }
+        $g = 8 + ($index - 232) * 10;
+        return new self($g, $g, $g, $index);
+    }
+
+    /**
+     * Map a named color string to a Color instance.
+     *
+     * Accepts CSS color names (e.g. 'cyan', 'magenta') and ANSI 8-color
+     * basic names (black, red, green, yellow, blue, magenta, cyan, white).
+     * Case-insensitive. Throws {@see \InvalidArgumentException} for
+     * unknown names.
+     */
+    public static function parse(string $name): self
+    {
+        $lower = strtolower(trim($name));
+        if ($lower === '') {
+            throw new \InvalidArgumentException(Lang::t('color.parse_empty'));
+        }
+
+        $named = [
+            // CSS / ANSI-16 basic 8 colors (indices 0-7)
+            'black'   => [  0,   0,   0],
+            'red'     => [205,   0,   0],
+            'green'   => [  0, 205,   0],
+            'yellow'  => [205, 205,   0],
+            'blue'    => [  0,   0, 238],
+            'magenta' => [205,   0, 205],
+            'cyan'    => [  0, 205, 205],
+            'white'   => [229, 229, 229],
+            // CSS extended names that map to ANSI-16
+            'purple'      => [205,   0, 205],  // maps to magenta
+            'fuchsia'     => [205,   0, 205],
+            'aqua'       => [  0, 205, 205],
+            'lime'       => [  0, 205,   0],
+            'maroon'     => [128,   0,   0],
+            'olive'      => [128, 128,   0],
+            'navy'       => [  0,   0, 128],
+            'teal'      => [  0, 128, 128],
+            'silver'    => [192, 192, 192],
+            'gray'      => [128, 128, 128],
+            'grey'      => [128, 128, 128],
+            'orange'    => [255, 165,   0],
+            'pink'      => [255, 192, 203],
+            'brown'     => [165,  42,  42],
+            'coral'     => [255, 127,  80],
+            'gold'      => [255, 215,   0],
+            'indigo'    => [ 75,   0, 130],
+            'violet'    => [238, 130, 238],
+            'turquoise' => [ 64, 224, 208],
+            'salmon'    => [250, 128, 114],
+            'khaki'     => [240, 230, 140],
+            'beige'     => [245, 245, 220],
+            'ivory'     => [255, 255, 240],
+            'lavender'  => [230, 230, 250],
+            'plum'      => [221, 160, 221],
+            'crimson'   => [220,  20,  60],
+            'darkgreen' => [  0, 100,   0],
+            // ANSI-16 bright colors (indices 8-15)
+            'bright-black'   => [127, 127, 127],
+            'bright-red'     => [255,   0,   0],
+            'bright-green'   => [  0, 255,   0],
+            'bright-yellow'  => [255, 255,   0],
+            'bright-blue'    => [ 92,  92, 255],
+            'bright-magenta' => [255,   0, 255],
+            'bright-cyan'    => [  0, 255, 255],
+            'bright-white'   => [255, 255, 255],
+        ];
+
+        if (isset($named[$lower])) {
+            [$r, $g, $b] = $named[$lower];
+            return new self($r, $g, $b);
+        }
+
+        throw new \InvalidArgumentException(Lang::t('color.parse_unknown', ['name' => $name]));
+    }
+
+    /**
+     * Construct from HSL values: hue 0-360, saturation 0-1, lightness 0-1.
+     * Translates to RGB via the standard HSL→RGB conversion.
+     */
+    public static function hsl(float $h, float $s, float $l): self
+    {
+        $h = fmod($h, 360.0);
+        if ($h < 0) {
+            $h += 360.0;
+        }
+        $s = max(0.0, min(1.0, $s));
+        $l = max(0.0, min(1.0, $l));
+
+        $c = (1.0 - abs(2.0 * $l - 1.0)) * $s;
+        $x = $c * (1.0 - abs(fmod($h / 60.0, 2.0) - 1.0));
+        $m = $l - $c / 2.0;
+        $rp = 0.0;
+        $gp = 0.0;
+        $bp = 0.0;
+        if ($h <  60) {
+            $rp = $c;
+            $gp = $x;
+        } elseif ($h < 120) {
+            $rp = $x;
+            $gp = $c;
+        } elseif ($h < 180) {
+            $gp = $c;
+            $bp = $x;
+        } elseif ($h < 240) {
+            $gp = $x;
+            $bp = $c;
+        } elseif ($h < 300) {
+            $rp = $x;
+            $bp = $c;
+        } else {
+            $rp = $c;
+            $bp = $x;
+        }
+        return new self(
+            (int) round(($rp + $m) * 255.0),
+            (int) round(($gp + $m) * 255.0),
+            (int) round(($bp + $m) * 255.0),
+        );
+    }
+
+    /**
+     * Construct from HSV values: hue 0-360, saturation 0-1, value 0-1.
+     */
+    public static function hsv(float $h, float $s, float $v): self
+    {
+        $h = fmod($h, 360.0);
+        if ($h < 0) {
+            $h += 360.0;
+        }
+        $s = max(0.0, min(1.0, $s));
+        $v = max(0.0, min(1.0, $v));
+
+        $c = $v * $s;
+        $x = $c * (1.0 - abs(fmod($h / 60.0, 2.0) - 1.0));
+        $m = $v - $c;
+        $rp = 0.0;
+        $gp = 0.0;
+        $bp = 0.0;
+        if ($h <  60) {
+            $rp = $c;
+            $gp = $x;
+        } elseif ($h < 120) {
+            $rp = $x;
+            $gp = $c;
+        } elseif ($h < 180) {
+            $gp = $c;
+            $bp = $x;
+        } elseif ($h < 240) {
+            $gp = $x;
+            $bp = $c;
+        } elseif ($h < 300) {
+            $rp = $x;
+            $bp = $c;
+        } else {
+            $rp = $c;
+            $bp = $x;
+        }
+        return new self(
+            (int) round(($rp + $m) * 255.0),
+            (int) round(($gp + $m) * 255.0),
+            (int) round(($bp + $m) * 255.0),
+        );
+    }
+
+    /** Round-trip back to 6-digit lowercase hex string (with leading `#`). */
+    public function toHex(): string
+    {
+        return sprintf('#%02x%02x%02x', $this->r, $this->g, $this->b);
+    }
+
+    /**
+     * Decompose to HSL. Returns `[hue 0-360, saturation 0-1, lightness 0-1]`.
+     *
+     * @return array{0:float,1:float,2:float}
+     */
+    public function toHsl(): array
+    {
+        $r = $this->r / 255.0;
+        $g = $this->g / 255.0;
+        $b = $this->b / 255.0;
+        $max = max($r, $g, $b);
+        $min = min($r, $g, $b);
+        $l = ($max + $min) / 2.0;
+        if ($max === $min) {
+            return [0.0, 0.0, $l];
+        }
+        $d = $max - $min;
+        $s = $l > 0.5 ? $d / (2.0 - $max - $min) : $d / ($max + $min);
+        $h = match (true) {
+            $max === $r => ($g - $b) / $d + ($g < $b ? 6.0 : 0.0),
+            $max === $g => ($b - $r) / $d + 2.0,
+            default     => ($r - $g) / $d + 4.0,
+        };
+        return [$h * 60.0, $s, $l];
+    }
+
+    /**
+     * Lighten by `$amount` (0-1) in HSL space. `0.1` = 10% lighter.
+     * Saturation stays put; lightness clamps at 1.0.
+     */
+    public function lighten(float $amount): self
+    {
+        [$h, $s, $l] = $this->toHsl();
+        return self::hsl($h, $s, max(0.0, min(1.0, $l + $amount)));
+    }
+
+    /**
+     * Darken by `$amount` (0-1) in HSL space. `0.1` = 10% darker.
+     */
+    public function darken(float $amount): self
+    {
+        [$h, $s, $l] = $this->toHsl();
+        return self::hsl($h, $s, max(0.0, min(1.0, $l - $amount)));
+    }
+
+    /**
+     * Composite this colour over `$bg` at opacity `$alpha` (0-1).
+     * Standard alpha-over: result = α·this + (1-α)·bg. With `bg=null`
+     * the composite is over solid black.
+     */
+    public function alpha(float $alpha, ?Color $bg = null): self
+    {
+        $alpha = max(0.0, min(1.0, $alpha));
+        $bg ??= self::rgb(0, 0, 0);
+        $inv = 1.0 - $alpha;
+        return new self(
+            (int) round($this->r * $alpha + $bg->r * $inv),
+            (int) round($this->g * $alpha + $bg->g * $inv),
+            (int) round($this->b * $alpha + $bg->b * $inv),
+        );
+    }
+
+    /**
+     * Linearly blend between this colour and `$other`. `$t = 0` returns
+     * this, `$t = 1` returns `$other`. Clamps `$t` to `[0,1]`.
+     */
+    public function blend(Color $other, float $t): self
+    {
+        $t = max(0.0, min(1.0, $t));
+        $inv = 1.0 - $t;
+        return new self(
+            (int) round($this->r * $inv + $other->r * $t),
+            (int) round($this->g * $inv + $other->g * $t),
+            (int) round($this->b * $inv + $other->b * $t),
+        );
+    }
+
+    /**
+     * Build an N-stop linear gradient between this colour and `$other`.
+     * Returns `$steps` colours including endpoints (so `steps=2` yields
+     * `[this, other]`, `steps=3` yields `[this, midpoint, other]`).
+     *
+     * @return list<Color>
+     */
+    public function blend1d(Color $other, int $steps): array
+    {
+        if ($steps <= 0) {
+            return [];
+        }
+        if ($steps === 1) {
+            return [$this];
+        }
+        $out = [];
+        for ($i = 0; $i < $steps; $i++) {
+            $out[] = $this->blend($other, $i / ($steps - 1));
+        }
+        return $out;
+    }
+
+    /**
+     * Build a 2D bilinear gradient as an `$rows × $cols` grid. The four
+     * corners are `[topLeft=this, topRight, bottomLeft, bottomRight]`.
+     *
+     * @return list<list<Color>>  rows top→bottom, cols left→right
+     */
+    public function blend2d(Color $topRight, Color $bottomLeft, Color $bottomRight, int $rows, int $cols): array
+    {
+        if ($rows <= 0 || $cols <= 0) {
+            return [];
+        }
+        $grid = [];
+        for ($r = 0; $r < $rows; $r++) {
+            $tr = $rows === 1 ? 0.0 : $r / ($rows - 1);
+            $rowLeft  = $this->blend($bottomLeft, $tr);
+            $rowRight = $topRight->blend($bottomRight, $tr);
+            $row = [];
+            for ($c = 0; $c < $cols; $c++) {
+                $tc = $cols === 1 ? 0.0 : $c / ($cols - 1);
+                $row[] = $rowLeft->blend($rowRight, $tc);
+            }
+            $grid[] = $row;
+        }
+        return $grid;
+    }
+
+    /**
+     * Hue-rotate by 180° to get the diametrically opposite colour.
+     */
+    public function complementary(): self
+    {
+        [$h, $s, $l] = $this->toHsl();
+        return self::hsl($h + 180.0, $s, $l);
+    }
+
+    /**
+     * Relative luminance per WCAG 2.1 (Y in CIE XYZ on linearised sRGB).
+     * 0 = black, 1 = white. Used by {@see isDark()}.
+     */
+    public function luminance(): float
+    {
+        $linearise = static function (float $c): float {
+            $c /= 255.0;
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * $linearise((float) $this->r)
+             + 0.7152 * $linearise((float) $this->g)
+             + 0.0722 * $linearise((float) $this->b);
+    }
+
+    /**
+     * True when this colour is "dark" — luminance below 0.5. Use this to
+     * pick a contrasting foreground when displaying over a sampled
+     * background (`Cmd::requestBackgroundColor()` reply).
+     */
+    public function isDark(): bool
+    {
+        return $this->luminance() < 0.5;
+    }
+
+    /**
+     * Render as a foreground SGR escape (e.g. `"\x1b[38;2;255;128;0m"`)
+     * for the given {@see ColorProfile}. Quantises the 24-bit color
+     * down to the profile's palette (TrueColor → 256 → ANSI16 →
+     * empty-string for `NoTTY`).
+     */
+    public function toFg(ColorProfile $profile): string
+    {
+        return $this->toSgr($profile, fg: true);
+    }
+
+    /** Background variant of {@see toFg()}. */
+    public function toBg(ColorProfile $profile): string
+    {
+        return $this->toSgr($profile, fg: false);
+    }
+
+    /**
+     * SGR 58 — coloured underline (xterm-256 extension). Pairs with
+     * SGR 4 (underline) to render an underline whose colour is
+     * independent of the foreground. Returns the empty string when
+     * the colour profile doesn't support ANSI.
+     */
+    public function toUnderline(ColorProfile $profile): string
+    {
+        if (!$profile->supportsAnsi()) {
+            return '';
+        }
+        // Deliberately does NOT honour {@see $ansiIndex}, unlike
+        // {@see toSgr()}: SGR 58 has no 4-bit palette form at all, and the only
+        // 16-colour spelling available here is the FOREGROUND slot below — so
+        // honouring the index at a 256/truecolor profile would trade a
+        // downsampled underline for a recoloured piece of text, which is the
+        // worse of the two. A palette-slot underline keeps the per-profile
+        // behaviour it has always had.
+        if ($profile->supportsTrueColor()) {
+            return Ansi::CSI . '58;2;' . $this->r . ';' . $this->g . ';' . $this->b . 'm';
+        }
+        if ($profile->supports256()) {
+            return Ansi::CSI . '58;5;' . $this->nearest256() . 'm';
+        }
+        // 16-color terminals don't support 58; fall back to 16-color
+        // 38 fg slot — still renders, just colours the text rather
+        // than the underline. Better than dropping the colour.
+        $idx = $this->nearestAnsi16();
+        $code = $idx < 8 ? 30 + $idx : 90 + ($idx - 8);
+        return Ansi::CSI . $code . 'm';
+    }
+
+    private function toSgr(ColorProfile $profile, bool $fg): string
+    {
+        if (!$profile->supportsAnsi()) {
+            return '';
+        }
+
+        // A colour named as a palette SLOT stays a palette slot at every
+        // profile that can address one — the whole point of choosing a slot is
+        // to defer to the terminal's own value for it, and both the 256-cube and
+        // the truecolor forms are absolute values that override exactly that.
+        // RGB colours keep downsampling as before, which is the only behaviour
+        // the profile tiers were ever about.
+        if ($this->ansiIndex !== null) {
+            if ($this->ansiIndex < 16) {
+                $code = $fg
+                    ? ($this->ansiIndex < 8 ? 30 + $this->ansiIndex : 90 + ($this->ansiIndex - 8))
+                    : ($this->ansiIndex < 8 ? 40 + $this->ansiIndex : 100 + ($this->ansiIndex - 8));
+
+                return Ansi::CSI . $code . 'm';
+            }
+
+            // A 256-slot on a 16-colour terminal has no palette code to keep,
+            // so it downsamples like any other colour.
+            if ($profile->supports256()) {
+                return $fg ? Ansi::fg256($this->ansiIndex) : Ansi::bg256($this->ansiIndex);
+            }
+
+            $idx = $this->nearestAnsi16();
+            $code = $fg ? ($idx < 8 ? 30 + $idx : 90 + ($idx - 8))
+                        : ($idx < 8 ? 40 + $idx : 100 + ($idx - 8));
+
+            return Ansi::CSI . $code . 'm';
+        }
+
+        if ($profile->supportsTrueColor()) {
+            return $fg
+                ? Ansi::fgRgb($this->r, $this->g, $this->b)
+                : Ansi::bgRgb($this->r, $this->g, $this->b);
+        }
+        if ($profile->supports256()) {
+            $idx = $this->nearest256();
+            return $fg ? Ansi::fg256($idx) : Ansi::bg256($idx);
+        }
+        $idx = $this->nearestAnsi16();
+        $code = $fg ? ($idx < 8 ? 30 + $idx : 90 + ($idx - 8))
+                    : ($idx < 8 ? 40 + $idx : 100 + ($idx - 8));
+        return Ansi::CSI . $code . 'm';
+    }
+
+    private function nearest256(): int
+    {
+        // Cube candidate (indices 16-231).
+        $q = static fn (int $v): int => match (true) {
+            $v < 48  => 0,
+            $v < 115 => 1,
+            default  => intdiv($v - 35, 40),
+        };
+        $cubeIdx = 16 + 36 * $q($this->r) + 6 * $q($this->g) + $q($this->b);
+
+        // Grayscale candidate (indices 232-255). Levels: 8, 18, ..., 238.
+        $avg     = ($this->r + $this->g + $this->b) / 3.0;
+        $grayBin = (int) round(($avg - 8.0) / 10.0);
+        $grayBin = max(0, min(23, $grayBin));
+        $grayIdx = 232 + $grayBin;
+
+        return self::distToIndex($cubeIdx) <= self::distToIndex($grayIdx)
+            ? $cubeIdx
+            : $grayIdx;
+    }
+
+    /** Squared RGB distance from this color to the palette color at $idx. */
+    private function distToIndex(int $idx): int
+    {
+        $c  = self::ansi256($idx);
+        $dr = $c->r - $this->r;
+        $dg = $c->g - $this->g;
+        $db = $c->b - $this->b;
+        return $dr * $dr + $dg * $dg + $db * $db;
+    }
+
+    private function nearestAnsi16(): int
+    {
+        $best = 0;
+        $bestDist = PHP_INT_MAX;
+        foreach (self::ANSI16_RGB as $idx => [$r, $g, $b]) {
+            $dr = $r - $this->r;
+            $dg = $g - $this->g;
+            $db = $b - $this->b;
+            $d = $dr * $dr + $dg * $dg + $db * $db;
+            if ($d < $bestDist) {
+                $bestDist = $d;
+                $best = $idx;
+            }
+        }
+        return $best;
+    }
+}

@@ -42,16 +42,16 @@ From `repo_map/ratatui_ratatui.md`, SugarCraft maps to Ratatui as follows:
 
 | ratatui Component | SugarCraft Library |
 |----------------|-------------------|
-| ratatui-core (Widget/StatefulWidget traits, Buffer, Layout, Style, Text) | candy-core |
+| ratatui-core (Widget/StatefulWidget traits, Buffer, Layout, Style, Text) | sugar-core |
 | ratatui-widgets (Block, Paragraph, List, Table, Chart, Gauge, etc.) | sugar-widgets |
 | ratatui-crossterm backend | candy-scriptui |
 | Layout + Cassowary constraints | sugar-markdown |
 | Stylize trait | sugar-forms |
 | ratatui-macros | sugar-widgets (likely) |
-| Terminal::draw + Frame pattern | candy-core (Model) |
-| StatefulWidget + State types | candy-core (State) |
+| Terminal::draw + Frame pattern | sugar-core (Model) |
+| StatefulWidget + State types | sugar-core (State) |
 | Text/Line/Span hierarchy | sugar-widgets (Text rendering) |
-| Buffer diffing | candy-core (render optimization) |
+| Buffer diffing | sugar-core (render optimization) |
 | ratatui::run() initialization | candy-scriptui (Tty initialization) |
 
 ---
@@ -136,7 +136,7 @@ terminal.swap_buffers();
 
 **Proposed Solution**: Add a `ForceRedraw` widget similar to `Clear`, or add `set_force(bool)` to Cell parallel to `set_skip()`.
 
-**Direct Risk to SugarCraft**: MEDIUM - If candy-core implements buffer diffing and we have external rendering pipelines (like image display), we'll need similar force-redraw capability.
+**Direct Risk to SugarCraft**: MEDIUM - If sugar-core implements buffer diffing and we have external rendering pipelines (like image display), we'll need similar force-redraw capability.
 
 ---
 
@@ -171,7 +171,7 @@ terminal.swap_buffers();
 - Naming and exact behavior still being worked out
 - Want to avoid releasing multiple core versions
 
-**Direct Risk to SugarCraft**: HIGH - This is exactly the architectural pattern we should follow. candy-core must be the stable foundation that other libs depend on, while sugar-widgets, candy-scriptui can iterate faster.
+**Direct Risk to SugarCraft**: HIGH - This is exactly the architectural pattern we should follow. sugar-core must be the stable foundation that other libs depend on, while sugar-widgets, candy-scriptui can iterate faster.
 
 ---
 
@@ -231,7 +231,7 @@ terminal.swap_buffers();
 
 **Maintainer Note**: "The goal is to get out of the diff process but control whether the Cell is rendered or not after skipping diff."
 
-**Direct Risk to SugarCraft**: MEDIUM - If candy-core implements buffer diffing, we'll need similar Cell-level force/skip control for integration with external rendering pipelines.
+**Direct Risk to SugarCraft**: MEDIUM - If sugar-core implements buffer diffing, we'll need similar Cell-level force/skip control for integration with external rendering pipelines.
 
 ---
 
@@ -243,7 +243,7 @@ The `StatefulWidget` trait requires `&mut self` and an associated `State` type, 
 
 **Evidence**: Issue #1725 requested removing StatefulWidget entirely in favor of Rust patterns, but maintainers noted 1.3k usages in external code makes gradual deprecation necessary.
 
-**SugarCraft Implication**: candy-core's state pattern should avoid StatefulWidget's lifetime complexity. Consider using `Widget for &mut SomeWidget` style patterns or a single unified trait.
+**SugarCraft Implication**: sugar-core's state pattern should avoid StatefulWidget's lifetime complexity. Consider using `Widget for &mut SomeWidget` style patterns or a single unified trait.
 
 ---
 
@@ -306,7 +306,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Recommended Approach**: Implement in an app first, document missing pieces, then upstream the pattern.
 
-**SugarCraft Implication**: HIGH - rat-ui-interact (third-party) fills this gap with FocusManager and ClickRegion. We should consider whether candy-core or sugar-widgets needs built-in focus/click management.
+**SugarCraft Implication**: HIGH - rat-ui-interact (third-party) fills this gap with FocusManager and ClickRegion. We should consider whether sugar-core or sugar-widgets needs built-in focus/click management.
 
 ---
 
@@ -401,7 +401,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 
 **Key Insight**: Widget libraries updating to ratatui 0.30 had significant migration work (see tui-widgets#120), but long-term benefit is stability.
 
-**SugarCraft Implication**: HIGH - This is the exact pattern for our monorepo. candy-core must be the stable foundation, with other libs able to depend on it without frequent updates.
+**SugarCraft Implication**: HIGH - This is the exact pattern for our monorepo. sugar-core must be the stable foundation, with other libs able to depend on it without frequent updates.
 
 ---
 
@@ -461,7 +461,7 @@ loop {
 }
 ```
 
-**SugarCraft Implication**: HIGH - candy-core must implement dirty-flag rendering. Continuous rendering in PHP (even with ReactPHP async) would be too CPU-intensive.
+**SugarCraft Implication**: HIGH - sugar-core must implement dirty-flag rendering. Continuous rendering in PHP (even with ReactPHP async) would be too CPU-intensive.
 
 ---
 
@@ -619,7 +619,7 @@ Key breaking changes in v0.30.0:
 
 **tui-widgets** (third-party) migration took significant effort - see issue #120.
 
-**SugarCraft Implication**: HIGH - When we make breaking changes to candy-core or other libs, we must provide comprehensive migration guides and deprecation paths.
+**SugarCraft Implication**: HIGH - When we make breaking changes to sugar-core or other libs, we must provide comprehensive migration guides and deprecation paths.
 
 ---
 
@@ -697,7 +697,7 @@ loop {
 
 **Result**: 50%→1% CPU improvement for static content.
 
-**SugarCraft Implication**: HIGH - Essential pattern for candy-core.
+**SugarCraft Implication**: HIGH - Essential pattern for sugar-core.
 
 ---
 
@@ -743,7 +743,7 @@ impl Component {
 }
 ```
 
-**SugarCraft Implication**: MEDIUM - Our Model pattern in candy-core is similar, but we should document it clearly as the recommended architecture.
+**SugarCraft Implication**: MEDIUM - Our Model pattern in sugar-core is similar, but we should document it clearly as the recommended architecture.
 
 ---
 
@@ -756,7 +756,7 @@ impl Component {
 
 **Key Insight**: Ratatui core doesn't have built-in focus management, community built it externally.
 
-**SugarCraft Implication**: HIGH - Consider whether candy-core or sugar-widgets needs built-in focus/click handling. The ratatui-interact pattern is worth emulating.
+**SugarCraft Implication**: HIGH - Consider whether sugar-core or sugar-widgets needs built-in focus/click handling. The ratatui-interact pattern is worth emulating.
 
 ---
 
@@ -798,7 +798,7 @@ impl Component {
 - Show carrying cost of performance code is justified
 - Benchmark tests that show the problem
 
-**SugarCraft Implication**: MEDIUM - When we optimize candy-core, we should have measurements to justify complexity.
+**SugarCraft Implication**: MEDIUM - When we optimize sugar-core, we should have measurements to justify complexity.
 
 ---
 
@@ -806,7 +806,7 @@ impl Component {
 
 **Quoted**: "If you're a widget author, consider switching to ratatui-core for better stability... ratatui-core evolves more slowly than the main ratatui crate or the backend/widget crates, meaning fewer breaking changes."
 
-**SugarCraft Implication**: HIGH - candy-core must be the stable foundation that sugar-*, candy-* libs depend on. Breaking changes should be rare and well-communicated.
+**SugarCraft Implication**: HIGH - sugar-core must be the stable foundation that sugar-*, candy-* libs depend on. Breaking changes should be rare and well-communicated.
 
 ---
 
@@ -859,7 +859,7 @@ impl Component {
 
 **Evidence**: Dirty flag rendering provides 50x CPU improvement for static content.
 
-**SugarCraft Action**: candy-core MUST implement dirty-flag rendering. Buffer diffing should only happen when content actually changes.
+**SugarCraft Action**: sugar-core MUST implement dirty-flag rendering. Buffer diffing should only happen when content actually changes.
 
 ---
 
@@ -909,7 +909,7 @@ impl Component {
 
 **Evidence**: ratatui-interact built externally to fill gap.
 
-**SugarCraft Action**: candy-core or sugar-widgets should consider built-in focus management, or ensure third-party integration is straightforward.
+**SugarCraft Action**: sugar-core or sugar-widgets should consider built-in focus management, or ensure third-party integration is straightforward.
 
 ---
 
@@ -949,7 +949,7 @@ impl Component {
 
 **SugarCraft Implementation**:
 ```
-candy-core (stable)
+sugar-core (stable)
   ↓ depend
 sugar-widgets, candy-scriptui, sugar-markdown, sugar-forms
   ↓ depend
@@ -964,7 +964,7 @@ sugar-* (user-facing components)
 
 **Maintainer**: "We want ratatui-core to be a stable place that makes it easier for widget libraries to generally not have to be updated any time we make a change."
 
-**SugarCraft Implementation**: candy-core traits should remain stable. New traits can be added but not modified once established.
+**SugarCraft Implementation**: sugar-core traits should remain stable. New traits can be added but not modified once established.
 
 ---
 
@@ -974,7 +974,7 @@ sugar-* (user-facing components)
 
 **Evidence**: Performance issues (#1338, #1004, #1855) emerged from users hitting them in production.
 
-**SugarCraft Implementation**: Design candy-core for performance from start:
+**SugarCraft Implementation**: Design sugar-core for performance from start:
 
 - Dirty flag rendering as primary pattern
 - Layout caching enabled by default
@@ -1034,7 +1034,7 @@ sugar-* (user-facing components)
 
 **Lesson**: Document what defaults mean and how to get equivalent behavior when changing settings.
 
-**SugarCraft**: candy-core and sugar-markdown should clearly document what defaults mean and what happens when changed.
+**SugarCraft**: sugar-core and sugar-markdown should clearly document what defaults mean and what happens when changed.
 
 ---
 
@@ -1075,7 +1075,7 @@ sugar-* (user-facing components)
 
 **Pattern**: Facade crate + stable core + evolving modules.
 
-**SugarCraft**: candy-core as stable foundation, other libs evolve around it.
+**SugarCraft**: sugar-core as stable foundation, other libs evolve around it.
 
 ---
 
@@ -1174,7 +1174,7 @@ class MyComponent {
 
 ### Immediate (High Impact, Low Effort)
 
-1. **Implement Dirty Flag Rendering** in candy-core
+1. **Implement Dirty Flag Rendering** in sugar-core
    - Critical for performance
    - Clean implementation with ReactPHP event model
 
@@ -1220,7 +1220,7 @@ class MyComponent {
 
 Ratatui's ecosystem provides a mature reference for what SugarCraft should aspire to. Key insights:
 
-**Architecture**: Modular architecture with stable core (candy-core) enabling ecosystem growth. Widget libraries depend on stable foundation, not frequent-breaking changes.
+**Architecture**: Modular architecture with stable core (sugar-core) enabling ecosystem growth. Widget libraries depend on stable foundation, not frequent-breaking changes.
 
 **Performance**: Dirty flag rendering, layout caching, and virtual scrolling are essential patterns that must be implemented from the start. Buffer diffing optimization and embedded memory constraints are known issues to design around.
 

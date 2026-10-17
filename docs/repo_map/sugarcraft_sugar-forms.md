@@ -7,7 +7,7 @@
 - **Namespace:** `SugarCraft\Forms`
 - **Status:** 🟡 in progress (extraction in progress, gaps tracked)
 - **Upstream sources:** Extracted from `sugar-widgets` + `sugar-forms`
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-style`
+- **Depends on:** `sugarcraft/sugar-core`, `sugarcraft/sugar-style`
 - **PHP minimum:** `^8.3`
 
 ## Overview
@@ -322,7 +322,7 @@ pterm provides 25+ interactive printers including `InteractiveSelectPrinter`, `I
 | `InteractiveTextInputPrinter` | `Field\Input` |
 | `ProgressbarPrinter` | Not in sugar-forms (in sugar-widgets) |
 
-**Key difference:** pterm's interactive components use `atomicgo.dev/keyboard` for blocking keyboard capture. sugar-forms uses the Bubble Tea message-passing model via `candy-core` with `KeyMsg` dispatched from the runtime's TTY reader.
+**Key difference:** pterm's interactive components use `atomicgo.dev/keyboard` for blocking keyboard capture. sugar-forms uses the Bubble Tea message-passing model via `sugar-core` with `KeyMsg` dispatched from the runtime's TTY reader.
 
 ### charmbracelet/gum
 

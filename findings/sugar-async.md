@@ -353,7 +353,7 @@ These are simple array operations, but they could use SPL counting interfaces fo
 
 ### 9.1 Naming collision: Async\Subscription vs Core\Subscription (HIGH)
 
-**Files:** `src/Subscription.php` vs `candy-core/src/Subscription.php`
+**Files:** `src/Subscription.php` vs `sugar-core/src/Subscription.php`
 
 Both `SugarCraft\Async\Subscription` (RxJS-style disposal handle) and `SugarCraft\Core\Subscription` (Elm-style event subscription value object) have the same class name but completely different semantics. This causes confusion when importing both namespaces.
 
@@ -382,10 +382,10 @@ The `retry()` function doesn't accept a `LoopInterface` parameter, and the recur
 The library correctly depends on:
 - `react/event-loop: ^1.6`
 - `react/promise: ^3.3`
-- `sugarcraft/candy-core: dev-master`
+- `sugarcraft/sugar-core: dev-master`
 
 And several libs correctly depend on `sugar-async`:
-- candy-core (i18n/Lang)
+- sugar-core (i18n/Lang)
 - sugar-forms (CancellationSource for async suggestions)
 - candy-git-server (Subscription/Subscriptions for cleanup)
 - candy-mail (CancellationToken, AsyncOps for SMTP)

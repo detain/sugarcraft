@@ -74,7 +74,7 @@ Suites + counts (current):
 | Lib | Tests | Notes |
 |---|---|---|
 | sugar-pty | 261 | 2 deprecations, 2 skipped — both expected |
-| candy-core | 545 | 24 skipped (FFI / Windows guards) |
+| sugar-core | 545 | 24 skipped (FFI / Windows guards) |
 | candy-wish | 70 | All real PTY end-to-end | <!-- @rename-keep -->
 | candy-scriptui | 180 | Spin / RealProcess adapter |
 
@@ -101,9 +101,9 @@ Failed mitigations (kept as historical record):
 
 ### Path-repo lock-version mismatch on PR branches
 
-`candy-core/composer.lock` (and any other consumer's lock) pins `sugarcraft/sugar-pty` to `"version": "dev-master"`. When CI checks out a PR branch where sugar-pty's HEAD is at `ai/<branch>`, composer reads the symlink's branch as `dev-ai/<branch>` and rejects the lock as incompatible.
+`sugar-core/composer.lock` (and any other consumer's lock) pins `sugarcraft/sugar-pty` to `"version": "dev-master"`. When CI checks out a PR branch where sugar-pty's HEAD is at `ai/<branch>`, composer reads the symlink's branch as `dev-ai/<branch>` and rejects the lock as incompatible.
 
-**Pattern**: candy-core jobs fail on PR branches that ALSO touch sugar-pty; they pass on master after merge. This is expected. **Don't try to "fix" the lock** by regenerating it on a PR branch — that just shifts the failure to the post-merge master push. The 7-cell failure pattern (Test/PHPStan/macOS/Windows × candy-core) on a PR is normal for any sugar-pty change.
+**Pattern**: sugar-core jobs fail on PR branches that ALSO touch sugar-pty; they pass on master after merge. This is expected. **Don't try to "fix" the lock** by regenerating it on a PR branch — that just shifts the failure to the post-merge master push. The 7-cell failure pattern (Test/PHPStan/macOS/Windows × sugar-core) on a PR is normal for any sugar-pty change.
 
 The macOS candy-wish cell **is** the canary that proves the underlying fix works on Darwin. <!-- @rename-keep -->
 
@@ -122,7 +122,7 @@ The macOS candy-wish cell **is** the canary that proves the underlying fix works
 #470  ai/hold-sugar-pty-from-macos   First MACOS_LIBS hold
 #469  ai/macos-resize-after-spawn    Resize after proc_open opens slave
 #468  ai/ci-cache-bust-darwin-anchor Cache busts + Darwin slave anchor
-#467  ai/monorepo-test-sweep         candy-core lock fix + initial macOS attempt
+#467  ai/monorepo-test-sweep         sugar-core lock fix + initial macOS attempt
 #466  ai/sugar-pty-docs-parity       P5.7 — README parity + CONCEPTS.md
 #465  ai/sugar-pty-ci-matrix         P5.6 — pty-matrix.yml workflow
 #464  ai/sugar-pty-test-eof-sigint-reap  P5.5 — EOF/SIGINT/orphan-reap
@@ -130,7 +130,7 @@ The macOS candy-wish cell **is** the canary that proves the underlying fix works
 #462  ai/sugar-pty-shell-repl-tests  P5.1+P5.2 — bash/dash/zsh/fish/python
 #461  ai/sugar-pty-spawn-bash-example  P4.6 — DI quickstart example
 #460  ai/sugar-pty-deprecation-markers  P4.5 — path-repo audit + check-path-repos.php
-#459  ai/candy-core-program-termios-di  P4.4 — Program optional Termios DI
+#459  ai/sugar-core-program-termios-di  P4.4 — Program optional Termios DI
 #458  ai/candy-wish-spawn-pty-system  P4.3 — Spawn middleware DI integration test <!-- @rename-keep -->
 #457  ai/candy-wish-pty-system-di    P4.2 — InProcessTransport optional PtySystem DI <!-- @rename-keep -->
 #456  ai/sugar-pty-system-factory    P4.1 — PtySystemFactory + UnsupportedPlatformException
@@ -252,7 +252,7 @@ These are real things this rollout learned and embedded in your auto-memory:
 ## CONTACT POINTS / ESCAPE HATCHES
 
 - **macOS PTY resize regresses**: rerun `debug/macos-sugar-pty` workflow with `SUGARCRAFT_PTY_DEBUG=1` to see catch traces.
-- **candy-core lock CI failures on a PR**: expected. Verify the failures are ONLY `Test/PHPStan/macOS/Windows · candy-core` — don't try to fix them. Once merged to master, they resolve.
+- **sugar-core lock CI failures on a PR**: expected. Verify the failures are ONLY `Test/PHPStan/macOS/Windows · sugar-core` — don't try to fix them. Once merged to master, they resolve.
 - **A new lib added needs MACOS_LIBS / WINDOWS_LIBS**: edit `scripts/affected-libs.php` manually — these pools are hand-maintained, not auto-discovered.
 - **Path-repo closure broken**: `tools/check-path-repos.php` will flag it in CI; fix by copying the path-repo entry from `sugar-charts/composer.json`.
 - **Pre-commit hook hangs / breaks**: Run `caliber refresh` manually to diagnose, or `git commit --no-verify` as last resort (don't commit this way long-term).

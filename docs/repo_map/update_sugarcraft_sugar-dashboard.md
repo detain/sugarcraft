@@ -6,7 +6,7 @@
 **Description**: Dashboard TUI library providing column grid layouts, framed panels, status bars, tabs, and 200+ components across 13 namespaces. Ports patterns from bubble-grid, bubbletea-tilelayout, go-tealeaves, bubbleboxer, lattice, Homedash, and termui.
 **Status**: 🟢 v1 ready
 **Primary Upstream**: charmbracelet/bubble-grid (shahar3/bubble-grid fork)
-**Ecosystem Position**: sugar-dashboard is the flagship dashboard/TUI composition library of SugarCraft, sitting at the application layer above candy-core (runtime), sugar-style (styling), and sugar-vterm (terminal emulation).
+**Ecosystem Position**: sugar-dashboard is the flagship dashboard/TUI composition library of SugarCraft, sitting at the application layer above sugar-core (runtime), sugar-style (styling), and sugar-vterm (terminal emulation).
 
 ### Biggest Opportunity Areas
 
@@ -77,7 +77,7 @@
 7. 200+ components across 13 namespaces
 8. JSON-based plugin system for external binary integration
 9. 40+ VHS demo GIFs
-10. Dual-SSOT awareness documented (distinct primitives from sugar-style/candy-core/sugar-vterm)
+10. Dual-SSOT awareness documented (distinct primitives from sugar-style/sugar-core/sugar-vterm)
 
 ### Weaknesses
 
@@ -89,7 +89,7 @@
 6. No streaming/chunked data update support
 7. Bubble sort in Table sorting (O(n²)) vs PHP's built-in sorting
 8. Gap distribution (space-around/space-evenly) is simplified/stubbed
-9. Event handling delegated externally to candy-core runtime
+9. Event handling delegated externally to sugar-core runtime
 10. No `compose()` generator interface for declarative child declaration
 
 ---
@@ -683,7 +683,7 @@ sugar-dashboard is a **mature, comprehensive TUI dashboard library** that succes
 
 **Implementation priority**: Focus on the immediate wins (bubble sort replacement, gap distribution completion) while planning the constraint enum system and buffer diffing as medium-term investments. The constraint enum system is the highest-impact architectural improvement — it fundamentally changes how developers write layouts, making code more declarative and maintainable.
 
-**Ecosystem position**: sugar-dashboard is the application-layer library that consumes candy-core (runtime), sugar-style (styling), and sugar-vterm (terminal emulation). It should lead the ecosystem in providing high-level dashboard composition patterns while relying on foundation libs for primitives.
+**Ecosystem position**: sugar-dashboard is the application-layer library that consumes sugar-core (runtime), sugar-style (styling), and sugar-vterm (terminal emulation). It should lead the ecosystem in providing high-level dashboard composition patterns while relying on foundation libs for primitives.
 
 The most significant long-term opportunity is **MCP server integration** — exposing sugar-dashboard components as AI-accessible tools would position SugarCraft uniquely in the AI agent tooling space, allowing agents to generate and modify TUIs programmatically. This is speculative but high-potential given the current AI agent tooling boom.
 

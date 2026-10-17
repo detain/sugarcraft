@@ -605,12 +605,12 @@ sugar-dashboard/
         }
     },
     "repositories": [
-        {"type": "path", "url": "../candy-core", "options": {"symlink": true}},
+        {"type": "path", "url": "../sugar-core", "options": {"symlink": true}},
         {"type": "path", "url": "../sugar-style", "options": {"symlink": true}}
     ],
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "@dev",
+        "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-style": "@dev"
     }
 }

@@ -535,7 +535,7 @@ hints:
 
 ### Current Dependencies
 
-- `sugarcraft/candy-core` (for Ansi utilities)
+- `sugarcraft/sugar-core` (for Ansi utilities)
 - PHP 8.3+
 
 ### No New Dependencies Required

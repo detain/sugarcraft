@@ -1,5 +1,5 @@
 [
-  {"name": "SugarCraft", "slug": "candy-core", "category": "library", "description": "Elm-architecture TUI runtime — Model / Msg / Cmd / Program. Cursed cell-diff renderer for SSH bandwidth.", "url": "lib/candy-core.html"},
+  {"name": "SugarCraft", "slug": "sugar-core", "category": "library", "description": "Elm-architecture TUI runtime — Model / Msg / Cmd / Program. Cursed cell-diff renderer for SSH bandwidth.", "url": "lib/sugar-core.html"},
   {"name": "SugarStyle", "slug": "sugar-style", "category": "library", "description": "Declarative styling + layout. Style, Border, Table, List, Tree, Layout::join/Place, multi-layer Canvas.", "url": "lib/sugar-style.html"},
   {"name": "SugarSpring", "slug": "sugar-spring", "category": "library", "description": "Damped spring physics + Newtonian projectile sim. The animation engine behind every smooth scroll in the stack.", "url": "lib/sugar-spring.html"},
   {"name": "SugarMouse", "slug": "sugar-mouse", "category": "library", "description": "Mouse-zone tracker. Wrap rendered chunks, get back bounding boxes — clickable regions without coordinate math.", "url": "lib/sugar-mouse.html"},
@@ -14,7 +14,7 @@
   {"name": "SugarColorprofile", "slug": "sugar-colorprofile", "category": "library", "description": "Terminal color profile detection + ANSI / ANSI256 / TrueColor conversion. StandardColors and ProfileWriter.", "url": "lib/sugar-colorprofile.html"},
   {"name": "SugarImage", "slug": "sugar-image", "category": "library", "description": "Image-to-cell renderer — Sixel, Kitty, iTerm2, Unicode half-block; Picker facade; ext-gd.", "url": "lib/sugar-image.html"},
   {"name": "SugarVterm", "slug": "sugar-vterm", "category": "library", "description": "In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.", "url": "lib/sugar-vterm.html"},
-  {"name": "CandyVcr", "slug": "candy-vcr", "category": "library", "description": "Record + replay candy-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI.", "url": "lib/candy-vcr.html"},
+  {"name": "CandyVcr", "slug": "candy-vcr", "category": "library", "description": "Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI.", "url": "lib/candy-vcr.html"},
   {"name": "SugarPty", "slug": "sugar-pty", "category": "library", "description": "PTY primitive for Linux + macOS — open / spawn / read / write / resize / size / setBlocking, Child lifecycle, SignalForwarder.", "url": "lib/sugar-pty.html"},
   {"name": "SugarLister", "slug": "sugar-treelist", "category": "library", "description": "Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type.", "url": "lib/sugar-treelist.html"},
   {"name": "SugarPanels", "slug": "sugar-panels", "category": "library", "description": "Box-drawing layout engine. H/V panel composition with weighted sizing, borders, and nested grids.", "url": "lib/sugar-panels.html"},

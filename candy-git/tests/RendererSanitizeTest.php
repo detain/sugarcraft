@@ -14,7 +14,7 @@ use SugarCraft\Git\Renderer;
  * Pins for audit #7: sanitize() used a `/u` preg pattern, so any malformed
  * UTF-8 byte made preg_match return FALSE (PREG_BAD_UTF8_ERROR) and the whole
  * strip was skipped — ESC sequences rode straight through to the terminal.
- * The replacement rides candy-core's byte-wise fail-closed Sanitize::untrusted.
+ * The replacement rides sugar-core's byte-wise fail-closed Sanitize::untrusted.
  */
 final class RendererSanitizeTest extends TestCase
 {

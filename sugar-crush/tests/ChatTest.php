@@ -624,7 +624,7 @@ final class ChatTest extends TestCase
     /**
      * Regression: Renderer must lay out against the REAL terminal size, and
      * the only place that size can come from without silently disagreeing
-     * with what candy-core's Program itself detected (or missing a live
+     * with what sugar-core's Program itself detected (or missing a live
      * resize) is the WindowSizeMsg Program dispatches at startup and on
      * every SIGWINCH - see rows()/cols()'s docblock.
      */
@@ -888,7 +888,7 @@ final class ChatTest extends TestCase
 
         // Injected Termios test seam - see EngineBackendTest's matching test.
         // The (int)-cast fd resolution this used to sidestep is gone from
-        // candy-core (E368: `descriptorForStream()`); the seam still earns
+        // sugar-core (E368: `descriptorForStream()`); the seam still earns
         // its place by driving the fd it is handed rather than one PHP
         // estimated.
         //
@@ -1674,7 +1674,7 @@ final class ChatTest extends TestCase
      * text/replies landing in the wrong row - e.g. the status bar - once a
      * conversation grew past a single frame). view() now always returns
      * the full literal frame; the real diffing happens once, correctly, in
-     * candy-core's Program/Renderer.
+     * sugar-core's Program/Renderer.
      */
     public function testViewReturnsTheFullFrameOnEveryCall(): void
     {
@@ -2241,7 +2241,7 @@ final class ChatTest extends TestCase
      * `bin/sugarcrush` actually runs) never passes an `agentManager:`, so a
      * typed "/agents" with no `agentManager` configured used to throw an
      * uncaught `RuntimeException('AgentManager not set')` straight out of
-     * `Chat::update()` — candy-core's `Program` has no try/catch around its
+     * `Chat::update()` — sugar-core's `Program` has no try/catch around its
      * synchronous update() dispatch, so this crashed the whole live CLI
      * instead of degrading like every other optional collaborator here
      * (workflow engine / session store / memory store).

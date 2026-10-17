@@ -47,7 +47,7 @@ final class CounterModel implements Model
         return "counter: {$this->count}\n  press any key, q to quit\n";
     }
 
-    // F3 (round 90): candy-core's Model contract mandates subscriptions();
+    // F3 (round 90): sugar-core's Model contract mandates subscriptions();
     // this counter needs none. Before this method existed the example
     // fataled at class-definition time.
     public function subscriptions(): ?Subscriptions

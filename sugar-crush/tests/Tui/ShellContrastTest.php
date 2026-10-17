@@ -482,7 +482,7 @@ final class ShellContrastTest extends TestCase
      * {@see \SugarCraft\Style\Theme::ansi()} is built exclusively from
      * `Color::ansi(0..8)` precisely so an app on that theme DEFERS to the
      * terminal's own 16 colours. That intent was defeated on any terminal
-     * advertising more than 16: candy-core's `Color` stored only RGB, so
+     * advertising more than 16: sugar-core's `Color` stored only RGB, so
      * `Color::ansi(8)` collapsed to [127,127,127] and came back out as
      * `\e[38;2;127;127;127m` — an absolute value overriding the palette the user
      * chose the theme to honour. Measured on this host before the fix:

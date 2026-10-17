@@ -57,7 +57,7 @@ final class Theme
     /**
      * Create the Dracula theme.
      *
-     * Hex literals are re-sourced from candy-core's {@see Palettes::DRACULA}
+     * Hex literals are re-sourced from sugar-core's {@see Palettes::DRACULA}
      * SSOT so the scheme cannot drift from the shared palette. The constants
      * are lowercase `#rrggbb`; sugar-dashboard historically used uppercase, but the
      * rendered SGR bytes are numeric RGB, so the case change is cosmetic.
@@ -81,7 +81,7 @@ final class Theme
     /**
      * Create the One Dark theme.
      *
-     * Hex literals are re-sourced from candy-core's {@see Palettes::ONE_DARK}
+     * Hex literals are re-sourced from sugar-core's {@see Palettes::ONE_DARK}
      * SSOT (lowercase `#rrggbb`); the previous uppercase literals rendered to
      * the same numeric-RGB SGR bytes, so the case change is cosmetic.
      */
@@ -104,7 +104,7 @@ final class Theme
     /**
      * Create the GitHub Dark theme.
      *
-     * Hex literals are re-sourced from candy-core's {@see Palettes::GITHUB_DARK}
+     * Hex literals are re-sourced from sugar-core's {@see Palettes::GITHUB_DARK}
      * SSOT (lowercase `#rrggbb`); the previous uppercase literals rendered to
      * the same numeric-RGB SGR bytes, so the case change is cosmetic.
      */

@@ -29,8 +29,8 @@ From `repo_map/pterm_pterm.md`, pterm maps almost entirely to `sugar-widgets`:
 
 | pterm Component | SugarCraft Lib |
 |---|---|
-| Color, Style, RGB, RGBStyle | `candy-core` |
-| Print/Sprint family, SetDefaultOutput | `candy-core` |
+| Color, Style, RGB, RGBStyle | `sugar-core` |
+| Print/Sprint family, SetDefaultOutput | `sugar-core` |
 | ThemeDefault | `sugar-markdown` |
 | ProgressbarPrinter, SpinnerPrinter, AreaPrinter | `sugar-widgets` |
 | Logger + SlogHandler | `sugar-widgets` |

@@ -492,7 +492,7 @@ final class ReactInputDriver implements ReadableStreamInterface
 **Related code locations:**
 
 - `src/Driver/StreamInputDriver.php` - existing synchronous implementation
-- `composer.json:31-32` - requires sugarcraft/candy-core (ReactPHP)
+- `composer.json:31-32` - requires sugarcraft/sugar-core (ReactPHP)
 
 ---
 

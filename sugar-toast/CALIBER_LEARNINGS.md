@@ -14,7 +14,7 @@ sugar-toast.
 
 
 When adding i18n to a leaf library that has no internal deps other than
-`candy-core`, follow the canonical pattern established by candy-ssh-launcher,
+`sugar-core`, follow the canonical pattern established by candy-ssh-launcher,
 sugar-datepicker, and sugar-table:
 
 1. **`lang/en.php`** — flat `array<string, string>` keyed by translation
@@ -55,11 +55,11 @@ sugar-datepicker, and sugar-table:
    translations. Include one test per key + a wildcard-pattern test for
    dynamic keys.
 
-6. **`candy-core` dep** — the `T` class lives in `candy-core`, so every
+6. **`sugar-core` dep** — the `T` class lives in `sugar-core`, so every
 
 
 
-   i18n lib needs `sugarcraft/candy-core: dev-master` in `require` plus a
+   i18n lib needs `sugarcraft/sugar-core: dev-master` in `require` plus a
    path-repo entry in `repositories`.
 
 ---
@@ -229,7 +229,7 @@ the pre-buffer lesson still governs the painter:
 Rule of thumb: any string that may contain multibyte glyphs or ANSI must be
 measured/sliced with `Width::*`, never `strlen`/`substr`/`str_pad`.
 
-FOLLOW-UP DONE (candy-core @85466ebd2): `Width::nextCluster()` is now a public
+FOLLOW-UP DONE (sugar-core @85466ebd2): `Width::nextCluster()` is now a public
 canonical entry point in core (bodies proven behaviorally identical by
 normalized diff before unifying). `Toast::nextCluster()` is reduced to a
 one-line delegate — the verbatim copy of the invalid-UTF-8 guards (ICU-position
@@ -240,7 +240,7 @@ delegate seam unchanged. Standing law: never re-fork a canonical core helper —
 if a promotion is blocked, say so in a follow-up note like this one was and
 keep the copy provably verbatim until the core lane lands.
 
-## [antipattern:hand-built-sgr] Route SGR through candy-core Ansi, not string literals
+## [antipattern:hand-built-sgr] Route SGR through sugar-core Ansi, not string literals
 
 
 

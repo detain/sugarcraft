@@ -36,7 +36,7 @@ use SugarCraft\Crush\Message;
  *
  * WHEN IT FLUSHES SYNCHRONOUSLY: {@see flush()} is called before a session
  * switch, before a fork reads the stored transcript, and at process shutdown.
- * The shutdown hook covers `/quit`, Ctrl+C (candy-core turns SIGINT into an
+ * The shutdown hook covers `/quit`, Ctrl+C (sugar-core turns SIGINT into an
  * orderly quit), `exit()` and a fatal error. A SIGKILL loses at most one
  * window. The hook acts only in the process that registered it: a forked turn
  * child that exits normally must not write its parent's snapshot, which may

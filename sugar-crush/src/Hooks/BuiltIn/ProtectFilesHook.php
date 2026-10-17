@@ -43,7 +43,7 @@ final readonly class ProtectFilesHook implements HookInterface
      * They are neither secrets (both are committed) nor policy (nothing in them
      * decides what this session may do), and the entries were unanchored
      * substrings judged against Read paths and whole Bash strings alike, so
-     * they refused `grep -c . candy-core/composer.json`, a `Read` of any
+     * they refused `grep -c . sugar-core/composer.json`, a `Read` of any
      * manifest, and every `for d in candy-*; do [ -f "$d/composer.json" ]` loop — in
      * a PHP monorepo, the most ordinary inspection there is. A model that
      * wanted to abuse a manifest's `scripts` already holds Bash, so the deny

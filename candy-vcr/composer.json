@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-vcr",
-    "description": "Record and replay candy-core Program sessions into cassettes \u2014 bug-repro / regression / fuzzing.",
+    "description": "Record and replay sugar-core Program sessions into cassettes \u2014 bug-repro / regression / fuzzing.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -29,7 +29,7 @@
     "require": {
         "php": "^8.3",
         "ext-mbstring": "*",
-        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-pty": "dev-master",
         "symfony/console": "^6.4 || ^7.0",

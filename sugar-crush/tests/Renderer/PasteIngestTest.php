@@ -75,7 +75,7 @@ final class PasteIngestTest extends TestCase
         );
         $this->assertFalse(
             (new ProgramOptions())->bracketedPaste,
-            'fixture: candy-core defaults this OFF, so the line above is Chat opting IN, not inheriting',
+            'fixture: sugar-core defaults this OFF, so the line above is Chat opting IN, not inheriting',
         );
         $this->assertTrue($options->useAltScreen, 'fixture: the alt-screen the app has always asked for');
         $this->assertTrue(

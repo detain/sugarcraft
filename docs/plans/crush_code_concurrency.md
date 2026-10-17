@@ -369,14 +369,14 @@ entire remaining queue** and should be W's next item after the in-flight bundles
 ### 3.4 Sibling-lib edits are the conflict that lane isolation does NOT catch by construction
 
 sugar-crush-scoped lane ownership says nothing about `candy-core/`, `candy-vt/`, `candy-shine/`, <!-- @rename-keep historical provenance -->
-`candy-vcr/`. Those get edited: commit `6c1e51c8` is titled *"sugar-crush + candy-core"* and `fe7ce954`
+`candy-vcr/`. Those get edited: commit `6c1e51c8` is titled *"sugar-crush + candy-core"* and `fe7ce954` <!-- @rename-keep historical provenance -->
 is *"sugar-crush + candy-core + candy-vt"* — two of the last five commits touched siblings. And the <!-- @rename-keep historical provenance -->
 hardening backlog has four sibling-lib items: **E15** (`candy-vcr/src/Tape/Lexer.php`), **E46**
 (`candy-core/src/Util/Width.php`), **E49** (`candy-shine/src/Renderer.php`), **E50** <!-- @rename-keep historical provenance -->
-(`candy-core/src/SgrState.php`).
+(`candy-core/src/SgrState.php`). <!-- @rename-keep historical provenance -->
 
-In a full-repo lane each lane edits *its own copy* of `candy-core`, so nothing breaks until push — and
-then two lanes' `candy-core` commits rebase against each other with no lane-ownership rule to separate
+In a full-repo lane each lane edits *its own copy* of `candy-core`, so nothing breaks until push — and <!-- @rename-keep historical provenance -->
+then two lanes' `candy-core` commits rebase against each other with no lane-ownership rule to separate <!-- @rename-keep historical provenance -->
 them.
 
 > **The rule: a sibling lib is claimed by NAME, by one lane at a time, from the supervisor.** Before a
@@ -479,9 +479,9 @@ just `sugar-crush/`.** Four reasons, all measured 2026-08-19:
 
 | | full-repo `cp -a sugarcraft` | lib-only `cp -a sugar-crush` |
 |---|---|---|
-| `vendor/sugarcraft/*` symlinks | **all 16 resolve inside the copy, zero repointing.** Verified: `readlink -f <copy>/sugar-crush/vendor/sugarcraft/candy-core` → `<copy>/candy-core`; `find -xtype l` over that dir → **0** broken | **all 16 escape the sandbox.** They are relative `../../../<lib>/`, which from `<lane>/vendor/sugarcraft/` resolves to `<parent-of-lane>/<lib>` — the wrong place, or the live tree. This is RESUME §7's repointing chore *and* an isolation leak |
+| `vendor/sugarcraft/*` symlinks | **all 16 resolve inside the copy, zero repointing.** Verified: `readlink -f <copy>/sugar-crush/vendor/sugarcraft/candy-core` → `<copy>/candy-core`; `find -xtype l` over that dir → **0** broken | **all 16 escape the sandbox.** They are relative `../../../<lib>/`, which from `<lane>/vendor/sugarcraft/` resolves to `<parent-of-lane>/<lib>` — the wrong place, or the live tree. This is RESUME §7's repointing chore *and* an isolation leak | <!-- @rename-keep historical provenance -->
 | git | **a real repo.** Verified in the copy: branch `master`, HEAD `1c78cc7a`, `origin git@github.com:detain/sugarcraft.git`. It can commit and push with no extra wiring | **no `.git` at all** — `sugar-crush/` is a subdirectory of one repo, not a repo. Cannot commit, which the user's model requires |
-| sibling-lib edits | possible and isolated — the lane edits its own `candy-core/` | impossible without reaching into the live tree |
+| sibling-lib edits | possible and isolated — the lane edits its own `candy-core/` | impossible without reaching into the live tree | <!-- @rename-keep historical provenance -->
 | disk | 1.9 GB per lane (`du -sh`), 1008 GB free. 6 lanes ≈ 11 GB | 124 MB per lane (109 MB of it `vendor/`) |
 | copy time | **6.7 s** (supervisor-measured) / **9.7 s** (mine, same 1.9 GB source, warm-ish cache — two runs, two numbers, both fine) | not measured |
 
@@ -624,7 +624,7 @@ LANE=/home/sites/crush-lane-w
 
 # (1) No broken symlinks, and they point INSIDE the lane.
 find $LANE/sugar-crush/vendor/sugarcraft -maxdepth 1 -xtype l | wc -l        # must be 0
-readlink -f $LANE/sugar-crush/vendor/sugarcraft/candy-core                    # must start with $LANE
+readlink -f $LANE/sugar-crush/vendor/sugarcraft/candy-core                    # must start with $LANE <!-- @rename-keep historical provenance -->
 
 # (2) THE CHECK THAT MATTERS (RESUME §7): reflection must resolve inside the lane.
 #     A lane can look right and still load the live tree's classes.
@@ -632,7 +632,7 @@ cd $LANE/sugar-crush && php -r 'require "vendor/autoload.php";
   echo (new ReflectionClass(SugarCraft\Core\Model::class))->getFileName(), "\n";
   echo (new ReflectionClass(SugarCraft\Crush\Theme::class))->getFileName(), "\n";'
 #   probe output was:
-#     /home/sites/crush-lane-probe/candy-core/src/Model.php     <- the SIBLING, inside the lane
+#     /home/sites/crush-lane-probe/candy-core/src/Model.php     <- the SIBLING, inside the lane <!-- @rename-keep historical provenance -->
 #     /home/sites/crush-lane-probe/sugar-crush/src/Theme.php
 #   If either path says /home/sites/sugarcraft, the lane is fake. Delete it and start over.
 
@@ -667,8 +667,8 @@ git -C $LANE status --porcelain            # empty, unless you deliberately copi
 explicitly at `/home/sites/sugarcraft/<lib>`; naive absolutising produced self-referential links for
 three separate agents"* — is correct **for the lib-only sandbox it was written about** (mutation
 testing on a `cp -a sugar-crush`), where the links genuinely escape. For a whole-repo lane, repointing
-is not merely unnecessary, **it is the bug**: pointing a lane's `vendor/sugarcraft/candy-core` at
-`/home/sites/sugarcraft/candy-core` breaks the isolation on purpose and makes lane suites load the
+is not merely unnecessary, **it is the bug**: pointing a lane's `vendor/sugarcraft/candy-core` at <!-- @rename-keep historical provenance -->
+`/home/sites/sugarcraft/candy-core` breaks the isolation on purpose and makes lane suites load the <!-- @rename-keep historical provenance -->
 supervisor's files. Do not do it. Check (2) is what catches it either way.
 
 ### 5.4 Why `git worktree` is not the answer here
@@ -761,7 +761,7 @@ git push origin master                        # if rejected: pull --rebase again
 **`git pull --rebase` is unconditional, and here is the measured reason.** CI pushes to `master` on its
 own: at the moment of writing, local `master` is **1 ahead / 1 behind** `origin/master`, and the
 upstream commit is `2f51b1a3 "vhs: regenerate demo GIFs"` — the `.github/workflows/vhs.yml` job
-re-rendering and pushing autonomously. It touched **7 binary `.gif` files** under `candy-core/.vhs/`
+re-rendering and pushing autonomously. It touched **7 binary `.gif` files** under `candy-core/.vhs/` <!-- @rename-keep historical provenance -->
 and `sugar-crush/.vhs/`. So drift on `master` arrives from a non-human writer that no lane coordination
 can see.
 

@@ -33,13 +33,13 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 | Package | Tests | Status | Critical | High | Medium | Low |
 |---------|-------|--------|---------|------|--------|-----|
-| candy-core | 588 ✓ | APPROVE | 0 | 2 | 3 | 0 |
+| candy-core | 588 ✓ | APPROVE | 0 | 2 | 3 | 0 | <!-- @rename-keep historical provenance -->
 | candy-scriptui | 230 ✓ | APPROVE | 0 | 0 | 3 | 0 |
 | candy-sprinkles | 522 ✓ | APPROVE | 0 | 0 | 4 | 0 | <!-- @rename-keep -->
 | sugar-markdown | 158 ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-git-server | 140 ✓ | APPROVE | 0 | 2 | 4 | 0 |
 
-**candy-core** — Foundation TUI runtime (Elm architecture). Well-architected with 588 passing tests. Issues: `Ansi::sgr()` called with 4 args where 3 expected (ghost rendering); `Subscription::startSubscription()` returns `mixed` instead of typed return.
+**candy-core** — Foundation TUI runtime (Elm architecture). Well-architected with 588 passing tests. Issues: `Ansi::sgr()` called with 4 args where 3 expected (ghost rendering); `Subscription::startSubscription()` returns `mixed` instead of typed return. <!-- @rename-keep historical provenance -->
 
 **candy-scriptui** — Symfony Console CLI shell (gum port). Clean, 230 tests. Issues: `sugar-forms` dependency not in path-repo closure for some consumers; `CommandScanner::scan()` limitation.
 
@@ -183,7 +183,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **sugar-dash** — Dashboard library. Massive (5409 tests, 99.98% pass). Clean architecture throughout. <!-- @rename-keep -->
 
-**candy-mail** — **BLOCKED**: Path-repo symlink for candy-core is incomplete/missing `I18n/Lang.php`. Two tests fail with `"Class 'SugarCraft\Core\I18n\Lang' not found"`. Run `composer reinstall` in candy-mail. Issues: `Attachment::fromPath()` silently returns empty on missing file; SMTPTransport has no connection timeout.
+**candy-mail** — **BLOCKED**: Path-repo symlink for candy-core is incomplete/missing `I18n/Lang.php`. Two tests fail with `"Class 'SugarCraft\Core\I18n\Lang' not found"`. Run `composer reinstall` in candy-mail. Issues: `Attachment::fromPath()` silently returns empty on missing file; SMTPTransport has no connection timeout. <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -239,7 +239,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ### 🔴 Critical Systemic Issues
 
 1. **Broken path-repo symlinks** (candy-mail, candy-mosaic) <!-- @rename-keep historical provenance -->
-   - `I18n/Lang.php` missing from candy-core symlink in candy-mail/vendor
+   - `I18n/Lang.php` missing from candy-core symlink in candy-mail/vendor <!-- @rename-keep historical provenance -->
    - Affects: candy-mail (2 test failures), candy-mosaic (test failures) <!-- @rename-keep historical provenance -->
    - Fix: `cd <package> && composer reinstall`
 
@@ -310,7 +310,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
    - Extract to `SugarCraft\Core\Msg\TickMsg`
 
 6. **`TestCase` base + `StreamHelper` trait** (improvements.md §4.3)
-   - Extract common stream-write pattern from candy-core/RendererTest.php
+   - Extract common stream-write pattern from candy-core/RendererTest.php <!-- @rename-keep historical provenance -->
    - Saves ~800 lines across 15+ test files
 
 7. **Shared `phpunit.xml.dist`** (improvements.md §4.2)
@@ -493,7 +493,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 1. **Publish sugar-forms to Packagist** — complete the extraction from sugar-bits/sugar-forms <!-- @rename-keep historical provenance -->
 2. **Establish `sugarcraft/` Packagist namespace** — currently some packages use `sugarcore/`
 3. **PHP 8.4 adoption** — the codebase targets 8.3+ but hasn't used PHP 8.4 features
-4. **phpstan level 9** — only candy-core has phpstan configured
+4. **phpstan level 9** — only candy-core has phpstan configured <!-- @rename-keep historical provenance -->
 5. **codecov integration** — ensure all packages have coverage tracking
 6. **VHS demo automation** — .vhs/ .tape files exist but rendering is hand-maintained
 7. **Inter-op testing** — test that packages work together (e.g., sugar-charts in sugar-dash) <!-- @rename-keep -->
@@ -510,7 +510,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | 33× Lang.php | Single LangFactory | 700 lines saved, DRY |
 | sugar-flexbox/Table vs sugar-table/Table | Rename sugar-flexbox Table to SimpleTable | Two different packages, same class name, confuses |
 | sugar-treelist + candy-ansi-inspect | No consolidation needed | Different purposes |
-| candy-mdview/WidthHelper vs candy-core/Util/Width | Delete candy-mdview/WidthHelper | Already exists in candy-core |
+| candy-mdview/WidthHelper vs candy-core/Util/Width | Delete candy-mdview/WidthHelper | Already exists in candy-core | <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -530,7 +530,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 ## Suggested Testing/CI Improvements
 
 1. **Run `composer reinstall` in CI** — detect broken path-repo symlinks before merge
-2. **Add phpstan to all packages** — only candy-core has it; bring others up to max level
+2. **Add phpstan to all packages** — only candy-core has it; bring others up to max level <!-- @rename-keep historical provenance -->
 3. **Add codecov flags per-package** — track coverage per lib in the monorepo
 4. **Test inter-op** — e.g., sugar-charts embedded in sugar-dash renders correctly <!-- @rename-keep -->
 5. **Add mutation testing** — check test quality beyond coverage

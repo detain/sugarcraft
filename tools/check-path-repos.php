@@ -400,7 +400,7 @@ foreach ($libs as $manifestPath) {
  *
  * Returns depSlug => path-string, where the path records the first chain that
  * introduced the dep (e.g. "sugar-widgets -> sugar-forms", a root test edge is
- * marked "[require-dev]") for actionable reporting. Cycles (candy-core ⇄
+ * marked "[require-dev]") for actionable reporting. Cycles (sugar-core ⇄
  * sugar-pty) are handled via the visited set.
  *
  * @param array<string, array{devDeps:array<string,string>, testDeps:array<string,string>}> $libData
@@ -634,7 +634,7 @@ if ($unused) {
         // lookup above is consulted only for a dep this pass has ALREADY
         // decided is dead, so a row naming something else is never looked at:
         // measured, two rows added to `sugar-markdown` -- one for
-        // `sugarcraft/candy-core`, which its `src/` references on every page,
+        // `sugarcraft/sugar-core`, which its `src/` references on every page,
         // and one for `sugarcraft/package-that-does-not-exist`, which is not
         // even a require -- produced no output at all and exit 0.
         //
@@ -730,7 +730,7 @@ if ($unused) {
             // Would the dep still be pulled in if we dropped THIS direct require?
             // Reachable from every OTHER production require plus every require-dev
             // root. The lib's own edge to the dep is removed from the graph too —
-            // otherwise a cycle back through this lib (e.g. candy-core ⇄ sugar-pty)
+            // otherwise a cycle back through this lib (e.g. sugar-core ⇄ sugar-pty)
             // would re-traverse the very edge we are hypothetically deleting and
             // falsely report the dep as still reachable. In-set ⇒ keep the repo
             // entry (only drop `require`); absent ⇒ the repo entry is safe to drop.

@@ -16,25 +16,25 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 ## Naming
 
-`Candy-` foundation/system, `Sugar-` components/data/apps, `Honey-` math/physics. Slug → kebab dir → composer pkg → namespace: `SugarMarkdown` → `sugar-markdown/` → `sugarcraft/sugar-markdown` → `SugarCraft\Markdown\` (quirk: `candy-core` → `SugarCraft\Core\`). Foundation `sugar-forms` is the form-primitives base that `sugar-widgets` + `candy-scriptui` depend on.
+`Candy-` foundation/system, `Sugar-` components/data/apps, `Honey-` math/physics. Slug → kebab dir → composer pkg → namespace: `SugarMarkdown` → `sugar-markdown/` → `sugarcraft/sugar-markdown` → `SugarCraft\Markdown\` (quirk: `sugar-core` → `SugarCraft\Core\`). Foundation `sugar-forms` is the form-primitives base that `sugar-widgets` + `candy-scriptui` depend on.
 
 ## Lib skeleton & composer.json
 
-Reference `sugar-widgets/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `sugar-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
+Reference `sugar-widgets/` (components), `sugar-charts/composer.json` (path-repo closure), `sugar-core/phpunit.xml` (test config), `sugar-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need a `require` entry ONLY — no `repositories[]` block in a lib manifest (a published lib's `../<dep>` path repo is a hard fatal in a split-repo clone). CI injects the closure before each install; the root manifest keeps its own.
 
 PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`. Libs whose suites arm timers on the shared ReactPHP loop point `bootstrap` at `tests/bootstrap.php` instead (`sugar-async`, `sugar-image`, `sugar-pty`, `sugar-testing`, `sugar-crush`).
 
 ## Code conventions
 
 - `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
-- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `sugar-style/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`). Nullable fields use a paired `bool $XSet` sentinel.
+- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `sugar-style/src/Style.php`; trait `sugar-core/src/Concerns/Mutable.php`). Nullable fields use a paired `bool $XSet` sentinel.
 - Bare accessors (no `get`). Factories mirror upstream — `::new()` default, `Theme::ansi()`, `Spinner::line()`; never `::create()`/`::make()`/`::default()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.
 - i18n: `Lang::t($key,$params)` over `SugarCraft\Core\I18n\T`; lookup exact → base → `en` → raw.
 
 ## Tests
 
-PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR), cell-grid (`SugarCraft\Vterm\Terminal`), behaviour (`update()` → `[Model,?Cmd]`), coercion (clamp edge cases). Stream-write: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `candy-core/tests/RendererTest.php`). FFI tests gate on `requirePtySyscalls()`. `sugar-testing` provides `ProgramSimulator`, `ScriptedInput`, golden-file + tape-recorder helpers for TEA programs, and `LoopPin::pinStableClock()` (`sugar-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php` whenever a suite bounds waits with timers on `Loop::get()`: under ext-uv deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue, while `StreamSelectLoop` refreshes at arm time.
+PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR), cell-grid (`SugarCraft\Vterm\Terminal`), behaviour (`update()` → `[Model,?Cmd]`), coercion (clamp edge cases). Stream-write: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `sugar-core/tests/RendererTest.php`). FFI tests gate on `requirePtySyscalls()`. `sugar-testing` provides `ProgramSimulator`, `ScriptedInput`, golden-file + tape-recorder helpers for TEA programs, and `LoopPin::pinStableClock()` (`sugar-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php` whenever a suite bounds waits with timers on `Loop::get()`: under ext-uv deadlines are computed against a clock refreshed once per loop iteration, so a timer armed after synchronous idle is already overdue, while `StreamSelectLoop` refreshes at arm time.
 
 `sugar-pty/tests/bootstrap.php` also calls `\SugarCraft\Pty\Tests\Support\HangWatchdog::install()`, AFTER `LoopPin::pinStableClock()` (which must be first to touch `Loop::get()`). The watchdog is a separate process (`sugar-pty/tests/Support/hang-watchdog.php`) that bounds each test and SIGKILLs the runner with a forensic dump on overrun — `PosixPump::pump()`/`MultiPump::run()` style loops carry no deadline, so a test built on them can only hang, never fail. `sugar-pty/tests/Support/SharedLoopResidue.php` throws on timers/streams left armed on the shared `Loop::get()`.
 
@@ -43,7 +43,7 @@ PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR),
 **Façade = alias smoke-test only.** A façade lib that re-exports a canonical class via `class_alias` (e.g. `sugar-widgets` → `SugarCraft\Forms\*`, `sugar-treelist`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`) must NOT copy the canonical lib's full test suite under its own namespace — that re-tests identical code and drifts. Ship ONE `AliasesTest`/`AliasResolutionTest` asserting each alias symbol resolves to its canonical FQN, plus tests only for genuinely lib-local behaviour the façade adds. (See #1275/#1312/#1314 which deleted ~4300 LOC of duplicated façade tests.)
 
 ```sh
-cd candy-core && composer install && vendor/bin/phpunit
+cd sugar-core && composer install && vendor/bin/phpunit
 ```
 
 ## VHS demos

@@ -1419,7 +1419,7 @@ final class StyleTest extends TestCase
      *
      * An UNDER-run (`render()` narrower than `Width` promised) wastes cells.
      * An OVER-run (`render()` WIDER than `Width` promised) is frame
-     * corruption: candy-core's diff renderer paints one line per terminal
+     * corruption: sugar-core's diff renderer paints one line per terminal
      * row, so a caller that budgeted with `Width` and laid out with `Style`
      * writes past the row. E73 was an over-run of up to 8 cells.
      *

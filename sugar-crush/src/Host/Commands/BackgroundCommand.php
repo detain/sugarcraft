@@ -114,7 +114,7 @@ final class BackgroundCommand implements HostCommand
      * spawn rather than running the session in the shared checkout.
      *
      * A failed spawn RESOLVES rather than rejects: a rejection would surface
-     * as candy-core's generic `ExceptionMsg` and lose the command context the
+     * as sugar-core's generic `ExceptionMsg` and lose the command context the
      * answer needs.
      *
      * @return \Closure(): PromiseInterface<BackgroundSessionSpawnedMsg>

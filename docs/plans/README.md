@@ -30,10 +30,10 @@ in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 
 | Plan | Upstream | Lib / location | Effort | Status |
 |---|---|---|---|---|
-| [x-windows](./x-windows.md) | `x/windows` | `candy-core` (Windows backend) | 4-5 d | drafted |
-| [x-exp-open](./x-exp-open.md) | `x/exp/open` | `candy-core/Util/Open.php` | 2-3 h | drafted |
-| [x-editor](./x-editor.md) | `x/editor` | `candy-core/Util/Editor.php` + `sugar-widgets/TextArea` | half day | drafted |
-| [x-ansi](./x-ansi.md) | `x/ansi` | `candy-core/Util/Ansi.php` (rolling) | rolling | drafted |
+| [x-windows](./x-windows.md) | `x/windows` | `sugar-core` (Windows backend) | 4-5 d | drafted |
+| [x-exp-open](./x-exp-open.md) | `x/exp/open` | `sugar-core/Util/Open.php` | 2-3 h | drafted |
+| [x-editor](./x-editor.md) | `x/editor` | `sugar-core/Util/Editor.php` + `sugar-widgets/TextArea` | half day | drafted |
+| [x-ansi](./x-ansi.md) | `x/ansi` | `sugar-core/Util/Ansi.php` (rolling) | rolling | drafted |
 | [x-mosaic](./x-mosaic.md) | `x/mosaic` + `blacktop/go-termimg` + `ratatui/ratatui-image` | new lib `sugar-image` | 5 d (v1) + 5 d (v1.5) | drafted |
 | [x-vt](./x-vt.md) | `x/vt` | new lib `sugar-vterm` | 1-2 w | drafted |
 | [x-vcr](./x-vcr.md) | `x/vcr` | new lib `candy-vcr` | 3-5 d | drafted |
@@ -45,9 +45,9 @@ in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 | Upstream | Reason |
 |---|---|
 | `x/conpty` | Linux/macOS-only port; ConPTY is for hosting child PTYs, not running TUIs. Reconsider only if a Windows-host SSH/multiplexer use case lands. |
-| `x/wcwidth` | Already absorbed in `candy-core/Util/Width.php`. |
-| `x/input` | Already absorbed in `candy-core/InputReader.php`. |
-| `x/term` | Already absorbed in `candy-core/Util/Tty.php` (POSIX side). Windows side covered by [x-windows](./x-windows.md). |
+| `x/wcwidth` | Already absorbed in `sugar-core/Util/Width.php`. |
+| `x/input` | Already absorbed in `sugar-core/InputReader.php`. |
+| `x/term` | Already absorbed in `sugar-core/Util/Tty.php` (POSIX side). Windows side covered by [x-windows](./x-windows.md). |
 | `ratatui/ratatui` | Architectural mismatch (immediate-mode vs SugarCraft's Elm architecture). Individual widget + layout ideas mined into [ratatui-widget-mining](./ratatui-widget-mining.md) instead. |
 | `blacktop/go-termimg` | Same domain as `x/mosaic` (already planned). Best ideas (dithering, font-size CSI, tmux passthrough, scaling modes, Kitty z-index) folded into `x-mosaic` v1.5. |
 | `ratatui/ratatui-image` | Same domain as `x/mosaic`. Best ideas (Picker pattern, two-tier API, async resize) folded into `x-mosaic` v1 + v1.5. |

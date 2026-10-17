@@ -301,7 +301,7 @@ sessions/<session-id>.key    # Cryptographic key
 
 #### Sample Entry
 ```
-[2026-08-20T00:15:33.001Z] npm update: sugarcraft/candy-core updated to 1.2.0
+[2026-08-20T00:15:33.001Z] npm update: sugarcraft/sugar-core updated to 1.2.0
 ```
 
 ---

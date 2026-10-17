@@ -7,7 +7,7 @@
 - **Namespace:** `SugarCraft\Forms` (re-export from `SugarCraft\Forms`)
 - **Status:** 🟢 v1 ready
 - **Upstream sources:** `charmbracelet/huh` (primary), `charmbracelet/bubbles` (widget layer)
-- **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-style`, `sugarcraft/sugar-widgets`
+- **Depends on:** `sugarcraft/sugar-core`, `sugarcraft/sugar-forms`, `sugarcraft/sugar-style`, `sugarcraft/sugar-widgets`
 - **PHP minimum:** `^8.3`
 
 ## Overview

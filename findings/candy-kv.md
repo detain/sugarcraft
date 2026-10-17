@@ -185,7 +185,7 @@ concern and return `'all|keys|values'` strings accordingly.
 
 **Location:** `src/Import/YamlImporter.php:150-159`
 
-`JsonImporter` was hardened to reject a non-array top level via candy-core `Json::decodeArray`
+`JsonImporter` was hardened to reject a non-array top level via sugar-core `Json::decodeArray`
 (commit `fe745d048`, pinned by `testJsonImporterRejectsNonArrayTopLevel`). The YAML path never got
 the equivalent guard: `Yaml::parse('42')` (or an empty file → `null`) returns a scalar, and the
 downstream `foreach ($data as …)` emits `Warning: foreach() argument must be of type array|object`

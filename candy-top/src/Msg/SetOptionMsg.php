@@ -10,7 +10,7 @@ use SugarCraft\Core\Msg;
  * Set one config option at runtime from an ASYNCHRONOUS producer — a Cmd
  * that only learns the value when it runs (a future sampler, a menu worker).
  *
- * A key handler must NOT use this: candy-core's Program dispatches every
+ * A key handler must NOT use this: sugar-core's Program dispatches every
  * key of one terminal read before any Cmd runs, so a write routed through a
  * Cmd lands a round-trip late and a second key from the same read acts on
  * the stale value. Key-driven writes (btop's immediate `Config::set` in

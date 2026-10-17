@@ -26,7 +26,7 @@ use SugarCraft\Core\Concerns\Mutable;
  * argument. A server that forgets its tasks never invalidates our history.
  *
  * Immutable + fluent per house law: every with*() returns a new instance via
- * the candy-core Mutable trait; the state machine guard lives in
+ * the sugar-core Mutable trait; the state machine guard lives in
  * withStatus() and throws rather than silently mis-ordering a transition.
  *
  * Honesty note (plan Q-3): no cost/billing fields ride the job — spend

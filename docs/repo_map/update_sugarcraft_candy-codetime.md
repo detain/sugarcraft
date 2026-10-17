@@ -375,7 +375,7 @@ foreach ($this->beats as $b) {
 1. **sugar-charts integration** — Use BarChart for weekly summaries, heatmap for calendar
    - Source: `candy-codetime` already uses Sparkline — expand to full chart suite
 
-2. **candy-core Tick subscription** — Subscribe to filesystem changes for live updates
+2. **sugar-core Tick subscription** — Subscribe to filesystem changes for live updates
    - Source: `docs/repo_map/pr_charmbracelet_bubbletea.md` — tick subscriptions
 
 3. **sugar-colorprofile color detection** — Respect terminal color profile for dashboard

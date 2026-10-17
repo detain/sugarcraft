@@ -9,7 +9,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Mirrors candy-core's WidthInvalidUtf8Test::malformed() shapes onto Toast's
+ * Mirrors sugar-core's WidthInvalidUtf8Test::malformed() shapes onto Toast's
  * nextCluster() seam — a thin delegate to the canonical
  * `Width::nextCluster()` since the fork body was deleted (@85466ebd2 promoted
  * the core method to public): with the core's invalid-UTF-8 guards (ICU

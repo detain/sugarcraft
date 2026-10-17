@@ -1,7 +1,7 @@
 # Step 15 — sugar-forms onto shared foundations
 
 **Branch:** `ai/sugar-forms-shared`
-**Depends on:** step-02 (sugar-cellbuffer), step-03 (sugar-constraints), step-04 (sugar-testing), step-07 (sugar-fuzzy), step-09 (candy-core ProgressReporter — optional)
+**Depends on:** step-02 (sugar-cellbuffer), step-03 (sugar-constraints), step-04 (sugar-testing), step-07 (sugar-fuzzy), step-09 (sugar-core ProgressReporter — optional)
 **Blocks:** step-23 (async consumers includes sugar-forms), step-24 (vim mode consolidation)
 
 ## Goal

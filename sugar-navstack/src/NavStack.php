@@ -198,7 +198,7 @@ final class NavStack
      * {@see Shell::pushDirectory} filesystem paths and {@see Url::parse}
      * URL-decoded segments — so a raw ESC (desyncs the frame-diff renderer)
      * or a newline (breaks the one-line-per-row model) can be injected. Full
-     * ANSI + C0/C1 strip via candy-core Sanitize (SSOT), then collapse the
+     * ANSI + C0/C1 strip via sugar-core Sanitize (SSOT), then collapse the
      * whitespace controls it deliberately preserves (\n \r \t) to spaces so
      * the single-line breadcrumb stays single-line.
      */

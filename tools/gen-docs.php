@@ -51,7 +51,7 @@ declare(strict_types=1);
  *   METADATA  (docs/_data/<slug>.json) — the SEO/identity fields that vary per page but have
  *             no other authoritative home: title, description, ogTitle, ogDescription, emoji,
  *             displayName, tagline, detailMeta (tag chips), phpVersion, and an optional
- *             prefixOverride for pages whose chrome legitimately diverges (candy-core).
+ *             prefixOverride for pages whose chrome legitimately diverges (sugar-core).
  *   BODY      (docs/_data/<slug>.body.html) — the hand-authored content fragment (lede →
  *             the Demos section close), stored verbatim so no content is ever lost.
  *
@@ -490,7 +490,7 @@ function extract_one(string $slug, string $html): array
     ];
 
     // Preserve chrome that legitimately diverges from the shared template
-    // (currently only candy-core, which carries a skip-link + ARIA nav +
+    // (currently only sugar-core, which carries a skip-link + ARIA nav +
     // twitter:image). Everything up to the first main <section> is compared
     // against the standard prefix; a real *content* mismatch is stored verbatim
     // so no accessibility / SEO markup is ever lost on regen. Whitespace-only

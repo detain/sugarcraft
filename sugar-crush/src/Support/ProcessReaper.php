@@ -31,7 +31,7 @@ namespace SugarCraft\Crush\Support;
  * gone; the budgets they documented are THIS class's constants now), alongside
  * E366's newer consumers. The stdio transport took {@see terminateAndClose()}
  * until phase-2a moved it into `sugarcraft/sugar-mcp-client`, where the teardown now
- * goes through candy-core's BoundedShutdown — the {@see \SugarCraft\Crush\MCP\StdioMcpServer}
+ * goes through sugar-core's BoundedShutdown — the {@see \SugarCraft\Crush\MCP\StdioMcpServer}
  * adapter contributes no ladder of its own. StreamingCommandBackend takes
  * {@see terminateAndAwaitExit()}, because its caller reaps the handle itself
  * to read the child's exit status.

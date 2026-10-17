@@ -22,7 +22,7 @@ From the first-pass analysis (`repo_map/charmbracelet_crush.md`), SugarCraft map
 | Crush Component | SugarCraft Lib | Status |
 |---|---|---|
 | `internal/shell` | `candy-scriptui` | Exists |
-| `internal/lsp` | `candy-core` (future) | Not implemented |
+| `internal/lsp` | `sugar-core` (future) | Not implemented |
 | `internal/agent/tools` | `sugar-widgets`, `sugar-forms` | Partial |
 | `internal/ui` | `sugar-markdown`, `sugar-charts` | Partial |
 | `internal/skills` | (none yet) | Not implemented |

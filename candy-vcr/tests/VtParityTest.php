@@ -437,7 +437,7 @@ final class VtParityTest extends TestCase
 
     public function testParityUnderlineColourIsConsumedByBothEngines(): void
     {
-        // candy-core EMITS `58;5;N` (Util/Color::toUnderline). Both SGR
+        // sugar-core EMITS `58;5;N` (Util/Color::toUnderline). Both SGR
         // consumers now carry a 58 arm (renderer CsiHandlerImpl, emulator
         // Handler\SgrHandler) that eats the whole colour specification
         // without touching the pen — the shared misparse this catalogue
@@ -470,7 +470,7 @@ final class VtParityTest extends TestCase
 
     public function testParityTruecolorAgreesOnBothPaths(): void
     {
-        // candy-core EMITS `38;2;R;G;B` / `48;2;R;G;B` at truecolor profiles
+        // sugar-core EMITS `38;2;R;G;B` / `48;2;R;G;B` at truecolor profiles
         // (Util/Color::toSgr). Both engines now STORE the exact value — the
         // emulator in its Sgr {@see Color}, the renderer in
         // {@see \SugarCraft\Vterm\Cell::$fgTruecolor}/$bgTruecolor — so the grids

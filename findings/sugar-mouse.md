@@ -219,14 +219,14 @@ Both compute `col - 1` as the last column of the previous content. This is not a
 
 ```json
 "repositories": [
-    {"type": "path", "url": "../candy-core", ...},
+    {"type": "path", "url": "../sugar-core", ...},
     {"type": "path", "url": "../sugar-async", ...},   // not in require
     {"type": "path", "url": "../sugar-ansi-parser", ...},    // not in require
     {"type": "path", "url": "../sugar-input", ...}   // not in require
 ]
 ```
 
-Only `candy-core` is in the `require` section. The other three path repositories (`sugar-async`, `sugar-ansi-parser`, `sugar-input`) are listed but not required.
+Only `sugar-core` is in the `require` section. The other three path repositories (`sugar-async`, `sugar-ansi-parser`, `sugar-input`) are listed but not required.
 
 **Recommendation:** Remove unused repository entries or add a comment explaining why they are present.
 
@@ -294,7 +294,7 @@ The CSI and OSC pass-through logic is specific to the scanner's column-tracking 
 
 ### 2. No known compatibility issues with other SugarCraft libs
 
-The library uses only `candy-core` (for `Width::string()`) and has no other external dependencies. It is a standalone library that other SugarCraft components can consume without conflict.
+The library uses only `sugar-core` (for `Width::string()`) and has no other external dependencies. It is a standalone library that other SugarCraft components can consume without conflict.
 
 ---
 

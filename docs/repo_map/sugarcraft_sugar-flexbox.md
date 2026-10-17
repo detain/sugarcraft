@@ -409,7 +409,7 @@ FlexBox and Table both use a **measure → compute → render** pipeline:
 ### 8.1 What sugar-flexbox Does Well
 
 1. **Faithful ratio-based layout**: The two-pass allocation (floor division + excess distribution) correctly handles integer rounding without floating-point errors
-2. **Lightweight**: No external dependencies beyond `sugarcraft/candy-core` and `sugarcraft/sugar-widgets`
+2. **Lightweight**: No external dependencies beyond `sugarcraft/sugar-core` and `sugarcraft/sugar-widgets`
 3. **SSOT composition**: Viewport/Scrollbar wrapping is a clean pattern for customization without duplication
 4. **Immutable API**: Fluent `with*()` setters return new instances
 

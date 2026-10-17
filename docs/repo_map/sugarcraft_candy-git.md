@@ -289,7 +289,7 @@ if ($this->collectingCommit) {
 
 - Simpler state: refresh on every keypress or explicit `R`
 
-- Built on SugarCraft/candy-core (PHP Elm-architecture port)
+- Built on SugarCraft/sugar-core (PHP Elm-architecture port)
 
 - ~25 files, ~3500 lines of PHP
 
@@ -463,7 +463,7 @@ candy-git is the most **complete application** in the SugarCraft monorepo:
 
 ```json
 {
-  "sugarcraft/candy-core": "dev-master",      // TUI framework (Model, Msg, KeyType, Program)
+  "sugarcraft/sugar-core": "dev-master",      // TUI framework (Model, Msg, KeyType, Program)
   "sugarcraft/sugar-style": "dev-master"    // Styling system (Style, Border, Layout, Color)
 }
 ```
@@ -506,7 +506,7 @@ candy-git is the most **complete application** in the SugarCraft monorepo:
 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — Primary upstream TUI framework
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-core.md` — TUI framework foundation
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-core.md` — TUI framework foundation
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-style.md` — Styling system
 

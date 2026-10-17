@@ -36,7 +36,7 @@ The scaffold is 5 files implementing a minimal counter:
 
 ```
 my-app/
-├── composer.json     # requires candy-core + sugar-style
+├── composer.json     # requires sugar-core + sugar-style
 ├── phpunit.xml      # bootstrap="vendor/autoload.php", colors, .phpunit.cache/
 ├── bin/start        # 3-line entry point: autoload → Program(new Counter()) → run()
 ├── src/Counter.php # 72-line demo Model (immutable, readonly int $n)
@@ -156,9 +156,9 @@ final class Counter implements Model {
 
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbletea.md` — "Issue #1654: Proposal: Testing Framework" and "Testing Infrastructure Gap" (Section 7.1)
 
-- **Implementation:** Add a `Simulator` class and snapshot testing utilities to candy-core, then update CounterTest to demonstrate them.
+- **Implementation:** Add a `Simulator` class and snapshot testing utilities to sugar-core, then update CounterTest to demonstrate them.
 
-- **Complexity:** High — requires designing testing abstractions in candy-core.
+- **Complexity:** High — requires designing testing abstractions in sugar-core.
 
 - **Impact:** Critical — testing is a known gap across the entire TUI ecosystem.
 
@@ -346,11 +346,11 @@ final class Counter implements Model {
 
 - **Tradeoffs:** Async queries allow graceful degradation but complicate the lifecycle.
 
-- **Applicability:** Must be handled in candy-core Program, not in scaffold. But scaffold should document this.
+- **Applicability:** Must be handled in sugar-core Program, not in scaffold. But scaffold should document this.
 
 **5. Renderer Architecture**
 
-- **Current:** Not implemented in scaffold (delegated to candy-core).
+- **Current:** Not implemented in scaffold (delegated to sugar-core).
 
 - **External (bubbletea v2):** Cursed Renderer with cell-based delta updates and synchronized output mode (ANSI 2026).
 
@@ -358,7 +358,7 @@ final class Counter implements Model {
 
 - **Tradeoffs:** Complex to implement. The scaffold doesn't need to show this — it's infrastructure.
 
-- **Applicability:** candy-core concern, not scaffold.
+- **Applicability:** sugar-core concern, not scaffold.
 
 ---
 
@@ -376,7 +376,7 @@ final class Counter implements Model {
 
 ### Medium-Term (v2.0)
 
-5. **Testing Infrastructure** — Design and implement `Program::withInput()` / `Program::withOutput()` and `Snapshot` testing utilities in candy-core, then update CounterTest to demonstrate them.
+5. **Testing Infrastructure** — Design and implement `Program::withInput()` / `Program::withOutput()` and `Snapshot` testing utilities in sugar-core, then update CounterTest to demonstrate them.
 
 6. **Add External I/O** — Add example using `Cmd::exec()` to run `git status` and display output, demonstrating async command pattern.
 
@@ -434,7 +434,7 @@ final class Counter implements Model {
 
 3. **Add Immutability Tests** — Explicit assertions that `update()` returns a new instance, not mutated `$this`.
 
-4. **Add Integration Test Skeleton** — Demonstrate testing the full program with captured I/O (requires candy-core `withInput()`/`withOutput()`).
+4. **Add Integration Test Skeleton** — Demonstrate testing the full program with captured I/O (requires sugar-core `withInput()`/`withOutput()`).
 
 5. **Document Test Patterns** — Add PHPDoc to CounterTest showing what each test category (behavior, snapshot, coercion) validates.
 
@@ -546,7 +546,7 @@ final class Counter implements Model {
 
 ### Major Upgrades (v2.0)
 
-11. **Design testing infrastructure** — `Program::withInput()`/`withOutput()`, `Snapshot`, `Simulator` in candy-core
+11. **Design testing infrastructure** — `Program::withInput()`/`withOutput()`, `Snapshot`, `Simulator` in sugar-core
 12. **Update scaffold to use testing infra** — Demonstrate deterministic model testing
 13. **Add web-based DevTools** — Inspector showing message flow and state
 14. **Add example variants** — Branch examples for different use cases
@@ -587,7 +587,7 @@ The **three most critical improvements** are:
 
 1. **Add a Spinner sub-component** to mirror the Go template's demonstration of `spinner.Model` as a field of the parent. This teaches the composition pattern essential for building larger apps.
 
-2. **Design testing infrastructure early** in candy-core (`Program::withInput()`/`withOutput()`, `Snapshot`, `Simulator`). The bubbletea community has requested testing tools for 6+ years without a first-class solution. This is SugarCraft's opportunity to differentiate.
+2. **Design testing infrastructure early** in sugar-core (`Program::withInput()`/`withOutput()`, `Snapshot`, `Simulator`). The bubbletea community has requested testing tools for 6+ years without a first-class solution. This is SugarCraft's opportunity to differentiate.
 
 3. **Add `init()` command and multi-screen navigation** to demonstrate the full TEA lifecycle and common app patterns beyond a single flat Model.
 

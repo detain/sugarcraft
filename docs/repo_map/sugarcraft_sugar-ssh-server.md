@@ -14,7 +14,7 @@
 
 - **Upstream:** [charmbracelet/wish](https://github.com/charmbracelet/wish) (MIT, Go, 5.2k stars)
 
-- **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/sugar-pty`, `react/event-loop`, `react/promise-timer`
+- **Dependencies:** `sugarcraft/sugar-core`, `sugarcraft/sugar-pty`, `react/event-loop`, `react/promise-timer`
 
 ## Description
 
@@ -565,7 +565,7 @@ Currently only `InProcessTransport` implements it. The interface enables `Spawn`
 
 ```
 sugar-ssh-server
-├── candy-core    # Core: SugarCraft\Core\I18n\T, event loop patterns
+├── sugar-core    # Core: SugarCraft\Core\I18n\T, event loop patterns
 └── sugar-pty     # PTY: PosixPump, PosixPtySystem, SignalForwarder, PumpOptions
 ```
 
@@ -577,7 +577,7 @@ SugarSshServer is a leaf-level library in the dependency graph. It is not depend
 
 | Library | Relationship |
 |---|---|
-| `candy-core` | Dependency — provides `Context`, i18n, exception types |
+| `sugar-core` | Dependency — provides `Context`, i18n, exception types |
 | `sugar-pty` | Dependency — PTY syscalls, pump, signal forwarding |
 | `sugar-widgets` | Potential consumer — BubbleTea middleware mounts sugar-widgets Programs over SSH |
 | `sugar-metrics` | Parallel — `SessionMetrics` middleware pattern mirrors promwish; both are SSH session middleware |

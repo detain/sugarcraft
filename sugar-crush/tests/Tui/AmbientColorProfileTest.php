@@ -14,7 +14,7 @@ use SugarCraft\Style\Style;
 /**
  * rv-devops-1 / rv-a11y-M1: the NO_COLOR / TERM=dumb / CLICOLOR_FORCE family
  * must apply to the WHOLE frame, not just PaneFrame's border glyphs. The
- * ladder itself lives in candy-core's ColorProfile::detect() (unit-pinned by
+ * ladder itself lives in sugar-core's ColorProfile::detect() (unit-pinned by
  * PaneFrameTest::testDetectionRoutesStandardCapabilityVariables); these tests
  * pin WHEN sugar-crush consults it and what the negotiated frame bytes look
  * like end-to-end through the real render path.
@@ -96,7 +96,7 @@ final class AmbientColorProfileTest extends TestCase
         self::assertSame(ColorProfile::Ascii, Renderer::negotiateColorProfile(['NO_COLOR' => '1', 'TERM' => 'xterm'], true));
         self::assertSame(ColorProfile::NoTty, Renderer::negotiateColorProfile(['TERM' => 'dumb'], true));
         self::assertSame(ColorProfile::TrueColor, Renderer::negotiateColorProfile(['CLICOLOR_FORCE' => '1', 'TERM' => 'xterm'], true));
-        // candy-core's ladder orders NO_COLOR ahead of the force vars; pin the
+        // sugar-core's ladder orders NO_COLOR ahead of the force vars; pin the
         // precedence as-is rather than relitigating it here.
         self::assertSame(ColorProfile::Ascii, Renderer::negotiateColorProfile(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1'], true));
         self::assertSame(ColorProfile::TrueColor, Renderer::negotiateColorProfile(['COLORTERM' => 'truecolor', 'TERM' => 'xterm'], true));

@@ -69,13 +69,13 @@ final class ProtectFilesHookTest extends TestCase
     {
         $hook = new ProtectFilesHook();
 
-        foreach (['composer.json', 'composer.lock', 'candy-core/composer.json'] as $path) {
+        foreach (['composer.json', 'composer.lock', 'sugar-core/composer.json'] as $path) {
             foreach (['Read', 'Edit', 'Write'] as $tool) {
                 $this->assertTrue($hook->execute($this->createContext($tool, $path))->isAllowed(), "$tool $path");
             }
         }
 
-        $this->assertTrue($hook->execute($this->createContext('Bash', 'grep -c . candy-core/composer.json'))->isAllowed());
+        $this->assertTrue($hook->execute($this->createContext('Bash', 'grep -c . sugar-core/composer.json'))->isAllowed());
         $this->assertTrue($hook->execute($this->createContext(
             'Bash',
             'for d in candy-*; do [ -f "$d/composer.json" ] || echo "$d NO-MANIFEST"; done',

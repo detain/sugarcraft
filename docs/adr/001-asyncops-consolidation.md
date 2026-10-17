@@ -56,7 +56,7 @@ Consolidating them would either:
 
 ## Alternatives Considered
 
-### 1. Extract shared `Deferred` pattern to `candy-core`
+### 1. Extract shared `Deferred` pattern to `sugar-core`
 - **Rejected:** The `Deferred` class from ReactPHP is already the shared primitive. Extracting a wrapper would add indirection without benefit.
 
 ### 2. Have candy-files use candy-async utilities internally <!-- @rename-keep historical provenance -->

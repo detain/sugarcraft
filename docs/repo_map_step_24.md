@@ -12,7 +12,7 @@ Reference: `docs/repo_map_update.md` §387.7.
 
 ## Files expected to be created
 
-- `sugar-forms/src/Vim/VimKeyHandler.php` — handler living in sugar-forms (since sugar-forms TextInput is the canonical implementation per reconnaissance). Alternative location candy-core: coder writes a recommendation to `docs/repo_map_updates.md` and proceeds with sugar-forms unless updates.md says otherwise.
+- `sugar-forms/src/Vim/VimKeyHandler.php` — handler living in sugar-forms (since sugar-forms TextInput is the canonical implementation per reconnaissance). Alternative location sugar-core: coder writes a recommendation to `docs/repo_map_updates.md` and proceeds with sugar-forms unless updates.md says otherwise.
 - `sugar-forms/src/Vim/VimState.php` — enum (Insert, Normal, Visual, VisualLine).
 - `sugar-forms/src/Vim/VimAction.php` — enum of mapped actions (CursorLeft, CursorRight, CursorWord, DeleteChar, DeleteLine, YankLine, Paste, etc.).
 
@@ -34,11 +34,11 @@ Reference: `docs/repo_map_update.md` §387.7.
 
 ## Coder brief
 
-1. **First step**: append to `docs/repo_map_updates.md` your recommendation for where `VimKeyHandler` lives (sugar-forms vs candy-core). Default sugar-forms (existing canonical impl). Wait for supervisor approval (it'll either accept by silence, or update updates.md with an override before re-spawning you).
+1. **First step**: append to `docs/repo_map_updates.md` your recommendation for where `VimKeyHandler` lives (sugar-forms vs sugar-core). Default sugar-forms (existing canonical impl). Wait for supervisor approval (it'll either accept by silence, or update updates.md with an override before re-spawning you).
 2. **Per-lib audit**: read each lib's vim handling code; build a union table of keybindings used. Some libs might have insert-mode-only; some might have visual mode. The handler must support the union; per-lib can opt out of advanced modes by passing a feature-flag.
 3. **Implement VimKeyHandler** with the union of keybindings.
 4. **Per lib**: replace internal vim branching with `VimKeyHandler::handle()` returning a `VimAction`; consume the VimAction (each lib handles the action because the lib owns its model state).
-5. **path-repo closure**: ensure each lib requires the sugar-forms (or candy-core) hosting VimKeyHandler.
+5. **path-repo closure**: ensure each lib requires the sugar-forms (or sugar-core) hosting VimKeyHandler.
 6. Run phpunit in all 4 libs + dependents.
 
 ## Tester brief

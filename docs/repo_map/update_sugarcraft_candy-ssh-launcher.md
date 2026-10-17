@@ -4,7 +4,7 @@
 
 ## Ecosystem Positioning
 
-candy-ssh-launcher sits at the intersection of TUI interaction and SSH connectivity — a focused, single-purpose tool that doesn't try to be a general-purpose SSH library. It consumes several SugarCraft foundation libraries (`candy-core` for RawMode/i18n, `sugar-style` for styling, `sugar-pty` for terminal control) but implements its own lightweight picker rather than pulling in the full `sugar-widgets` component library.
+candy-ssh-launcher sits at the intersection of TUI interaction and SSH connectivity — a focused, single-purpose tool that doesn't try to be a general-purpose SSH library. It consumes several SugarCraft foundation libraries (`sugar-core` for RawMode/i18n, `sugar-style` for styling, `sugar-pty` for terminal control) but implements its own lightweight picker rather than pulling in the full `sugar-widgets` component library.
 
 ## Biggest Opportunity Areas
 
@@ -433,7 +433,7 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 **Implementation:**
 ```php
 // candy-ssh-launcher composer.json would change from:
-// "require": { "sugarcraft/candy-core": "..." }
+// "require": { "sugarcraft/sugar-core": "..." }
 // to:
 // "require": { "sugarcraft/candy-sshconfig": "..." }
 ```

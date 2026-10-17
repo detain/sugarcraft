@@ -152,7 +152,7 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($farm . '/candy-core');
+        mkdir($farm . '/sugar-core');
         file_put_contents($farm . '/not-a-link.txt', 'a real file, not a link');
 
         try {
@@ -172,9 +172,9 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($dir . '/candy-core-real');
+        mkdir($dir . '/sugar-core-real');
         mkdir($farm . '/sugar-spring');
-        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
 
         try {
             self::assertTrue(
@@ -197,8 +197,8 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($dir . '/candy-core-real');
-        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+        mkdir($dir . '/sugar-core-real');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
 
         try {
             self::assertSame(
@@ -224,7 +224,7 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($farm . '/candy-core');
+        mkdir($farm . '/sugar-core');
 
         try {
             self::assertSame(
@@ -251,7 +251,7 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($farm . '/candy-core');
+        mkdir($farm . '/sugar-core');
 
         $prior = getenv('SUGARCRUSH_LIVE_SGLANG');
 
@@ -312,8 +312,8 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($dir . '/candy-core-real');
-        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+        mkdir($dir . '/sugar-core-real');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
 
         try {
             $roster = self::withLiveGateUnarmed(
@@ -351,7 +351,7 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($farm . '/candy-core');
+        mkdir($farm . '/sugar-core');
 
         try {
             $roster = self::withLiveGateUnarmed(
@@ -390,8 +390,8 @@ final class SuiteSkipRosterTest extends TestCase
         $dir  = $this->createFarmSandbox();
         $farm = $dir . '/sugarcraft';
         mkdir($farm);
-        mkdir($dir . '/candy-core-real');
-        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+        mkdir($dir . '/sugar-core-real');
+        symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
 
         try {
             $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');

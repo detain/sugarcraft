@@ -30,14 +30,14 @@ From `repo_map/treilik_bubbleboxer.md`, the following mappings were identified:
 
 | bubbleboxer | SugarCraft Equivalent | Notes |
 |-------------|----------------------|-------|
-| `Boxer` struct + `LayoutTree` | `candy-core` viewport/layout | Tree-based vs termbox-cell |
+| `Boxer` struct + `LayoutTree` | `sugar-core` viewport/layout | Tree-based vs termbox-cell |
 | `Node.VerticalStacked` | `sugar-markdown` table layout | Row/column orientation |
 | `CreateLeaf()` + `ModelMap` | `SugarCraft\Core\I18n\T` | Address/key lookup indirection |
 | `SizeFunc` | `sugar-spring` layout weights | Flex-weight/grid-template sizing |
 | `EditLeaf()` safe edit | Immutable `with*()` builders | Functional edit vs copy-on-write |
 | `View()` rendering | `sugar-widgets` view pipeline | String output for terminal |
 | `renderHorizontal/Vertical` | `sugar-markdown` table rendering | Separator-based cell rendering |
-| `UpdateSize()` propagation | `candy-core` resize handling | Size constraint hierarchy |
+| `UpdateSize()` propagation | `sugar-core` resize handling | Size constraint hierarchy |
 | `tea.Model` interface | SugarCraft `Model` contract | Charmbracelet TEA pattern |
 
 ---
@@ -685,7 +685,7 @@ $layout = $rootLayout->withChildren(
 
 **Effort**: Low — documentation only
 **Impact**: High — reduces issue #7 class of problems
-**Action**: Add comprehensive resize examples to `candy-core` or `sugar-widgets` documentation
+**Action**: Add comprehensive resize examples to `sugar-core` or `sugar-widgets` documentation
 
 ---
 

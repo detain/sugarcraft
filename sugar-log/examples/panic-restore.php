@@ -13,9 +13,9 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Core\Util\Tty;
 
-// Check if Tty is available (it comes from candy-core)
+// Check if Tty is available (it comes from sugar-core)
 if (!class_exists(Tty::class)) {
-    echo "Tty class not available (candy-core dependency missing)\n";
+    echo "Tty class not available (sugar-core dependency missing)\n";
     exit(1);
 }
 

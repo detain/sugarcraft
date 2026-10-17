@@ -67,7 +67,7 @@ src/
 
 | Repo | Relevance | Major applicable concepts | Priority |
 |------|-----------|--------------------------|----------|
-| `charmbracelet/bubbletea` | High | TEA pattern (Model/Update/View), Elm architecture in PHP via candy-core | P0 |
+| `charmbracelet/bubbletea` | High | TEA pattern (Model/Update/View), Elm architecture in PHP via sugar-core | P0 |
 | `charmbracelet/lipgloss` → sugar-style | High | Declarative styling, color system, border rendering | P0 |
 | `charmbracelet/harmonica` → sugar-spring | High | Spring physics for ghost-piece animation, line-clear particles, camera shake | P1 |
 | `ratatui/ratatui` | Medium | Widget trait pattern, immediate-mode rendering, buffer diffing | P1 |
@@ -75,7 +75,7 @@ src/
 | `charmbracelet/vhs` | Medium | Demo recording infrastructure (.tape format) | P2 |
 | `sugarcraft/sugar-spring` | High | Spring physics, easing curves, WCAG REDUCE_MOTION | P0 |
 | `sugarcraft/sugar-style` | High | Styling foundation for board rendering, borders, colors | P0 |
-| `sugarcraft/candy-core` | High | TEA runtime, View rendering, input handling | P0 |
+| `sugarcraft/sugar-core` | High | TEA runtime, View rendering, input handling | P0 |
 
 **Source:** `docs/repo_map/charmbracelet_bubbletea.md`, `docs/repo_map/sugarcraft_sugar-spring.md`, `docs/repo_map/sugarcraft_sugar-style.md`, `docs/repo_map/charmbracelet_lipgloss.md`, `docs/repo_map/charmbracelet_vhs.md`
 
@@ -259,7 +259,7 @@ src/
 
 **Improvement:** Consider a more granular state — `Points`, `Level`, `Lines` as separate readonly value objects combined via `Score::fromPointsAndLines()`.
 
-**Reference:** Pattern from `candy-core` immutable value objects.
+**Reference:** Pattern from `sugar-core` immutable value objects.
 
 ## 2. Weak Subscriber Pattern for Game Events
 
@@ -571,7 +571,7 @@ candy-tetris is a **mature, well-architected** library that has already surpasse
 
 **Noted lessons from ecosystem:**
 
-- The Elm Architecture (bubbletea → candy-core) is the correct model — immutable state + pure update functions + declarative views work equally well in PHP
+- The Elm Architecture (bubbletea → sugar-core) is the correct model — immutable state + pure update functions + declarative views work equally well in PHP
 - sugar-spring's physics-first approach (no rendering dependency) is the right split — rendering should remain consumer's responsibility
 - DAS/ARR keyboard timing is essential for competitive play; native terminal key repeat (Kitty protocol) is a future optimization
 - The 7-bag randomizer with injectable RNG is a best practice other games should adopt

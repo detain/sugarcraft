@@ -18,7 +18,7 @@
 **Create:**
 
 - `sugar-treelist/src/FuzzyMatch.php` — share impl with sugar-forms
-  fuzzy (step 08.02) where possible; consider lifting to candy-core
+  fuzzy (step 08.02) where possible; consider lifting to sugar-core
   if both consume it.
 - `sugar-treelist/src/FilterState.php` (enum).
 

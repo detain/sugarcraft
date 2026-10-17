@@ -20,7 +20,7 @@ final class BufferHelper
 {
     /**
      * Compute the display width of a single grapheme cluster in terminal
-     * cells. Delegates to the shared candy-core width table
+     * cells. Delegates to the shared sugar-core width table
      * ({@see Width::of()}) so East-Asian, emoji (including plane-1), and
      * combining marks follow the same canon as every other SugarCraft
      * renderer — the old private table omitted plane-1 emoji despite its

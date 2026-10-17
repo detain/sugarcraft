@@ -15,7 +15,7 @@ use SugarCraft\Crush\Chat;
  *
  * readline moves by word with Alt+B/Alt+F, and terminals that encode Alt as a
  * bare ESC prefix send those as the two-byte chords `\x1bb` and `\x1bf`, which
- * candy-core's decoder answers with KeyMsg(Char 'b'|'f', alt). Until E2 those
+ * sugar-core's decoder answers with KeyMsg(Char 'b'|'f', alt). Until E2 those
  * messages fell through Chat's delegation and TYPED a stray letter; they now
  * route to the same offset helpers the Alt/Ctrl arrows use — one boundary
  * rule, two byte spellings.

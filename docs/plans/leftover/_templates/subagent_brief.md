@@ -114,7 +114,7 @@ green on master; keep it green.
 
 Do not `ftruncate; rewind;` between writes to a `php://memory` stream.
 Slice deltas with `ftell` / `fseek` / `stream_get_contents`. Canonical
-example: `candy-core/tests/RendererTest.php`.
+example: `sugar-core/tests/RendererTest.php`.
 
 ## PHPUnit kill pattern (saved memory)
 

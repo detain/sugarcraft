@@ -46,7 +46,7 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 - pr_charmbracelet_freeze.md 64 hits INSPECTED: all "Sugarcraft Port"/"Implications for candy-freeze" mapping lines <!-- @rename-keep --> = living port-analysis, mechanical correct (upstream charmbracelet/freeze bare-word URLs untouched). php74_branch/plan_crush_media/leftover steps = live path tables, mechanical.
 
 ## R2 remote — LANDED
-- rename-remote.sh run 1: GitHub rename SUCCEEDED, died on topics HTTP 422 (repo at 20-cap incl stale `candycore` + noise showoff/xterm/drop-shadow — B5/B6 family).
+- rename-remote.sh run 1: GitHub rename SUCCEEDED, died on topics HTTP 422 (repo at 20-cap incl stale `candycore` + noise showoff/xterm/drop-shadow — B5/B6 family). <!-- @rename-keep historical provenance -->
 - Run 2 (before trim) FALSELY refused "candy-codeshot already exists and is not candy-freeze" <!-- @rename-keep --> — transient old-name redirect resolution race post-rename; run 3 after trimming 4 topics + re-run = idempotent convergence ("rename skipped, re-syncing metadata"), verified record name=candy-codeshot, description kept "port of charmbracelet/freeze." per entry mandate, old URL 301s. Topics=20 exact.
 
 ## Log
@@ -74,7 +74,7 @@ Concurrent lane (b9/b10/b12 run in parallel worktrees; batch E hazard note: cand
 - residue --old=candy-freeze: 0 findings, rc0 (∧ before staging). <!-- @rename-keep -->
 - candy-codeshot suite: OK 350T/752A rc0 — baseline shape EXACT.
 - consumers (comment-only edits, no composer deps): candy-ansi OK 360T/901A EXACT; candy-ansi-inspect OK 278T/1412A EXACT. <!-- @rename-keep historical provenance -->
-- tools/tests OK 426T/1484A EXACT (via candy-core vendor after its relink; earlier fail = my own bash `&` grouping swallowed the cd — harness lesson: `cd X; ( wd ) &` NOT `cd X && ( wd ) &`).
+- tools/tests OK 426T/1484A EXACT (via candy-core vendor after its relink; earlier fail = my own bash `&` grouping swallowed the cd — harness lesson: `cd X; ( wd ) &` NOT `cd X && ( wd ) &`). <!-- @rename-keep historical provenance -->
 - child-lifetimes rc0. Branch diff 166 files (+969/−907); generic-freeze audit line-by-line: all +/- freeze↔codeshot pairs legit.
 
 ## R9 fire (weld 2026-10-16)

@@ -621,7 +621,7 @@ final class DatePicker
 
     /**
      * Map an SGR colour index (0-7, bright variant when {@see $bright}) to a
-     * packed 24-bit RGB int. The triples come from candy-core's canonical
+     * packed 24-bit RGB int. The triples come from sugar-core's canonical
      * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
      * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
      * {@see Color::ANSI16_RGB} so this decode can never fork its own blues

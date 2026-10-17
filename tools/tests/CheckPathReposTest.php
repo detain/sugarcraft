@@ -19,8 +19,8 @@ declare(strict_types=1);
  *
  * HOW TO RUN IT:
  *
- *     candy-core/vendor/bin/phpunit --no-configuration \
- *         --bootstrap candy-core/vendor/autoload.php tools/tests/
+ *     sugar-core/vendor/bin/phpunit --no-configuration \
+ *         --bootstrap sugar-core/vendor/autoload.php tools/tests/
  *     phpunit --no-configuration --colors=never tools/tests/   # a PHAR, as CI does
  *
  * ONLY THE FIRST HAS BEEN EXERCISED HERE, and an earlier draft of this line

@@ -419,7 +419,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 
 3. **sugar-markdown (Glamour) integration** — Markdown/code syntax highlighting not yet connected to sugar-style rendering pipeline.
 
-4. **candy-core `Width` utility sharing** — Both sugar-style and sugar-widgets import from `SugarCraft\Core\Util\Width`. Ensure API consistency.
+4. **sugar-core `Width` utility sharing** — Both sugar-style and sugar-widgets import from `SugarCraft\Core\Util\Width`. Ensure API consistency.
 
 5. **sugar-charts heatmap using `Blend2D`** — `Color::blend2D()` would enable heatmap cell coloring in charts.
 

@@ -13,7 +13,7 @@ use SugarCraft\Table\Table;
 /**
  * Tripwire pinning sugar-table's SGR→RGB decode (Table::ansiColorToRgb(),
  * reached through Table::parseAnsiToStyle() for codes 30-37/40-47/90-97/100-107)
- * to candy-core's canonical xterm ANSI-16 table.
+ * to sugar-core's canonical xterm ANSI-16 table.
  *
  * Historically parseAnsiToStyle() carried per-case 256-cube literals and
  * color256ToRgb() duplicated that exact table for the 38;5;n (n<16) path,
@@ -66,7 +66,7 @@ final class Ansi16TableParityTest extends TestCase
             self::assertSame(
                 [$r, $g, $b],
                 [($packed >> 16) & 0xff, ($packed >> 8) & 0xff, $packed & 0xff],
-                "slot {$slot} diverged from candy-core Color::ANSI16_RGB",
+                "slot {$slot} diverged from sugar-core Color::ANSI16_RGB",
             );
         }
     }

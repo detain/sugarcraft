@@ -733,13 +733,13 @@ public function withUnderline(bool $on = true): self
 
 ## Phase 8: Dependency & Compatibility [PENDING]
 
-### 8.1 Pin `sugarcraft/candy-core` to stable version [PENDING]
+### 8.1 Pin `sugarcraft/sugar-core` to stable version [PENDING]
 
 **File:** `composer.json:31`
 
 **What:**
 ```json
-"sugarcraft/candy-core": "dev-master"
+"sugarcraft/sugar-core": "dev-master"
 ```
 Using `dev-master` for a required dependency is unstable.
 
@@ -747,12 +747,12 @@ Using `dev-master` for a required dependency is unstable.
 
 **Severity:** Medium
 
-**Fix:** When `candy-core` has a stable release, update to `^1.0` or similar. Until then, document the risk.
+**Fix:** When `sugar-core` has a stable release, update to `^1.0` or similar. Until then, document the risk.
 
 **Investigation Notes:**
 
 - Source: `composer.json:31`
-- `candy-core` is a dev dependency (used for `sugar-testing` in test builds)
+- `sugar-core` is a dev dependency (used for `sugar-testing` in test builds)
 - Actually looking at the output, it's in `require-dev`, not `require` — still should be pinned
 
 ---
@@ -793,7 +793,7 @@ Using `dev-master` for a required dependency is unstable.
 | 16 | Document Region::contains() (7.3) | 7 | PENDING |
 | 17 | Document Position negative coords (7.4) | 7 | PENDING |
 | 18 | Add Style toggle builders (7.5) | 7 | PENDING |
-| 19 | Pin candy-core dependency (8.1) | 8 | PENDING |
+| 19 | Pin sugar-core dependency (8.1) | 8 | PENDING |
 | 20 | Note PHP 8.4 hooks (8.2) | 8 | PENDING |
 | — | Fix RepeatRunOp wide-char (1.1) | 1 | PENDING (test-only path) |
 

@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  * CRIT regression (audit finding 1) at the scheduling level.
  *
  * The bug: every hardDrop/hold dispatched a FRESH gravity tick through
- * scheduleGravity() while the previous tick was still queued, and candy-core
+ * scheduleGravity() while the previous tick was still queued, and sugar-core
  * has no cancel — so each action permanently added +1 concurrent timer. Five
  * rapid hard drops made the game free-fall. The fix is tetris-side: a
  * gravityPending flag makes the chain a singleton; re-arms are skipped while

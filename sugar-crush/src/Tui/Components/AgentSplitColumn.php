@@ -33,7 +33,7 @@ use SugarCraft\Style\Style;
  * {@see \SugarCraft\Crush\Tui\SplitLayout}, which pads the FIRST pane to its
  * budget and then appends the divider and this pane's line verbatim, so one
  * over-wide row here is one over-wide row in the finished frame — and
- * candy-core's renderer paints one line per terminal row with an absolute
+ * sugar-core's renderer paints one line per terminal row with an absolute
  * `cursorTo()`, so the terminal wraps it and every row below lands on the
  * wrong line (`docs/ARCHITECTURE.md`, render invariants).
  *
@@ -53,7 +53,7 @@ use SugarCraft\Style\Style;
  * {@see AgentDashboardPane}'s does. So the same two-part boundary is applied
  * here: {@see PaneLabel::of()} for escapes and line breaks, plus a
  * Private-Use sweep — the block hosts sugar-mouse's zone sentinels
- * (U+E000/U+E001) and candy-core's image markers (U+E002 upward), so an agent
+ * (U+E000/U+E001) and sugar-core's image markers (U+E002 upward), so an agent
  * that echoes one would corrupt the frame's graphics/zone bookkeeping rather
  * than merely look wrong.
  */

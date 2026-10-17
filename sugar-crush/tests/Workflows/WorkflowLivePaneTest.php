@@ -38,7 +38,7 @@ use SugarCraft\Crush\Workflows\WorkflowStatus;
  *
  * The split-pane compositor has been wired since Phase 8 item 4 and a user had
  * never seen it. The reason on record was that `Chat::workflowRun()` called
- * `WorkflowEngine::run()` synchronously inside `update()`, so candy-core's
+ * `WorkflowEngine::run()` synchronously inside `update()`, so sugar-core's
  * `Program` could not tick a repaint until the run was over.
  *
  * That was true and it was not sufficient. Measured, a build that fixed ONLY
@@ -505,7 +505,7 @@ final class WorkflowLivePaneTest extends TestCase
      * the alternative is not "an ugly stack trace": a Cmd that neither
      * resolves nor rejects leaves `inFlight` latched forever, with no message
      * and no way back. Rejecting instead would be no better, because
-     * candy-core dispatches `ExceptionMsg` for that and this model does not
+     * sugar-core dispatches `ExceptionMsg` for that and this model does not
      * handle it.
      */
     public function testAThrowingFiberSettlesWithAnErrorNoticeRatherThanLatchingTheTurnForever(): void

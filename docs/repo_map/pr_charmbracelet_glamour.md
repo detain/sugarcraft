@@ -31,7 +31,7 @@ From the first-stage analysis, glamour maps to:
 | `sugar-widgets` | ANSI escape sequences, word wrap | Direct port target — glamour's `ansi` package is the canonical reference for TUI rendering architecture |
 | `sugar-charts` | Table rendering | Reference — glamour's `TableElement` using Lip Gloss table.Builder is production-quality |
 | `sugar-markdown` | Styles/theme system | Reference — glamour's `StyleConfig` + `cascadeStyle()` is the canonical JSON stylesheet-in-JSON pattern |
-| `candy-core` | BaseElement, Element, Renderer pattern | Direct port — Entering/Exiting/Renderer/Finisher tuple pattern is portable |
+| `sugar-core` | BaseElement, Element, Renderer pattern | Direct port — Entering/Exiting/Renderer/Finisher tuple pattern is portable |
 | `sugar-forms` | Word wrapping, ANSI output | Direct port — `MarginWriter`/`lipgloss.Wrap` are directly reusable |
 | `candy-scriptui` | Link rendering (hyperlinks) | Reference — `LinkElement` with OSC 8 hyperlink generation via FNV hash for URL IDs |
 

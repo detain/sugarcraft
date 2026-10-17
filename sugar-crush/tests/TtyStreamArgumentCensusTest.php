@@ -90,7 +90,7 @@ use PHPUnit\Framework\TestCase;
  * WHAT THIS GUARD SAID: "Exactly one shape in this codebase holds it", and
  * the scanner accepted the short name `Tty` alone. WHAT IS TRUE: `Tty` is a
  * FAÇADE over the backend, and the backend has the same constructor. Reading
- * candy-core rather than inferring from the façade,
+ * sugar-core rather than inferring from the façade,
  * `SugarCraft\Core\Util\Tty\PosixBackend::__construct()` is
  * `$this->stream = $stream ?? STDIN;` — the identical resolution — and it is
  * the class that actually owns both `stream_set_blocking()` calls. Anyone who
@@ -114,7 +114,7 @@ use PHPUnit\Framework\TestCase;
  * assumed because its constructor looks identical (`$this->stream = $stream ??
  * STDIN;`, an injected `Kernel32Interface` in the second slot). It contains no
  * `stream_set_blocking` call at all — verified by symbol over
- * `candy-core/src/Util/Tty/WindowsBackend.php`, whose `enableRawMode()` and
+ * `sugar-core/src/Util/Tty/WindowsBackend.php`, whose `enableRawMode()` and
  * `restore()` go through the console-mode API instead — so it cannot erase the
  * flag this guard exists to protect. It is named here so the next reader does
  * not "complete" the roster by symmetry. (Linux box, PHP 8.3.6: that backend
@@ -152,7 +152,7 @@ use PHPUnit\Framework\TestCase;
  *
  * WHAT THIS SAID: the headline, unqualified — nothing in this tree builds the
  * hazardous shape. WHAT IS TRUE: it was true of the shapes this scanner can
- * DECIDE, and `candy-core/src/Program.php` resolves the stream ONE FRAME
+ * DECIDE, and `sugar-core/src/Program.php` resolves the stream ONE FRAME
  * EARLIER. Verified by symbol rather than inferred:
  *
  *   $this->input = $options->input ?? STDIN;
@@ -164,7 +164,7 @@ use PHPUnit\Framework\TestCase;
  * hazard, reached through a second façade. At that site the census reads
  * `new Tty(expression, …)` and waves it through, correctly, because by then
  * the `?? STDIN` has already happened. And `ProgramOptions::$termios` is
- * documented in candy-core as a TEST SEAM ("Tests inject a stub Termios"),
+ * documented in sugar-core as a TEST SEAM ("Tests inject a stub Termios"),
  * which is the shape a test is likeliest to reach for.
  *
  * WHY THIS EARNED A THIRD ARM rather than a narrower headline: the join is
@@ -310,8 +310,8 @@ final class TtyStreamArgumentCensusTest extends TestCase
      * reaches X", verified over `sugar-crush/`, and both times the thing that
      * reached X was in a sibling library — `SugarCraft\Image\Detect` reading
      * the `\STDIN` constant unguarded, which cost a full suite run and 107
-     * errors. The shape this file scans for is a candy-core shape, so the
-     * library that is most likely to grow the next instance of it is candy-core
+     * errors. The shape this file scans for is a sugar-core shape, so the
+     * library that is most likely to grow the next instance of it is sugar-core
      * and not this package.
      *
      * MEASURED at the commit that added this arm, PHP 8.3.6: the scan sees
@@ -321,7 +321,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
      * WHERE THIS ARM'S ALPHABET ACCEPTANCE ACTUALLY LIVES, because it is not
      * here and a reader should not have to find that out by mutating. This
      * arm's `$seen > 0` control cannot catch a NARROWING of
-     * {@see HAZARD_CLASSES}: candy-core builds a `Tty` as well as two
+     * {@see HAZARD_CLASSES}: sugar-core builds a `Tty` as well as two
      * `PosixBackend`s, so with the alphabet cut to `['Tty']` the walk still
      * sees a construction and this arm stays green. MEASURED both ways, PHP
      * 8.3.6, at the commit that wrote this paragraph: that narrowing filtered
@@ -364,7 +364,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
             0,
             $seen,
             'the census found no Tty/PosixBackend construction anywhere under ' . self::LIB_SCOPE
-                . ' - the walk is dead, not the libraries clean. candy-core builds both.',
+                . ' - the walk is dead, not the libraries clean. sugar-core builds both.',
         );
 
         self::assertSame(
@@ -432,12 +432,12 @@ final class TtyStreamArgumentCensusTest extends TestCase
 
         // The dead-scanner control (rule 15/E228): an empty offender list is
         // also what a walk that found no ProgramOptions at all returns, and
-        // candy-core alone builds two.
+        // sugar-core alone builds two.
         self::assertGreaterThan(
             0,
             $seen,
             'the census found no ProgramOptions construction in ' . implode(', ', self::SCOPE) . ' or under '
-                . self::LIB_SCOPE . ' - the scanner is dead, not the tree clean. candy-core builds two.',
+                . self::LIB_SCOPE . ' - the scanner is dead, not the tree clean. sugar-core builds two.',
         );
 
         self::assertSame(
@@ -529,7 +529,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
             '$b = new \SugarCraft\Core\Util\Tty\PosixBackend(null, $termios);',
             [['name' => '\SugarCraft\Core\Util\Tty\PosixBackend', 'firstArg' => 'null', 'extraArgs' => true]],
         ];
-        yield 'PosixBackend via the Tty sub-namespace, as candy-core spells it' => [
+        yield 'PosixBackend via the Tty sub-namespace, as sugar-core spells it' => [
             '$b = new Tty\PosixBackend($stream, $termios);',
             [['name' => 'Tty\PosixBackend', 'firstArg' => 'expression', 'extraArgs' => true]],
         ];

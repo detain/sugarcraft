@@ -1,0 +1,916 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Core\Tests\Util;
+
+use SugarCraft\Core\Util\Width;
+use PHPUnit\Framework\TestCase;
+
+final class WidthTest extends TestCase
+{
+    public function testAsciiWidth(): void
+    {
+        $this->assertSame(11, Width::string('hello world'));
+    }
+
+    public function testStripsAnsiBeforeMeasuring(): void
+    {
+        $this->assertSame(5, Width::string("\x1b[31mhello\x1b[0m"));
+    }
+
+    public function testEmpty(): void
+    {
+        $this->assertSame(0, Width::string(''));
+    }
+
+    public function testCjkWideEachCounts2(): void
+    {
+        $this->assertSame(4, Width::string('日本'));
+    }
+
+    public function testEmojiCounts2(): void
+    {
+        $this->assertSame(2, Width::string('🎉'));
+    }
+
+    /**
+     * Emoji_Presentation=Yes codepoints (Unicode 16.0 emoji-data.txt pin)
+     * score 2 cells.
+     *
+     * The user-reported frame corruption: a live thinking row padded to the
+     * pane width counted its ✅ (U+2705) as one cell where every modern
+     * terminal lays out two, the row wrapped, and every border on and below
+     * it slid a column left. `isWide()`'s classic East-Asian ranges miss the
+     * whole default-emoji class because these codepoints carry
+     * East_Asian_Width=Neutral — width comes from emoji-data, not EAW — so
+     * `isEmojiPresentation()` carries the union and this test carries its
+     * edges: both endpoints of every range count 2, the codepoint just
+     * outside each boundary still counts 1 (the table may not quietly widen),
+     * and the double-oracle law from the sugar-crush L5 fix holds — where
+     * PHP's `mb_strwidth` agrees it corroborates, and the roster rows it
+     * lags on are the block-shaped ranges' unassigned tails, never a
+     * disagreement against the terminal truth this class exists to model.
+     *
+     * @return array{string, int}[] glyph => expected cells
+     */
+    public static function emojiPresentationEdges(): array
+    {
+        return [
+            // in-range endpoints (2 cells)
+            ["\u{231A}", 2], ["\u{231B}", 2],           // watch/hourglass
+            ["\u{23E9}", 2], ["\u{23EC}", 2],           // media arrows
+            ["\u{23F0}", 2], ["\u{23F3}", 2],           // alarm/sand timer
+            ["\u{25FD}", 2], ["\u{25FE}", 2],           // small squares
+            ["\u{2614}", 2], ["\u{2615}", 2],           // umbrella/hot beverage
+            ["\u{2648}", 2], ["\u{2653}", 2],           // zodiac block
+            ["\u{267F}", 2], ["\u{2693}", 2],           // wheelchair/anchor
+            ["\u{26A1}", 2], ["\u{26AA}", 2],           // high voltage, black/white circle
+            ["\u{26AB}", 2], ["\u{26BD}", 2],
+            ["\u{26BE}", 2], ["\u{26C4}", 2],
+            ["\u{26C5}", 2], ["\u{26CE}", 2],
+            ["\u{26D4}", 2], ["\u{26EA}", 2],
+            ["\u{26F2}", 2], ["\u{26F3}", 2],
+            ["\u{26F5}", 2], ["\u{26FA}", 2],
+            ["\u{26FD}", 2],
+            ["\u{2705}", 2],                            // ✅ THE incident glyph
+            ["\u{270A}", 2], ["\u{270B}", 2],           // raised fist/hand
+            ["\u{2728}", 2],                            // ✨
+            ["\u{274C}", 2], ["\u{274E}", 2],           // ❌ cross marks
+            ["\u{2753}", 2], ["\u{2755}", 2],           // question/exclamation ornaments
+            ["\u{2757}", 2],                            // ❗
+            ["\u{2795}", 2], ["\u{2797}", 2],           // heavy math signs
+            ["\u{27B0}", 2], ["\u{27BF}", 2],           // curly loops
+            ["\u{2B1B}", 2], ["\u{2B1C}", 2],           // large squares
+            ["\u{2B50}", 2], ["\u{2B55}", 2],           // ⭐ circle
+            ["\u{1F004}", 2], ["\u{1F0CF}", 2],         // mahjong/red joker
+            ["\u{1F18E}", 2],                           // AB button
+            ["\u{1F191}", 2], ["\u{1F19A}", 2],         // squared CL..VS
+            ["\u{1F201}", 2], ["\u{1F202}", 2],         // Japanese service buttons
+            ["\u{1F21A}", 2], ["\u{1F22F}", 2],         // ideographic month/ideograph
+            ["\u{1F7E0}", 2], ["\u{1F7EB}", 2],         // 🟠..🟫 coloured circles/squares
+            ["\u{1F7F0}", 2],                           // grey heart (Unicode 16.0)
+            // Unicode 16.0 additions — both endpoints of every (merged) range
+            ["\u{1FA70}", 2], ["\u{1FA74}", 2],         // bandage..pre-16 tail
+            ["\u{1FA75}", 2], ["\u{1FA77}", 2],         // health seam (U16)
+            ["\u{1FA78}", 2], ["\u{1FA7C}", 2],         // occupied core..end
+            ["\u{1FA80}", 2], ["\u{1FA86}", 2],         // musical start..pre-16 tail
+            ["\u{1FA87}", 2], ["\u{1FA89}", 2],         // musical seam (U16)
+            ["\u{1FA8F}", 2], ["\u{1FA90}", 2],         // heart-hands join (U16)
+            ["\u{1FAAC}", 2], ["\u{1FAAD}", 2],         // hairy-face seam (U16)
+            ["\u{1FAAF}", 2], ["\u{1FAB0}", 2],         // ..into the eggs (U16)
+            ["\u{1FABA}", 2], ["\u{1FABB}", 2],         // nest seam (U16)
+            ["\u{1FABF}", 2], ["\u{1FAC0}", 2],         // ..into anatomical (U16)
+            ["\u{1FAC5}", 2], ["\u{1FAC6}", 2],         // fingerprint (U16)
+            ["\u{1FACE}", 2], ["\u{1FACF}", 2],         // mammoth pair (U16)
+            ["\u{1FAD0}", 2], ["\u{1FAD9}", 2],         // tools block
+            ["\u{1FADA}", 2], ["\u{1FADC}", 2],         // plunger seam (U16)
+            ["\u{1FADF}", 2], ["\u{1FAE0}", 2],         // bubble join (U16)
+            ["\u{1FAE7}", 2], ["\u{1FAE8}", 2],         // shaking-face seam (U16)
+            ["\u{1FAE9}", 2],                           // ..handshake end (U16)
+            ["\u{1FAF0}", 2], ["\u{1FAF6}", 2],         // heart-hands block
+            ["\u{1FAF7}", 2], ["\u{1FAF8}", 2],         // extended-A tail (U16)
+            // boundary neighbours that must stay 1 cell (table may not creep)
+            ["\u{2319}", 1], ["\u{231C}", 1],           // ⌙ ⌜ around 231A/231B
+            ["\u{23E8}", 1], ["\u{23ED}", 1],
+            ["\u{25FC}", 1], ["\u{25FF}", 1],
+            ["\u{2613}", 1], ["\u{2616}", 1],
+            ["\u{2647}", 1], ["\u{2654}", 1],
+            ["\u{2704}", 1], ["\u{2706}", 1],           // neighbours of ✅
+            ["\u{2709}", 1], ["\u{270C}", 1],
+            ["\u{2B51}", 1], ["\u{2B54}", 1],
+            ["\u{1F18D}", 1], ["\u{1F190}", 1],
+            ["\u{1F203}", 1],                           // gap between the 1F200s sub-ranges
+            ["\u{1F7EF}", 1], ["\u{1F7F1}", 1],         // either side of the grey heart
+            ["\u{1FA8A}", 1],                           // past the musical seam
+            ["\u{1FA8E}", 1],                           // before the heart-hands join
+            ["\u{1FAC7}", 1],                           // past the fingerprint
+            ["\u{1FACD}", 1],                           // before the mammoth pair
+            ["\u{1FADD}", 1], ["\u{1FADE}", 1],         // gap before the bubble join
+            ["\u{1FAEA}", 1],                           // past the handshake
+            ["\u{1FAF9}", 1],                           // just past the extended-A tail
+            ["\u{1F1FF}", 1],                           // lone regional indicator (letter box)
+            // deliberate exclusions, pinned toward narrow
+            ["\u{2329}", 1], ["\u{232A}", 1],           // deprecated angle brackets — NOT emoji
+            // classic wide siblings still 2 (no regression on the EAW path)
+            ["\u{1F600}", 2], ["\u{4E00}", 2],
+        ];
+    }
+
+    /**
+     * @dataProvider emojiPresentationEdges
+     */
+    public function testEmojiPresentationCodepointsScoreTheirPinnedCells(string $glyph, int $cells): void
+    {
+        $this->assertSame($cells, Width::string($glyph), sprintf('U+%04X mis-scored', \IntlChar::ord($glyph)));
+    }
+
+    public function testEmojiPresentationRosterAgreesWithMbStrwidthOracle(): void
+    {
+        // The double-oracle law: for the assigned, commonly-painted members
+        // of the set, PHP's independent Unicode tables must say the same
+        // thing. (This runtime's mb_strwidth already returns 2 for ✅ — the
+        // very disagreement the incident turned on is Width's side of it.)
+        $roster = ['✅', '✨', '❌', '❗', '⭐', '⛔', '🟠', '🟩', '⌚', '⛅', '☔', '⚫', '⚪', '➰', '🈴', '🃏'];
+        foreach ($roster as $glyph) {
+            $this->assertSame(
+                mb_strwidth($glyph, 'UTF-8'),
+                Width::string($glyph),
+                sprintf('U+%04X: Width and mb_strwidth disagree', \IntlChar::ord($glyph)),
+            );
+        }
+    }
+
+    public function testOfHandlesZwjFamilyEmoji(): void
+    {
+        $this->assertSame(2, Width::of("👨‍👩‍👧‍👦"));
+    }
+
+    public function testZeroWidthJoinerInvisible(): void
+    {
+        $this->assertSame(0, Width::string("\u{200b}"));
+    }
+
+    public function testCombiningMarkInvisible(): void
+    {
+        $this->assertSame(1, Width::string("e\u{0301}"));
+    }
+
+    public function testTruncate(): void
+    {
+        $this->assertSame('hello', Width::truncate('hello world', 5));
+    }
+
+    public function testTruncateRespectsWideChars(): void
+    {
+        $this->assertSame('日', Width::truncate('日本', 3));
+    }
+
+    public function testTruncateZero(): void
+    {
+        $this->assertSame('', Width::truncate('hello', 0));
+    }
+
+    public function testTruncateAnsiPreservesEscapes(): void
+    {
+        $out = Width::truncateAnsi("\x1b[31mhello\x1b[0m", 3);
+        $this->assertSame("\x1b[31mhel\x1b[0m", $out);
+    }
+
+    public function testTruncateAnsiRespectsWideChars(): void
+    {
+        $out = Width::truncateAnsi("\x1b[31m日本\x1b[0m", 3);
+        // '日' uses 2 cells; '本' would need 4 → drop, keep trailing ANSI.
+        $this->assertSame("\x1b[31m日\x1b[0m", $out);
+    }
+
+    public function testTruncateAnsiZero(): void
+    {
+        $this->assertSame('', Width::truncateAnsi("\x1b[31mhi\x1b[0m", 0));
+    }
+
+    public function testPadRight(): void
+    {
+        $this->assertSame('hi   ', Width::padRight('hi', 5));
+        $this->assertSame('hello', Width::padRight('hello', 5));
+        $this->assertSame('hello', Width::padRight('hello', 3));
+        $this->assertSame('hi***', Width::padRight('hi', 5, '*'));
+    }
+
+    public function testPadLeft(): void
+    {
+        $this->assertSame('   hi', Width::padLeft('hi', 5));
+        $this->assertSame('00042', Width::padLeft('42', 5, '0'));
+    }
+
+    public function testPadCenter(): void
+    {
+        $this->assertSame(' hi  ', Width::padCenter('hi', 5));
+        $this->assertSame('  hi  ', Width::padCenter('hi', 6));
+    }
+
+    public function testPadIgnoresAnsi(): void
+    {
+        $padded = Width::padRight("\x1b[31mhi\x1b[0m", 5);
+        $this->assertSame("\x1b[31mhi\x1b[0m   ", $padded);
+        $this->assertSame(5, Width::string($padded));
+    }
+
+    public function testWrapShortText(): void
+    {
+        $this->assertSame('hello', Width::wrap('hello', 10));
+    }
+
+    public function testWrapBreaksOnSpaces(): void
+    {
+        $this->assertSame("hello\nworld", Width::wrap('hello world', 5));
+    }
+
+    public function testWrapHonorsExistingNewlines(): void
+    {
+        $this->assertSame("a\nb", Width::wrap("a\nb", 80));
+    }
+
+    public function testWrapBreaksLongWord(): void
+    {
+        $this->assertSame("abcd\nefgh\ni", Width::wrap('abcdefghi', 4));
+    }
+
+    public function testWrapZeroOrNegativeReturnsInput(): void
+    {
+        $this->assertSame('hello world', Width::wrap('hello world', 0));
+        $this->assertSame('hello world', Width::wrap('hello world', -1));
+    }
+
+    public function testWrapMultipleWordsAcrossLines(): void
+    {
+        $out = Width::wrap('the quick brown fox jumps over the lazy dog', 12);
+        $this->assertSame("the quick\nbrown fox\njumps over\nthe lazy dog", $out);
+    }
+
+    public function testWrapAnsiPreservesStyling(): void
+    {
+        $out = Width::wrapAnsi("\x1b[31mhello\x1b[0m world", 5);
+        $this->assertSame("\x1b[31mhello\x1b[0m\nworld", $out);
+    }
+
+    public function testTruncateMiddleShortStringUnchanged(): void
+    {
+        $this->assertSame('short', Width::truncateMiddle('short', 10));
+    }
+
+    public function testTruncateMiddleKeepsBothEnds(): void
+    {
+        // "abcdefghij" (10) into 7 cells: budget 6, head 3, tail 3 → "abc…hij".
+        $this->assertSame('abc…hij', Width::truncateMiddle('abcdefghij', 7));
+    }
+
+    public function testTruncateMiddleResultFitsWidth(): void
+    {
+        $out = Width::truncateMiddle('/var/lib/mysql/data/very/deep/path.db', 20);
+        $this->assertLessThanOrEqual(20, Width::string($out));
+        $this->assertStringContainsString('…', $out);
+    }
+
+    public function testTruncateMiddleStripsAnsi(): void
+    {
+        $this->assertSame('hello', Width::truncateMiddle("\x1b[31mhello\x1b[0m", 10));
+    }
+
+    public function testTruncateMiddleZeroWidth(): void
+    {
+        $this->assertSame('', Width::truncateMiddle('anything', 0));
+    }
+
+    public function testTruncateMiddleEllipsisWiderThanMaxFallsBack(): void
+    {
+        // max smaller than the ellipsis → plain head-truncate, still fits.
+        $out = Width::truncateMiddle('abcdef', 1, '...');
+        $this->assertLessThanOrEqual(1, Width::string($out));
+    }
+
+    public function testStringMemoRepeatedInputReturnsIdentical(): void
+    {
+        $s = "\x1b[31mhello 日本\x1b[0m";
+        $first  = Width::string($s);       // cold: computes + memoizes
+        $second = Width::string($s);       // warm: memo hit
+        $this->assertSame($first, $second);
+        // "hello" (5) + " " (1) + 日 (2) + 本 (2) = 10.
+        $this->assertSame(10, $second);
+    }
+
+    /**
+     * The static memo behind {@see Width::string()} must never grow past its
+     * cap, and every result (fresh, memo-hit, or evicted-and-recomputed) must
+     * equal the uncached width. Reverting the cap makes the memo unbounded and
+     * fails the size assertion.
+     */
+    public function testStringMemoStaysBoundedAndCorrect(): void
+    {
+        $memoProp = new \ReflectionProperty(Width::class, 'memo');
+        $memoProp->setAccessible(true);
+        $memoProp->setValue(null, []); // clean baseline for a precise size check
+
+        $cap = (new \ReflectionClassConstant(Width::class, 'MEMO_MAX'))->getValue();
+        $this->assertIsInt($cap);
+
+        // Feed more distinct strings than the cap; each is pure ASCII so its
+        // display width equals its byte length.
+        for ($i = 0; $i < $cap + 500; $i++) {
+            $s = 'row-' . $i;
+            $this->assertSame(\strlen($s), Width::string($s));
+        }
+
+        $memo = $memoProp->getValue();
+        $this->assertIsArray($memo);
+        $this->assertGreaterThan(0, \count($memo), 'memo should be populated');
+        $this->assertLessThanOrEqual($cap, \count($memo), 'memo must stay bounded');
+
+        $memoProp->setValue(null, []); // don't leak state into sibling tests
+    }
+
+    public function testDropAnsiDropsPrefixCells(): void
+    {
+        // "hello" = 5 cells, drop first 3 → "lo" (ANSI-stripped)
+        $this->assertSame('lo', Width::dropAnsi('hello', 3));
+    }
+
+    public function testDropAnsiPreservesTrailingAnsi(): void
+    {
+        // Drop 3 cells from colored text, trailing color reset preserved.
+        $s = "\x1b[31mhello\x1b[0m";
+        $out = Width::dropAnsi($s, 3);
+        $this->assertSame("\x1b[31mlo\x1b[0m", $out);
+    }
+
+    public function testDropAnsiZeroReturnsFull(): void
+    {
+        $this->assertSame('hello', Width::dropAnsi('hello', 0));
+    }
+
+    public function testDropAnsiNegativeReturnsFull(): void
+    {
+        // Negative skip is treated as 0 (early-exit guard)
+        $this->assertSame('hello', Width::dropAnsi('hello', -5));
+    }
+
+    public function testDropAnsiDropsWideCharWhole(): void
+    {
+        // "日本" = 4 cells, "日" = 2 cells wide. Dropping 1 cell (landing mid-grapheme)
+        // should drop the whole wide cluster, leaving only "本".
+        $out = Width::dropAnsi('日本', 1);
+        $this->assertSame('本', $out);
+    }
+
+    public function testDropAnsiPreservesAnsiInDroppedRegion(): void
+    {
+        // ANSI in the dropped prefix is preserved in output prefix.
+        $s = "he\x1b[31mllo\x1b[0m";
+        $out = Width::dropAnsi($s, 2);
+        // ANSI sequences from dropped region appear in output
+        $this->assertSame("\x1b[31mllo\x1b[0m", $out);
+    }
+
+    public function testTakeAnsiTakesPrefixCells(): void
+    {
+        // "hello" = 5 cells, take first 3 → "hel"
+        $this->assertSame('hel', Width::takeAnsi('hello', 3));
+    }
+
+    public function testTakeAnsiPreservesAnsiInRegion(): void
+    {
+        // Take 2 cells from colored text, color sequences preserved.
+        $s = "\x1b[31mhello\x1b[0m";
+        $out = Width::takeAnsi($s, 2);
+        $this->assertSame("\x1b[31mhe\x1b[0m", $out);
+    }
+
+    public function testTakeAnsiZeroReturnsEmpty(): void
+    {
+        $this->assertSame('', Width::takeAnsi('hello', 0));
+    }
+
+    public function testTakeAnsiNegativeReturnsEmpty(): void
+    {
+        // Negative take is treated as 0 (early-exit guard)
+        $this->assertSame('', Width::takeAnsi('hello', -5));
+    }
+
+    public function testTakeAnsiIncludesWideCharWhole(): void
+    {
+        // "日本" = 4 cells, taking 1 cell (landing mid-grapheme) should include
+        // the whole wide cluster, giving "日" (2 cells).
+        $out = Width::takeAnsi('日本', 1);
+        $this->assertSame('日', $out);
+    }
+
+    public function testTakeAnsiPreservesTrailingAnsi(): void
+    {
+        // When take lands inside a wide grapheme, trailing ANSI after the
+        // cut point should still be captured.
+        $s = "日\x1b[31m本\x1b[0m";
+        $out = Width::takeAnsi($s, 1);
+        // "日" is taken (wide char), trailing sequences preserved
+        $this->assertStringContainsString('日', $out);
+    }
+
+    public function testDropAnsiEmptyString(): void
+    {
+        $this->assertSame('', Width::dropAnsi('', 5));
+    }
+
+    public function testTakeAnsiEmptyString(): void
+    {
+        $this->assertSame('', Width::takeAnsi('', 5));
+    }
+
+    /**
+     * E68, minimised. `truncateAnsi()` is a budget, and its result measured by
+     * `string()` — the measure every caller in the repo clamps with — must
+     * never exceed it.
+     *
+     * The specific input is the one recorded in the finding: THUMBS UP SIGN
+     * followed by EMOJI MODIFIER FITZPATRICK TYPE-4, then `xy`, at budget 3.
+     * It used to return 5 cells.
+     */
+    public function testTruncateAnsiNeverReturnsMoreCellsThanItsBudget(): void
+    {
+        $this->assertSame(3, Width::string(Width::truncateAnsi("\u{1F44D}\u{1F3FD}xy", 3)));
+
+        // Cluster shapes on which the two segmentations used to disagree:
+        // emoji + skin-tone modifier, regional-indicator pair (a flag),
+        // ZWJ sequence, variation selector, and a combining mark.
+        $fixtures = [
+            "\u{1F44D}\u{1F3FD}xy",
+            "\u{1F1E6}\u{1F1F8}xy",
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}xy",
+            "\u{2600}\u{FE0F}xy",
+            "e\u{0301}xy",
+            "\u{1F3FD}\u{1F1E6}\u{0301}",
+            "\x1b[31m\u{1F44D}\u{1F3FD}\x1b[0mxy",
+            '日本語abc',
+        ];
+        foreach ($fixtures as $s) {
+            for ($budget = 1; $budget <= 8; $budget++) {
+                $this->assertLessThanOrEqual(
+                    $budget,
+                    Width::string(Width::truncateAnsi($s, $budget)),
+                    sprintf('truncateAnsi(%s, %d) came back over budget', bin2hex($s), $budget),
+                );
+            }
+        }
+    }
+
+    /**
+     * E69, third measure. `wrapAnsi()` had its own tab rule — it charged a
+     * `\t` **1** cell in its whitespace branch, where `string()` charged 0 and
+     * `Style::render()` laid out {@see Width::TAB_WIDTH}. Three answers for one
+     * character. It now charges what `graphemeWidth()` says, so a wrapped line
+     * cannot come back wider than the column it was wrapped to.
+     *
+     * `wrapAnsi("ab\tcd", 7)` is the reproduction: at a 1-cell charge the whole
+     * string scored 5 against a budget of 7 and came back as ONE line of 8
+     * cells. At `TAB_WIDTH` it breaks, and both lines are 2 cells.
+     */
+    /**
+     * The tab charge is FOUR, asserted as a literal, in the library that owns
+     * the constant.
+     *
+     * Every other tab assertion added in round 40 — here and in
+     * sugar-style' StyleTest — is written in terms of `Width::TAB_WIDTH`,
+     * so all of them agree with each other for any value the constant takes.
+     * MEASURED: `TAB_WIDTH = 4` -> `= 8` was killed ONLY by a pre-existing
+     * sugar-style test (`testUnsetTabWidthRevertsToFour`), which means
+     * sugar-core's own suite pinned nothing about the value and the constant
+     * could have drifted with this lib green. A shared constant makes two
+     * measures AGREE; it does not make either of them RIGHT.
+     *
+     * Four is not arbitrary: it is what `Style::render()` has always expanded a
+     * tab to, so changing it changes rendered output everywhere.
+     */
+    public function testATabIsChargedExactlyFourCells(): void
+    {
+        self::assertSame(4, Width::TAB_WIDTH);
+        self::assertSame(4, Width::string("\t"));
+        self::assertSame(8, Width::string("\t\t"));
+        self::assertSame(5, Width::string("a\t"));
+    }
+
+    public function testWrapAnsiChargesATabTheSameCellsAsEveryOtherMeasure(): void
+    {
+        $lines = explode("\n", Width::wrapAnsi("ab\tcd", 7));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(7, Width::string($line), 'wrapAnsi returned a line over its column');
+        }
+        $this->assertCount(2, $lines);
+    }
+
+    /**
+     * The reason E68 existed: `string()` and every truncation path have to
+     * agree on where one grapheme ends and the next begins. They did not —
+     * `string()` split per codepoint on PHP 8.3 (its preferred
+     * `grapheme_str_split()` is 8.4+) while `truncateAnsi()` split per
+     * cluster. This pins the agreement itself, so a future edit that gives
+     * either side its own splitter fails here rather than in a pane.
+     */
+    public function testStringScoresAWholeClusterAsOneGlyph(): void
+    {
+        // Emoji + skin-tone modifier is ONE glyph in ONE 2-cell box; the
+        // per-codepoint sum used to score it 4.
+        $this->assertSame(2, Width::string("\u{1F44D}\u{1F3FD}"));
+        // A regional-indicator pair is one flag in 2 cells; a lone regional
+        // indicator is a 1-cell letter box.
+        $this->assertSame(2, Width::string("\u{1F1E6}\u{1F1F8}"));
+        $this->assertSame(1, Width::string("\u{1F1E6}"));
+        // WHAT THIS SAID: "already true before the fix, via a ZWJ special
+        // case — pinned here so that special case cannot be dropped
+        // silently." WHAT IS TRUE NOW: the special case is gone (E73) and
+        // this assertion holds without it, because ICU returns the whole
+        // family as ONE cluster whose base is U+1F468. WHY THE ASSERTION
+        // STILL EARNS ITS PLACE: it is the check that a ZWJ sequence is
+        // scored once rather than per-emoji — which is what would break if
+        // segmentation ever fell back to a per-codepoint splitter. Measured
+        // on PHP 8.3.6, ext-intl ICU 74.2 / Unicode 15.1: 1 cluster, 2 cells.
+        $this->assertSame(1, \count(self::icuClusters("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")));
+        $this->assertSame(2, Width::of("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"));
+        // Truncation and measurement must charge the same cluster the same
+        // number of cells, which is the invariant, stated directly.
+        foreach (["\u{1F44D}\u{1F3FD}", "\u{1F1E6}\u{1F1F8}", "\u{2600}\u{FE0F}", "e\u{0301}", '日'] as $cluster) {
+            $w = Width::string($cluster);
+            $this->assertSame(
+                $cluster,
+                Width::truncateAnsi($cluster, $w),
+                sprintf('%s did not survive truncation at its own width %d', bin2hex($cluster), $w),
+            );
+            $this->assertSame(
+                '',
+                Width::truncateAnsi($cluster, $w - 1),
+                sprintf('%s was emitted whole into a budget of %d', bin2hex($cluster), $w - 1),
+            );
+        }
+    }
+
+    /**
+     * E73. A Control character immediately before a ZWJ made
+     * `Width::string()` score the whole run 0.
+     *
+     * Mechanism, measured on PHP 8.3.6 with ext-intl ICU 74.2 / Unicode 15.1:
+     * UAX #29 GB4 breaks after a Control, so `"\t" ZWJ U+1F44D` comes back as
+     * THREE clusters — the tab, a bare ZWJ, and the emoji — where a joining
+     * ZWJ would have been inside one. `compute()`'s old look-ahead saw the
+     * next cluster was a ZWJ and charged the tab 0; the `$inZwjSequence` flag
+     * it then set charged the emoji 0 as well. Total 0 cells for a run
+     * `Style::new()->render()` lays out as 6.
+     *
+     * This is the OVER-RUN direction — the caller is told a 6-cell run is
+     * free — and an over-wide row is frame corruption here, because the diff
+     * renderer paints one line per terminal row.
+     *
+     * Exact expected values, not bounds, so the sign of any future
+     * disagreement is visible: {@see WidthTest::testATabIsChargedExactlyFourCells}
+     * pins TAB_WIDTH = 4 as a literal in this same file.
+     */
+    public function testAControlBeforeAZwjNoLongerZeroesTheRunAroundIt(): void
+    {
+        // The two inputs recorded in the finding.
+        $this->assertSame(Width::TAB_WIDTH + 2, Width::string("\t\u{200d}\u{1F44D}"));
+        $this->assertSame(1 + Width::TAB_WIDTH + 2, Width::string("a\t\u{200d}\u{1F44D}"));
+
+        // Same defect with no tab in sight: a ZWJ at the START of the string
+        // is also a bare cluster, so the flag zeroed the emoji after it.
+        $this->assertSame(2, Width::string("\u{200d}\u{1F44D}"));
+
+        // Every C0/C1 control breaks the cluster the same way, so none of them
+        // may zero their neighbours either. The loop drives C0 (0x01, 0x07,
+        // 0x0b, 0x0a), DEL (0x7f) and C1 (U+0080, U+0085 NEL, U+009F) — the
+        // C1 half of that sentence was asserted by nothing until E73's review
+        // pointed it out, and ICU returns 3 clusters for every one of these.
+        foreach (["\x01", "\x07", "\x0b", "\x7f", "\n", "\u{0080}", "\u{0085}", "\u{009F}"] as $control) {
+            $this->assertSame(
+                3,
+                \count(self::icuClusters($control . "\u{200d}\u{1F44D}")),
+                sprintf('control %s did not break into 3 clusters', bin2hex($control)),
+            );
+            $this->assertSame(
+                2,
+                Width::string($control . "\u{200d}\u{1F44D}"),
+                sprintf('control %s zeroed the emoji after a ZWJ', bin2hex($control)),
+            );
+        }
+
+        // A ZWJ that actually joins is unaffected: one cluster, 2 cells.
+        $this->assertSame(2, Width::string("\u{1F469}\u{200D}\u{1F4BB}"));
+    }
+
+    /**
+     * The invariant E73's fix installs, stated as a property rather than as a
+     * list of inputs: `string()` carries NO state across cluster boundaries,
+     * so measuring a string equals the sum of measuring its clusters one at a
+     * time.
+     *
+     * The old ZWJ look-ahead violated this by construction — it read
+     * `$clusters[$i + 1]` — which is why a Control could change the score of
+     * a cluster two positions away. Any future cross-cluster rule fails here.
+     *
+     * Corpus: 20,000 deterministic strings (seed 20260822, `mt_srand`) of 1-6
+     * symbols over an alphabet of controls, ZWJ/ZWNJ, skin-tone modifiers,
+     * regional indicators, Hangul jamo, Indic conjunct parts, combining
+     * marks, variation selectors, CJK and ASCII. Segmentation oracle is
+     * ext-intl's `grapheme_extract()`, i.e. the same ICU the class uses.
+     */
+    public function testMeasuringCarriesNoStateAcrossClusterBoundaries(): void
+    {
+        $mismatches = [];
+        $checked = 0;
+        foreach (self::widthFuzzCorpus(20000, 20260822) as $s) {
+            $checked++;
+            $sum = 0;
+            foreach (self::icuClusters($s) as $cluster) {
+                $sum += Width::string($cluster);
+            }
+            $whole = Width::string($s);
+            if ($sum !== $whole && \count($mismatches) < 5) {
+                $mismatches[] = sprintf('%s: clusters sum to %d, whole measures %d', bin2hex($s), $sum, $whole);
+            }
+        }
+        // Aggregated rather than asserted per trial: 20,000 per-trial
+        // assertions would swamp this lib's assertion count without adding
+        // information, and the first five failures name their own input.
+        $this->assertSame([], $mismatches, 'cross-cluster state moved a width');
+        $this->assertSame(20000, $checked);
+    }
+
+    /**
+     * No input may be measured NEGATIVE or measured 0 while containing a
+     * cluster that is not zero-width — the shape E73 presented as.
+     *
+     * Same corpus as {@see self::testMeasuringCarriesNoStateAcrossClusterBoundaries()}.
+     */
+    public function testAnInputContainingANonZeroWidthClusterNeverMeasuresZero(): void
+    {
+        $swallowed = [];
+        $checked = 0;
+        foreach (self::widthFuzzCorpus(20000, 776611) as $s) {
+            $checked++;
+            $w = Width::string($s);
+            $widest = 0;
+            foreach (self::icuClusters($s) as $cluster) {
+                $widest = \max($widest, Width::string($cluster));
+            }
+            if (($w < 0 || $w < $widest) && \count($swallowed) < 5) {
+                $swallowed[] = sprintf('%s measured %d, widest cluster alone is %d', bin2hex($s), $w, $widest);
+            }
+        }
+        $this->assertSame([], $swallowed, 'a string measured narrower than one of its own clusters');
+        $this->assertSame(20000, $checked);
+    }
+
+    /**
+     * A width oracle INDEPENDENT of `Width` — ICU's own character properties,
+     * not ICU's segmenter.
+     *
+     * WHY THIS EXISTS. The two property tests above call `Width::string()` on
+     * BOTH sides of their invariant, so by construction they can only detect
+     * cross-cluster STATE; a wrong per-cluster width is invisible to them.
+     * E73's review demonstrated that with three mutations that survived the
+     * entire sugar-core suite: dropping U+200C from `isZeroWidth()`, dropping
+     * U+FEFF from it, and moving `isWide()`'s emoji upper bound from U+1F64F
+     * to U+1F64E. All three are per-codepoint width errors. This test is what
+     * kills them.
+     *
+     * THE ORACLE, derived at runtime from ext-intl rather than written down:
+     * `IntlChar::charType()` Cf/Mn/Cc paint nothing, so 0 cells;
+     * `IntlChar::PROPERTY_EAST_ASIAN_WIDTH` of Wide or Fullwidth means 2
+     * cells; everything else 1. The one deliberate departure is the tab,
+     * which ICU classes Cc but which E69 charges `Width::TAB_WIDTH`.
+     *
+     * DOMAIN, and it is NOT "Width agrees with ICU". `Width`'s tables are
+     * block-shaped approximations of Unicode, and over a sweep of
+     * U+0000..U+2FFF, U+A000..U+A4FF, U+AC00..U+D7AF, U+F900..U+FAFF,
+     * U+FE00..U+FE4F, U+FF00..U+FFEF and U+1F000..U+1FBFF they disagree with
+     * this oracle on 1,256 of 26,937 ASSIGNED codepoints (4.7%) — measured on
+     * PHP 8.3.6, ext-intl ICU 74.2 / Unicode 15.1, at the commit that added
+     * this test. The bulk is 694 non-spacing marks outside the class's
+     * combining ranges and ~500 emoji-block codepoints whose real
+     * East_Asian_Width is Neutral. Closing that is a foundation-wide
+     * rendering-semantics change, not a test fix. So this test drives the set
+     * the class's own corpus and range table actually claim — every
+     * single-codepoint member of {@see self::widthFuzzAlphabet()}, both
+     * endpoints of every `isWide()` range, and the C1 controls — and pins the
+     * five residual disagreements EXPLICITLY, each with its mechanism.
+     */
+    public function testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties(): void
+    {
+        // The five known departures, asserted BOTH ways below so the list
+        // cannot rot into a rubber stamp: an entry that stops disagreeing
+        // fails this test and must be deleted.
+        //   U+094D  DEVANAGARI SIGN VIRAMA — a real gap: Mn, but outside every
+        //           combining range isZeroWidth() knows, so it scores 1 not 0.
+        //   U+A4CF / U+FF00 / U+1F6FF — UNASSIGNED codepoints that sit at the
+        //           end of a block-shaped isWide() range, so they score 2
+        //           where the oracle's fallback says 1. Benign: nothing paints
+        //           an unassigned codepoint.
+        //   U+1F900 CIRCLED CROSS FORMEE WITH FOUR DOTS — assigned, and ICU
+        //           calls it Neutral, but it is the first codepoint of the
+        //           block-shaped 0x1F900..0x1F9FF range, so it scores 2.
+        $knownDepartures = [0x094D, 0xA4CF, 0xFF00, 0x1F6FF, 0x1F900];
+
+        $mismatches = [];
+        $departuresStillReal = [];
+        $codepoints = self::oracleCodepoints();
+        foreach ($codepoints as $cp) {
+            $expected = self::icuExpectedWidth($cp);
+            $actual = Width::string(\IntlChar::chr($cp));
+            $agrees = $actual === $expected;
+            if (\in_array($cp, $knownDepartures, true)) {
+                if ($agrees) {
+                    $departuresStillReal[] = sprintf('U+%05X now agrees with ICU (%d) — delete it from $knownDepartures', $cp, $actual);
+                }
+                continue;
+            }
+            if (!$agrees) {
+                $mismatches[] = sprintf(
+                    'U+%05X: ICU properties say %d cells, Width::string() says %d',
+                    $cp,
+                    $expected,
+                    $actual,
+                );
+            }
+        }
+
+        $this->assertSame([], $mismatches, 'a per-codepoint width disagrees with ICU character properties');
+        $this->assertSame([], $departuresStillReal, 'a documented departure is stale');
+        // The corpus must not silently shrink to nothing — 34 alphabet
+        // symbols, 32 isWide() range endpoints and 3 C1 controls, deduplicated.
+        $this->assertGreaterThanOrEqual(60, \count($codepoints));
+    }
+
+    /**
+     * ICU's verdict on how many cells one codepoint occupies, computed from
+     * `ext-intl` character properties alone — no call into `Width`.
+     */
+    private static function icuExpectedWidth(int $cp): int
+    {
+        // E69: a tab is Cc to ICU but is laid out as TAB_WIDTH cells by every
+        // renderer that consumes this measure. Deliberate, and the only one.
+        if ($cp === 0x09) {
+            return Width::TAB_WIDTH;
+        }
+        $type = \IntlChar::charType($cp);
+        if (
+            $type === \IntlChar::CHAR_CATEGORY_FORMAT_CHAR
+            || $type === \IntlChar::CHAR_CATEGORY_NON_SPACING_MARK
+            || $type === \IntlChar::CHAR_CATEGORY_CONTROL_CHAR
+        ) {
+            return 0;
+        }
+        $eaw = \IntlChar::getIntPropertyValue($cp, \IntlChar::PROPERTY_EAST_ASIAN_WIDTH);
+        // U_EA_FULLWIDTH = 3, U_EA_WIDE = 5.
+        return ($eaw === 3 || $eaw === 5) ? 2 : 1;
+    }
+
+    /**
+     * The codepoints {@see self::testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties()}
+     * drives: every single-codepoint symbol of the fuzz alphabet, both
+     * endpoints of each range `Width::isWide()` declares, and the C1 controls
+     * the E73 test loop exercises.
+     *
+     * The endpoint list is a deliberate mirror of the private range table. It
+     * is the boundary that mutation-kills an off-by-one in it — a scan wide
+     * enough to discover the boundary on its own would also surface the 1,256
+     * documented block-shape disagreements and prove nothing.
+     *
+     * @return list<int>
+     */
+    private static function oracleCodepoints(): array
+    {
+        $cps = [];
+        foreach (self::widthFuzzAlphabet() as $symbol) {
+            if (\mb_strlen($symbol, 'UTF-8') === 1) {
+                $cps[] = \mb_ord($symbol, 'UTF-8');
+            }
+        }
+        foreach ([0x0080, 0x0085, 0x009F] as $c1) {
+            $cps[] = $c1;
+        }
+        foreach (
+            [
+                [0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf],
+                [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff],
+                [0xfe30, 0xfe4f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1f64f],
+                [0x1f680, 0x1f6ff], [0x1f900, 0x1f9ff], [0x20000, 0x2fffd], [0x30000, 0x3fffd],
+            ] as [$lo, $hi]
+        ) {
+            $cps[] = $lo;
+            $cps[] = $hi;
+        }
+        return \array_values(\array_unique($cps));
+    }
+
+    /**
+     * `$count` deterministic random strings of 1-6 symbols drawn from
+     * {@see self::widthFuzzAlphabet()}, seeded so a failure is reproducible.
+     *
+     * @return \Generator<int, string>
+     */
+    private static function widthFuzzCorpus(int $count, int $seed): \Generator
+    {
+        $alphabet = self::widthFuzzAlphabet();
+        $n = \count($alphabet);
+        \mt_srand($seed);
+        for ($t = 0; $t < $count; $t++) {
+            $len = 1 + \mt_rand(0, 5);
+            $s = '';
+            for ($k = 0; $k < $len; $k++) {
+                $s .= $alphabet[\mt_rand(0, $n - 1)];
+            }
+            yield $s;
+        }
+    }
+
+    /**
+     * Emoji-heavy alphabet shared by the property tests above. Deliberately
+     * includes the shapes each of E68, E69 and E73 turned on: controls
+     * (cluster breakers), ZWJ/ZWNJ, skin-tone modifiers (Extend), regional
+     * indicator pairs, Hangul jamo L/V/T, an Indic conjunct, a combining
+     * mark, and both variation selectors.
+     *
+     * @return list<string>
+     */
+    private static function widthFuzzAlphabet(): array
+    {
+        return [
+            'a', 'Z', ' ', "\t", "\x01", "\x07", "\x0b", "\x7f",
+            "\u{200d}", "\u{200c}", "\u{200b}", "\u{feff}",
+            "\u{1F44D}", "\u{1F469}", "\u{1F4BB}", "\u{1F3C3}", "\u{2600}",
+            "\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}",
+            "\u{1F1FA}", "\u{1F1F8}", "\u{1F1EF}", "\u{1F1F5}",
+            "\u{1100}", "\u{1161}", "\u{11A8}",
+            "\u{0915}", "\u{094D}", "\u{0937}",
+            "\u{0301}", "\u{FE0F}", "\u{FE0E}", "\u{4E00}",
+        ];
+    }
+
+    /**
+     * ICU grapheme clusters of `$s`, via ext-intl.
+     *
+     * **This is NOT an independent oracle and must not be described as one.**
+     * It is a line-for-line re-implementation of the ext-intl branch of
+     * `Width::nextCluster()` driven by the same loop as `Width::graphemes()`:
+     * same `grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next)`, same
+     * one-byte fallback on an empty return, same `$i += strlen($cluster)`
+     * advance. Duplicating the code under test means it cannot falsify
+     * SEGMENTATION — if `Width` starts splitting wrongly, this splits wrongly
+     * the same way and every property built on it still passes.
+     *
+     * WHAT IT IS GOOD FOR, which is why it is here rather than deleted: the
+     * property tests above are about ARITHMETIC ACROSS cluster boundaries, and
+     * for that a splitter that provably agrees with the class's own is exactly
+     * the right instrument — it isolates the cross-cluster question from the
+     * segmentation question. The segmentation question is answered separately,
+     * by the exact-value assertions in
+     * {@see self::testStringScoresAWholeClusterAsOneGlyph()}, and the
+     * per-codepoint WIDTH question by
+     * {@see self::testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties()},
+     * which uses ICU character PROPERTIES — genuinely independent of anything
+     * `Width` does.
+     *
+     * @return list<string>
+     */
+    private static function icuClusters(string $s): array
+    {
+        $out = [];
+        $i = 0;
+        $len = \strlen($s);
+        while ($i < $len) {
+            $next = 0;
+            $cluster = \grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
+            if (!\is_string($cluster) || $cluster === '') {
+                $cluster = $s[$i];
+            }
+            $out[] = $cluster;
+            $i += \strlen($cluster);
+        }
+        return $out;
+    }
+}

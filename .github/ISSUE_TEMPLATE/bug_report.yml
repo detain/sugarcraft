@@ -10,7 +10,7 @@ body:
       label: Library
       description: Which library is affected?
       options:
-        - candy-core (runtime / Util)
+        - sugar-core (runtime / Util)
         - sugar-style (styling / layout)
         - sugar-spring (spring physics)
         - sugar-mouse (mouse zones)

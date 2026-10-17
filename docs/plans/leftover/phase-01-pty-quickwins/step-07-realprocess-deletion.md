@@ -42,7 +42,7 @@ If zero hits outside `candy-scriptui/` itself → safe to delete.
   with `@deprecated`. Document in `candy-scriptui/CALIBER_LEARNINGS.md`.
 
 - `candy-scriptui/composer.json` — confirm `sugarcraft/sugar-pty` is in
-  `require` (likely transitive via candy-core; verify with
+  `require` (likely transitive via sugar-core; verify with
   `tools/check-path-repos.php`).
 
 ## Acceptance

@@ -37,9 +37,9 @@ Ask (or confirm) with the user:
 
 1. Upstream repo URL — needed for `Mirrors charmbracelet/...` doc-comments and `MATCHUPS.md` row.
 2. Proposed slug and prefix (Candy/Sugar/Honey). Cross-check against `PROJECT_NAMES.md` — if the slug already exists or the prefix conflicts with the role, stop and ask.
-3. Direct sibling deps (e.g. depends on `candy-core` + `sugar-widgets`). The path-repo closure is the FULL TRANSITIVE set, not just direct.
+3. Direct sibling deps (e.g. depends on `sugar-core` + `sugar-widgets`). The path-repo closure is the FULL TRANSITIVE set, not just direct.
 
-Derive: kebab-case slug, namespace = `SugarCraft\<SlugWithoutPrefix>` (exception: `candy-core` → `SugarCraft\Core`).
+Derive: kebab-case slug, namespace = `SugarCraft\<SlugWithoutPrefix>` (exception: `sugar-core` → `SugarCraft\Core`).
 
 Verify: read `PROJECT_NAMES.md` to confirm slug is free.
 
@@ -48,7 +48,7 @@ Verify: read `PROJECT_NAMES.md` to confirm slug is free.
 These are the source of truth — copy structure, don't invent it. Read in parallel:
 
 - `sugar-charts/` for the canonical path-repo closure pattern.
-- `candy-core/` for the canonical PHPUnit XML.
+- `sugar-core/` for the canonical PHPUnit XML.
 - `sugar-widgets/` for the canonical leaf-lib skeleton.
 - Root `composer.json` for where to add `require` + `repositories`.
 - The CI workflow files under `.github/workflows/` for matrix entry shape.
@@ -235,14 +235,14 @@ Actions:
 
 Result: collision caught before scaffolding; user picks final name.
 
-### Example 2 — leaf lib depending on `candy-core` + `sugar-widgets`
+### Example 2 — leaf lib depending on `sugar-core` + `sugar-widgets`
 
-User: "Create a new sugar-prefixed lib, depends on candy-core and sugar-widgets."
+User: "Create a new sugar-prefixed lib, depends on sugar-core and sugar-widgets."
 
 Actions:
 
 1. Verify slug free in `PROJECT_NAMES.md`. Pick namespace.
-2. Read `sugar-charts/` composer manifest — its path-repo closure already includes `candy-core` + `sugar-widgets`, so copy and prune to those two.
+2. Read `sugar-charts/` composer manifest — its path-repo closure already includes `sugar-core` + `sugar-widgets`, so copy and prune to those two.
 3. Write the lib files (composer manifest, PHPUnit XML, README, CALIBER_LEARNINGS stub, source class, test class).
 4. Edit root composer manifest (require + repositories), `MATCHUPS.md` (🟡 row), `PROJECT_NAMES.md`, root `README.md` (count + table + loop), `docs/index.html` (tile), `codecov.yml`, both CI workflows.
 5. Run verification gate. All checks green.

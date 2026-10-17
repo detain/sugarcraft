@@ -484,7 +484,7 @@ final class BinSugarcrushWiringTest extends TestCase
      * R20.fix regression: typing "/agents" (or pressing Ctrl+A) against a real
      * `Bootstrap::chat()`-constructed Chat used to throw an uncaught
      * `RuntimeException('AgentManager not set')` straight out of
-     * `Chat::update()` -- candy-core's `Program` has no try/catch around its
+     * `Chat::update()` -- sugar-core's `Program` has no try/catch around its
      * synchronous update() dispatch, so this crashed the live CLI outright
      * (and skipped `teardownTerminal()`). It was then made to degrade to a
      * "not configured" response; with Phase 1 item 1's wiring it must answer

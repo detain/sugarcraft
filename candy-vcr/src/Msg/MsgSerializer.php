@@ -7,7 +7,7 @@ namespace SugarCraft\Vcr\Msg;
 use SugarCraft\Core\Msg;
 
 /**
- * Encode and decode candy-core {@see Msg}s into the cassette `input`
+ * Encode and decode sugar-core {@see Msg}s into the cassette `input`
  * envelope. The envelope is a JSON-able associative array carrying an
  * `@type` tag so the {@see Registry} can route on read.
  *

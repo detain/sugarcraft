@@ -11,7 +11,7 @@ use React\EventLoop\TimerInterface;
  * Wall-clock deadline for an interactive {@see \SugarCraft\Core\Program} run.
  *
  * gum's `--timeout N` aborts a prompt N seconds after it starts, no matter
- * what the user is doing. candy-core's Program has no built-in deadline and
+ * what the user is doing. sugar-core's Program has no built-in deadline and
  * we deliberately keep it that way — a general TUI runtime shouldn't grow a
  * policy knob that only the CandyScriptui CLI layer needs. Instead each command
  * arms a one-shot React timer on the SAME loop the Program runs on; when it

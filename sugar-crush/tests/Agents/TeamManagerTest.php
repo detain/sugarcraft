@@ -567,7 +567,7 @@ final class TeamManagerTest extends TestCase
     public function testRegistryIsWrittenOwnerOnlyAndAtomically(): void
     {
         // Audit M2's perm half (pre-fix: direct write, default-umask 0644) and
-        // the adoption of candy-core AtomicJsonFile (Session.php precedent).
+        // the adoption of sugar-core AtomicJsonFile (Session.php precedent).
         $this->tempDir = $this->createTempDir();
         $tm = new TeamManager($this->tempDir . '/teams');
         $tm->createTeam(

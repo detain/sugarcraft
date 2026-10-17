@@ -1,10 +1,10 @@
 ---
 name: sugarcraft-model-pattern
-description: Scaffolds a new SugarCraft TUI class following the canonical immutable + fluent pattern: final class, declare(strict_types=1), readonly props, private mutate() helper, with*() setters, and (for TUI roots) the Model::init/update/view contract from candy-core. Use when user says 'add a new Model', 'new TUI widget', 'port from charmbracelet/<x>', 'scaffold a SugarCraft class', or creates new files under <slug>/src/. Do NOT use for editing existing Models, for non-SugarCraft PHP libs, for tests-only changes (use phpunit-skill), for adding new libraries from scratch (use scaffold-library), or for cross-lib refactors.
+description: Scaffolds a new SugarCraft TUI class following the canonical immutable + fluent pattern: final class, declare(strict_types=1), readonly props, private mutate() helper, with*() setters, and (for TUI roots) the Model::init/update/view contract from sugar-core. Use when user says 'add a new Model', 'new TUI widget', 'port from charmbracelet/<x>', 'scaffold a SugarCraft class', or creates new files under <slug>/src/. Do NOT use for editing existing Models, for non-SugarCraft PHP libs, for tests-only changes (use phpunit-skill), for adding new libraries from scratch (use scaffold-library), or for cross-lib refactors.
 ---
 # SugarCraft Model Pattern
 
-Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every class must look identical in shape to `sugar-style/src/Style.php` (data) or `candy-core/src/Model.php` (TUI root).
+Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every class must look identical in shape to `sugar-style/src/Style.php` (data) or `sugar-core/src/Model.php` (TUI root).
 
 ## Critical
 
@@ -14,9 +14,9 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 - **Mutation happens through ONE private helper, `mutate(array $changes): self`.** Every `with*()` calls it. Do not clone-and-assign inline in each setter.
 - **Accessors have NO `get` prefix.** `theme()`, not `getTheme()`.
 - **Factory methods mirror upstream** Charmbracelet names: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`. Add doc-comment `Mirrors charmbracelet/<repo>.<Method>`.
-- **Namespace quirk**: lib `candy-core` → `SugarCraft\Core\`. All other libs follow `Candy<X>` / `Sugar<X>` / `Honey<X>` → `SugarCraft\<X>\` (e.g. `sugar-markdown` → `SugarCraft\Markdown\`).
+- **Namespace quirk**: lib `sugar-core` → `SugarCraft\Core\`. All other libs follow `Candy<X>` / `Sugar<X>` / `Honey<X>` → `SugarCraft\<X>\` (e.g. `sugar-markdown` → `SugarCraft\Markdown\`).
 - **Don't add comments restating code.** Only doc *why* (upstream link, invariant, constraint).
-- **TUI Model contract** is in `candy-core/src/Model.php`: `init(): ?Cmd`, `update(Msg $msg): array{0: Model, 1: ?Cmd}`, `view(): string`. Implement the interface verbatim — do not invent a `render()` method.
+- **TUI Model contract** is in `sugar-core/src/Model.php`: `init(): ?Cmd`, `update(Msg $msg): array{0: Model, 1: ?Cmd}`, `view(): string`. Implement the interface verbatim — do not invent a `render()` method.
 - **After scaffolding, run `cd <lib> && composer dump-autoload && vendor/bin/phpunit`.** If autoload misses the class, the namespace or filename is wrong — fix before continuing.
 
 ## Instructions
@@ -33,14 +33,14 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
    ```sh
    grep -A2 'psr-4' <slug>/composer.json
    ```
-   Expected: `"SugarCraft\\<Sub>\\": "src/"`. Use that exact `<Sub>` — do not guess from the slug (`candy-core` resolves to `SugarCraft\Core\`, not `SugarCraft\CandyCore\`).
+   Expected: `"SugarCraft\\<Sub>\\": "src/"`. Use that exact `<Sub>` — do not guess from the slug (`sugar-core` resolves to `SugarCraft\Core\`, not `SugarCraft\SugarCore\`).
 
    **Verify**: `<Sub>` matches one segment, capitalised, no hyphen.
 
 3. **Read the canonical templates before writing.** Always read both, even if you remember them:
    - Data class template: `sugar-style/src/Style.php`
-   - TUI Model interface: `candy-core/src/Model.php`
-   - Msg/Cmd types (if TUI): `candy-core/src/Msg.php`, `candy-core/src/Cmd.php`
+   - TUI Model interface: `sugar-core/src/Model.php`
+   - Msg/Cmd types (if TUI): `sugar-core/src/Msg.php`, `sugar-core/src/Cmd.php`
 
    **Verify**: confirm `mutate()` is `private` and returns `self`, and that `with*()` methods call it with an associative array.
 
@@ -150,7 +150,7 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 
    **Verify**: `cd <slug> && composer validate` (drop `--strict` — `"@dev"` constraints are flagged but expected pre-1.0).
 
-6. **Write at least one PHPUnit test** at `<slug>/tests/<Class>Test.php` under namespace `SugarCraft\<Sub>\Tests`. Mirror the patterns in `candy-core/tests/` and `sugar-widgets/tests/`:
+6. **Write at least one PHPUnit test** at `<slug>/tests/<Class>Test.php` under namespace `SugarCraft\<Sub>\Tests`. Mirror the patterns in `sugar-core/tests/` and `sugar-widgets/tests/`:
    - **Immutability**: assert `$a->withX(v) !== $a` and `$a->x !== $a->withX(v)->x`.
    - **Snapshot** (if it renders): assert raw `\x1b[...m` bytes from `view()`. Don't abstract.
    - **Coercion** (if it accepts user input): feed negative/oversized/empty/null, assert clamp/no-op.
@@ -238,10 +238,10 @@ Scaffold a new immutable + fluent class inside an existing SugarCraft lib. Every
 
 - **`composer validate` warns `sugarcraft/<dep> : @dev`**: expected pre-1.0 for path-repos. Drop `--strict`. See root CLAUDE.md gotchas.
 
-- **`Argument #1 ($msg) must be of type Msg, X given` in `update()`**: the runtime dispatches concrete `Msg` subclasses (`KeyMsg`, `MouseMsg`, `WindowSizeMsg`). Type-hint the parameter as the `Msg` interface from `candy-core/src/Msg.php` and branch with `instanceof` inside the method.
+- **`Argument #1 ($msg) must be of type Msg, X given` in `update()`**: the runtime dispatches concrete `Msg` subclasses (`KeyMsg`, `MouseMsg`, `WindowSizeMsg`). Type-hint the parameter as the `Msg` interface from `sugar-core/src/Msg.php` and branch with `instanceof` inside the method.
 
-- **Tests fail with `Failed asserting that two strings are equal` on `view()` output**: don't abstract the expected string — paste the raw `\x1b[...m` bytes inline. Mirror `candy-core/tests/RendererTest.php`.
+- **Tests fail with `Failed asserting that two strings are equal` on `view()` output**: don't abstract the expected string — paste the raw `\x1b[...m` bytes inline. Mirror `sugar-core/tests/RendererTest.php`.
 
-- **Stream deltas wrong in renderer tests**: don't `ftruncate; rewind;` between writes. Slice with `ftell`/`fseek`/`stream_get_contents` (canonical in `candy-core/tests/RendererTest.php`).
+- **Stream deltas wrong in renderer tests**: don't `ftruncate; rewind;` between writes. Slice with `ftell`/`fseek`/`stream_get_contents` (canonical in `sugar-core/tests/RendererTest.php`).
 
 - **VHS workflow doesn't render the new demo**: `.github/workflows/vhs.yml` matrix is hand-maintained. Add `<slug>` to the `all=(...)` array. `ci.yml` is auto-discovered via `scripts/affected-libs.php` and needs no edit.

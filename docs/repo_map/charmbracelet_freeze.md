@@ -154,15 +154,15 @@ SugarCraft is a PHP monorepo porting the Charmbracelet TUI ecosystem to PHP. The
 | freeze Component | SugarCraft Library | Mapping Rationale |
 |-----------------|-------------------|------------------|
 | Core image generation | `sugar-widgets` | Core output/rendering primitives |
-| ANSI escape parsing | `candy-core` | Terminal ANSI code handling (colors, styles) |
+| ANSI escape parsing | `sugar-core` | Terminal ANSI code handling (colors, styles) |
 | Chroma syntax highlighting | `sugar-widgets` | Token-based rendering, syntax highlighting |
 | SVG output generation | `sugar-markdown` (potential) | Vector graphics rendering |
 | Interactive TUI forms | `sugar-forms` / `huh` port | Form components, file picker |
-| Config/flag parsing | `candy-core` | Command-line argument handling |
+| Config/flag parsing | `sugar-core` | Command-line argument handling |
 | Window decorations | `sugar-widgets` | Border rendering, rounded corners |
 | Shadow effects | `sugar-widgets` / `sugar-markdown` | Visual effects, filters |
 | PTY execution | `sugar-pty` | Pseudo-terminal control |
-| Font handling | `candy-core` / `sugar-widgets` | Font metrics, text rendering |
+| Font handling | `sugar-core` / `sugar-widgets` | Font metrics, text rendering |
 | Style/theming | `sugar-widgets` | Theme management, style registry |
 
 ### Direct SugarCraft Equivalents
@@ -187,6 +187,6 @@ Charmbracelet/freeze is a well-engineered Go CLI tool that transforms code and t
 
 The project's greatest strength is its visual output quality. The combination of embedded JetBrains Mono fonts, SVG-based vector rendering, and CSS-style visual properties (padding, margin, border-radius, shadow) produces consistently professional screenshots. The interactive TUI mode, built on huh, makes these properties accessible without reading documentation—users can preview and tweak settings in real-time.
 
-From a SugarCraft perspective, freeze represents the "output" side of a TUI ecosystem. While SugarCraft focuses on building interactive terminal applications, freeze demonstrates how to render styled content to images. The ANSI parsing code in `ansi.go` is particularly relevant—SugarCraft's `candy-core` could benefit from similar SGR sequence handling for proper color and style support. The SVG manipulation patterns in `svg/svg.go` also offer insights for potential vector graphics support in SugarCraft's render pipeline.
+From a SugarCraft perspective, freeze represents the "output" side of a TUI ecosystem. While SugarCraft focuses on building interactive terminal applications, freeze demonstrates how to render styled content to images. The ANSI parsing code in `ansi.go` is particularly relevant—SugarCraft's `sugar-core` could benefit from similar SGR sequence handling for proper color and style support. The SVG manipulation patterns in `svg/svg.go` also offer insights for potential vector graphics support in SugarCraft's render pipeline.
 
 The main gap for a PHP port would be the PNG/WebP conversion layer, which relies on either system rsvg-convert or resvg-go's WASM renderer—neither translates directly to PHP. A PHP implementation would likely need to either use ImageMagick/FFI or focus on SVG output only, potentially using an external tool for rasterization.

@@ -1476,7 +1476,7 @@ final class Renderer
      * with tracking off no mouse coordinates ever arrive, so keeping a stale
      * zone registry around would be pure waste. Sentinel *stripping* is
      * unconditional: the markers are Private-Use codepoints a terminal would
-     * paint as a replacement glyph, and candy-core's line diff counts them
+     * paint as a replacement glyph, and sugar-core's line diff counts them
      * as content.
      *
      * Marker-free frames take a `str_contains()` fast path (~0.0004ms) and
@@ -1596,7 +1596,7 @@ final class Renderer
      * boxes in the hit-test registry {@see Chat::zoneAt()} reads, hijacking
      * clicks meant for real UI. Stripping at the boundary keeps the invariant
      * that only {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the
-     * scan. candy-core composes the two sweeps so the predicate lives in one
+     * scan. sugar-core composes the two sweeps so the predicate lives in one
      * audited place rather than re-rolled per application.
      *
      * Carriage returns are mapped to line feeds on top
@@ -1663,7 +1663,7 @@ final class Renderer
      * Kept as the entry point for every caller that only wants the literal
      * frame (tests, and anything composing the frame into something else):
      * an image layer is meaningless without a {@see \SugarCraft\Core\Program}
-     * to paint it, and a plain string is what candy-core's `Model::view()`
+     * to paint it, and a plain string is what sugar-core's `Model::view()`
      * contract calls the simple case.
      */
     public static function render(Chat $chat): string
@@ -1676,7 +1676,7 @@ final class Renderer
      * result in the transcript (crush_feat.md §9 E3).
      *
      * Sixel/Kitty/iTerm2 blobs are not text and cannot be diffed by
-     * candy-core's line renderer, so — exactly as `sugar-gallery`'s
+     * sugar-core's line renderer, so — exactly as `sugar-gallery`'s
      * `PosterCard` does — each blob is registered with a per-frame
      * {@see ImageLayer}, which hands back a marker block to sit in the text
      * frame, and the collected {@see ImageLayer::placements()} ride out on the
@@ -1895,7 +1895,7 @@ final class Renderer
         }
 
         // Full-window usage: fit the frame to exactly $rows lines, always.
-        // candy-core's Renderer repaints changed rows via an ABSOLUTE
+        // sugar-core's Renderer repaints changed rows via an ABSOLUTE
         // cursorTo($row, 1) - it has no concept of scrolling. If $content
         // is ever taller than the real terminal, every cursorTo() past the
         // terminal's last row gets silently clamped there by the terminal
@@ -1909,7 +1909,7 @@ final class Renderer
         // conversations still get padded so the status bar lands on the
         // true last line instead of leaving most of the window blank.
         //
-        // $chat->rows() (sourced from WindowSizeMsg - the size candy-core's
+        // $chat->rows() (sourced from WindowSizeMsg - the size sugar-core's
         // Program actually dispatches, live, on every resize) is the
         // authoritative value here - NOT a second, independent
         // TuiRenderer::getTerminalSize() query. That second query has its
@@ -3243,7 +3243,7 @@ final class Renderer
      * The strip is prepended above the shell, outside every clip, so it has
      * to hold its own two invariants (audit 15b-18):
      *
-     * - ONE row no wider than `$chat->cols()`. candy-core repaints with an
+     * - ONE row no wider than `$chat->cols()`. sugar-core repaints with an
      *   absolute `cursorTo()`, so a row the terminal soft-wraps paints every
      *   row below it one line low, and {@see transcriptTextRegion()} counts
      *   the strip's lines to find the shell. Each name is capped at
@@ -3586,7 +3586,7 @@ final class Renderer
      * requested of the producer.
      *
      * Why this matters is the same reason {@see renderDiff()} truncates and
-     * {@see renderStatusBar()} fits rather than wraps: candy-core's `Renderer`
+     * {@see renderStatusBar()} fits rather than wraps: sugar-core's `Renderer`
      * repaints rows with an ABSOLUTE `cursorTo($row, 1)`, so one logical line
      * per physical row is a hard invariant. An over-wide row is soft-wrapped
      * by the TERMINAL, every row after it slides down, and the repaint lands
@@ -3695,11 +3695,11 @@ final class Renderer
      * {@see Width::wrapAnsi()}.
      *
      * ✅ THE CLUSTER DISAGREEMENT THIS PARAGRAPH DESCRIBED IS FIXED — in
-     * candy-core, in round 40 (2026-08-22), as backlog E68. It is rewritten
+     * sugar-core, in round 40 (2026-08-22), as backlog E68. It is rewritten
      * rather than deleted because the branch below still exists, and a reader
      * who finds a guard with its stated reason removed will delete the guard.
      *
-     * WHAT IT SAID. candy-core measured cell width two ways that disagreed on
+     * WHAT IT SAID. sugar-core measured cell width two ways that disagreed on
      * grapheme clusters: `Width::of()` split with `grapheme_str_split()` where
      * it existed and fell back to ONE CODEPOINT PER CLUSTER where it did not
      * (PHP < 8.4 without that intl function — this repo's baseline is 8.3),
@@ -3710,7 +3710,7 @@ final class Renderer
      * cols=100 produced rows of 194, with the wrap reporting success.
      *
      * WHAT IS TRUE NOW. `Width` has ONE segmentation on every PHP version —
-     * `graphemes()` walks ICU through `grapheme_extract()`, and `candy-core`
+     * `graphemes()` walks ICU through `grapheme_extract()`, and `sugar-core`
      * declares `ext-intl` to make that a guarantee rather than a hope. MEASURED
      * on PHP 8.3.6, before -> after the fix: a skin-toned thumb scores
      * `Width::of` 4 -> 2, and a regional-indicator flag was 2 and stays 2. The
@@ -3901,7 +3901,7 @@ final class Renderer
      * documents that "a colour set on line N stays active on line N+1 (no SGR
      * reset is auto-emitted)", and SugarMarkdown's own paragraph wrap leaves the
      * same thing behind. That is fine for a stream written top to bottom and
-     * wrong for this renderer, because candy-core repaints only the rows that
+     * wrong for this renderer, because sugar-core repaints only the rows that
      * CHANGED — a middle line of a wrapped block, repainted alone, would
      * inherit whatever styling happened to be active on the wire instead of
      * its own, and a row left with an open SGR bleeds its colour into the
@@ -3909,7 +3909,7 @@ final class Renderer
      *
      * The state is carried across the whole block, not recomputed per line,
      * which is why this takes the list rather than one line at a time.
-     * {@see SgrState} is candy-core's own tracker — the one its cell-diff
+     * {@see SgrState} is sugar-core's own tracker — the one its cell-diff
      * resumes partial repaints with — so "balanced" here means the same thing
      * it means there.
      *
@@ -5148,7 +5148,7 @@ final class Renderer
      * diff bodies are verbatim file contents, so an edited file containing a
      * raw ESC would otherwise forge SGR straight onto the terminal wire - then
      * hard-truncated to $width so the frame keeps its one-logical-line-per-row
-     * invariant (candy-core's Renderer repaints by absolute row; a wrapped
+     * invariant (sugar-core's Renderer repaints by absolute row; a wrapped
      * line silently shifts every row below it). Sanitising happens BEFORE the
      * gutter is computed, so the marker column the numbering reads is the same
      * one that ends up on screen. Tabs are expanded in the same pass, for the
@@ -5174,12 +5174,12 @@ final class Renderer
         }
 
         // TAB has to be expanded HERE, before anything measures a row.
-        // candy-core's Sanitize::untrusted() deliberately preserves TAB, and
+        // sugar-core's Sanitize::untrusted() deliberately preserves TAB, and
         // Width::string("\t") is 0 - but sugar-style' Style::render()
         // expands every tab to tabWidth spaces before it does its own width
         // work (Style.php:969). So a tab-indented row (Go, Makefiles, C) is
         // budgeted 0 cells and painted 4, and the frame emits a row wider than
-        // the viewport - the PR #1403 failure class, where candy-core's
+        // the viewport - the PR #1403 failure class, where sugar-core's
         // absolute cursorTo() repaint turns an over-wide row into a status-bar
         // collision. The expansion width is read off a default Style rather
         // than written as a literal so it cannot drift from the styles below,
@@ -7004,7 +7004,7 @@ final class Renderer
      * in a quoted script, and a raw TAB would jump to the terminal's next tab
      * stop - a column the wrap cannot know - so a row could overrun the box.
      *
-     * The zone sentinels (U+E000/U+E001) are Private-Use TEXT to candy-core,
+     * The zone sentinels (U+E000/U+E001) are Private-Use TEXT to sugar-core,
      * so {@see Sanitize::visibleControls()} keeps them; raw, they would forge
      * sugar-mouse zone markup inside the modal. Every other row in the frame
      * strips them ({@see untrusted()}), but this one spells them as
@@ -7069,7 +7069,7 @@ final class Renderer
      * sits; snapping UP would silently eat the rest of the cluster behind the
      * caret. The two ends are exact boundaries, so the common offsets - 0 and
      * the whole string - short-circuit without a walk; a mid-text caret costs
-     * one ICU walk as far as the caret, the segmentation candy-core's `Width`
+     * one ICU walk as far as the caret, the segmentation sugar-core's `Width`
      * already charges for per row (E68 made `ext-intl` the guarantee).
      */
     private static function snapToClusterStart(string $text, int $codepointOffset): int

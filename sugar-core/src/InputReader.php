@@ -1,0 +1,908 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Core;
+
+use SugarCraft\Core\Msg\BackgroundColorMsg;
+use SugarCraft\Core\Msg\BlurMsg;
+use SugarCraft\Core\Msg\ClipboardMsg;
+use SugarCraft\Core\Msg\CursorColorMsg;
+use SugarCraft\Core\Msg\CursorPositionMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
+use SugarCraft\Core\Msg\ForegroundColorMsg;
+use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyPressMsg;
+use SugarCraft\Core\Msg\KeyReleaseMsg;
+use SugarCraft\Core\Msg\KeyRepeatMsg;
+use SugarCraft\Core\Msg\ModeReportMsg;
+use SugarCraft\Core\Msg\TerminalVersionMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMotionMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\PasteEndMsg;
+use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\Msg\PasteStartMsg;
+use SugarCraft\Core\Util\Sanitize;
+
+/**
+ * Stateful byte-stream parser. Feed it raw bytes via {@see parse()};
+ * it returns zero or more typed {@see Msg} values per call. Partial escape
+ * sequences are buffered across calls so split reads (common with stdin)
+ * still produce correct keys.
+ *
+ * Phase-3 round 1 covers: printable ASCII, control characters
+ * (Ctrl+A‒Z, Tab, Enter, Backspace, Escape, Space), Alt-prefixed keys
+ * (ESC + char), and the 4 arrow CSIs. Function keys, mouse, and the
+ * Kitty keyboard protocol arrive in a follow-up.
+ */
+final class InputReader
+{
+    private const PASTE_END   = "\x1b[201~";
+
+    /**
+     * Ceiling on paste bytes held between two surfaced {@see PasteMsg}s.
+     *
+     * A `CSI 200~` whose `CSI 201~` never arrives (a terminal that dropped
+     * the tail, or hostile input) would otherwise park every later byte in
+     * the paste buffer for the life of the process. Past this size the
+     * collected bytes are surfaced as a PasteMsg and collection continues
+     * in a fresh buffer — the envelope is NOT abandoned: treating the rest
+     * of a large but legitimate paste as keystrokes (where a pasted newline
+     * is Enter) is exactly what bracketed paste exists to prevent.
+     */
+    public const MAX_PASTE_BYTES = 1 << 20;
+
+    /**
+     * Read silence, in seconds, after which an open paste envelope is judged
+     * stale: its end marker was lost, so it is closed by
+     * {@see flushStalePaste()} and the keyboard comes back.
+     *
+     * {@see MAX_PASTE_BYTES} bounds memory but not liveness — a short paste
+     * whose `CSI 201~` was dropped never nears the cap, and every key typed
+     * afterwards would vanish into it. A real paste is one back-to-back burst
+     * from the terminal; typing after a lost marker comes after a human pause.
+     * This sits well above any intra-paste gap (a split write over a slow
+     * link) yet short enough that a dead keyboard is barely noticed.
+     */
+    public const PASTE_IDLE_TIMEOUT = 1.0;
+
+    private string $buf = '';
+    private bool $pasting = false;
+    private string $pasteBuf = '';
+
+    /**
+     * @param bool $sanitizePaste When true (default), bracketed-paste payloads
+     *                            are run through
+     *                            {@see Sanitize::untrustedForMarkedFrames()}
+     *                            before being surfaced as a {@see PasteMsg}, so
+     *                            an embedded OSC-52 / control sequence can't
+     *                            reach the model or the terminal raw — and
+     *                            neither can a pasted sugar-mouse zone sentinel
+     *                            (U+E000/U+E001), which survives a plain ANSI
+     *                            sweep as well-formed text and would otherwise
+     *                            forge click/frame markup once the paste is
+     *                            echoed into a zone-marked frame. Wired
+     *                            from {@see ProgramOptions::$sanitizePaste}.
+     */
+    public function __construct(private readonly bool $sanitizePaste = true)
+    {
+    }
+
+    /**
+     * @return list<Msg>
+     */
+    public function parse(string $bytes): array
+    {
+        $this->buf .= $bytes;
+        $msgs = [];
+        $i = 0;
+        $len = strlen($this->buf);
+
+        while ($i < $len) {
+            // Inside a bracketed-paste envelope: collect raw bytes until
+            // the CSI 201~ end marker is seen.
+            if ($this->pasting) {
+                $end = strpos($this->buf, self::PASTE_END, $i);
+                if ($end === false) {
+                    // Hold back a tail that could be the START of the end
+                    // marker (`ESC [ 2 0` here, `1 ~` on the next read):
+                    // moving it into pasteBuf meant the next strpos() could
+                    // never see the whole marker, so a paste whose end marker
+                    // straddled a read boundary never closed.
+                    $keep = self::pasteEndPrefixAtTail($this->buf, $i, $len);
+                    $this->pasteBuf .= substr($this->buf, $i, $len - $keep - $i);
+                    $i = $len - $keep;
+                    $this->surfaceOversizePaste($msgs);
+                    break;
+                }
+                $this->pasteBuf .= substr($this->buf, $i, $end - $i);
+                $msgs[]         = new PasteEndMsg();
+                $msgs[]         = new PasteMsg($this->pastePayload($this->pasteBuf));
+                $this->pasteBuf = '';
+                $this->pasting  = false;
+                $i = $end + strlen(self::PASTE_END);
+                continue;
+            }
+
+            $b = $this->buf[$i];
+            $code = ord($b);
+
+            // ESC: maybe a CSI sequence, an SS3 sequence, an alt-prefixed
+            // key, or a bare Escape.
+            if ($code === 0x1b) {
+                $remain = $len - $i;
+                if ($remain === 1) {
+                    break;
+                }
+                $next = $this->buf[$i + 1];
+                if ($next === '[') {
+                    if ($remain < 3) {
+                        break;
+                    }
+                    $j = $i + 2;
+                    while ($j < $len) {
+                        $c = ord($this->buf[$j]);
+                        $j++;
+                        if ($c >= 0x40 && $c <= 0x7e) {
+                            $params = substr($this->buf, $i + 2, $j - $i - 3);
+                            $final  = chr($c);
+                            // Bracketed paste: switch into paste mode and
+                            // consume the start marker. Subsequent bytes
+                            // (including the eventual 201~) are handled
+                            // by the pasting branch above.
+                            if ($final === '~' && $params === '200') {
+                                $this->pasting  = true;
+                                $this->pasteBuf = '';
+                                $msgs[]         = new PasteStartMsg();
+                                $i = $j;
+                                continue 2;
+                            }
+                            $msg = $this->decodeCsi($params, $final);
+                            if ($msg !== null) {
+                                $msgs[] = $msg;
+                            }
+                            $i = $j;
+                            continue 2;
+                        }
+                    }
+                    break;
+                }
+                if ($next === 'O') {
+                    // SS3: ESC O <single byte>. Used for F1-F4 on most
+                    // terminals (xterm sends "ESC O P" for F1, etc.).
+                    if ($remain < 3) {
+                        break;
+                    }
+                    $msg = $this->decodeSs3($this->buf[$i + 2]);
+                    if ($msg !== null) {
+                        $msgs[] = $msg;
+                    }
+                    $i += 3;
+                    continue;
+                }
+                if ($next === ']') {
+                    // OSC: ESC ] payload (ST | BEL). Used for terminal
+                    // queries (OSC 10/11/12 colour replies, OSC 52
+                    // clipboard, OSC 0/2 title, etc.).
+                    $end = $this->findOscEnd($i + 2, $len);
+                    if ($end === null) {
+                        // End marker not in the buffer yet — wait for
+                        // more bytes.
+                        break;
+                    }
+                    [$payload, $next_i] = $end;
+                    $msg = $this->decodeOsc($payload);
+                    if ($msg !== null) {
+                        $msgs[] = $msg;
+                    }
+                    $i = $next_i;
+                    continue;
+                }
+                // DCS: ESC P payload ESC \ . Narrowly triggered when
+                // the next byte is `>` (the XTVERSION reply marker)
+                // so we don't shadow Alt-P keypresses (`ESC P` from
+                // the user) for the general case.
+                if ($next === 'P' && $remain >= 3 && $this->buf[$i + 2] === '>') {
+                    $end = $this->findStTerminator($i + 2, $len);
+                    if ($end === null) {
+                        break;
+                    }
+                    [$payload, $next_i] = $end;
+                    $msg = $this->decodeDcs($payload);
+                    if ($msg !== null) {
+                        $msgs[] = $msg;
+                    }
+                    $i = $next_i;
+                    continue;
+                }
+                // Alt-prefixed key. The printable range (0x20-0x7e) covers
+                // ordinary Alt+letter/digit/punctuation; DEL (0x7f, most
+                // terminals' Backspace byte), Tab (0x09), and CR/LF
+                // (0x0d/0x0a, Enter) are also valid decodeChar() inputs and
+                // must be accepted here too - excluding them meant
+                // Alt+Backspace/Alt+Enter/Alt+Tab decoded as a bare,
+                // un-alt-flagged Escape (dropping just this ESC byte) plus a
+                // second, unrelated non-alt KeyMsg from the leftover byte on
+                // the next loop iteration - e.g. Alt+Backspace fired Escape
+                // (which callers often bind to quit) immediately followed by
+                // a plain Backspace, rather than one Alt+Backspace event.
+                $code2 = ord($next);
+                if (($code2 >= 0x20 && $code2 < 0x7f) || $code2 === 0x7f || $code2 === 0x09 || $code2 === 0x0d || $code2 === 0x0a || $code2 === 0x08) {
+                    $msgs[] = $this->decodeChar($code2, alt: true);
+                    $i += 2;
+                    continue;
+                }
+                // Alt + non-ASCII rune (sugar-core audit C3): terminals send
+                // Meta as ESC <bytes>, so Alt+é arrives as ESC C3 A9. The
+                // printable set above is ASCII-only, and falling through to
+                // the bare-Escape branch below silently dropped the alt flag
+                // for EVERY non-ASCII keypress (Escape, then a plain rune
+                // from the leftover bytes on the next pass). Mirror the
+                // bubbletea rune-assembly law of the non-alt block: assemble
+                // the full cluster after the ESC, park only a genuine
+                // plausible partial, and degrade provably-broken or
+                // overlong-encoded sequences exactly like the old branch did
+                // (Escape, then the stray byte re-parses as non-alt garbage).
+                // Single-codepoint framing keeps bubbletea parity: a combining
+                // sequence after Alt+base still yields one alt-flagged Char
+                // for the base plus plain Chars for the marks.
+                if ($code2 >= 0xc0 && $code2 <= 0xf7) {
+                    $seqLen = match (true) {
+                        $code2 >= 0xf0 => 4,
+                        $code2 >= 0xe0 => 3,
+                        default => 2,   // 0xC0-0xDF: 2-byte sequences
+                    };
+                    $available = min($seqLen, $len - $i - 1);
+
+                    $provenBroken = false;
+                    for ($j = 1; $j < $available; $j++) {
+                        $cb = ord($this->buf[$i + 1 + $j]);
+                        if ($cb < 0x80 || $cb > 0xbf) {
+                            $provenBroken = true;
+                            break;
+                        }
+                    }
+                    if ($provenBroken) {
+                        $msgs[] = new KeyMsg(KeyType::Escape);
+                        $i += 1;
+                        continue;
+                    }
+                    if ($available < $seqLen) {
+                        // Split read mid-rune: ESC + plausible lead parks in
+                        // the buffer. Safe — hasPendingEscape()/flushPending()
+                        // promote only a LONE ESC, never ESC + lead.
+                        break;
+                    }
+                    $rune = substr($this->buf, $i + 1, $seqLen);
+                    // Strict decode catches what the range scan cannot:
+                    // overlong forms (C0/C1 leads) and out-of-range lead +
+                    // continuation combinations.
+                    if (!mb_check_encoding($rune, 'UTF-8')) {
+                        $msgs[] = new KeyMsg(KeyType::Escape);
+                        $i += 1;
+                        continue;
+                    }
+                    $msgs[] = new KeyMsg(KeyType::Char, rune: $rune, alt: true);
+                    $i += 1 + $seqLen;
+                    continue;
+                }
+                $msgs[] = new KeyMsg(KeyType::Escape);
+                $i += 1;
+                continue;
+            }
+
+            // Mirrors charmbracelet/bubbletea rune assembly.
+            // Detect UTF-8 lead bytes and assemble the full codepoint
+            // before emitting — C0-0x7f bytes are single-byte ASCII.
+            //
+            // Cited fix (candy-tetris audit finding #2, 2026-09-30): this
+            // block used to reuse the name `$len` for the sequence length,
+            // clobbering the buffer-length that drives the `while ($i < $len)`
+            // walk. Every multi-byte rune truncated the parse at its own
+            // boundary and deferred the rest of the read to the NEXT read —
+            // so the last bytes of a glyph burst (typically the `q` typed
+            // right after) sat parked until further input arrived, soft-locking
+            // the app. It also parked a lead byte unconditionally whenever the
+            // buffer was shorter than the promised sequence, even when the few
+            // bytes actually present already proved the sequence malformed
+            // (e.g. `\xe2` followed by `q`) — a split read then poisoned the
+            // buffer head forever: every later parse() broke at $i = 0 before
+            // reaching any key. Fail-open law: only a *plausible* partial
+            // (all bytes present so far are real continuations) may park;
+            // anything undecodable is dropped one byte at a time and the
+            // stream keeps draining.
+            if ($code >= 0x80) {
+                // Expected sequence length from the lead byte. A 1 here means
+                // the byte cannot start a rune at all: a stray continuation
+                // byte (0x80-0xBF) or an invalid lead (0xF8-0xFF).
+                $seqLen = match (true) {
+                    $code >= 0xf0 => 4,  // 0xF0-0xF7: 4-byte sequences
+                    $code >= 0xe0 => 3,  // 0xE0-0xEF: 3-byte sequences (CJK)
+                    $code >= 0xc0 => 2,  // 0xC0-0xDF: 2-byte sequences (Latin extend)
+                    default       => 1,
+                };
+                $available = min($seqLen, $len - $i);
+
+                // Any present byte after the lead that is not a continuation
+                // (0x80-0xBF) disproves the sequence right now — never wait
+                // for bytes that would contradict what is already in hand.
+                $provenBroken = false;
+                for ($j = 1; $j < $available; $j++) {
+                    $cb = ord($this->buf[$i + $j]);
+                    if ($cb < 0x80 || $cb > 0xbf) {
+                        $provenBroken = true;
+                        break;
+                    }
+                }
+                if ($provenBroken) {
+                    $i += 1;
+                    continue;
+                }
+                // Genuine split mid-rune: every byte so far is a plausible
+                // continuation and more are owed. Park until the next read —
+                // same contract as the ESC/OSC branches.
+                if ($available < $seqLen) {
+                    break;
+                }
+                $rune = substr($this->buf, $i, $seqLen);
+                // Strict decode catches what the range scan cannot: stray
+                // single bytes ($seqLen 1), overlong forms (0xC0/0xC1 leads)
+                // and out-of-range lead/continuation combinations. Dropping a
+                // byte and re-walking is bounded — each pass advances $i.
+                if ($seqLen === 1 || !mb_check_encoding($rune, 'UTF-8')) {
+                    $i += 1;
+                    continue;
+                }
+                $msgs[] = new KeyMsg(KeyType::Char, rune: $rune);
+                $i += $seqLen;
+                continue;
+            }
+
+            $msgs[] = $this->decodeChar($code);
+            $i += 1;
+        }
+
+        $this->buf = substr($this->buf, $i);
+        return $msgs;
+    }
+
+    public function flushPending(): ?Msg
+    {
+        // Inside a paste, a buffered ESC is the head of the end marker (or a
+        // pasted byte), never an Escape key: promoting it would both inject a
+        // keystroke into the paste and eat the byte the marker needs.
+        if ($this->buf === '' || $this->pasting) {
+            return null;
+        }
+        if (ord($this->buf[0]) === 0x1b && strlen($this->buf) === 1) {
+            $this->buf = '';
+            return new KeyMsg(KeyType::Escape);
+        }
+        return null;
+    }
+
+    /**
+     * True when the parser is holding a single ESC byte awaiting
+     * disambiguation. {@see \SugarCraft\Core\Program} polls this so it can
+     * promote the byte to a bare Escape after a short timeout.
+     */
+    public function hasPendingEscape(): bool
+    {
+        return !$this->pasting && $this->buf === "\x1b";
+    }
+
+    /**
+     * True while inside a bracketed-paste envelope whose end marker has not
+     * arrived yet. {@see \SugarCraft\Core\Program} polls this after each
+     * read to arm the {@see PASTE_IDLE_TIMEOUT} stale-paste recovery.
+     */
+    public function isPasting(): bool
+    {
+        return $this->pasting;
+    }
+
+    /**
+     * Close a paste envelope whose `CSI 201~` never came, exactly as the
+     * marker would have: a {@see PasteEndMsg} followed by a {@see PasteMsg}
+     * with whatever was collected — including a held-back tail that looked
+     * like the start of the marker, since with the marker gone it was pasted
+     * text. Afterwards the reader is back in key mode, so the next byte is a
+     * keystroke again. Returns an empty list when no paste is open.
+     *
+     * @return list<Msg>
+     */
+    public function flushStalePaste(): array
+    {
+        if (!$this->pasting) {
+            return [];
+        }
+        $raw = $this->pasteBuf . $this->buf;
+        $this->pasteBuf = '';
+        $this->buf      = '';
+        $this->pasting  = false;
+        return [new PasteEndMsg(), new PasteMsg($this->pastePayload($raw))];
+    }
+
+    /**
+     * Paste content is attacker-influenced (whatever was on the clipboard);
+     * neutralize embedded escapes/control bytes AND the sugar-mouse zone
+     * sentinels (U+E000/U+E001) by default — sentinels survive a plain ANSI
+     * sweep as well-formed text and would forge click/frame markup once
+     * echoed into a marked frame. Opt out via ProgramOptions::$sanitizePaste.
+     */
+    private function pastePayload(string $raw): string
+    {
+        return $this->sanitizePaste ? Sanitize::untrustedForMarkedFrames($raw) : $raw;
+    }
+
+    /**
+     * Length of the longest proper prefix of {@see PASTE_END} that `$buf`
+     * ends with, looking no further back than `$from`.
+     */
+    private static function pasteEndPrefixAtTail(string $buf, int $from, int $len): int
+    {
+        for ($k = min(strlen(self::PASTE_END) - 1, $len - $from); $k > 0; $k--) {
+            if (substr_compare($buf, substr(self::PASTE_END, 0, $k), $len - $k, $k) === 0) {
+                return $k;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Surface the collected paste bytes as a {@see PasteMsg} once they pass
+     * {@see MAX_PASTE_BYTES}, staying inside the envelope. The cut backs off
+     * an incomplete trailing UTF-8 sequence so a multibyte character is never
+     * split between two messages (which the sanitizer would mangle).
+     *
+     * @param list<Msg> $msgs
+     */
+    private function surfaceOversizePaste(array &$msgs): void
+    {
+        $size = strlen($this->pasteBuf);
+        if ($size < self::MAX_PASTE_BYTES) {
+            return;
+        }
+        $cut = $size;
+        for ($back = 1; $back <= 3 && $back <= $size; $back++) {
+            $b = ord($this->pasteBuf[$size - $back]);
+            if (($b & 0xc0) === 0x80) {
+                continue; // continuation byte — keep looking for its lead
+            }
+            $need = match (true) {
+                ($b & 0xe0) === 0xc0 => 2,
+                ($b & 0xf0) === 0xe0 => 3,
+                ($b & 0xf8) === 0xf0 => 4,
+                default              => 1,
+            };
+            if ($need > $back) {
+                $cut = $size - $back; // lead byte whose sequence is not complete yet
+            }
+            break;
+        }
+        $msgs[] = new PasteMsg($this->pastePayload(substr($this->pasteBuf, 0, $cut)));
+        $this->pasteBuf = substr($this->pasteBuf, $cut);
+    }
+
+    private function decodeChar(int $code, bool $alt = false): KeyMsg
+    {
+        return match (true) {
+            $code === 0x09 => new KeyMsg(KeyType::Tab, alt: $alt),
+            $code === 0x0d, $code === 0x0a
+                          => new KeyMsg(KeyType::Enter, alt: $alt),
+            $code === 0x7f, $code === 0x08
+                          => new KeyMsg(KeyType::Backspace, alt: $alt),
+            $code === 0x20 => new KeyMsg(KeyType::Space, rune: ' ', alt: $alt),
+            $code === 0x1b => new KeyMsg(KeyType::Escape, alt: $alt),
+            $code >= 1 && $code <= 26
+                          => new KeyMsg(KeyType::Char, rune: chr(0x60 + $code), alt: $alt, ctrl: true),
+            $code >= 0x20 && $code < 0x7f
+                          => new KeyMsg(KeyType::Char, rune: chr($code), alt: $alt),
+            default        => new KeyMsg(KeyType::Char, rune: chr($code), alt: $alt),
+        };
+    }
+
+    private function decodeCsi(string $params, string $final): ?Msg
+    {
+        // Focus reporting (CSI ?1004h): ESC[I → focus in, ESC[O → focus out.
+        if ($params === '') {
+            if ($final === 'I') {
+                return new FocusGainedMsg();
+            }
+            if ($final === 'O') {
+                return new BlurMsg();
+            }
+        }
+
+        // SGR-encoded mouse (CSI ?1006h): ESC[< b ; x ; y M|m
+        if (($final === 'M' || $final === 'm') && isset($params[0]) && $params[0] === '<') {
+            return $this->decodeSgrMouse(substr($params, 1), $final === 'M');
+        }
+
+        // DSR cursor-position report (reply to CSI 6n): CSI <row> ; <col> R.
+        // F3 also sends `CSI R` but with no params, so the digit prefix
+        // tells the two apart.
+        if ($final === 'R' && $params !== '' && preg_match('/^(\d+);(\d+)$/', $params, $m) === 1) {
+            return new CursorPositionMsg((int) $m[1], (int) $m[2]);
+        }
+
+        // Kitty keyboard flag report (reply to `CSI ? u`): CSI ? <flags> u.
+        if ($final === 'u' && isset($params[0]) && $params[0] === '?'
+            && preg_match('/^\?(\d+)$/', $params, $m) === 1) {
+            return new KeyboardEnhancementsMsg((int) $m[1]);
+        }
+
+        // Kitty per-key event format: CSI <code>[;<mod>[:<event>]][;<text>] u.
+        // Press is the default; event 2 = repeat, 3 = release. We dispatch
+        // to KeyPressMsg / KeyRepeatMsg / KeyReleaseMsg so handlers can
+        // pattern match on instanceof, while still satisfying the
+        // existing `instanceof KeyMsg` checks.
+        if ($final === 'u' && $params !== '' && ctype_digit($params[0])) {
+            return $this->decodeKittyKey($params);
+        }
+
+        // DECRPM mode report (reply to DECRQM): CSI [?] <mode> ; <state> $ y.
+        // The intermediate `$` is collected into params by the CSI loop,
+        // so params ends in `$` and final is `y`.
+        if ($final === 'y' && str_ends_with($params, '$')) {
+            $body    = substr($params, 0, -1);
+            $private = isset($body[0]) && $body[0] === '?';
+            $core    = $private ? substr($body, 1) : $body;
+            if (preg_match('/^(\d+);(\d+)$/', $core, $m) === 1) {
+                $state = ModeState::tryFrom((int) $m[2]);
+                if ($state !== null) {
+                    return new ModeReportMsg((int) $m[1], $private, $state);
+                }
+            }
+        }
+
+        // Modified key sequences carry a `;<mod>` suffix on the params,
+        // e.g. `CSI 1;5A` (ctrl-Up) or `CSI 15;3~` (alt-F5). Strip the
+        // modifier off here so the key-lookup match below stays simple.
+        $mods = null;
+        $keyParams = $params;
+        if (preg_match('/^(\d*);(\d+)$/', $params, $mm) === 1) {
+            $mods = Modifiers::fromXtermMod((int) $mm[2]);
+            $keyParams = $mm[1]; // may be '' (for `;<mod>`) or a digit string
+        }
+
+        $key = match ($final) {
+            'A' => new KeyMsg(KeyType::Up),
+            'B' => new KeyMsg(KeyType::Down),
+            'C' => new KeyMsg(KeyType::Right),
+            'D' => new KeyMsg(KeyType::Left),
+            'H' => new KeyMsg(KeyType::Home),
+            'F' => new KeyMsg(KeyType::End),
+            'P' => new KeyMsg(KeyType::F1),
+            'Q' => new KeyMsg(KeyType::F2),
+            'R' => new KeyMsg(KeyType::F3),
+            'S' => new KeyMsg(KeyType::F4),
+            // Modified Tab. The raw 0x09 byte has no room to carry a
+            // modifier, so xterm-family terminals report Ctrl+Tab as
+            // `CSI 1;5I` and Ctrl+Shift+Tab as `CSI 1;6I`. Unmodified
+            // `CSI I` (empty params) is the focus-in report and is
+            // already returned above, so reaching here always means a
+            // parameterised — i.e. modified — Tab.
+            'I' => new KeyMsg(KeyType::Tab),
+            // Shift+Tab, the one modified Tab that does NOT use the `CSI 1;<mod>I`
+            // form. Every xterm-family terminal spells backtab `CSI Z` instead,
+            // carrying the modifier in the final byte rather than in a
+            // parameter — so the `;<mod>` strip above finds nothing and $mods
+            // stays null. Set shift here rather than leaving it to that block.
+            //
+            // Without this arm `CSI Z` fell straight through to `default =>
+            // null` and was dropped by the reader, which meant no application
+            // on sugar-core could bind Shift+Tab at all: a handler could be
+            // written and would simply never fire.
+            //
+            // A terminal that sends the parameterised `CSI 1;2Z` still works —
+            // $mods is then non-null and the rebuild below merges shift in
+            // from it, landing on the same message.
+            //
+            // WHAT THIS COMMENT USED TO SAY, and why the code changed: the
+            // rebuild below was *total*, so it held only where the parameter
+            // already encoded shift. Every parameter whose xterm modifier has
+            // the shift bit CLEAR — `1;3Z` (alt), `1;5Z` (ctrl), `1;7Z`
+            // (ctrl+alt) — was rebuilt from $mods alone and came back without
+            // the shift this final byte is the whole meaning of. The comment
+            // named only `1;5Z` and declined the fix on the grounds that no
+            // xterm-family terminal emits it. That reasoning was right about
+            // the emitter and wrong about the size: it is a three-member
+            // family, not one shape, so a fix scoped to `1;5` would have been
+            // wrong. The rebuild now ORs rather than replaces, which fixes the
+            // whole family at once and is a no-op for every other arm — `'Z'`
+            // is the only entry in this table that sets a modifier flag of its
+            // own.
+            'Z' => new KeyMsg(KeyType::Tab, shift: true),
+            '~' => match ($keyParams) {
+                '1', '7' => new KeyMsg(KeyType::Home),
+                '4', '8' => new KeyMsg(KeyType::End),
+                '3'      => new KeyMsg(KeyType::Delete),
+                '5'      => new KeyMsg(KeyType::PageUp),
+                '6'      => new KeyMsg(KeyType::PageDown),
+                '11'     => new KeyMsg(KeyType::F1),
+                '12'     => new KeyMsg(KeyType::F2),
+                '13'     => new KeyMsg(KeyType::F3),
+                '14'     => new KeyMsg(KeyType::F4),
+                '15'     => new KeyMsg(KeyType::F5),
+                '17'     => new KeyMsg(KeyType::F6),
+                '18'     => new KeyMsg(KeyType::F7),
+                '19'     => new KeyMsg(KeyType::F8),
+                '20'     => new KeyMsg(KeyType::F9),
+                '21'     => new KeyMsg(KeyType::F10),
+                '23'     => new KeyMsg(KeyType::F11),
+                '24'     => new KeyMsg(KeyType::F12),
+                default  => null,
+            },
+            default => null,
+        };
+
+        if ($key !== null && $mods !== null) {
+            // MERGE, do not replace. A `;<mod>` parameter and a final byte are
+            // two independent modifier channels, and a key can arrive carrying
+            // both: `CSI 1;5Z` spells ctrl in the parameter and shift in the
+            // `Z`. Overwriting with $mods alone dropped whichever half the
+            // arm above had set, so ORing is what makes the two channels
+            // additive. Every arm other than `'Z'` builds its KeyMsg with all
+            // three flags false, so for them this is exactly the old
+            // assignment.
+            $key = new KeyMsg(
+                $key->type,
+                $key->rune,
+                alt:   $mods->alt   || $key->alt,
+                ctrl:  $mods->ctrl  || $key->ctrl,
+                shift: $mods->shift || $key->shift,
+            );
+        }
+        return $key;
+    }
+
+    /**
+     * Locate an OSC terminator starting at byte $start in the buffer.
+     * Returns `[payload, next_i]` or null if the terminator hasn't
+     * arrived yet. OSC strings end with either `\x07` (BEL) or the
+     * two-byte ST sequence `ESC \`.
+     *
+     * @return array{0:string,1:int}|null
+     */
+    private function findOscEnd(int $start, int $len): ?array
+    {
+        for ($k = $start; $k < $len; $k++) {
+            $c = $this->buf[$k];
+            if ($c === self::BEL) {
+                return [substr($this->buf, $start, $k - $start), $k + 1];
+            }
+            if ($c === "\x1b" && ($this->buf[$k + 1] ?? '') === '\\') {
+                return [substr($this->buf, $start, $k - $start), $k + 2];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Decode a Kitty progressive-keyboard per-key event payload (the
+     * params of a `CSI ... u` sequence). Format:
+     *
+     *     <code>[:<alt-code>:<base-code>][;<modifiers>[:<event>]][;<text>...]
+     *
+     * `<event>`: 1 (press, default), 2 (repeat), 3 (release).
+     * Returns one of {@see KeyPressMsg} / {@see KeyRepeatMsg} /
+     * {@see KeyReleaseMsg}.
+     */
+    private function decodeKittyKey(string $params): KeyMsg
+    {
+        // Split into the three semicolon-separated sections; each
+        // section may contain colon sub-fields.
+        $sections = explode(';', $params);
+        $sectionCount = count($sections);
+        $codePart = $sections[0];
+        $modPart  = $sectionCount > 1 ? $sections[1] : '1';
+        $textPart = $sectionCount > 2 ? $sections[2] : '';
+
+        // Primary code is the first colon-sub-field of section 0.
+        $code = (int) explode(':', $codePart)[0];
+
+        // Section 1 carries `<modifiers>:<event>`; both default to 1.
+        $modBits = explode(':', $modPart);
+        $modByte = (int) ($modBits[0] === '' ? '1' : $modBits[0]);
+        $event   = (int) ($modBits[1] ?? '1');
+        $mods    = Modifiers::fromXtermMod($modByte);
+
+        // Optional text section is colon-separated decimal codepoints.
+        $text = '';
+        if ($textPart !== '') {
+            foreach (explode(':', $textPart) as $cp) {
+                if ($cp !== '' && ctype_digit($cp)) {
+                    $text .= mb_chr((int) $cp, 'UTF-8');
+                }
+            }
+        }
+
+        // Kitty progressive keyboard protocol routes named functional
+        // keys (arrows, F-keys, keypad, media, locks, modifier-as-key)
+        // through the Private Use Area (0xE000+).
+        $kittyMap = KeyType::kittyFunctionalKeys();
+
+        // Map well-known codepoints to KeyType; otherwise treat as
+        // printable Char with the rune from `$text` (preferred) or the
+        // codepoint itself.
+        [$type, $rune] = match (true) {
+            $code === 9              => [KeyType::Tab,       ''],
+            $code === 13             => [KeyType::Enter,     ''],
+            $code === 27             => [KeyType::Escape,    ''],
+            $code === 32             => [KeyType::Space,     ' '],
+            $code === 127            => [KeyType::Backspace, ''],
+            isset($kittyMap[$code])  => [$kittyMap[$code],   ''],
+            default                  => [KeyType::Char, $text !== '' ? $text : mb_chr($code, 'UTF-8')],
+        };
+
+        $cls = match ($event) {
+            3       => KeyReleaseMsg::class,
+            2       => KeyRepeatMsg::class,
+            default => KeyPressMsg::class,
+        };
+
+        return new $cls(
+            $type,
+            (string) $rune,
+            alt:   $mods->alt,
+            ctrl:  $mods->ctrl,
+            shift: $mods->shift,
+        );
+    }
+
+    /**
+     * Locate a DCS / ST terminator (the two-byte `ESC \`) starting at
+     * byte $start. Returns `[payload, next_i]` or null if the
+     * terminator hasn't arrived yet. Also accepts `BEL` as a
+     * terminator since some terminals are sloppy about it for short
+     * replies.
+     *
+     * @return array{0:string,1:int}|null
+     */
+    private function findStTerminator(int $start, int $len): ?array
+    {
+        for ($k = $start; $k < $len; $k++) {
+            $c = $this->buf[$k];
+            if ($c === self::BEL) {
+                return [substr($this->buf, $start, $k - $start), $k + 1];
+            }
+            if ($c === "\x1b" && ($this->buf[$k + 1] ?? '') === '\\') {
+                return [substr($this->buf, $start, $k - $start), $k + 2];
+            }
+        }
+        return null;
+    }
+
+    private function decodeDcs(string $payload): ?Msg
+    {
+        // XTVERSION reply: `> | <terminal name and version>`. The
+        // leading `>` is the request-marker (we filter on it before
+        // calling) and `|` is the response separator.
+        if (str_starts_with($payload, '>|')) {
+            return new TerminalVersionMsg(substr($payload, 2));
+        }
+        return null;
+    }
+
+    private function decodeOsc(string $payload): ?Msg
+    {
+        // OSC 10 / 11 / 12: foreground / background / cursor colour
+        // reports. Format is `<num>;rgb:RRRR/GGGG/BBBB` — each channel
+        // is 1-4 hex digits and we squash to 8-bit.
+        if (preg_match('/^(10|11|12);rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})$/', $payload, $m) === 1) {
+            $r = self::scaleHex($m[2]);
+            $g = self::scaleHex($m[3]);
+            $b = self::scaleHex($m[4]);
+            return match ($m[1]) {
+                '10'    => new ForegroundColorMsg($r, $g, $b),
+                '11'    => new BackgroundColorMsg($r, $g, $b),
+                default => new CursorColorMsg($r, $g, $b),
+            };
+        }
+
+        // OSC 52: clipboard reply. Format is `52;<selection-bytes>;<base64>`.
+        // The selection token is normally a single character (c/p/s/0-7)
+        // but spec allows multiple, so we accept anything non-`;`.
+        if (preg_match('/^52;([^;]*);([A-Za-z0-9+\/=]*)$/', $payload, $m) === 1) {
+            $selection = $m[1] === '' ? 'c' : $m[1][0];
+            $decoded = base64_decode($m[2], true);
+            if ($decoded === false) {
+                return null;
+            }
+            return new ClipboardMsg($decoded, $selection);
+        }
+
+        return null;
+    }
+
+    /**
+     * Convert a 1-4 digit hex string into an 8-bit channel value. The
+     * terminal reports channels at the resolution it has available
+     * (xterm uses 4 hex digits = 16 bits per channel) so we scale down
+     * proportionally to the [0, 255] range we expose.
+     */
+    private static function scaleHex(string $hex): int
+    {
+        $maxFor = (1 << (4 * strlen($hex))) - 1;
+        $value = (int) hexdec($hex);
+        return (int) round(($value / $maxFor) * 255);
+    }
+
+    private const BEL = "\x07";
+
+    /**
+     * Decode an SS3 final byte (the byte after `ESC O`). Most terminals
+     * use SS3 for F1-F4 — F5+ generally come back as CSI ~ sequences.
+     */
+    private function decodeSs3(string $final): ?Msg
+    {
+        return match ($final) {
+            'P' => new KeyMsg(KeyType::F1),
+            'Q' => new KeyMsg(KeyType::F2),
+            'R' => new KeyMsg(KeyType::F3),
+            'S' => new KeyMsg(KeyType::F4),
+            'A' => new KeyMsg(KeyType::Up),
+            'B' => new KeyMsg(KeyType::Down),
+            'C' => new KeyMsg(KeyType::Right),
+            'D' => new KeyMsg(KeyType::Left),
+            'H' => new KeyMsg(KeyType::Home),
+            'F' => new KeyMsg(KeyType::End),
+            default => null,
+        };
+    }
+
+    private function decodeSgrMouse(string $params, bool $press): ?MouseMsg
+    {
+        $parts = explode(';', $params);
+        if (count($parts) !== 3) {
+            return null;
+        }
+        $b = (int) $parts[0];
+        $x = (int) $parts[1];
+        $y = (int) $parts[2];
+
+        $shift = ($b & 0x04) !== 0;
+        $alt   = ($b & 0x08) !== 0;
+        $ctrl  = ($b & 0x10) !== 0;
+
+        $isMotion = ($b & 0x20) !== 0;
+        $isWheel  = ($b & 0x40) !== 0;
+        $isExtra  = ($b & 0x80) !== 0;
+        $btnBits  = $b & 0x03;
+
+        if ($isWheel) {
+            $button = $btnBits === 0 ? MouseButton::WheelUp : MouseButton::WheelDown;
+            $action = MouseAction::Press;
+        } elseif ($isExtra) {
+            $button = $btnBits === 0 ? MouseButton::Backward : MouseButton::Forward;
+            $action = $isMotion ? MouseAction::Motion : ($press ? MouseAction::Press : MouseAction::Release);
+        } else {
+            $button = match ($btnBits) {
+                0       => MouseButton::Left,
+                1       => MouseButton::Middle,
+                2       => MouseButton::Right,
+                default => MouseButton::None,
+            };
+            $action = $isMotion
+                ? MouseAction::Motion
+                : ($press ? MouseAction::Press : MouseAction::Release);
+        }
+
+        // Pick the v2-style concrete subclass so callers can pattern-
+        // match on event kind via instanceof. All four subclasses still
+        // satisfy `instanceof MouseMsg`, so existing handlers keep
+        // working unchanged.
+        $class = match (true) {
+            $isWheel                          => MouseWheelMsg::class,
+            $action === MouseAction::Motion   => MouseMotionMsg::class,
+            $action === MouseAction::Release  => MouseReleaseMsg::class,
+            default                           => MouseClickMsg::class,
+        };
+        return new $class($x, $y, $button, $action, $shift, $alt, $ctrl);
+    }
+}

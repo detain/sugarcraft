@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Sanitize;
  *    tmux does not pass it through without `allow-passthrough`, so under tmux
  *    `bell` is the one that arrives.
  *
- * The bytes leave as a candy-core `Cmd::raw()`, never from `view()`: writing
+ * The bytes leave as a sugar-core `Cmd::raw()`, never from `view()`: writing
  * to the terminal is a side effect, and `raw` writes beside the frame without
  * disturbing the renderer's diff state.
  */

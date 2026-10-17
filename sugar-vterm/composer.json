@@ -30,7 +30,7 @@
         "react/stream": "^1.2",
         "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-async": "dev-master",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/sugar-core": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

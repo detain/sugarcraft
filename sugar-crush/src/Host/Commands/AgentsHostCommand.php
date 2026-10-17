@@ -15,7 +15,7 @@ use SugarCraft\Crush\Lang;
  * throwing. A `sugarcrush` launch always supplies one; an embedder that
  * builds a session without one gets the sentence every other optional
  * collaborator answers with. (The old `?? throw` escaped out of
- * `Chat::update()`, past candy-core's loop, and left the terminal raw.)
+ * `Chat::update()`, past sugar-core's loop, and left the terminal raw.)
  */
 final class AgentsHostCommand implements HostCommand
 {

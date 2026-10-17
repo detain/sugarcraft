@@ -14,7 +14,7 @@ use SugarCraft\Async\CancellationToken;
  * Async PostgreSQL connection wrapper using voryx/pgasync.
  *
  * PgAsync is the only pure-PHP async Postgres client that runs on the ReactPHP
- * event loop (the one candy-core's Program drives) — no Revolt, no fibers, no
+ * event loop (the one sugar-core's Program drives) — no Revolt, no fibers, no
  * loop bridging. (Supersedes an earlier amphp/postgres attempt whose Revolt
  * loop could not be bridged onto React's, crashing the admin pane on open.)
  *

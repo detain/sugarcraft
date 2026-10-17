@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**candy-vcr** is a PHP port of charmbracelet/x/vcr for recording/replaying candy-core TUI sessions. This research compares approaches across Go (upstream), Rust, and other ecosystems to identify improvements and priorities.
+**candy-vcr** is a PHP port of charmbracelet/x/vcr for recording/replaying sugar-core TUI sessions. This research compares approaches across Go (upstream), Rust, and other ecosystems to identify improvements and priorities.
 
 **Current Status:** candy-vcr is functionally complete with:
 
@@ -574,7 +574,7 @@ final class ContentMatcher implements EventMatcher {
 {
   "require": {
     "php": "^8.3",
-    "sugarcraft/candy-core": "dev-master"
+    "sugarcraft/sugar-core": "dev-master"
   },
   "require-dev": {
     "phpunit/phpunit": "^10.5",

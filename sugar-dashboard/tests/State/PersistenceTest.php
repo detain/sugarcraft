@@ -105,7 +105,7 @@ final class PersistenceTest extends TestCase
 
     /**
      * Regression: save() must persist the `{version, data}` wrapper through the
-     * shared candy-core atomic store, and load() must round-trip it back.
+     * shared sugar-core atomic store, and load() must round-trip it back.
      */
     public function testSaveRoundTripsThroughAtomicJsonFile(): void
     {

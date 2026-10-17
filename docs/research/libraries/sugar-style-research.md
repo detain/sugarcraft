@@ -101,7 +101,7 @@ console = Console(color_system="auto")  # auto-detect
 | ANSI 16 | ✓ | ✓ | ✓ | ✓ |
 | String parsing | Limited | ✓ (`FromStr`) | ✓ | Partial (hex only) |
 | HSL colors | ✗ | ✓ (palette feature) | ✓ | ✗ |
-| Profile detection | ✓ (external pkg) | ✓ | ✓ | ✓ (in candy-core) |
+| Profile detection | ✓ (external pkg) | ✓ | ✓ | ✓ (in sugar-core) |
 
 ### Missing in sugar-style
 
@@ -464,7 +464,7 @@ public static function hsl(float $hue, float $saturation, float $lightness): Col
 
 - `src/Style.php` — Main style class (1170+ lines)
 - `src/Border.php` — Border definitions
-- `src/Color.php` (in candy-core) — Color utilities
+- `src/Color.php` (in sugar-core) — Color utilities
 - `src/Palette.php` — ANSI color constants
 - `src/AdaptiveColor.php` — Light/dark switching
 - `src/CompleteColor.php` — Profile-aware colors

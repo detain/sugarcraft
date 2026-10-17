@@ -635,7 +635,7 @@ soft-serve repo info <name> [dataPath]
 
 ### Dependencies
 
-- **candy-core** — Base runtime (implied by `SugarCraft\Core\I18n\Lang`)
+- **sugar-core** — Base runtime (implied by `SugarCraft\Core\I18n\Lang`)
 
 - **sugar-ssh-server** — Could provide SSH transport layer for candy-git-server
 

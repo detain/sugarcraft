@@ -18,7 +18,7 @@ use SugarCraft\Style\Style;
 
 /**
  * The colour-capability guard: a presenter handed no theme renders through
- * Theme::detect() — the ansi palette downgraded via candy-core's
+ * Theme::detect() — the ansi palette downgraded via sugar-core's
  * ColorProfile::detect() — instead of emitting SGR unconditionally. Before
  * the guard, `StatusLine::success('done') | cat` wrote `\x1b[1m\x1b[92m✓`.
  */
@@ -109,7 +109,7 @@ final class DefaultThemeTest extends TestCase
     /**
      * NO_COLOR on a non-tty stream: no escape byte at all, on every presenter.
      *
-     * candy-core's ColorProfile::detect() follows charmbracelet/colorprofile:
+     * sugar-core's ColorProfile::detect() follows charmbracelet/colorprofile:
      * tty-ness is checked before NO_COLOR, so a pipe resolves NoTty and the
      * theme renders exactly as Theme::plain(). (It used to check NO_COLOR
      * first and answer Ascii, which still wrote bold/faint into the pipe.)

@@ -369,7 +369,7 @@ final class BackgroundSessionRunner
      * inherited buffers and keep the ordinary exit: the code survives, and the
      * one consequence of a plain exit that nothing else in this tree defuses
      * goes away. (The other two are defused already, and neither is reachable
-     * from this particular fork anyway: candy-core's `PosixBackend::restore()`
+     * from this particular fork anyway: sugar-core's `PosixBackend::restore()`
      * is PID-aware, and the daemon parent has built no backend — hence no MCP
      * client, no loop watcher — at the moment it forks, because
      * {@see self::executeTask()} builds all of that in the CHILD.)

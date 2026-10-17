@@ -59,7 +59,7 @@ use SugarCraft\Crush\Tools\Tool;
  * called — rather than leaking async-dispatch mode, or resetting a handler
  * the calling process installed, into the rest of that process once the run
  * finishes. That second half matters now that {@see \SugarCraft\Crush\Chat}
- * dispatches run() inside a live TUI: candy-core's `Program` installs its own
+ * dispatches run() inside a live TUI: sugar-core's `Program` installs its own
  * SIGINT closure for graceful shutdown, and resetting to `SIG_DFL` here left
  * an external `kill -INT` killing the process outright, so PHP's shutdown
  * sequence — and with it PosixBackend's destructor, which is what puts termios
@@ -2988,7 +2988,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *    fork: {@see \SugarCraft\Crush\Chat::driveWorkflowFiber()} resumes
      *    `run()` inside a \Fiber on the live TUI's own ReactPHP loop, so the
      *    process that installs this handler is the process holding the
-     *    raw-mode terminal. candy-core's `PosixBackend::restore()` is
+     *    raw-mode terminal. sugar-core's `PosixBackend::restore()` is
      *    PID-aware and THIS pid is the owner, so the plain exit's destructor
      *    chain is what puts the user's terminal back into cooked mode after
      *    Ctrl-C; a SIGKILL here would leave them typing blind. It is also
@@ -3113,7 +3113,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // this branch only ever runs in the process that installed the
             // handler, which is the live TUI/CLI process itself. Its
             // shutdown sequence is load-bearing here — the PID-aware
-            // candy-core terminal restore and Bootstrap's MCP-server stop
+            // sugar-core terminal restore and Bootstrap's MCP-server stop
             // hook both hang off it. See installInterruptHandlers()'s
             // doc-block.
             exit($signo === \SIGINT ? 130 : 143);
@@ -3134,7 +3134,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * RESTORED, not reset. This used to `pcntl_signal(SIGINT, SIG_DFL)`, which
      * is only equivalent when the caller had no handler of its own — and the
-     * caller that matters does: candy-core's `Program` installs a SIGINT closure
+     * caller that matters does: sugar-core's `Program` installs a SIGINT closure
      * that flips `$running = false` and stops the loop, which is how a
      * `bin/sugarcrush` session shuts down gracefully and how PHP gets to run its
      * shutdown sequence at all — `SugarCraft\Core\Util\Tty\PosixBackend` puts

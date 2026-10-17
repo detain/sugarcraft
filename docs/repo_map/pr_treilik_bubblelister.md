@@ -26,19 +26,19 @@ From the first-stage analysis (`repo_map/treilik_bubblelister.md`), SugarCraft's
 
 | treilik/bubblelister Feature | SugarCraft Lib(s) |
 |---|---|
-| List Model rendering (lines, viewport, cursor) | `candy-core` |
-| Word wrapping / text formatting | `candy-core` (StringUtil/WordWrap) |
-| tea.Model interface compliance | `candy-core` (Model trait) |
+| List Model rendering (lines, viewport, cursor) | `sugar-core` |
+| Word wrapping / text formatting | `sugar-core` (StringUtil/WordWrap) |
+| tea.Model interface compliance | `sugar-core` (Model trait) |
 | Line number prefixes, tree prefixes | `sugar-widgets` (Border/Frameless) |
 | Multi-line item support | `sugar-forms` (TextArea) |
 | Item sorting, LessFunc/EqualsFunc | `sugar-widgets` (ListModel) |
 | Current item styling (reverse video) | `sugar-widgets` (CurrentItem) |
-| Prefix/Suffix interfaces | `candy-core` (Decorator pattern) |
+| Prefix/Suffix interfaces | `sugar-core` (Decorator pattern) |
 | Viewport cursor offset | `sugar-widgets` (ScrollMargins) |
 | Concurrent item search | `sugar-widgets` (parallel find) |
 | Custom sort functions | `sugar-widgets` (Comparator) |
 
-**Primary mapping**: `sugar-widgets` as target for bubblelister port, with model/viewport/wrapping infrastructure in `candy-core`.
+**Primary mapping**: `sugar-widgets` as target for bubblelister port, with model/viewport/wrapping infrastructure in `sugar-core`.
 
 ---
 

@@ -29,15 +29,15 @@ final class AgentLabelFoldingTest extends TestCase
     {
         $this->assertSame([], AgentLabelFolding::fold([]));
         $this->assertSame(
-            ['You are auditing candy-core'],
-            AgentLabelFolding::fold(['You are auditing candy-core']),
+            ['You are auditing sugar-core'],
+            AgentLabelFolding::fold(['You are auditing sugar-core']),
         );
     }
 
     public function testASingleWordPrefixStaysByteIdentical(): void
     {
-        // The shape pinned live: 'Audit candy-core' / 'Audit sugar-ansi-parser'.
-        $labels = ['Audit candy-core', 'Audit sugar-ansi-parser', 'Audit sugar-constraints'];
+        // The shape pinned live: 'Audit sugar-core' / 'Audit sugar-ansi-parser'.
+        $labels = ['Audit sugar-core', 'Audit sugar-ansi-parser', 'Audit sugar-constraints'];
 
         $this->assertSame($labels, AgentLabelFolding::fold($labels));
     }

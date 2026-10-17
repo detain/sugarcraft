@@ -417,7 +417,7 @@ final class AgentWorkerPool
      * but "this helper does not throw" is not the same claim as "nothing throws
      * out of this destructor". The reap spends up to 100ms in usleep(), and
      * pcntl_async_signals(true) is unconditionally on in BOTH contexts a pool is
-     * ever built in (candy-core's Program run loop and WorkflowEngine::run()),
+     * ever built in (sugar-core's Program run loop and WorkflowEngine::run()),
      * so any signal the host process handles in userland is delivered inside
      * that window and a handler that throws would surface its exception right
      * here. An exception leaving a destructor is an uncatchable fatal, and
@@ -1322,7 +1322,7 @@ final class AgentWorkerPool
             //
             // 1. RAW TTY. An inherited raw-mode Tty's destructor clobbering
             //    the real terminal on the way out is fixed at the ROOT in
-            //    candy-core's PosixBackend::restore() (PID-aware; see #1406).
+            //    sugar-core's PosixBackend::restore() (PID-aware; see #1406).
             // 2. EXIT STATUS. waitForCompletion() reports an agent from the
             //    reap when no result file arrived, so the status IS read by
             //    the parent — which is why a clean exit(0) after

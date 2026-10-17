@@ -11,7 +11,7 @@ use SugarCraft\Minesweeper\Stats;
 /**
  * Atomic persistence wrapper for minesweeper difficulty statistics.
  *
- * Delegates the durable-state read/write to candy-core's
+ * Delegates the durable-state read/write to sugar-core's
  * {@see AtomicJsonFile} SSOT: writes go to a same-dir temp file under an
  * exclusive lock, then rename over the target. The rename is atomic on
  * POSIX — the target file is never in a partially-written state even if a

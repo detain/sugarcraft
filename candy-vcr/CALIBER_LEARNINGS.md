@@ -46,7 +46,7 @@ Local smoke test:
 
 The new `vhs-candy-vcr` job in vhs.yml runs in parallel with the
 upstream `vhs` job. It uses `candy-vcr render-batch` (PHP) instead of
-the Go `vhs` binary. Only `candy-core` is rendered during the soak
+the Go `vhs` binary. Only `sugar-core` is rendered during the soak
 period — the parallel job uses `|| true` so one lib's failure does not
 fail the whole workflow.
 

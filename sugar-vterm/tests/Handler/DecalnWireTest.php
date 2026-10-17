@@ -324,7 +324,7 @@ final class DecalnWireTest extends TestCase
         }
     }
 
-    // ─── Cross-lib seam: candy-core emitter → sugar-vterm emulator ────────────
+    // ─── Cross-lib seam: sugar-core emitter → sugar-vterm emulator ────────────
 
     public function testAnsiDecalnRoundTripMatchesProgrammaticCall(): void
     {
@@ -335,7 +335,7 @@ final class DecalnWireTest extends TestCase
         $direct = $this->handler(self::DIRTY, cols: 6, rows: 3);
         $direct->displayAlignmentTest();
 
-        $this->assertSame(Ansi::decaln(), "\x1b#8", 'candy-core emits the DEC encoding');
+        $this->assertSame(Ansi::decaln(), "\x1b#8", 'sugar-core emits the DEC encoding');
         for ($r = 0; $r < 3; $r++) {
             for ($c = 0; $c < 6; $c++) {
                 $this->assertEquals(

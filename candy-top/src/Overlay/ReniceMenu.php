@@ -87,7 +87,7 @@ final class ReniceMenu implements Overlay
             return OverlayResult::close();
         }
         if (in_array($key, ['enter', 'space'], true)) {
-            // Named, not inlined: candy-core's descriptor census reads the
+            // Named, not inlined: sugar-core's descriptor census reads the
             // argument of anything called close() and has no word for a ternary.
             $cmd = $this->pid > 0 ? Menus::renice($this->control, $this->pid, $this->value()) : null;
 

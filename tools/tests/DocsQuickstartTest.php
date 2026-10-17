@@ -41,7 +41,7 @@ declare(strict_types=1);
  * `SSHServer::listen()`, sugar-datepicker `withMinDate()`, candy-mail `from()`),
  * wrong arguments (sugar-video `cols:`/`rows:`, sugar-log `with('k', 'v')`), a
  * private constructor (sugar-table `new Table()`), and two `Model`
- * implementations without `subscriptions()` (candy-core, sugar-widgets). The
+ * implementations without `subscriptions()` (sugar-core, sugar-widgets). The
  * argument-type check came later. candy-sql's programmatic sample handed
  * `ConnectionFactory::fromDsn()`'s ConnectionConfig to
  * `App::start(DatabaseInterface $db)`, a TypeError that names and counts alone
@@ -1121,7 +1121,7 @@ final class DocsQuickstartTest extends TestCase
 
         // A class the sample declares must implement every method of the
         // SugarCraft interfaces it names. Checked only when nothing else can
-        // supply them (no parent class, no traits): the candy-core and
+        // supply them (no parent class, no traits): the sugar-core and
         // sugar-widgets Counter samples omitted Model::subscriptions() and could
         // never have been loaded.
         for ($i = 0; $i < $n; $i++) {

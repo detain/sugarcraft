@@ -274,7 +274,7 @@ class Picker
      * Byte-oriented patterns on purpose (no /u flag on the C0 class): C0
      * bytes can never occur inside a well-formed multi-byte sequence, and
      * a /u pattern returns false (not zero) on invalid UTF-8 — the same
-     * fail-closed shape candy-core's Sanitize documents.
+     * fail-closed shape sugar-core's Sanitize documents.
      */
     private function isTextKey(string $key): bool
     {
@@ -447,7 +447,7 @@ class Picker
 
     /**
      * Toggle the controlling tty into raw mode so the picker sees
-     * keys one byte at a time. Delegates to candy-core's portable
+     * keys one byte at a time. Delegates to sugar-core's portable
      * {@see RawMode} helper, which is a safe no-op on non-tty streams
      * (e.g. piped input in tests).
      */

@@ -51,7 +51,7 @@ $shell2 = $shell->withPop();  // new Shell instance, $shell unchanged
 
 ```
 sugar-navstack
-├── candy-core (dev-master)   — TUI framework foundation, Width util, Msg types
+├── sugar-core (dev-master)   — TUI framework foundation, Width util, Msg types
 └── sugar-mouse (dev-master)  — Manager for mouse-click zone tracking (optional)
 ```
 
@@ -419,7 +419,7 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 
 ## Analysis
 
-**sugar-navstack** is a faithful, well-extended PHP port of KevM/bubbleo that deliberately decouples from the bubbletea framework. Where bubbleo uses `tea.Model` interfaces and message-driven navigation, sugar-navstack uses plain PHP classes with direct method calls and produces raw strings — making it usable with any TUI framework (not just candy-core/bubbletea).
+**sugar-navstack** is a faithful, well-extended PHP port of KevM/bubbleo that deliberately decouples from the bubbletea framework. Where bubbleo uses `tea.Model` interfaces and message-driven navigation, sugar-navstack uses plain PHP classes with direct method calls and produces raw strings — making it usable with any TUI framework (not just sugar-core/bubbletea).
 
 ### Strengths
 
@@ -467,7 +467,7 @@ sugar-navstack is the navigation primitive for SugarCraft TUI applications. Its 
 
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-mouse-zones.md` — Mouse zone tracking for clickable breadcrumbs
 
-- `/home/sites/sugarcraft/repo_map/sugarcraft_candy-core.md` — TUI framework foundation
+- `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-core.md` — TUI framework foundation
 
 - `/home/sites/sugarcraft/repo_map/treilik_bubblelister.md` — List widget alternative for selection UI
 

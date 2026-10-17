@@ -268,8 +268,8 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 
 | textual Component | SugarCraft Lib | Mapping Rationale |
 |---|---|---|
-| `App`, `Widget`, `Screen`, `DOMNode`, `MessagePump` | `candy-core/` | Core TUI runtime — both provide the Elm-architecture base (Model/View/Update loop) |
-| `Reactive`, `var()`, `watch_*()` | `candy-core/` + `sugar-widgets/` | Reactive state — sugar-widgets has reactive components (TextInput, etc.) |
+| `App`, `Widget`, `Screen`, `DOMNode`, `MessagePump` | `sugar-core/` | Core TUI runtime — both provide the Elm-architecture base (Model/View/Update loop) |
+| `Reactive`, `var()`, `watch_*()` | `sugar-core/` + `sugar-widgets/` | Reactive state — sugar-widgets has reactive components (TextInput, etc.) |
 | Widget library (Button, Input, Tree, etc.) | `sugar-widgets/` | Prebuilt UI components |
 | TCSS Stylesheet, CSS properties | `sugar-style/` | Declarative styling + layout |
 | `Layout`, `VerticalLayout`, `HorizontalLayout`, `GridLayout` | `sugar-style/` + `sugar-panels/` | Layout algorithms |
@@ -286,14 +286,14 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `Button` | `sugar-widgets/` | Button widget |
 | `Toast`, `Notification` | `sugar-toast/` | Toast notifications |
 | `_xterm_parser` | `sugar-vterm/` | Terminal escape sequence parsing |
-| `timer.Timer` | `candy-core/` | Timer functionality |
-| `worker.Worker`, `WorkerManager` | `candy-core/` | Background workers |
+| `timer.Timer` | `sugar-core/` | Timer functionality |
+| `worker.Worker`, `WorkerManager` | `sugar-core/` | Background workers |
 | `command.CommandPalette`, `Provider` | `sugar-cli/` | Command palette system |
 | `binding.Binding` | `candy-scriptui/` | Key binding configuration |
 | `Pilot` (testing) | `candy-vcr/` | Testing infrastructure |
 | `Logger` + `log()` | `sugar-log/` | Logging system |
 | Web driver/rendering | _no equivalent_ | Browser-based TUI (unique to textual) |
-| `signal.Signal` | _partial in candy-core_ | Event signals |
+| `signal.Signal` | _partial in sugar-core_ | Event signals |
 
 **Notable Gaps in SugarCraft:**
 
@@ -309,4 +309,4 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 
 The framework's **strengths** include its comprehensive **widget library** (40+ built-in widgets), excellent **testing support** via the Pilot class, first-class **async/await** integration, and the ability to **serve apps in a web browser** via textual-web. Its **weaknesses** center on being Python-only, having a complex internal architecture that can be challenging to debug or extend, and historical performance issues on Windows. The tight coupling to the **rich** library is both a strength (excellent text formatting) and a weakness (large dependency, version coupling).
 
-For **SugarCraft**, textual represents a well-designed reference implementation for several patterns already being ported from the Charmbracelet Go ecosystem. The reactive system in `candy-core` maps to textual's `Reactive` descriptors, the CSS layout in `sugar-style` maps to textual's layout engine, and the widget components in `sugar-widgets` map to textual's built-in widget library. The key architectural insight from textual is the **separation of the message pump from the widget tree**, combined with **declarative reactive state** with automatic watcher injection. SugarCraft's ports of the Charmbracelet ecosystem are complementary rather than competing — textual could serve as a **reference implementation** for future SugarCraft architectural improvements.
+For **SugarCraft**, textual represents a well-designed reference implementation for several patterns already being ported from the Charmbracelet Go ecosystem. The reactive system in `sugar-core` maps to textual's `Reactive` descriptors, the CSS layout in `sugar-style` maps to textual's layout engine, and the widget components in `sugar-widgets` map to textual's built-in widget library. The key architectural insight from textual is the **separation of the message pump from the widget tree**, combined with **declarative reactive state** with automatic watcher injection. SugarCraft's ports of the Charmbracelet ecosystem are complementary rather than competing — textual could serve as a **reference implementation** for future SugarCraft architectural improvements.

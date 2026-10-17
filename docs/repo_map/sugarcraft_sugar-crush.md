@@ -538,7 +538,7 @@ Matches Anthropic/OpenAI tool_result wire format for compatibility with standard
 
 | Dependency | Purpose | File Reference |
 |------------|---------|-----------------|
-| `sugarcraft/candy-core` | `Model`, `Msg`, `Cmd`, `KeyType`, `KeyMsg`, `Subscriptions` | `Chat.php`, `AssistantMsg.php` |
+| `sugarcraft/sugar-core` | `Model`, `Msg`, `Cmd`, `KeyType`, `KeyMsg`, `Subscriptions` | `Chat.php`, `AssistantMsg.php` |
 | `sugarcraft/sugar-markdown` | `Renderer` (markdown), `Ansi` | `Renderer.php` |
 | `sugarcraft/sugar-style` | `Border`, `Style` | `Renderer.php` |
 
@@ -617,7 +617,7 @@ Requires PHP >= 8.3 (due to readonly properties, first-class callable `Closure::
 
 ```
 sugar-crush
-├── candy-core (TUI runtime, Model/Msg/Cmd)
+├── sugar-core (TUI runtime, Model/Msg/Cmd)
 ├── sugar-markdown (Markdown rendering via league/commonmark)
 └── sugar-style (Border, Style)
 
@@ -629,7 +629,7 @@ Dependent packages: None yet
 | sugar-crush Component | Upstream Crush | SugarCraft Equivalent |
 |----------------------|---------------|---------------------|
 | `Backend` interface | `fantasy.Provider` | `sugar-crush` pattern |
-| `Chat` (MVU Model) | `internal/ui/model.go` | `candy-core` |
+| `Chat` (MVU Model) | `internal/ui/model.go` | `sugar-core` |
 | `ToolCall`/`ToolResult` | `internal/agent/tools/*.go` | `sugar-crush` |
 | `ClaudeCodeMcpClient` | `modelcontextprotocol/go-sdk` | Not yet ported |
 | `Session` | SQLite session storage | `sugar-style` (future) |

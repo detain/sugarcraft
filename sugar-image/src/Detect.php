@@ -265,8 +265,8 @@ final class Detect
      * return their own no-answer value, which is the same thing they already
      * return on a timeout.
      *
-     * THIS IS ONE MEMBER OF A FAMILY, AND THE FAMILY LIVES AT candy-core.
-     * candy-core and sugar-image were both written when descriptor 0 was
+     * THIS IS ONE MEMBER OF A FAMILY, AND THE FAMILY LIVES AT sugar-core.
+     * sugar-core and sugar-image were both written when descriptor 0 was
      * always a live terminal; the through-line, the other members, and the
      * measurements for each of the three standard-library calls that THROW
      * rather than degrade on a closed handle are on

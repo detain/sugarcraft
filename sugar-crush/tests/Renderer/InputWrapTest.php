@@ -135,7 +135,7 @@ final class InputWrapTest extends TestCase
      * come out about a third of the terminal wide. Measuring in cells is the
      * whole assertion.
      *
-     * PHP 8.3.6 on this box; the cell widths come from candy-core's
+     * PHP 8.3.6 on this box; the cell widths come from sugar-core's
      * `Width::of()`, not from the platform.
      */
     public function testACjkDraftWrapsByCellsAndNotByBytes(): void

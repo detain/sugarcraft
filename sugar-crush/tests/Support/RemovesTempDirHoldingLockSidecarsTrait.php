@@ -9,7 +9,7 @@ namespace SugarCraft\Crush\Tests\Support;
  * {@see \SugarCraft\Core\Util\AtomicJsonFile} write into.
  *
  * WHY. Every atomic write takes an exclusive flock on a stable sidecar named
- * `.<basename>.lock` beside the target, and candy-core 96e8fce92 deliberately
+ * `.<basename>.lock` beside the target, and sugar-core 96e8fce92 deliberately
  * NEVER unlinks it — removing a lock races a writer blocked on the old inode
  * into a new one. A teardown that sweeps with `glob($dir . '/*')` therefore
  * misses the dot-prefixed sidecar (and any stray `.<name>.tmp.<hex>` payload

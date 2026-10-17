@@ -43,7 +43,7 @@ echo StatusLine::error('connection refused'), "\n";
   `Theme::ansi()` ships the colourful palette; bring your own theme by
   passing styles to the constructor (or `Theme::build()`).
   `Theme::detect()` is the `ansi()` palette downgraded to what the output
-  can show, via candy-core's `ColorProfile::detect()`: no escape bytes at
+  can show, via sugar-core's `ColorProfile::detect()`: no escape bytes at
   all when STDOUT is not a tty (`myapp --help | less`), colour dropped but
   bold kept under `NO_COLOR` on a terminal, full colour forced by
   `CLICOLOR_FORCE` / `FORCE_COLOR`. As in the `colorprofile` design, tty-ness

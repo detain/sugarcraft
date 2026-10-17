@@ -1100,7 +1100,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 ### ISS-047 · [P2] Unbound Ctrl+letter chords type their letter into the draft; readline keys are unusable
 - **Product / area:** sugar-crush · tui (input)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
-- **Location:** `sugar-crush/src/Chat.php:3533-3545` (ctrl-flagged `Char` → `insertRune`); `candy-core/src/InputReader.php:502` (C0 byte → `KeyMsg(Char, rune: chr(0x60+code), ctrl: true)`)
+- **Location:** `sugar-crush/src/Chat.php:3533-3545` (ctrl-flagged `Char` → `insertRune`); `sugar-core/src/InputReader.php:502` (C0 byte → `KeyMsg(Char, rune: chr(0x60+code), ctrl: true)`)
 - **Problem:**
   - Every unclaimed ctrl-chord inserts its bare letter. This is deliberate and pinned by `KeyHelpTest`: it keeps `TextArea::update()`'s own Ctrl+A/E/U/K edits from running.
   - There is no clear-line chord, and idle `Esc` does nothing to the draft (`sugar-crush/src/Chat.php:2992-2995`).

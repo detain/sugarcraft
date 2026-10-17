@@ -69,7 +69,7 @@ Emit a brief digest (do not write files):
 
 ```
 Lib: sugar-widgets (SugarCraft\Widgets\)
-PHP: ^8.3 | deps: candy-core
+PHP: ^8.3 | deps: sugar-core
 Type: TUI component library | upstream: charmbracelet/bubbletea
 Entry: src/Stopwatch/Stopwatch.php — final class, readonly props, Model contract
 Tests: behavior + snapshot | fixtures in tests/fixtures/
