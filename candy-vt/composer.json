@@ -37,7 +37,7 @@
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.65",
-        "sugarcraft/candy-testing": "dev-master"
+        "sugarcraft/sugar-testing": "dev-master"
     },
     "autoload": {
         "psr-4": {

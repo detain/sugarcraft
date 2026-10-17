@@ -8,11 +8,11 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Program;
 
 /**
- * candy-testing is the harness every other lib drives its Programs through,
+ * sugar-testing is the harness every other lib drives its Programs through,
  * so it must not lean on a candy-core name that candy-core only keeps alive
  * as a delegating alias. The aliases stay (external consumers use them), but
  * a harness call is what pins them in place: candy-core's
- * `Program::getModel()` docblock cited "candy-testing's ProgramSimulator still
+ * `Program::getModel()` docblock cited "sugar-testing's ProgramSimulator still
  * calls this name" as its reason to exist.
  *
  * The deprecated roster is re-derived from candy-core's own `@deprecated`

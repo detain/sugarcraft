@@ -95,7 +95,7 @@ cd sugar-cli && composer install && vendor/bin/phpunit
 
 ## Snapshot tests
 
-Presenter output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
+Presenter output is pinned via `sugar-testing`'s `assertGoldenAnsi` golden-file
 snapshots. Any change to the ANSI slide output must be intentional — re-record
 the fixtures with `UPDATE_GOLDENS=1 vendor/bin/phpunit` to accept a new
 canonical render.

@@ -107,7 +107,7 @@ Add the icon-strip `<a>` link AND the `lib-card` block (both reference `sugar-pa
 Add a 48px icon. If none yet, copy a placeholder sibling icon so the README/docs img refs resolve.
 
 ### Step 13 — `.github/workflows/vhs.yml`
-Add `<slug>` to the hand-maintained `all=(...)` bash array (around line 143). Skip ONLY if the lib is non-visual (FFI, codec, pure-data — e.g. `candy-pty`, `candy-testing`). Add a `.vhs/<demo>.tape` under `<slug>/.vhs/` using `Set Theme "TokyoNight"`, quote ALL values, `Type "php examples/<demo>.php"`. Multi-directive lines are OK (`Down Sleep 200ms`).
+Add `<slug>` to the hand-maintained `all=(...)` bash array (around line 143). Skip ONLY if the lib is non-visual (FFI, codec, pure-data — e.g. `candy-pty`, `sugar-testing`). Add a `.vhs/<demo>.tape` under `<slug>/.vhs/` using `Set Theme "TokyoNight"`, quote ALL values, `Type "php examples/<demo>.php"`. Multi-directive lines are OK (`Down Sleep 200ms`).
 
 ### Step 14 — `codecov.yml`
 Add TWO entries: a `flag_management` flag and a `component_management` component (templates around lines 165 and 470):

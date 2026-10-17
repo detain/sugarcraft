@@ -1,7 +1,7 @@
 # Step 09 — candy-core foundation enhancements
 
 **Branch:** `ai/candy-core-foundations`
-**Depends on:** step-04 (candy-testing exists — for the WithTestableIo trait integration)
+**Depends on:** step-04 (sugar-testing exists — for the WithTestableIo trait integration)
 **Blocks:** step-15 (sugar-forms uses ProgressReporter), step-23 (consumers of withLogger/withExceptionHandler)
 
 ## Goal

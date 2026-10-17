@@ -41,7 +41,7 @@
         "phpunit/phpunit": "^10.5",
         "sugarcraft/candy-vt": "dev-master",
         "sugarcraft/candy-vcr": "dev-master",
-        "sugarcraft/candy-testing": "dev-master"
+        "sugarcraft/sugar-testing": "dev-master"
     },
     "suggest": {
         "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."

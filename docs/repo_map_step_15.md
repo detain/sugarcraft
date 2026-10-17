@@ -1,27 +1,27 @@
 # Step 15 — sugar-forms onto shared foundations
 
 **Branch:** `ai/sugar-forms-shared`
-**Depends on:** step-02 (candy-buffer), step-03 (candy-layout), step-04 (candy-testing), step-07 (sugar-fuzzy), step-09 (candy-core ProgressReporter — optional)
+**Depends on:** step-02 (candy-buffer), step-03 (candy-layout), step-04 (sugar-testing), step-07 (sugar-fuzzy), step-09 (candy-core ProgressReporter — optional)
 **Blocks:** step-23 (async consumers includes sugar-forms), step-24 (vim mode consolidation)
 
 ## Goal
 
-Migrate `sugar-forms` (Form + 7 field types: TextInput, TextArea, Select, MultiSelect, Confirm, Note, FilePicker) onto: candy-buffer (cell rendering), candy-layout (form/field sizing), candy-testing (snapshot infrastructure — replace any per-test ad-hoc fixtures), sugar-fuzzy (Select / MultiSelect filter delegates to sugar-fuzzy). sugar-forms keeps its own FuzzyMatcher as the back-compat shim added in step-7.
+Migrate `sugar-forms` (Form + 7 field types: TextInput, TextArea, Select, MultiSelect, Confirm, Note, FilePicker) onto: candy-buffer (cell rendering), candy-layout (form/field sizing), sugar-testing (snapshot infrastructure — replace any per-test ad-hoc fixtures), sugar-fuzzy (Select / MultiSelect filter delegates to sugar-fuzzy). sugar-forms keeps its own FuzzyMatcher as the back-compat shim added in step-7.
 
-Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → candy-testing), §387.1 (fuzzy reinvention).
+Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → sugar-testing), §387.1 (fuzzy reinvention).
 
 ## Files expected to be modified
 
-- `sugar-forms/composer.json` — add `sugarcraft/candy-buffer`, `sugarcraft/candy-layout`, `sugarcraft/candy-testing` (dev-only OK), `sugarcraft/sugar-fuzzy` (production).
+- `sugar-forms/composer.json` — add `sugarcraft/candy-buffer`, `sugarcraft/candy-layout`, `sugarcraft/sugar-testing` (dev-only OK), `sugarcraft/sugar-fuzzy` (production).
 - `sugar-forms/src/Form.php` — layout fields via candy-layout when an explicit constraint set is provided.
 - `sugar-forms/src/Field/Select.php` + `MultiSelect.php` — internal filter delegates to sugar-fuzzy (the existing public API stays).
 - `sugar-forms/src/TextInput/TextInput.php` + `TextArea/TextArea.php` — render via candy-buffer (snapshot tests pin byte output for safety).
 - `sugar-forms/src/Fuzzy/FuzzyMatcher.php` — already a back-compat shim from step-7; no further edits.
-- `sugar-forms/tests/` — convert any ad-hoc fixture loading to candy-testing's `assertGoldenAnsi` + `assertCellGrid`.
+- `sugar-forms/tests/` — convert any ad-hoc fixture loading to sugar-testing's `assertGoldenAnsi` + `assertCellGrid`.
 
 ## Acceptance criteria
 
-- [ ] All existing sugar-forms tests pass; converted-to-golden tests use candy-testing helpers.
+- [ ] All existing sugar-forms tests pass; converted-to-golden tests use sugar-testing helpers.
 - [ ] Select/MultiSelect filter UX unchanged (same candidate ordering); match highlights newly visible via sugar-fuzzy indices.
 - [ ] Renderers (TextInput, TextArea, Select view) byte-equivalent to before (snapshot tests assert).
 - [ ] No regression in any sugar-forms dependent (sugar-forms is the main one).
@@ -39,7 +39,7 @@ Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → candy-
 
 ## Tester brief
 
-- All existing tests converted to candy-testing helpers; each formerly-string-equality assertion becomes assertGoldenAnsi with the fixture filename.
+- All existing tests converted to sugar-testing helpers; each formerly-string-equality assertion becomes assertGoldenAnsi with the fixture filename.
 - Add a Select test with a deliberately ambiguous query ("ab") against ["alpha", "ablation", "label"] — assert ordering by sugar-fuzzy score + that highlight indices are non-empty for matched candidates.
 - ItemList of sugar-forms (if present) — same.
 
@@ -50,13 +50,13 @@ Reference: §369.1 (merge sugar-forms + sugar-forms testing utilities → candy-
 
 ## Ship brief
 
-- **PR title**: `sugar-forms: adopt candy-buffer + candy-layout + candy-testing + sugar-fuzzy`
+- **PR title**: `sugar-forms: adopt candy-buffer + candy-layout + sugar-testing + sugar-fuzzy`
 - **PR body**:
   ```
   ## Summary
   - sugar-forms migrated onto 4 shared packages (buffer, layout, testing, fuzzy).
   - Select / MultiSelect filter now shows match-highlight indices via sugar-fuzzy.
-  - Tests converted to candy-testing's golden-file helpers.
+  - Tests converted to sugar-testing's golden-file helpers.
   - sugar-forms\Fuzzy\FuzzyMatcher remains as the back-compat shim (delegates to sugar-fuzzy).
 
   ## Test plan

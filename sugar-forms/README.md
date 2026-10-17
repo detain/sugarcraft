@@ -284,7 +284,7 @@ sugar-forms is built on five shared packages:
 - **[candy-layout](/sugarcraft/candy-layout)** — `LayoutSolver` + constraint types
   (`Constraint::length`, `Constraint::fill`, etc.). `Form::withConstraints()` routes
   through the solver when an explicit constraint set is provided.
-- **[candy-testing](/sugarcraft/candy-testing)** — `Assertions::assertGoldenAnsi` and
+- **[sugar-testing](/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
   `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
   `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
 - **[sugar-fuzzy](/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scores.

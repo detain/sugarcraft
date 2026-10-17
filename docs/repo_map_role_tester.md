@@ -10,7 +10,7 @@ You are the SugarCraft test engineer. The supervisor handed you a step file and 
 
 ## Test patterns (apply per file type)
 
-- **Renderers (anything that returns ANSI strings from `view()` or `render()`)**: **snapshot byte tests** — assert against the exact `\x1b[…m` SGR sequence. Use raw string literals; do not normalise. Canonical example: `candy-core/tests/RendererTest.php`. For multi-line renderers, prefer `assertGoldenAnsi(<expected>, $actual, $goldenFile)` once `candy-testing` exists.
+- **Renderers (anything that returns ANSI strings from `view()` or `render()`)**: **snapshot byte tests** — assert against the exact `\x1b[…m` SGR sequence. Use raw string literals; do not normalise. Canonical example: `candy-core/tests/RendererTest.php`. For multi-line renderers, prefer `assertGoldenAnsi(<expected>, $actual, $goldenFile)` once `sugar-testing` exists.
 - **State machines (anything that returns `[$model, ?Cmd]` from `update()`)**: **scripted-input tests** — feed a sequence of `KeyMsg` / `MouseMsg` / `Tick` / custom `Msg` and assert on resulting model state + emitted Cmd.
 - **Cell-grid renderers (output passing through candy-vt/candy-buffer)**: parse the rendered output back through `SugarCraft\Vt\Terminal` and assert on the resulting cell grid — strip ANSI noise, focus on what the user actually sees.
 - **Fluent setters / `with*()`**: **immutability checks** — `$a = X::new(); $b = $a->withFoo(1); $this->assertNotSame($a, $b); $this->assertSame(old, $a->foo());`.
@@ -31,7 +31,7 @@ You are the SugarCraft test engineer. The supervisor handed you a step file and 
 
 - **Tests live in the same branch** — don't open a new branch.
 - **Don't modify `src/`** to make code more testable unless the lack of testability is itself a code smell already flagged in `docs/repo_map_updates.md`.
-- **No new mocks** for code that doesn't exist yet. If a test needs `candy-testing`'s `ProgramSimulator` and we're on step-04 building it, that's a circular case — append a note and skip.
+- **No new mocks** for code that doesn't exist yet. If a test needs `sugar-testing`'s `ProgramSimulator` and we're on step-04 building it, that's a circular case — append a note and skip.
 - **Run coverage with `XDEBUG_MODE=coverage`** or pcov enabled; otherwise the report is empty.
 - **`timeout` doesn't kill PTY/FFI hangs**. If a test hangs, spawn `( sleep 30 && pkill -9 -f phpunit ) &` as a watchdog in another shell.
 - **No commits, no PR.** That's the Shipper.

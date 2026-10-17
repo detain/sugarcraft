@@ -5,7 +5,7 @@
 
 <!-- Add learnings below as they are discovered -->
 
-### 2026-05-29 — Golden-file snapshot convention (candy-testing)
+### 2026-05-29 — Golden-file snapshot convention (sugar-testing)
 Pattern: Render output tests use `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi($goldenPath, $actual)` — the actual ANSI bytes are compared against a fixture file at `$goldenPath`. Fixture files live in `tests/fixtures/` and carry a `.golden` extension. Set `UPDATE_GOLDENS=1` in the environment to auto-regenerate any missing fixture.
 Anti-pattern: Do NOT use string equality (`assertEquals`) for ANSI output — ESC sequences in a mismatch produce an unreadable diff. Always use `assertGoldenAnsi` or `assertAnsiEquals`.
 Source: step-15 ai/sugar-forms-shared

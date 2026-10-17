@@ -211,7 +211,7 @@ No significant security issues found. `Picture::detect()` reads `TERM`/`TERM_PRO
 
 ## 11. Test Coverage Observations
 
-- **Golden file tests** (`GoldenRenderTest.php`) correctly use `candy-testing`'s snapshot assertions
+- **Golden file tests** (`GoldenRenderTest.php`) correctly use `sugar-testing`'s snapshot assertions
 - **Short-alias parity tests** (`ShortAliasesTest.php`) verify byte-identical output
 - **Edge case coverage** is good for negative dimensions, empty inputs, degenerate ranges, label truncation
 - **Missing tests**: `Graph::niceNumbers`, `BufferHelper::graphemeWidth`, `Waveline`, `Streamline`, `OHLCChart`, `Heatmap`

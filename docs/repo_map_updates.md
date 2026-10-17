@@ -60,18 +60,18 @@ _All items in this section have been resolved by the completion of steps 20–40
   - candy-git-server: added Subscriptions for graceful shutdown in GitDaemon
   - Branch ai/async-adopters merged to master; Commit SHA: 30ea7afa
 
-- [RESOLVED | 2026-05-31 | step-32 | coder] candy-tetris + candy-minesweeper: adopt candy-buffer + sugar-mouse + candy-testing — MERGED PR #911:
+- [RESOLVED | 2026-05-31 | step-32 | coder] candy-tetris + candy-minesweeper: adopt candy-buffer + sugar-mouse + sugar-testing — MERGED PR #911:
   - candy-tetris: Buffer-based playfield rendering; candy-minesweeper: Buffer-based minefield
   - Branch ai/games-shared merged to master
 
 - [RESOLVED | 2026-05-31 | step-30 | coder] Ecosystem audit: adoption opportunity matrix for 19 remaining libs — MERGED PR #909:
   - Created docs/repo_map_update_followups.md; Branch ai/ecosystem-audit merged to master
 
-- [RESOLVED | 2026-06-01 | step-34 | coder] sugar-datepicker + sugar-toast: adopt candy-buffer + candy-testing — MERGED PR #914:
-  - sugar-datepicker: DatePicker widget + candy-testing golden-files; sugar-toast: border styling + queue management
+- [RESOLVED | 2026-06-01 | step-34 | coder] sugar-datepicker + sugar-toast: adopt candy-buffer + sugar-testing — MERGED PR #914:
+  - sugar-datepicker: DatePicker widget + sugar-testing golden-files; sugar-toast: border styling + queue management
   - Branch ai/widget-shared merged to master
 
-- [RESOLVED | 2026-06-01 | step-36 | shipper] sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopt candy-testing — MERGED PR #916:
+- [RESOLVED | 2026-06-01 | step-36 | shipper] sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopt sugar-testing — MERGED PR #916:
   - Branch ai/testing-rollout merged to master; Commit SHA: 0995878a
 
 - [RESOLVED | 2026-06-01 | step-37 | shipper] NO-OP step-37 catch-all — MERGED PR #917:
@@ -151,13 +151,13 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch: ai/filter-consumers
   - Note: `highlightLine()` re-matches displayLine against filter needle to get indices aligned with the rendered text; applies ANSI bold+cyan (sgr 1,36) on matched grapheme clusters
 
-- [2026-06-01 | step-36 | shipper] sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopt candy-testing — MERGED PR #916:
+- [2026-06-01 | step-36 | shipper] sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopt sugar-testing — MERGED PR #916:
   - Branch ai/testing-rollout merged to master
   - 25 files changed, 571 insertions(+), 5 deletions(-)
-  - Added `GoldenRenderTest.php` snapshot tests to all 4 libs via candy-testing
+  - Added `GoldenRenderTest.php` snapshot tests to all 4 libs via sugar-testing
   - Added golden fixtures: sugar-animation (density-3x3), sugar-cli (stage-step, stage-substep), sugar-spring (projectile-trajectory, spring-trajectory), candy-flappy (game-state-5ticks, game-state-crash)
   - sugar-cli: added new CALIBER_LEARNINGS.md
-  - Updated READMEs and composer.json (added candy-testing dev dep + path-repos) for all 4 libs
+  - Updated READMEs and composer.json (added sugar-testing dev dep + path-repos) for all 4 libs
   - Commit SHA: 0995878a
 
 - [2026-06-01 | step-37 | shipper] NO-OP — step-37 catch-all: deferral sweep complete, no remaining actionable libs — MERGED PR #917:
@@ -177,7 +177,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch ai/docs-site merged to master
   - 17 files changed, 47 insertions(+)
   - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
-  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
+  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, sugar-testing)
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
 

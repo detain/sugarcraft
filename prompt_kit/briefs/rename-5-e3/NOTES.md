@@ -12,7 +12,7 @@ Lane: e3 (batch-E line 50, ns Testing→Testing UNCHANGED, type=lib, bins {}). B
 
 ## Self-lock (never tag — path rename targets)
 
-candy-testing/** (all), findings/candy-testing.md, findings/plan_candy-testing.md, docs/_data/candy-testing.{json,body.html}, docs/lib/candy-testing.html, media/icons/candy-testing.png. Formerly notice added POST-move to sugar-testing/README.md. No .vhs dir, no ansi/candy-testing, no docs/repo_map/ or research file for this slug (verified).
+sugar-testing/** (all), findings/candy-testing.md, findings/plan_candy-testing.md, docs/_data/sugar-testing.{json,body.html}, docs/lib/sugar-testing.html, media/icons/sugar-testing.png. Formerly notice added POST-move to sugar-testing/README.md. No .vhs dir, no ansi/sugar-testing, no docs/repo_map/ or research file for this slug (verified).
 
 ## Tag-prep set (history → @rename-keep, per-line)
 

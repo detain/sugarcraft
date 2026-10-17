@@ -40,7 +40,7 @@ So wiring a new `sugarcraft/<dep>` is **one edit**: the `require` line. Do not a
        "sugarcraft/<dep>": "dev-master"
    },
    ```
-   A test-only harness (`candy-testing`) goes in `require-dev`. Verify the JSON still parses:
+   A test-only harness (`sugar-testing`) goes in `require-dev`. Verify the JSON still parses:
    ```sh
    php -r 'json_decode(file_get_contents("<slug>/composer.json"),true,512,JSON_THROW_ON_ERROR);'
    ```

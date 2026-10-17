@@ -250,7 +250,7 @@ public static function render(Frame $f, string $preset = self::PRESET_SOLID): st
 
 7. **i18n via `Lang` facade** properly extends `SugarCraft\Core\I18n\Lang` with a namespace and DIR constant. All user-facing strings are externalized.
 
-8. **Golden-file snapshot testing** via `candy-testing`'s `assertGoldenAnsi` pins rendering output.
+8. **Golden-file snapshot testing** via `sugar-testing`'s `assertGoldenAnsi` pins rendering output.
 
 ---
 
@@ -282,7 +282,7 @@ sugar-animation
 ├── sugarcraft/candy-core      (Model, Cmd, Msg, Program, ProgramOptions, Ansi)
 ├── sugarcraft/candy-pty       (SizeIoctl)
 ├── sugarcraft/candy-sprinkles (Style — not directly imported, but in ecosystem)
-├── sugarcraft/candy-testing   (test only, assertGoldenAnsi)
+├── sugarcraft/sugar-testing   (test only, assertGoldenAnsi)
 └── ext-gd                     (PHP extension)
 ```
 

@@ -74,7 +74,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
 - [x] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
 - [x] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
-- [x] [Step 04 — Create candy-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
+- [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/sugar-testing-new`
 - [x] [Step 05 — Create sugar-mouse](repo_map_step_05.md) — branch: `ai/sugar-mouse-new`
 - [x] [Step 06 — Create candy-input](repo_map_step_06.md) — branch: `ai/candy-input-new`
 - [x] [Step 07 — Create sugar-fuzzy](repo_map_step_07.md) — branch: `ai/sugar-fuzzy-new`
@@ -106,7 +106,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 ### Phase 5 — Cross-cutting via shared packages (4)
 - [x] [Step 26 — candy-buffer::diff() delta ANSI](repo_map_step_26.md) — branch: `ai/buffer-diff-impl`, PR #905
 - [x] [Step 27 — Wire buffer-diff into renderers](repo_map_step_27.md) — branch: `ai/buffer-diff-consumers`, PR #906
-- [x] [Step 28 — Golden-file snapshot rollout via candy-testing](repo_map_step_28.md) — branch: `ai/golden-file-rollout`, PR #907
+- [x] [Step 28 — Golden-file snapshot rollout via sugar-testing](repo_map_step_28.md) — branch: `ai/golden-file-rollout`, PR #907
 - [x] [Step 29 — Terminal-probe consumers (candy-mdview, candy-wish)](repo_map_step_29.md) — branch: `ai/probe-consumers`, PR #908
 
 ### Phase 6 — Ecosystem-wide adoption sweep (8)
@@ -114,9 +114,9 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 31 — candy-pty adopts candy-input + candy-ansi](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
 - [x] [Step 32 — candy-tetris + candy-minesweeper adopt candy-buffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
 - [x] [Step 33 — candy-kv + candy-ssh-launcher + candy-git adopt sugar-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
-- [x] [Step 34 — sugar-datepicker + sugar-toast adopt candy-buffer + candy-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
+- [x] [Step 34 — sugar-datepicker + sugar-toast adopt candy-buffer + sugar-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
 - [x] [Step 35 — candy-codetime + candy-mail + candy-git-server adopt candy-async](repo_map_step_35.md) — branch: `ai/async-adopters`, PR #915
-- [x] [Step 36 — sugar-animation + sugar-cli + sugar-spring + candy-flappy adopt candy-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`, PR #916
+- [x] [Step 36 — sugar-animation + sugar-cli + sugar-spring + candy-flappy adopt sugar-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`, PR #916
 - [x] [Step 37 — Catch-all: any remaining lib from the audit](repo_map_step_37.md) — branch: `ai/sweep-catchall`, PR #917
 
 ### Phase 7 — Final documentation & CI (3)
@@ -136,7 +136,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 The shared-foundation refactor is **complete**. Summary:
 
 - **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 sugar-forms migration which was not completed)
-- **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, sugar-mouse, candy-input, sugar-fuzzy, candy-async
+- **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, sugar-testing, sugar-mouse, candy-input, sugar-fuzzy, candy-async
 - **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy
 - **4 items deferred** to future plan (candy-metrics, candy-log, sugar-mouse, candy-starter — see docs/repo_map_update_followups.md)
 - **1 step not completed** (step-15 sugar-forms — FuzzyMatcher API incompatibility; deferred)

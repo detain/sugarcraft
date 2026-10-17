@@ -164,8 +164,8 @@ flag_management:
     - name: candy-git-server
       paths: ["candy-git-server/src/**"]
       carryforward: true
-    - name: candy-testing
-      paths: ["candy-testing/src/**"]
+    - name: sugar-testing
+      paths: ["sugar-testing/src/**"]
       carryforward: true
     - name: sugar-panels
       paths: ["sugar-panels/src/**"]
@@ -481,12 +481,12 @@ component_management:
         - "candy-git-server/src/**"
       flag_regexes:
         - "^candy-git-server$"
-    - component_id: candy-testing
-      name: candy-testing
+    - component_id: sugar-testing
+      name: sugar-testing
       paths:
-        - "candy-testing/src/**"
+        - "sugar-testing/src/**"
       flag_regexes:
-        - "^candy-testing$"
+        - "^sugar-testing$"
     - component_id: sugar-panels
       name: sugar-panels
       paths:

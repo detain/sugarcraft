@@ -105,7 +105,7 @@ vendor/bin/phpunit
 
 ## Snapshot tests
 
-Rendering output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
+Rendering output is pinned via `sugar-testing`'s `assertGoldenAnsi` golden-file
 snapshots. Any change to the ANSI cell output must be intentional — re-record the
 fixture with `UPDATE_GOLDENS=1 vendor/bin/phpunit` to accept a new canonical render.
 

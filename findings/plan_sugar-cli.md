@@ -17,7 +17,7 @@ Address all 24 findings from the code review of `sugarcraft/sugar-cli`, covering
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Organize fixes by dependency order (critical → high → medium → low) | Core bugs must be fixed before adding tests; tests before refactoring; refactoring before features | `ref:sugar-cli-review` |
-| Snapshot tests use `candy-testing`'s `assertGoldenAnsi` | Matches existing `GoldenRenderTest.php` pattern and `CALIBER_LEARNINGS.md` recommendation | `ref:sugar-cli-caliber` |
+| Snapshot tests use `sugar-testing`'s `assertGoldenAnsi` | Matches existing `GoldenRenderTest.php` pattern and `CALIBER_LEARNINGS.md` recommendation | `ref:sugar-cli-caliber` |
 | Fix the Section::header rune formula semantics rather than behavior | Changing parameter semantics would break callers; clarify docs + fix math is safer | `ref:sugar-cli-section-34` |
 | Remove unused repositories from composer.json | These are path-repo entries for deps not actually used by sugar-cli; removing reduces CI noise | `ref:sugar-cli-composer` |
 | Extract truncate helper to reduce Frame::padRight/padCenter duplication | Both methods contain nearly identical ANSI-truncation-and-remeasure logic; DRY principle | `ref:sugar-cli-frame-134-176` |
@@ -200,7 +200,7 @@ Add golden-file snapshot tests for the 6 classes that lack them: `Banner`, `Sect
 - `sugar-cli/tests/fixtures/stage-substep.golden`
 
 **Investigation notes:**
-`GoldenRenderTest` currently tests only `Stage::step()` and `Stage::subStep()`. The existing fixture format uses `assertGoldenAnsi` from `candy-testing`. The finding lists these classes with associated risk:
+`GoldenRenderTest` currently tests only `Stage::step()` and `Stage::subStep()`. The existing fixture format uses `assertGoldenAnsi` from `sugar-testing`. The finding lists these classes with associated risk:
 - `Banner` — border/padding regression
 - `Section::header` — rune-fill logic (see issue #1)
 - `Section::rule` — width handling
@@ -372,7 +372,7 @@ Remove unused path repositories:
 - `../candy-buffer` — no buffer usage
 - `../candy-input` — no input handling
 
-Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (required deps), and `candy-testing` (dev dep).
+Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (required deps), and `sugar-testing` (dev dep).
 
 **Why:** Reduces maintenance burden and CI closure-checking noise. These entries were likely copy-paste scaffold artifacts.
 

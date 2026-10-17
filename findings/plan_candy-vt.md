@@ -1160,7 +1160,7 @@ But it's not in `require`, so `candy-async` is only available for development/te
 **Investigation Notes:**
 
 - `composer.json` shows `candy-async` is already in the path repositories (lines 82-86) but NOT in `require` (lines 27-31)
-- `candy-async` IS in `require-dev` of `candy-testing`
+- `candy-async` IS in `require-dev` of `sugar-testing`
 
 ---
 

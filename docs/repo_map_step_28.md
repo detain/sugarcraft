@@ -1,18 +1,18 @@
-# Step 28 — Golden-file snapshot rollout via candy-testing
+# Step 28 — Golden-file snapshot rollout via sugar-testing
 
 **Branch:** `ai/golden-file-rollout`
-**Depends on:** step-04 (candy-testing exists), step-15/16/17/18 (sugar-forms / sugar-forms / sugar-charts / sugar-table use candy-testing for some tests already)
+**Depends on:** step-04 (sugar-testing exists), step-15/16/17/18 (sugar-forms / sugar-forms / sugar-charts / sugar-table use sugar-testing for some tests already)
 **Blocks:** —
 
 ## Goal
 
-Roll out candy-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `sugar-forms`, `sugar-forms`, `sugar-widgets`, `sugar-charts`, `sugar-table`, `candy-mdview`, `candy-vt`, `candy-vcr`, `sugar-markdown`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
+Roll out sugar-testing's `assertGoldenAnsi` helpers across all rendering libs that the analysis flagged: `sugar-forms`, `sugar-forms`, `sugar-widgets`, `sugar-charts`, `sugar-table`, `candy-mdview`, `candy-vt`, `candy-vcr`, `sugar-markdown`. Replaces ad-hoc string comparisons and brings every lib into the "snapshot tests for ANSI output" pattern. This is the #1 ecosystem-wide weakness called out in the analysis.
 
 Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakness across 8+ libs).
 
 ## Files expected to be modified
 
-- Each of the 9 lib's composer.json — add `sugarcraft/candy-testing` (dev) via `path-repo-closure`.
+- Each of the 9 lib's composer.json — add `sugarcraft/sugar-testing` (dev) via `path-repo-closure`.
 - Each lib's `tests/` — convert existing tests that build string-equal assertions into `Assertions::assertGoldenAnsi(...)`; add NEW golden-file tests for view() output on representative scenarios.
 - `tests/fixtures/` in each lib — golden files added.
 
@@ -26,7 +26,7 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 
 ## Coder brief
 
-1. **path-repo closure**: candy-testing (dev-only require) in each of the 9 libs.
+1. **path-repo closure**: sugar-testing (dev-only require) in each of the 9 libs.
 2. **For each lib**: identify the most exercised render() method; build a representative input fixture; capture the output via `UPDATE_GOLDENS=1` once; commit the .golden file; the test asserts against it on subsequent runs.
 3. **Convert ad-hoc string-equality tests**: where a test currently does `$this->assertSame($expected, $rendered)` with a literal string, swap to `Assertions::assertGoldenAnsi('fixtures/foo.golden', $rendered)`. Drop the inline expected string into the fixture file.
 4. **DO NOT** delete any existing tests — only convert or add.
@@ -45,7 +45,7 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 
 ## Ship brief
 
-- **PR title**: `9 rendering libs: golden-file snapshot tests via candy-testing`
+- **PR title**: `9 rendering libs: golden-file snapshot tests via sugar-testing`
 - **PR body**:
   ```
   ## Summary
@@ -61,4 +61,4 @@ Reference: §19, §149 (zero ANSI byte assertions cited as the most common weakn
 
   Refs: docs/repo_map_step_28.md, docs/repo_map_update.md §19, §149, §322
   ```
-- Commit subject: `9 rendering libs: golden-file snapshot test rollout via candy-testing`.
+- Commit subject: `9 rendering libs: golden-file snapshot test rollout via sugar-testing`.

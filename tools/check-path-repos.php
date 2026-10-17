@@ -465,7 +465,7 @@ $transitiveDeps = static function (string $startSlug, array $libData): array {
 // path entry whose target is neither a require, a require-dev, nor in the
 // production closure of either is PRUNE_REPO_ONLY (a lingering dead entry).
 //
-// require-dev matters: a test harness like candy-testing appears only in
+// require-dev matters: a test harness like sugar-testing appears only in
 // require-dev, yet its path-repo (and its production closure) is genuinely
 // needed for `composer install --dev`. Ignoring require-dev would wrongly flag
 // ~20 such entries as dead, so both roots feed the reachability walk. Each

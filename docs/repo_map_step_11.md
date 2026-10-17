@@ -50,7 +50,7 @@ Reference: `docs/repo_map_update.md` §345.9 (StyleSheet / BlockStack), shared d
 - BlockStack: push/pop sequence; popTo(BlockKind) pops until found; peek on empty returns null.
 - StyleSheet: base() returns deterministic defaults; with*() overrides only the named attr; cascading resolution via StyleCascade.
 - StyleCascade: parent Style.bold=true, child Style.italic=true → resolved has both; parent.bold=true, child.bold=false → child wins.
-- Golden tests for the 3 nesting cases above. Use `assertGoldenAnsi` from candy-testing if it's ready (step-04); otherwise inline byte assertion.
+- Golden tests for the 3 nesting cases above. Use `assertGoldenAnsi` from sugar-testing if it's ready (step-04); otherwise inline byte assertion.
 - Regression: run existing sugar-markdown fixtures, assert unchanged output.
 
 ## Scribe brief

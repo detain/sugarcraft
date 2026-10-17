@@ -1,14 +1,16 @@
-# candy-testing
+# sugar-testing
+
+> Formerly published as `sugarcraft/candy-testing` (renamed 2026-10). <!-- @rename-keep -->
 
 Deterministic test harness for SugarCraft apps — MVC-style Model–Update–View
 programs — for PHP 8.3+: scripted input, golden snapshots and full program
 simulation.
 
-> **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. Testing such programs deterministically has been a long-standing gap — `candy-testing` closes it for the PHP ecosystem.
+> **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. Testing such programs deterministically has been a long-standing gap — `sugar-testing` closes it for the PHP ecosystem.
 
 ## Overview
 
-`candy-testing` provides the infrastructure for deterministic SugarCraft app testing:
+`sugar-testing` provides the infrastructure for deterministic SugarCraft app testing:
 
 - **`ProgramSimulator`** — drives a `Program` with scripted input, captures model/view/cmds
 - **`ScriptedInput`** — fluent builder for message sequences (`->key('q')->enter()`)
@@ -45,7 +47,7 @@ $counter = $sim->model; // CounterModel with updated count
 ## Install
 
 ```sh
-composer require sugarcraft/candy-testing:@dev
+composer require sugarcraft/sugar-testing:@dev
 ```
 
 ## API
