@@ -34,13 +34,13 @@ Mark each step `✅ <short-sha>` **as soon as it is committed and verified** and
 | 2.3 | `gen-docs.php` emits redirect stubs for old slugs | ✅ 6f1ef69a0 (regen 6b3a7c618) |
 | 2.4 | `scripts/rename-remote.sh` (GitHub) + `scripts/packagist.sh` (Packagist) helpers | ✅ 022c0651a (review-fixed 2026-10-15: real Packagist API shape) |
 | 2.5 | Create the `candy-gifview` GitHub repo + Packagist package | ✅ 26edcb18c |
-| 3 | Batch A — pilot (3 renames) | ☐ |
-| 4 | Batch B — apps (12 renames) | ☐ |
-| 5 | Batch C — components (13 renames) | ☐ |
-| 6 | Batch D — media / rendering (7 renames) | ☐ |
-| 7 | Batch E — foundation (13 renames) | ☐ |
-| 8 | Batch F — sugar-crush → candy-code (+ web) | ☐ |
-| 9 | Docs, website, naming rulebook, agent configs | ☐ |
+| 3 | Batch A — pilot (3 renames) | ✅ landed + R8/R9 fired (pre-F chain, see git log) |
+| 4 | Batch B — apps (12 renames) | ✅ landed + R8/R9 fired (pre-F chain, see git log) |
+| 5 | Batch C — components (13 renames) | ✅ landed + R8/R9 fired (pre-F chain, see git log) |
+| 6 | Batch D — media / rendering (7 renames) | ✅ landed + R8/R9 fired (pre-F chain, see git log) |
+| 7 | Batch E — foundation (13 renames) | ✅ landed + R8/R9 fired (pre-F chain, see git log) |
+| 8 | Batch F — sugar-crush → candy-code (+ web) | ✅ weld aab9eacc9 (R8/R9-F 156688b84, review-fixes 9d0fd549b) |
+| 9 | Docs, website, naming rulebook, agent configs | ✅ a54e105b4 · f82d19557 · 15bd64e2e · 51f4249cf + tracker commit |
 | 10 | GitHub + Packagist finalization (archive, abandon, metadata) | ☐ |
 | 11.1 | External: webhooks.interserver.net | ☐ |
 | 11.2 | External: php-dup-finder | ☐ |
@@ -1273,6 +1273,9 @@ The mechanical renames already rewrote slugs everywhere. This phase fixes the **
    `@rename-keep` history line listing `honey-bounce → sugar-spring`, `honey-flap → candy-flappy`). Suffix rule: plain descriptive nouns (what it
    does), keep upstream names only when they're the well-known term (`top`, `tetris`). Update the prefix cheat sheet and every table row.
    Add a "Renamed in 2026-10" table generated from `tools/renames.json` (old → new), marked `@rename-keep`.
+   **Implementation note (Phase 9):** the table regenerates with
+   `php -r '$j=json_decode(file_get_contents("tools/renames.json"),true); foreach($j["entries"] as $e){$o=$e["old"]??null; if($o===null){printf("| — | `%s` | %s | new package split out of the renamed lib |\n",$e["new"],$e["batch"]);continue;} printf("| `%s` | `%s` | %s | renamed <!-- @rename-keep --> |\n",$o,$e["new"],$e["batch"]);}'`
+   (merge/fold rows read "absorbed/folded into the target package"; tag every line that spells an old slug).
 2. **`docs/MATCHUPS.md`:** every `candy-*` row under `## Apps`, every `sugar-*` row under `## Libraries`. Update the "Naming conventions (cheat sheet)"
    section the same way as PROJECT_NAMES. Then `php tools/gen-docs.php` (patches the homepage counts) and `--check`.
 3. **`docs/index.html`:** tiles in the right sections (Apps / Libraries), and tile descriptions read correctly with the new names. Hero copy mentioning
@@ -1303,6 +1306,8 @@ The mechanical renames already rewrote slugs everywhere. This phase fixes the **
 10. `php tools/check-rename-residue.php --all-done` → 0.
 
 **Done when:** all of the above, plus the tools guards green. Commit: `docs: two-prefix naming scheme (candy- apps, sugar- libs)`. Push.
+
+**Phase 9 disposition (2026-10-17):** (1) PROJECT_NAMES rewritten (a54e105b4). (2-4) MATCHUPS/README/index regrouped — `candy-vcr` moved to Apps (ships `bin/candy-vcr`; prefix = role) and `sugar-video` + `sugar-animation` to Libraries (no bin); stale duplicate merged candy-zone SugarMouse tile removed; counts corrected to 40 libs / 21 apps / 61 pkgs; sitemap regenerated (61 real pages — dropped the dead `super-candy` entry, stub pages stay out) — f82d19557. (5-7) CLAUDE/AGENTS/CONTRIBUTING/skills prose + generate_icons.py hue families + `.gitignore` root line modernized to `.candy-code/` (the owner's legacy `.sugar-crush/` ignore survives only on this box via `.git/info/exclude`) — 15bd64e2e. (8-9) research INDEX five dead links healed; rename-followups ledger verified complete; `gen-ansi-readme --check` rc0 — 51f4249cf. Gates: residue 52 entries / 0 findings · gen-docs --check rc0 · tools/tests 429/1517 · four-dir link sweep clean.
 
 ---
 
