@@ -935,6 +935,17 @@ What runs where:
 - **Quitting detaches.** A turn still running goes on, its events in the
   session's log for whoever subscribes next.
 
+A dropped socket is not the end of the attachment (ISS-114). The window redials
+with exponential backoff — first after 0.25 s, each wait doubling up to 4 s,
+twelve attempts in all — and re-says `server.hello` with
+`resume: {sessionId: cursor}`; the server re-subscribes it and replays whatever
+the dark missed, or resets it from a paged snapshot when the log can no longer
+serve the cursor. A turn running while nobody listens lands in the log and is
+replayed on resume, exactly as a live stream would have been. The verdict stays
+final only for a deliberate close, a resume the server outright refuses (the
+session deleted, or locked to another process), and an exhausted ladder — the
+session the socket died for is what the redial aims to return to.
+
 The other way round: a plain `candy-code --resume <id>` (or `-c`) whose session
 the server holds opens it read-only, as for any other holder, and the notice
 names the server and the `candy-code attach <id>` that would drive it instead.

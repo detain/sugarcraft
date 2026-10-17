@@ -27,7 +27,7 @@ use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
  */
 final class AttachPagingTest extends TestCase
 {
-    private const ATTACH_TOKEN = 'abababababababababababababababababababababababababababababababab';
+    private const PAGE_TOKEN = 'abababababababababababababababababababababababababababababababab';
 
     private ProtocolFixture $fixture;
 
@@ -41,7 +41,7 @@ final class AttachPagingTest extends TestCase
         $this->fixture = ProtocolFixture::new();
         $this->server = Server::new(
             ServerConfig::new($this->fixture->dir)->withPort(0),
-            AuthContext::new(TokenStore::new($this->fixture->dir)->withOverride(self::ATTACH_TOKEN)),
+            AuthContext::new(TokenStore::new($this->fixture->dir)->withOverride(self::PAGE_TOKEN)),
             StaticFiles::new(null),
             $this->fixture->dispatcher,
             Loop::get(),
@@ -100,7 +100,7 @@ final class AttachPagingTest extends TestCase
     private function attach(string $sessionId, int $pageRows = RemoteSessionHost::SNAPSHOT_PAGE_ROWS): RemoteSessionHost
     {
         $url = 'ws://127.0.0.1:' . $this->server->port() . '/ws';
-        $host = $this->fixture->await(Attach::connect($url, self::ATTACH_TOKEN)->then(
+        $host = $this->fixture->await(Attach::connect($url, self::PAGE_TOKEN)->then(
             static fn (RemoteSessionHost $host): PromiseInterface => $host->hello()->then(static fn (): PromiseInterface => $host->open($sessionId, $pageRows)),
         ));
         self::assertInstanceOf(RemoteSessionHost::class, $host, $host instanceof \Throwable ? $host->getMessage() : 'no answer');

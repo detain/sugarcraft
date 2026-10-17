@@ -14,6 +14,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
+use React\Stream\DuplexStreamInterface;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\Backend\RemoteBackend;
@@ -135,17 +136,44 @@ final class Attach
 
     /**
      * Open the `candy-code.v1` WebSocket at $url (`ws://host:port/ws`) with
-     * $token as the bearer credential: the HTTP upgrade, its answer checked
-     * (101, the accept key, the subprotocol echoed), then a
-     * {@see RemoteSessionHost} over the socket. A refusal rejects with the
-     * status line and the server's own reason.
+     * $token as the bearer credential: the HTTP upgrade via {@see stream()},
+     * then a {@see RemoteSessionHost} over the socket — carrying the same dial
+     * as its re-dial, so a dropped connection resumes rather than dies
+     * (ISS-114). A refusal rejects with the status line and the server's own
+     * reason.
      *
      * A connect timeout only — once connected, the socket stays open as long
-     * as the session is followed (turns can run for many minutes).
+     * as the session is followed (turns can run for many minutes), and while
+     * it is not, the resume ladder keeps trying for its bound.
+     *
+     * $after overrides the ladder's delay scheduler (ISS-114 tests); it
+     * defaults to the event loop.
      *
      * @return PromiseInterface<RemoteSessionHost>
      */
-    public static function connect(string $url, string $token, ?LoopInterface $loop = null): PromiseInterface
+    public static function connect(string $url, string $token, ?LoopInterface $loop = null, ?\Closure $after = null): PromiseInterface
+    {
+        return self::stream($url, $token, $loop)->then(
+            static fn (array $socket): RemoteSessionHost => RemoteSessionHost::overStream(
+                $socket[0],
+                RemoteSessionHost::CLIENT_NAME,
+                $socket[1],
+                static fn (): PromiseInterface => self::stream($url, $token, $loop),
+                $after,
+            ),
+        );
+    }
+
+    /**
+     * The dial behind {@see connect()}: connect, send the HTTP upgrade, check
+     * its answer (101, the accept key, the subprotocol echoed), and hand back
+     * the duplex socket plus whatever bytes the handshake read beyond its end.
+     * Twice the same call means twice the same session's front door — which is
+     * what a resume re-dials (ISS-114).
+     *
+     * @return PromiseInterface<array{0: DuplexStreamInterface, 1: string}>
+     */
+    public static function stream(string $url, string $token, ?LoopInterface $loop = null): PromiseInterface
     {
         $loop ??= Loop::get();
         $uri = new Uri($url);
@@ -211,7 +239,7 @@ final class Attach
 
                         return;
                     }
-                    $deferred->resolve(RemoteSessionHost::overStream($connection, RemoteSessionHost::CLIENT_NAME, $rest));
+                    $deferred->resolve([$connection, $rest]);
                 };
                 $connection->on('data', $onData);
                 $connection->write(Psr7Message::toString($request));
