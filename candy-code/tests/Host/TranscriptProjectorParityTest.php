@@ -178,6 +178,20 @@ final class TranscriptProjectorParityTest extends TestCase
     }
 
     /**
+     * ISS-113: the guard-stopped reply reports `loop_guard`, not the silent
+     * `end_turn` it answered with before; a cancellation still outranks it.
+     */
+    public function testALoopGuardStoppedReplyReportsItsOwnStopReason(): void
+    {
+        $guardStopped = Message::assistant('cut short')->withLoopGuardStoppedBy('Read');
+
+        self::assertSame(SessionEvent::STOP_LOOP_GUARD, TranscriptProjector::stopReason($guardStopped, false, false));
+        self::assertSame(SessionEvent::STOP_CANCELLED, TranscriptProjector::stopReason($guardStopped, true, false), 'the cancel the user sent outranks the guard');
+        self::assertSame(SessionEvent::STOP_SPEND_CAP, TranscriptProjector::stopReason($guardStopped, false, true));
+        self::assertSame(SessionEvent::STOP_END_TURN, TranscriptProjector::stopReason(Message::assistant('whole'), false, false), 'an ordinary reply is unchanged');
+    }
+
+    /**
      * @param list<Message> $rows
      * @return list<array<string, mixed>>
      */

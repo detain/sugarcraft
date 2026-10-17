@@ -89,6 +89,7 @@ final class SessionEvent
     public const STOP_MAX_STEPS = 'max_steps';
     public const STOP_LENGTH = 'length';
     public const STOP_CANCELLED = 'cancelled';
+    public const STOP_LOOP_GUARD = 'loop_guard';
     public const STOP_SPEND_CAP = 'spend_cap';
     public const STOP_ERROR = 'error';
 

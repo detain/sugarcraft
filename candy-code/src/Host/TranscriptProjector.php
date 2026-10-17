@@ -450,6 +450,9 @@ final class TranscriptProjector
             $reply->lengthStopped => SessionEvent::STOP_LENGTH,
             $reply->stepsTruncated => SessionEvent::STOP_MAX_STEPS,
             $softCancelled => SessionEvent::STOP_CANCELLED,
+            // ISS-113: a turn the tool-loop guard stopped ended for its own
+            // reason, not end_turn — a driver must see why the reply is short.
+            $reply->loopGuardStoppedBy !== null => SessionEvent::STOP_LOOP_GUARD,
             default => SessionEvent::STOP_END_TURN,
         };
     }

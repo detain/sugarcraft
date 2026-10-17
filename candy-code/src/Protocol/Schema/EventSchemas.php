@@ -107,7 +107,7 @@ final class EventSchemas
                 'reason' => Schema::enum(['sent', 'removed']),
             ], ['queueId', 'reason']),
             E::TURN_COMPLETED => Schema::object([
-                'stopReason' => Schema::enum([E::STOP_END_TURN, E::STOP_MAX_STEPS, E::STOP_LENGTH, E::STOP_CANCELLED, E::STOP_SPEND_CAP, E::STOP_ERROR]),
+                'stopReason' => Schema::enum([E::STOP_END_TURN, E::STOP_MAX_STEPS, E::STOP_LENGTH, E::STOP_CANCELLED, E::STOP_SPEND_CAP, E::STOP_LOOP_GUARD, E::STOP_ERROR]),
                 'error' => Schema::string(),
                 'messageId' => Schema::string(),
             ], ['stopReason']),

@@ -5180,6 +5180,7 @@
                             "length",
                             "cancelled",
                             "spend_cap",
+                            "loop_guard",
                             "error"
                         ]
                     },
