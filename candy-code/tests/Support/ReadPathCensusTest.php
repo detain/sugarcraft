@@ -386,6 +386,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'would reach, so the snapshot never admits a path the caller did not already '
                 . 'trust it to hash',
         ],
+        'Config/StatusLineCommand.php|file_get_contents' => [
+            'SELF_LOCATED — collect(): the status-line child\'s result payload, the name '
+                . 'Support\\ToolIpcFiles::reserve() created for this run, read once after the '
+                . 'child exits and immediately discarded; decoded as JSON, never executed',
+        ],
         'Context/Compaction/ReinjectionPlan.php|file_get_contents' => [
             'CONTAINED — renderFiles() (roadmap 2.6): a file the conversation\'s Read/Edit/Write calls '
                 . 'touched, re-read after a compaction only when ContainedPath::below() holds it under the '
@@ -556,7 +561,15 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — entries(): the `.compaction-journal-<key>.jsonl` this class appends beside '
                 . 'the home store\'s notes (roadmap 5.4-1); each line decoded as JSON, never executed',
         ],
+        'Memory/CompactionJournal.php|file_get_contents' => [
+            'SELF_LOCATED — scanFrom(): the one byte BEFORE the stored cursor offset, probed to '
+                . 'prove the resume point sits on a line boundary before anything is read from it',
+        ],
         'Memory/CompactionJournal.php|fopen' => [
+            'SELF_LOCATED — scanFrom(): the same journal opened `rb`, read forward from the '
+                . 'validated byte cursor; each line decoded as JSON, never executed',
+            'SELF_LOCATED — trimBefore(): opened `r+b` under LOCK_EX to drop the compacted prefix; '
+                . 'only this class\'s own journal is ever rewritten',
             'SELF_LOCATED — write(): the same journal opened `ab` for one locked append; no byte of it is read',
         ],
         'Memory/DreamPass.php|file_get_contents' => [

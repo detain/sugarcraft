@@ -410,7 +410,7 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "ELEVEN spellings remain by hand, in SIX files" — plus the seven the
+     * "ELEVEN spellings remain by hand, in SIX files" — plus the eight the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -430,7 +430,10 @@ final class ContainedPathInventoryTest extends TestCase
      * (`isBundledPresetPath()`, agents-qa) asks whether a preset resolves inside the
      * package's own bundled tree — `$bundled` is `__DIR__`-derived, and a FALSE answer
      * only routes the file through the stricter user-audit; nothing untrusted sits on
-     * the compared-with side.
+     * the compared-with side. `BuildsUnifiedDiff`'s one (`headerPaths()`, ISS-100)
+     * abbreviates an in-root absolute path to a relative `a/`/`b/` diff header label
+     * and shows an out-of-root one bare; the answer selects the SPELLING a header
+     * displays, nothing is admitted or refused on it.
      */
     public function testTheHandSpelledInventoryIncludingItsStatedExclusion(): void
     {
@@ -448,6 +451,7 @@ final class ContainedPathInventoryTest extends TestCase
                 'Skills/SkillLoader.php' => 1,
                 'Support/MediaStore.php' => 1,
                 'Tools/BuiltIn/Glob.php' => 1,
+                'Tools/Concerns/BuildsUnifiedDiff.php' => 1,
                 'Tools/IgnoreRules.php' => 1,
                 'Tools/PathJail.php' => 5,
                 'Tui/SessionPicker.php' => 1,
@@ -455,7 +459,7 @@ final class ContainedPathInventoryTest extends TestCase
             $counts,
         );
 
-        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php']);
+        unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php']);
         $this->assertSame(11, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(6, $counts, 'files still holding one');
     }
