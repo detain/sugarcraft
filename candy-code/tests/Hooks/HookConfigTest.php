@@ -761,4 +761,155 @@ YAML;
             . "    - name: forever\n      command: 'b.sh'\n      timeout: .inf\n",
         );
     }
+
+    // =========================================================================
+    // ISS-039: user-tier relative commands
+    // =========================================================================
+
+    /**
+     * The documented user-tier example - a script that travels with the
+     * config, spelled `./hooks/...` in `~/.candy-code/hooks.yaml` - resolves
+     * against the config's OWN directory, not whichever repository happens to
+     * be open. The name fallback keeps the raw text the user typed.
+     */
+    public function testAUserTierRelativeCommandResolvesAgainstTheUserConfigDirectory(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/home039');
+        mkdir($home . '/.candy-code/hooks', 0o700, true);
+        $file = $home . '/.candy-code/hooks.yaml';
+        // Bootstrap reaches parse() only THROUGH loadFromFile(), so the file
+        // is always there; the tier test follows suit and matches on the real
+        // path rather than on a string that merely looks like one.
+        file_put_contents($file, "hooks: {}\n");
+        try {
+            $entries = HookConfig::parse(
+                "hooks:\n  PreToolUse:\n    - command: './hooks/confirm-deploy.sh --strict'\n",
+                $file,
+            );
+
+            $this->assertSame(
+                $home . '/.candy-code/hooks/confirm-deploy.sh --strict',
+                $entries[0]['command'],
+            );
+            $this->assertSame(
+                './hooks/confirm-deploy.sh --strict',
+                $entries[0]['name'],
+                'the chain label stays the text the user wrote',
+            );
+        } finally {
+            $this->restoreHomeSandbox();
+            rmdir($home . '/.candy-code/hooks');
+            unlink($file);
+            rmdir($home . '/.candy-code');
+            rmdir($home);
+        }
+    }
+
+    /**
+     * THE PROJECT TIER IS NOT THE USER TIER. A repo's own hooks.yaml ships
+     * with the checkout the cwd already points at, so its relative commands
+     * are repository-relative BY CONTRACT and the rewrite must keep its hands
+     * off - running a repo's guard against a snapshot of the home directory
+     * would execute the wrong file under the right-looking name.
+     */
+    public function testAProjectTierFileKeepsRepoRelativeCommandsUntouched(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/home039p');
+        mkdir($home . '/.candy-code', 0o700, true);
+        file_put_contents($home . '/.candy-code/hooks.yaml', "hooks: {}\n");
+        $project = $this->tempDir . '/repo039/.candy-code';
+        mkdir($project, 0o700, true);
+        $projectFile = $project . '/hooks.yaml';
+        file_put_contents($projectFile, "hooks:\n  PreToolUse:\n    - command: './hooks/repo-guard.sh'\n");
+        try {
+            $entries = HookConfig::parse(
+                "hooks:\n  PreToolUse:\n    - command: './hooks/repo-guard.sh'\n",
+                $projectFile,
+            );
+
+            $this->assertSame('./hooks/repo-guard.sh', $entries[0]['command']);
+
+            // And the same file CONTENT read AS the user's own file does get
+            // rewritten - the tier is the path, never the text.
+            $userEntries = HookConfig::parse(
+                "hooks:\n  PreToolUse:\n    - command: './hooks/repo-guard.sh'\n",
+                $home . '/.candy-code/hooks.yaml',
+            );
+            $this->assertSame(
+                $home . '/.candy-code/hooks/repo-guard.sh',
+                $userEntries[0]['command'],
+            );
+        } finally {
+            $this->restoreHomeSandbox();
+            unlink($projectFile);
+            rmdir($project);
+            rmdir($this->tempDir . '/repo039');
+            unlink($home . '/.candy-code/hooks.yaml');
+            rmdir($home . '/.candy-code');
+            rmdir($home);
+        }
+    }
+
+    /**
+     * ONLY a leading `./` is rewritten. `bash ./x.sh` hides the relative
+     * path behind an interpreter this rewrite would have to parse around;
+     * `../x.sh` walks out of whatever base either reading could claim;
+     * `x.sh` is a PATH lookup in every shell's eyes. Guessing at those is
+     * how a config rewrite starts running things the user did not name.
+     */
+    public function testTheRewriteTouchesOnlyALeadingDotSlashAndNothingElse(): void
+    {
+        $home = $this->useHomeSandbox($this->tempDir . '/home039q');
+        mkdir($home . '/.candy-code', 0o700, true);
+        $file = $home . '/.candy-code/hooks.yaml';
+        file_put_contents($file, "hooks: {}\n");
+        $yaml = static fn (string $command): string =>
+            "hooks:\n  PreToolUse:\n    - name: n\n      command: '" . $command . "'\n";
+        try {
+            $cases = [
+                'bash ./x.sh' => 'bash ./x.sh',
+                '../x.sh' => '../x.sh',
+                'x.sh' => 'x.sh',
+                'echo ./x.sh' => 'echo ./x.sh',
+            ];
+            foreach ($cases as $typed => $expected) {
+                $entries = HookConfig::parse($yaml($typed), $file);
+                $this->assertSame($expected, $entries[0]['command'], $typed);
+            }
+
+            // The one polarity that DOES rewrite, with a trailing `./` operand
+            // that must survive untouched - first token only.
+            $entries = HookConfig::parse($yaml('./run.sh --hook ./data'), $file);
+            $this->assertSame($home . '/.candy-code/run.sh --hook ./data', $entries[0]['command']);
+        } finally {
+            $this->restoreHomeSandbox();
+            unlink($file);
+            rmdir($home . '/.candy-code');
+            rmdir($home);
+        }
+    }
+
+    /**
+     * An undeterminable home is NO rewrite, not a wrong rewrite: with HOME
+     * unset (or pointing at a directory ownership cannot establish) the tier
+     * test has nothing to resolve against, and the command runs exactly as
+     * before this feature - the pre-ISS-039 shape is the fail-into-keeping
+     * side, since a guard silently re-rooted into the wrong directory is a
+     * guard reading the wrong arguments.
+     */
+    public function testAnUnestablishableHomeLeavesUserSpelledCommandsAlone(): void
+    {
+        $missing = $this->tempDir . '/gone039';
+        $this->useHomeSandbox($missing, create: false);
+        try {
+            $entries = HookConfig::parse(
+                "hooks:\n  PreToolUse:\n    - command: './hooks/x.sh'\n",
+                $missing . '/.candy-code/hooks.yaml',
+            );
+
+            $this->assertSame('./hooks/x.sh', $entries[0]['command']);
+        } finally {
+            $this->restoreHomeSandbox();
+        }
+    }
 }

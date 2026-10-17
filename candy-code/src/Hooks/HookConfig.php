@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Support\HomeDirectory;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -224,6 +225,17 @@ final class HookConfig
             );
         }
 
+        // ISS-039: the user's own hook file is the ONE tier whose script files
+        // travel with the config rather than with any repository, and today a
+        // command starting `./` executes with cwd = whatever project is open -
+        // so `./hooks/confirm-deploy.sh`, the exact shape the documented
+        // example uses, silently reaches for a script in a stranger's tree.
+        // Resolving against the file's own directory makes the example mean
+        // what it looks like it means. REFUSE-was-the-alternative, and it lost:
+        // dropping an entry silently UNINSTALLS a guard, which is the
+        // fail-open this class spends its whole existence declining.
+        $userTierBase = self::userTierBase($source);
+
         $hooks = [];
 
         /** @var array<string, array<string, true>> $seen */
@@ -290,6 +302,15 @@ final class HookConfig
                     throw new \InvalidArgumentException(
                         "{$source}: a hook under 'hooks.{$event}' has an empty 'name'.",
                     );
+                }
+
+                // THE FIRST TOKEN ONLY, and only when it opens `./`: `bash
+                // ./x.sh`, `../x.sh` and `x.sh` each carry an intent this
+                // rewrite must not guess at. The name fallback above saw the
+                // RAW command, so the chain label stays the text the user
+                // typed even though the RUN text is now absolute.
+                if ($userTierBase !== null && str_starts_with($command, './')) {
+                    $command = $userTierBase . substr($command, 1);
                 }
 
                 $matcher = $config['matcher'] ?? '.*';
@@ -401,5 +422,33 @@ final class HookConfig
         }
 
         return $hooks;
+    }
+
+    /**
+     * The directory user-tier relative commands resolve against — the home
+     * config directory {@see \SugarCraft\Code\Cli\Bootstrap::hookFiles()}
+     * builds the user file path from, spelled the same way on purpose:
+     * `HomeDirectory::owned() . '/.candy-code'`, matched on
+     * {@see realpath()} so a symlinked route to the very same file still
+     * recognises it and a merely-similar string does not.
+     *
+     * Null for every other source — a project tier file (whose commands are
+     * repository-relative BY CONTRACT: the file ships with the checkout the
+     * cwd points at), an embedder's label that is not a path, an
+     * undeterminable home, or any path that is not the user's own file.
+     */
+    private static function userTierBase(string $source): ?string
+    {
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            return null;
+        }
+
+        $canonical = realpath($source);
+        $userFile = realpath($home . '/.candy-code/hooks.yaml');
+
+        return $canonical !== false && $userFile !== false && $canonical === $userFile
+            ? $home . '/.candy-code'
+            : null;
     }
 }
