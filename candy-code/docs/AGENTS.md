@@ -118,7 +118,8 @@ ask is refused. Only your own agent's calls can go to the background; a nested
 run always runs in the foreground.
 
 `/bg <task>` and `/fork <prompt>` start background sessions by hand, with the
-roster's `default` agent (else its first): `/bg` from a fresh conversation,
+roster's `default` agent (else its first native entry, else the built-in
+`coder`): `/bg` from a fresh conversation,
 `/fork` from a copy of this one. `/bg stop <id>` stops one. A background
 session outlives the TUI: quit, relaunch in the same project, and the new
 launch re-adopts it and reports its result. See

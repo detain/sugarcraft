@@ -481,9 +481,13 @@ one":
   See [`WORKFLOWS.md`](WORKFLOWS.md).
 - **`/bg` and `/fork`** run a task in a background session
   (`src/Sessions/BackgroundSessionRunner.php`) as the roster's `default`
-  agent (else its first), consulting nothing else of the preset but its
-  provider, model and `isolation:` (a worktree session, see
-  [Teams and worktrees](#teams-and-worktrees)). A **background `Task`** does consult it: `Task` with
+  agent, else its first NATIVE entry — a foreign import never takes the slot
+  a position-zero fallback lands on (ISS-087) — else the built-in `coder`,
+  consulting nothing else of the preset but its provider, model and
+  `isolation:` (a worktree session, see
+  [Teams and worktrees](#teams-and-worktrees)). An agent that inherits the
+  session's model exports nothing to the daemon (`Agent::exportedModel()`),
+  so the child keeps the session's own rather than a stamped literal. A **background `Task`** does consult it: `Task` with
   `background: true` — or for an agent whose preset says `background: true`,
   unless the call says `background: false` — returns `{"agent_id": …}` at
   once, and the session daemon runs the agent through `TaskTool` itself, so
@@ -495,12 +499,14 @@ one":
 
 So a preset's practical effect today is: it appears in the roster, `/agent
 <name>` describes it, and `Task` dispatches it by name onto the executor
-paths that already exist in `src/Agents/` (`AgentWorkerPool`,
-`ProcessExecutor`, `SubAgent`) — the same governed pool
-`Chat::executeAgents()` drives.
-
-That is a seam with a finished payload, not an accident, and it is written down
-here rather than marketed as delegation.
+paths in `src/Agents/` (`AgentWorkerPool`, `ProcessExecutor`, `SubAgent`) —
+and `Task` is LIVE on the main session: `Bootstrap::tools()` appends the
+`TaskTool` bound to the same manager and worker pool
+`Chat::executeAgents()` drives, one roster and one set of grants rather than
+two split states, and its background-supervisor and worktree seams ride the
+same instance. A
+preset's grants, effort and step cap therefore bind every `Task` call that
+names it, whichever path reaches the executor.
 
 ---
 
@@ -524,7 +530,9 @@ rules underneath are `TaskList`'s:
 - A claim is recorded against the session that made it (the TUI process, or a
   background teammate's daemon). When that session dies mid-task, the next
   `list` or `claim` puts the task back to pending and says so.
-- A team takes at most `max_teammates` teammates working at once (default 5).
+- A team takes at most `max_teammates` teammates working at once; `0` or
+  omitted means no cap, which is the default — nothing is imposed when the
+  operator stated no limit (a stated cap binds up to 50).
 - `create` with `auto_assign: false` makes a `claim` with no task hand out
   nothing: every teammate claims the task it is told to, by name.
 - A claim held longer than the team's `timeout_seconds` (default 600; `0`
@@ -568,7 +576,8 @@ continues in the same tree. A kept tree with no uncommitted change is swept
 after `worktreeCleanupPeriodDays` (its branch, and so its commits, stays); one
 with uncommitted changes stays until you remove it. A
 `/bg` (or `/fork`) session whose agent — the roster's `default`, else its first
-— says `isolation: worktree` is spawned into such a tree too, marked as a named
+native entry, else the built-in `coder` — says `isolation: worktree` is
+spawned into such a tree too, marked as a named
 session so the sweep never touches it, and the spawn notice names the path.
 
 A run that cannot be isolated — no git checkout, or `git worktree add` fails —
