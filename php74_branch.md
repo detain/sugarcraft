@@ -46,7 +46,7 @@ the language level.
 
 **Effort shape:** ~80% of the work is mechanical and parallelizable per file; the irreducible
 design work is (a) the **enum polyfill** (35 libs touch enums), (b) **`match`→`switch`** done
-without changing comparison semantics, and (c) **fibers** in `candy-ansi`/`candy-testing`.
+without changing comparison semantics, and (c) **fibers** in `candy-ansi`/`candy-testing`. <!-- @rename-keep -->
 
 ---
 
@@ -281,7 +281,7 @@ libs depending on core) plus to any leaf lib that uses them without a core dep. 
 
 ### 4.11 **Fibers (candy‑ansi, candy‑testing)** — **DESIGN / RISK**
 7.4 has no Fibers. The Coder agent must first *read the actual usage*:
-- If fibers back a cooperative scheduler/coroutine in `candy-testing`'s program simulator, replace
+- If fibers back a cooperative scheduler/coroutine in `candy-testing`'s program simulator, replace <!-- @rename-keep -->
   with a generator‑based driver or a synchronous step‑pump (ReactPHP loop already available).
 - If `candy-ansi`'s fiber use is a feature‑detected fast path with an existing fallback, gate it
   behind `if (\PHP_VERSION_ID >= 80100 && class_exists(\Fiber::class))` and ship the fallback for
@@ -379,7 +379,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.2** `candy-sprinkles` (43, med) — deps core+layout → **3.2a** `Layout/` (12), **3.2b**
   `Table/Border/Tree/Listing` (10), **3.2c** root color/style files (≈10), **3.2d** remainder.
 - **3.3** `candy-palette`(8,med), `candy-kit`(7,med), `sugar-treelist`(10,med) — deps core(+sprinkles). <!-- @rename-keep historical provenance -->
-- **3.4** `candy-testing`(8,med) — deps core+buffer; **Fiber** + attributes + first‑class‑callable
+- **3.4** `candy-testing`(8,med) — deps core+buffer; **Fiber** + attributes + first‑class‑callable <!-- @rename-keep -->
   + intersection. *(High‑touch; extra review per §4.11.)*
 - **3.5** `candy-git-server`(14,med, deps core+async), `candy-sql`(14,high, core+sprinkles),
   `candy-log`(16,high, core+palette+sprinkles; psr/log→^1.1 + drop param types).
@@ -509,7 +509,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-git-server | medium | 14 | ctor-promotion, first-class-callable, match, named-args; ssh2/openssl |
 | candy-scriptui | medium | 41 | attribute, backed-enum, ctor-promotion, enum-with-methods, match, mixed; symfony console |
 | candy-sprinkles | medium | 43 | backed-enum, enum, ctor-promotion, match, mixed, nullsafe |
-| candy-testing | medium | 8 | **fiber**, attribute, ctor-promotion, enum-in-const-expr, first-class-callable, intersection |
+| candy-testing | medium | 8 | **fiber**, attribute, ctor-promotion, enum-in-const-expr, first-class-callable, intersection | <!-- @rename-keep -->
 | candy-tetris | medium | 14 | attribute, backed-enum, ctor-promotion, enum-with-methods, first-class-callable |
 | candy-vcr | medium | 81 | attribute, backed-enum, ctor-promotion, match, named-args, new-in-init; symfony |
 | candy-wish | medium | 35 | ctor-promotion, match, mixed, named-args, non-capturing-catch |
