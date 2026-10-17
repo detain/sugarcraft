@@ -34,7 +34,7 @@ use SugarCraft\Code\Support\PrivateDir;
 final class DelegationSlots
 {
     /** Name stem of the per-uid directory under the temp root. */
-    public const DIR_PREFIX = 'sugar_crush_slots_';
+    public const DIR_PREFIX = 'candy_code_slots_';
 
     /** A scope directory untouched this long, with no seat held, is removed. */
     public const STALE_SECONDS = 86_400;

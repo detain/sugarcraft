@@ -24,7 +24,7 @@ use SugarCraft\Code\Memory\ForeignMemoryImporter;
  *
  * AUDIT R11. `/memory import claude` follows Claude Code's `CLAUDE_CONFIG_DIR`
  * and `CLAUDE_CODE_PROJECT_DIR_NAME`. EnvRosterDriftTest pins only the
- * `SUGARCRUSH_*` roster, so the "Claude Code variables" table on
+ * `CANDY_CODE_*` roster, so the "Claude Code variables" table on
  * ENVIRONMENT.md is pinned here instead, both directions, against the
  * importer's own `*_ENV` constants.
  */

@@ -86,13 +86,13 @@ use SugarCraft\Code\Tools\ToolCall;
  * the two `launchChatInChild()` calls a reader counts in the source, because
  * every MCP fixture server is itself a php process. The explicit `php` in that
  * command is load-bearing; see
- * {@see BinSugarcrushAutoloadGuardTest}'s class doc-block for what tracing the
+ * {@see BinCandyCodeAutoloadGuardTest}'s class doc-block for what tracing the
  * shebang wrapper instead does to the number.
  *
  * THE COST IS NOT THE CHILDREN. ~3.19 s of wall against ~1.18 s of CPU means
  * ~2 s of this file is WAITING — fixture-server startup and the stdio
  * handshake — and fewer, fatter children would wait exactly as long. That is
- * the opposite of {@see BinSugarcrushAutoloadGuardTest}, whose own ~1.58 s is
+ * the opposite of {@see BinCandyCodeAutoloadGuardTest}, whose own ~1.58 s is
  * ~87% interpreter startup, and it is why the two files do not get the same
  * answer despite both looking like "an integration test that spawns a lot". The
  * lever here would be the handshake timeout, not the process count; nothing

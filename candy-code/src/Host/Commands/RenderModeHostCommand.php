@@ -89,7 +89,7 @@ final class RenderModeHostCommand implements HostCommand
         return CommandResult::new(
             Message::user($text),
             Message::assistant(sprintf(
-                "render mode: %s — saved to %s\nnew image labels and the player on the next /play follow this word; transcript images keep the renderer chosen at launch and repaint in this one at the next launch\nSUGARCRUSH_MEDIA_RENDER_MODE reasserts at next launch when set",
+                "render mode: %s — saved to %s\nnew image labels and the player on the next /play follow this word; transcript images keep the renderer chosen at launch and repaint in this one at the next launch\nCANDY_CODE_MEDIA_RENDER_MODE reasserts at next launch when set",
                 $word,
                 $path,
             )),

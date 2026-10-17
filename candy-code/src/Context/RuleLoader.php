@@ -264,7 +264,7 @@ final class RuleLoader
      * loader's read to the other and reports a variable that is read as though it
      * were not. `DEBUG_RULES_REFUSALS_ENV` is unique, so both names resolve to
      * exactly the string each is declared to be. unset, empty and `0` all read as
-     * off, matching every other SUGARCRUSH_* switch. Adding the
+     * off, matching every other CANDY_CODE_* switch. Adding the
      * CANDY_CODE_DEBUG_RULES value is what obliges the `docs/ENVIRONMENT.md` roster
      * row that accompanies this commit.
      */

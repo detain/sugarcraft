@@ -196,7 +196,7 @@ final class CommandLoaderRefusalReportingTest extends TestCase
     }
 
     /**
-     * `0` is off, matching every other `SUGARCRUSH_*` switch.
+     * `0` is off, matching every other `CANDY_CODE_*` switch.
      *
      * Pinned because the natural spelling of the guard — `getenv(…) !== false`
      * — reads `=0` as ON, handing a user who set it to zero the opposite of

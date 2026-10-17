@@ -423,7 +423,7 @@ and rebuild` is still a task. A bare `/bg stop` prints usage and the active
 session ids.
 
 A background session talks to its daemon through files in an owner-only
-`sugar_crush_bg_<uid>_<hex>` directory in the system temp directory. Once the
+`candy_code_bg_<uid>_<hex>` directory in the system temp directory. Once the
 session settles and its answer has been read back, those files are deleted, and
 the directory goes with its last session. A daemon is meant to outlive the TUI
 that started it, so a TUI that exits first leaves its directory behind; the next
@@ -443,7 +443,7 @@ a mention you typed. A session you ended with `/bg stop` sends no result.
 
 A restart does not lose a session. Each spawn also writes a 0600 record, holding
 the daemon's pid and start time, its IPC paths and the launch that owns it, into
-an owner-only `sugar_crush_bg_<uid>_index` directory beside the IPC directories.
+an owner-only `candy_code_bg_<uid>_index` directory beside the IPC directories.
 At boot, candy-code re-adopts every record whose owning launch has exited and
 whose session was started for the same project. The first background poll then
 reports it, as running or with the result it reached while no TUI was open. The

@@ -40,7 +40,7 @@ final class HelpTest extends TestCase
 
     protected function tearDown(): void
     {
-        T::overrideNamespace('crush', self::LANG_DIR);
+        T::overrideNamespace('code', self::LANG_DIR);
         T::setLocale($this->locale);
         self::flushLocaleMemoisedCatalogues();
         if ($this->poisonDir !== null) {
@@ -89,7 +89,7 @@ final class HelpTest extends TestCase
             '<?php return ' . var_export(['cli.help.screen' => $poison], true) . ';',
         );
 
-        T::overrideNamespace('crush', $dir);
+        T::overrideNamespace('code', $dir);
         self::flushLocaleMemoisedCatalogues();
 
         // The poison survives the catalogue layer untouched — it is the
@@ -153,26 +153,19 @@ final class HelpTest extends TestCase
      * Roster variables deliberately NOT on the help screen, each with its why.
      *
      * The screen is the one place a user who has only `--help` can look, and
-     * every canonical `SUGARCRUSH_*` the code reads is now on it. What remains
-     * here are the deprecated `SUGAR_CRUSH_*` spellings: they stay READABLE
-     * for one release line (removing a read is a breaking change this lane
-     * does not make), but advertising a second spelling of a documented
-     * variable on the screen only invites users to set the one that will
-     * eventually stop working. The screen documents the canonical name; the
-     * alias is excluded by name here, and
-     * {@see testEveryExcludedVariableIsStillOnTheLiveRoster()} reddens the
-     * day the alias stops being read and this row should be deleted.
+     * every canonical `CANDY_CODE_*` the code reads is on it. The roster is
+     * EMPTY since the 2026-10 rename: the pre-rename `SUGARCRUSH_*` and // @rename-keep
+     * `SUGAR_CRUSH_*` spellings fold onto `CANDY_CODE_*` once at startup // @rename-keep
+     * (LegacyEnv in bin/candy-code), so they are inputs, not roster entries —
+     * the screen documents the one canonical spelling each variable has.
      */
-    private const UNDOCUMENTED_ON_HELP_SCREEN = [
-        'CANDY_CODE_SHARE_UPLOAD_URL' => 'deprecated alias of the documented CANDY_CODE_SHARE_UPLOAD_URL; kept readable, not advertised.',
-        'CANDY_CODE_WORKTREES_DIR' => 'deprecated alias of the documented CANDY_CODE_WORKTREES_DIR; kept readable, not advertised.',
-    ];
+    private const UNDOCUMENTED_ON_HELP_SCREEN = [];
 
     /**
      * The live roster as the token scanner resolves it — the same oracle and
      * the same walk {@see EnvRosterDriftTest()} uses for `docs/ENVIRONMENT.md`,
      * which is why a name is not simply grepped out of the tree: a `grep -o
-     * 'SUGARCRUSH_[A-Z_]*'` over `src/ bin/` counts 27 "variables", of which
+     * 'CANDY_CODE_[A-Z_]*'` over `src/ bin/` counts 27 "variables", of which
      * three are concatenation fragments (`CANDY_CODE_DEBUG_…`), and two —
      * `CANDY_CODE_TOOL_CALL_PARSER` and `CANDY_CODE_REASONING_EFFORT` — exist
      * only in doc-blocks, read by nothing. Scrape-with-the-oracle, not
@@ -266,7 +259,7 @@ final class HelpTest extends TestCase
     /**
      * The REVERSE direction, mirroring
      * {@see EnvRosterDriftTest::testEveryVariableTheEnvironmentPageTabulatesIsOneTheCodeReads()}
-     * for docs/ENVIRONMENT.md: every line-anchored `SUGARCRUSH_*` the screen
+     * for docs/ENVIRONMENT.md: every line-anchored `CANDY_CODE_*` the screen
      * prints must be a name the code still reads or exports. Without this,
      * a rename that drops a variable from `src/` while its help entry stays
      * is invisible — the forward guard's provider list just shrinks and the
@@ -281,7 +274,7 @@ final class HelpTest extends TestCase
      */
     public function testEveryVariableTheScreenNamesIsOnTheLiveRoster(): void
     {
-        \preg_match_all('/^ *(SUGARCRUSH_[A-Z0-9_]+)(?![A-Z0-9_])/m', Help::screen(), $found);
+        \preg_match_all('/^ *(CANDY_CODE_[A-Z0-9_]+)(?![A-Z0-9_])/m', Help::screen(), $found);
         $screened = \array_values(\array_unique($found[1]));
         \sort($screened);
 
@@ -445,7 +438,7 @@ final class HelpTest extends TestCase
             // KNOWN GAP, pre-existing and deliberately left as-is.
             //
             // `backendFor()` — the method that BUILDS the backend — is not in
-            // this list, so a `getenv('SUGARCRUSH_...')` added there would not
+            // this list, so a `getenv('CANDY_CODE_...')` added there would not
             // be scraped and could ship undocumented. Every other
             // backend-selection method is named above; this one was missed.
             //
@@ -487,7 +480,7 @@ final class HelpTest extends TestCase
                 $reflected->getEndLine(),
             );
 
-            \preg_match_all("/'(SUGARCRUSH_[A-Z0-9_]+)'/", $body, $found);
+            \preg_match_all("/'(CANDY_CODE_[A-Z0-9_]+)'/", $body, $found);
             foreach ($found[1] as $var) {
                 $vars[$var] = [$var];
             }

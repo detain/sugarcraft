@@ -692,7 +692,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'this process as owner',
         ],
         'Sessions/BackgroundSupervisor.php|glob' => [
-            'NAMES_ONLY — the startup sweep (audit BG-2) lists `sugar_crush_bg_<uid>_*` names in the '
+            'NAMES_ONLY — the startup sweep (audit BG-2) lists `candy_code_bg_<uid>_*` names in the '
                 . 'temp dir; each candidate is then lstat-checked as a real directory of this uid '
                 . 'in the exact minted shape, and no content is read',
             'NAMES_ONLY — reconnect() (roadmap 4.3-3) lists `sess_*.json` records in the per-uid '

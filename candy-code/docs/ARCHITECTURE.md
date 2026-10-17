@@ -886,7 +886,7 @@ gate and `ProtectFilesHook` classify by the declared class, and
 `tools/gen-tool-docs.php` regenerates the tool roster, the class lists and the
 counts on these pages. A tool class with no declaration is a hard error, not a
 silent skip (`ToolCatalogTest::testAnUndeclaredToolIsRefusedNotSkipped()`), and
-`BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`
+`BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`
 checks the launch set against the directory: that is the defect that once left `Write` written, tested, named in
 the README, and unreachable from any real run. `Task` is the one exception the
 catalog classifies but does not build, because `Bootstrap::tools()` appends it
@@ -1006,7 +1006,7 @@ completion can legitimately run for tens of minutes.
 | `~/.candy-code/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC; swept with its session, as `subagents/` is |
 | `<tmp>/sc_runtime_tool_<id>.board` | `Agents\Board\Board` | one parallel `Task` batch's shared board: the posts its members make with `BoardPost`, one JSON line each, in a 0600 file created before the batch forks (when two or more members can join) and removed when the batch is over; a file a killed process leaves goes with the batch's other `sc_runtime_tool_` files in the next launch's one-hour sweep |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
-| `<tmp>/sugar_crush_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
+| `<tmp>/candy_code_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
 
 **Transcript rows have an identity.** `EnhancedSessionStore::saveTranscript()`
 writes transcript schema version 2: every row has an id, `m_<session>_<ref>`, and a
@@ -1316,7 +1316,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `/memory import`, and `src/LSP/` until step 3.F gave it a launcher.)
 2. **Absence is a no-op; present-but-unusable is a refusal.** Applied to
    `config.json`, `hooks.yaml`, `.mcp.json`, `--config`, `--root`, and every
-   `SUGARCRUSH_*` variable that carries policy.
+   `CANDY_CODE_*` variable that carries policy.
 3. **One resolution per question.** `HomeDirectory` for `~`, `ContainedPath` for
    containment, `HookConfig::pattern()` for matcher delimiters,
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of

@@ -147,7 +147,7 @@ trait HttpClientDefaults
     /**
      * Escape hatch for deployments this default is wrong for - a satellite
      * link, or a lab box that needs it far shorter. Follows the existing
-     * `SUGARCRUSH_*` `getenv()` convention (`CANDY_CODE_SEARCH_ENDPOINT`,
+     * `CANDY_CODE_*` `getenv()` convention (`CANDY_CODE_SEARCH_ENDPOINT`,
      * `CANDY_CODE_MODEL`, ...) rather than introducing a new config
      * mechanism for one scalar.
      */

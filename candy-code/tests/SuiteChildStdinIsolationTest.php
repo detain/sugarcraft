@@ -196,7 +196,7 @@ final class SuiteChildStdinIsolationTest extends TestCase
         // each, that file's include shape reproduced from inside a private
         // method: $GLOBALS => /dev/null 3/3, a bare local => fd 0 closed 3/3).
         self::assertIsResource(
-            $GLOBALS['__sugarcrushSuiteStdin'] ?? null,
+            $GLOBALS['__candyCodeSuiteStdin'] ?? null,
             'the bootstrap freed descriptor 0 but did not park the replacement handle where it survives '
                 . 'the include - PHPUnit includes tests/bootstrap.php from inside a METHOD, so a bare local '
                 . 'there is freed on return and closes fd 0 again',

@@ -22,7 +22,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * fast. Same bug class as the already-fixed "`--help` opens the TUI".
  *
  * The reason it shipped is that no test drove the real entry point at all
- * (see {@see BinSugarcrushWiringTest}'s docblock, which exercises Bootstrap
+ * (see {@see BinCandyCodeWiringTest}'s docblock, which exercises Bootstrap
  * instead precisely because the bin script ends in a blocking
  * `Program::run()`). This class closes that gap in the only two ways that are
  * safe to do so:
@@ -37,7 +37,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  *    those would be exactly the hang (or the live network call) this file
  *    exists to prevent.
  */
-final class BinSugarcrushDispatchTest extends TestCase
+final class BinCandyCodeDispatchTest extends TestCase
 {
     use HomeSandboxTrait;
 
@@ -1633,7 +1633,7 @@ final class BinSugarcrushDispatchTest extends TestCase
 
         // bash: a COMPREPLY-filling function bound with `complete -F`.
         $this->assertStringContainsString('COMPREPLY=', $bash);
-        $this->assertStringContainsString('complete -F _sugarcrush candy-code', $bash);
+        $this->assertStringContainsString('complete -F _candy_code candy-code', $bash);
 
         // zsh: #compdef plus _arguments/_describe. It must carry NONE of bash's
         // vocabulary — that substitution is the failure this test exists for.
@@ -2087,7 +2087,7 @@ final class BinSugarcrushDispatchTest extends TestCase
      * PATH + a throwaway HOME + $overrides, and deliberately nothing else.
      *
      * A whitelist rather than "inherit and override": the whole point is that
-     * NO `SUGARCRUSH_*` or provider credential from the runner's environment
+     * NO `CANDY_CODE_*` or provider credential from the runner's environment
      * can reach the child, and an override list cannot enumerate variables it
      * does not know the machine has set.
      *

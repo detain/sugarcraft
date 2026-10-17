@@ -416,7 +416,7 @@ final class Chat implements Model
      * one funnel so the call site cannot drift on the gate, exactly as
      * {@see \SugarCraft\Code\Context\RuleLoader} funnels its own refusals.
      * unset, empty and `0` all read as off, matching every other
-     * `SUGARCRUSH_*` switch.
+     * `CANDY_CODE_*` switch.
      */
     private static function debugStreamRequested(): bool
     {

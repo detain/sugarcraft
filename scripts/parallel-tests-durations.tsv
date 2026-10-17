@@ -7,7 +7,7 @@ candy-code/tests/TreeWideGuardRosterTest.php	35.607	17
 candy-code/tests/Support/DuplicatedTestHelperDriftTest.php	35.595	14
 candy-code/tests/Config/EnvRosterDriftTest.php	34.233	34
 candy-code/tests/RendererTest.php	32.523	120
-candy-code/tests/Integration/BinSugarcrushDispatchTest.php	30.408	126
+candy-code/tests/Integration/BinCandyCodeDispatchTest.php	30.408	126
 candy-code/tests/Cli/StderrEmitterCensusTest.php	26.468	95
 candy-code/tests/LSP/LspClientDispatchPumpTest.php	20.387	2
 candy-code/tests/Tools/BuiltInToolCorpusTest.php	20.382	53
@@ -41,7 +41,7 @@ candy-code/tests/SwallowingCatchCensusTest.php	9.808	2
 candy-code/tests/Server/ServeStatusStopTest.php	9.323	7
 candy-code/tests/Agents/AgentManagerTest.php	9.223	143
 candy-code/tests/Support/ForkedChildReaperAdoptionTest.php	9.152	6
-candy-code/tests/Integration/BinSugarcrushWiringTest.php	8.788	1013
+candy-code/tests/Integration/BinCandyCodeWiringTest.php	8.788	1013
 candy-code/tests/FrameCapFamilyTest.php	8.650	8
 candy-code/tests/Runtime/SequentialToolHeartbeatTest.php	8.497	6
 candy-code/tests/MCP/ClaudeCodeMcpClientDeadlineTest.php	8.421	12
@@ -119,7 +119,7 @@ candy-code/tests/Support/HomeDirectoryPathReaderInventoryTest.php	3.792	7
 candy-code/tests/Chat/RewindCommandTest.php	3.755	15
 candy-code/tests/Chat/CommandArgumentSeparatorTest.php	3.749	17
 candy-code/tests/Support/DuplicatedDocBlockLineTest.php	3.738	4
-candy-code/tests/Integration/BinSugarcrushAutoloadGuardTest.php	3.736	35
+candy-code/tests/Integration/BinCandyCodeAutoloadGuardTest.php	3.736	35
 candy-code/tests/Chat/RewindFilesTest.php	3.694	11
 candy-code/tests/Protocol/MediaMethodsTest.php	3.680	14
 candy-code/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.637	13
@@ -439,7 +439,7 @@ candy-code/tests/Host/TurnRunnerActiveSubagentsTest.php	0.309	4
 candy-code/tests/Skills/SkillManagerTest.php	0.306	44
 candy-code/tests/Backend/MemoryFlushBeforeCompactionTest.php	0.304	10
 candy-code/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.303	1
-candy-code/tests/Integration/BinSugarcrushJsonStdoutDiagnosticsTest.php	0.302	1
+candy-code/tests/Integration/BinCandyCodeJsonStdoutDiagnosticsTest.php	0.302	1
 candy-code/tests/Context/EnvironmentBlockGitConfigIsolationTest.php	0.301	4
 candy-code/tests/MCP/McpAuthStoreTest.php	0.300	19
 candy-code/tests/Tui/MenuBarMouseTest.php	0.300	16
@@ -929,7 +929,7 @@ candy-code/tests/Media/MediaAffordanceTest.php	0.013	16
 candy-code/tests/Providers/OpenAIProviderStreamedToolCallsTest.php	0.013	7
 candy-code/tests/App/DockPersistenceRoundTripTest.php	0.013	5
 candy-code/tests/Agents/WorktreeConfigTest.php	0.013	31
-candy-code/tests/Integration/BinSugarcrushTuiErrorLogTest.php	0.013	6
+candy-code/tests/Integration/BinCandyCodeTuiErrorLogTest.php	0.013	6
 candy-code/tests/Skills/SkillSourceTest.php	0.013	11
 candy-code/tests/Chat/BareMcpAuthWordBoundaryTest.php	0.013	8
 candy-code/tests/Context/Triggers/TriggerTest.php	0.013	33

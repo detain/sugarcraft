@@ -261,7 +261,7 @@ use SugarCraft\Code\Tests\Support\TokenFunctionRanges;
  * channel was built and MEASURED before being rejected: on this tree it finds
  * exactly TWO root-anchored subprocess sites and BOTH are false positives -
  * `Cli/BootstrapSkillSkipsTest`'s `exec()` and
- * `Integration/BinSugarcrushDispatchTest`'s `proc_open()` spawn the CLI under
+ * `Integration/BinCandyCodeDispatchTest`'s `proc_open()` spawn the CLI under
  * test and walk nothing - so it would buy zero real members at the price of two
  * exemption rows written for CORRECT code, which rule 33 names as exactly where
  * the next real offender hides.
@@ -599,10 +599,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
         // tearDown() removes the sys_get_temp_dir() home setUp() made.
         'Diagnostics/TuiErrorLogTest.php' => ['scandir($path)'],
-        'Integration/BinSugarcrushAutoloadGuardTest.php' => ['scandir($dir)'],
-        'Integration/BinSugarcrushDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
+        'Integration/BinCandyCodeAutoloadGuardTest.php' => ['scandir($dir)'],
+        'Integration/BinCandyCodeDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() removes the sys_get_temp_dir() HOME + project setUp() made.
-        'Integration/BinSugarcrushJsonStdoutDiagnosticsTest.php' => ['RecursiveDirectoryIterator($this->tempDir,\FilesystemIterator::SKIP_DOTS)'],
+        'Integration/BinCandyCodeJsonStdoutDiagnosticsTest.php' => ['RecursiveDirectoryIterator($this->tempDir,\FilesystemIterator::SKIP_DOTS)'],
         'Integration/FeatWiringReachabilityTest.php' => ['scandir($dir)'],
         'Integration/McpToolWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Integration/MultiAgentRefactorTest.php' => [

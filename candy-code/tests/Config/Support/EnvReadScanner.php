@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Config\Support;
 
 /**
- * WHICH `SUGARCRUSH_*` VARIABLES THE CODE ACTUALLY READS, BY TOKEN STREAM.
+ * WHICH `CANDY_CODE_*` VARIABLES THE CODE ACTUALLY READS, BY TOKEN STREAM.
  *
  * `grep` cannot answer this question. Every prefixed name in `src/` that a
  * `grep` finds is a mixture of three different things — a real read, a mention
@@ -85,14 +85,15 @@ final class EnvReadScanner
 {
     /**
      * The roster's own alphabet — and it deliberately admits the DEPRECATED
-     * spelling `SUGAR_CRUSH_*` as well as the canonical `SUGARCRUSH_*`.
+     * the pre-rename `SUGARCRUSH_*`/`SUGAR_CRUSH_*` spellings are deliberately // @rename-keep
+ * outside the alphabet — LegacyEnv folds them onto `CANDY_CODE_*` at startup.
      *
      * A pattern that only matched the canonical prefix would report zero
      * problems while the two legacy aliases in `WorktreeManager` and
      * `ShareCommand` went undocumented — a census cannot find what its alphabet
      * cannot spell.
      */
-    public const NAME_PATTERN = '/^SUGAR_?CRUSH_[A-Z0-9_]+$/';
+    public const NAME_PATTERN = '/^CANDY_CODE_[A-Z0-9_]+$/';
 
     /**
      * The synthetic token id for a string whose value is assembled at runtime.
@@ -154,7 +155,7 @@ final class EnvReadScanner
      * Literals that look like a roster name assembled from pieces.
      *
      * THE ONE THING THIS SCANNER GENUINELY CANNOT FOLLOW is a name built at
-     * runtime — `getenv('SUGARCRUSH_' . $suffix)` is read by the code and named
+     * runtime — `getenv('CANDY_CODE_' . $suffix)` is read by the code and named
      * by no pattern here. Rather than leave that as a caveat in prose, the
      * pieces are collected so the caller can assert there are none: the blind
      * spot is measured empty rather than assumed empty.
@@ -162,7 +163,7 @@ final class EnvReadScanner
      * THREE SHAPES REACH THIS LIST, and the last two were added in round 44
      * after they were found silently dropped:
      *
-     * - a piece that is not a well-formed name, `'SUGARCRUSH_' . $suffix`;
+     * - a piece that is not a well-formed name, `'CANDY_CODE_' . $suffix`;
      * - a piece of an INTERPOLATED string, `"CANDY_CODE_X_{$n}"`, even when the
      *   piece matches {@see NAME_PATTERN} on its own — it is a piece of the
      *   value, and recording it as the value would be a confident wrong answer
@@ -200,7 +201,7 @@ final class EnvReadScanner
                     // in `Bootstrap` is an error message that MENTIONS a
                     // variable, and reporting it as a half-assembled name would
                     // have been the census crying wolf on its first run.
-                    if (str_starts_with($part, 'SUGAR')) {
+                    if (str_starts_with($part, 'CANDY')) {
                         $this->fragments[] = $label . ':' . $token['line'] . ': ' . $part;
                     }
                 }
@@ -211,13 +212,13 @@ final class EnvReadScanner
                 continue;
             }
             $value = self::stringValue($token);
-            if ($value === null || !str_starts_with($value, 'SUGAR')) {
+            if ($value === null || !str_starts_with($value, 'CANDY')) {
                 continue;
             }
             if (preg_match(self::NAME_PATTERN, $value) === 1) {
                 continue;
             }
-            if (preg_match('/^(SUGAR_?CRUSH_[A-Z0-9_]+)=/', $value, $matches) === 1) {
+            if (preg_match('/^(CANDY_CODE_[A-Z0-9_]+)=/', $value, $matches) === 1) {
                 $this->exported[$matches[1]][] = $label . ':' . $token['line'];
 
                 continue;

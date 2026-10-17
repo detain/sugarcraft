@@ -9,7 +9,7 @@ use SugarCraft\Code\Tests\Config\Support\DocumentParagraphs;
 use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
 
 /**
- * `docs/ENVIRONMENT.md` OPENS WITH "EVERY ENVIRONMENT VARIABLE SUGARCRUSH
+ * `docs/ENVIRONMENT.md` OPENS WITH "EVERY ENVIRONMENT VARIABLE CANDY_CODE
  * READS, IN ONE PLACE" — AND UNTIL NOW NOTHING CHECKED IT.
  *
  * That page is one of five claim families the round-43 audit recorded as
@@ -51,17 +51,16 @@ use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
  *   page discusses out of the documented set. This half-sentence was copied
  *   forward into a round-45 claim about the roster page and stamped
  *   "measured"; the correction lives on {@see tabulatedNames()}.
- * - The deprecated `SUGAR_CRUSH_*` spelling is inside the scanner's alphabet on
- *   purpose. A pattern matching only the canonical prefix would have reported a
- *   clean roster while `CANDY_CODE_WORKTREES_DIR` and
- *   `CANDY_CODE_SHARE_UPLOAD_URL` went untabulated — a census cannot find what
- *   its alphabet cannot spell.
+ * - The pre-rename `SUGARCRUSH_*`/`SUGAR_CRUSH_*` spellings are deliberately // @rename-keep
+ *   OUTSIDE the scanner's alphabet since the 2026-10 rename: they fold onto
+ *   `CANDY_CODE_*` once at startup (LegacyEnv) plus two @rename-keep'd
+ *   fallback reads in WorktreeManager/ShareCommand, and the alias table in
+ *   docs/ENVIRONMENT.md tabulates those legacy shapes on purpose.
  *
  * WHAT THE ORACLE FOUND THE FIRST TIME IT RAN, recorded because a generator
  * whose first result is "no defect" is the one a reader most needs convincing
- * about. The code reads TWENTY-ONE variables — nineteen canonical plus the two
- * deprecated `SUGAR_CRUSH_*` aliases — the page tabulates the same twenty-one,
- * and both directions are empty. The page was already right. What changed is
+ * about. The code reads its canonical `CANDY_CODE_*` set, the page tabulates
+ * the same names, and both directions are empty. The page was already right. What changed is
  * that "already right" is now a measurement instead of a belief, and the
  * cheapest way to check the oracle is not vacuous is that it also found two
  * things nobody was looking for: `BackgroundSessionRunner` EXPORTS
@@ -79,7 +78,7 @@ use SugarCraft\Code\Tests\Config\Support\EnvReadScanner;
  * over markdown. The stamp is provenance.
  *
  * OUT OF SCOPE, DELIBERATELY: a sibling `sugarcraft/*` library reading a
- * `SUGARCRUSH_*` variable would not be seen. Measured at the time of writing —
+ * `CANDY_CODE_*` variable would not be seen. Measured at the time of writing —
  * no lib outside `candy-code/` mentions the prefix at all — and scanning
  * siblings from here would fail in a split-repo clone, where they are Packagist
  * copies rather than a monorepo path away.
@@ -173,13 +172,13 @@ final class EnvRosterDriftTest extends TestCase
         ];
 
         yield 'S1 — a NOWDOC literal argument' => [
-            "<?php class A { function f() { return getenv(<<<'TXT'\nSUGARCRUSH_NOWDOC\nTXT); } }",
+            "<?php class A { function f() { return getenv(<<<'TXT'\nCANDY_CODE_NOWDOC\nTXT); } }",
             'CANDY_CODE_NOWDOC',
             'S1-direct',
         ];
 
         yield 'S1 — a HEREDOC literal argument' => [
-            "<?php class A { function f() { return getenv(<<<TXT\nSUGARCRUSH_HEREDOC\nTXT); } }",
+            "<?php class A { function f() { return getenv(<<<TXT\nCANDY_CODE_HEREDOC\nTXT); } }",
             'CANDY_CODE_HEREDOC',
             'S1-direct',
         ];
@@ -192,16 +191,16 @@ final class EnvRosterDriftTest extends TestCase
 
         yield 'S3 — a heredoc literal forwarded through a reader' => [
             "<?php class A {\n"
-                . "    function f() { return self::flag(<<<TXT\nSUGARCRUSH_HEREDOC_FWD\nTXT); }\n"
+                . "    function f() { return self::flag(<<<TXT\nCANDY_CODE_HEREDOC_FWD\nTXT); }\n"
                 . "    private static function flag(string \$name): bool { return getenv(\$name) !== false; }\n"
                 . '}',
             'CANDY_CODE_HEREDOC_FWD',
             'S3-forward:flag#0',
         ];
 
-        yield 'the deprecated SUGAR_CRUSH_ spelling is inside the alphabet' => [
-            '<?php class A { function f() { return getenv("CANDY_CODE_LEGACY"); } }',
-            'CANDY_CODE_LEGACY',
+        yield 'a double-quoted canonical literal is a read' => [
+            '<?php class A { function f() { return getenv("CANDY_CODE_DQ"); } }',
+            'CANDY_CODE_DQ',
             'S1-direct',
         ];
 
@@ -340,7 +339,7 @@ final class EnvRosterDriftTest extends TestCase
      * Prose is not a read — the single thing `grep` cannot get right.
      *
      * All three of these would be hits for
-     * `grep -o 'SUGARCRUSH_[A-Z_]*'`, and none of them is a variable anyone
+     * `grep -o 'CANDY_CODE_[A-Z_]*'`, and none of them is a variable anyone
      * reads. The scanner sees no token for the first two at all (comments are
      * their own token category and are dropped before matching) and cannot
      * place the third, whose name is read nowhere.
@@ -431,7 +430,7 @@ final class EnvRosterDriftTest extends TestCase
     /**
      * A name ASSEMBLED at runtime is collected as a fragment, not silently lost.
      *
-     * This is the scanner's one genuine blind spot — `getenv('SUGARCRUSH_' .
+     * This is the scanner's one genuine blind spot — `getenv('CANDY_CODE_' .
      * $suffix)` is a read no pattern here can name — and the point of
      * collecting the fragment is that the blind spot gets MEASURED empty by
      * {@see testNoRosterNameIsAssembledFromPiecesTheScannerCannotFollow()}
@@ -440,11 +439,11 @@ final class EnvRosterDriftTest extends TestCase
     public function testANameAssembledFromPiecesIsCollectedRatherThanLost(): void
     {
         $scanner = new EnvReadScanner([
-            'fixture.php' => '<?php class A { function f() { return getenv("SUGARCRUSH_" . $this->suffix); } }',
+            'fixture.php' => '<?php class A { function f() { return getenv("CANDY_CODE_" . $this->suffix); } }',
         ]);
 
         $this->assertSame([], $scanner->reads());
-        $this->assertSame(['fixture.php:1: SUGARCRUSH_'], $scanner->fragments());
+        $this->assertSame(['fixture.php:1: CANDY_CODE_'], $scanner->fragments());
     }
 
     /**
@@ -463,7 +462,7 @@ final class EnvRosterDriftTest extends TestCase
      * THE INTERPOLATED CASE IS THE SUBTLE ONE. `"CANDY_CODE_INTERP_{$fd}"` has
      * a literal part, `CANDY_CODE_INTERP_`, that matches
      * {@see EnvReadScanner::NAME_PATTERN} on its own — unlike
-     * `'SUGARCRUSH_' . $suffix`, whose piece does not. Treating a part of an
+     * `'CANDY_CODE_' . $suffix`, whose piece does not. Treating a part of an
      * assembled string as a name would therefore have produced a CONFIDENT
      * WRONG ANSWER (a read of a variable nobody reads) rather than a reported
      * gap, which is why parts are routed to {@see EnvReadScanner::fragments()}
@@ -483,7 +482,7 @@ final class EnvRosterDriftTest extends TestCase
     public function testANameInterpolatedIntoAHeredocIsAlsoAFragment(): void
     {
         $scanner = new EnvReadScanner([
-            'fixture.php' => "<?php class A { function f() { return getenv(<<<TXT\nSUGARCRUSH_HD_{\$this->fd}\nTXT); } }",
+            'fixture.php' => "<?php class A { function f() { return getenv(<<<TXT\nCANDY_CODE_HD_{\$this->fd}\nTXT); } }",
         ]);
 
         $this->assertSame([], $scanner->reads(), 'half an assembled name was recorded as a read');
@@ -495,7 +494,7 @@ final class EnvRosterDriftTest extends TestCase
      *
      * `getenv('CANDY_CODE_MAX' . $suffix)` reads neither `CANDY_CODE_MAX` nor
      * anything nameable, and the literal is a perfectly well-formed roster name
-     * on its own — so the shape that catches `'SUGARCRUSH_' . $x` (a piece that
+     * on its own — so the shape that catches `'CANDY_CODE_' . $x` (a piece that
      * fails the pattern) does not catch this one. MEASURED at round 44: no such
      * literal exists in `src/` or `bin/`, so the rule reports nothing today.
      */
@@ -515,7 +514,7 @@ final class EnvRosterDriftTest extends TestCase
      * THE CONTROL FOR THE RULE ABOVE, and it is not hypothetical: `Bootstrap`
      * throws `"\$CANDY_CODE_MAX_COST is '{$trimmed}', which is not a spend
      * ceiling"`. The first cut of the interpolated-parts rule used
-     * `str_contains($part, 'SUGAR')` and reported that message as a
+     * a loose `str_contains` on the brand prefix and reported that message as a
      * half-assembled name on its very first run over `src/`. The rule is
      * `str_starts_with`, the same test the whole-literal path applies.
      */
@@ -638,7 +637,7 @@ final class EnvRosterDriftTest extends TestCase
         $this->assertSame(
             [],
             $this->scanner()->unresolved(),
-            'a SUGARCRUSH_* occurrence matched none of the shapes EnvReadScanner understands; '
+            'a CANDY_CODE_* occurrence matched none of the shapes EnvReadScanner understands; '
             . 'teach it the shape rather than widening the exclusion',
         );
     }
@@ -678,7 +677,7 @@ final class EnvRosterDriftTest extends TestCase
      *   red on prose that exists to record that the code makes no promise. So:
      *   first column only.
      * - EVERY OTHER page MENTIONS. It has no roster to keep and no not-read
-     *   section; a `SUGARCRUSH_*` name printed on it is being handed to a
+     *   section; a `CANDY_CODE_*` name printed on it is being handed to a
      *   reader to set. So: whole page — and the roster page is EXCLUDED from
      *   that scrape rather than exempted inside it, which is what keeps the two
      *   not-read sentences out of the widened rule without an exemption list.
@@ -714,7 +713,7 @@ final class EnvRosterDriftTest extends TestCase
     private function tabulatedNames(): array
     {
         $page = self::read(self::ENVIRONMENT_DOC);
-        $matched = preg_match_all('/^\|\s*`(SUGAR_?CRUSH_[A-Z0-9_]+)`\s*\|/m', $page, $matches);
+        $matched = preg_match_all('/^\|\s*`(CANDY_CODE_[A-Z0-9_]+)`\s*\|/m', $page, $matches);
         $this->assertIsInt($matched, 'the table scrape failed to run, so the documented set is unknown');
         $this->assertGreaterThan(
             10,
@@ -747,10 +746,10 @@ final class EnvRosterDriftTest extends TestCase
      *
      * A census cannot find what its alphabet cannot spell, and this is the one
      * shape this alphabet cannot spell. Measured empty on PHP 8.3.6,
-     * 2026-08-22 — the only `SUGAR`-prefixed literal in `src/` that is not a
+     * 2026-08-22 (pre-rename alphabet) — the only brand-prefixed literal in `src/` that is not a
      * whole roster name is `BackgroundSessionRunner`'s `'CANDY_CODE_MODEL='`,
      * which is an export and is checked separately below. The day someone
-     * writes `getenv('SUGARCRUSH_' . $x)` this reds, and the right answer then
+     * writes `getenv('CANDY_CODE_' . $x)` this reds, and the right answer then
      * is to teach the scanner that shape rather than to widen this exclusion.
      */
     public function testNoRosterNameIsAssembledFromPiecesTheScannerCannotFollow(): void
@@ -758,7 +757,7 @@ final class EnvRosterDriftTest extends TestCase
         $this->assertSame(
             [],
             $this->scanner()->fragments(),
-            'a SUGAR-prefixed string literal is not a whole roster name — if it is half of one, '
+            'a CANDY_CODE-prefixed string literal is not a whole roster name — if it is half of one, '
             . 'the read that assembles it is invisible to every assertion in this file',
         );
     }
@@ -1046,17 +1045,16 @@ final class EnvRosterDriftTest extends TestCase
     /** The census answer {@see censusFixture()} must produce. */
     private const CENSUS_FIXTURE_ANSWER = [
         'CANDY_CODE_FIXTURE_ONE' => ['fixture-a.md', 'fixture-b.md'],
-        'CANDY_CODE_FIXTURE_WRAPPED' => ['fixture-b.md'],
         'CANDY_CODE_FIXTURE_TWO' => ['fixture-a.md'],
+        'CANDY_CODE_FIXTURE_WRAPPED' => ['fixture-b.md'],
     ];
 
     /**
-     * Every `SUGARCRUSH_*` / `SUGAR_CRUSH_*` name in a blob of text.
+     * Every `CANDY_CODE_*` name in a blob of text.
      *
-     * The same alphabet {@see tabulatedNames()} uses, deprecated spelling
-     * included for the reason this class's doc-block records: a census cannot
-     * find what its alphabet cannot spell, and the deprecated pair is exactly
-     * what a canonical-prefix-only pattern misses in silence.
+     * The same alphabet {@see tabulatedNames()} uses: canonical
+     * `CANDY_CODE_*` names. Pre-rename spellings fold in at startup and the
+     * alias table is where the page keeps them, outside this census.
      *
      * NORMALISED THROUGH THE SHARED WINDOW (E149). WHAT THIS USED TO BE: one
      * `preg_match_all()` over the raw page text — a different window from the
@@ -1080,8 +1078,8 @@ final class EnvRosterDriftTest extends TestCase
      * "`CANDY_CODE_X` OR" — conjure a candidate; the cap keeps the ambiguity
      * on the side where rejoining is the only reading a wrapped identifier
      * has. THE LIMIT IS STATED RATHER THAN SMOOTHED: a break INSIDE the fixed
-     * prefix (`SUGAR_\nCRUSH_X`) is not rejoined, because admitting a gap
-     * there would make the ordinary words `SUGAR CRUSH...` in any casing a
+     * prefix (`CANDY_\nCODE_X`) is not rejoined, because admitting a gap
+     * there would make the ordinary words `CANDY CODE...` in any casing a
      * name candidate — the hazard is one-sided and this oracle refuses to
      * buy coverage with a prose-hunting regex. A break is also invisible to
      * the tabulated side of the roster in exactly the same way; both halves
@@ -1100,11 +1098,11 @@ final class EnvRosterDriftTest extends TestCase
     {
         $names = [];
         foreach (DocumentParagraphs::of($text) as $unit) {
-            $matched = preg_match_all('/\b(SUGAR_?CRUSH_[A-Z0-9_]+)\b/', $unit, $matches);
+            $matched = preg_match_all('/\b(CANDY_CODE_[A-Z0-9_]+)\b/', $unit, $matches);
             $this->assertIsInt($matched, 'the mention scrape failed to run, so its answer means nothing');
             $whole = $matches[1];
 
-            $matched = preg_match_all('/\b(SUGAR_?CRUSH_[A-Z0-9_]* [A-Z0-9_]+)\b/', $unit, $wrapped);
+            $matched = preg_match_all('/\b(CANDY_CODE_[A-Z0-9_]* [A-Z0-9_]+)\b/', $unit, $wrapped);
             $this->assertIsInt($matched, 'the wrapped-name scrape failed to run, so its answer means nothing');
             foreach ($wrapped[1] as $spelled) {
                 $joined = str_replace(' ', '', $spelled);
@@ -1313,7 +1311,7 @@ final class EnvRosterDriftTest extends TestCase
      * rv-devops-3 (fix lane f-docs, 2026-10-14): THE OS-VARIABLE ROSTER,
      * PINNED BOTH DIRECTIONS.
      *
-     * Everything else in this class speaks the `SUGAR_?CRUSH_*` alphabet — the
+     * Everything else in this class speaks the `CANDY_CODE_*` alphabet — the
      * scanner's and the table scrape's alike — so an OS variable could sit
      * read-but-undocumented (or documented-but-renamed) with no oracle at all.
      * That is exactly how `LANG`, `DISPLAY`, `CDPATH` and `TMPDIR` lived

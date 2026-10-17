@@ -194,11 +194,11 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * gone, and {@see testTheGuardsThreeCandidatesAllLandInsideTheEmptyFixture()}
  * asserts the containment instead of assuming it.
  *
- * NOT A DUPLICATE OF {@see BinSugarcrushDispatchTest}: every case there runs
+ * NOT A DUPLICATE OF {@see BinCandyCodeDispatchTest}: every case there runs
  * the real script out of the real checkout, where the autoloader is present by
  * construction and this branch is unreachable.
  */
-final class BinSugarcrushAutoloadGuardTest extends TestCase
+final class BinCandyCodeAutoloadGuardTest extends TestCase
 {
     use SlicesDeclaredMethodsTrait;
 

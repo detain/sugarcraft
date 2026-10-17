@@ -24,7 +24,7 @@ final class InfotextTest extends TestCase
 {
     public function testGoldenCanonicalFullFieldReplaysByteIdentical(): void
     {
-        $text = "a cat, sitting\nNegative prompt: blurry, low-res\nSteps: 20, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7, Seed: 123456789, Face restoration: True, Size: 512x512, Model hash: abcd1234, Model: moviefilm_00344V5.safetensors [372b6a05], VAE hash: fedc0000, VAE: ft-mse-vae, Variation seed: 987654321, Variation seed strength: 0.2, Seed resize from: -1x-1, Denoising strength: 0.75, Conditional mask weight: 1.0, Clip skip: 2, ENSD: 31337, Token merging ratio: 0, Token merging ratio hr: 0, Init image hash: 1234abcd, RNG: CPU, Tiling: True, Eta: 0, Hires upscale: 1.5, Hires upscaler: R-ESRGAN 4x+, Style: analog style, Face restoration model: GFPGAN, Sugar-crush: dev-test, Version: v1.10.1, User: hush";
+        $text = "a cat, sitting\nNegative prompt: blurry, low-res\nSteps: 20, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7, Seed: 123456789, Face restoration: True, Size: 512x512, Model hash: abcd1234, Model: moviefilm_00344V5.safetensors [372b6a05], VAE hash: fedc0000, VAE: ft-mse-vae, Variation seed: 987654321, Variation seed strength: 0.2, Seed resize from: -1x-1, Denoising strength: 0.75, Conditional mask weight: 1.0, Clip skip: 2, ENSD: 31337, Token merging ratio: 0, Token merging ratio hr: 0, Init image hash: 1234abcd, RNG: CPU, Tiling: True, Eta: 0, Hires upscale: 1.5, Hires upscaler: R-ESRGAN 4x+, Style: analog style, Face restoration model: GFPGAN, Candy-code: dev-test, Version: v1.10.1, User: hush";
         $parsed = Infotext::parse($text);
         self::assertSame('a cat, sitting', $parsed[Infotext::PROMPT_KEY]);
         self::assertSame('blurry, low-res', $parsed[Infotext::NEGATIVE_KEY]);
@@ -47,10 +47,10 @@ final class InfotextTest extends TestCase
             ->withWidth(512)
             ->withHeight(768)
             ->withDenoisingStrength(0.6);
-        $text = Infotext::emit($params, ['Sugar-crush' => 'dev-test'], 'p');
+        $text = Infotext::emit($params, ['Candy-code' => 'dev-test'], 'p');
         $tail = substr($text, strrpos($text, "\n") + 1);
         self::assertSame(
-            'Steps: 28, Sampler: Euler a, Schedule type: Automatic, CFG scale: 7, Seed: 42, Size: 512x768, Denoising strength: 0.6, Sugar-crush: dev-test',
+            'Steps: 28, Sampler: Euler a, Schedule type: Automatic, CFG scale: 7, Seed: 42, Size: 512x768, Denoising strength: 0.6, Candy-code: dev-test',
             $tail,
         );
     }
@@ -111,7 +111,7 @@ final class InfotextTest extends TestCase
 
     public function testCjkAndEmojiPromptBodyPassesThroughRawOnThePromptLine(): void
     {
-        $text = "桜の少女 🌸、超高品質、マスターピース\nNegative prompt: worst quality, low quality\nSteps: 28, Sampler: Euler a, Seed: 42, Size: 768x768, Sugar-crush: dev-test, Version: v1.9.3, User: sakura";
+        $text = "桜の少女 🌸、超高品質、マスターピース\nNegative prompt: worst quality, low quality\nSteps: 28, Sampler: Euler a, Seed: 42, Size: 768x768, Candy-code: dev-test, Version: v1.9.3, User: sakura";
         $parsed = Infotext::parse($text);
         self::assertSame('桜の少女 🌸、超高品質、マスターピース', $parsed[Infotext::PROMPT_KEY]);
         self::assertSame($text, Infotext::emit(GenerationParams::new(), $parsed));
@@ -119,7 +119,7 @@ final class InfotextTest extends TestCase
 
     public function testNewlineInNegativeSpansBodyLinesAndQuotesOnValues(): void
     {
-        $text = "portrait\nNegative prompt: blurry\nnoisy\nugly hands\nSteps: 20, Sampler: Euler a, Seed: 7, Size: 512x512, Sugar-crush: dev-test";
+        $text = "portrait\nNegative prompt: blurry\nnoisy\nugly hands\nSteps: 20, Sampler: Euler a, Seed: 7, Size: 512x512, Candy-code: dev-test";
         $parsed = Infotext::parse($text);
         self::assertSame("blurry\nnoisy\nugly hands", $parsed[Infotext::NEGATIVE_KEY]);
         self::assertSame($text, Infotext::emit(GenerationParams::new(), $parsed));
@@ -145,7 +145,7 @@ final class InfotextTest extends TestCase
         // Legacy unquoted spellings (bracketed comma, lora colons) parse via
         // depth-tracked splitting; re-emit normalises them to the §3.5 quoting
         // law — the documented one-way direction, same as legacy labels.
-        $legacy = "p\nSteps: 9, Model: HAT [ESRGAN, 4x], Networks: <lora:mylora:0.8:0.2>, Sugar-crush: dev-test";
+        $legacy = "p\nSteps: 9, Model: HAT [ESRGAN, 4x], Networks: <lora:mylora:0.8:0.2>, Candy-code: dev-test";
         $parsed = Infotext::parse($legacy);
         self::assertSame('HAT [ESRGAN, 4x]', $parsed['Model']);
         self::assertSame('<lora:mylora:0.8:0.2>', $parsed['Networks']);
@@ -164,7 +164,7 @@ final class InfotextTest extends TestCase
 
     public function testPromptBodyMimickingParameterLineStillAnchorsOnLastLine(): void
     {
-        $text = "Steps: this is prose not a pair\nreal prompt\nSteps: 5, Sugar-crush: dev-test";
+        $text = "Steps: this is prose not a pair\nreal prompt\nSteps: 5, Candy-code: dev-test";
         $parsed = Infotext::parse($text);
         self::assertSame("Steps: this is prose not a pair\nreal prompt", $parsed[Infotext::PROMPT_KEY]);
         self::assertSame('5', $parsed['Steps']);
@@ -189,6 +189,12 @@ final class InfotextTest extends TestCase
         self::assertSame('9', $parsed['Steps']);
         self::assertArrayNotHasKey('Variance seed', $parsed);
         self::assertArrayNotHasKey('Sampling steps', $parsed);
+        // The app's own brand stamp: pre-rename infotext wrote `Sugar-crush:`,
+        // LEGACY folds it onto 'Candy-code' at parse, re-emit writes the new label.
+        $branded = Infotext::parse("p\nSteps: 9, Sugar-crush: dev-test"); // @rename-keep legacy brand label
+        self::assertSame('dev-test', $branded['Candy-code']);
+        self::assertArrayNotHasKey('Sugar-crush', $branded); // @rename-keep legacy brand label
+        self::assertStringContainsString('Candy-code: dev-test', Infotext::emit(GenerationParams::new(), $branded));
         // Re-emit writes canonical spellings (documented one-way direction).
         $again = Infotext::emit(GenerationParams::new(), $parsed);
         self::assertStringContainsString('Variation seed: 111, Variation seed strength: 0.5', $again);
@@ -197,7 +203,7 @@ final class InfotextTest extends TestCase
 
     public function testCommentStrippingTogglesWithTheFlag(): void
     {
-        $text = "a cat # tail comment\nSteps: 4, Sugar-crush: dev-test";
+        $text = "a cat # tail comment\nSteps: 4, Candy-code: dev-test";
         self::assertSame('a cat', Infotext::parse($text)[Infotext::PROMPT_KEY]);
         self::assertSame('a cat # tail comment', Infotext::parse($text, stripComments: false)[Infotext::PROMPT_KEY]);
     }
@@ -205,11 +211,11 @@ final class InfotextTest extends TestCase
     public function testSugarCrushStampSplicesBeforeVersionAndReplaysVerbatim(): void
     {
         $emitted = Infotext::emit(GenerationParams::new()->withSteps(1), ['Version' => 'v1.10.1'], 'p');
-        self::assertMatchesRegularExpression('/Sugar-crush: .+, Version: v1\.10\.1$/', $emitted);
+        self::assertMatchesRegularExpression('/Candy-code: .+, Version: v1\.10\.1$/', $emitted);
         $replay = Infotext::emit(GenerationParams::new(), Infotext::parse($emitted));
         self::assertSame($emitted, $replay);
-        $own = Infotext::emit(GenerationParams::new()->withSteps(1), ['Sugar-crush' => 'custom-stamp', 'Version' => 'v1.6.0'], 'p');
-        self::assertStringContainsString('Sugar-crush: custom-stamp, Version: v1.6.0', $own);
+        $own = Infotext::emit(GenerationParams::new()->withSteps(1), ['Candy-code' => 'custom-stamp', 'Version' => 'v1.6.0'], 'p');
+        self::assertStringContainsString('Candy-code: custom-stamp, Version: v1.6.0', $own);
     }
 
     public function testApplyToLoadsEveryDtoFieldFromParsedText(): void
@@ -301,7 +307,7 @@ final class InfotextTest extends TestCase
 
     public function testParseThenEmitFromDtoMatchesGoldenSemantics(): void
     {
-        $text = "p\nSteps: 20, CFG scale: 7, Seed: 42, Size: 512x512, Sugar-crush: dev-test";
+        $text = "p\nSteps: 20, CFG scale: 7, Seed: 42, Size: 512x512, Candy-code: dev-test";
         $parsed = Infotext::parse($text);
         $request = Infotext::applyTo(MediaRequest::new(), $parsed);
         // The parsed map also carries the stamp/value extras, so replay of the
@@ -317,18 +323,18 @@ final class InfotextTest extends TestCase
     public static function roundTripCorpus(): array
     {
         return [
-            'cjk-emoji' => "桜の少女 🌸、超高品質\nNegative prompt: worst quality, low quality\nSteps: 28, Sampler: Euler a, Seed: 42, Size: 768x768, Sugar-crush: dev-test, Version: v1.9.3",
-            'hires-trio' => "p\nSteps: 20, Seed: 1, Size: 512x512, Hires upscale: 1.5, Hires upscaler: R-ESRGAN 4x+, Hires denoising strength: 0.3, Sugar-crush: dev-test",
-            'variation-extras' => "p\nSeed: 1, Variation seed: 111, Variation seed strength: 0.5, Seed resize from: 0x0, Sugar-crush: dev-test",
-            'bracket-trap' => "p\nSteps: 9, Model: \"HAT [ESRGAN, 4x]\", Networks: \"<lora:mylora:0.8:0.2>\", Sugar-crush: dev-test",
-            'json-quoted-colon' => "x\nSteps: 10, Model: \"a:b, c\", Sugar-crush: dev-test",
-            'no-prompt' => "Steps: 15, Sampler: DPM++ 2M, Sugar-crush: dev-test",
-            'multiline-negative' => "portrait\nNegative prompt: blurry\nnoisy\nSteps: 20, Sugar-crush: dev-test",
-            'empty-seed-zero-size' => "p\nSeed: 0, Size: 0x0, Sugar-crush: dev-test",
-            'user-version-bookends' => "p\nSteps: 1, Sugar-crush: dev-test, Version: v1.10.1, User: hush",
-            'legacy-face-model' => "p\nFace restoration: CodeFormer, Face restoration model: CodeFormer, Sugar-crush: dev-test",
-            'multi-style' => "p\nSteps: 12, Style: \"[\\\"sci-fi\\\", \\\"noir\\\"]\", Sugar-crush: dev-test",
-            'tiling-rng-enbd' => "p\nSteps: 30, Clip skip: 2, ENSD: 31337, RNG: CPU, Tiling: True, Sugar-crush: dev-test",
+            'cjk-emoji' => "桜の少女 🌸、超高品質\nNegative prompt: worst quality, low quality\nSteps: 28, Sampler: Euler a, Seed: 42, Size: 768x768, Candy-code: dev-test, Version: v1.9.3",
+            'hires-trio' => "p\nSteps: 20, Seed: 1, Size: 512x512, Hires upscale: 1.5, Hires upscaler: R-ESRGAN 4x+, Hires denoising strength: 0.3, Candy-code: dev-test",
+            'variation-extras' => "p\nSeed: 1, Variation seed: 111, Variation seed strength: 0.5, Seed resize from: 0x0, Candy-code: dev-test",
+            'bracket-trap' => "p\nSteps: 9, Model: \"HAT [ESRGAN, 4x]\", Networks: \"<lora:mylora:0.8:0.2>\", Candy-code: dev-test",
+            'json-quoted-colon' => "x\nSteps: 10, Model: \"a:b, c\", Candy-code: dev-test",
+            'no-prompt' => "Steps: 15, Sampler: DPM++ 2M, Candy-code: dev-test",
+            'multiline-negative' => "portrait\nNegative prompt: blurry\nnoisy\nSteps: 20, Candy-code: dev-test",
+            'empty-seed-zero-size' => "p\nSeed: 0, Size: 0x0, Candy-code: dev-test",
+            'user-version-bookends' => "p\nSteps: 1, Candy-code: dev-test, Version: v1.10.1, User: hush",
+            'legacy-face-model' => "p\nFace restoration: CodeFormer, Face restoration model: CodeFormer, Candy-code: dev-test",
+            'multi-style' => "p\nSteps: 12, Style: \"[\\\"sci-fi\\\", \\\"noir\\\"]\", Candy-code: dev-test",
+            'tiling-rng-enbd' => "p\nSteps: 30, Clip skip: 2, ENSD: 31337, RNG: CPU, Tiling: True, Candy-code: dev-test",
         ];
     }
 
@@ -341,7 +347,7 @@ final class InfotextTest extends TestCase
             'Denoising strength', 'Conditional mask weight', 'Clip skip', 'ENSD',
             'Token merging ratio', 'Token merging ratio hr', 'Init image hash', 'RNG',
             'Tiling', 'Hires upscale', 'Hires upscaler', 'Hires steps',
-            'Hires denoising strength', 'Style', 'Version', 'User', 'Sugar-crush',
+            'Hires denoising strength', 'Style', 'Version', 'User', 'Candy-code',
         ] as $label) {
             self::assertArrayHasKey($label, InfotextFields::FIELDS, "missing label {$label}");
         }

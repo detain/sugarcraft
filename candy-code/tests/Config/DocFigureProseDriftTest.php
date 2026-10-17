@@ -1566,7 +1566,7 @@ final class DocFigureProseDriftTest extends TestCase
      * spells the live total and this arm keeps the two pages counting ONE
      * roster with ONE number. The launch configuration stays outside the hook
      * environment: the page names the parallel-calls disable variable by the
-     * very string EngineBackend reads, no quoted `SUGARCRUSH_*` key appears
+     * very string EngineBackend reads, no quoted `CANDY_CODE_*` key appears
      * in the environment assembly. The "nothing from your shell survives"
      * sentence this arm used to keep standing was false — audit F-E1 measured
      * the hook inheriting the whole launch environment — so it is now pinned
@@ -1598,20 +1598,22 @@ final class DocFigureProseDriftTest extends TestCase
             'the documented disable variable drifted from the name EngineBackend reads',
         );
 
-        // Audit F-E1 reversed this sentence: the launch's `SUGARCRUSH_*`
+        // Audit F-E1 reversed this sentence: the launch's `CANDY_CODE_*`
         // variables ARE inherited (scrubbedEnv() is a getenv() copy), and the
         // page said they were not. The code-side half below still holds —
         // ScriptHook never SETS one — so the pin now reads the inherit list.
+        // (The page sentence names the pre-rename brand spellings on purpose:
+        // a hook author's old exports are inherited through the same copy.)
         self::assertSame(
             1,
-            preg_match('/the `SUGARCRUSH_\*` variables that configured the launch — with\s+three changes/', $hooks),
+            preg_match('/the `CANDY_CODE_\*` variables that configured the launch — with\s+three changes/', $hooks),
             'the launch-vars-are-inherited sentence moved — hook authors program against it',
         );
         self::assertStringNotContainsString('Nothing from your shell survives', $hooks, 'the replaced-environment claim F-E1 disproved is back in HOOKS.md');
         self::assertStringNotContainsString('Nothing from your shell survives', $trouble, 'the replaced-environment claim F-E1 disproved is back in TROUBLESHOOTING.md');
         self::assertSame(
             0,
-            preg_match_all("/['\"]SUGARCRUSH_[A-Z_]+['\"]/", self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'executeStaged', 7000)),
+            preg_match_all("/['\"]SUGARCRUSH_[A-Z_]+['\"]/", self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'executeStaged', 7000)), // @rename-keep
             'a quoted SUGARCRUSH_* key joined the hook environment assembly — the page promises launch configuration never reaches a hook',
         );
     }
@@ -2843,7 +2845,7 @@ final class DocFigureProseDriftTest extends TestCase
             '~/.candy-code/mailboxes/',
             '<tmp>/sc_runtime_tool_<id>.board',
             '<workflowsPath>/.running/',
-            '<tmp>/sugar_crush_bg_<uid>_index/',
+            '<tmp>/candy_code_bg_<uid>_index/',
         ];
         self::assertSame($orderedDirs, array_column($rows, 1), 'the table\'s directory column changed — re-derive each referent below before re-pinning');
         foreach ($rows as $row) {
@@ -2873,9 +2875,9 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('Board::create(', self::bodyExcerpt(self::sourceOf('Runtime.php'), 'executeConcurrently', 40000), 'executeConcurrently() no longer creates the batch board — the row\'s "created before the batch forks" lost its referent');
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Code\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
-            'sugar_crush_bg_<uid>_index',
+            'candy_code_bg_<uid>_index',
             \SugarCraft\Code\Sessions\BackgroundSupervisor::IPC_DIR_PREFIX . '<uid>' . \SugarCraft\Code\Sessions\BackgroundSupervisor::INDEX_DIR_SUFFIX,
-            'the session index directory no longer spells sugar_crush_bg_<uid>_index — table cell drifted',
+            'the session index directory no longer spells candy_code_bg_<uid>_index — table cell drifted',
         );
 
         self::assertSame(
@@ -3000,7 +3002,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(1, preg_match('/for the (\w+) that briefly differed/', $env, $pair1), 'the app-variables preamble no longer previews the alias count');
         self::assertSame(1, preg_match('/^(\w+) app variables originally carried an underscore/m', $envRaw, $pair2), 'the aliases section no longer opens with its own count');
-        preg_match_all('/^\| `(SUGAR_CRUSH_[A-Z_]+)` \| `(SUGARCRUSH_[A-Z_]+)` \|/m', $envRaw, $table, \PREG_SET_ORDER);
+        preg_match_all('/^\| `(SUGAR_CRUSH_[A-Z_]+)` \| `(SUGARCRUSH_[A-Z_]+)` \|/m', $envRaw, $table, \PREG_SET_ORDER); // @rename-keep
         self::assertCount($words[$pair1[1]] ?? -1, $table, 'the spelled "briefly differed" count no longer matches the table — flip word and rows together');
         self::assertSame($words[$pair1[1]] ?? -1, $words[strtolower($pair2[1])] ?? -2, 'the preamble and the section header state different alias counts');
         self::assertCount(2, $table, 'the alias table grew — this arm\'s word maps cover it, but the src pairing scan below must gain the pair too');
@@ -3010,7 +3012,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         $legacy = [];
         foreach (self::srcTexts() as $text) {
-            preg_match_all("/'(SUGAR_CRUSH_[A-Z_]+)'/", $text, $hits);
+            preg_match_all("/'(SUGAR_CRUSH_[A-Z_]+)'/", $text, $hits); // @rename-keep
             $legacy = array_merge($legacy, $hits[1]);
         }
         $legacy = array_values(array_unique($legacy));
@@ -3984,8 +3986,8 @@ final class DocFigureProseDriftTest extends TestCase
 
         // The screen's ENGLISH text (15b-14-2 moved it into the catalogue):
         // the page quotes English, so the lookup pins the locale.
-        \SugarCraft\Core\I18n\T::register('crush', \dirname(__DIR__, 2) . '/lang');
-        $helpSource = \SugarCraft\Core\I18n\T::translate('crush.cli.help.screen', [], 'en');
+        \SugarCraft\Core\I18n\T::register('code', \dirname(__DIR__, 2) . '/lang');
+        $helpSource = \SugarCraft\Core\I18n\T::translate('code.cli.help.screen', [], 'en');
         self::assertSame((require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'], $helpSource, 'the help screen is not the cli.help.screen catalogue entry');
         self::assertSame(
             1,

@@ -60,7 +60,7 @@ final class SettingsSchemaDocDriftTest extends TestCase
         $doc = (string) file_get_contents(self::package() . '/' . SettingsDocGenerator::ENVIRONMENT_DOC);
         self::assertStringContainsString('| Variable | Default when unset | Description | Settings key |', $doc);
 
-        preg_match_all('/^\| `(SUGARCRUSH_[A-Z0-9_]+)` \|.*\| (`([A-Za-z.]+)`|—) \|$/m', $doc, $rows, \PREG_SET_ORDER);
+        preg_match_all('/^\| `(CANDY_CODE_[A-Z0-9_]+)` \|.*\| (`([A-Za-z.]+)`|—) \|$/m', $doc, $rows, \PREG_SET_ORDER);
         $named = [];
         foreach ($rows as $row) {
             if (($row[3] ?? '') !== '') {

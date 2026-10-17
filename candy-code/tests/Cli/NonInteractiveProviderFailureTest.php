@@ -412,7 +412,7 @@ final class NonInteractiveProviderFailureTest extends TestCase
      * make {@see \SugarCraft\Code\Providers\EchoProvider} unreachable from the
      * one-shot path entirely. So it keeps exit 0 — and gains a stderr notice
      * (asserted end-to-end in
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushDispatchTest})
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeDispatchTest})
      * so the caller who merely forgot to export the variable is still told.
      */
     public function testUnsetProviderStillAnswersFromTheOfflineEchoProviderAtExitZero(): void

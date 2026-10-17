@@ -45,7 +45,7 @@ use SugarCraft\Code\Tools\BuiltIn\Write;
  * has none of them. Measured before the clearing was added: one error here in a
  * full run.
  */
-final class BinSugarcrushWiringTest extends TestCase
+final class BinCandyCodeWiringTest extends TestCase
 {
     use BackendSelectionEnvSandboxTrait;
 
@@ -318,7 +318,7 @@ final class BinSugarcrushWiringTest extends TestCase
      *
      *   vendor/bin/phpunit tests/Integration/FeatWiringReachabilityTest.php \
      *     tests/Integration/SkillPathScopingWiringTest.php \
-     *     tests/Integration/BinSugarcrushWiringTest.php \
+     *     tests/Integration/BinCandyCodeWiringTest.php \
      *     tests/Tools/BuiltIn/WriteTest.php \
      *     tests/Tools/BuiltIn/SkillPathScopingTest.php
      *

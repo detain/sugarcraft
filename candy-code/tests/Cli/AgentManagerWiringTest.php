@@ -42,7 +42,7 @@ use SugarCraft\Code\Tui\Components\AgentDashboardPane;
  *
  * That frugality is deliberate rather than stylistic. The suite has two
  * forked-completion tests —
- * `Integration\BinSugarcrushWiringTest::testDoctorToolIsReachableEndToEndThroughARealChatTurn`
+ * `Integration\BinCandyCodeWiringTest::testDoctorToolIsReachableEndToEndThroughARealChatTurn`
  * and `Integration\SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves`
  * — that are known load-sensitive flakes, and adding ANY launch-based test file
  * to the run destabilises them. That was verified against an OTHERWISE
@@ -64,7 +64,7 @@ use SugarCraft\Code\Tui\Components\AgentDashboardPane;
  * `Program::run()`, which attaches to a real TTY and blocks. The bin ->
  * Bootstrap link is pinned by source instead
  * ({@see testTheBinaryHandsProgramTheShellThatCarriesTheManager}), which is the
- * same reasoning {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest}
+ * same reasoning {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest}
  * and {@see \SugarCraft\Code\Tests\Integration\FeatWiringReachabilityTest}
  * already document.
  */

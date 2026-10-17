@@ -5241,7 +5241,7 @@ final class ChatTest extends TestCase
      * no provider (audit R13). Without it the two spawning tests below ran a
      * real daemon against the default provider config, and since nothing
      * ticked the supervisor the session never settled, so each run left its
-     * `sugar_crush_bg_*` IPC directory in the temp dir.
+     * `candy_code_bg_*` IPC directory in the temp dir.
      *
      * @template T
      * @param \Closure(): T $body
@@ -5288,7 +5288,7 @@ final class ChatTest extends TestCase
                 $this->assertFileDoesNotExist($path, 'a settled /bg session left an IPC file behind');
             }
         }
-        $this->assertDirectoryDoesNotExist($dir, 'a settled /bg session left its sugar_crush_bg_* directory behind');
+        $this->assertDirectoryDoesNotExist($dir, 'a settled /bg session left its candy_code_bg_* directory behind');
 
         return $chat;
     }

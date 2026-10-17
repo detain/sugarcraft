@@ -64,7 +64,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         // setUp/tearDown pair this was copied from and which only ever clears
         // it), so a restore-if-it-was-set leaks `dont-ask` into every later test
         // in the process. Measured: it turned six passing tests in
-        // McpToolWiringTest, BinSugarcrushWiringTest and
+        // McpToolWiringTest, BinCandyCodeWiringTest and
         // CustomCommandShellAndFileFormsTest red in the full run while each of
         // those files stayed green on its own.
         if (is_string($this->originalPermissionMode)) {

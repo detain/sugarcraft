@@ -49,7 +49,7 @@ final class RegistryTranslationTest extends TestCase
 
     protected function tearDown(): void
     {
-        T::overrideNamespace('crush', self::LANG_DIR);
+        T::overrideNamespace('code', self::LANG_DIR);
         T::setLocale($this->locale);
         self::flushLocaleMemoisedCatalogues();
         if ($this->pseudoDir !== null) {
@@ -221,7 +221,7 @@ final class RegistryTranslationTest extends TestCase
             '<?php return ' . var_export(array_map(static fn (string $v): string => '⟦' . $v . '⟧', $en), true) . ';',
         );
 
-        T::overrideNamespace('crush', $dir);
+        T::overrideNamespace('code', $dir);
         T::setLocale(self::PSEUDO);
         self::flushLocaleMemoisedCatalogues();
     }

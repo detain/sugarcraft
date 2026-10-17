@@ -20,13 +20,13 @@ use PHPUnit\Framework\TestCase;
  * recorded the suite's `candy-code: ` stderr lines as a HARNESS property -
  * "child-process launches whose stderr the PHPUnit process inherits rather
  * than keeping on the pipe the test already reads" - and named
- * `tests/Integration/BinSugarcrushDispatchTest.php` and
+ * `tests/Integration/BinCandyCodeDispatchTest.php` and
  * `tests/Integration/McpToolWiringTest.php` among the owning files.
  *
  * Neither owns what it was said to. Measured at 62f4e5d1 on PHP 8.3.6, one
  * file per run, `vendor/bin/phpunit <file> 2>&1 | grep -ac 'candy-code: '`
  * (the `-a` is not optional - plain `grep` calls that log binary and prints
- * NOTHING, which reads exactly like a real zero): BinSugarcrushDispatchTest
+ * NOTHING, which reads exactly like a real zero): BinCandyCodeDispatchTest
  * emits NONE AT ALL, its `runBin()` having piped fd 2 all along, and
  * McpToolWiringTest emits EXACTLY ONE.
  *
@@ -274,7 +274,7 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'reader: the parent drives a pty and parses the screen, so surfacing stty '
                 . 'noise there would land in the grid the PtyRun suites byte-assert.',
         ],
-        'Integration/BinSugarcrushDispatchTest.php' => [
+        'Integration/BinCandyCodeDispatchTest.php' => [
             'count' => 1,
             'reason' =>
                 'armWatchdog()\'s detached SIGKILL timer. It is a backgrounded subshell that '
@@ -313,7 +313,7 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'exec() reads as inherited because the stderr redirect is spelled INSIDE the '
                 . 'caller-passed $command - verified at every live call site: '
                 . 'Cli/BootstrapSkillSkipsTest.php (two `>/dev/null 2>file` split-forms), '
-                . 'Integration/BinSugarcrushJsonStdoutDiagnosticsTest.php (one `>file 2>file` split-form) and '
+                . 'Integration/BinCandyCodeJsonStdoutDiagnosticsTest.php (one `>file 2>file` split-form) and '
                 . 'Support/RequirementDirectiveProvenanceTest.php (one `2>&1` merged-form). The '
                 . 'wrapper must stay in this file (ChildWallClockBudgetTest\'s same-file %d law), '
                 . 'so no caller-side literal the scanner could follow exists; count=1 keeps the '
@@ -387,7 +387,7 @@ final class ChildStderrCaptureTest extends TestCase
         // scanner used to answer `captured` for any spec that merely NAMED
         // fd 2 without holding the literal `/dev/null`, so an entry behind a
         // call came back compliant on the strength of the key. The live shape
-        // is `BinSugarcrushDispatchTest::armWatchdog()`'s `2 => $devNull('w')`
+        // is `BinCandyCodeDispatchTest::armWatchdog()`'s `2 => $devNull('w')`
         // - a closure returning `['file','/dev/null','w']`, i.e. a discard
         // reported as a capture.
         //
@@ -803,7 +803,7 @@ final class ChildStderrCaptureTest extends TestCase
      * branch blinded, this fixture test passed - 60 assertions, entirely
      * green - and so did the absence guard. The only thing that reddened was
      * the exemption row for a real site in
-     * `Integration/BinSugarcrushDispatchTest.php`, and that row is
+     * `Integration/BinCandyCodeDispatchTest.php`, and that row is
      * deliberately SELF-DELETING: the day `armWatchdog()` stops discarding,
      * the row goes, and the branch would have been left with no liveness
      * coverage at all.

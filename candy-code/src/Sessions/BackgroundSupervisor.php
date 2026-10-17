@@ -84,19 +84,19 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
 
     /**
      * Name stem of the per-process private IPC directory under the system
-     * temp dir: `sugar_crush_bg_<uid>_<16 hex>`. Public so the startup sweep
+     * temp dir: `candy_code_bg_<uid>_<16 hex>`. Public so the startup sweep
      * ({@see sweepStaleIpcDirs()}, reached through
      * {@see ToolIpcFiles::sweepOnce()}) and this class's own mkdir share one
      * spelling.
      */
-    public const IPC_DIR_PREFIX = 'sugar_crush_bg_';
+    public const IPC_DIR_PREFIX = 'candy_code_bg_';
 
     /** The exact shape {@see ensurePrivateIpcDir()} creates; nothing else is swept. */
-    private const IPC_DIR_PATTERN = '/^sugar_crush_bg_(\d+)_[0-9a-f]{16}$/';
+    private const IPC_DIR_PATTERN = '/^candy_code_bg_(\d+)_[0-9a-f]{16}$/';
 
     /**
      * Name suffix of the per-uid session INDEX directory,
-     * `sugar_crush_bg_<uid>_index` beside the IPC directories (roadmap 4.3-3).
+     * `candy_code_bg_<uid>_index` beside the IPC directories (roadmap 4.3-3).
      *
      * One record per spawned session, `<sessionId>.json`, 0600 inside a 0700
      * directory: where its daemon's IPC files are, the daemon's pid and

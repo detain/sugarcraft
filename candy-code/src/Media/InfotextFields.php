@@ -79,7 +79,7 @@ final class InfotextFields
         'Firstpass height' => 'firstphase_height',
         // Bookends and strays.
         'Style' => 'styles',
-        'Sugar-crush' => 'sugar_crush_version',
+        'Candy-code' => 'candy_code_version',
         'Version' => 'version',
         'User' => 'user',
     ];
@@ -93,6 +93,7 @@ final class InfotextFields
      * @var array<string, string>
      */
     public const LEGACY = [
+        'Sugar-crush' => 'Candy-code', // @rename-keep old infotext stamps carry the pre-rename brand label
         'Sampling steps' => 'Steps',
         'Variance seed' => 'Variation seed',
         'Variance seed strength' => 'Variation seed strength',
@@ -122,7 +123,7 @@ final class InfotextFields
         'RNG', 'Tiling', 'Style', 'Eta', 'Sigma churn', 'NGMS',
         'Hires upscale', 'Hires upscaler', 'Hires steps',
         'Hires denoising strength', 'Denoising strength (highres)',
-        'Firstpass width', 'Firstpass height', 'Sugar-crush',
+        'Firstpass width', 'Firstpass height', 'Candy-code',
         'Version', 'User',
     ];
 

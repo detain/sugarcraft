@@ -167,7 +167,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
      * `refusals` is the one optional key in the contract, and this is the half
      * of that decision a test can hold: the zero-refusal document must not
      * merely be equivalent, it must have the same keys — because
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushAutoloadGuardTest}
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeAutoloadGuardTest}
      * compares `array_keys()` against a document `bin/candy-code` hand-rolls
      * before `vendor/autoload.php` exists, in a process where no tool could
      * ever have run.

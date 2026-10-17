@@ -44,7 +44,7 @@ namespace SugarCraft\Code\Support;
  * sequences are one; the budgets stay where they were pinned.
  *
  * WHAT THIS DELIBERATELY IS NOT: a detached-watchdog spawner. The suite's
- * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushDispatchTest} arms an
+ * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeDispatchTest} arms an
  * external watchdog with pid-reuse checking before its own `proc_terminate(9)`,
  * and that is right THERE — a test harness must not be wedged by a child that
  * survives signal 9, and it can afford to spawn a process to guarantee it.

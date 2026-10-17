@@ -21,7 +21,7 @@ use SugarCraft\Code\Tools\Tool;
  * that pins only one of the two directions. MEASURED: adding an eleventh `Tool`
  * implementor (`src/Tools/BuiltIn/Notify.php`) and NOT listing it in
  * {@see \SugarCraft\Code\Cli\Bootstrap::tools()} left
- * `BinSugarcrushWiringTest` at `OK (298 tests, 1692 assertions)` and the whole
+ * `BinCandyCodeWiringTest` at `OK (298 tests, 1692 assertions)` and the whole
  * Integration tier green — while `tests/Tools/BuiltInToolTest.php`'s "all
  * built-in tools" provider listed only NINE of the ten that existed, `SkillTool`
  * absent. Nothing scanned the directory. The omitted-from-the-array direction is
@@ -82,7 +82,7 @@ final class BuiltInToolCorpus
      * interface-conformance, naming and schema test still covers them — and are
      * subtracted only by the ONE assertion whose subject is "the literal in
      * `Bootstrap::tools()` and the `src/Tools/BuiltIn/` directory agree"
-     * ({@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}).
+     * ({@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}).
      *
      * WHY IT HAD TO EXIST. That assertion is `assertSame(classNames(), wired)` in
      * both directions, which is exactly what caught the `Write` defect and must
@@ -117,7 +117,7 @@ final class BuiltInToolCorpus
      * AND THAT RULE IS NOW THE SHAPE OF THIS CONSTANT RATHER THAN A SENTENCE
      * ABOVE IT. It was a flat list, and the rule was asserted nowhere: MEASURED,
      * adding one line here for a `Tool` that nothing wires and nothing can
-     * dispatch made it pass `BuiltInToolCorpusTest`, `BinSugarcrushWiringTest`,
+     * dispatch made it pass `BuiltInToolCorpusTest`, `BinCandyCodeWiringTest`,
      * `BuiltInToolTest` and `ToolSchemaEncodingTest`, all rc=0 — an exemption that
      * granted itself. So each entry is a `class => reachability test method` pair,
      * and {@see BuiltInToolCorpusTest::testEveryDynamicToolExemptionNamesAReachabilityTestThatExists()}
@@ -168,7 +168,7 @@ final class BuiltInToolCorpus
      * that namespace, so a `Tool` implementor one directory away was invisible to
      * all three consumers ({@see \SugarCraft\Code\Tests\Tools\BuiltInToolTest},
      * {@see \SugarCraft\Code\Tests\Providers\ToolSchemaEncodingTest},
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest}).
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest}).
      * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
      * this tree, `src/` holds THIRTEEN concrete `Tool` implementors, TWELVE in
      * `src/Tools/BuiltIn/` and ONE in `src/Tools/` — {@see McpToolBridge},
@@ -190,7 +190,7 @@ final class BuiltInToolCorpus
      * asserts `assertSame(flat-glob + DYNAMIC_TOOL_CLASSES, classNames())` — so a
      * wired tool placed in `src/Tools/` and not exempted reds that assertion, and
      * exempting it is impossible because
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}
      * requires every exempted class to be ABSENT from the array. Measured, not
      * reasoned: with the file at `src/Tools/LspTool.php` that first assertion
      * failed `actual size 11 matches expected size 10`. The widening did catch a
@@ -426,7 +426,7 @@ final class BuiltInToolCorpus
      *
      * Both are real authoring mistakes — a factory that grew a dependency, a
      * missing `static` — and both used to mean "this tool disappears from every
-     * built-in-tool test and BinSugarcrushWiringTest stays green". A filter that
+     * built-in-tool test and BinCandyCodeWiringTest stays green". A filter that
      * removes a would-be tool for a reason nobody is told is worse than an abort.
      *
      * So this method asks only what a class IS: concrete, not an enum, implements

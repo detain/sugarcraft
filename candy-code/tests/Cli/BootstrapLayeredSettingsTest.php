@@ -386,7 +386,7 @@ final class BootstrapLayeredSettingsTest extends TestCase
      *
      * `grep -rn "'trustedProjectSettings'" src/ tests/` returned ONE hit before
      * this test, in `src/`. Each of the three siblings has its literal pinned in
-     * a test (`BootstrapHookFileTest`, `BinSugarcrushDispatchTest`,
+     * a test (`BootstrapHookFileTest`, `BinCandyCodeDispatchTest`,
      * `CustomCommandShellAndFileFormsTest`); this is the fourth.
      */
     public function testTheTrustKeyIsNamedTrustedProjectSettings(): void

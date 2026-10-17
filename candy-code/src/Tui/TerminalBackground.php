@@ -62,7 +62,7 @@ final class TerminalBackground
     /**
      * The settings key that says the same thing persistently: `auto` (the
      * default — detect), `light` or `dark`. The variable outranks it, as every
-     * `SUGARCRUSH_*` variable outranks its settings key.
+     * `CANDY_CODE_*` variable outranks its settings key.
      */
     public const SETTINGS_KEY = 'terminalBackground';
 

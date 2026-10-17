@@ -22,7 +22,7 @@ use SugarCraft\Code\Tools\BuiltIn\Read;
  *
  * Drives Bootstrap directly rather than shelling out to bin/candy-code, which
  * ends in a blocking Program::run() — same convention as
- * {@see BinSugarcrushWiringTest}.
+ * {@see BinCandyCodeWiringTest}.
  */
 final class SkillPathScopingWiringTest extends TestCase
 {
@@ -99,7 +99,7 @@ final class SkillPathScopingWiringTest extends TestCase
      *
      *   vendor/bin/phpunit tests/Integration/FeatWiringReachabilityTest.php \
      *     tests/Integration/SkillPathScopingWiringTest.php \
-     *     tests/Integration/BinSugarcrushWiringTest.php \
+     *     tests/Integration/BinCandyCodeWiringTest.php \
      *     tests/Tools/BuiltIn/WriteTest.php \
      *     tests/Tools/BuiltIn/SkillPathScopingTest.php
      *
@@ -108,10 +108,10 @@ final class SkillPathScopingWiringTest extends TestCase
      * `Write` — the mutation moves not one assertion. Its `instructionLoader:`
      * half was NOT unguarded: dropping that one gives `Tests: 376,
      * Assertions: 1980, Failures: 1` at
-     * `BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`.
+     * `BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`.
      *
      * The roster-wide assertion now lives in
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testEveryLoaderCarryingToolSharesTheOneSkillPathNudge()},
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest::testEveryLoaderCarryingToolSharesTheOneSkillPathNudge()},
      * which DERIVES its list from the tools that actually declare the
      * property. This test is kept as the focused Read/Edit/Glob case it always
      * was; it is deliberately not widened, because two derivations of the same

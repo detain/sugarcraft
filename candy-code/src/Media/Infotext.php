@@ -27,10 +27,10 @@ use SugarCraft\Code\Cli\Help;
  *
  * Version policy (plan W1.6 review-brief): a parsed `Version:` key is replayed
  * byte-untouched — the backend's own stamp belongs to the backend. Our stamp
- * rides as an extra_generation_params-style pair `Sugar-crush: <ver>` spliced
+ * rides as an extra_generation_params-style pair `Candy-code: <ver>` spliced
  * immediately BEFORE `Version:`, sourced from Composer install metadata via
  * {@see Help::versionString()} so it never rots; a caller-supplied
- * 'Sugar-crush' extra wins verbatim, which is what makes replay byte-exact.
+ * 'Candy-code' extra wins verbatim, which is what makes replay byte-exact.
  *
  * parse() never throws: text without a recognisable parameter tail yields an
  * empty field map with the first line kept as the prompt, mirroring upstream's
@@ -119,7 +119,7 @@ final class Infotext
      * field unset, and the reserved 'prompt'/'negative prompt' keys. DTO-set
      * values win the merge; leftover extras (labels outside the §3.5
      * skeleton) splice after the sampler-knob region and before the
-     * `Sugar-crush`/`Version`/`User` bookends.
+     * `Candy-code`/`Version`/`User` bookends.
      *
      * @param array<string, mixed> $extra
      */
@@ -129,8 +129,8 @@ final class Infotext
         ?string $prompt = null,
     ): string {
         // Our provenance stamp unless the caller supplied one verbatim.
-        if (!array_key_exists('Sugar-crush', $extra)) {
-            $extra['Sugar-crush'] = Help::versionString();
+        if (!array_key_exists('Candy-code', $extra)) {
+            $extra['Candy-code'] = Help::versionString();
         }
         $used = [];
         $resolve = static function (string $label) use (&$used, $params, $extra): ?string {
@@ -174,7 +174,7 @@ final class Infotext
             }
             // §3.5: extra_generation_params splice BEFORE Version — so the
             // bookend trio is held back until the trailing extras are emitted.
-            if ($label === 'Sugar-crush' || $label === 'Version' || $label === 'User') {
+            if ($label === 'Candy-code' || $label === 'Version' || $label === 'User') {
                 $value = $resolve($label);
                 if ($value !== null) {
                     $bookends[$label] = $label . ': ' . self::quoteValue($value);

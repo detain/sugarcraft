@@ -10,7 +10,7 @@ use SugarCraft\Core\I18n\T;
 /**
  * Per-library translation facade for candy-code.
  *
- * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the `'crush'`
+ * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the `'code'`
  * namespace baked in, so `t('settings.category.model')` resolves
  * `crush.settings.category.model` through exact locale → base language →
  * `en` → raw key. Translated strings live in {@see ../lang/en.php}, the

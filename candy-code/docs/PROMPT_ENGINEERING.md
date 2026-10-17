@@ -595,7 +595,7 @@ How each user-facing surface reaches the model, and where it does not reach:
 
 This file joins the docs census every drift guard walks, so a claim here that stops being true
 turns a test red rather than a reader confidently wrong: `GlobFigureDriftTest` (figures stated in
-docs must match what the generators derive), `EnvRosterDriftTest` (every `SUGARCRUSH_` variable any
+docs must match what the generators derive), `EnvRosterDriftTest` (every `CANDY_CODE_` variable any
 page names must have its row on the environment roster and read live code),
 `TrustKeyDocumentationDriftTest` (trust-key prose census over docs and README),
 `DocumentParagraphsTest` (balanced fences and paragraph discipline over `docs/` and `src/`), and

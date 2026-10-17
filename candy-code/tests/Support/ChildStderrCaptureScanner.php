@@ -128,7 +128,7 @@ final class ChildStderrCaptureScanner
 
             // T_NAME_FULLY_QUALIFIED, not T_STRING, is what PHP 8's lexer
             // hands back for the `\proc_open(...)` spelling - and that is the
-            // spelling `BinSugarcrushDispatchTest` uses throughout. A first
+            // spelling `BinCandyCodeDispatchTest` uses throughout. A first
             // version of this scanner matched only T_STRING and reported that
             // file as having no spawn sites at all, which is exactly the
             // shape of a confident false green: the answer was already known
@@ -619,7 +619,7 @@ final class ChildStderrCaptureScanner
      * any spec that mentioned `2 =>` and did not contain the literal
      * `/dev/null` - so an entry the scanner cannot actually read came back as
      * compliant on the strength of the key alone. The live example is
-     * `Integration/BinSugarcrushDispatchTest::armWatchdog()`'s
+     * `Integration/BinCandyCodeDispatchTest::armWatchdog()`'s
      * `2 => $devNull('w')`, a CLOSURE returning `['file','/dev/null','w']`:
      * the truth there is a discard and the answer was `captured`, the
      * polarity that waves a real offender through.

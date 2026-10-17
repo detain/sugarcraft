@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
  * before `Program::run()`, and on no other path.
  *
  * READ FROM SOURCE, not exec'd, for the reason
- * {@see BinSugarcrushDispatchTest} gives its TUI-bound controls: exec'ing the
+ * {@see BinCandyCodeDispatchTest} gives its TUI-bound controls: exec'ing the
  * TUI path IS the blocking `Program::run()`. Comments are stripped first so
  * the comment that explains the call cannot satisfy the assertions about it.
  *
@@ -28,7 +28,7 @@ use PHPUnit\Framework\TestCase;
  * displaying diagnostics while the redirect holds and reports a fatal in one
  * line naming the log.
  */
-final class BinSugarcrushTuiErrorLogTest extends TestCase
+final class BinCandyCodeTuiErrorLogTest extends TestCase
 {
     private const INSTALL = '$tuiErrorLog = TuiErrorLog::install(HomeDirectory::owned());';
 

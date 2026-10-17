@@ -7,7 +7,7 @@ only in PHP docblocks, and the rest discoverable only by `grep`.
 
 Two groups are listed separately because they behave differently:
 
-- **App variables** (`SUGARCRUSH_*`) configure CandyCode itself. Every one is
+- **App variables** (`CANDY_CODE_*`) configure CandyCode itself. Every one is
   optional; each row gives the behaviour when it is unset.
 - **Provider credential variables** are read on your behalf when
   `ProviderFactory` builds a provider's *default* config. They are the
@@ -26,7 +26,7 @@ is what makes them the right override for scripting and CI.
 
 ## App variables
 
-All are named `SUGARCRUSH_*` — no underscore between `SUGAR` and `CRUSH`. See
+All are named `CANDY_CODE_*`. See
 [Deprecated aliases](#deprecated-aliases) for the two that briefly differed.
 
 | Variable | Default when unset | Description | Settings key |
@@ -71,7 +71,7 @@ All are named `SUGARCRUSH_*` — no underscore between `SUGAR` and `CRUSH`. See
 | `CANDY_CODE_SERVER_DIR` | `~/.candy-code/server` | The directory `serve` keeps its state in: the `token`, the `server.json` discovery record, the `server.lock` singleton lock, the `control.sock` control socket and a detached server's `server.log`. One server runs per directory. Created `0700`; refused if it is a symlink, someone else's, or not exactly `0700`. `serve status`, `stop`, `logs` and `url` read it without creating it. | — |
 | `CANDY_CODE_SERVER_PARENT_PID` | unset — no parent is watched | A process id `serve` exits with: checked every second, by pid and start time, so a recycled pid reads as gone. `--parent-pid` wins over it. A pid that is not running at startup is refused (exit `2`). For an editor or a TUI that starts a private server. | — |
 | `CANDY_CODE_SD_BASE_URL` | unset — the media client refuses every generation with a message naming this variable | Base URL of the Stable Diffusion server the media transport dials — the A1111/SD.Next `sdapi` dialect or `sglang-diffusion` — e.g. `http://127.0.0.1:7860`. Precedence: an explicit code override, then this variable, then the layered `sd.baseUrl` setting (with the provider-shaped `mediaBaseUrl` key as its sibling fallback). The media transport dials its own egress pinned to the configured origin (`Media\Sd\UrlGuard`); it deliberately does NOT reuse `WebFetch`'s SSRF blocklist — a LAN-hosted SD server is the legitimate target here (plan W0 finding 3). | `sd.baseUrl` |
-| `CANDY_CODE_MEDIA_RENDER_MODE` | unset — `auto`, which asks the terminal | The value half of the `ui.imageRenderMode` setting's env layer: `auto`, `sixel`, `kitty`, `iterm2`, `halfblock`, `half`, `ansi`, `quarterblock`, `quarter`, `ascii`, `ansi256`, `truecolor` or `chafa`. Read once at launch by `Bootstrap::applyMediaRenderMode()`, where a non-empty value outranks the merged `ui.imageRenderMode` setting (an empty one is absence, like every `SUGARCRUSH_*` reader treats it), and the resolved word is handed to `ToolResult::setRenderMode()` — which fails an unknown word soft to `auto` rather than erroring, exactly as a bad settings-file value does. `/rendermode` switches the word mid-session (see [`MEDIA.md`](MEDIA.md)); this variable still re-asserts at launch and outranks the merged setting. | `ui.imageRenderMode` |
+| `CANDY_CODE_MEDIA_RENDER_MODE` | unset — `auto`, which asks the terminal | The value half of the `ui.imageRenderMode` setting's env layer: `auto`, `sixel`, `kitty`, `iterm2`, `halfblock`, `half`, `ansi`, `quarterblock`, `quarter`, `ascii`, `ansi256`, `truecolor` or `chafa`. Read once at launch by `Bootstrap::applyMediaRenderMode()`, where a non-empty value outranks the merged `ui.imageRenderMode` setting (an empty one is absence, like every `CANDY_CODE_*` reader treats it), and the resolved word is handed to `ToolResult::setRenderMode()` — which fails an unknown word soft to `auto` rather than erroring, exactly as a bad settings-file value does. `/rendermode` switches the word mid-session (see [`MEDIA.md`](MEDIA.md)); this variable still re-asserts at launch and outranks the merged setting. | `ui.imageRenderMode` |
 
 Every flag-style variable above (`CANDY_CODE_DISABLE_MOUSE`,
 `CANDY_CODE_DISABLE_MOUSE_CLICKS`, `CANDY_CODE_DISABLE_PARALLEL_TOOL_CALLS`,
@@ -161,20 +161,22 @@ run. If you are on Windows, pass your command as a list.
 ## Deprecated aliases
 
 Two app variables originally carried an underscore after `SUGAR`, unlike every
-other variable CandyCode reads. They were renamed to the canonical spelling.
-The old names keep working for one release, so an existing export does not
-silently change behaviour the day the rename lands. **When both are set the
-canonical name wins** — which is what lets you add the new export to a shared
-profile before removing the old one.
+other variable CandyCode reads.
 
-| Deprecated | Canonical |
-|------------|-----------|
-| `CANDY_CODE_WORKTREES_DIR` | `CANDY_CODE_WORKTREES_DIR` |
-| `CANDY_CODE_SHARE_UPLOAD_URL` | `CANDY_CODE_SHARE_UPLOAD_URL` |
+The whole `CANDY_CODE_*` prefix is itself a deprecated alias <!-- @rename-keep -->
+of `CANDY_CODE_*` since the 2026-10 rename: `bin/candy-code` folds both
+`CANDY_CODE_*` and `CANDY_CODE_*` <!-- @rename-keep --> onto `CANDY_CODE_*` at
+startup and prints one deprecation line per old variable it finds. A variable
+set under the newer name always wins — **when both are set the canonical name
+wins** — which is what lets you add the new export to a shared profile before
+removing the old one. The two per-variable readers below additionally accept
+every spelling in their own fallback list, because they can run inside a
+long-lived server process started before any fold happened.
 
-No deprecation warning is printed. The only reader of each runs while the
-interactive TUI owns the terminal, where a stray stderr line corrupts the frame
-rather than informing anyone.
+| Deprecated | Deprecated canonical | Current |
+|------------|----------------------|---------|
+| `CANDY_CODE_WORKTREES_DIR` | `CANDY_CODE_WORKTREES_DIR` | `CANDY_CODE_WORKTREES_DIR` | <!-- @rename-keep -->
+| `CANDY_CODE_SHARE_UPLOAD_URL` | `CANDY_CODE_SHARE_UPLOAD_URL` | `CANDY_CODE_SHARE_UPLOAD_URL` | <!-- @rename-keep -->
 
 ---
 

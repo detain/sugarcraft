@@ -79,7 +79,7 @@ final class NonInteractive
      *
      * FIRST KEY on every side, deliberately: `array_keys()` order is pinned
      * pair-wise between NonInteractive's real documents and the hand-rolled
-     * guard literal (BinSugarcrushAutoloadGuardTest), and putting the version
+     * guard literal (BinCandyCodeAutoloadGuardTest), and putting the version
      * before the payload means a streaming parser sees it before any bytes it
      * might need to interpret differently.
      */
@@ -180,7 +180,7 @@ final class NonInteractive
      * Run one prompt to completion and print the result.
      *
      * $backend can be supplied directly — used by tests to avoid depending on
-     * `SUGARCRUSH_*` environment state, and available to a future headless
+     * `CANDY_CODE_*` environment state, and available to a future headless
      * server mode that already holds a constructed `Backend`. When it is
      * null, one is built here — and that is where this path deliberately
      * stops matching the TUI's leniency, see {@see
@@ -630,7 +630,7 @@ final class NonInteractive
      * makes it a measurement rather than an appeal. THE ERROR DOCUMENT WITH NO
      * REFUSALS HAS TO STAY BYTE-IDENTICAL TO THE ONE THIS PACKAGE ALREADY
      * SHIPS, because a second party is compared against it key-for-key.
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushAutoloadGuardTest::testTheGuardsDocumentHasTheSameShapeAsNonInteractives()}
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeAutoloadGuardTest::testTheGuardsDocumentHasTheSameShapeAsNonInteractives()}
      * asserts `array_keys()` equality between this method's document and the
      * one `bin/candy-code`'s autoload guard hand-rolls — and that guard runs
      * BEFORE `vendor/autoload.php` has been found, in a process where no tool
@@ -703,7 +703,7 @@ final class NonInteractive
      * needs no autoloader, which is why the guard can still honour the contract
      * (E84) — the shape's OWNER is unreachable there, the shape is not. The two
      * are kept from drifting by
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushAutoloadGuardTest},
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeAutoloadGuardTest},
      * which asserts them key-for-key against each other; change the keys here
      * and that test reds until the guard is changed to match.
      *

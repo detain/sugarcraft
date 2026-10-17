@@ -61,7 +61,7 @@ final class TuiLangTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->pseudoDir !== null) {
-            T::overrideNamespace('crush', self::LANG_DIR);
+            T::overrideNamespace('code', self::LANG_DIR);
             self::flushLocaleMemoisedCatalogues();
             foreach (glob($this->pseudoDir . '/*.php') ?: [] as $file) {
                 unlink($file);
@@ -290,14 +290,14 @@ final class TuiLangTest extends TestCase
             $this->pseudoDir = $dir;
         }
 
-        T::overrideNamespace('crush', $this->pseudoDir);
+        T::overrideNamespace('code', $this->pseudoDir);
         T::setLocale('xx');
         self::flushLocaleMemoisedCatalogues();
     }
 
     private function useEnglish(): void
     {
-        T::overrideNamespace('crush', self::LANG_DIR);
+        T::overrideNamespace('code', self::LANG_DIR);
         T::setLocale('en');
     }
 }

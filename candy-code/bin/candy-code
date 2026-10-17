@@ -53,7 +53,7 @@ ini_set('display_errors', 'stderr');
     // it was inexact: the owner throws and catches a JsonException, while this
     // branch has no exception handler to reach for and instead tests the
     // documented `string|false` return directly below. Both files name this site
-    // in return, and Tests\Integration\BinSugarcrushAutoloadGuardTest asserts
+    // in return, and Tests\Integration\BinCandyCodeAutoloadGuardTest asserts
     // the two documents key-for-key AND the two flag expressions token-for-token
     // — the second of those because a key comparison cannot see an encode flag
     // at all (round 43's review dropped both flags from either side and the
@@ -78,7 +78,7 @@ ini_set('display_errors', 'stderr');
     // and this. The eight in NonInteractive and Subcommands were never weighed.
     // The exemption below is unaffected, because it is about THIS site and not
     // about the others; what the survey would have found is written up on
-    // Tests\Integration\BinSugarcrushAutoloadGuardTest, and the two writes that
+    // Tests\Integration\BinCandyCodeAutoloadGuardTest, and the two writes that
     // do look like candidates under the routing rule are recorded in
     // docs/plans/crush_code_hardening_backlog.md.
     // Bootstrap's launch-notice seam is a static method on a class the
@@ -96,7 +96,7 @@ ini_set('display_errors', 'stderr');
     // branch before, because reaching it needs a checkout WITHOUT
     // vendor/autoload.php. Copying this script into a bare
     // `<tmp>/bin/candy-code` is enough to produce one, and
-    // Tests\Integration\BinSugarcrushAutoloadGuardTest now does exactly that
+    // Tests\Integration\BinCandyCodeAutoloadGuardTest now does exactly that
     // and reads the real stderr and exit code back.
     $message = 'candy-code: cannot find composer autoload.php';
     fwrite(STDERR, $message . "\n");
@@ -149,7 +149,7 @@ ini_set('display_errors', 'stderr');
     // any format is honoured, while a broken checkout has no help screen to
     // print and reports the installation failure instead. THE AGREEMENT THAT IS
     // CLAIMED IS ASSERTED, not restated in prose — Tests\Integration\
-    // BinSugarcrushAutoloadGuardTest runs a table of argv vectors through this
+    // BinCandyCodeAutoloadGuardTest runs a table of argv vectors through this
     // scan and through ArgvParser::parse() and compares the two decisions.
     $rawArgv = $GLOBALS['argv'] ?? [];
     $format = 'text';
@@ -196,7 +196,7 @@ ini_set('display_errors', 'stderr');
         // so nothing here holds the literal to the shape it is a fallback for —
         // round 43's review replaced it with `{"BROKEN":true}` and the suite
         // stayed green. It is pinned by SOURCE instead:
-        // BinSugarcrushAutoloadGuardTest::testTheUnreachableFallbackLiteralIsTheDocumentItReplaces()
+        // BinCandyCodeAutoloadGuardTest::testTheUnreachableFallbackLiteralIsTheDocumentItReplaces()
         // reads this literal out of this file and compares it against the bytes
         // the reachable arm actually printed.
         echo ($document === false
@@ -427,7 +427,7 @@ try {
 // outside to begin with: every probe in Subcommands::doctorProbes() catches its
 // own throws, so `doctor` still prints its report and exits 1 on an install
 // this catch would otherwise turn into a bare exit 2. Both are asserted in
-// Tests\Integration\BinSugarcrushDispatchTest.
+// Tests\Integration\BinCandyCodeDispatchTest.
 if ($args->subcommand !== null) {
     exit(Subcommands::dispatch($args));
 }

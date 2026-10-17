@@ -99,7 +99,7 @@ final class SettingsResolver
 
     /**
      * The process environment (or a fixture of it). An empty value is absence,
-     * as every `SUGARCRUSH_*` reader treats it.
+     * as every `CANDY_CODE_*` reader treats it.
      *
      * @param array<string, string> $env
      */

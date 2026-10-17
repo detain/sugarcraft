@@ -256,7 +256,7 @@ final class CapabilityAwareDescriptionTest extends TestCase
 
     public function testTheProbeReadsNoEnvironmentVariableBeyondPathAndSpawnsNothing(): void
     {
-        // R-A/R-B: a new `SUGARCRUSH_`-prefixed read would need an
+        // R-A/R-B: a new `CANDY_CODE_`-prefixed read would need an
         // `EnvRosterDriftTest` row and a docs/ENVIRONMENT.md entry — both out of
         // this step's file ceiling, so the ceiling is pinned here instead.
         $file = (new ReflectionMethod(Bootstrap::class, 'capabilityPresent'))->getFileName();
@@ -265,7 +265,7 @@ final class CapabilityAwareDescriptionTest extends TestCase
 
         $this->assertSame(1, substr_count($code, 'getenv('), 'PATH is the only environment read');
         $this->assertStringContainsString("getenv('PATH')", $code);
-        $this->assertStringNotContainsString('SUGARCRUSH_', $code);
+        $this->assertStringNotContainsString('CANDY_CODE_', $code);
         foreach (['proc_open', 'exec(', 'shell_exec', 'popen', 'passthru', 'pcntl_fork'] as $spawn) {
             $this->assertStringNotContainsString($spawn, $code, "the probe must not reach {$spawn}");
         }

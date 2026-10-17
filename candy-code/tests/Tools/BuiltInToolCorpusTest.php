@@ -22,7 +22,7 @@ use SugarCraft\Code\Tools\Tool;
  * `src/` file lands a class in this corpus whether or not it is a tool, and a
  * new dispatchable tool must be recorded in the corpus's secondary-declaration
  * map or the roster arms go red. The same growth reaches
- * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::crushSourceFiles()},
+ * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest::crushSourceFiles()},
  * whose provider yields one data row per `src/` file plus `bin/candy-code`:
  * every file added to the library adds one test total to every run, wherever
  * it sits in the tree. Figures here are deliberately DERIVED, never typed, so
@@ -236,7 +236,7 @@ final class BuiltInToolCorpusTest extends TestCase
      * line for a `Tool` that `Bootstrap::tools()` does not wire and `Runtime`
      * cannot dispatch made it pass
      * {@see testTheWideSweepFindsTheFlatGlobPlusExactlyTheRecordedDynamicTools()},
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()},
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()},
      * `BuiltInToolTest` and `ToolSchemaEncodingTest` — every consumer green, an
      * exemption that granted itself. The ACCIDENTAL case was already safe (an
      * unwired tool that is not listed reds two of those and names it); this is the

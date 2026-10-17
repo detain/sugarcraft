@@ -694,7 +694,7 @@ rather than saying only that the hook could not be executed.
 #### What else the hook inherits
 
 Your launch environment reaches the hook — `PATH`, `HOME`, `LANG`,
-`VIRTUAL_ENV`, the `SUGARCRUSH_*` variables that configured the launch — with
+`VIRTUAL_ENV`, the `CANDY_CODE_*` variables that configured the launch — with
 three changes, made by `ProcessContainment::scrubbedEnv()`:
 
 1. **Credentials are removed** (audit F-E1). A variable whose name matches

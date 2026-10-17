@@ -47,7 +47,7 @@ use SugarCraft\Mouse\Zone;
  * The bin script itself cannot be driven from a test (it ends in
  * `Program::run()`, which attaches to a real TTY and blocks), so the entry
  * point under test is `Bootstrap`, the construction logic that script's IIFE
- * was extracted into — the same reasoning {@see BinSugarcrushWiringTest}
+ * was extracted into — the same reasoning {@see BinCandyCodeWiringTest}
  * documents.
  *
  * Rows covered here (W4.S1a): the session store, session tabs, and background

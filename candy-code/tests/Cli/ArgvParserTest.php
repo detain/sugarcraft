@@ -1098,7 +1098,7 @@ final class ArgvParserTest extends TestCase
     // -------------------------------------------------------------------------
     // crush_code.md Phase 4 item 6: the real subcommands, at the PARSE layer.
     // The end-to-end routing is exercised against the real binary in
-    // Tests\Integration\BinSugarcrushDispatchTest; these pin the reading
+    // Tests\Integration\BinCandyCodeDispatchTest; these pin the reading
     // decisions that class cannot see (which token became the verb, which became
     // its operand, and what did NOT become either).
     // -------------------------------------------------------------------------

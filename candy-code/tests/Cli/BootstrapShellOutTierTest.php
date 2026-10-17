@@ -223,7 +223,7 @@ final class BootstrapShellOutTierTest extends TestCase
      *
      * `new StreamingCommandBackend($streamCmd, 1)` — a 1-second idle cap on
      * every live streaming run — left this whole file and
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushDispatchTest}
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeDispatchTest}
      * green, because the only thing pinning "no deadline" was a reflection test
      * on the CONSTRUCTOR DEFAULT plus a comment at the call site. A comment does
      * not fail. So this reads the constructed object.

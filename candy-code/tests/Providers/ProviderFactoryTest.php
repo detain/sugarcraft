@@ -819,7 +819,7 @@ final class ProviderFactoryTest extends TestCase
      * bin/candy-code needing any change or any awareness of
      * fromProjectConfig().
      */
-    public function testDefaultConfigAndCreateSelectDevSglangLikeBinSugarcrushDoes(): void
+    public function testDefaultConfigAndCreateSelectDevSglangLikeBinCandyCodeDoes(): void
     {
         $config = $this->factory->defaultConfig('dev-sglang');
 

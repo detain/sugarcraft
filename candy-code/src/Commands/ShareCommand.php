@@ -191,16 +191,17 @@ final class ShareCommand
      * The opt-in upload host, or null when none is configured (the default).
      *
      * The canonical variable is CANDY_CODE_SHARE_UPLOAD_URL.
-     * CANDY_CODE_SHARE_UPLOAD_URL is the original spelling and one of only two
-     * app variables that ever carried the underscore after SUGAR — every other
-     * SUGARCRUSH_* variable this app reads does not (crush_code.md Phase 4
-     * item 4). It keeps working for one release; the canonical name wins when
-     * both are set. There is no default host any more (X-35a): unset means
-     * "do not upload", not "upload to a public default".
+     * `SUGARCRUSH_SHARE_UPLOAD_URL` is the pre-rename spelling and // @rename-keep
+     * `SUGAR_CRUSH_SHARE_UPLOAD_URL` its original one-of-two underscore variant // @rename-keep
+     * (crush_code.md Phase 4 item 4); both keep working — bin/candy-code folds
+     * the old prefixes onto CANDY_CODE_* via LegacyEnv before anything reads
+     * env — and the canonical name wins when both are set. There is no default
+     * host any more (X-35a): unset means "do not upload", not "upload to a
+     * public default".
      */
     private function getUploadBaseUrl(): ?string
     {
-        foreach (['CANDY_CODE_SHARE_UPLOAD_URL', 'CANDY_CODE_SHARE_UPLOAD_URL'] as $name) {
+        foreach (['CANDY_CODE_SHARE_UPLOAD_URL', 'SUGARCRUSH_SHARE_UPLOAD_URL', 'SUGAR_CRUSH_SHARE_UPLOAD_URL'] as $name) { // @rename-keep legacy dual-read
             $envUrl = getenv($name);
             if (is_string($envUrl) && $envUrl !== '') {
                 return $envUrl;

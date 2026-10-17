@@ -453,7 +453,7 @@ final readonly class RepoMapBlock implements PromptSection
      * `--root <lib>` run the map has to describe the directory the tools are
      * jailed to, which is the same rule {@see EnvironmentBlock::capture()}
      * follows and which
-     * `tests/Integration/BinSugarcrushWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd()`
+     * `tests/Integration/BinCandyCodeWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd()`
      * enforces across `src/`.
      */
     public static function capture(string $root): self

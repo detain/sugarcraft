@@ -50,7 +50,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *
  * THE CHANNELS, AND THE LAST TWO ARE THE POINT OF THE EXERCISE. The census this
  * project already had —
- * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
+ * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
  * `src/` and `bin/` is NINETEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
@@ -2183,7 +2183,7 @@ final class StderrEmitterCensusTest extends TestCase
      * The prose census this file supersedes must keep agreeing with the scan.
      *
      * READ-ONLY, and pinned rather than rewritten: the sentence lives in
-     * `tests/Integration/BinSugarcrushAutoloadGuardTest.php`, which is not this
+     * `tests/Integration/BinCandyCodeAutoloadGuardTest.php`, which is not this
      * lane's file. It is right today. The reason to anchor it anyway is that it
      * is the sentence a reader finds FIRST when they ask how many stderr writes
      * this application has, and it answers a narrower question than they asked
@@ -2206,7 +2206,7 @@ final class StderrEmitterCensusTest extends TestCase
      */
     public function testTheInheritedCensusStillAgreesWithTheScan(): void
     {
-        $path = \dirname(__DIR__, 2) . '/tests/Integration/BinSugarcrushAutoloadGuardTest.php';
+        $path = \dirname(__DIR__, 2) . '/tests/Integration/BinCandyCodeAutoloadGuardTest.php';
         self::assertFileExists($path, 'the file carrying the prose census has moved');
 
         $flat = self::flattened(self::censusSource($path));
@@ -2241,7 +2241,7 @@ final class StderrEmitterCensusTest extends TestCase
         self::assertSame(
             $scanned,
             self::NUMBER_WORDS[$word],
-            'BinSugarcrushAutoloadGuardTest still says the raw fwrite(STDERR, …) census is "' . $word
+            'BinCandyCodeAutoloadGuardTest still says the raw fwrite(STDERR, …) census is "' . $word
                 . '" while the token scan counts ' . $scanned,
         );
     }

@@ -45,7 +45,7 @@ final class SkillManager
      * the backfill path is implemented and tested, not yet production reachable
      * from bin/candy-code", and it outlived the wiring it described by several
      * rounds: crush_feat.md section 7 item 2 / W3.S8 landed, and
-     * BinSugarcrushWiringTest::testBootstrapToolsIncludesTheModelFacingSkillTool
+     * BinCandyCodeWiringTest::testBootstrapToolsIncludesTheModelFacingSkillTool
      * plus testSkillToolInvocationReturnsTheOnDiskSkillBody have been asserting
      * both halves since. A doc-block claiming a subsystem is unreachable while it
      * is reachable is the same defect as one claiming the reverse -- which is the

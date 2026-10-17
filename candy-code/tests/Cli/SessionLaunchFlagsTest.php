@@ -268,7 +268,7 @@ final class SessionLaunchFlagsTest extends TestCase
                 Bootstrap::promptHistory()->path(),
             );
         } finally {
-            Bootstrap::pinPromptHistoryPath($GLOBALS['__sugarcrushPromptHistoryPin'] ?? null);
+            Bootstrap::pinPromptHistoryPath($GLOBALS['__candyCodePromptHistoryPin'] ?? null);
         }
     }
 

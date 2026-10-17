@@ -11,7 +11,7 @@ namespace SugarCraft\Code\Config\Settings;
  *
  * ONE RULE FOR ALL FOUR, so the readers cannot drift on it: a variable that is
  * set to anything non-empty DECIDES — `0` off, anything else on, as every
- * `SUGARCRUSH_*` switch reads — and an unset or empty one leaves the answer to
+ * `CANDY_CODE_*` switch reads — and an unset or empty one leaves the answer to
  * the setting. Each reader keeps its own `getenv()` call and hands the value
  * here, so the variable stays a direct, scannable read where it always was.
  * User tier only and read at launch (the loaders run once while the session

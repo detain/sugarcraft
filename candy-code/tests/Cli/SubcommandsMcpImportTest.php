@@ -17,7 +17,7 @@ use SugarCraft\Code\Cli\Subcommands;
  * verb. stdout is ob-captured (the document, or the JSON envelope); stderr is
  * NOT capturable in-process — the note-channel content is asserted through
  * `--output-format json`'s `notes` array and through the real-bin arms in
- * BinSugarcrushDispatchTest, so nothing here pretends to read a stream it
+ * BinCandyCodeDispatchTest, so nothing here pretends to read a stream it
  * cannot see.
  *
  * THE NEVER-WRITE LAW gets two independent pins: a BEHAVIOURAL one (the temp

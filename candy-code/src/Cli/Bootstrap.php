@@ -1351,7 +1351,7 @@ final class Bootstrap
      * literal `getenv` because the launch does not resolve through
      * {@see \SugarCraft\Code\Config\Settings\SettingsResolver} (advisory
      * only) — same shape as {@see \SugarCraft\Code\Media\Sd\Client::resolveBaseUrl()}
-     * for its own env row. An empty value is absence, as every SUGARCRUSH_*
+     * for its own env row. An empty value is absence, as every CANDY_CODE_*
      * reader treats it; a junk word is ToolResult's problem to fail soft on
      * (=> auto), never a throw on the launch path.
      *
@@ -8907,7 +8907,7 @@ final class Bootstrap
      * no server configured — the default — the client is null and every call
      * returns an ERROR naming the language, never an empty success; see
      * {@see LspTool} for why that distinction is the point, and
-     * {@see \SugarCraft\Code\Tests\Integration\BinSugarcrushWiringTest::testTheWiredLspToolRefusesRatherThanAnsweringEmptyWithNoServerConfigured()}
+     * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeWiringTest::testTheWiredLspToolRefusesRatherThanAnsweringEmptyWithNoServerConfigured()}
      * for the assertion that the LIVE wiring behaves that way.
      *
      * $client is injectable so an embedder that built its own servers can hand
@@ -8953,7 +8953,7 @@ final class Bootstrap
      * derives this array from that directory or that directory from this array;
      * they are two hand-maintained halves, and the reason they agree is a TEST
      * that scans the directory —
-     * `BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`,
+     * `BinCandyCodeWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()`,
      * whose expected set comes from `glob()` over `src/Tools/BuiltIn/` rather than
      * a literal. Measured with the old literal assertions in place: an eleventh
      * implementor added to that directory and not listed here left the whole
@@ -9201,7 +9201,7 @@ final class Bootstrap
         // stale — `Write` below has taken the same pair since it was wired —
         // and `Grep` has now joined them, which is the arithmetic this project
         // keeps getting wrong. The count and the names are both asserted, not
-        // just written here: `BinSugarcrushWiringTest` now DERIVES the roster
+        // just written here: `BinCandyCodeWiringTest` now DERIVES the roster
         // from the tools that declare an `instructionLoader` property instead
         // of restating a hand-kept list, so the next tool to take the pair
         // fails that test until it is acknowledged there.

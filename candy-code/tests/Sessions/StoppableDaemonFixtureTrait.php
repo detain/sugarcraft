@@ -80,7 +80,7 @@ trait StoppableDaemonFixtureTrait
             @unlink($file);
         }
         foreach (array_unique(array_map('dirname', $this->fixtureFiles)) as $dir) {
-            if (str_contains(basename($dir), 'sugar_crush_bg_')) {
+            if (str_contains(basename($dir), 'candy_code_bg_')) {
                 @rmdir($dir);
             }
         }

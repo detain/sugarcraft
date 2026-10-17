@@ -1321,15 +1321,14 @@ final class WorktreeManager
     /**
      * The base-path override from the environment, or null when unset/empty.
      *
-     * The canonical name is CANDY_CODE_WORKTREES_DIR. CANDY_CODE_WORKTREES_DIR
-     * is the original spelling and one of only two app variables that ever
-     * carried the underscore after SUGAR — every other SUGARCRUSH_* variable
-     * this app reads does not (crush_code.md Phase 4 item 4). It keeps working
-     * for one release so an existing export does not silently relocate every
-     * agent worktree back to the config default the day the rename lands; the
-     * canonical name wins when both are set, which is the ordering that lets
-     * an operator add the new export to a shared profile before removing the
-     * old one.
+     * The canonical name is CANDY_CODE_WORKTREES_DIR. The pre-rename
+     * spellings `SUGARCRUSH_WORKTREES_DIR` and its underscore variant // @rename-keep
+     * `SUGAR_CRUSH_WORKTREES_DIR` (one of only two app variables that ever // @rename-keep
+     * carried the underscore after SUGAR, crush_code.md Phase 4 item 4) keep
+     * working — bin/candy-code folds the old prefixes onto CANDY_CODE_* via
+     * LegacyEnv, and this reader accepts all three shapes directly so an
+     * existing export never silently relocates every agent worktree back to
+     * the config default; the canonical name wins when several are set.
      *
      * No deprecation warning is emitted: the only caller runs inside the
      * constructor, and the interactive TUI owns the terminal by then — a
@@ -1337,7 +1336,7 @@ final class WorktreeManager
      */
     private static function worktreesDirOverride(): ?string
     {
-        foreach (['CANDY_CODE_WORKTREES_DIR', 'CANDY_CODE_WORKTREES_DIR'] as $name) {
+        foreach (['CANDY_CODE_WORKTREES_DIR', 'SUGARCRUSH_WORKTREES_DIR', 'SUGAR_CRUSH_WORKTREES_DIR'] as $name) { // @rename-keep legacy dual-read
             $value = getenv($name);
             if (is_string($value) && $value !== '') {
                 return $value;

@@ -21,13 +21,13 @@ use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
  * through its exception alone (pinned on its own by
  * {@see \SugarCraft\Code\Tests\Cli\BootstrapEnsureDirReportTest}; the
  * top-of-file ini_set() is pinned by source in
- * {@see BinSugarcrushTuiErrorLogTest}).
+ * {@see BinCandyCodeTuiErrorLogTest}).
  *
  * Hermetic by construction: `env -i` keeps every provider variable of the
  * runner out of the child, so the offline echo provider answers, with no
  * network and no credentials.
  */
-final class BinSugarcrushJsonStdoutDiagnosticsTest extends TestCase
+final class BinCandyCodeJsonStdoutDiagnosticsTest extends TestCase
 {
     use RunsWallClockBoundedChildTrait;
 

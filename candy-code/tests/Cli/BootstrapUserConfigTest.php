@@ -11,7 +11,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * Isolates ~/.candy-code/config.json under a temp HOME, same convention as
- * BinSugarcrushWiringTest/SessionTest, so this never touches the real
+ * BinCandyCodeWiringTest/SessionTest, so this never touches the real
  * per-user config file on the machine running the suite.
  *
  * The backend-selection chain is cleared too

@@ -642,11 +642,11 @@ final class TeamManagerTest extends TestCase
      * Registered for teardown, not just returned. tearDown() used to remove
      * only whatever $this->tempDir happened to hold last, so a test that
      * minted its own registry dir left it behind for good — 1,190 abandoned
-     * sugar_crush_test_* trees had piled up in one developer's /tmp.
+     * candy_code_test_* trees had piled up in one developer's /tmp.
      */
     private function createTempDir(): string
     {
-        $tempDir = sys_get_temp_dir() . '/sugar_crush_test_' . uniqid('', true);
+        $tempDir = sys_get_temp_dir() . '/candy_code_test_' . uniqid('', true);
         mkdir($tempDir, 0755, true);
         $this->tempDirs[] = $tempDir;
 

@@ -44,7 +44,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * `completeAsync()` fork boundary. Construction mirrors `Bootstrap::backend()`
  * -- one shared `Bootstrap::instructionLoader($root)` threaded into both the
  * engine and `Bootstrap::tools()` -- with only the provider's HTTP layer
- * stubbed, the same seam `BinSugarcrushWiringTest` stubs.
+ * stubbed, the same seam `BinCandyCodeWiringTest` stubs.
  *
  * P11.S4 ADDENDUM, one sentence because the gap it names was real: block-arm
  * coverage of the same request (`CompleteRequest::$systemBlocks`, delivered

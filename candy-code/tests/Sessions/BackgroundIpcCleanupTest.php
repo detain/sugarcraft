@@ -17,7 +17,7 @@ use SugarCraft\Code\Support\ToolIpcFiles;
  * finished are reaped at startup.
  *
  * Before the fix the daemon unlinked only its socket. The `.buffer`, its
- * `.log` sidecar, the `.token` and the `sugar_crush_bg_<uid>_<hex>` directory
+ * `.log` sidecar, the `.token` and the `candy_code_bg_<uid>_<hex>` directory
  * itself stayed in `/tmp` after every `/bg` task, and no sweep matched them.
  */
 final class BackgroundIpcCleanupTest extends TestCase

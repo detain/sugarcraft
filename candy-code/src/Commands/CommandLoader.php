@@ -96,7 +96,7 @@ final class CommandLoader
      * count, which is exactly the split the skills surface runs on.
      *
      * `unset`, empty and `0` all read as off, matching every other
-     * `SUGARCRUSH_*` switch.
+     * `CANDY_CODE_*` switch.
      */
     public const DEBUG_REFUSALS_ENV = 'CANDY_CODE_DEBUG_COMMANDS';
 

@@ -48,7 +48,7 @@ require __DIR__ . '/../vendor/autoload.php';
  *
  * DO NOT "clean this up" — it fixes a measured ~33% flake (2 failures in 6
  * runs, on this change AND on the untouched baseline) in the three tests that
- * bound their wait with a Loop safety timer: BinSugarcrushWiringTest,
+ * bound their wait with a Loop safety timer: BinCandyCodeWiringTest,
  * StreamingWiringTest and SystemPromptWiringTest.
  *
  * Loop::get() autodetects, and where ext-uv is installed it hands back
@@ -282,10 +282,10 @@ $realTempDir = sys_get_temp_dir();
 
 // Published for the contract test, which has no other way to see the value
 // this process resolved BEFORE the export below. `$GLOBALS` rather than a
-// local for the same reason as `__sugarcrushSuiteStdin` at the foot of this
+// local for the same reason as `__candyCodeSuiteStdin` at the foot of this
 // file: PHPUnit includes this bootstrap from inside a private method of
 // `Application`, so a bare local here does not outlive the include.
-$GLOBALS['__sugarcrushRealTempDir'] = $realTempDir;
+$GLOBALS['__candyCodeRealTempDir'] = $realTempDir;
 
 $sandbox = $realTempDir . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x');
 @mkdir($sandbox, 0o700, true);
@@ -344,7 +344,7 @@ $promptHistoryPin = $sandbox . '/prompt_history.' . getmypid() . '.jsonl';
 if (is_file($promptHistoryPin)) {
     unlink($promptHistoryPin);
 }
-$GLOBALS['__sugarcrushPromptHistoryPin'] = $promptHistoryPin;
+$GLOBALS['__candyCodePromptHistoryPin'] = $promptHistoryPin;
 \SugarCraft\Code\Cli\Bootstrap::pinPromptHistoryPath($promptHistoryPin);
 // Owner-pid guarded: suites that pcntl_fork() run shutdown functions in every
 // child too, and a child deleting the file would pull it out from under the
@@ -615,7 +615,7 @@ if (!stream_isatty(\STDIN)) {
     // $GLOBALS, not a local: see the cost list above. This handle is what
     // occupies descriptor 0 for the rest of the run, and it has to outlive the
     // method PHPUnit includes this file from.
-    $GLOBALS['__sugarcrushSuiteStdin'] = fopen('/dev/null', 'r');
+    $GLOBALS['__candyCodeSuiteStdin'] = fopen('/dev/null', 'r');
 }
 
 /*

@@ -1603,7 +1603,7 @@ final class Subcommands
 
         return "# bash completion for candy-code. Install with:\n"
             . "#   eval \"\$(candy-code completion bash)\"\n"
-            . "_sugarcrush() {\n"
+            . "_candy_code() {\n"
             . "    local cur prev\n"
             . "    cur=\"\${COMP_WORDS[COMP_CWORD]}\"\n"
             . "    prev=\"\${COMP_WORDS[COMP_CWORD-1]}\"\n"
@@ -1619,7 +1619,7 @@ final class Subcommands
             . "\n"
             . "    COMPREPLY=(\$(compgen -W \"" . $verbs . "\" -- \"\$cur\"))\n"
             . "}\n"
-            . "complete -F _sugarcrush candy-code\n";
+            . "complete -F _candy_code candy-code\n";
     }
 
     /**
@@ -1669,8 +1669,8 @@ final class Subcommands
 
         return "#compdef candy-code\n"
             . "# zsh completion for candy-code. Install it somewhere on \$fpath as\n"
-            . "# _sugarcrush, e.g. candy-code completion zsh > \"\${fpath[1]}/_sugarcrush\"\n"
-            . "_sugarcrush() {\n"
+            . "# _candy-code, e.g. candy-code completion zsh > \"\${fpath[1]}/_candy-code\"\n"
+            . "_candy_code() {\n"
             . "    local state\n"
             . "    local -a subcommands\n"
             . "    subcommands=(\n"
@@ -1692,7 +1692,7 @@ final class Subcommands
             . "    esac\n"
             . "}\n"
             . "\n"
-            . "_sugarcrush \"\$@\"\n";
+            . "_candy_code \"\$@\"\n";
     }
 
     /**

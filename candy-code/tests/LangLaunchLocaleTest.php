@@ -50,7 +50,7 @@ final class LangLaunchLocaleTest extends TestCase
             \putenv($env === false ? $variable : $variable . '=' . $env);
         }
         if ($this->catalogue !== null) {
-            T::overrideNamespace('crush', \dirname(__DIR__) . '/lang');
+            T::overrideNamespace('code', \dirname(__DIR__) . '/lang');
             self::flushLocaleMemoisedCatalogues();
             @\unlink($this->catalogue . '/en.php');
             @\unlink($this->catalogue . '/de.php');
@@ -109,7 +109,7 @@ final class LangLaunchLocaleTest extends TestCase
         \file_put_contents($dir . '/en.php', '<?php return require ' . \var_export(\dirname(__DIR__) . '/lang/en.php', true) . ';');
         \file_put_contents($dir . '/de.php', '<?php return ' . \var_export(['cli.serve.none' => '(keine)'], true) . ';');
         Lang::t('cli.serve.none');
-        T::overrideNamespace('crush', $dir);
+        T::overrideNamespace('code', $dir);
         self::flushLocaleMemoisedCatalogues();
 
         $_SERVER['LANG'] = 'de_AT.UTF-8';

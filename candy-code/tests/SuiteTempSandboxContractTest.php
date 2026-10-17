@@ -187,7 +187,7 @@ final class SuiteTempSandboxContractTest extends TestCase
     {
         // 1. In-process: the value the bootstrap resolved BEFORE it exported is
         //    still this process's answer, and it is not the sandbox.
-        $captured = $GLOBALS['__sugarcrushRealTempDir'] ?? null;
+        $captured = $GLOBALS['__candyCodeRealTempDir'] ?? null;
         $this->assertIsString($captured, 'the bootstrap did not publish the temp directory it resolved');
         $this->assertSame(
             $captured,
