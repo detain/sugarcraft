@@ -114,12 +114,17 @@ final class ClaudeCodeMcpServerTest extends TestCase
             'binary' => PHP_BINARY, 'args' => ['bogus-serve-args'], 'env' => null,
         ]);
 
+        // ISS-090-era census cure: capture, then assert — fail() inside the
+        // try is an ExpectationFailedException, which extends RuntimeException,
+        // so the wide catch used to swallow the very failure that proved the arm.
+        $caught = null;
         try {
             $server->start();
-            $this->fail('a rejected spawn must throw');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('spawned with arguments `bogus-serve-args`', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a rejected spawn must throw');
+        self::assertStringContainsString('spawned with arguments `bogus-serve-args`', $caught->getMessage());
     }
 
     /**
@@ -407,15 +412,17 @@ final class ClaudeCodeMcpServerTest extends TestCase
             // passthrough then delivers. Pinned so the two layers' claims —
             // the server-side sentence as last line of defense, the client
             // message as the live path — stay the documented shapes.
+            $hollow = null;
             try {
                 $server->callTool('demo', ['case' => 'hollow']);
-                self::fail('the hollow envelope reached the server layer instead of failing the exchange');
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString(
-                    'the server answered with neither a result nor an error',
-                    $e->getMessage(),
-                );
+                $hollow = $e;
             }
+            self::assertNotNull($hollow, 'the hollow envelope reached the server layer instead of failing the exchange');
+            self::assertStringContainsString(
+                'the server answered with neither a result nor an error',
+                $hollow->getMessage(),
+            );
         } finally {
             $server->stop();
         }

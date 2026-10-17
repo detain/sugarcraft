@@ -365,13 +365,17 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->rawClientFor('{"mcpServers":{"well":"not-an-object","good":{"type":"git"}}}');
 
+        // Capture-then-assert: fail() inside a try wrapped by a wide
+        // RuntimeException catch is the swallow this census names.
+        $caught = null;
         try {
             $client->startServers();
-            $this->fail('a non-array entry value must join the aggregate report');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('could not be built', $e->getMessage());
-            $this->assertStringContainsString('well (entry is string, not a named server object)', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'a non-array entry value must join the aggregate report');
+        $this->assertStringContainsString('could not be built', $caught->getMessage());
+        $this->assertStringContainsString('well (entry is string, not a named server object)', $caught->getMessage());
 
         $this->assertNotSame([], $client->listTools());
     }
@@ -385,12 +389,14 @@ final class McpClientServerIsolationTest extends TestCase
     {
         $client = $this->rawClientFor('{"mcpServers":{"1":{"type":"git"},"good":{"type":"git"}}}');
 
+        $caught = null;
         try {
             $client->startServers();
-            $this->fail('expected the aggregate report');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('1 (entry is', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'expected the aggregate report');
+        $this->assertStringContainsString('1 (entry is', $caught->getMessage());
     }
 
     // =========================================================================

@@ -191,6 +191,27 @@ final readonly class ScriptHook implements BoundedHookInterface
     private const DRAIN_SLICE_SECONDS = 0.2;
 
     /**
+     * ISS-090(d): the drain's byte ceiling PER STREAM.
+     *
+     * Every downstream bound in this class clips what a verdict CARRIES —
+     * deny reasons, ask questions, context notes. None of them clipped what a
+     * hook PRINTS while the pump is still reading: a wedged-but-chatty hook
+     * (a build loop on stdout, an argparse stack trace repeating on a stuck
+     * retry) grew `$buffers` until the process ran out of memory long before
+     * the deadline could answer it, and the deadline itself bounds the WAIT,
+     * not the VOLUME inside it — a hook writing 40 MB within the window landed
+     * whole. 1 MiB is generously above every envelope a real hook ships (the
+     * rewrite ceiling below is two orders of magnitude smaller), so what this
+     * cuts off is runaway output, not content.
+     *
+     * A cut on stdout is fail-CLOSED by construction: JSON truncated at the
+     * cap does not decode, and {@see envelope()} answers such an output with
+     * null — the same existing path as a partial write from an interrupted
+     * select. The verdict still comes from the exit code.
+     */
+    private const MAX_DRAIN_BYTES = 1_048_576;
+
+    /**
      * Bytes of the hook's own words a DENY may carry back.
      *
      * A DENY REASON GOES STRAIGHT INTO THE MODEL'S CONTEXT. Both live gates
@@ -232,27 +253,6 @@ final readonly class ScriptHook implements BoundedHookInterface
      *   docblock. It is left as-is because there is no exposure to fix, not
      *   because its size is "what the author chose to emit".
      */
-    /**
-     * ISS-090(d): the drain's byte ceiling PER STREAM.
-     *
-     * Every downstream bound in this class clips what a verdict CARRIES —
-     * deny reasons, ask questions, context notes. None of them clipped what a
-     * hook PRINTS while the pump is still reading: a wedged-but-chatty hook
-     * (a build loop on stdout, an argparse stack trace repeating on a stuck
-     * retry) grew `$buffers` until the process ran out of memory long before
-     * the deadline could answer it, and the deadline itself bounds the WAIT,
-     * not the VOLUME inside it — a hook writing 40 MB within the window landed
-     * whole. 1 MiB is generously above every envelope a real hook ships (the
-     * rewrite ceiling below is two orders of magnitude smaller), so what this
-     * cuts off is runaway output, not content.
-     *
-     * A cut on stdout is fail-CLOSED by construction: JSON truncated at the
-     * cap does not decode, and {@see envelope()} answers such an output with
-     * null — the same existing path as a partial write from an interrupted
-     * select. The verdict still comes from the exit code.
-     */
-    private const MAX_DRAIN_BYTES = 1_048_576;
-
     private const MAX_DENY_REASON_BYTES = 16384;
 
     /**
