@@ -57,7 +57,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-three sites (f-app-launch 2026-10-14: +2 in
+ *  1. `fwrite(STDERR, …)` — twenty-four sites (ISS-080 2026-10-17: +1 in
+ *     `NonInteractive` for the stdin-silent grace line; f-app-launch 2026-10-14: +2 in
  *     `bin/candy-code` — the rv-qa-1 TTY-guard refusal line and the rv-tui-1
  *     recovery line, both stderr-alone by decision: neither names a lost
  *     capability and both must land on a channel the dying process still
@@ -313,7 +314,9 @@ final class StderrEmitterCensusTest extends TestCase
         // hook refuses or throws. Stderr alone: the session is over, so no
         // transcript is left to carry it, and on the TUI path the terminal
         // is the operator's again by the time it is written.
-        'src/Cli/NonInteractive.php' => 9,
+        // +1 in ISS-080: readStdinIfPiped()'s stdin-silent grace line. Stderr
+        // alone: no answer exists yet and stdout is the answer alone.
+        'src/Cli/NonInteractive.php' => 10,
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is
@@ -476,7 +479,10 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/LegacyMigration.php' => 3,
         // +1 in wave 11: noticeAttachment()'s prefix literal (channel 1's note).
         // +1 in step 3.D-2: fireSessionEnd()'s refusal line (channel 1's note).
-        'src/Cli/NonInteractive.php' => 9,
+        // +1 in ISS-080: the stdin-silent grace line (channel 1's note).
+        // +1 in ISS-006: failUsage()'s spend-cap refusal argument (channel 1's note).
+        // +1 in ISS-041: the turn-hook document's message prefix (channel 1's note).
+        'src/Cli/NonInteractive.php' => 12,
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door

@@ -26,9 +26,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-THREE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-FOUR:
  *
- *  - {@see \SugarCraft\Code\Cli\NonInteractive}, nine —
+ *  - {@see \SugarCraft\Code\Cli\NonInteractive}, ten —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
  *    as JSON), `failUsage()`, `failUnusableProvider()`,
  *    `noticeOfflineDefault()`, `readStdinIfPiped()`, and — added by E219 —
@@ -38,7 +38,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    the transcript seam, and why it could not be put in `Runtime`. And —
  *    added by audit 15b-15's headless residual — `noticeAttachment()`, one
  *    line per `-p` mention notice or unseen image. And — added by step 3.D-2 —
- *    `fireSessionEnd()`, one line when a SessionEnd hook refuses or throws.
+ *    `fireSessionEnd()`, one line when a SessionEnd hook refuses or throws. And
+ *    — added by ISS-080 — the second line inside `readStdinIfPiped()`: the
+ *    stdin-silent grace notice, stdout staying the answer alone.
  *  - {@see \SugarCraft\Code\Cli\Subcommands}, four — `sessionDelete()`'s "no
  *    such session", `mcp()`'s inventory error, — added by E710 —
  *    `mcpImportLine()`, the single funnel for the import verb's notes, and —

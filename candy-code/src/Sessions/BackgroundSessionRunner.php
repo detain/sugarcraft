@@ -9,6 +9,8 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\PermissionConfigException;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Host\TurnController;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -427,6 +429,22 @@ final class BackgroundSessionRunner
      *
      * @return int 0 when the turn completed, 1 when it failed
      */
+    /**
+     * A pinned chain (ISS-041 test seam, the same convention as
+     * {@see \SugarCraft\Code\Cli\NonInteractive::pinTurnHooksForTesting()}):
+     * when set, {@see self::fireTurnHooks()} runs THIS chain instead of the
+     * launch-built one. Why the daemon needs the seam at all is its answer to
+     * the same hermeticity question — a pinned manager keeps a developer's
+     * own `~/.candy-code/hooks.yaml` out of the suite, exactly as NonInteractive's
+     * twin keeps it out of the `-p` doubles. Null restores the real chain.
+     */
+    public static function pinTurnHooksForTesting(?\SugarCraft\Code\Hooks\HookManager $hooks): void
+    {
+        self::$turnHooksForTesting = $hooks;
+    }
+
+    private static ?\SugarCraft\Code\Hooks\HookManager $turnHooksForTesting = null;
+
     public function executeTask(?Backend $backend = null, ?EnhancedSessionStore $store = null, ?\SugarCraft\Code\Agents\AgentManager $agents = null): int
     {
         if ($this->workingDirectory !== '' && \is_dir($this->workingDirectory)) {
@@ -491,10 +509,30 @@ final class BackgroundSessionRunner
             $pending = \substr($pending, $lastNewline + 1);
         };
 
+        // ISS-041 (background half): `UserPromptSubmit`, and `SessionStart`
+        // when this task opens a fresh session, run BEFORE the first billed
+        // call, through the one body the TUI and host dispatch with —
+        // {@see TurnController::runTurnHooks()}. A daemon that skipped the
+        // chain would let every guarded prompt through just because nobody
+        // was watching the terminal, which is the opposite of what a hook is
+        // for. Deny is failure: the task logs the reason and exits non-zero,
+        // the same shape every other `[session:task:failed]` here takes.
+        // Synchronous on purpose — the forked worker has no event loop to
+        // freeze. The chain-unwrap failure lets the task run unhooked,
+        // matching the SessionEnd polarity; a broken hook config must not
+        // kill work already dispatched.
+        [$turnNotes, $turnBlocked] = $this->fireTurnHooks($this->task, $fork !== null);
+        if ($turnBlocked !== null) {
+            $this->log('[session:task:failed] turn hook blocked: ' . $this->oneLine($turnBlocked));
+            $this->saveFork($fork, [Message::user($this->task), Message::notice('Background task blocked by a turn hook: ' . $this->oneLine($turnBlocked))]);
+
+            return 1;
+        }
+
         $user = Message::user($this->task);
         try {
             $message = $backend->complete(
-                [...$prior, $user],
+                [...$prior, ...$turnNotes, $user],
                 $onToken,
                 function (object $event): void {
                     $this->noticeRefusal($event);
@@ -525,6 +563,51 @@ final class BackgroundSessionRunner
         $this->log('[session:task:complete]');
 
         return 0;
+    }
+
+    /**
+     * The `UserPromptSubmit`/`SessionStart` chain for one background task
+     * (ISS-041). See the call site for WHY the daemon runs it at all; the
+     * WHAT is all borrowed: gate-first order, ASK-fails-closed, note order
+     * and the discard rule are {@see TurnController}'s single definitions.
+     *
+     * SessionStart follows the host's once-per-empty-history gate: a fork
+     * continuing an existing transcript does not re-open the session.
+     *
+     * @return array{0: list<Message>, 1: ?string} the notes to splice ahead
+     *   of the user's line (empty when nothing was permitted to say), and
+     *   the refusal reason — non-null only when the prompt must not run.
+     */
+    private function fireTurnHooks(string $prompt, bool $continuingFork): array
+    {
+        $root = $this->workingDirectory !== '' && \is_dir($this->workingDirectory) ? $this->workingDirectory : '';
+        if (self::$turnHooksForTesting !== null) {
+            $hooks = self::$turnHooksForTesting;
+        } else {
+            try {
+                $hooks = Bootstrap::hooks(null, $root !== '' ? $root : null);
+            } catch (\Throwable) {
+                return [[], null];
+            }
+        }
+
+        $turns = TurnController::new();
+        $sessionId = $this->forkedSessionId !== '' ? $this->forkedSessionId : $this->sessionId;
+        $promptEvent = HookEvent::UserPromptSubmit;
+        $sessionEvent = HookEvent::SessionStart;
+        $promptContext = $turns->turnHookContext($promptEvent->value, $prompt, false, $sessionId, $root);
+        $sessionContext = $continuingFork
+            ? null
+            : $turns->turnHookContext($sessionEvent->value, $prompt, true, $sessionId, $root);
+
+        [$promptResult, $sessionResult] = TurnController::runTurnHooks($hooks, $promptContext, $sessionContext);
+
+        $blocked = $turns->turnHookRefusalReason($promptResult);
+        if ($blocked !== null) {
+            return [[], $blocked];
+        }
+
+        return [$turns->turnHookNotes($promptResult, $sessionResult), null];
     }
 
     /**

@@ -224,7 +224,7 @@ final class NonInteractive
      * @return int Unix exit code: {@see self::EXIT_OK} on success,
      *   {@see self::EXIT_CONFIG} when no prompt was given or an explicitly
      *   selected provider is unusable, {@see self::EXIT_FAILURE} when the
-     *   backend threw — extending the existing `candy-mail`/`candy-ssh-launcher`
+     *   backend threw or a turn hook denied the prompt (ISS-041) — extending the existing `candy-mail`/`candy-ssh-launcher`
      *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
      *   `bin/candy-code`'s own 2-means-usage-error.
      */
@@ -395,6 +395,37 @@ final class NonInteractive
             }
         };
 
+        // ISS-041: `UserPromptSubmit` and `SessionStart` run BEFORE the
+        // first billed call, through the one body the TUI and the host
+        // dispatch with — {@see \SugarCraft\Code\Host\TurnController::runTurnHooks()}
+        // (gate-first, SessionStart only into an empty history, which a
+        // one-shot run always is). Until here a configured guard hook fired
+        // for every interactive prompt and for `-p` not once, so
+        // `candy-code -p "$(evil.sh)"` bypassed exactly the chain its own
+        // config said must judge every prompt. A denied prompt is NOT sent:
+        // the run exits {@see self::EXIT_FAILURE} with the reason filed as a
+        // `hook`-kind refusal row on both channels, and an unanswered ASK
+        // fails closed for the same reason the host's
+        // {@see \SugarCraft\Code\Host\TurnController::turnHookRefusalReason()}
+        // documents — nobody is here to answer it. Permitted notes
+        // (SessionStart's first, then the prompt's, in the host's order) are
+        // spliced ahead of the user's line exactly as
+        // {@see \SugarCraft\Code\Host\TurnController::turnHookNotes()} hands
+        // them to the TUI. DIVERGENCE from the TUI, deliberate: the TUI
+        // forks an out-of-process chain because a 60 s `proc_open()` froze
+        // its event loop; a one-shot run has no loop to freeze and blocks on
+        // the backend anyway, so the chain runs here synchronously. And,
+        // mirroring the SessionEnd ownership rule further down, only a run
+        // that built its own backend owns the session whose start and
+        // submission these events describe — an injected backend belongs to
+        // its caller, tests included, so the family filters stay hermetic.
+        if ($ownsSession || self::$turnHooksForTesting !== null) {
+            $blocked = self::fireTurnHooks($args, $backend, $history, $refusals, $outputFormat);
+            if ($blocked !== null) {
+                return $blocked;
+            }
+        }
+
         try {
             $message = $backend->complete($history, null, $observeRefusals);
         } catch (\Throwable $e) {
@@ -538,6 +569,85 @@ final class NonInteractive
         \fwrite(\STDERR, $line);
 
         return $line;
+    }
+
+    /**
+     * Run `UserPromptSubmit` and `SessionStart` for one `-p` submission
+     * (ISS-041) and either splice the permitted notes into $history ahead of
+     * the user's line, or refuse to send it.
+     *
+     * Delegates the whole verdict vocabulary to the single dispatch body —
+     * {@see \SugarCraft\Code\Host\TurnController::runTurnHooks()} and its
+     * two readers — so `-p`, the TUI and the host share one definition of
+     * what a hook answer means; the WHY of gate-first ordering, of ASK
+     * failing closed, and of note order lives in those methods' docblocks
+     * and is not restated here. A chain that cannot be built lets the run
+     * proceed unhooked — the same polarity {@see self::fireSessionEnd()}
+     * applies on the way out: failing OPEN is consistent in both directions,
+     * and a broken config file is a launch problem, not a prompt problem.
+     *
+     * @param list<Message> $history       by reference: notes prepend
+     * @param list<array{tool: string, kind: string, reason: string}> $refusals by reference: the deny row lands here
+     *
+     * @return ?int null when the prompt may proceed, otherwise the exit code
+     *   this run must take ({@see self::EXIT_FAILURE}) after emitting its
+     *   document.
+     */
+    private static function fireTurnHooks(
+        ParsedArgs $args,
+        Backend $backend,
+        array &$history,
+        array &$refusals,
+        string $outputFormat,
+    ): ?int {
+        if (self::$turnHooksForTesting !== null) {
+            $hooks = self::$turnHooksForTesting;
+        } else {
+            try {
+                $hooks = Bootstrap::hooks(null, $args->root);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        $turns = \SugarCraft\Code\Host\TurnController::new();
+        $promptEvent = HookEvent::UserPromptSubmit;
+        $sessionEvent = HookEvent::SessionStart;
+        $root = $args->root ?? (getcwd() ?: '');
+        $sessionId = $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? ($backend->sessionId() ?? '') : '';
+        $promptContext = $turns->turnHookContext($promptEvent->value, (string) $args->prompt, false, $sessionId, $root);
+        $sessionContext = $turns->turnHookContext($sessionEvent->value, (string) $args->prompt, true, $sessionId, $root);
+
+        [$promptResult, $sessionResult] = \SugarCraft\Code\Host\TurnController::runTurnHooks(
+            $hooks,
+            $promptContext,
+            $sessionContext,
+        );
+
+        $blocked = $turns->turnHookRefusalReason($promptResult);
+        if ($blocked !== null) {
+            // The same `turn` slot as {@see self::SPEND_CAP_ROW_TOOL}: what
+            // the hook stopped is the turn itself, not any named tool.
+            $row = ['tool' => 'turn', 'kind' => DenialKind::Hook->token(), 'reason' => $blocked];
+            $refusals[] = $row;
+            self::noticeRefusal($row['tool'], $row['kind'], $row['reason']);
+            self::emitErrorDocument(
+                $outputFormat,
+                'hook',
+                'candy-code: ' . Lang::t('cli.noninteractive.turn_hook_blocked', ['reason' => $blocked]),
+                null,
+                $refusals,
+            );
+
+            return self::EXIT_FAILURE;
+        }
+
+        $notes = $turns->turnHookNotes($promptResult, $sessionResult);
+        if ($notes !== []) {
+            $history = [...$notes, ...$history];
+        }
+
+        return null;
     }
 
     /**
@@ -702,6 +812,9 @@ final class NonInteractive
      *   `provider_configuration`-> {@see self::EXIT_CONFIG} (2)
      *   `backend`               -> {@see self::EXIT_FAILURE} (1)
      *   `encoding`              -> {@see self::EXIT_FAILURE} (1)
+     *   `hook`                  -> {@see self::EXIT_FAILURE} (1) — a turn
+     *                              hook denied (or unansuably asked about)
+     *                              the prompt, so it was never sent (ISS-041)
      *
      * A consumer that kept the exit code and wants to know WHICH kind of 2 it
      * got is exactly who `type` is for.
@@ -1038,6 +1151,27 @@ final class NonInteractive
     {
         self::$stdinDefault = $stream;
     }
+
+    /**
+     * A pinned chain (ISS-041 test seam, same convention as
+     * {@see self::pinStdinDefault()}): when set, {@see self::fireTurnHooks()}
+     * runs THIS {@see HookManager} instead of the launch-built one, and the
+     * $ownsSession gate opens for injected backends.
+     *
+     * WHY A SEAM AND NOT A HOOKS.YAML FIXTURE: the gate that keeps a
+     * caller-supplied backend off the session-lifecycle chains — the SessionEnd
+     * rule this lane mirrored — is exactly what makes a file-built chain
+     * unobservable to a backend-double test, and loosening the gate for YAML
+     * fixtures would let every ambient dev HOME's guard scripts into every
+     * `-p` test. The pin keeps production shape (real chain, real gate) and
+     * test shape (explicit chain, explicit backend) each honest.
+     */
+    public static function pinTurnHooksForTesting(?HookManager $hooks): void
+    {
+        self::$turnHooksForTesting = $hooks;
+    }
+
+    private static ?HookManager $turnHooksForTesting = null;
 
     /**
      * The stream this `-p` console family reads when its caller names none —
