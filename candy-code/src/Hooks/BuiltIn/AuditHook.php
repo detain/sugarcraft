@@ -9,7 +9,9 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Memory\SecretRedactor;
 use SugarCraft\Code\Permissions\DenialKind;
+use SugarCraft\Code\Support\HomeDirectory;
 
 /**
  * One appended line per finished tool call: when, which session, which tool,
@@ -38,6 +40,10 @@ use SugarCraft\Code\Permissions\DenialKind;
  * secret scanner behind it was about to refuse.
  * Every interpolated field goes through {@see field()}, so a field cannot
  * end the line early, and the input is capped at {@see INPUT_CAP_BYTES}.
+ * Every EXCERPT additionally passes through {@see secretFree()} before it is
+ * cut (ISS-059): `curl -H "Authorization: Bearer …"` and the first lines of a
+ * `cat ~/.config/gh/hosts.yml` land as `[REDACTED]`, not as themselves, in
+ * all three record shapes.
  *
  * THE DEFAULT PATH IS THE PRODUCTION PATH, WHICH IS WHY IT GETS THIS MUCH
  * ATTENTION. {@see \SugarCraft\Code\Hooks\HookManager::registerBuiltIns()}
@@ -77,11 +83,26 @@ final class AuditHook implements HookInterface
     /**
      * How much of a call's input any record keeps (audit F-H2). The input used
      * to be logged whole, so every `Write` copied the entire file it wrote
-     * into a log that is never rotated. 4 KiB holds every ordinary command
-     * line and path set; what is cut is named with its full length, so the
-     * record still says how big the call was.
+     * into an unbounded log (rotation came later, with ISS-059 — the cap still
+     * earns its keep: a rotated log is not a licence to write megabytes per
+     * line). 4 KiB holds every ordinary command line and path set; what is cut
+     * is named with its full length, so the record still says how big the call
+     * was.
      */
     public const INPUT_CAP_BYTES = 4096;
+
+    /**
+     * The size at which the default log is rolled into `audit.log.1` (ISS-059).
+     *
+     * 5 MiB holds tens of thousands of records — comfortably a working week of
+     * ordinary use — while keeping the pair bounded at ~10 MiB, so an audit
+     * trail cannot fill the home directory unnoticed. ONE generation is a
+     * decision, not an oversight: this is a best-effort local trail, and a
+     * caller who wants full history passes their own path to the constructor —
+     * rotation, like the other path guards, is spent only on the default
+     * ({@see $ownsPath}).
+     */
+    public const ROTATE_AT_BYTES = 5 * 1024 * 1024;
 
     /**
      * Leaf-name stem of the per-user directory {@see defaultLogFile()} lives
@@ -250,7 +271,16 @@ final class AuditHook implements HookInterface
      * notices it.
      *
      * WHY THIS IS A STATIC METHOD RATHER THAN A CONSTANT: the uid is a
-     * property of the running process, so there is nothing to declare.
+     * property of the running process, so there is nothing to declare —
+     * and since ISS-059 the sentence covers the FALLBACK naming, because
+     * the primary answer is the user's own home directory, chosen by
+     * {@see defaultLogDirectory()}.
+     *
+     * AND EVERY EXCERPT IS SCRUBBED BEFORE IT IS CUT (ISS-059,
+     * {@see secretFree()}): the guards above keep other users off the file;
+     * the redactor keeps the file from being a secret collector for whoever
+     * legitimately reads it — the operator, a backup, a bug report attached
+     * by `candy-code` itself.
      */
     public static function defaultLogFile(): string
     {
@@ -259,6 +289,22 @@ final class AuditHook implements HookInterface
 
     /**
      * The per-user directory {@see defaultLogFile()} sits in.
+     *
+     * WHAT IS TRUE NOW (ISS-059). The production default moved under the
+     * user's home — `<home>/.candy-code/audit` — because a tmp that is a
+     * tmpfs wipes the trail on reboot, and an audit log that survives only
+     * until the next restart is close to no audit log at all. The home arm
+     * takes {@see HomeDirectory::owned()}'s judgement, which refuses what
+     * this class would have to refuse anyway: a home it cannot determine, a
+     * spelling that is relative, a directory that is world-writable or owned
+     * by somebody else. When it refuses, the euid-scoped temp scheme below
+     * is what answers — cross-user safety preserved, persistence not, which
+     * is the honest ordering for a machine whose home this process cannot
+     * vouch for. Whatever directory answers, {@see append()} still creates it
+     * 0700, still checks mode, owner and leaf, and now also rotates the
+     * default leaf at {@see ROTATE_AT_BYTES}.
+     *
+     * THE TEMP SCHEME, now the fallback arm, stays as it was written:
      *
      * Scoped by the EFFECTIVE uid, matching
      * {@see \SugarCraft\Code\Support\ToolIpcFiles::sweep()}: the effective
@@ -299,8 +345,20 @@ final class AuditHook implements HookInterface
      */
     public static function defaultLogDirectory(): string
     {
-        return self::$directoryPin
-            ?? self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null);
+        if (self::$directoryPin !== null) {
+            return self::$directoryPin;
+        }
+
+        // HomeDirectory::owned() returns the HOME itself when it can vouch for
+        // it — the `.candy-code` leg is every caller's concatenation, this one
+        // included, and `audit` keeps the trail beside the settings, sessions
+        // and memory that already live under it.
+        $home = HomeDirectory::owned();
+        if ($home !== null) {
+            return $home . '/.candy-code/audit';
+        }
+
+        return self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null);
     }
 
     /**
@@ -340,7 +398,7 @@ final class AuditHook implements HookInterface
     {
         $this->append(self::line(
             $context,
-            '=> ' . self::field(self::cut($context->toolOutput, self::OUTPUT_EXCERPT_BYTES)),
+            '=> ' . self::field(self::cut(self::secretFree($context->toolOutput), self::OUTPUT_EXCERPT_BYTES)),
         ));
 
         return HookResult::allow();
@@ -363,7 +421,7 @@ final class AuditHook implements HookInterface
      */
     public function recordDenial(HookContext $context, DenialKind $kind, string $reason): bool
     {
-        return $this->append(self::line($context, sprintf('=! DENY %s: %s', $kind->token(), self::field($reason))));
+        return $this->append(self::line($context, sprintf('=! DENY %s: %s', $kind->token(), self::field(self::secretFree($reason)))));
     }
 
     /**
@@ -380,7 +438,7 @@ final class AuditHook implements HookInterface
     {
         $tag = $hook === null ? '=! WITHHELD: ' : '=! WITHHELD "' . self::field($hook) . '": ';
 
-        return $this->append(self::line($context, $tag . self::field($reason)));
+        return $this->append(self::line($context, $tag . self::field(self::secretFree($reason))));
     }
 
     /**
@@ -393,13 +451,19 @@ final class AuditHook implements HookInterface
             date('Y-m-d H:i:s'),
             self::field($context->sessionId),
             self::field($context->toolName),
-            self::field(self::capInput($context->toolInput)),
+            self::field(self::capInput(self::secretFree($context->toolInput))),
             $tail,
         );
     }
 
     /**
      * $input cut to {@see INPUT_CAP_BYTES}, with the original length named.
+     *
+     * SINCE ISS-059 the caller hands this ALREADY-REDACTED text, so the named
+     * length is the length of the scrubbed input, not of the raw call — a
+     * `[REDACTED]` standing in for a longer secret counts as eleven bytes.
+     * The number still bounds how big the call was from above minus that
+     * slack, which is all a reader ever did with it: triage, not forensics.
      */
     private static function capInput(string $input): string
     {
@@ -409,6 +473,34 @@ final class AuditHook implements HookInterface
         }
 
         return self::cut($input, self::INPUT_CAP_BYTES) . sprintf(' [truncated: %d bytes]', $length);
+    }
+
+    /**
+     * $text with every secret {@see SecretRedactor} recognises replaced by
+     * its marker (ISS-059).
+     *
+     * REDACT FIRST, CUT SECOND, and the order is the whole design. The
+     * redactor's patterns match against text; cut first and you show it a
+     * prefix, which is exactly how a secret escapes: a bearer token the cut
+     * leaves shorter than the `{16,}` its pattern demands simply stops
+     * looking like a bearer token, and the characters that survive the cut
+     * are secret characters the log never needed to print. Redact first and
+     * the marker replaces the token before any cut can shorten what the
+     * patterns see. {@see \SugarCraft\Code\Tests\Hooks\AuditHookRedactionRotationTest}
+     * pins the boundary shape in both directions.
+     *
+     * The residue the order does NOT cure is named so nobody re-decides it:
+     * a cut may still fall INSIDE the eleven-byte marker and print `[REDACT`.
+     * That is a truncated marker, not a truncated secret, and no reordering
+     * of these two calls fixes it — it is the price of a fixed-size excerpt.
+     *
+     * ONE NEW INSTANCE PER RECORD, the same way `Memory` writes reach it:
+     * the redactor is a stateless list of regexes and this hook runs once per
+     * tool call, so a memo would be ceremony.
+     */
+    private static function secretFree(string $text): string
+    {
+        return SecretRedactor::new()->redact($text);
     }
 
     /**
@@ -522,6 +614,23 @@ final class AuditHook implements HookInterface
             return false;
         }
 
+        // SIZE ROTATION (ISS-059): the default leaf is rolled into a single
+        // `audit.log.1` before the append that would carry it past
+        // {@see ROTATE_AT_BYTES}, so the trail survives a reboot (the home
+        // move) without growing without bound (this). Gated on $ownsPath like
+        // every other guard, because a caller-named path belongs to a caller
+        // who may have logrotate with real policies behind it; silently
+        // renaming a file we were handed would be that overruling again.
+        // Best-effort in both directions: a failed `filesize()` or `rename()`
+        // lets the append through — a log line that is late to rotate beats
+        // an audit record that never lands. The one benign race: a concurrent
+        // process mid-`LOCK_EX` write when this arm renames simply finishes
+        // its write in what becomes the `.1` generation — moved, not lost —
+        // and the next rotate supersedes that generation, same as any other.
+        if ($this->ownsPath) {
+            self::rotateIfNeeded($this->logFile);
+        }
+
         // AND THE LEAF ITSELF IS CREATED OWNER-ONLY, by narrowing the umask
         // around the create rather than by a `chmod()` after it — the same
         // pattern and the same reason as
@@ -557,6 +666,27 @@ final class AuditHook implements HookInterface
                 \umask($previous);
             }
         }
+    }
+
+    /**
+     * Move $log to `$log.1` when it has passed {@see ROTATE_AT_BYTES} (ISS-059).
+     *
+     * `rename()` moves the whole file atomically, including whatever another
+     * writer appended between the stat and the rename — that content rides
+     * into the previous generation instead of being caught mid-write. The old
+     * `.1` is overwritten: one generation deep is the declared budget, and a
+     * rename that fails on permissions is silent because the append right
+     * after it is the point of this method, not the rotation.
+     */
+    private static function rotateIfNeeded(string $log): void
+    {
+        $size = @\filesize($log);
+        if ($size === false || $size <= self::ROTATE_AT_BYTES) {
+            return;
+        }
+
+        @\rename($log, $log . '.1');
+        \clearstatcache(true, $log);
     }
 
     /**

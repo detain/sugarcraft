@@ -20,6 +20,9 @@ final class AuditHookTest extends TestCase
     /** Every private path this test made, removed in tearDown(). */
     private array $scratch = [];
 
+    /** Per-test scratch root for the ISS-059 home-arm tests; created on first use. */
+    private ?string $homeSandbox = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -34,6 +37,20 @@ final class AuditHookTest extends TestCase
         }
 
         // reverse order: a directory's contents were appended after it was.
+        if ($this->homeSandbox !== null) {
+            // The home arm creates nested trees (.candy-code/audit) the flat
+            // scratch loop above was never built for: children first.
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($this->homeSandbox, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
+            );
+            foreach ($walk as $entry) {
+                $entry->isDir() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
+            }
+            @rmdir($this->homeSandbox);
+            $this->homeSandbox = null;
+        }
+
         foreach (array_reverse($this->scratch) as $path) {
             // is_link() first and never is_file(): a dangling link is neither
             // a file nor a directory, and leaving it behind is what turns one
@@ -124,40 +141,160 @@ final class AuditHookTest extends TestCase
      * in the same check reports its line.
      *
      * WHAT THIS ASSERTED: the literal `candy-code-audit.log` on the temp root.
-     * WHAT IS TRUE NOW (E328): the leaf is the same idea — a fixed name, so
-     * `tail -f` still works across runs — but it sits inside a directory
-     * scoped to the effective uid, because the temp root is world-writable and
-     * the old leaf was reachable by every other user on the box. WHY THIS TEST
-     * STILL EARNS ITS PLACE UNCHANGED IN SHAPE: asserting the CONSTRUCTED value
-     * rather than driving a write is what stops this test from being the
-     * vandal again, and that is orthogonal to which path is right.
+     * WHAT WAS TRUE AT E328: the leaf moved inside a per-euid directory under
+     * the temp root. WHAT IS TRUE NOW (ISS-059): the production default lives
+     * in the user's OWN home — `<home>/.candy-code/audit/audit.log` — because
+     * a tmp that is a tmpfs wipes the trail at reboot, and the temp-euid path
+     * this test used to pin is now only the FALLBACK, for homes this process
+     * cannot vouch for. Asserting the CONSTRUCTED value rather than driving a
+     * write still keeps this test from being the vandal, whichever arm is
+     * answering.
      */
-    public function testTheDefaultLogFileIsThePerUserProductionPathWithoutWritingToIt(): void
+    public function testTheDefaultLogFileIsTheHomeAuditDirectoryWhenTheHomeIsVouchedFor(): void
     {
-        $expected = sys_get_temp_dir() . '/candy-code-audit-' . posix_geteuid() . '/audit.log';
+        $home = $this->homeSandbox() .'/home-vouched';
+        mkdir($home, 0o700);
+        $expected = $home . '/.candy-code/audit/audit.log';
 
-        [$actual, $constructed] = $this->withNoDirectoryPin(static fn (): array => [
+        [$actual, $constructed] = $this->withHome($home, fn (): array => $this->withNoDirectoryPin(static fn (): array => [
             AuditHook::defaultLogFile(),
             (new \ReflectionProperty(AuditHook::class, 'logFile'))->getValue(new AuditHook()),
-        ]);
+        ]));
 
         self::assertSame($expected, $actual);
         self::assertSame($expected, $constructed);
     }
 
     /**
-     * E328, as the regression it is: the leaf every user on the box shared.
+     * The home arm REFUSES — and the euid-scoped temp path answers — exactly
+     * where {@see \SugarCraft\Code\Support\HomeDirectory::owned()} refuses:
+     * a home that does not exist, and a home world-writable enough that any
+     * other user could plant the audit directory ahead of this process.
+     */
+    public function testTheHomeArmRefusesAndTheTempFallbackAnswersWhenTheHomeCannotBeVouchedFor(): void
+    {
+        $fallback = sys_get_temp_dir() . '/candy-code-audit-' . posix_geteuid() . '/audit.log';
+        $expected = static fn (string $why): string => $fallback;
+
+        // Arm one: HOME names a directory that is not there.
+        $missing = $this->homeSandbox() .'/home-missing';
+        $this->withHome($missing, function () use ($expected): void {
+            $this->withNoDirectoryPin(function () use ($expected): void {
+                $this->assertSame($expected('missing'), AuditHook::defaultLogFile(), 'a nonexistent home fell through to something other than the temp fallback');
+            });
+        });
+
+        // Arm two: HOME exists but anybody can write it.
+        $wide = $this->homeSandbox() .'/home-wide';
+        mkdir($wide, 0o700);
+        chmod($wide, 0o777);
+        $this->withHome($wide, function () use ($expected): void {
+            $this->withNoDirectoryPin(function () use ($expected): void {
+                $this->assertSame($expected('wide'), AuditHook::defaultLogFile(), 'a world-writable home was vouched for, which is the one thing owned() exists to refuse');
+            });
+        });
+    }
+
+    /**
+     * E328, as the regression it is: the leaf every user on the box shared,
+     * and (ISS-059) the temp root whose persistence a reboot does not
+     * promise. Under a vouched home the default is neither; under the
+     * fallback it is still not the shared leaf.
      *
-     * Spelled out rather than derived, because the point is that this exact
-     * string is no longer what an unconfigured `candy-code` appends to, and a
+     * Spelled out rather than derived, because the point is that these exact
+     * strings are not what an unconfigured `candy-code` appends to, and a
      * derivation from the code under test cannot say that.
      */
     public function testTheDefaultIsNoLongerTheLeafEveryUserOnTheBoxShared(): void
     {
-        $actual = $this->withNoDirectoryPin(static fn (): string => AuditHook::defaultLogFile());
+        $home = $this->homeSandbox() .'/home-vouched2';
+        mkdir($home, 0o700);
 
-        self::assertNotSame(sys_get_temp_dir() . '/candy-code-audit.log', $actual);
-        self::assertStringContainsString('/candy-code-audit-' . posix_geteuid() . '/', $actual);
+        $inHome = $this->withHome($home, fn (): string => $this->withNoDirectoryPin(static fn (): string => AuditHook::defaultLogFile()));
+
+        self::assertNotSame(sys_get_temp_dir() . '/candy-code-audit.log', $inHome);
+        self::assertStringContainsString('/.candy-code/audit/audit.log', $inHome);
+
+        $inFallback = $this->withHome($this->homeSandbox() .'/home-missing2', fn (): string => $this->withNoDirectoryPin(static fn (): string => AuditHook::defaultLogFile()));
+
+        self::assertNotSame(sys_get_temp_dir() . '/candy-code-audit.log', $inFallback);
+        self::assertStringContainsString('/candy-code-audit-' . posix_geteuid() . '/', $inFallback);
+    }
+
+    /**
+     * The WRITE-THROUGH of the home arm, including the lazy creation: the
+     * `audit` directory — and with it `.candy-code` — did not exist before
+     * the call, and what answers is a 0700 directory holding one record.
+     *
+     * This is the shape {@see AuditHookProductionPathIsolationTest} keeps off
+     * the developer's real home; here the whole home lives under the test's
+     * own scratch root, so writing through it is what the test is FOR.
+     */
+    public function testAnUnconfiguredHookCreatesAndWritesTheHomeAuditDirectory(): void
+    {
+        $home = $this->homeSandbox() .'/home-write';
+        mkdir($home, 0o700);
+        $directory = $home . '/.candy-code/audit';
+        $marker = 'iss059-write-' . \bin2hex(\random_bytes(8));
+
+        $this->withHome($home, function () use ($directory, $marker): void {
+            $this->withNoDirectoryPin(function () use ($directory, $marker): void {
+                (new AuditHook())->execute($this->createContext(sessionId: $marker));
+
+                $log = $directory . '/audit.log';
+                $this->assertFileExists($log, 'the home arm did not create and write the default log');
+                $this->assertStringContainsString($marker, (string) file_get_contents($log));
+                $this->assertSame(0o700, fileperms($directory) & 0o777, 'the audit directory was not created owner-only');
+            });
+        });
+    }
+
+    /**
+     * The per-test scratch root the home-arm fixtures hang off of — created
+     * lazily so the thirty-odd tests in this class that never touch a HOME
+     * arm pay nothing, and removed recursively in `tearDown()` because the
+     * home arm's lazy `mkdir` nests two levels below it.
+     */
+    private function homeSandbox(): string
+    {
+        if ($this->homeSandbox === null) {
+            $this->homeSandbox = sys_get_temp_dir() . '/audit-hook-home-' . uniqid((string) getmypid(), true);
+            mkdir($this->homeSandbox, 0o700, true);
+        }
+
+        return $this->homeSandbox;
+    }
+
+    /**
+     * Drive $probe with `$HOME` pointed at $home (both spellings —
+     * {@see \SugarCraft\Code\Support\HomeDirectory::resolved()} reads
+     * `getenv()`), then restore exactly what was there.
+     *
+     * Snapshot BEFORE touching anything, per the lane-cf law: a probe that
+     * unsets first and snapshots after restores `false` forever and poisons
+     * every later test that reads HOME.
+     *
+     * @template T
+     * @param \Closure():T $probe
+     * @return T
+     */
+    private function withHome(string $home, \Closure $probe): mixed
+    {
+        $original = getenv('HOME');
+        $originalServer = $_SERVER['HOME'] ?? null;
+        putenv('HOME=' . $home);
+        $_SERVER['HOME'] = $home;
+
+        try {
+            return $probe();
+        } finally {
+            $original === false ? putenv('HOME') : putenv('HOME=' . $original);
+            if ($originalServer === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $originalServer;
+            }
+        }
     }
 
     /**

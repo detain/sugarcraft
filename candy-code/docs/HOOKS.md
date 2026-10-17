@@ -1239,7 +1239,13 @@ field.
 
 The input is capped at 4 KiB (`AuditHook::INPUT_CAP_BYTES`). Anything longer
 ends in ` [truncated: <n> bytes]`, so a `Write` no longer copies the whole file
-it wrote into a log that is never rotated.
+it wrote into the log. The log itself is size-capped (ISS-059): past
+`AuditHook::ROTATE_AT_BYTES` the hook-owned default rolls to `.1`, one
+generation deep, before the next append — a caller-supplied path is never
+touched, because its retention belongs to the caller. And before any field is
+cut to fit, it is scrubbed of secret-shaped text by the same redactor memory
+notes use, so a bearer token straddling the cut boundary is replaced whole
+rather than leaking its first characters.
 
 ### What `protect-files` covers
 
