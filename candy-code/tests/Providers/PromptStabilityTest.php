@@ -841,7 +841,7 @@ final class PromptStabilityTest extends TestCase
     // not move), and the 15 B directory spelling this file chose fixture-side
     // (59 -> 74). 35 + 15 = the +50 the total moved by.
     // MEASURED 2026-10-16 at rename lane f1: 4,831 -> 4,830. One mover only: MemoryBlock's
-    // repository-group label prose `.sugar-crush/memory` became `.candy-code/memory` —
+    // repository-group label prose `.sugar-crush/memory` became `.candy-code/memory` — // @rename-keep
     // the 11 B spelling lost one byte per occurrence, production side, inside the
     // <project-memory> layer (2,467 -> 2,466).
     private const STABLE_LAYERS_BYTES = 4830;
