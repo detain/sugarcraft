@@ -6431,10 +6431,10 @@ final class Renderer
         // A pathologically narrow box truncates the KEY so that a column is
         // always left for the description and the space before it: `$room`
         // below is `$width - $keyCol - 1`, and this cap is what keeps it
-        // positive. Measured, the Enter row renders `E` at cols=5, `E S` at 7
-        // and `En S` at 8 — the key losing characters, not the description
-        // losing its column. (Under width 3 there is nothing to split and the
-        // description does go.)
+        // positive. Measured (ISS-099 re-measured with the ellipsis), the
+        // Enter row renders `…` at cols=5, `… …` at 7 and `E… …` at 8 — the
+        // key losing characters, not the description losing its column.
+        // (Under width 3 there is nothing to split and the description does go.)
         //
         // Deliberately the reverse of what happens without it: Style::width()
         // TRUNCATES the assembled line rather than wrapping it (measured: a
@@ -6455,12 +6455,16 @@ final class Renderer
             if ($lines !== []) {
                 $lines[] = '';
             }
-            $lines[] = $headerStyle->render(Width::truncate($context, $width));
+            $lines[] = $headerStyle->render(self::clipWithEllipsis($context, $width));
             foreach ($bindings as $binding) {
-                $key = Width::truncate($binding->keys, $keyCol);
+                // ISS-099: clipWithEllipsis, not Width::truncate — a row that
+                // ends mid-word said "Move the cursor one charac" at 49
+                // columns with no sign the sentence went on. The ellipsis is
+                // that sign.
+                $key = self::clipWithEllipsis($binding->keys, $keyCol);
                 $pad = str_repeat(' ', max(0, $keyCol - Width::of($key)));
                 $room = $width - $keyCol - 1;
-                $desc = $room > 0 ? Width::truncate($binding->description, $room) : '';
+                $desc = $room > 0 ? self::clipWithEllipsis($binding->description, $room) : '';
                 $lines[] = $keyStyle->render($key) . $pad . ' ' . $descStyle->render($desc);
             }
         }
@@ -6476,7 +6480,7 @@ final class Renderer
         $visible = array_slice($lines, $start, $body);
 
         if ($showHint) {
-            $visible[] = $hintStyle->render(Width::truncate(
+            $visible[] = $hintStyle->render(self::clipWithEllipsis(
                 // The footer is where the MODAL's own keys are stated — the
                 // rows above describe the app's ordinary keyboard, which is
                 // not what those keys do while this screen is up. The wheel

@@ -1458,6 +1458,12 @@ final class Renderer
 
         $width = self::sideWidth($a, $panes[0], $cols, $rows);
 
+        if ($width <= 0) {
+            // ISS-099: the dock holds this side but the degradation ladder
+            // dropped it at this frame size — no band, no chrome.
+            return ['', null, []];
+        }
+
         if (count($panes) === 1) {
             $block = self::renderPane($a, $panes[0], $width, $rows);
             $painted = self::blockWidth($block);
@@ -1573,12 +1579,15 @@ final class Renderer
      *    planted the legacy measurement into the column shares at the first
      *    mutation, so those shares carry real pixels and scale with every
      *    later resize.
-     *  - Resolve answers with no region for the first pane (the degradation
-     *    ladder dropped this side at this frame size, or the pane is only
-     *    TRANSIENTLY focused on an otherwise-empty side, whose share was
-     *    never seeded because seeding runs at dock mutations, not at focus) →
-     *    fall back to the legacy measure. Something has to width the box;
-     *    the number the frame always used is the honest answer.
+     *  - Resolve answers with no region for a DOCKED first pane — the
+     *    degradation ladder dropped this side at this frame size → the side
+     *    gets zero columns and paints nothing. Forcing the legacy measure
+     *    here drew a box the band could not host: at 50 columns that is a
+     *    one-cell sliver of chrome (ISS-099).
+     *  - No region for a merely TRANSIENTLY focused pane (its share was
+     *    never seeded, because seeding runs at dock mutations, not at
+     *    focus) → fall back to the legacy measure. A frame nobody ever
+     *    docked into must not shift a pixel.
      */
     private static function sideWidth(App $a, Pane $firstPane, int $cols, int $rows): int
     {
@@ -1588,7 +1597,13 @@ final class Renderer
             return $legacy;
         }
 
-        return $a->dock()->resolve(new Region(0, 0, $cols, $rows))->regionFor($firstPane->value)?->width ?? $legacy;
+        $region = $a->dock()->resolve(new Region(0, 0, $cols, $rows))->regionFor($firstPane->value);
+
+        if ($region !== null) {
+            return $region->width;
+        }
+
+        return $a->isDocked($firstPane) ? 0 : $legacy;
     }
 
     /**

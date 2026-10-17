@@ -1221,7 +1221,7 @@ final class KeyHelpTest extends TestCase
 
         // The tail goes first, all the way down: Esc — named first precisely so
         // it survives — is the last thing standing.
-        $this->assertSame('Esc closes', $this->footer($this->chat('', 14, 30)));
+        $this->assertSame('Esc close…', $this->footer($this->chat('', 14, 30)));
         $this->assertStringStartsWith('Esc closes', $this->footer($this->chat('', 40, 30)));
         $this->assertStringNotContainsString(
             'scroll',
@@ -3706,6 +3706,42 @@ final class KeyHelpTest extends TestCase
      * slot. Reaching `renderKeyHelp()` first in the chain is what guarantees
      * that; this is the property, not the ordering.
      */
+    /**
+     * ISS-099: a truncated key-help row ends its clipped field with an
+     * explicit ellipsis. Raw {@see Width::truncate} silently dropped the tail,
+     * so "Move the cursor one character left" painted as a cut-off phrase
+     * with nothing marking the loss.
+     */
+    public function testAClippedKeyHelpFieldEndsWithAnEllipsis(): void
+    {
+        $box = $this->overlay($this->chat('', 49, 30)->withKeyHelp(0));
+        $this->assertNotSame([], $box, 'fixture: the box must be drawn at 49 columns');
+        $rows = array_map(
+            static fn(string $line): string => (string) preg_replace('/\e\[[0-9;]*m/', '', $line),
+            $box,
+        );
+
+        $clippedDescriptions = 0;
+        $longest = '';
+        foreach (KeyBindingRegistry::live() as $binding) {
+            if (Width::of($binding->description) > Width::of($longest)) {
+                $longest = $binding->description;
+            }
+        }
+        $this->assertGreaterThan(40, Width::of($longest), 'fixture: a live description must overflow 49 columns');
+
+        $needle = mb_substr($longest, 0, 12);
+        foreach ($rows as $row) {
+            if (!str_contains($row, $needle)) {
+                continue;
+            }
+            ++$clippedDescriptions;
+            $body = trim($row, "\u{2502} ");
+            $this->assertStringEndsWith('…', $body, "clipped description row must mark the loss: {$row}");
+        }
+        $this->assertGreaterThan(0, $clippedDescriptions, 'the longest live description must be drawn clipped at 49 columns');
+    }
+
     public function testTheScrollCeilingDoesNotSurviveAFrameWithoutTheReference(): void
     {
         [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));
@@ -3745,8 +3781,13 @@ final class KeyHelpTest extends TestCase
             $box,
         );
 
-        $key = Width::truncate($first->keys, 2);
-        $desc = Width::truncate($first->description, 1);
+        // ISS-099: the fields clip with an explicit ellipsis, so the expected
+        // row mirrors clipWithEllipsis rather than raw truncation.
+        $clip = static fn(string $text, int $cols): string => Width::of($text) <= $cols
+            ? $text
+            : ($cols === 1 ? '…' : rtrim(Width::truncate($text, $cols - 1)) . '…');
+        $key = $clip($first->keys, 2);
+        $desc = $clip($first->description, 1);
         $this->assertContains(
             '│ ' . $key . ' ' . $desc . ' │',
             $rows,

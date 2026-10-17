@@ -12,6 +12,7 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Constraints\Region;
 use SugarCraft\Constraints\Dock\Side;
 
 /**
@@ -199,6 +200,36 @@ final class DockSeedTest extends TestCase
         [$at120] = App::new($this->provider, 'test-model')->update(new WindowSizeMsg(120, 40));
         \assert($at120 instanceof App);
         self::assertSame(30, self::sideWidth($at120, Pane::Files, 120));
+    }
+
+    /**
+     * ISS-099: the mirror polarity of the transient case below — a pane the
+     * dock genuinely holds whose side the degradation ladder dropped gets NO
+     * columns (the side paints nothing) instead of the legacy measure, which
+     * used to force a one-cell chrome sliver into bands too narrow to host it.
+     */
+    public function testADockedSideTheLadderDroppedGetsNoColumns(): void
+    {
+        $dock = App::defaultDock()->withSlotAdded(Side::Left, 'tools');
+        $app = App::new($this->provider, 'test-model')->withDock($dock);
+
+        $measured = [];
+        foreach ([200, 120, 100, 80, 70, 60, 50, 40, 30] as $cols) {
+            $measured[$cols] = self::sideWidth($app, Pane::Tools, $cols);
+        }
+
+        // A docked pane answers its resolve region or the ISS-099 zero — the
+        // legacy quarter never re-enters once the dock has been mutated.
+        foreach ($measured as $cols => $width) {
+            $region = $dock->resolve(new Region(0, 0, $cols, 40))->regionFor('tools');
+            self::assertSame(
+                $region?->width ?? 0,
+                $width,
+                "docked side at {$cols} must follow the region, zero when the ladder drops it",
+            );
+        }
+
+        self::assertContains(0, $measured, 'fixture: some narrow band must drop the docked side (the ISS-099 shape)');
     }
 
     public function testASideResolveNeverPlacedFallsBackToTheLegacyMeasure(): void
