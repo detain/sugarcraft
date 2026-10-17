@@ -565,6 +565,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             // clip bound has to seat both the skip and the change sentence.
             "' in: '", "''", "' :'", "' '",
             ' (', ')', "'s'", "'; '",
+            // ISS-090(d): the fold tail's two glue literals. Row-list
+            // plumbing around the named envelopes, same bargain as the ISS-031
+            // joiners above — the COUNT rides the named format's first
+            // conversion; these words only say which rows the count folded.
+            "' (and '", "' more)'",
         ],
     ];
 

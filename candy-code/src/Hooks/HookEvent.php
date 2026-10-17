@@ -7,9 +7,16 @@ namespace SugarCraft\Code\Hooks;
 /**
  * Hook lifecycle events that form the escape hatch for anything a permission mode can't express.
  *
- * Exit codes carry the same three-way meaning across every event:
+ * Exit codes carry the same three-way meaning across every event — the
+ * dispatcher's meaning, which {@see HookDispatcher::dispatch()} resolves
+ * through the per-event properties below. The SCRIPT contract is stricter:
+ * {@see ScriptHook} maps BOTH 1 and 2 to a blocking deny on the live gates
+ * (its class docblock carries the full account), so a `hooks.yaml` hook
+ * exiting 1 stops the call — the non-blocking half below is reachable only
+ * through the `[exit-1]` message prefix, which no shipped hook emits.
  * - 0 (allow): permits the action; stdout may be shown to user or folded into context
- * - 1 (deny): non-blocking deny — stderr shown to user, execution continues
+ * - 1 (deny): non-blocking deny on the dispatcher's contract — stderr shown to user,
+ *   execution continues; a DENY, not a walk-by, on every live script path
  * - 2 (block): hard block; effect is event-specific:
  *   - PreToolUse/Stop/TaskCreated: stops action outright, feeds stderr back to agent
  *   - PostToolUse/SubagentStop/TaskCompleted: action already happened, surfaces via continueOnBlock

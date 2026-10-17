@@ -123,6 +123,56 @@ final class PolicyFreshnessQuarantineTest extends TestCase
         $this->assertContains('day-one', $names, 'first launch after install has no baseline to be surprised by');
     }
 
+    public function testAProjectOnlyDriftArmsTheQuarantineTheUserFilesCannotSee(): void
+    {
+        // ISS-090(a): the git-pull shape. Both user files sit untouched —
+        // their fingerprints cannot arm anything — while the trusted repo's
+        // hooks.yaml gains an entry nobody has seen. Before the fix the new
+        // hook ran on the launch that first discovered it.
+        $this->writeUserHooks("hooks:\n  PreToolUse:\n    - name: from-home\n      command: 'true'\n");
+        $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: old-guard\n      command: 'true'\n");
+        $this->launchHookChain();
+
+        $this->writeProjectHooks(
+            "hooks:\n  PreToolUse:\n"
+            . "    - name: old-guard\n      command: 'true'\n"
+            . "    - name: pulled-in\n      command: 'true'\n"
+        );
+
+        $this->resetFreshnessStatics();
+        $before = \count(Bootstrap::launchNotices());
+        $names = $this->launchHookChain();
+        $notices = \array_slice(Bootstrap::launchNotices(), $before);
+
+        $this->assertNotSame([], $notices, 'project-only drift must still speak through the launch-notice channel');
+        $this->assertStringContainsString(
+            'carries entries the last launch never saw',
+            implode("\n", $notices),
+            'the notice must name the file the operator reviews — the repo copy, not ~/.candy-code'
+        );
+        $this->assertContains('old-guard', $names, 'the seen entry is not the new thing');
+        $this->assertNotContains('pulled-in', $names, 'the unseen entry waits one launch — the whole point');
+
+        // And the next launch honours it: one-launch quarantine, not a veto.
+        $this->resetFreshnessStatics();
+        $this->assertContains('pulled-in', $this->launchHookChain());
+    }
+
+    public function testAnUnchangedSecondLaunchStaysSilentAboutProjectHooks(): void
+    {
+        // The negative half: identity comparison that re-arms on every launch
+        // would quarantine (and announce) the same hook forever.
+        $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: steady\n      command: 'true'\n");
+        $this->launchHookChain();
+
+        $this->resetFreshnessStatics();
+        $before = \count(Bootstrap::launchNotices());
+        $names = $this->launchHookChain();
+
+        $this->assertSame([], \array_slice(Bootstrap::launchNotices(), $before), 'an untouched box must not cry drift');
+        $this->assertContains('steady', $names);
+    }
+
     public function testTheSnapshotRecordsTheEntryIdentitiesTheNextFilterNeeds(): void
     {
         $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: old-guard\n      command: 'true'\n");

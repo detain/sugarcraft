@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+
 /**
  * Core hook dispatcher that executes registered hooks for lifecycle events.
  *
@@ -399,6 +401,17 @@ final class HookDispatcher
             // that judges a call it did not mean to can still allow it (a
             // permitting result does not stop the scan), while a hook that
             // never runs cannot deny anything.
+            //
+            // ISS-090(c): and say it out loud, once per pattern — the byte-
+            // identical wording to HookRegistry's notice means a drain batch
+            // that sees both keeps one row.
+            if (!isset($this->matcherFailures[$pattern])) {
+                RuntimeNoticeSink::warn(sprintf(
+                    'A hook matcher could not be evaluated: %s (%s). The hook was treated as matching, so its guard still judged this call — narrow the matcher.',
+                    $pattern,
+                    preg_last_error_msg(),
+                ));
+            }
             $this->matcherFailures[$pattern] = preg_last_error_msg();
 
             return true;
@@ -418,7 +431,9 @@ final class HookDispatcher
      * is reached mid-session on a tool call, where the TUI owns the screen and
      * a stderr line lands inside a frame the renderer believes it owns. "Your
      * matcher is too expensive to evaluate" is not something the user can act
-     * on if nobody records it.
+     * on if nobody records it — and since ISS-090(c) the first failure of each
+     * pattern is also pushed through {@see RuntimeNoticeSink::warn()}, so the
+     * record is not the whole of the telling.
      *
      * @return array<string, string>
      */

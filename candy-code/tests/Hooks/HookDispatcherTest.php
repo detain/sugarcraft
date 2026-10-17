@@ -426,6 +426,11 @@ final class HookDispatcherTest extends TestCase
             $this->createHardBlockHook('CatastrophicHook', HookEvent::PreToolUse, 'x', '(a+)+$'),
         );
 
+        // ISS-090(c): arm the sink so the once-per-pattern notice this
+        // dispatch now emits is captured, not printed.
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::reset();
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::arm(crossFork: false);
+
         $limit = ini_get('pcre.backtrack_limit');
         ini_set('pcre.backtrack_limit', '100');
 
@@ -436,6 +441,7 @@ final class HookDispatcherTest extends TestCase
             );
         } finally {
             ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+            \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::reset();
         }
 
         $this->assertTrue($result->isBlock(), 'a guard that cannot be evaluated must still get to judge the call');

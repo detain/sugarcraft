@@ -44,7 +44,9 @@ use SugarCraft\Code\Support\ToolIpcFiles;
  * `$hookResult->message` only into `"Hook denied: …"`. MEASURED at afe3c26b:
  * a hook printing 200,000 bytes and exiting 0 produced a message of 0 bytes at
  * `HookManager::preToolUse()`. It survives only through {@see HookDispatcher},
- * which nothing in `src/` constructs.
+ * which the launch builds via {@see HookManager::dispatcher()} and
+ * `Bootstrap::hooks()` hands to `TeamManager::useLaunchHooks` for the team
+ * chain — a path this class's own gates do not take.
  *
  * 0/1/2 are NOT this class's invention and were NOT free to renumber: they are
  * already the documented, tested contract of {@see HookDispatcher} and
@@ -105,8 +107,10 @@ final readonly class ScriptHook implements BoundedHookInterface
      * {@see \SugarCraft\Code\Chat::gateToolCall()} and
      * {@see \SugarCraft\Code\Runtime::gate()} — reach this class
      * synchronously through {@see HookManager::preToolUse()} before any tool
-     * call runs. (NOT through {@see HookDispatcher}, which nothing in this
-     * package constructs.) So a hook that never finishes is not a slow hook —
+     * call runs. (The {@see HookDispatcher} — built by
+     * {@see HookManager::dispatcher()} for the team-hook chain — is a different
+     * path; neither gate above reaches this class through it.) So a hook that
+     * never finishes is not a slow hook —
      * it is a frozen CLI, with no spinner, no Escape and no recovery. Until this there was no bound of any kind: the drain's
      * `stream_select()` was passed a NULL timeout, and `proc_close()` below it
      * WAITS, so both halves were unbounded independently. MEASURED at
@@ -228,6 +232,27 @@ final readonly class ScriptHook implements BoundedHookInterface
      *   docblock. It is left as-is because there is no exposure to fix, not
      *   because its size is "what the author chose to emit".
      */
+    /**
+     * ISS-090(d): the drain's byte ceiling PER STREAM.
+     *
+     * Every downstream bound in this class clips what a verdict CARRIES —
+     * deny reasons, ask questions, context notes. None of them clipped what a
+     * hook PRINTS while the pump is still reading: a wedged-but-chatty hook
+     * (a build loop on stdout, an argparse stack trace repeating on a stuck
+     * retry) grew `$buffers` until the process ran out of memory long before
+     * the deadline could answer it, and the deadline itself bounds the WAIT,
+     * not the VOLUME inside it — a hook writing 40 MB within the window landed
+     * whole. 1 MiB is generously above every envelope a real hook ships (the
+     * rewrite ceiling below is two orders of magnitude smaller), so what this
+     * cuts off is runaway output, not content.
+     *
+     * A cut on stdout is fail-CLOSED by construction: JSON truncated at the
+     * cap does not decode, and {@see envelope()} answers such an output with
+     * null — the same existing path as a partial write from an interrupted
+     * select. The verdict still comes from the exit code.
+     */
+    private const MAX_DRAIN_BYTES = 1_048_576;
+
     private const MAX_DENY_REASON_BYTES = 16384;
 
     /**
@@ -311,6 +336,13 @@ final readonly class ScriptHook implements BoundedHookInterface
         'additionalContext',
         'updatedInput',
         'hookSpecificOutput',
+        // ISS-090(e): Claude Code's two display keys. Before they were known,
+        // `{"suppressOutput": true}` matched NOTHING below, failed the bar in
+        // allowOrEnvelope(), and fell through as a PLAIN NOTE — the JSON text
+        // itself reaching the model as additionalContext, which is precisely
+        // the output the hook had just asked to suppress.
+        'suppressOutput',
+        'systemMessage',
     ];
 
     /**
@@ -1083,6 +1115,13 @@ final readonly class ScriptHook implements BoundedHookInterface
      * by returning short, because {@see execute()} has to KILL the child on
      * that path and cannot infer it from the buffers.
      *
+     * AND VOLUME IS BOUNDED TOO — ISS-090(d): reads go through a capture that
+     * stops at {@see MAX_DRAIN_BYTES} per stream and counts the refused bytes;
+     * every way out of this method stamps a constant-size marker naming both
+     * figures when anything was dropped. Returning short on the cut is
+     * deliberate and safe the same way a deadline expiry is: the verdict comes
+     * from the exit code, and a truncated envelope fails closed.
+     *
      * @param resource $stdout
      * @param resource $stderr
      * @param float $deadline instant on this hook's clock (see {@see self::$clock})
@@ -1106,6 +1145,43 @@ final readonly class ScriptHook implements BoundedHookInterface
 
         try {
             $buffers = ['', ''];
+            // Bytes refused for the slot because the cap was reached — the
+            // marker counts them so the user learns the buffer is a window,
+            // not the whole file.
+            $dropped = [0, 0];
+
+            $capture = static function (int $slot, string $bytes) use (&$buffers, &$dropped): void {
+                $room = self::MAX_DRAIN_BYTES - strlen($buffers[$slot]);
+
+                if ($room >= strlen($bytes)) {
+                    $buffers[$slot] .= $bytes;
+
+                    return;
+                }
+
+                if ($room > 0) {
+                    $buffers[$slot] .= substr($bytes, 0, $room);
+                }
+
+                $dropped[$slot] += strlen($bytes) - max(0, $room);
+            };
+
+            // The marker is constant-size and stamped once per stream, so a
+            // sealed buffer is bounded by cap + marker and the loop below
+            // cannot be re-entered past the cap by the stamp itself.
+            $seal = static function () use (&$buffers, &$dropped): void {
+                foreach ($dropped as $slot => $count) {
+                    if ($count > 0) {
+                        $buffers[$slot] .= sprintf(
+                            ' … [hook output capped at %d bytes; %d further bytes dropped]',
+                            self::MAX_DRAIN_BYTES,
+                            $count,
+                        );
+                        $dropped[$slot] = 0;
+                    }
+                }
+            };
+
             $open = [0 => $stdout, 1 => $stderr];
             $failures = 0;
 
@@ -1125,9 +1201,11 @@ final readonly class ScriptHook implements BoundedHookInterface
                     foreach ($open as $slot => $pipe) {
                         $rest = @stream_get_contents($pipe);
                         if (is_string($rest)) {
-                            $buffers[$slot] .= $rest;
+                            $capture($slot, $rest);
                         }
                     }
+
+                    $seal();
 
                     return [$buffers[0], $buffers[1], true];
                 }
@@ -1156,7 +1234,7 @@ final readonly class ScriptHook implements BoundedHookInterface
                         foreach ($open as $slot => $pipe) {
                             $rest = @stream_get_contents($pipe);
                             if (is_string($rest)) {
-                                $buffers[$slot] .= $rest;
+                                $capture($slot, $rest);
                             }
                         }
 
@@ -1214,9 +1292,11 @@ final readonly class ScriptHook implements BoundedHookInterface
                         continue;
                     }
 
-                    $buffers[$slot] .= $chunk;
+                    $capture($slot, $chunk);
                 }
             }
+
+            $seal();
 
             return [$buffers[0], $buffers[1], false];
         } finally {
@@ -1371,7 +1451,10 @@ final readonly class ScriptHook implements BoundedHookInterface
      * `continue` + `stopReason`, `additionalContext` and `updatedInput`, each
      * also accepted under `hookSpecificOutput` (where `permissionDecision` /
      * `permissionDecisionReason` spell the first two, and win over the
-     * top-level spelling — Claude Code's own precedence). Every field is the
+     * top-level spelling — Claude Code's own precedence). The display keys
+     * `suppressOutput` and `systemMessage` join the qualifying set since
+     * ISS-090(e), top-level only — see {@see fromEnvelope()} for what each is
+     * honoured with here. Every field is the
      * JSON twin of an exit code this class already honours, so the envelope
      * adds no verdict the exit codes could not reach: `deny` is exit 2,
      * `ask` exit 3, `updatedInput` exit 4, `additionalContext` exit 0's note.
@@ -1487,12 +1570,20 @@ final readonly class ScriptHook implements BoundedHookInterface
         $note = $field('additionalContext', 'additionalContext');
         $updated = $field('updatedInput', 'updatedInput');
 
+        // ISS-090(e): TOP LEVEL ONLY — Claude Code documents both as envelope
+        // fields, not hookSpecificOutput ones, and reading them through
+        // $field() would invent a per-tool spelling the spec does not carry.
+        $suppress = $envelope->suppressOutput ?? null;
+        $systemMessage = $envelope->systemMessage ?? null;
+
         $typed = [
             'continue' => [$continue, 'bool'],
             'stopReason' => [$stopReason, 'string'],
             'decision' => [$decision, 'string'],
             'reason' => [$reason, 'string'],
             'additionalContext' => [$note, 'string'],
+            'suppressOutput' => [$suppress, 'bool'],
+            'systemMessage' => [$systemMessage, 'string'],
         ];
         foreach ($typed as $key => [$value, $type]) {
             if ($value !== null && get_debug_type($value) !== $type) {
@@ -1537,6 +1628,18 @@ final readonly class ScriptHook implements BoundedHookInterface
                 $reason !== '' ? self::clip($reason, self::MAX_DENY_REASON_BYTES)
                     : "Hook {$this->name} blocked the call",
             );
+        }
+
+        // ISS-090(e): `suppressOutput: true` kills the hook's stdout. Our only
+        // stdout-borne surface is the additional-context note; the deny reason
+        // and the ask question are verdicts, not output, and Claude Code's own
+        // renderer keeps showing those. `systemMessage` — HONORED BY REMOVAL:
+        // a human-directed string with no human surface in this pipeline (no
+        // UI prints a HookResult field that is neither verdict nor model
+        // context), and half-shipping it into the model context would show the
+        // human note to exactly the party it was not written for.
+        if ($suppress === true) {
+            $note = null;
         }
 
         $context = HookContextFiles::bound(trim((string) $note), HookResult::MAX_ADDITIONAL_CONTEXT_BYTES);

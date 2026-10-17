@@ -584,6 +584,95 @@ final class ScriptHookTest extends TestCase
     }
 
     /**
+     * ISS-090(d): THE DRAIN ITSELF IS BOUNDED.
+     *
+     * {@see testALargeStderrMessageSurvivesTheDrainAndIsThenClipped} proves the
+     * downstream clip counts what the drain delivered; nothing bounded what the
+     * drain would deliver. 130 × 8 KiB on stdout: the buffer stops at exactly
+     * MAX_DRAIN_BYTES — a whole number of reads, so the refused figure is the
+     * two chunks never let in — and the stamp names both. The reflection is
+     * deliberate: every downstream clip would hide the raw cap behind its own
+     * marker, and the whole point of this cap is the RAW volume that reaches
+     * those clips.
+     */
+    public function testTheDrainStopsAtTheByteCapAndStampsWhatItRefused(): void
+    {
+        $hook = new ScriptHook('cap_hook', HookEvent::PreToolUse, '.*', 'true', '');
+        $drain = new \ReflectionMethod($hook, 'drain');
+
+        $pipes = [];
+        $proc = proc_open(
+            [PHP_BINARY, '-r', 'for ($i = 0; $i < 130; ++$i) { echo str_repeat("A", 8192); }'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        fclose($pipes[0]);
+
+        try {
+            [$stdout, $stderr, $timedOut] = $drain->invoke($hook, $pipes[1], $pipes[2], microtime(true) + 15.0);
+        } finally {
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+        }
+
+        $this->assertFalse($timedOut, 'the cap is not a deadline and must not report one');
+        $this->assertSame('', $stderr);
+        $marker = ' … [hook output capped at 1048576 bytes; 16384 further bytes dropped]';
+        $this->assertStringStartsWith(str_repeat('A', 4096), $stdout);
+        $this->assertStringEndsWith($marker, $stdout);
+        $this->assertSame(
+            1048576 + \strlen($marker),
+            \strlen($stdout),
+            'the kept window plus one constant-size stamp — the stamp itself must not reopen the cap',
+        );
+    }
+
+    // ISS-090(e): Claude Code's display keys must not fall through as notes.
+
+    public function testASuppressOutputEnvelopeAloneIsHonouredNotForwardedAsANote(): void
+    {
+        $result = $this->runHookBounded('printf %s \'{"suppressOutput":true}\'');
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertSame('', $result['additionalContext'], 'the JSON text of a suppression request reached the model as context — the exact leak ISS-090(e) is about');
+    }
+
+    public function testSuppressOutputDropsTheNoteAndSystemMessageNeverReachesTheModel(): void
+    {
+        $result = $this->runHookBounded('printf %s \'{"suppressOutput":true,"systemMessage":"ask the human","additionalContext":"a note anyway"}\'');
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertSame('', $result['additionalContext']);
+        $this->assertStringNotContainsString('ask the human', $result['message']);
+    }
+
+    public function testASystemMessageEnvelopeIsStrippedNotForwarded(): void
+    {
+        $result = $this->runHookBounded('printf %s \'{"systemMessage":"human only"}\'');
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertSame('', $result['additionalContext'], 'a human-directed string has no surface here and must not borrow the model\'s');
+    }
+
+    public function testSuppressOutputFalseKeepsTheNote(): void
+    {
+        $result = $this->runHookBounded('printf %s \'{"suppressOutput":false,"additionalContext":"seen"}\'');
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertSame('seen', $result['additionalContext'], 'false suppresses nothing');
+    }
+
+    public function testANonBooleanSuppressOutputDeniesLikeOtherMalformedEnvelopes(): void
+    {
+        $result = $this->runHookBounded('printf %s \'{"suppressOutput":"yes"}\'');
+
+        $this->assertSame('deny', $result['action']);
+        $this->assertStringContainsString('"suppressOutput" must be a boolean', $result['message']);
+    }
+
+    /**
      * A deny reason that FITS is not touched — the clip must not be a tax on
      * every hook that explains itself.
      */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Support\HookContextFiles;
 
 final class HookRegistry
@@ -35,6 +36,21 @@ final class HookRegistry
     private const RESERVED = [
         BuiltIn\PermissionGateHook::NAME => [BuiltIn\PermissionGateHook::class, 'the permission gate'],
         BuiltIn\SubAgentGrantHook::NAME => [BuiltIn\SubAgentGrantHook::class, "a sub-agent's tool grant"],
+        // ISS-090(b): the four EngineBackend registers per turn on the SAME
+        // manager the yaml script-hook chain loads into (or into the manager
+        // resolveHookManager shares with it). A project hooks.yaml entry
+        // claiming one of these names is not an author choosing a pun — the
+        // registry keys by name, so the arrival can shadow the guard it
+        // copies the name of. The names are cheap; the guard being silenced
+        // is not. BashEscapeDenyHook carries no NAME constant (its name() is
+        // the literal), so its row spells the key it answers to.
+        BuiltIn\RepeatCallGuardHook::NAME => [BuiltIn\RepeatCallGuardHook::class, 'the repeat-call guard'],
+        BuiltIn\RepeatCallCountHook::NAME => [BuiltIn\RepeatCallCountHook::class, 'the repeat-call counter'],
+        'bash-escape-deny' => [BuiltIn\BashEscapeDenyHook::class, 'the bash-escape breaker'],
+        \SugarCraft\Code\Context\Pruning\CompressPreviewHook::NAME => [
+            \SugarCraft\Code\Context\Pruning\CompressPreviewHook::class,
+            'the compaction preview',
+        ],
     ];
 
     /** @var array<string, bool> disabled hooks */
@@ -226,7 +242,26 @@ final class HookRegistry
         // The failure is also kept rather than swallowed, because "your matcher
         // is too expensive to evaluate" is not something the user can act on if
         // nobody records it — see {@see matcherFailures()}.
+        //
+        // ISS-090(c): recording was only half the duty. `matcherFailures()`
+        // had no caller in src/ — the user could ship a pathological matcher,
+        // watch it fail-open into "treated as matching" on every guarded call,
+        // and never hear a word. So the FIRST failure of each pattern also
+        // rides {@see RuntimeNoticeSink::warn()} — the per-turn notice drain
+        // that lands in the transcript, the same channel
+        // {@see \SugarCraft\Code\Hooks\BuiltIn\AuditHook} warns through (its
+        // :737 argument applies verbatim here: a mid-session warning is a
+        // notice, not a raw frame write). Once per pattern per registry,
+        // because a matcher that fails once fails on every later match and a
+        // notice per tool call is wallpaper.
         if ($matched === false) {
+            if (!isset($this->matcherFailures[$pattern])) {
+                RuntimeNoticeSink::warn(sprintf(
+                    'A hook matcher could not be evaluated: %s (%s). The hook was treated as matching, so its guard still judged this call — narrow the matcher.',
+                    $pattern,
+                    preg_last_error_msg(),
+                ));
+            }
             $this->matcherFailures[$pattern] = preg_last_error_msg();
 
             return true;
@@ -244,7 +279,9 @@ final class HookRegistry
      * this is reached mid-session, on a tool call, where the TUI owns the
      * screen and a stderr line lands inside a frame the renderer believes it
      * owns. A doctor report or a debug pane can ask; the frame is not written
-     * to.
+     * to. The first failure of each pattern is additionally pushed through
+     * {@see RuntimeNoticeSink::warn()} — ISS-090(c) closed the gap where this
+     * map was the whole of the telling and nobody asked it.
      *
      * @return array<string, string>
      */

@@ -125,9 +125,10 @@ returns `false` — not `0` — when PCRE exhausts `pcre.backtrack_limit` or
 name does exactly that. `HookRegistry::matcherMatches()` reads that as
 **matching**: the hook runs and gets to deny, because treating an
 unevaluable guard as satisfied is the one failure mode a guard must not have.
-The pattern and the PCRE error are kept on `HookRegistry::matcherFailures()` —
-recorded, not printed, because the match happens mid-frame where the renderer
-owns the screen.
+The pattern and the PCRE error are kept on `HookRegistry::matcherFailures()`,
+and the first failure of each pattern is announced once through the same
+per-turn notice drain `/notices` reads (ISS-090(c)) — announced, never printed
+raw, because the match happens mid-frame where the renderer owns the screen.
 
 ### A loaded hook may only add to the chain
 

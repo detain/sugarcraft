@@ -591,6 +591,20 @@ final class Bootstrap
     public const FOREIGN_PRESET_CHANGE_NOTICE_FORMAT = 'imported %d foreign agent file%s with changes: %s';
 
     /**
+     * ISS-090(d): how many per-file rows either foreign-preset notice lists.
+     *
+     * The merged skip+change line already fights {@see
+     * FOREIGN_PRESET_SKIP_NOTICE_FORMAT}'s clip — ISS-088 had to de-duplicate
+     * paths inside each row to keep the second sentence alive — and a bad
+     * tier directory is bad for EVERY file in it: sixty rows is a wall no
+     * launch notice survives being read. The byte clip bounds one line; this
+     * bounds the COUNT, and the envelope still reports the true totals ("N
+     * files" keeps counting everything, and the tail names what was folded).
+     * Ten matches the row budget of the narrowed-grant launch notices.
+     */
+    private const FOREIGN_PRESET_NOTICE_ROWS = 10;
+
+    /**
      * The tail row {@see launchNotices()} synthesises when this launch raised
      * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
      *
@@ -2965,8 +2979,13 @@ final class Bootstrap
         $notice = null;
         $skipped = $registry->skippedFiles();
         if ($skipped !== []) {
+            // ISS-090(d): the row cap folds the tail into one honest count
+            // by CONCATENATION — a new sprintf site here would re-open the
+            // launch-format census that every Bootstrap notice must pass.
             $rows = [];
-            foreach ($skipped as $path => $why) {
+            $skippedShown = 0;
+            foreach (array_slice($skipped, 0, self::FOREIGN_PRESET_NOTICE_ROWS, true) as $path => $why) {
+                ++$skippedShown;
                 $why = str_starts_with($why, $path . ': ')
                     ? substr($why, \strlen($path) + 2)
                     // ISS-088: the foreign parser's messages END with the path
@@ -2978,21 +2997,25 @@ final class Bootstrap
                 $rows[] = "{$path} ({$why})";
             }
 
+            $skippedRest = \count($skipped) - $skippedShown;
+
             $notice = sprintf(
                 self::translated(self::FOREIGN_PRESET_SKIP_NOTICE_FORMAT),
                 \count($skipped),
                 \count($skipped) === 1 ? '' : 's',
-                implode('; ', $rows),
+                implode('; ', $rows) . ($skippedRest > 0 ? ' (and ' . $skippedRest . ' more)' : ''),
             );
         }
 
         $warned = $registry->warnings();
         if ($warned !== []) {
+            $warnedShown = array_slice($warned, 0, self::FOREIGN_PRESET_NOTICE_ROWS);
+            $warnedRest = \count($warned) - \count($warnedShown);
             $changeNotice = sprintf(
                 self::translated(self::FOREIGN_PRESET_CHANGE_NOTICE_FORMAT),
                 \count($warned),
                 \count($warned) === 1 ? '' : 's',
-                implode('; ', $warned),
+                implode('; ', $warnedShown) . ($warnedRest > 0 ? ' (and ' . $warnedRest . ' more)' : ''),
             );
             $notice = $notice === null ? $changeNotice : $notice . ' ' . $changeNotice;
         }
@@ -4809,15 +4832,6 @@ final class Bootstrap
         $currentConfig = PolicySnapshot::fingerprint($userConfigPath);
         $currentHooks = PolicySnapshot::fingerprint($userHooksPath);
 
-        $changed = $previous !== null
-            && ($currentConfig !== $previous['userConfig'] || $currentHooks !== $previous['userHooks']);
-
-        self::$policyChanged = $changed;
-        self::$policyPreviousProjectHooks = $changed ? $previous['projectHooks'] : [];
-        self::$policyPreviousTrustedRoots = $changed && is_array($previous['trustedRoots'] ?? null)
-            ? $previous['trustedRoots']
-            : [];
-
         $trustedRoots = self::trustedProjectHookRoots(self::permissionConfig());
         $projectHookIdentities = [];
         foreach ($trustedRoots as $root) {
@@ -4836,6 +4850,29 @@ final class Bootstrap
             ));
         }
 
+        $userChanged = $previous !== null
+            && ($currentConfig !== $previous['userConfig'] || $currentHooks !== $previous['userHooks']);
+
+        // ISS-090(a): a trusted repo's hooks.yaml GAINING entries is exactly
+        // the event the entry filter exists for, and it used to arm nothing —
+        // the fingerprints covered only the user's two files, so the hook a
+        // `git pull` walked in ran on the very launch that first saw it. The
+        // identities the next filter needs were already being recorded; the
+        // decision simply never read them. Comparing whole identity maps
+        // (not "did the file appear") also covers a REMOVED entry changing
+        // the list, which is harmless to quarantine but keeps the snapshot
+        // honest about what changed.
+        $projectHooksChanged = $previous !== null
+            && $projectHookIdentities !== ($previous['projectHooks'] ?? []);
+
+        $changed = $userChanged || $projectHooksChanged;
+
+        self::$policyChanged = $changed;
+        self::$policyPreviousProjectHooks = $changed ? ($previous['projectHooks'] ?? []) : [];
+        self::$policyPreviousTrustedRoots = $changed && is_array($previous['trustedRoots'] ?? null)
+            ? $previous['trustedRoots']
+            : [];
+
         PolicySnapshot::write($configDir, [
             'version' => PolicySnapshot::VERSION,
             'userConfig' => $currentConfig,
@@ -4845,15 +4882,23 @@ final class Bootstrap
         ]);
 
         if ($changed) {
-            self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.policy_changed'));
+            // One seam call still (the census counts call sites, not keys):
+            // the project-only drift names the file the operator actually
+            // needs to review, which is in the repo, not in ~/.candy-code.
+            self::warnPermissionConfigInTranscript(Lang::t(
+                $projectHooksChanged && !$userChanged
+                    ? 'appLaunch.notice.project_policy_changed'
+                    : 'appLaunch.notice.policy_changed'
+            ));
         }
     }
 
     /**
      * Whether THIS launch is quarantining freshly-seen project policy
      * (rv-sec-3). True only when the last launch's snapshot exists and the
-     * user's config.json or hooks.yaml hashed differently — see
-     * {@see checkPolicyFreshness()}.
+     * user's config.json or hooks.yaml hashed differently, or a trusted
+     * project's hooks.yaml carries identities the last launch never saw —
+     * see {@see checkPolicyFreshness()}.
      */
     private static function policyQuarantineActive(): bool
     {

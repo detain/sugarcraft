@@ -162,6 +162,63 @@ final class ForeignAgentPresetNoticeTest extends TestCase
     }
 
     /**
+     * ISS-090(d): THIRTEEN VANISHED FILES ARE REPORTED AS THIRTEEN, NOT AS A
+     * WALL. The envelope counts everything; the listing draws at most ten rows
+     * and names the fold. The three hidden names are the discriminator that
+     * survives the byte clip: without the row cap they would sit inside the
+     * kept tail window, and with it they exist nowhere in the row.
+     */
+    public function testTheSkipNoticeListsTenRowsAndNamesTheRestByCount(): void
+    {
+        $repo = $this->tempDir . '/repo';
+        $agents = $repo . '/.claude/agents';
+        mkdir($agents, 0755, true);
+        for ($i = 1; $i <= 13; ++$i) {
+            $this->writeRaw($agents, sprintf('f%02d', $i), "no frontmatter\n");
+        }
+
+        $this->withSandboxedHome(function () use ($repo): void {
+            $notices = $this->noticesRaisedBy(function () use ($repo): void {
+                Bootstrap::foreignAgentPresets($repo);
+            });
+
+            $this->assertStringContainsString('skipped 13 foreign agent files: ', $notices, 'the envelope counts every file, not every row');
+            $this->assertStringContainsString('(and 3 more)', $notices, 'the fold must be named, not silent');
+            $this->assertStringContainsString('f01.md', $notices);
+            foreach (['f11.md', 'f12.md', 'f13.md'] as $folded) {
+                $this->assertStringNotContainsString($folded, $notices, "row {$folded} belongs to the count, not to the listing");
+            }
+        });
+    }
+
+    /** Same cap, same honest tail, on the changes envelope. */
+    public function testTheChangeNoticeListsTenRowsAndNamesTheRestByCount(): void
+    {
+        $repo = $this->tempDir . '/repo';
+        $agents = $repo . '/.claude/agents';
+        mkdir($agents, 0755, true);
+        for ($i = 1; $i <= 12; ++$i) {
+            $this->writeForeignAgent(
+                $agents,
+                sprintf('w%02d', $i),
+                "description: Lossy {$i}\nmcpServers:\n  sv" . sprintf('%02d', $i) . ":\n    command: npx",
+            );
+        }
+
+        $this->withSandboxedHome(function () use ($repo): void {
+            $notices = $this->noticesRaisedBy(function () use ($repo): void {
+                Bootstrap::foreignAgentPresets($repo);
+            });
+
+            $this->assertStringContainsString('imported 12 foreign agent files with changes: ', $notices);
+            $this->assertStringContainsString('(and 2 more)', $notices);
+            foreach (['sv11', 'sv12'] as $folded) {
+                $this->assertStringNotContainsString($folded, $notices, "warning {$folded} belongs to the count, not to the listing");
+            }
+        });
+    }
+
+    /**
      * @param callable():void $body
      */
     private function withSandboxedHome(callable $body): void

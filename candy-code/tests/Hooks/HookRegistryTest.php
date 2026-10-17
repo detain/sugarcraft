@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Hooks;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Hooks\HookConfig;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
@@ -272,6 +273,11 @@ final class HookRegistryTest extends TestCase
         $hook = $this->createHook('CatastrophicHook', HookEvent::PreToolUse, 'x', '(a+)+$');
         $this->registry->register($hook);
 
+        // ISS-090(c): the first failure also rides the notice sink; arm and
+        // drain so this test observes its own records, not the console.
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(crossFork: false);
+
         $limit = ini_get('pcre.backtrack_limit');
         ini_set('pcre.backtrack_limit', '100');
 
@@ -279,6 +285,7 @@ final class HookRegistryTest extends TestCase
             $matches = $this->registry->findMatches('PreToolUse', str_repeat('a', 40) . 'b');
         } finally {
             ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+            RuntimeNoticeSink::reset();
         }
 
         $this->assertCount(1, $matches, 'a guard that cannot be evaluated must still get to judge the call');
@@ -287,9 +294,46 @@ final class HookRegistryTest extends TestCase
         $this->assertNotSame('No error', $this->registry->matcherFailures()['(a+)+$']);
     }
 
-    /** The failure log stays empty when every matcher evaluates normally. */
-    public function testMatcherFailuresIsEmptyWhenNothingFails(): void
+    /**
+     * ISS-090(c): RECORDING MUST REACH THE USER.
+     *
+     * `matcherFailures()` had no caller in src/, so the fail-closed path above
+     * was silent by a different door than the fail-open it replaced: recorded,
+     * never shown. The first failure of each pattern now also rides
+     * RuntimeNoticeSink::warn() — the per-turn transcript notice drain — and a
+     * matcher that fails on every call is announced exactly once, not once per
+     * tool call.
+     */
+    public function testTheFirstFailureOfAMatcherSurfacesAsANoticeExactlyOnce(): void
     {
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(crossFork: false);
+
+        try {
+            $this->registry->register($this->createHook('LoudFailureHook', HookEvent::PreToolUse, 'x', '(a+)+$'));
+
+            $limit = ini_get('pcre.backtrack_limit');
+            ini_set('pcre.backtrack_limit', '100');
+
+            try {
+                $subject = str_repeat('a', 40) . 'b';
+                $this->registry->findMatches('PreToolUse', $subject);
+                $this->registry->findMatches('PreToolUse', $subject);
+            } finally {
+                ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+            }
+
+            $rows = RuntimeNoticeSink::drain();
+            $this->assertCount(1, $rows, 'the second failure of the same matcher must not repeat the notice');
+            $this->assertStringContainsString('(a+)+$', $rows[0]);
+            $this->assertStringContainsString('treated as matching', $rows[0]);
+        } finally {
+            RuntimeNoticeSink::reset();
+        }
+    }
+
+    /** The failure log stays empty when every matcher evaluates normally. */
+    public function testMatcherFailuresIsEmptyWhenNothingFails(): void    {
         $this->registry->register($this->createHook('OrdinaryHook', HookEvent::PreToolUse, 'Read', '^Read$'));
         $this->registry->findMatches('PreToolUse', 'Read');
 

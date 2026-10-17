@@ -141,8 +141,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-TWO
- *     of them, in FOURTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-FOUR
+ *     of them, in SIXTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -611,6 +611,14 @@ final class StderrEmitterCensusTest extends TestCase
         // Round 49, lane b (E345): the once-per-process notice for a refused audit
         // write. One call site behind a latch, so it is one row and stays one.
         'src/Hooks/BuiltIn/AuditHook.php' => 1,
+        // ISS-090(c): the first PCRE evaluation failure of each matcher
+        // pattern announces itself where the user can act on it — the same
+        // per-turn notice drain AuditHook above uses (a match happens
+        // mid-frame; a raw line would land inside a frame the renderer owns).
+        // Latched per pattern per object, so the row is one SITE regardless
+        // of how often the pathological matcher is exercised.
+        'src/Hooks/HookDispatcher.php' => 1,
+        'src/Hooks/HookRegistry.php' => 1,
         // X-31a / audit 15a A4: the end-of-stream tool-call flush's two drop
         // warnings (never-streamed payload on a truncated end; arguments that
         // are not a complete JSON object), in the streamed tool-call
