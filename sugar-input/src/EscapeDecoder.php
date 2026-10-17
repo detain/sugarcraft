@@ -463,7 +463,7 @@ final class EscapeDecoder
             // keypad as SS3 letters. ansicode.txt:742-753 pins the table: Op..Oy
             // are digits 0..9, Ol the decimal separator (labelled "COMMA on keypad"
             // on the VT100, the modern kp_decimal), Om minus. A stateless decoder
-            // cannot track DECKPAM itself (candy-input models no DEC modes), but the
+            // cannot track DECKPAM itself (sugar-input models no DEC modes), but the
             // ESC O <letter> frames are unambiguous, so decoding them is always
             // correct regardless of whether the host toggled the mode. Frames beyond
             // this table (e.g. ESC O n / ESC O o) are not VT100 keypad codes and stay

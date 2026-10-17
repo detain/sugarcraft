@@ -474,7 +474,7 @@ IPv6) in the net box (via `getifaddrs`).
 **Verdict: ADOPT (P-F; layout math in FrameBuilder).**
 - `FrameBuilder` reads the percent and clamps it to the computed min and max widths for mem/net and proc
   (btop minimums: proc 44, mem/net 36) without mutating the stored value.
-- Keys go through candy-input kitty/CSI modifiers. Verify that Shift and Alt+Shift arrows decode on the
+- Keys go through sugar-input kitty/CSI modifiers. Verify that Shift and Alt+Shift arrows decode on the
   supported terminals; legacy xterm sends `\e[1;2D` and `\e[1;4D`.
 - Size S-M.
 - *Config:*

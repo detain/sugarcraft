@@ -9,7 +9,7 @@ skips/flake), `5f33c4b7` (sugar-mouse contains, candy-wish StreamHelper
 + pid()), `1920988f`/`09546125` (candy-git-server auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-scriptui), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
-candy-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
+sugar-input paste-EOF hang), `1050caf5` (candy-sql), `41b47d9a`
 (candy-pty). candy-sprinkles plan items were all verified
 misreferenced/N-A (see plan_candy-sprinkles.md annotations).
 Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
@@ -490,18 +490,18 @@ cd ../candy-git-server && composer install --quiet && vendor/bin/phpunit 2>&1 | 
 
 ### Group 1-C (3 agents)
 
-#### 1.16 🟡 candy-input: Shift+scroll tests missing (Item 1.1)
+#### 1.16 🟡 sugar-input: Shift+scroll tests missing (Item 1.1)
 
-**Plan:** `findings/plan_candy-input.md` — Item 1.1
+**Plan:** `findings/plan_sugar-input.md` — Item 1.1
 **Fix:** Add `testShiftScrollUp` and `testShiftScrollDown` to `EscapeDecoderTest.php`
-**Files:** `candy-input/tests/EscapeDecoderTest.php`
+**Files:** `sugar-input/tests/EscapeDecoderTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 1.17 🟡 candy-input: equals() docblock missing (Item 2.3)
+#### 1.17 🟡 sugar-input: equals() docblock missing (Item 2.3)
 
-**Plan:** `findings/plan_candy-input.md` — Item 2.3
+**Plan:** `findings/plan_sugar-input.md` — Item 2.3
 **Fix:** Add docblock to `KeyModifier::equals()` explaining why it exists despite `===` working for value comparison
-**Files:** `candy-input/src/KeyModifier.php:159-162`
+**Files:** `sugar-input/src/KeyModifier.php:159-162`
 **Agent:** Same coder agent as 1.16 (grouped — same lib)
 
 #### 1.18 🟡 sugar-colorprofile: No DetectionChain (Items 1.1-1.8)
@@ -967,29 +967,29 @@ Same branch/PR check as Phase 0/1.
 **Files:** `candy-testing/tests/Concerns/TemporaryDirectoryTrait.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 3.17 🟢 candy-input: EscapeDecoderOptions (Item 4.1)
+#### 3.17 🟢 sugar-input: EscapeDecoderOptions (Item 4.1)
 
-**Plan:** `findings/plan_candy-input.md` — Item 4.1
+**Plan:** `findings/plan_sugar-input.md` — Item 4.1
 **Fix:** Create `EscapeDecoderOptions.php` for protocol filtering
-**Files:** `candy-input/src/EscapeDecoderOptions.php` (new)
+**Files:** `sugar-input/src/EscapeDecoderOptions.php` (new)
 **Agent:** Same coder agent as 3.16 (grouped — same lib)
 
-#### 3.18 🟢 candy-input: ReactInputDriver (Item 4.2)
+#### 3.18 🟢 sugar-input: ReactInputDriver (Item 4.2)
 
-**Plan:** `findings/plan_candy-input.md` — Item 4.2
+**Plan:** `findings/plan_sugar-input.md` — Item 4.2
 **Fix:** Create `ReactInputDriver.php` wrapping ReactPHP streams
-**Files:** `candy-input/src/Driver/ReactInputDriver.php` (new)
+**Files:** `sugar-input/src/Driver/ReactInputDriver.php` (new)
 **Agent:** Same coder agent as 3.16 (grouped — same lib)
 
 ---
 
 ### Group 3-D (3 agents)
 
-#### 3.19 🟢 candy-input: SignalResizeDriver (Item 4.3)
+#### 3.19 🟢 sugar-input: SignalResizeDriver (Item 4.3)
 
-**Plan:** `findings/plan_candy-input.md` — Item 4.3
+**Plan:** `findings/plan_sugar-input.md` — Item 4.3
 **Fix:** Create `SignalResizeDriver.php` for SIGWINCH-based resize detection
-**Files:** `candy-input/src/Driver/SignalResizeDriver.php` (new)
+**Files:** `sugar-input/src/Driver/SignalResizeDriver.php` (new)
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 3.20 🟢 sugar-colorprofile: AsyncProbe (Item 3.1)
@@ -1215,11 +1215,11 @@ Same verification as previous phases.
 **Files:** `sugar-animation/tests/DecoderCompositingTest.php`
 **Agent:** Same coder agent as 5.3 (grouped — same lib)
 
-#### 5.5 🟢 candy-input: FocusEvent tests (Item 3.1)
+#### 5.5 🟢 sugar-input: FocusEvent tests (Item 3.1)
 
-**Plan:** `findings/plan_candy-input.md` — Item 3.1
+**Plan:** `findings/plan_sugar-input.md` — Item 3.1
 **Fix:** Add tests for intermediate bytes, private mode prefix, focus events followed by other sequences
-**Files:** `candy-input/tests/EscapeDecoderTest.php`
+**Files:** `sugar-input/tests/EscapeDecoderTest.php`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
 #### 5.6 🟢 candy-async: markCancelled visibility test (Item 1.1)

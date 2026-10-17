@@ -14,7 +14,7 @@ use SugarCraft\Input\KeyModifier;
 use SugarCraft\Input\Driver\StreamInputDriver;
 
 /**
- * Run a sugar-readline prompt with real TTY input via candy-input.
+ * Run a sugar-readline prompt with real TTY input via sugar-input.
  *
  * Wiring:
  * 1. Construct with an InputDriver (production default: StreamInputDriver::fromStdin()).
@@ -342,7 +342,7 @@ final class Readline
 
     /**
      * Emit `CSI ?2004h` (mirrors candy-core Ansi::bracketedPasteOn()) so the
-     * terminal wraps pastes in ESC[200~ / ESC[201~ markers that candy-input's
+     * terminal wraps pastes in ESC[200~ / ESC[201~ markers that sugar-input's
      * decoder turns into PasteEvents.
      *
      * Guarded to real TTYs only: tests write to memory streams and pipes,

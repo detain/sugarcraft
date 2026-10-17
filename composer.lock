@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "584aaa2a1d4ea16aa38622d2014e4645",
+    "content-hash": "b9e482c3f27a363b245448df439dfe0e",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -4137,66 +4137,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-input",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-input",
-                "reference": "f85e1ad1c049a2652355be7368db66310b2f7e75"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/stream": "^1.2",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Input\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Input\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Terminal escape sequence decoder for keyboard (legacy + Kitty progressive) and mouse (SGR 1006). Provides InputDriver interface and EscapeDecoder implementation. Unblocks sugar-readline migration to real-TTY input.",
-            "homepage": "https://github.com/sugarcraft/candy-input",
-            "keywords": [
-                "escape-sequences",
-                "input",
-                "keyboard",
-                "kitty",
-                "mouse",
-                "sgr",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-input/issues",
-                "source": "https://github.com/sugarcraft/candy-input",
-                "docs": "https://sugarcraft.github.io/lib/candy-input.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-kv",
             "version": "dev-master",
             "dist": {
@@ -4625,7 +4565,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-pty",
-                "reference": "ed5e917369394c011252c15fcf81dbe802e3a990"
+                "reference": "c27a4bac7b0435c6c0146df12d12e73fbb5de323"
             },
             "require": {
                 "ext-ffi": "*",
@@ -4634,7 +4574,7 @@
                 "react/promise": "^3.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-input": "dev-master"
+                "sugarcraft/sugar-input": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -6409,6 +6349,66 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-input",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-input",
+                "reference": "616fd48c2fa7c0528c509150448911157bf454a3"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/stream": "^1.2",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Input\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Input\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal escape sequence decoder for keyboard (legacy + Kitty progressive) and mouse (SGR 1006). Provides InputDriver interface and EscapeDecoder implementation. Unblocks sugar-readline migration to real-TTY input.",
+            "homepage": "https://github.com/sugarcraft/sugar-input",
+            "keywords": [
+                "escape-sequences",
+                "input",
+                "keyboard",
+                "kitty",
+                "mouse",
+                "sgr",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-input/issues",
+                "source": "https://github.com/sugarcraft/sugar-input",
+                "docs": "https://sugarcraft.github.io/lib/sugar-input.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-markdown",
             "version": "dev-master",
             "dist": {
@@ -6823,12 +6823,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-readline",
-                "reference": "bcc853ad0406b40b285094213935fa378a320dea"
+                "reference": "96b3e44cfc478fd54299370e13d0c189dad24359"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-input": "@dev",
-                "sugarcraft/sugar-forms": "dev-master"
+                "sugarcraft/sugar-forms": "dev-master",
+                "sugarcraft/sugar-input": "@dev"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"

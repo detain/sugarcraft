@@ -19,7 +19,7 @@ This plan maps each finding to actual code locations where the described functio
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | sugar-crush is crush port, not bubbletea | The actual sugar-crush ports charmbracelet/crush (chat-shell), not bubbletea input handling | `sugar-crush/README.md:L16` |
-| Input handling exists in candy-input | EscapeDecoder.php handles escape sequences including mouse/paste | `candy-input/src/EscapeDecoder.php` |
+| Input handling exists in sugar-input | EscapeDecoder.php handles escape sequences including mouse/paste | `sugar-input/src/EscapeDecoder.php` |
 | InputReader in candy-core parses bytes | InputReader.php parses byte streams into typed Msg objects | `candy-core/src/InputReader.php` |
 | Debounce/throttle in candy-async | AsyncOps.php provides debounce() and throttle() | `candy-async/src/AsyncOps.php:L159-204` |
 | WindowSizeMsg exists in candy-core | Resize events are handled via WindowSizeMsg | `candy-core/src/Msg/WindowSizeMsg.php` |
@@ -58,7 +58,7 @@ The findings file describes a `sugar-crush` library that:
 **Related code locations:**
 
 - `sugar-crush/src/Tui/KeyboardHandler.php` — actual keyboard handler for sugar-crush app
-- `candy-input/src/EscapeDecoder.php` — escape sequence decoder (bubbletea-style input)
+- `sugar-input/src/EscapeDecoder.php` — escape sequence decoder (bubbletea-style input)
 - `candy-core/src/InputReader.php` — byte stream parser into typed Msg
 
 **Investigation notes:**
@@ -66,7 +66,7 @@ The findings file describes a `sugar-crush` library that:
 - The findings say "sugar-crush ports charmbracelet/bubbletea input handling"
 - But `sugar-crush/README.md:L16` says it's a "port of `charmbracelet/crush`"
 - `KeyboardHandler.php` handles Ctrl combinations (Ctrl+C, Ctrl+N, Ctrl+G, etc.) but not Ctrl+D EOF
-- `candy-input` has the bubbletea input handling (EscapeDecoder, MouseEvent, PasteEvent)
+- `sugar-input` has the bubbletea input handling (EscapeDecoder, MouseEvent, PasteEvent)
 
 ---
 
@@ -154,13 +154,13 @@ Users cannot click on the first column or last column of the terminal.
 
 **Actual code location:**
 
-- `candy-input/src/EscapeDecoder.php:268-331` — handles SGR 1006 mouse decoding
-- `candy-input/src/Event/MouseEvent.php:35-47` — MouseEvent is 1-based per docstring
+- `sugar-input/src/EscapeDecoder.php:268-331` — handles SGR 1006 mouse decoding
+- `sugar-input/src/Event/MouseEvent.php:35-47` — MouseEvent is 1-based per docstring
 - `candy-core/src/InputReader.php:569-617` — `decodeSgrMouse()` also handles mouse
 
 **Investigation notes:**
 
-- `candy-input/src/Event/MouseEvent.php:35-36` says:
+- `sugar-input/src/Event/MouseEvent.php:35-36` says:
   ```
   @param int          $x         Column (1-based, matches terminal coordinates)
   @param int          $y         Row (1-based)
@@ -255,8 +255,8 @@ Paste could fail silently instead of crashing.
 
 **Actual code location:**
 
-- `candy-input/src/EscapeDecoder.php:542-591` — handles paste events
-- `candy-input/src/Event/PasteEvent.php` — PasteEvent with MAX_SIZE truncation
+- `sugar-input/src/EscapeDecoder.php:542-591` — handles paste events
+- `sugar-input/src/Event/PasteEvent.php` — PasteEvent with MAX_SIZE truncation
 - `candy-core/src/InputReader.php:60-76` — handles paste via PasteStartMsg/PasteEndMsg
 
 **Investigation notes:**
@@ -291,7 +291,7 @@ Bracketed paste mode sends start/end markers that should be handled separately.
 - `candy-core/src/Msg/PasteEndMsg.php` — EXISTS
 - `candy-core/src/Msg/PasteMsg.php` — EXISTS
 - `candy-core/src/InputReader.php:104-109` — emits PasteStartMsg
-- `candy-input/src/EscapeDecoder.php:31-45, 542-591` — handles paste buffering
+- `sugar-input/src/EscapeDecoder.php:31-45, 542-591` — handles paste buffering
 
 **Investigation notes:**
 
@@ -337,7 +337,7 @@ For large numbers of handlers, this could become a bottleneck.
 | Finding | Severity | Status | Actual Location |
 |---------|----------|--------|-----------------|
 | 1. EOF detection | HIGH | NEEDS CLARIFICATION | `Tui/KeyboardHandler.php` (no Ctrl+D handler) |
-| 2. Mouse coords off-by-one | HIGH | VERIFY | `candy-input/src/EscapeDecoder.php` (1-based confirmed) |
+| 2. Mouse coords off-by-one | HIGH | VERIFY | `sugar-input/src/EscapeDecoder.php` (1-based confirmed) |
 | 3. Debounce timer not reset | MEDIUM | APPEARS FIXED | `candy-async/src/AsyncOps.php:L168-170` cancels timer |
 | 4. Paste clipboard throws | MEDIUM | CANNOT VERIFY | No clipboard access in current files |
 | 5. Event lookup O(n) | LOW | NOT AN ISSUE | match statement is O(1) |
@@ -361,7 +361,7 @@ The actual `sugar-crush` in this repository is a chat-shell AI coding agent that
 **Recommended actions:**
 
 1. Verify if the findings are for a different/planned library (e.g., a future bubbletea input port)
-2. If implementing bubbletea input handling, it should likely live in `candy-input` (which already has EscapeDecoder, MouseEvent, PasteEvent, ResizeEvent)
+2. If implementing bubbletea input handling, it should likely live in `sugar-input` (which already has EscapeDecoder, MouseEvent, PasteEvent, ResizeEvent)
 3. If modifying the existing sugar-crush app, the issues should be mapped to actual files like `Tui/KeyboardHandler.php`
 
 ---
@@ -380,4 +380,4 @@ Tests should pass for the actual application. The findings describe functionalit
 
 ## Notes
 
-- 2026-06-30: Initial investigation revealed the findings file describes files that do not exist. The actual `sugar-crush` app uses different structure (Tui/KeyboardHandler.php, not InputHandler.php). The bubbletea input handling functionality described IS present in `candy-input` library, but under different class names (EscapeDecoder, not InputHandler/MouseHandler).
+- 2026-06-30: Initial investigation revealed the findings file describes files that do not exist. The actual `sugar-crush` app uses different structure (Tui/KeyboardHandler.php, not InputHandler.php). The bubbletea input handling functionality described IS present in `sugar-input` library, but under different class names (EscapeDecoder, not InputHandler/MouseHandler).

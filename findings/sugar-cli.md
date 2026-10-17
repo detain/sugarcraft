@@ -2,7 +2,7 @@
 
 **Library:** `sugarcraft/sugar-cli`  
 **Review scope:** `src/` (8 classes) + `tests/` (9 test files)  
-**Dependencies:** `candy-core`, `candy-sprinkles`, `candy-async`, `candy-layout`, `candy-ansi`, `candy-input`, `candy-buffer`
+**Dependencies:** `candy-core`, `candy-sprinkles`, `candy-async`, `candy-layout`, `candy-ansi`, `sugar-input`, `candy-buffer`
 
 ---
 
@@ -217,7 +217,7 @@ The `repositories` array includes:
 - `../candy-layout` — no class in sugar-cli uses any `candy-layout` types
 - `../candy-async` — no async patterns exist in the library
 - `../candy-buffer` — no buffer usage
-- `../candy-input` — no input handling
+- `../sugar-input` — no input handling
 
 These add maintenance burden and CI closure-checking noise without providing any value to sugar-cli. Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed.
 

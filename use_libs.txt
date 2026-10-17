@@ -5,7 +5,7 @@ https://sugarcraft.github.io/lib/sugar-panels.html
 https://sugarcraft.github.io/lib/sugar-navstack.html
 https://sugarcraft.github.io/lib/sugar-dashboard.html
 https://sugarcraft.github.io/lib/sugar-quickpick.html
-https://sugarcraft.github.io/lib/candy-input.html
+https://sugarcraft.github.io/lib/sugar-input.html
 https://sugarcraft.github.io/lib/sugar-fuzzy.html
 https://sugarcraft.github.io/lib/sugar-flexbox.html
 https://sugarcraft.github.io/lib/sugar-toast.html

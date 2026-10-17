@@ -1,4 +1,4 @@
-# Code Audit: sugarcraft/candy-input
+# Code Audit: sugarcraft/sugar-input
 
 **Library:** Terminal escape sequence decoder for keyboard and mouse  
 **Date:** Tue Jun 30 2026  
@@ -9,7 +9,7 @@
 
 ## Summary
 
-`candy-input` is a well-structured PHP 8.3+ library providing terminal input decoding for TUI applications. It correctly implements legacy CSI sequences, the Kitty keyboard protocol, SGR 1006 mouse events, bracketed paste, and focus events. The codebase is `final readonly` throughout with immutable value objects and a clean separation of concerns (decoder, driver, events). Test coverage is thorough at ~960 lines for the EscapeDecoder alone. There are no memory leaks, no security vulnerabilities, and no blocking I/O issues in the async-aware stream driver.
+`sugar-input` is a well-structured PHP 8.3+ library providing terminal input decoding for TUI applications. It correctly implements legacy CSI sequences, the Kitty keyboard protocol, SGR 1006 mouse events, bracketed paste, and focus events. The codebase is `final readonly` throughout with immutable value objects and a clean separation of concerns (decoder, driver, events). Test coverage is thorough at ~960 lines for the EscapeDecoder alone. There are no memory leaks, no security vulnerabilities, and no blocking I/O issues in the async-aware stream driver.
 
 The most significant issue is the **hardcoded `KeyModifier::none()` for scroll events in `handleSgrMouse`** — scroll events with modifiers are silently downgraded to no modifiers. Secondary concerns are: redundant `stream_set_blocking()` calls on every `read()`, a misleading Ctrl-letter mapping comment, and the absence of `ResizeEvent` generation in the decoder despite the event type existing.
 
@@ -322,7 +322,7 @@ An empty marker interface provides minimal value beyond using a docblock tag. Ho
 
 ### 2. No `sugar-widgets` Compatibility
 
-**Problem:** `sugar-widgets` (component library) has no dependency on `candy-input`. The TUI component ecosystem (`sugar-widgets`, `candy-scriptui`) likely needs keyboard/mouse input but there is no integration example.
+**Problem:** `sugar-widgets` (component library) has no dependency on `sugar-input`. The TUI component ecosystem (`sugar-widgets`, `candy-scriptui`) likely needs keyboard/mouse input but there is no integration example.
 
 ### 3. Hard Dependency on `sugarcraft/candy-core`
 

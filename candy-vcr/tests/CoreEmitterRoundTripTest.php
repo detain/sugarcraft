@@ -390,7 +390,7 @@ final class CoreEmitterRoundTripTest extends TestCase
     public function testScsG2AndG3DesignationsTakeEffectOnSingleShift(): void
     {
         // SS2/SS3 are the C1 bytes 0x8E/0x8F. candy-core deliberately has no
-        // emitter for them: the audit shows candy-input still mis-decodes the
+        // emitter for them: the audit shows sugar-input still mis-decodes the
         // 7-bit ESC N / ESC O spellings, so single shifts stay a raw-byte
         // concern here until that lands.
         $g2 = $this->feed(Ansi::scsG2(Ansi::CHARSET_DEC_SPECIAL) . "\x8e" . 'lqq');

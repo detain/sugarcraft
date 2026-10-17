@@ -30,7 +30,7 @@ composer require sugarcraft/sugar-readline
 
 ## Quick Start
 
-`Readline` reads real TTY keypresses via `candy-input`'s `InputDriver`. In production, `StreamInputDriver::fromStdin()` is the default — no configuration needed. For testing, inject a driver over a fixture stream.
+`Readline` reads real TTY keypresses via `sugar-input`'s `InputDriver`. In production, `StreamInputDriver::fromStdin()` is the default — no configuration needed. For testing, inject a driver over a fixture stream.
 
 ### Text Prompt
 

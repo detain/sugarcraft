@@ -25,7 +25,7 @@ Address all 16 findings from the sugar-readline audit covering bugs, edge cases,
 | Explicitly chmod history file to 0600 | Default 0644 allows group read; sensitive commands may be in history | Finding 9 |
 | Incremental search is low-priority missing feature | Standard Emacs feature but complex to implement correctly | Finding 12 |
 | Vi text objects require significant VimKeyHandler extension | Must go through sugar-forms VimKeyHandler per CALIBER_LEARNINGS | Finding 13 |
-| Verify bracketed paste mode is wired through candy-input | Readline.php has onPaste handler; needs end-to-end verification | Finding 14 |
+| Verify bracketed paste mode is wired through sugar-input | Readline.php has onPaste handler; needs end-to-end verification | Finding 14 |
 | Defer sync history save to background tick | Blocking I/O on every Enter could cause input lag; needs ReactPHP integration | Finding 16 |
 
 ---
@@ -364,7 +364,7 @@ pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `di
 ### 3.3 Finding 14 — No Bracketed Paste Mode
 
 **Severity:** LOW  
-**Location:** `src/Readline.php:185-205`, `candy-input/`
+**Location:** `src/Readline.php:185-205`, `sugar-input/`
 
 **What is expected:**
 
@@ -385,7 +385,7 @@ pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `di
 **Related code locations:**
 
 - `src/Readline.php:185-205` — `PasteEvent` handling exists
-- `candy-input/src/` — input driver that decodes bracketed paste sequences
+- `sugar-input/src/` — input driver that decodes bracketed paste sequences
 
 **Investigation notes:**
 
@@ -393,7 +393,7 @@ pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `di
 - `PasteEvent` is dispatched at line 185 when `event instanceof PasteEvent`
 - Pasted text is fed char-by-char via `handleChar()` in loop (line 192-201)
 - bracketed paste mode may need to be enabled via terminal query sequence
-- candy-input driver may need to send ESC[?2004h to enable
+- sugar-input driver may need to send ESC[?2004h to enable
 
 ---
 
@@ -480,7 +480,7 @@ pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `di
 | 11. Dual engine complexity | LOW | DOCS | Add architecture documentation |
 | 12. No incremental search (Emacs) | LOW | PENDING | Add Ctrl+S to EmacsMode |
 | 13. No Vi text objects | MEDIUM | PENDING | Extend VimAction in sugar-forms |
-| 14. No bracketed paste | LOW | VERIFY | Verify candy-input integration |
+| 14. No bracketed paste | LOW | VERIFY | Verify sugar-input integration |
 | 15. PHP 8.3 compatibility | N/A | N/A | Fully compatible |
 | 16. Sync history save | MEDIUM | PENDING | Defer to background tick |
 

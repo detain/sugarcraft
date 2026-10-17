@@ -101,7 +101,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-widgets | P1 | 2 | Stopwatch teardown pattern; Tick::advance() edge cases |
 | sugar-mouse | P1 | 3 | Mouse event coordinate validation; wheel event handling |
 | sugar-treelist | P1 | 4 | Paginator state machine; filter input handling |
-| candy-input | P1 | 2 | InputReader buffer boundary conditions |
+| sugar-input | P1 | 2 | InputReader buffer boundary conditions |
 | candy-wish | P1 | 3 | AsyncMiddleware blocks event loop; PromiseAwait race |
 | sugar-overlay | P1 | 2 | Animation frame timing |
 
@@ -173,7 +173,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-widgets.md` — Phase 1 (Stopwatch teardown, Tick edge cases)
 - `findings/plan_sugar-mouse.md` — Phase 1 (mouse coordinate validation, wheel events)
 - `findings/plan_sugar-treelist.md` — Phase 1 (Paginator state machine, filter input)
-- `findings/plan_candy-input.md` — Phase 1 (buffer boundary conditions)
+- `findings/plan_sugar-input.md` — Phase 1 (buffer boundary conditions)
 - `findings/plan_candy-wish.md` — Phase 1 (AsyncMiddleware blocks loop, PromiseAwait race)
 - `findings/plan_sugar-overlay.md` — Phase 1 (animation frame timing)
 
