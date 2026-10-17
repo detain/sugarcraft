@@ -57,7 +57,7 @@ candy-code uses the sharded runner mirroring ci.yml "Run tests (candy-code — s
 | candy-sprinkles | 865 | 2896 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-testing | 267 | 5417 | 0 | 0 | 2 | 0 |  | <!-- @rename-keep -->
 | candy-tetris | 214 | 4322 | 0 | 0 | 0 | 0 |  |
-| candy-top | 2110 | 107777 | 0 | 0 | 0 | 0 |  |
+| candy-top | 2107 | 108632 | 0 | 0 | 0 | 0 | <!-- corrected 2026-10-17: the 2110 was wc -l of phpunit --list-tests; 3 long dataset names wrap past 80 cols into phantom continuation lines. True run count at 40a4919fc = 2107 (verified x2, plain pipe). Tip 8d13ebc49 = 2108 = base +1 (NpuTest colon-BDF pin) — no rename regression. Assertions wobble +-25/run (live /proc reads); measured 108632/108656. --> |
 | candy-vcr | 989 | 4209 | 0 | 0 | 14 | 0 |  |
 | candy-vt | 976 | 12873 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | candy-wish | 260 | 976 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
