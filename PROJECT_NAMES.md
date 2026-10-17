@@ -95,7 +95,7 @@ the app it belongs to.
 
 | Satellite | App | Surface | Decision |
 |---|---|---|---|
-| **CandyCodeWeb** (`sugar-crush-web/`, `sugarcraft/sugar-crush-web`, `SugarCraft\CrushWeb\`) | CandyCode | browser UI for `candy-code serve` (Vite + Vue 3 bundle + one-class PHP shim) | User decision, 2026-10-01: keep the three-word name. A two-word candidate (e.g. a `Sugar-` + `Web` coinage) would hide that it is candy-code's UI and unusable without it. |
+| **CandyCodeWeb** (`candy-code-web/`, `sugarcraft/candy-code-web`, `SugarCraft\CodeWeb\`) | CandyCode | browser UI for `candy-code serve` (Vite + Vue 3 bundle + one-class PHP shim) | User decision, 2026-10-01: keep the three-word name. A two-word candidate (e.g. a `Sugar-` + `Web` coinage) would hide that it is candy-code's UI and unusable without it. |
 
 The exception is narrow: a satellite has no use without its app, ships no
 standalone functionality, and keeps the app's prefix (no `Candy-` for an

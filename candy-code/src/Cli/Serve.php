@@ -1165,13 +1165,13 @@ final class Serve
     }
 
     /**
-     * The installed `sugarcraft/sugar-crush-web` build, or null when the
+     * The installed `sugarcraft/candy-code-web` build, or null when the
      * package is absent. Looked up by name so this package carries no hard
      * dependency on it (it is a composer `suggest`).
      */
     private static function installedWebRoot(): ?string
     {
-        $assets = 'SugarCraft\\CrushWeb\\Assets';
+        $assets = 'SugarCraft\\CodeWeb\\Assets';
         if (!\class_exists($assets) || !\method_exists($assets, 'distPath')) {
             return null;
         }

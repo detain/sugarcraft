@@ -21,7 +21,7 @@ Lane: f2 (batch-F line 58, kind=rename, ns CrushWeb→CodeWeb, type=lib, bins {}
 3. php -l sweep; blindspot manual fixes; web.yml YAML validate.
 4. npm: `npm install --package-lock-only && npm ci && npm run gen:protocol && npm run build && lint && typecheck && test`. Commit rebuilt dist/ + regenerated generated.ts + lock.
 5. R5 wire: root composer update of the new slug entry only, gen-docs (+ old-name redirect stub), gen-ansi --check, refresh-deps linked.
-6. Gates: residue 0, CrushWeb grep 0 (untagged), shim suite, StaticFiles/serve tests, K=8 22,571T exact, tools/tests 429/1517, path-repos, child-lifetimes, dist parity rebuild-diff zero.
+6. Gates: residue 0, CrushWeb grep 0 (untagged), shim suite, StaticFiles/serve tests, K=8 22,571T exact, tools/tests 429/1517, path-repos, child-lifetimes, dist parity rebuild-diff zero. <!-- @rename-keep -->
 7. renames.json:58 pending→renamed (own-line sed). Push rename/f2.
 
 ## Progress log (append as work lands) <!-- @rename-keep -->

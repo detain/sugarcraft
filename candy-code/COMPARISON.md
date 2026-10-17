@@ -1,11 +1,11 @@
-# candy-code & sugar-crush-web vs Claude Code, OpenCode and OpenClaw
+# candy-code & candy-code-web vs Claude Code, OpenCode and OpenClaw
 
 _A feature-by-feature comparison, compiled 2026-10-16. Uncommitted working document. Issues found along the way are in [`../sugar_issues.md`](../sugar_issues.md)._
 
 | Product | Version compared | How it was examined |
 |---|---|---|
 | **candy-code** (PHP TUI agent) | monorepo `master` @ `10f121d49` (2026-10-16) | Five code audits traced from `bin/candy-code`, plus live runs in tmux and headless. Every audit-reported issue was re-checked by an independent verifier; five later single-pass findings are marked PLAUSIBLE |
-| **sugar-crush-web** (Vue 3 browser UI for `candy-code serve`) | 0.1.0 (committed `dist/` verified byte-identical to a fresh build) | Code audit + typecheck/lint/211 unit tests + live probes of a throwaway server (curl, WebSocket, headless Chromium) |
+| **candy-code-web** (Vue 3 browser UI for `candy-code serve`) | 0.1.0 (committed `dist/` verified byte-identical to a fresh build) | Code audit + typecheck/lint/211 unit tests + live probes of a throwaway server (curl, WebSocket, headless Chromium) |
 | **Claude Code** | 2.1.301 (installed here) | All 228 official doc pages, the changelog, `--help` for every subcommand, and a read-only look at `~/.claude` |
 | **OpenCode** | **1.18.35** (installed here) and **2.0.31** (latest major) | Source at both tags, shipped docs, CLI help, local configs and installed plugins. v1 latest is 1.19.3, so the installed copy is 4 releases behind |
 | **OpenClaw** | 2026.9.8 (installed here) | The installed package's ~1,300 doc pages, `dist/` source, CLI help, the `clawhub` CLI, and GitHub changelogs to 2026.10.4 |
@@ -17,7 +17,7 @@ _A feature-by-feature comparison, compiled 2026-10-16. Uncommitted working docum
 | ✅ | Full native support |
 | 🟡 | Partial or limited (the cell says what's missing) |
 | 🔌 | Only via a named plugin or extension |
-| 🧪 | Code exists but is dormant, i.e. not reachable from the live app (candy-code and sugar-crush-web columns only) |
+| 🧪 | Code exists but is dormant, i.e. not reachable from the live app (candy-code and candy-code-web columns only) |
 | ❌ | Absent |
 | ➖ | Not applicable |
 | ❓ | Could not verify |
@@ -25,10 +25,10 @@ _A feature-by-feature comparison, compiled 2026-10-16. Uncommitted working docum
 | 🆕 | A row added during research for a feature outside the original 356-row taxonomy |
 | Δ | (OpenCode 2.0.31 column) Changed from 1.18.35 |
 
-> **Read the scoreboard with one caveat.** The candy-code and sugar-crush-web columns come from *adversarial code audits*: a feature with a real bug or an unreachable path was marked 🟡 or 🧪. The competitor columns come from each product's docs, source and CLI help, and their bugs were only counted when the researchers happened to find one (e.g. OpenCode's never-fired `permission.ask` hook). Raw ✅ counts therefore flatter the competitors relative to candy-code. Read the cells, not just the totals.
+> **Read the scoreboard with one caveat.** The candy-code and candy-code-web columns come from *adversarial code audits*: a feature with a real bug or an unreachable path was marked 🟡 or 🧪. The competitor columns come from each product's docs, source and CLI help, and their bugs were only counted when the researchers happened to find one (e.g. OpenCode's never-fired `permission.ask` hook). Raw ✅ counts therefore flatter the competitors relative to candy-code. Read the cells, not just the totals.
 
 
-**Contents:** [1. Bottom line](#1-bottom-line) · [2. Scoreboard](#2-scoreboard-356-taxonomy-rows-per-product) · [3. Full feature matrix](#3-full-feature-matrix) · [4. How and when context is surfaced](#4-how-and-when-each-tool-surfaces-context-to-the-model-and-to-the-user) · [5. OpenCode 1.18.35 → 2.0.31](#5-opencode-11835--2031-what-changes-in-the-comparison) · [6. How candy-code can improve](#6-how-candy-code-and-sugar-crush-web-can-improve-prioritised) · [Appendix A: per-feature detail](#appendix-a--per-feature-detail-how-when-where-evidence) · [Appendix B: method and sources](#appendix-b--method-and-sources)
+**Contents:** [1. Bottom line](#1-bottom-line) · [2. Scoreboard](#2-scoreboard-356-taxonomy-rows-per-product) · [3. Full feature matrix](#3-full-feature-matrix) · [4. How and when context is surfaced](#4-how-and-when-each-tool-surfaces-context-to-the-model-and-to-the-user) · [5. OpenCode 1.18.35 → 2.0.31](#5-opencode-11835--2031-what-changes-in-the-comparison) · [6. How candy-code can improve](#6-how-candy-code-and-candy-code-web-can-improve-prioritised) · [Appendix A: per-feature detail](#appendix-a--per-feature-detail-how-when-where-evidence) · [Appendix B: method and sources](#appendix-b--method-and-sources)
 
 ---
 
@@ -50,7 +50,7 @@ _A feature-by-feature comparison, compiled 2026-10-16. Uncommitted working docum
   - **Real safety bugs.** One P0 (`PtyRun` keystrokes bypass every permission layer) plus several P1s that undercut an otherwise strong safety design.
   - **TUI rough edges.** No startup summary, approvals without diffs, typo'd slash commands sent to the model, and readline keys that type letters.
 
-**sugar-crush-web is a strong multi-session cockpit**, with a careful sign-in design and lossless reconnect, but it **exposes only part of the engine**:
+**candy-code-web is a strong multi-session cockpit**, with a careful sign-in design and lossless reconnect, but it **exposes only part of the engine**:
 - 17 of 62 protocol methods are unused.
 - `/model`, `/compact` and `/init` are terminal-only.
 - No panel shows loaded instructions, skills, MCP or hooks; only text commands (`/context`, `/mcp`, `/notices`) hint at them.
@@ -65,13 +65,13 @@ _A feature-by-feature comparison, compiled 2026-10-16. Uncommitted working docum
 | Providers | Deepest self-hosted (SGLang) support; explicit no-total-timeout engineering; mid-stream resume of a dropped stream | Bedrock, Vertex, OpenAI-compatible endpoints (Claude Code has no OpenAI-compatible endpoint; OpenClaw's Bedrock is a plugin); fallback models (as Claude Code and OpenClaw) | `openai` provider breaks reasoning models (ISS-005); `anthropic` is the OpenAI-compat endpoint (no caching/thinking/PDF); retries ignore Retry-After and have no jitter (ISS-074); no model catalog; no subscription login |
 | Sessions & automation | Typed JSON error document on every CLI failure with test-pinned exit codes (OpenClaw's `agent exec` is similar) | Single-writer session locking, background daemons, `/goal` judge loop (as Claude Code and OpenClaw; OpenCode 1.18.35 has no lock and `/goal` only via a plugin); resume/continue/branch/fork/export | `-p` spend cap not enforced (ISS-006); no stream-json / `--max-turns`; `-p` runs not persisted; `-c` not project-scoped (ISS-026); no cron/`/loop`/webhooks; share links are a stub |
 | UX | Generated, drift-tested keyboard reference; contrast-aware themes (unique); settings view with source + apply mode; dockable panes; inline images with kitty/iTerm2/sixel/chafa/half-block fallbacks (OpenClaw: Kitty/iTerm2/Ghostty thumbnails only) | Status bar, permission modal depth, steering (Enter/Tab/Esc) | No startup banner; paste not collapsed; `/` popup overflows; Ctrl+U/E/B/F type letters; panes auto-dock and squeeze chat; static spinner; no vim / keybinding config / history search |
-| Surfaces | Self-hostable browser cockpit (multi-session tabs + 3×3 grid, server-wide approvals) with gap-free seq-cursor reconnect in sugar-crush-web | One engine behind TUI, web, `attach` and ACP clients (as OpenCode's server and OpenClaw's Gateway); lossless reconnect (OpenClaw and OpenCode 2.0.31 replay too; `candy-code attach` never reconnects); ACP for Zed/JetBrains/Neovim | No VS Code extension or native JetBrains plugin (Claude Code has both; OpenCode has the VS Code extension); no desktop, mobile, chat channels or cloud execution; Linux-first, no Windows; Composer-only install |
+| Surfaces | Self-hostable browser cockpit (multi-session tabs + 3×3 grid, server-wide approvals) with gap-free seq-cursor reconnect in candy-code-web | One engine behind TUI, web, `attach` and ACP clients (as OpenCode's server and OpenClaw's Gateway); lossless reconnect (OpenClaw and OpenCode 2.0.31 replay too; `candy-code attach` never reconnects); ACP for Zed/JetBrains/Neovim | No VS Code extension or native JetBrains plugin (Claude Code has both; OpenCode has the VS Code extension); no desktop, mobile, chat channels or cloud execution; Linux-first, no Windows; Composer-only install |
 
 ---
 
 ## 2. Scoreboard (356 taxonomy rows per product)
 
-| Category | candy-code | sugar-crush-web | Claude Code 2.1.301 | OpenCode 1.18.35 | OpenCode 2.0.31 | OpenClaw 2026.9.8 |
+| Category | candy-code | candy-code-web | Claude Code 2.1.301 | OpenCode 1.18.35 | OpenCode 2.0.31 | OpenClaw 2026.9.8 |
 |---|---|---|---|---|---|---|
 | PLAT — Platform & distribution | ✅5 🟡4 ❌1 | ✅7 🟡2 ❌1 | ✅6 🟡2 ❌2 | ✅7 🟡3 | ✅8 🟡2 | ✅9 🟡1 |
 | MOD — Models & providers | ✅9 🟡12 🧪1 ❌3 | ✅5 🟡11 🧪1 ❌6 ➖1 ❓1 | ✅17 🟡5 ❌3 | ✅21 🟡2 ❌2 | ✅18 🟡4 ❌3 | ✅24 🔌1 |
@@ -108,12 +108,12 @@ The matrix has **398 rows**: the 356-row taxonomy plus 42 🆕 rows for features
 - **Category rows:** bold rows start each of the 25 categories.
 - **Corrections:** one candy-code cell (INS-08) has been corrected from the verification passes; its detail says so.
 
-| ID | Feature | candy-code | sugar-crush-web | Claude Code 2.1.301 | OpenCode 1.18.35 | OpenCode 2.0.31 | OpenClaw 2026.9.8 |
+| ID | Feature | candy-code | candy-code-web | Claude Code 2.1.301 | OpenCode 1.18.35 | OpenCode 2.0.31 | OpenClaw 2026.9.8 |
 |---|---|---|---|---|---|---|---|
 | **PLAT** | **Platform & distribution** |  |  |  |  |  |  |
 | PLAT-01 | Implementation language / runtime | ✅ PHP 8.3+ (pure PHP, ReactPHP loop, pcntl fork per turn); ext-pdo_sqlite, mbstring, intl required; pcntl strongly recommended | ✅ Vue 3.5 + TypeScript 6 + Pinia 4 + vue-router 5 SPA built by Vite 8; server side is PHP 8.3 on ReactPHP | ✅ TypeScript app shipped as a native single-file executable (Bun-compiled, ~256 MB); npm package runs on Node | ✅ TypeScript on Bun compiled to one ~186 MB binary; Effect-TS core, OpenTUI+SolidJS TUI, Electron desktop | ✅ Δ Same TS/Effect stack, re-cut as core/server/cli/tui/app packages; native `@opencode/ai` provider layer; ~212 MB binary | ✅ TypeScript on Node 24.16+/26 (Bun opt-in); native Swift/Kotlin/WinUI companion apps; Control UI is Vite + Lit |
 | PLAT-02 | License / open source | 🟡 MIT (composer.json, README badge), but no LICENSE file in candy-code/ or any lib dir; split package ships no license text | ✅ MIT | ❌ Proprietary (Anthropic Consumer/Commercial Terms); public repo has changelog, issues, some built-in mods, not CLI source | ✅ MIT-licensed, fully open source (anomalyco/opencode, formerly sst/opencode) | ✅ MIT-licensed, fully open source (anomalyco/opencode, formerly sst/opencode) | ✅ MIT; stewarded by the OpenClaw Foundation (501(c)(3)); no paid tier, hosted service or token |
-| PLAT-03 | Install methods (npm, brew, curl script, composer, binary, docker) | 🟡 Composer only (require, global require, git checkout); no phar, brew, npm, curl script, binary or Docker image | ✅ `composer require sugarcraft/sugar-crush-web`: prebuilt dist/ committed, so PHP users never need Node; a candy-code suggest | ✅ Native curl/irm installer (auto-updating), Homebrew casks, WinGet, apt/dnf/apk, npm, dev-container feature; `claude install <ver>` | ✅ curl script, npm/bun/pnpm/yarn, Homebrew tap, pacman/AUR, choco, scoop, mise, Docker image, release binaries | ✅ Δ v2: curl /v2/install, npm @opencode/cli, brew opencode-v2, AUR opencode-beta, mise≥2026.10.9, WinGet, Docker, zips | ✅ curl/PowerShell installer (provisions Node), npm/pnpm/bun, Docker/Podman, Nix, Ansible, K8s, source, desktop apps |
+| PLAT-03 | Install methods (npm, brew, curl script, composer, binary, docker) | 🟡 Composer only (require, global require, git checkout); no phar, brew, npm, curl script, binary or Docker image | ✅ `composer require sugarcraft/candy-code-web`: prebuilt dist/ committed, so PHP users never need Node; a candy-code suggest | ✅ Native curl/irm installer (auto-updating), Homebrew casks, WinGet, apt/dnf/apk, npm, dev-container feature; `claude install <ver>` | ✅ curl script, npm/bun/pnpm/yarn, Homebrew tap, pacman/AUR, choco, scoop, mise, Docker image, release binaries | ✅ Δ v2: curl /v2/install, npm @opencode/cli, brew opencode-v2, AUR opencode-beta, mise≥2026.10.9, WinGet, Docker, zips | ✅ curl/PowerShell installer (provisions Node), npm/pnpm/bun, Docker/Podman, Nix, Ansible, K8s, source, desktop apps |
 | PLAT-04 | OS support (Linux / macOS / Windows native / WSL) | 🟡 Linux primary/fully tested; macOS best-effort; Windows explicitly unsupported (WSL presumably as Linux, unverified) | 🟡 Any modern browser (desktop or phone); the server it needs runs on Linux/macOS/WSL only (pcntl + posix + FFI required) | ✅ macOS 13+, Windows 10 1809+ native (Git Bash or PowerShell tool), Ubuntu 20.04+/Debian 10+/Alpine 3.19+, WSL 1/2 | ✅ Linux, macOS, Windows native (pwsh/cmd/Git Bash shells; WSL recommended) | ✅ Δ Linux (glibc+musl), macOS, Windows native incl. ARM64 builds; WSL still supported | ✅ macOS, Linux, Windows native (CLI + Windows Hub), WSL2, ChromeOS; iOS/Android/watchOS as nodes |
 | PLAT-05 | Self-update / release channels | ❌ No self-update or release channels; `--version` reads Composer metadata; update = `composer (global) update` | 🟡 No self-update; when the server comes back as a different version a banner offers "Reload" | ✅ Background auto-update for native installs; `latest` (default) or `stable` channel via `autoUpdatesChannel`; `claude update` | ✅ `autoupdate` true/false/notify on startup; `opencode upgrade [ver] --method`; separate v2 channel (@opencode/cli) | ✅ Δ `update` auto/notify/disable; `opencode upgrade` (curl/npm/pnpm/bun/yarn/vp/brew/winget); /update; release highlights | ✅ `openclaw update` with stable / extended-stable / beta / dev channels, auto-updates, rollback, `/update` from chat |
 | PLAT-06 | Interfaces offered (TUI / web / desktop / IDE / mobile / chat apps) | ✅ TUI, browser web UI (serve), remote TUI attach, ACP editor agent, headless -p; no desktop, mobile or chat apps | ✅ Browser UI (desktop + responsive layout) over `candy-code serve`; sibling clients are `candy-code attach` (TUI) and ACP editors | ✅ CLI TUI, Desktop (Code tab), VS Code, JetBrains, web (claude.ai/code), iOS/Android, Slack, Chrome, GitHub Actions, SDK | ✅ TUI (+--mini inline), web UI, Electron desktop, VS Code ext, ACP editors, GitHub/GitLab bots; no mobile app | ✅ Δ TUI + `opencode mini`, web (pair, installable PWA), Electron desktop, iOS app pairing, VS Code ext, ACP; GitHub cmd gone | ✅ TUI, web Control UI, desktop apps, iOS/Android, 20+ chat apps, ACP (Zed), MCP serve, OpenAI-compatible HTTP |
@@ -475,7 +475,7 @@ The matrix has **398 rows**: the 356-row taxonomy plus 42 🆕 rows for features
 | UI-N5 | 🆕 Prompt hygiene (strip invisible Unicode before sending; spellcheck) | 🟡 Paste boundary strips escapes and C0/C1 controls; bidi/zero-width chars in the draft show as <U+XXXX> but are sent; no spellcheck | 🟡 Browser-native spellcheck on the composer textarea (no spellcheck attr set); invisible Unicode is neither stripped nor marked | ✅ strips invisible Unicode before sending; optional aspell/hunspell spellcheck underline | ❌ No invisible-Unicode stripping or spellcheck of prompts found | ❌ No prompt invisible-Unicode stripping or spellcheck found | ❌ User prompts are not scrubbed of invisible Unicode and there is no spellcheck feature |
 | UI-N6 | 🆕 Cross-session attention model (server-wide approvals inbox, badge counts, title/desktop notifications) | 🟡 TUI: `notify` bell/OSC 9 on turn end or waiting question; one live session per window; no cross-session approvals inbox or badges | ✅ approvals drawer + ⚠ count + "(N) CandyCode" title + sidebar/tab badges | ✅ Agent view (research preview) counts sessions needing input/working/done and notifies on needs-input/finish/fail | 🟡 Per-session attention (sounds/notifications); child permission asks surface in the parent; no server-wide inbox | 🟡 Tabs show status/unread; terminal program-status reports sessions awaiting permission; no approvals inbox | ✅ Approvals page + attention chips, unread markers incl. child failures, running-task indicator, web/macOS push |
 | **WEB** | **Web, remote, multi-surface** |  |  |  |  |  |  |
-| WEB-01 | Web UI | ✅ `serve` hands out the sugar-crush-web bundle on the same port as the API/WS (suggest package; `--web-root`, `--no-web`) | ✅ The web UI itself: multi-session dashboard served by `serve` on the API port | ✅ claude.ai/code web UI for cloud sessions and for Remote Control of local sessions | ✅ `opencode web` serves the embedded web app (sessions, server picker, terminal panel) | ✅ Δ Web UI from the same server, password-protected by default, opened via `opencode pair`; installable PWA | ✅ Control UI (Vite + Lit SPA on the Gateway port): chat, panes, sessions, agents, settings, usage, automations, plugins |
+| WEB-01 | Web UI | ✅ `serve` hands out the candy-code-web bundle on the same port as the API/WS (suggest package; `--web-root`, `--no-web`) | ✅ The web UI itself: multi-session dashboard served by `serve` on the API port | ✅ claude.ai/code web UI for cloud sessions and for Remote Control of local sessions | ✅ `opencode web` serves the embedded web app (sessions, server picker, terminal panel) | ✅ Δ Web UI from the same server, password-protected by default, opened via `opencode pair`; installable PWA | ✅ Control UI (Vite + Lit SPA on the Gateway port): chat, panes, sessions, agents, settings, usage, automations, plugins |
 | WEB-02 | Server mode (HTTP / WebSocket API) | ✅ HTTP+WS JSON-RPC 2.0 `candy-code.v1`: 62 methods, 34 events, generated schema, validated params, idempotency, seq replay | ✅ Speaks the server's HTTP + WS JSON-RPC API; uses 45 of 62 methods | 🟡 No self-hostable HTTP/WebSocket server for the CLI; SDK uses stdio stream-json; remote access relays through Anthropic | ✅ HTTP OpenAPI 3.1 + SSE event stream; experimental websockets flag | ✅ Δ Shared background service (`opencode service`) or foreground `serve`; new v2 API | ✅ Gateway WebSocket RPC (versioned, scoped) + OpenAI-compatible and OpenResponses HTTP APIs + tools-invoke HTTP |
 | WEB-03 | Multiple clients attached to the same session | ✅ Many clients per session (≤50 subscribers): browsers, `candy-code attach`, scripts; first valid permission answer wins | ✅ Many tabs/devices/attach on one session; deltas, cards and questions mirrored; first answer closes the card everywhere | ✅ Remote Control keeps terminal, browser and phone in sync on the same local session, all able to send messages | ✅ Any number of TUIs/web/desktop/SDK clients attach to one server and share live session state | ✅ Any number of TUIs/web/desktop/SDK clients attach to one server and share live session state | ✅ Many clients on one session (Control UI tabs, TUI, apps, channels) with live sync and presence |
 | WEB-04 | Remote control from phone / browser | 🟡 Remote use via SSH tunnel or TLS reverse proxy (documented); `--allow-remote` direct bind is cleartext; no built-in TLS | 🟡 Usable from a phone through an SSH tunnel or TLS proxy, but at 375 px the top bar overflows (scrollWidth 465, verified) | ✅ Remote Control (`/rc`, `--remote-control`) from claude.ai/code or the mobile app; requires claude.ai subscription | 🟡 LAN access via --hostname 0.0.0.0/mDNS + basic auth; phone use via community Portal/CodeNomad | ✅ Δ `opencode pair --remote` exposes the server via OpenTunnel (E2E encrypted, password); QR for phones | ✅ Remote via Tailscale, stable HTTPS URL, Cloudflare Access, trusted proxy; `tui --url`; phone apps; chat apps |
@@ -537,11 +537,11 @@ The matrix has **398 rows**: the 356-row taxonomy plus 42 🆕 rows for features
 
 ## 4. How and when each tool surfaces context, to the model and to the user
 
-The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 changes. The big table says *whether* a product has a feature. This section covers the question that matters most day to day: **what the model is actually given, at what moment, and what the human can see of it.** "Web" means what a browser user of sugar-crush-web can see; the engine behind it is the same as the TUI's.
+The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 changes. The big table says *whether* a product has a feature. This section covers the question that matters most day to day: **what the model is actually given, at what moment, and what the human can see of it.** "Web" means what a browser user of candy-code-web can see; the engine behind it is the same as the TUI's.
 
 ### 4.1 Instruction files (CLAUDE.md / AGENTS.md / rules)
 
-| | candy-code (TUI) | sugar-crush-web | Claude Code 2.1.301 | OpenCode 1.18.35 | OpenClaw 2026.9.8 |
+| | candy-code (TUI) | candy-code-web | Claude Code 2.1.301 | OpenCode 1.18.35 | OpenClaw 2026.9.8 |
 |---|---|---|---|---|---|
 | **Files read** | `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.clinerules` at every level; personal `~/.candy-code/AGENTS.md`; user-tier `instructions` globs; own rules tier (`~/.candy-code/rules`, `rulebooks/`, `<root>/.candy-code/rules`, `RULES.md`) | Same engine, server-side | `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, managed `/etc/claude-code/CLAUDE.md`, `~/.claude/CLAUDE.md`, `.claude/rules/**`, `~/.claude/rules/**`. `AGENTS.md` natively since 2.1.277, but only if no CLAUDE.md is on the path (switchable in `/config`) | First name with any hit wins, in the order `AGENTS.md` → `CLAUDE.md` → `CONTEXT.md` (so one AGENTS.md hides every CLAUDE.md); global `~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`; `instructions` config (paths, globs, URLs) | Workspace `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, `MEMORY.md` (plus `BOOTSTRAP.md` on first run); execution folder's `AGENTS.md`. **CLAUDE.md is not read** by the native runtime |
 | **Not read** | `CLAUDE.local.md`, `~/.claude/CLAUDE.md`, `.claude/rules`, `.cursor/rules`, `copilot-instructions.md`, `.windsurfrules` | — | Other vendors' files (only imported once via `/init` or `/import`) | `CLAUDE.local.md`, any rules directory, `@imports` | No parent walk, no path-scoped rules, no local override |
@@ -564,7 +564,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
 
 ### 4.2 Memory
 
-| | candy-code | sugar-crush-web | Claude Code | OpenCode | OpenClaw |
+| | candy-code | candy-code-web | Claude Code | OpenCode | OpenClaw |
 |---|---|---|---|---|---|
 | **Native?** | ✅ | ✅ (panel) | ✅ (auto memory) | ❌ plugins only (`opencode-agent-memory` on this host; supermemory, honcho, oc-mnemoria, magic-context) | ✅ |
 | **Store** | `~/.candy-code/memory/<scope>/*.md` (a private **git repo**: `/memory log`, `/memory restore`) + repo-local `<repo>/.candy-code/memory/project/` (shareable) | — | `~/.claude/projects/<project>/memory/`: `MEMORY.md` index + typed topic files | Plugin-defined | Workspace Markdown (`MEMORY.md`, `memory/YYYY-MM-DD.md`) + SQLite FTS5/vector index |
@@ -581,7 +581,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
 
 ### 4.3 Skills
 
-| | candy-code | sugar-crush-web | Claude Code | OpenCode | OpenClaw |
+| | candy-code | candy-code-web | Claude Code | OpenCode | OpenClaw |
 |---|---|---|---|---|---|
 | **Discovery** | built-in < project `.candy-code/skills` < user `~/.candy-code/skills` (user wins, shadowing reported) + **7 foreign trees** (`.claude`, `.agents`, `.opencode`, `~/.config/opencode`), badged by origin | — | Enterprise, personal, project (walk-up), nested (lazy), `--add-dir`, plugins, claude.ai-synced, 20 bundled | `.opencode/skills`, `~/.config/opencode/skills`, `.claude/skills`, `.agents/skills`, `skills.paths`, `skills.urls` registries | Workspace `skills/`, `.agents/skills`, `~/.agents/skills`, managed, Workshop, 49 bundled, plugins; **not** `.claude/skills` |
 | **Model sees** | `<available-skills>` fenced listing in the system prompt **every turn** with a "MUST load the matching skill" mandate (no size budget: 98 skills ≈ 10k tokens here) | — | System-reminder listing, budgeted to 1% of context (least-used lose descriptions first) | XML list in the system prompt + pointer in the `skill` tool | `<available_skills>` (name, description, path), budgeted |
@@ -593,7 +593,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
 
 ### 4.4 Agents and sub-agents
 
-| | candy-code | sugar-crush-web | Claude Code | OpenCode | OpenClaw |
+| | candy-code | candy-code-web | Claude Code | OpenCode | OpenClaw |
 |---|---|---|---|---|---|
 | **Built-ins** | coder, reviewer, debugger, architect, tester, devops (⚠ coder lacks Write; tester lacks Write+Edit) | runs only | Explore, Plan, general-purpose, `claude`, statusline-setup, claude-code-guide, fork | build/plan (primary), general/explore (sub) | none typed; generic `sessions_spawn` |
 | **Custom defs** | `.candy-code/agents` (project beats user beats built-in, ⚠ silently), **plus imported `.claude/agents` and `.opencode/agents`** | — | `.claude/agents`, `~/.claude/agents`, managed, `--agents`, plugins | `.opencode/agents`, `~/.config/opencode/agents`, JSON | `agents.entries.<id>` with own workspace |
@@ -614,7 +614,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
   - Ctrl+P palette is a curated 19-action subset. F10 menu bar.
   - ⚠ An unknown `/word` is sent to the model as a prompt (a typo costs a turn).
   - ⚠ A project command can silently replace `/undo`, `/diff`, `/mcp` and similar; only 9 control-plane names are protected.
-- **sugar-crush-web**: 48 built-ins listed; 30 run server-side, 18 refused as terminal-only (`/model`, `/compact`, `/init`, `/goal`, …). ⚠ `!cmd` runs but reports "refused".
+- **candy-code-web**: 48 built-ins listed; 30 run server-side, 18 refused as terminal-only (`/model`, `/compact`, `/init`, `/goal`, …). ⚠ `!cmd` runs but reports "refused".
 - **Claude Code**: ~116 commands and bundled skills; custom commands merged into skills; MCP prompts become `/server:prompt`; typo suggestions. Messages typed during a turn are delivered *between tool calls*.
 - **OpenCode**: ~33 built-ins; Markdown/JSON commands with `agent`, `model` and `subtask` frontmatter; MCP prompts and skills appear as commands; Ctrl+P palette over all actions.
 - **OpenClaw**: ~60 core commands; skills double as commands (native menus on Discord/Telegram); ⌘K palette in the Control UI; no `` !`cmd` `` templating.
@@ -639,7 +639,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
   - Missing: resources, prompts, elicitation, sampling, user-level config, and MCP-server mode.
   - OAuth is CLI-only.
   - The HTTP tool call has a fixed 30 s total timeout.
-- **sugar-crush-web**: MCP calls are generic cards; `/mcp` prints config status only.
+- **candy-code-web**: MCP calls are generic cards; `/mcp` prints config status only.
 - **Claude Code**:
   - Transports: stdio, SSE, HTTP and WebSocket.
   - OAuth, resources as `@server:` mentions, and prompts as commands; elicitation, but no sampling.
@@ -708,7 +708,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
   - Opt-in `notify`: terminal bell or OSC 9 desktop notification.
   - ⚠ The startup terminal probe leaves `^[[?1;2;4c…` in the shell on every quit.
   - ⚠ The configured `statusLine` command blocks the UI.
-- **sugar-crush-web**: sessions sidebar with question badges, tab-title counts, opt-in desktop notifications, status bar (step, tokens, spend, mode).
+- **candy-code-web**: sessions sidebar with question badges, tab-title counts, opt-in desktop notifications, status bar (step, tokens, spend, mode).
 - **Claude Code**: welcome banner (version, model + effort, account, cwd, tips, announcements); spinner with elapsed time and token count; scriptable status line fed JSON; desktop notifications in Ghostty/Kitty/iTerm2; Remote Control push.
 - **OpenCode**: logo + rotating tips + footer (`dir:branch`, MCP count, version); sidebar with context %, cost, MCP/LSP status, todos, modified files.
 - **OpenClaw**: TUI header (gateway URL / agent / session); the Control UI is the real surface (context ring, plan-usage bars, activity recaps).
@@ -716,7 +716,7 @@ The OpenCode cells in this section describe 1.18.35; §5 lists what 2.0.31 chang
 ### 4.12 Surfaces
 
 - **candy-code**: TUI, `-p` headless, `serve` (WebSocket protocol + browser UI), `attach` (TUI over WS), `acp` (Zed / JetBrains / Neovim). No VS Code extension, desktop app, mobile app, chat channels or cloud execution.
-- **sugar-crush-web**: multi-session cockpit (tabs + live 3×3 grid), server-wide approvals drawer, panels for agents/todo/background/workflows/memory, settings with provenance. Exposes 45 of 62 protocol methods.
+- **candy-code-web**: multi-session cockpit (tabs + live 3×3 grid), server-wide approvals drawer, panels for agents/todo/background/workflows/memory, settings with provenance. Exposes 45 of 62 protocol methods.
 - **Claude Code**: CLI, VS Code, JetBrains, Desktop, web (claude.ai/code), mobile (cloud sessions + Remote Control), Slack, channel plugins.
 - **OpenCode**: one server, many clients (TUI, web, desktop, VS Code extension, ACP, SDK, GitHub/GitLab bots, `attach`).
 - **OpenClaw**: always-on Gateway with 20+ chat channels, Control UI (a full agent IDE), TUI, macOS/Windows/iOS/Android apps, ACP, an OpenAI-compatible API.
@@ -759,7 +759,7 @@ In the 2.0.31 column, **240 of 398 rows carry Δ and 77 have a different status 
 
 ---
 
-## 6. How candy-code and sugar-crush-web can improve (prioritised)
+## 6. How candy-code and candy-code-web can improve (prioritised)
 
 `ISS-nnn` refers to entries in [`../sugar_issues.md`](../sugar_issues.md). Project policy applies throughout: **wire dormant code instead of deleting it**, fix root causes rather than "disable + TODO", and never add a blanket total-request timeout to LLM calls. A striking share of the items below are *wiring* jobs.
 - **Fully dormant:** `StreamingDirectoryLister`, `Tui\SessionTabs`, `CompleteRequest::$jsonSchema`, the served-session idle-compaction check, and 17 protocol methods the web never calls.
@@ -876,7 +876,7 @@ candy-code builds rich state and then hides it. Each competitor shows *something
   - per-tool card summarisers and project-relative diff paths (ISS-100);
   - picker bleed (ISS-094).
 
-### 6.7 sugar-crush-web
+### 6.7 candy-code-web
 
 1. **Security first:** ISS-004, ISS-007, ISS-008, ISS-009, ISS-055 (see 6.1).
 2. **Wire the 17 unused protocol methods (no new server code):**
@@ -914,7 +914,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-01</b> Implementation language / runtime</summary>
 
 - **candy-code** ✅ — Runs on stock php-cli. Each interactive turn runs in a forked child (pcntl) that streams length-prefixed frames to the parent over a socket pair; without pcntl turns, parallel tools and sub-agents run in-process and the screen only updates when they finish. `serve` additionally needs ext-pcntl, ext-posix and ext-ffi (doctor checks). composer.json also *requires* ext-sqlite3, which the code never uses (doctor says so itself) — see ISSUES. — _Evidence:_ `candy-code/composer.json:34-65`; `README.md:92-99`; doctor output `pdo_sqlite usable; ext-sqlite3 (declared in composer.json, unused by the code) loaded`
-- **sugar-crush-web** ✅ — `src-web/` holds the TS (kept out of the PSR-4 `src/`). Deps: @tanstack/vue-virtual (transcript), markdown-it + DOMPurify (rendering). A one-class PHP shim `SugarCraft\CrushWeb\Assets` tells `serve` where `dist/` is. Node is only needed to develop, never to run. — _Evidence:_ `sugar-crush-web/package.json`; `sugar-crush-web/src/Assets.php`; `sugar-crush-web/README.md`
+- **candy-code-web** ✅ — `src-web/` holds the TS (kept out of the PSR-4 `src/`). Deps: @tanstack/vue-virtual (transcript), markdown-it + DOMPurify (rendering). A one-class PHP shim `SugarCraft\CodeWeb\Assets` tells `serve` where `dist/` is. Node is only needed to develop, never to run. — _Evidence:_ `candy-code-web/package.json`; `candy-code-web/src/Assets.php`; `candy-code-web/README.md`
 - **Claude Code 2.1.301** ✅ — The native installer keeps versioned binaries under `~/.local/share/claude/versions/` with a launcher symlink at `~/.local/bin/claude` (observed: ELF x86-64, 2.1.301 = 256 MB on disk; the binary's strings contain Bun runtime messages). The npm package `@anthropic-ai/claude-code` is still a supported install path and runs under Node; docs reference both "the Node or Bun runtime" (Windows VT input note). Bundles ripgrep; on macOS/Linux/WSL the shell's `find`/`grep` are embedded `bfs`/`ugrep`. The Agent SDK (TS/Python) drives the same CLI as a subprocess. — _Evidence:_ local: `file ~/.local/bin/claude`, `du -sh …/versions/2.1.301`; cc:setup; cc:interactive-mode (Alt+M note); cc:tools-reference#glob-tool-behavior
 - **OpenCode 1.18.35** ✅ — v1 layout: `packages/opencode` holds the agent loop and HTTP server, `packages/tui` the OpenTUI/Solid terminal client, `packages/core` the shared Effect services (plus the unused v2 runner), `packages/app` the web/desktop UI, and `packages/desktop` the Electron 42 shell. The npm package `opencode-ai` installs a per-platform prebuilt binary. Tree-sitter WASM is used for bash parsing and syntax highlighting. — _Evidence:_ `ls -la /home/my/.opencode/bin`; packages/desktop/package.json (`electron 42.3.3`); tag v1.18.35
 - **OpenCode 2.0.31** ✅ — 1.18.35: packages/opencode (loop+server) + tui + core with AI SDK everywhere. 2.0.31: packages/core (Location-scoped services, durable session inbox, plugin host), packages/server (new HttpApi), packages/cli, packages/tui (OpenTUI/Solid), packages/app + desktop (Electron), packages/ai (own provider protocols; AI-SDK packages still usable via `aisdk:` prefix), packages/sdk (in-process host incl. Cloudflare workerd). npm `@opencode/cli` installs per-platform binaries; linux-x64 binary is 211,793,376 bytes. — _Evidence:_ V2 repo tag v2.0.31 (22728d6) packages/; npm pack @opencode/cli-linux-x64@2.0.31; V2D/build/sdk/index
@@ -924,7 +924,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-02</b> License / open source</summary>
 
 - **candy-code** 🟡 — `composer.json` `"license": "MIT"`; the only LICENSE is the monorepo root's. The README badge links `LICENSE` relative to `candy-code/`, a broken link in the monorepo and in the split `sugarcraft/candy-code` repo (the sync workflow does not add one). Open source, original work (port of charmbracelet/crush, now far beyond). — _Evidence:_ `candy-code/composer.json:5`; `candy-code/README.md:9`; `ls /home/sites/sugarcraft/*/LICENSE` → none
-- **sugar-crush-web** ✅ — Same license as the monorepo; package.json `"license": "MIT"`. — _Evidence:_ `sugar-crush-web/package.json`
+- **candy-code-web** ✅ — Same license as the monorepo; package.json `"license": "MIT"`. — _Evidence:_ `candy-code-web/package.json`
 - **Claude Code 2.1.301** ❌ — Use is governed by Anthropic Consumer Terms (Free/Pro/Max) or Commercial Terms (Team/Enterprise/API); preinstalling/running CC inside your own products requires Commercial Terms. github.com/anthropics/claude-code publishes CHANGELOG.md, the issue tracker and a `mods/` directory with source for the built-in `diff`, `agents-md`, `sec-default` and `telemetry` mods. Adjacent OSS: `@anthropic-ai/sandbox-runtime` (the sandbox), `anthropics/claude-code-action`, the `claude-plugins-official` marketplace repo. — _Evidence:_ cc:legal-and-compliance; cc:plugins/mods/overview#read-the-source-of-built-in-mods; cc:sandboxing
 - **OpenCode 1.18.35** ✅ — The whole monorepo is MIT: TUI, server, desktop, web, SDKs and docs. Official SDK repos opencode-sdk-js/-go/-python are listed in awesome-opencode. — _Evidence:_ LICENSE; awesome-opencode README (Official Repositories)
 - **OpenCode 2.0.31** ✅ — The whole monorepo is MIT: TUI, server, desktop, web, SDKs and docs. Official SDK repos opencode-sdk-js/-go/-python are listed in awesome-opencode. — _Evidence:_ LICENSE; awesome-opencode README (Official Repositories)
@@ -934,7 +934,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-03</b> Install methods (npm, brew, curl script, composer, binary, docker)</summary>
 
 - **candy-code** 🟡 — Bin entry `bin/candy-code` via composer `bin`. A systemd user unit example ships for `serve` (`docs/examples/candy-code.service`); container use is documented (HOME, `CANDY_CODE_SERVER_DIR`, `CANDY_CODE_SERVER_TOKEN`) but no image is published. — _Evidence:_ `README.md:84-115`; `README.md:1823-1842`; `docs/SERVER.md:201-210`
-- **sugar-crush-web** ✅ — `serve` finds the UI from `--web-root`, `CANDY_CODE_SERVER_WEB_ROOT`, or the installed package; `--no-web` serves API only. The bundle is byte-deterministic (no timestamps) and CI (`web.yml`) fails when `dist/` drifts from `src-web/` — rebuilt here into scratch: identical. — _Evidence:_ `candy-code/docs/SERVER.md:994-1004`; `sugar-crush-web/vite.config.ts`; build diff (this audit)
+- **candy-code-web** ✅ — `serve` finds the UI from `--web-root`, `CANDY_CODE_SERVER_WEB_ROOT`, or the installed package; `--no-web` serves API only. The bundle is byte-deterministic (no timestamps) and CI (`web.yml`) fails when `dist/` drifts from `src-web/` — rebuilt here into scratch: identical. — _Evidence:_ `candy-code/docs/SERVER.md:994-1004`; `candy-code-web/vite.config.ts`; build diff (this audit)
 - **Claude Code 2.1.301** ✅ — Native: `curl -fsSL https://claude.ai/install.sh` piped to bash (macOS/Linux/WSL), `irm https://claude.ai/install.ps1` piped to `iex` (PowerShell), an `install.cmd` for CMD. Homebrew: `claude-code` (stable channel) and `claude-code@latest`. WinGet `Anthropic.ClaudeCode`. apt/dnf/apk repos for Debian/Fedora/RHEL/Alpine. `npm install -g @anthropic-ai/claude-code` (no sudo). Dev container reference/feature. Package-manager installs don't auto-update unless `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE=1` (brew/winget). `claude install [stable/latest/<version>]` switches native builds. No official Docker image of the CLI itself (dev containers instead). — _Evidence:_ cc:setup; cc:devcontainer; help (`install`)
 - **OpenCode 1.18.35** ✅ — Channels: `curl -fsSL https://opencode.ai/install` piped to bash, `npm i -g opencode-ai` (bun/pnpm/yarn too), `brew install anomalyco/tap/opencode` (recommended over core brew), `pacman -S opencode` / `paru -S opencode-bin`, `choco`, `scoop`, `mise use -g github:anomalyco/opencode`, `docker run ghcr.io/anomalyco/opencode`, and GitHub release binaries. `opencode upgrade --method` accepts curl/npm/pnpm/bun/brew/choco/scoop. — _Evidence:_ DOCS/index (Install); CLI: `opencode upgrade --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 used `opencode-ai` npm, brew anomalyco/tap/opencode, choco/scoop. 2.0.31: `curl -fsSL https://opencode.ai/v2/install`, `npm i -g @opencode/cli` (postinstall picks native binary), `brew install anomalyco/tap/opencode-v2`, `paru -S opencode-beta`, `mise use -g opencode` (mise 2026.10.9+ installs v2), official WinGet `Anomaly.OpenCode` (changelog 2.0.28) — though the v2 docs page still says Windows package managers are not supported (doc drift), Docker `ghcr.io/anomalyco/opencode:2.x`, standalone zips incl. baseline/musl. The v2 curl installer replaces the V1 binary. — _Evidence:_ V2D/index; V2D/migrate-v1 (intro); V2CL v2.0.28 (WinGet); install script lines 24-25,198
@@ -944,7 +944,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-04</b> OS support (Linux / macOS / Windows native / WSL)</summary>
 
 - **candy-code** 🟡 — Stated in the README banner. Clipboard image paste covers pngpaste/wl-paste/xclip. serve requires posix/ffi. — _Evidence:_ `README.md:18-21`; `README.md:214`
-- **sugar-crush-web** 🟡 — `serve` refuses to start without ext-pcntl/posix/ffi and refuses native Windows; the page itself is plain ES modules + CSS. — _Evidence:_ `candy-code/docs/SERVER.md:1124-1142,1272-1275`
+- **candy-code-web** 🟡 — `serve` refuses to start without ext-pcntl/posix/ffi and refuses native Windows; the page itself is plain ES modules + CSS. — _Evidence:_ `candy-code/docs/SERVER.md:1124-1142,1272-1275`
 - **Claude Code 2.1.301** ✅ — x64 or ARM64, 4 GB+ RAM, internet required, Anthropic supported countries only. Native Windows works without Git for Windows (PowerShell tool becomes the shell); with Git Bash, Bash tool uses it. Sandbox: macOS, Linux, WSL2 only (not native Windows/WSL1). Computer use from the CLI is macOS-only. Alpine needs `libgcc libstdc++ ripgrep` + `USE_BUILTIN_RIPGREP=0`. — _Evidence:_ cc:setup#system-requirements; cc:sandboxing; cc:computer-use
 - **OpenCode 1.18.35** ✅ — The shell tool knows bash, pwsh, powershell and cmd. `OPENCODE_GIT_BASH_PATH` points at Git Bash on Windows. Windows keybinding defaults differ: ctrl+z undo, and no suspend. The desktop app needs WebView2 on Windows. Docs recommend WSL for best results. — _Evidence:_ OC/tool/shell/id.ts:1-17; DOCS/windows-wsl; DOCS/keybinds (Windows note)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Linux, macOS, Windows native (pwsh/cmd/Git Bash shells; WSL recommended). 2.0.31 (✅): 2.0.28 added native Windows ARM64 CLI/desktop builds; musl and x64-baseline Linux binaries are published. — _Evidence:_ V2CL v2.0.28; V2D/index (download list)
@@ -954,7 +954,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-05</b> Self-update / release channels</summary>
 
 - **candy-code** ❌ — Version comes from `Composer\InstalledVersions` (pretty version + 7-char ref for dev). On a monorepo checkout the ref is whatever the last `composer install` recorded, so it goes stale (measured 115 commits behind HEAD). No update check, no channel selection. — _Evidence:_ `src/Cli/Help.php:92-139`; `--version` output `dev-master (d2f2a58)` vs HEAD `10f121d49`
-- **sugar-crush-web** 🟡 — `CandyCodeClient.firstVersion` vs the latest `server.hello` version drives `ConnectionBanner`'s "The server was updated" + Reload. Updating is `composer update`. — _Evidence:_ `sugar-crush-web/src-web/protocol/client.ts:121-124`; `src-web/components/ConnectionBanner.vue`
+- **candy-code-web** 🟡 — `CandyCodeClient.firstVersion` vs the latest `server.hello` version drives `ConnectionBanner`'s "The server was updated" + Reload. Updating is `composer update`. — _Evidence:_ `candy-code-web/src-web/protocol/client.ts:121-124`; `src-web/components/ConnectionBanner.vue`
 - **Claude Code 2.1.301** ✅ — Checks at startup and periodically, installs in the background, takes effect next launch; `stable` is ~1 week old and skips releases with major regressions. `claude install <version>` pins; `DISABLE_AUTOUPDATER`; `claude respawn [--all]` restarts background sessions on the new binary; `/release-notes` version picker (shown in transcript, not sent to Claude); `claude doctor` reports the last update attempt. — _Evidence:_ cc:setup#auto-updates; cc:setup#configure-release-channel; help (`update`, `install`, `respawn`)
 - **OpenCode 1.18.35** ✅ — `autoupdate` (default on) downloads updates at startup. `"notify"` only tells you. It does not apply to package-manager installs such as brew. `OPENCODE_DISABLE_AUTOUPDATE` and `OPENCODE_ALWAYS_NOTIFY_UPDATE` override it. `opencode upgrade <target>` pins a version. `opencode uninstall` takes `--keep-config` / `--keep-data` / `--dry-run`. v2 ships as a separately installed package rather than an in-place upgrade. — _Evidence:_ DOCS/config (Autoupdate); CLI: `opencode upgrade --help`, `opencode uninstall --help`; opencode.ai/v2/docs
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `autoupdate` true/false/notify on startup; `opencode upgrade [ver] --method`; separate v2 channel (@opencode/cli). 2.0.31 (✅): V1 `autoupdate` maps to `update` (`true`→auto, `notify`, `false`→disable). TUI `/update` and post-update highlights dialog (`/highlights`, disable via cli.json `highlights:false`). Both lines are actively released: npm `opencode-ai` latest 1.19.3 and `@opencode/cli` latest 2.0.31 were both published 2026-10-16. — _Evidence:_ V2CLI: `opencode upgrade --help`; V2D/migrate-v1 (autoupdate); V2CL v2.0.28; `npm view opencode-ai`/`@opencode/cli` dist-tags
@@ -963,8 +963,8 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 </details>
 <details><summary><b>PLAT-06</b> Interfaces offered (TUI / web / desktop / IDE / mobile / chat apps)</summary>
 
-- **candy-code** ✅ — `serve` = WebSocket+HTTP JSON-RPC server (loopback by default, owner token + one-time sign-in URL) that serves `sugarcraft/sugar-crush-web` when installed; `attach [<session>] [--url]` runs the TUI against a server session; `acp` speaks Agent Client Protocol on stdio. All dispatched from `bin/candy-code` before any TTY attach. — _Evidence:_ `bin/candy-code:431-441`; `src/Cli/ParsedArgs.php:55`; `src/Cli/{Serve,Attach,Acp}.php`; `--help` output
-- **sugar-crush-web** ✅ — One page: sessions sidebar, tabs + 3×3 grid, approvals drawer, side panels, settings form. The TUI can attach to the same server session the browser shows. — _Evidence:_ `sugar-crush-web/README.md`; `candy-code/docs/SERVER.md:857-911`
+- **candy-code** ✅ — `serve` = WebSocket+HTTP JSON-RPC server (loopback by default, owner token + one-time sign-in URL) that serves `sugarcraft/candy-code-web` when installed; `attach [<session>] [--url]` runs the TUI against a server session; `acp` speaks Agent Client Protocol on stdio. All dispatched from `bin/candy-code` before any TTY attach. — _Evidence:_ `bin/candy-code:431-441`; `src/Cli/ParsedArgs.php:55`; `src/Cli/{Serve,Attach,Acp}.php`; `--help` output
+- **candy-code-web** ✅ — One page: sessions sidebar, tabs + 3×3 grid, approvals drawer, side panels, settings form. The TUI can attach to the same server session the browser shows. — _Evidence:_ `candy-code-web/README.md`; `candy-code/docs/SERVER.md:857-911`
 - **Claude Code 2.1.301** ✅ — Same engine on every surface; config, project memory and MCP servers are shared across local surfaces. CLI is the most complete (scripting, Agent SDK, third-party providers, computer use on macOS). Desktop = Chat/Cowork/Code tabs with parallel sessions, diff viewer, previews, Dispatch (Pro/Max). Web/mobile run cloud sessions; Remote Control drives a local session from web/mobile. Slack (Pro/Max, cloud) and Claude Tag (Team/Enterprise). — _Evidence:_ cc:platforms; cc:desktop; cc:mobile; cc:remote-control
 - **OpenCode 1.18.35** ✅ — Surfaces: full-screen TUI (`opencode`); inline split-footer mode (`--mini`, `run -i`); `opencode web`; OpenCode Desktop (Electron); VS Code-family extension `sst-dev.opencode`; ACP for Zed/JetBrains/Neovim; GitHub Action and app; GitLab CI/Duo. The repo also has an unpublished Slack bot sample. There is no mobile app. — _Evidence:_ CLI: `opencode --help`; DOCS/ide, DOCS/acp, DOCS/github, DOCS/gitlab; packages/slack/README.md
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): TUI (+--mini inline), web UI, Electron desktop, VS Code ext, ACP editors, GitHub/GitLab bots; no mobile app. 2.0.31 (✅): Adds: shared background service all clients attach to, `opencode pair` one-time links/QR for browsers and the OpenCode iOS app, installable web app, OpenTunnel remote access. Removed from the v2 CLI: `github`, `pr`, `web`, `agent create`, `db` (GitHub Action in the v2 repo still installs v1 and runs `opencode github run`). — _Evidence:_ V2CLI: `opencode --help`; V2D/cli/web; V2CL v2.0.27/2.0.29/2.0.30; github/action.yml:61-70
@@ -974,7 +974,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-07</b> Telemetry & opt-out</summary>
 
 - **candy-code** ✅ — `ModelMetadata` fetches `raw.githubusercontent.com/BerriAI/litellm/.../model_prices_and_context_window.json` lazily (first lookup), in a double-forked detached grandchild, cached in `~/.candy-code/cache/` for 24 h; `CANDY_CODE_DISABLE_MODEL_METADATA=1` turns it off. `share` upload is a stub that never sends. grep for telemetry/sentry/posthog/otel finds nothing. — _Evidence:_ `src/Providers/ModelMetadata.php:71,336-390`; `src/Share/ShareUploader.php`
-- **sugar-crush-web** ✅ — Fonts are system stacks, no CDN, no analytics. Only per-viewer conveniences (theme, drafts, tabs, layout) go to localStorage under `sugar-crush-web:`. — _Evidence:_ `candy-code/src/Server/Http/Responses.php:29-36`; `src-web/stores/storage.ts`
+- **candy-code-web** ✅ — Fonts are system stacks, no CDN, no analytics. Only per-viewer conveniences (theme, drafts, tabs, layout) go to localStorage under `candy-code-web:`. — _Evidence:_ `candy-code/src/Server/Http/Responses.php:29-36`; `src-web/stores/storage.ts`
 - **Claude Code 2.1.301** ✅ — Metrics (latency, reliability, usage) never include code, prompts or file paths; error reports redact secrets/paths/emails; both off by default on Bedrock/Agent Platform/Foundry/Claude Platform on AWS. Session-quality surveys separate (`CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY`). Gotcha: turning telemetry off also stops feature-flag fetching, which silently disables flag-dependent features (prompt suggestions, You-should-know mod, Monitor tool, `/skill-doctor`, claude.ai skill sync, Remote Control eligibility). Analytics are sent by the built-in `cc-plugin-telemetry` mod. — _Evidence:_ cc:data-usage#telemetry-services; cc:env-vars#features-that-need-feature-flag-fetching; cc:plugins/mods/overview#mods-built-into-claude-code
 - **OpenCode 1.18.35** 🟡 — I grepped OC/, TUI/ and CORE/ for posthog, segment, mixpanel and telemetry SDKs and found none. The web and desktop renderers call `Sentry.init` only when `VITE_SENTRY_DSN` is set at build time, and no user opt-out is documented. Outbound calls: the models catalog (`https://models.opencode.ai`, off with `OPENCODE_DISABLE_MODELS_FETCH`), update checks (`OPENCODE_DISABLE_AUTOUPDATE`), npm plugin installs, LSP downloads, and share sync only for shared sessions. OpenCode-hosted providers (Zen/Go) receive `x-opencode-*` project/session headers. — _Evidence:_ APP/entry.tsx:133-137; packages/desktop/src/renderer/index.tsx:40-42; CORE/models-dev.ts:160; OC/session/llm/request.ts:184-201
 - **OpenCode 2.0.31** 🟡 — I grepped OC/, TUI/ and CORE/ for posthog, segment, mixpanel and telemetry SDKs and found none. The web and desktop renderers call `Sentry.init` only when `VITE_SENTRY_DSN` is set at build time, and no user opt-out is documented. Outbound calls: the models catalog (`https://models.opencode.ai`, off with `OPENCODE_DISABLE_MODELS_FETCH`), update checks (`OPENCODE_DISABLE_AUTOUPDATE`), npm plugin installs, LSP downloads, and share sync only for shared sessions. OpenCode-hosted providers (Zen/Go) receive `x-opencode-*` project/session headers. — _Evidence:_ APP/entry.tsx:133-137; packages/desktop/src/renderer/index.tsx:40-42; CORE/models-dev.ts:160; OC/session/llm/request.ts:184-201
@@ -984,7 +984,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-08</b> Offline / air-gapped operation (local models only)</summary>
 
 - **candy-code** ✅ — No provider selected → `EchoProvider` through the full engine (stderr says so on `-p`). A failed LiteLLM refresh keeps the old file and waits a day. Caveat: the package ships `.candy-code/config.dev.json` naming a maintainer demo endpoint (`skynet2.interserver.net`), selectable but never default. — _Evidence:_ `src/Cli/NonInteractive.php:207-221`; `src/Cli/Bootstrap.php:10001-10015`; `candy-code/.candy-code/config.dev.json`; `README.md:156-161`
-- **sugar-crush-web** ✅ — Nothing is fetched from outside the server origin; model reachability is the server's concern (sglang/custom local endpoints). — _Evidence:_ `sugar-crush-web/dist/index.html`; CSP above
+- **candy-code-web** ✅ — Nothing is fetched from outside the server origin; model reachability is the server's concern (sglang/custom local endpoints). — _Evidence:_ `candy-code-web/dist/index.html`; CSP above
 - **Claude Code 2.1.301** ❌ — Network access is a system requirement. Air-gapped-ish enterprise setups use Bedrock/Agent Platform/Foundry private endpoints, an LLM gateway, or self-hosted cloud environments, but all still call Claude. Local state (transcripts, checkpoints, memory) is on disk, the agent loop is not. — _Evidence:_ cc:setup#system-requirements; cc:llm-gateway; cc:gateways
 - **OpenCode 1.18.35** ✅ — Any local OpenAI-compatible server works through a custom provider using `@ai-sdk/openai-compatible`. This machine runs SGLang on skynet2 that way. Air-gap switches: `OPENCODE_DISABLE_MODELS_FETCH` / `OPENCODE_MODELS_PATH`, `OPENCODE_DISABLE_AUTOUPDATE`, `OPENCODE_DISABLE_LSP_DOWNLOAD`, `--pure` (no external plugins), and `share: disabled`. Unpinned npm plugins are fetched at startup, so offline use needs pinned or local plugins. websearch/webfetch obviously need network. — _Evidence:_ DOCS/providers (llama.cpp, LM Studio, Ollama); LOCAL: ~/.config/opencode/opencode.jsonc (sglang provider); CLI: `--pure`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Local models via Ollama/LM Studio/llama.cpp/any OpenAI-compatible; flags disable models.dev fetch, autoupdate, LSP downloads. 2.0.31 (✅): Same capability; custom providers now `providers.<id>.package: "aisdk:@ai-sdk/openai-compatible"` with `settings.baseURL`. Plugins are installed in the background at service start; pinned versions stay offline-safe. — _Evidence:_ V2D/migrate-v1 (Providers); V2D/plugins (Reload)
@@ -994,7 +994,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-09</b> Startup time / footprint</summary>
 
 - **candy-code** ✅ — Measured on PHP 8.3.6 (no opcache CLI). Help/version/subcommands never construct Program, so they are fast. Footprint dominated by aws-sdk-php and google/cloud-ai-platform. — _Evidence:_ measurements in header of this file; `scratchpad/a3/tools/ttfb.py`
-- **sugar-crush-web** ✅ — Measured by the scratch build. The first cold `serve` start here took more than 15 s; warm restarts printed the sign-in line in ~10 s (wall clock incl. PHP start). — _Evidence:_ build output (this audit); `sugar-crush-web/dist/assets/`
+- **candy-code-web** ✅ — Measured by the scratch build. The first cold `serve` start here took more than 15 s; warm restarts printed the sign-in line in ~10 s (wall clock incl. PHP start). — _Evidence:_ build output (this audit); `candy-code-web/dist/assets/`
 - **Claude Code 2.1.301** 🟡 — Measured locally: `claude --version` ≈10 ms, 40 MB RSS (fast path only, not a full session start). `--bare` skips hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads and CLAUDE.md discovery (sets CLAUDE_CODE_SIMPLE=1). Fullscreen renderer keeps memory flat in long conversations; `/heapdump`; `CLAUDE_CODE_TOOL_MEMORY_LIMIT` caps Bash/Monitor memory via cgroup on Linux. — _Evidence:_ local: `/usr/bin/time claude --version`; help (`--bare`, `--safe-mode`); cc:fullscreen; cc:tools-reference#memory-limit-on-linux-and-wsl
 - **OpenCode 1.18.35** 🟡 — Measured 3× on this host with `/usr/bin/time opencode --version`: 1.11-1.12 s and 204 MB max RSS, for printing the version alone. I did not start the TUI (forbidden by the brief), so interactive cold-start was not measured. `opencode debug startup` exists for timing. MCP cold boot is the documented reason for `run --attach` to a warm server. — _Evidence:_ measured locally; CLI: `opencode debug --help`; DOCS/cli (run --attach rationale)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): `opencode --version` measured 1.1 s / ~200 MB RSS; 186 MB binary; `opencode debug startup` prints timing. 2.0.31 (✅): Measured 3x on this host in an isolated fake HOME with the npm-packed linux-x64 2.0.31 binary: 0.14-0.16 s, 88.7-89.5 MB max RSS. The TUI was not launched. Startup of real sessions depends on the shared background service (already running = fast attach). — _Evidence:_ measured: scratch npmpack/linux/package/bin/opencode --version
@@ -1004,7 +1004,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLAT-10</b> Localization / i18n of the UI</summary>
 
 - **candy-code** 🟡 — `Lang::useLaunchLocale()` is the first statement after autoload; any non-en locale falls back to en because `lang/` contains only `en.php`. Some strings remain hard-coded (e.g. the no-TTY refusal in bin/candy-code). — _Evidence:_ `bin/candy-code:227`; `src/Lang.php:74-89`; `lang/en.php` (only file)
-- **sugar-crush-web** ❌ — Server error messages arrive localised via `Lang::t`, but every label, button and help text in `src-web/` is a literal. — _Evidence:_ `sugar-crush-web/src-web/components/*.vue`
+- **candy-code-web** ❌ — Server error messages arrive localised via `Lang::t`, but every label, button and help text in `src-web/` is a literal. — _Evidence:_ `candy-code-web/src-web/components/*.vue`
 - **Claude Code 2.1.301** 🟡 — `language` (any settings file, unvalidated string such as "japanese") is passed verbatim as an instruction to always respond in that language; voice dictation has a fixed supported-language list; session titles otherwise follow the conversation language. Word motions handle CJK; spellcheck skips CJK/Thai/Lao/Khmer/Myanmar. No translated interface. — _Evidence:_ cc:settings-reference#language; cc:interactive-mode; cc:voice-dictation
 - **OpenCode 1.18.35** 🟡 — `APP/i18n/` has about 60 locale files (am … zh, zht) with a parity test. The TUI has no i18n layer. Docs exist in about 17 languages (ar, bs, da, de, es, fr, it, ja, ko, nb, pl, pt-br, ru, th, tr, zh-cn, zh-tw). — _Evidence:_ APP/i18n/*.ts; packages/web/src/content/docs/<lang>/
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): TUI English-only; desktop/web app ships ~60 locales; docs translated into ~17 languages. 2.0.31 (🟡): APP runtime i18n has ~67 locale files (packages/app/src/runtime/i18n). The v2 docs site under services/www is English; console docs proxy by locale. — _Evidence:_ packages/app/src/runtime/i18n/; README.*.md
@@ -1017,7 +1017,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-01</b> Anthropic API</summary>
 
 - **candy-code** 🟡 — `ProviderFactory::createAnthropic()` builds a `CustomProvider` with Anthropic headers; tools go out as OpenAI `tools`, images as `image_url`, streaming with `stream_options.include_usage`. Consequences: no cache_control breakpoints, no native thinking blocks/budget, no PDF/document blocks, default max_tokens 4096. Native Claude is available through `vertex` (rawPredict, native body) and `bedrock` (Converse), or `claude-code` (shells to the CLI). Docs are honest about this (Limitations). Default model `claude-sonnet-4-6`. — _Evidence:_ `src/Providers/ProviderFactory.php:983-1056`; `README.md:1431-1432`; `README.md:2189`
-- **sugar-crush-web** 🟡 — The browser can only use the provider/model the server process resolved at launch (flag → env → config). The status bar shows `provider · model` read-only from the session summary. — _Evidence:_ `src-web/components/StatusBar.vue:28-32`
+- **candy-code-web** 🟡 — The browser can only use the provider/model the server process resolved at launch (flag → env → config). The status bar shows `provider · model` read-only from the session summary. — _Evidence:_ `src-web/components/StatusBar.vue:28-32`
 - **Claude Code 2.1.301** ✅ — Auth precedence covers env `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper`, stored OAuth. `--betas` adds beta headers (API-key users). First-party-only extras: advisor server tool, server-side auto-mode review, web search, tool search, feature flags. — _Evidence:_ cc:authentication; cc:model-config; help (`--betas`)
 - **OpenCode 1.18.35** ✅ — Built-in `anthropic` provider. `anthropic.txt` base prompt for `claude` model IDs. Ephemeral cacheControl on the first 2 system and last 2 messages. Built-in variants `high` (default) and `max` thinking budgets. — _Evidence:_ OC/session/system.ts:43; OC/provider/transform.ts:356-385; DOCS/models (Variants)
 - **OpenCode 2.0.31** ✅ — Built-in `anthropic` provider. `anthropic.txt` base prompt for `claude` model IDs. Ephemeral cacheControl on the first 2 system and last 2 messages. Built-in variants `high` (default) and `max` thinking budgets. — _Evidence:_ OC/session/system.ts:43; OC/provider/transform.ts:356-385; DOCS/models (Variants)
@@ -1027,7 +1027,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-02</b> OpenAI API (Chat Completions / Responses)</summary>
 
 - **candy-code** 🟡 — Default model gpt-4o; built-in price/vision tables (vision list includes gpt-5/o1/o3/o4-mini); LiteLLM DB for unknown prices. `complete()`/`completeStream()` always send `temperature: 0.7` and `max_tokens: 4096` (or maxOutputTokens), no `max_completion_tokens`, no `reasoning_effort` — so the README's own `--model gpt-5` example fails with a 400. See ISSUES P1. — _Evidence:_ `src/Providers/OpenAIProvider.php:366-445`; `src/Providers/OpenAIProvider.php:100-112`; `README.md:1559`
-- **sugar-crush-web** 🟡 — As MOD-01. — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** 🟡 — As MOD-01. — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ❌ — The gateway compatibility guide lists only those three API formats (Foundry and Claude Platform on AWS implement Anthropic Messages). Docs state Anthropic "doesn't support routing Claude Code to non-Claude models through any gateway". — _Evidence:_ cc:llm-gateway-protocol#api-formats; cc:llm-gateway
 - **OpenCode 1.18.35** ✅ — OpenAI provider via @ai-sdk/openai (Responses). Base prompts: beast.txt for gpt-4/o1/o3, gpt.txt, gpt-astra.txt for gpt-6, codex.txt. `gpt-*` models other than oss and gpt-4 get `apply_patch` and lose edit/write. Tools are sent with `strict:false`. `promptCacheKey` is the session ID. Variants none…xhigh. — _Evidence:_ OC/session/system.ts:33-41; OC/tool/registry.ts:297-300; OC/session/llm/request.ts:150-160; OC/provider/transform.ts:1323-1336
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): OpenAI (Responses via @ai-sdk/openai); GPT models get apply_patch instead of edit/write; codex/gpt prompts. 2.0.31 (✅): GPT-family models get the `patch` tool instead of edit/write (docs). ChatGPT OAuth requests default to zstd body encoding (`settings.encoding`). Native OpenAI Responses compaction is available (`settings.compaction.type: native`). — _Evidence:_ V2D/tools (Patch); V2CL v2.0.28 (encoding); V2D/compaction (Providers); V2C/plugin/optimize.ts:15-19
@@ -1037,7 +1037,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-03</b> Google Gemini / Vertex AI</summary>
 
 - **candy-code** 🟡 — `VertexProvider` routes `gemini-*` to `:generateContent`/`:streamGenerateContent` with `contents`/`systemInstruction`, `inlineData` images, `thinkingConfig.thinkingBudget`. Docs admit the Gemini thinking changes were not checked against a live endpoint. A Gemini key could be used via `custom` + Google's OpenAI-compat URL (undocumented). Price table has 2.0/2.5 only. — _Evidence:_ `src/Providers/VertexProvider.php:70-90,2015-2025,195-230`; `docs/SETTINGS.md:469-478`
-- **sugar-crush-web** 🟡 — As MOD-01. — _Evidence:_ `server.info` providers list (live probe)
+- **candy-code-web** 🟡 — As MOD-01. — _Evidence:_ `server.info` providers list (live probe)
 - **Claude Code 2.1.301** 🟡 — `CLAUDE_CODE_USE_VERTEX=1`, `ANTHROPIC_VERTEX_BASE_URL`; alias table differs per provider (opus→Opus 5.5, sonnet→Sonnet 4.5, haiku→Haiku 4.5 there); tool search only on 4.5+ models there; auto mode only on Sonnet 5+/Opus 4.7+/Haiku 5.5/Fable on that provider. — _Evidence:_ cc:google-vertex-ai; cc:model-config#model-aliases; cc:mcp#configure-tool-search; cc:permission-modes
 - **OpenCode 1.18.35** ✅ — Google (AI Studio) and Google Vertex AI providers from the models.dev catalog. `gemini-*` model IDs get the gemini.txt base prompt. Variants `low` and `high`. — _Evidence:_ OC/session/system.ts:42; DOCS/providers (Google Vertex AI); DOCS/models
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Google Gemini + Vertex AI providers; gemini.txt base prompt; low/high variants. 2.0.31 (✅): 2.0.26 added Google Cloud ADC credentials to the Vertex connect flow; 2.0.28 continues split Gemini/Vertex responses via provider continuation tokens. The v1 gemini.txt base prompt is gone (generic system.txt used). — _Evidence:_ V2CL v2.0.26, v2.0.28; V2C/plugin/optimize.ts (no gemini plugin)
@@ -1047,7 +1047,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-04</b> AWS Bedrock</summary>
 
 - **candy-code** ✅ — Default model `us.anthropic.claude-sonnet-4-6`, region us-east-1. Credentials left to the SDK default chain (env, profile, instance role). Streaming is incremental (the SDK sets `@http.stream=true` for event streams). Caveats: SDK-internal retries stack with the engine's retry ladder; connect bound not honoured on the streaming transport (see ISSUES). — _Evidence:_ `src/Providers/BedrockProvider.php:300-325,620-650`; `vendor/aws/aws-sdk-php/src/AwsClient.php:668-689`
-- **sugar-crush-web** 🟡 — As MOD-01. — _Evidence:_ `server.info` providers list (live probe)
+- **candy-code-web** 🟡 — As MOD-01. — _Evidence:_ `server.info` providers list (live probe)
 - **Claude Code 2.1.301** ✅ — Telemetry/error reporting default off; WebSearch, PushNotification, Monitor, routines, Remote Control, channels, voice are unavailable on Bedrock; fallback targets resolve through deployment model IDs. — _Evidence:_ cc:amazon-bedrock; cc:claude-platform-on-aws; cc:tools-reference
 - **OpenCode 1.18.35** ✅ — `amazon-bedrock` options: `region`, `profile`, `endpoint`. `AWS_BEARER_TOKEN_BEDROCK` or `/connect` takes precedence over profiles. Caching uses Bedrock `cachePoint`. — _Evidence:_ DOCS/config (Amazon Bedrock); DOCS/providers; OC/provider/transform.ts:370-372
 - **OpenCode 2.0.31** ✅ — `amazon-bedrock` options: `region`, `profile`, `endpoint`. `AWS_BEARER_TOKEN_BEDROCK` or `/connect` takes precedence over profiles. Caching uses Bedrock `cachePoint`. — _Evidence:_ DOCS/config (Amazon Bedrock); DOCS/providers; OC/provider/transform.ts:370-372
@@ -1057,7 +1057,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-05</b> Azure OpenAI / Foundry</summary>
 
 - **candy-code** 🟡 — grep for azure in src/docs finds nothing. Bearer-key auth on `custom` works only with Azure's newer `/openai/v1/` surface; deployments of reasoning models also hit the MOD-02 parameter bug. — _Evidence:_ `src/Providers/ProviderFactory.php:89-121` (type roster)
-- **sugar-crush-web** 🟡 — No Azure-specific surface anywhere in the web UI.
+- **candy-code-web** 🟡 — No Azure-specific surface anywhere in the web UI.
 - **Claude Code 2.1.301** 🟡 — `CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_FOUNDRY_BASE_URL`; Azure-hosted Foundry deployments reject tool search so MCP tools load upfront; alias table: opus→Opus 4.6 there. — _Evidence:_ cc:microsoft-foundry; cc:mcp#scale-with-mcp-tool-search; cc:model-config#model-aliases
 - **OpenCode 1.18.35** ✅ — Both providers are documented. A built-in azure plugin handles auth. `useCompletionUrls` switches to the chat-completions URL and strips Responses-only options. — _Evidence:_ DOCS/providers (Azure OpenAI, Azure Cognitive Services); OC/session/llm/request.ts:88-94; OC/plugin/azure.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Azure OpenAI + Azure Cognitive Services providers (useCompletionUrls option). 2.0.31 (✅): Provider ID `azure-cognitive-services` → `azure` on migration; 2.0.28 stopped querying Azure resources at startup. — _Evidence:_ V2D/migrate-v1 (provider ID table); V2CL v2.0.28
@@ -1067,7 +1067,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-06</b> OpenRouter / aggregators</summary>
 
 - **candy-code** 🟡 — `OPENAI_BASE_URL` redirects `openai`, `sglang` and `custom` built-ins; named provider blocks in config can declare any base URL/model/apiKey (`${VAR}` interpolation). Pricing from LiteLLM exact match (incl. `provider/id` form). — _Evidence:_ `docs/ENVIRONMENT.md:255-258`; `src/Providers/ProviderFactory.php:118-121,407-436`
-- **sugar-crush-web** 🟡 — As MOD-01.
+- **candy-code-web** 🟡 — As MOD-01.
 - **Claude Code 2.1.301** 🟡 — Gateways centralise credentials, budgets, audit logs, provider switching; `allowedProviders: ["customEndpoint"]` (managed) forces gateway use; model discovery via the gateway's models endpoint cached in `~/.claude/cache/gateway-models.json`. `claude gateway --config <yaml>` runs the enterprise auth/telemetry gateway. Aggregators (OpenRouter-style) only work if they expose Anthropic Messages format, and non-Claude models are explicitly unsupported. — _Evidence:_ cc:llm-gateway; cc:llm-gateway-protocol#model-discovery; cc:claude-apps-gateway; help (`gateway`)
 - **OpenCode 1.18.35** ✅ — All are first-class directory entries. OpenRouter also gets cacheControl. OpenCode Zen (curated pay-as-you-go) and OpenCode Go (subscription) are OpenCode's own gateways. — _Evidence:_ DOCS/providers (directory headings); DOCS/zen; DOCS/go
 - **OpenCode 2.0.31** ✅ — All are first-class directory entries. OpenRouter also gets cacheControl. OpenCode Zen (curated pay-as-you-go) and OpenCode Go (subscription) are OpenCode's own gateways. — _Evidence:_ DOCS/providers (directory headings); DOCS/zen; DOCS/go
@@ -1077,7 +1077,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-07</b> Local models (Ollama, LM Studio, llama.cpp, vLLM, SGLang)</summary>
 
 - **candy-code** ✅ — SglangProvider reads `/model_info` + `/server_info` once per session for context window and `has_image_understanding`, session-affinity headers, heartbeat on batch path; `toolCallParser` openai/minimax-xml-fallback/dsml. Caveat: streamed requests bound the response-header wait to 15 s (servers that withhold headers until first token, e.g. Ollama, can fail) — ISSUES P2. — _Evidence:_ `src/Providers/SglangProvider.php:600-670,1118-1160`; `README.md:1440-1535`; `src/Providers/Concerns/HttpClientDefaults.php:284-300`
-- **sugar-crush-web** 🟡 — Works for web sessions exactly as for TUI sessions of the same server. — _Evidence:_ `server.info` providers: anthropic, bedrock, claude-code, custom, dev-sglang, openai, sglang, vertex
+- **candy-code-web** 🟡 — Works for web sessions exactly as for TUI sessions of the same server. — _Evidence:_ `server.info` providers: anthropic, bedrock, claude-code, custom, dev-sglang, openai, sglang, vertex
 - **Claude Code 2.1.301** ❌ — Unsupported per docs. Unrecognized model IDs behind a gateway get conservative request shapes (fixed thinking budget, no effort/context-management fields, assumed window) — community hacks exist but are outside support. — _Evidence:_ cc:gateways; cc:llm-gateway-protocol; cc:model-config#correct-the-window-for-a-gateway-or-custom-model-id
 - **OpenCode 1.18.35** ✅ — Local engines are configured as custom providers with `baseURL` and model `limit`s. This host's global config defines an `sglang` provider (`@ai-sdk/openai-compatible`, 1M context, custom reasoning variants). — _Evidence:_ DOCS/providers (Ollama, LM Studio, llama.cpp); LOCAL: ~/.config/opencode/opencode.jsonc `provider.sglang`
 - **OpenCode 2.0.31** ✅ — Local engines are configured as custom providers with `baseURL` and model `limit`s. This host's global config defines an `sglang` provider (`@ai-sdk/openai-compatible`, 1M context, custom reasoning variants). — _Evidence:_ DOCS/providers (Ollama, LM Studio, llama.cpp); LOCAL: ~/.config/opencode/opencode.jsonc `provider.sglang`
@@ -1087,7 +1087,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-08</b> Arbitrary OpenAI-compatible endpoint</summary>
 
 - **candy-code** ✅ — Named blocks live under `providers.<name>` in user config (or the package's config.dev.json) and are selectable by name via `CANDY_CODE_PROVIDER` or `/model <name>`. `${VAR}`/`${VAR:-default}` env interpolation. Streams with include_usage. — _Evidence:_ `src/Providers/ProviderFactory.php:118-121,1520-1549`; `src/Providers/CustomProvider.php:460-680`
-- **sugar-crush-web** 🟡 — Provider/egress settings are risk classes `egress`/`spend`, so `settings.set` refuses them over the wire. — _Evidence:_ `candy-code/src/Protocol/Methods/SettingsMethods.php:110`
+- **candy-code-web** 🟡 — Provider/egress settings are risk classes `egress`/`spend`, so `settings.set` refuses them over the wire. — _Evidence:_ `candy-code/src/Protocol/Methods/SettingsMethods.php:110`
 - **Claude Code 2.1.301** ❌ — `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`/`apiKeyHelper`; tool search auto-disables for non-first-party hosts unless `ENABLE_TOOL_SEARCH` is set. — _Evidence:_ cc:llm-gateway-connect; cc:mcp#configure-tool-search
 - **OpenCode 1.18.35** ✅ — Under `provider.<id>`: `npm`, `name`, `options` (baseURL, apiKey, headers, timeouts, setCacheKey), and `models` (limits, `reasoning`, `tool_call`, options, `variants`). `whitelist`/`blacklist` filter the picker. — _Evidence:_ DOCS/providers (Custom provider, Hiding models); DOCS/config (Models)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Custom provider = any AI-SDK npm pkg (e.g. @ai-sdk/openai-compatible) + baseURL, models, limits, variants. 2.0.31 (✅): Custom provider: `providers.<id>.package` (aisdk:… or native), `settings.baseURL`, headers, body, compatibility — _Evidence:_ V2D/providers; V2D/migrate-v1 (Providers)
@@ -1097,7 +1097,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-09</b> Subscription OAuth login (Claude Pro/Max, ChatGPT, Copilot, etc.)</summary>
 
 - **candy-code** ❌ — `ClaudeCodeProvider::options()` hard-codes `'bare' => true`; Claude Code 2.1.301 `--help`: "Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via --settings (OAuth and keychain are never read)". So a Claude Pro/Max login cannot be used; ChatGPT/Copilot logins unsupported. MCP OAuth exists but is a different row. — _Evidence:_ `src/Providers/ClaudeCodeProvider.php:112-127`; `src/Providers/ClaudeCodeInvocation.php:108-152`; `claude --help`
-- **sugar-crush-web** ❌ — The web never handles provider credentials.
+- **candy-code-web** ❌ — The web never handles provider credentials.
 - **Claude Code 2.1.301** ✅ — `/login`; `claude auth login --claudeai/--console/--sso/--email`; `claude auth status --json`; free plan excluded; multi-account login; managed `forceLoginMethod`/`forceLoginOrgUUID`. Subscription usage limits apply, with automatic continue when a limit resets (v2.1.234+) and usage credits. — _Evidence:_ help (`auth login`, `setup-token`); cc:authentication; cc:interactive-mode#wait-for-a-usage-limit-to-reset
 - **OpenCode 1.18.35** 🟡 — `/connect` or `opencode providers login` offers ChatGPT Plus/Pro OAuth (built-in openai plugin, regional residency), GitHub Copilot device flow, and GitLab Duo. The docs' info box says Claude Pro/Max plugins have not been bundled since 1.3.0 because Anthropic prohibits it, so Claude subscriptions need a third-party auth plugin. Older `opencode-anthropic-auth` and `opencode-copilot-auth` packages are still in this host's cache. — _Evidence:_ DOCS/providers (Anthropic info box, OpenAI, GitHub Copilot); OC/plugin/openai, OC/plugin/github-copilot; LOCAL: ~/.cache/opencode/node_modules/opencode-anthropic-auth
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Native OAuth for ChatGPT Plus/Pro, GitHub Copilot, GitLab Duo; Claude Pro/Max unbundled since 1.3.0 (3rd-party plugin). 2.0.31 (🟡): `opencode auth` gains `switch` (active account per integration), `export` (prints secrets as JSON) and `import`. Desktop Settings → Providers manages multiple accounts (2.0.29). — _Evidence:_ V2CLI: `opencode auth --help`; V2CL v2.0.29
@@ -1107,7 +1107,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-10</b> Provider count / model catalog source (e.g. models.dev)</summary>
 
 - **candy-code** 🟡 — `ProviderFactory::availableTypes()` = openai, anthropic, claude-code, sglang, bedrock, vertex, custom. `ModelChoice::paletteLabels()` offers at most three ids per provider; any id can be typed (`/model <provider> <model>`). LiteLLM DB is used only to size/price, not to list. Vertex default `claude-3-sonnet@20240229` is a retired model (ISSUES P2). — _Evidence:_ `src/Providers/ProviderFactory.php:438-575`; `src/Config/Settings/ModelChoice.php:71-81`; `candy-code models` output
-- **sugar-crush-web** 🧪 — 17 of the 62 protocol methods are unused by the web, `server.info` among them, so there is no catalog/about view. — _Evidence:_ `candy-code/src/Protocol/Methods/ServerMethods.php`; grep of `src-web/` (this audit)
+- **candy-code-web** 🧪 — 17 of the 62 protocol methods are unused by the web, `server.info` among them, so there is no catalog/about view. — _Evidence:_ `candy-code/src/Protocol/Methods/ServerMethods.php`; grep of `src-web/` (this audit)
 - **Claude Code 2.1.301** 🟡 — Provider routes: Anthropic API, Bedrock (incl. Mantle), Agent Platform, Foundry, Claude Platform on AWS, gateways. Current API defaults: Opus 5.5, Sonnet 5.5, Haiku 5.5 (v2.1.293), Fable 5.1. `ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL` pins; `availableModels` allowlist; org default model; custom model option; `modelOverrides`. — _Evidence:_ cc:model-config#model-aliases; cc:model-config#restrict-model-selection; CL v2.1.293
 - **OpenCode 1.18.35** ✅ — The catalog comes from `OPENCODE_MODELS_URL` or `https://models.opencode.ai`, cached in `~/.cache/opencode/models.json`. `opencode models [provider] --verbose` shows costs. `--refresh` re-fetches. `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` shows experimental entries. — _Evidence:_ CORE/models-dev.ts:160; CLI: `opencode models --help`; DOCS/models
 - **OpenCode 2.0.31** ✅ — The catalog comes from `OPENCODE_MODELS_URL` or `https://models.opencode.ai`, cached in `~/.cache/opencode/models.json`. `opencode models [provider] --verbose` shows costs. `--refresh` re-fetches. `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` shows experimental entries. — _Evidence:_ CORE/models-dev.ts:160; CLI: `opencode models --help`; DOCS/models
@@ -1117,7 +1117,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-11</b> Mid-session model switching (/model)</summary>
 
 - **candy-code** ✅ — `/model` writes `provider` to `~/.candy-code/config.json` and the model into the per-provider `models` map via SettingsWriter; engine rebuild waits for a running turn. Persisted choice is global (affects every project's next launch). — _Evidence:_ `builtin-commands/0300-model.php`; `README.md:149-152`; `src/Config/Settings/ModelChoice.php:7-25`
-- **sugar-crush-web** ❌ — No model switch exists anywhere in the web; a new session takes the server default. `session.create` has no provider/model param. — _Evidence:_ live probe `command.exec name=model`; `candy-code/src/Protocol/Schema/MethodSchemas.php:157-160`
+- **candy-code-web** ❌ — No model switch exists anywhere in the web; a new session takes the server default. `session.create` has no provider/model param. — _Evidence:_ live probe `command.exec name=model`; `candy-code/src/Protocol/Schema/MethodSchemas.php:157-160`
 - **Claude Code 2.1.301** ✅ — `/model` saves the default for new sessions unless `s`; arrows adjust effort in the picker; PreModelSwitch (can block) / PostModelSwitch hooks; switching to a smaller-window model summarizes first with the previous model (v2.1.301); remote devices can switch; `--model`. — _Evidence:_ cc:commands; cc:interactive-mode#when-claude-code-sends-what-you-queued; cc:hooks#premodelswitch; CL v2.1.301
 - **OpenCode 1.18.35** ✅ — Model picker supports favorites (ctrl+f) and provider list (ctrl+a). `model_cycle_recent` is F2/shift+F2. `/variants` and ctrl+t switch reasoning variant. Every user message stores its provider/model/variant, and the loop resolves the model from the latest user message. — _Evidence:_ DOCS/keybinds; OC/session/prompt.ts:1140 (`getModel(lastUser.model…)`); TUI/app.tsx:636-720
 - **OpenCode 2.0.31** ✅ — Model picker supports favorites (ctrl+f) and provider list (ctrl+a). `model_cycle_recent` is F2/shift+F2. `/variants` and ctrl+t switch reasoning variant. Every user message stores its provider/model/variant, and the loop resolves the model from the latest user message. — _Evidence:_ DOCS/keybinds; OC/session/prompt.ts:1140 (`getModel(lastUser.model…)`); TUI/app.tsx:636-720
@@ -1127,7 +1127,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-12</b> Per-agent / per-subagent model selection</summary>
 
 - **candy-code** ✅ — An unservable model is never relabelled: the run uses the session model and says so on the trail and in the Task result. Workflow stages likewise run on the session provider. — _Evidence:_ `docs/AGENTS_AUTHORING.md:224-245`; `src/Tools/BuiltIn/TaskTool.php:1125-1150`
-- **sugar-crush-web** 🟡 — Agent view header shows status, step, tokens, cost. — _Evidence:_ `src-web/components/agents/AgentView.vue`
+- **candy-code-web** 🟡 — Agent view header shows status, step, tokens, cost. — _Evidence:_ `src-web/components/agents/AgentView.vue`
 - **Claude Code 2.1.301** ✅ — Order: per-invocation param → definition `model` → `CLAUDE_CODE_SUBAGENT_MODEL` → main model (env var can be forced onto all, Explore included). Explore runs on Opus when the main model is Fable on 1P. `CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL` (v2.1.296); Agent `effort` param (v2.1.292). — _Evidence:_ cc:sub-agents#choose-a-model; CL v2.1.292; CL v2.1.296
 - **OpenCode 1.18.35** ✅ — `agent.<name>.model` and `variant`. A task child uses `next.model ?? parent message model`. A command's `model:` overrides the model for that command (and its subtask). — _Evidence:_ OC/agent/agent.ts:281-283; DOCS/agents (Model); OC/session/prompt.ts:1420-1450
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Agent `model`/`variant`; subagents inherit invoking agent's model unless set; commands can set model. 2.0.31 (✅): Variant joins the model reference after `#`. The `subagent` tool has an optional `model` (only when the user asks), validated against available models; the model can list models with the Code Mode `opencode.models` tool. Child uses override → agent model → parent model. — _Evidence:_ V2D/agents (Model); V2C/tool/plugin/subagent.ts:30-37,49-66; V2C/tool/plugin/opencode.ts:220
@@ -1137,7 +1137,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-13</b> Small/fast model for auxiliary tasks (titles, summaries, classifiers)</summary>
 
 - **candy-code** 🟡 — `Bootstrap::toollessBackend()` uses env → setting → the provider block's own `model`. The title backend also drives prompt suggestions (on by default, one extra call per turn over the last 12 messages), `/btw`, `/goal` judging and autoReview; the summary backend drives compaction and auto-memory. README calls it a "cheap small-model backend". — _Evidence:_ `src/Cli/Bootstrap.php:10093-10095,10186-10213`; `README.md:824-826`; `docs/ENVIRONMENT.md:50`
-- **sugar-crush-web** ✅ — "The server titles its own sessions" — the web just renders `summary.name`. — _Evidence:_ `src-web/stores/sessions.ts:105-110`; `candy-code/docs/SERVER.md:890-894`
+- **candy-code-web** ✅ — "The server titles its own sessions" — the web just renders `summary.name`. — _Evidence:_ `src-web/stores/sessions.ts:105-110`; `candy-code/docs/SERVER.md:890-894`
 - **Claude Code 2.1.301** ✅ — Background summarization for `--resume` costs ~<$0.04/session; prompt suggestions and "You should know" checks use the session model on the warm cache; `ANTHROPIC_SMALL_FAST_MODEL` deprecated. — _Evidence:_ cc:sessions#name-your-sessions; cc:costs#background-token-usage; cc:model-config#environment-variables
 - **OpenCode 1.18.35** ✅ — `small_model` runs the lightweight hidden agents (title at temperature 0.5, summary). If unset, OpenCode picks a cheaper model from the same provider, else the main model. Plugins can override this through `experimental.provider.small_model`. — _Evidence:_ DOCS/config (Models); OC/agent/agent.ts:235-258; PLUG/index.ts:300
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): `small_model` (auto-picks cheap model) for title/summary agents; plugin hook experimental.provider.small_model. 2.0.31 (🟡): V1 small_model drove title/summary. V2 maps it to `agents.title.model`; docs: “Compaction uses the session's model. There is no separate compaction model.” — _Evidence:_ V2D/migrate-v1 (small_model); V2D/compaction (Limits)
@@ -1147,7 +1147,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-14</b> Fallback model on overload/error</summary>
 
 - **candy-code** ✅ — Same provider only (no cross-provider fallback). Switch only before the first streamed token. Status bar names the pinned model. — _Evidence:_ `src/Providers/FallbackProvider.php:1-60`; `README.md:1436`
-- **sugar-crush-web** ❓ — Engine fallback behaviour is the SC column's; the protocol has no fallback event, so the web cannot show one. — _Evidence:_ `candy-code/docs/protocol/candy-code.v1.schema.json` (events)
+- **candy-code-web** ❓ — Engine fallback behaviour is the SC column's; the protocol has no fallback event, so the web cannot show one. — _Evidence:_ `candy-code/docs/protocol/candy-code.v1.schema.json` (events)
 - **Claude Code 2.1.301** ✅ — Switch lasts the current turn; applies to subagents and to compaction (never to a smaller window); a notice appears only when it fires (not at startup, not in `/status`). Content fallback: Fable/Opus 5.5 cyber→Opus 4.8, bio→Opus 5; Sonnet 5.5 cyber→Sonnet 5; optional "ask before switching". — _Evidence:_ help (`--fallback-model`); cc:model-config#fallback-model-chains; cc:model-config#automatic-model-fallback
 - **OpenCode 1.18.35** ❌ — Overload and 5xx errors are retried (MOD-18), but there is no `fallback_model` concept. Multi-model orchestration plugins exist, but I found no documented fallback feature in core. — _Evidence:_ OC/session/retry.ts; `grep fallback` over provider/session/config: none
 - **OpenCode 2.0.31** ❌ — 1.18.35 (❌): No fallback model on overload/error; only retries with backoff. 2.0.31 (❌): 2.0.27: “Preserved a saved session's unavailable model selection instead of silently replacing it with a fallback.” — _Evidence:_ V2CL v2.0.27
@@ -1157,7 +1157,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-15</b> Reasoning/thinking control (effort levels, budgets, keywords)</summary>
 
 - **candy-code** 🟡 — Main-session effort comes from provider config; `EngineBackend::withReasoningEffort()` is called only by TaskTool for agents declaring `effort:` (ignored with a note on non-sglang providers). No Anthropic thinking budget (compat endpoint), no OpenAI reasoning_effort, no `/effort` or think keywords. — _Evidence:_ `src/Providers/SglangProvider.php:612-665`; `src/Backend/EngineBackend.php:814-820,1598`; `src/Tools/BuiltIn/TaskTool.php:1139-1150`; `src/Providers/VertexProvider.php:2020`
-- **sugar-crush-web** ❌ — Nothing in the composer or status bar sets reasoning effort. — _Evidence:_ `candy-code/src/Config/Settings/Definitions/ModelProviderSettings.php:123-130`
+- **candy-code-web** ❌ — Nothing in the composer or status bar sets reasoning effort. — _Evidence:_ `candy-code/src/Config/Settings/Definitions/ModelProviderSettings.php:123-130`
 - **Claude Code 2.1.301** ✅ — Adaptive reasoning on current models; thinking can't be disabled on Opus/Sonnet/Haiku 5.5 or Fable; Alt+T toggles on older models; `maxEffortLevel` caps; effort shown in the session header ("with low effort"); `/effort` applies mid-turn after a cache warning; `max` is session-only. — _Evidence:_ cc:model-config#adjust-effort-level; help (`--effort`); cc:commands
 - **OpenCode 1.18.35** ✅ — A variant is a named bundle of provider options (reasoningEffort, thinking budget, and others), merged last over model and agent options. Built-in variants exist per provider. Users can define custom ones; this host defines xhigh/medium/low × preserve_thinking. `--variant` works for `run`. — _Evidence:_ OC/session/llm/request.ts:80-87; DOCS/models (Variants); LOCAL: opencode.jsonc variants
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Model variants (e.g. high/max, low..xhigh) cycled with ctrl+t, `--variant`, agent `variant`, custom variants. 2.0.31 (✅): V1 variants object → V2 array `[{id, settings}]`. — _Evidence:_ V2D/migrate-v1 (Models and variants)
@@ -1167,7 +1167,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-16</b> Thinking/reasoning display in UI</summary>
 
 - **candy-code** ✅ — Reasoning deltas cross the fork as `reasoning` frames (empty ones double as heartbeats); providers extract `reasoning_content`, Anthropic/Vertex `thinking` blocks, CC `thinking` deltas. — _Evidence:_ `README.md:764-766`; `docs/ARCHITECTURE.md:321`; `src/Providers/ClaudeCodeProvider.php:596`
-- **sugar-crush-web** ✅ — `ReasoningFold` (live and settled), attached to assistant rows and to the first tool card of a step. — _Evidence:_ `src-web/components/ReasoningFold.vue`; `src-web/stores/reducer.ts`
+- **candy-code-web** ✅ — `ReasoningFold` (live and settled), attached to assistant rows and to the first tool card of a step. — _Evidence:_ `src-web/components/ReasoningFold.vue`; `src-web/stores/reducer.ts`
 - **Claude Code 2.1.301** ✅ — Interactive Anthropic-API sessions receive redacted thinking by default; transcript viewer also shows per-message model and timestamp. — _Evidence:_ cc:model-config#extended-thinking; cc:interactive-mode#keyboard-shortcuts
 - **OpenCode 1.18.35** ✅ — Reasoning streams into reasoning parts. The TUI `/thinking` (alias toggle-thinking) only hides or shows them. `opencode run --thinking` prints them in headless mode. — _Evidence:_ DOCS/tui (thinking); TUI/routes/session/index.tsx (slash thinking); CLI: `opencode run --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Reasoning parts rendered; /thinking toggles visibility; `run --thinking`. 2.0.31 (✅): No `/thinking` slash command in the v2 slash list; visibility is a cli.json setting. — _Evidence:_ V2D/cli/config (Sessions); V2CLI: `opencode run --help`
@@ -1177,7 +1177,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-17</b> Streaming responses</summary>
 
 - **candy-code** ✅ — openai-php createStreamed, Guzzle SSE (custom/sglang/anthropic), ConverseStream, streamRawPredict/streamGenerateContent, CC `stream-json --include-partial-messages`. Shell-out `CANDY_CODE_BACKEND_CMD_STREAM` is token-per-line but repaints once at the end. — _Evidence:_ `src/Runtime.php:1580-1615`; `src/Providers/ClaudeCodeInvocation.php:108-116`; `src/Cli/NonInteractive.php:261-293`
-- **sugar-crush-web** ✅ — A duplicate delta is dropped, a gap is marked "…" and healed by the completed reply. Rendering cost is O(n²) per reply (ISSUES). — _Evidence:_ `src-web/stores/reducer.ts:269-280`; `src-web/views/SessionView.vue:125-128`
+- **candy-code-web** ✅ — A duplicate delta is dropped, a gap is marked "…" and healed by the completed reply. Rendering cost is O(n²) per reply (ISSUES). — _Evidence:_ `src-web/stores/reducer.ts:269-280`; `src-web/views/SessionView.vue:125-128`
 - **Claude Code 2.1.301** ✅ — Spinner shows live output-token count; first-byte and idle watchdogs. — _Evidence:_ help; cc:errors#automatic-retries; cc:costs#read-the-token-count-beside-the-spinner
 - **OpenCode 1.18.35** ✅ — Every part is written to SQLite and part-delta events go out on the bus and SSE (`/event`), so the TUI, web, desktop and SDK all render the same stream live. — _Evidence:_ DOCS/server (Events); OC/session/processor.ts
 - **OpenCode 2.0.31** ✅ — Every part is written to SQLite and part-delta events go out on the bus and SSE (`/event`), so the TUI, web, desktop and SDK all render the same stream live. — _Evidence:_ DOCS/server (Events); OC/session/processor.ts
@@ -1187,7 +1187,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-18</b> Retries / backoff / rate-limit handling</summary>
 
 - **candy-code** 🟡 — `TransientFailure::isTransient()` walks the exception chain (Guzzle, openai-php, AWS, Google ApiCore, Anthropic error types). Mid-stream failures resume via continuation/prefill rather than repainting. Connect bound 15 s (`CANDY_CODE_CONNECT_TIMEOUT`), stream read-idle 3600 s, turn idle ceiling 120 s (`turnIdleTimeoutSeconds`, re-armed per frame) — verified there is no total-request timeout on any LLM call (Vertex SDK's hidden 60 s deadline is explicitly neutralised). Weak spots: Retry-After ignored, ladder totals ≈1.5 s by default, AWS SDK retries stack on top. — _Evidence:_ `src/Providers/TransientFailure.php:15-30,140-200,700-703`; `src/Runtime.php:1580-1715`; `src/Providers/Concerns/HttpClientDefaults.php`; `src/Providers/VertexProvider.php:2885-2950`; `src/Backend/EngineBackend.php:75-126`
-- **sugar-crush-web** 🟡 — Provider retry/backoff is invisible in the web. Transport reconnect: Backoff ±30 %, ladder reset after 60 s up, fresh ticket each try. — _Evidence:_ `src-web/protocol/reconnect.ts:17-74`
+- **candy-code-web** 🟡 — Provider retry/backoff is invisible in the web. Transport reconnect: Backoff ±30 %, ladder reset after 60 s up, fresh ticket each try. — _Evidence:_ `src-web/protocol/reconnect.ts:17-74`
 - **Claude Code 2.1.301** ✅ — Retries 5xx/529/timeouts/dropped connections/429 throttles (not spend-limit 429s); `system/api_retry` events in stream-json; `CLAUDE_CODE_RETRY_WATCHDOG` waits out 429/529 unattended (caps via `…_MAX_WAIT_MS`, `…_MAX_USAGE_LIMIT_WAIT_MS` in 2.1.301); `CLAUDE_CODE_OVERLOADED_RETRY_*` delays. — _Evidence:_ cc:errors#automatic-retries; cc:headless#handle-api-retries; CL v2.1.295; CL v2.1.301
 - **OpenCode 1.18.35** ✅ — RETRY_MAX_RETRIES=5, initial 2000 ms, factor 2, 25% jitter, 30 s cap when there are no headers. Retries on 429/500/502/503/504/524 and overloaded patterns, and honor `retry-after-ms` / `retry-after`. Session status `retry` is shown, including on subagent rows. Defaults: `headerTimeout` and SSE `chunkTimeout` are 5 min. The source applies **no** total `timeout` unless one is set; the docs claim a 300000 default, which the code does not apply. — _Evidence:_ OC/session/retry.ts:26-60; OC/provider/provider.ts:94-125; DOCS/config (timeout)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Up to 5 retries, 2 s exponential backoff w/ jitter, honors retry-after(-ms); retry status shown in UI. 2.0.31 (✅): Generic retry covers rate limits, provider-internal and unsent/unknown-delivery transport failures and incomplete streams; at most four retries. 2.0.28 raised the streamed-chunk timeout from 5 to 15 min and disabled Bun's fetch idle timeout. 2.0.29 auto-continues responses that hit the output-token limit. Plugins can veto/alter retries via `ctx.session.hook("retry")`. — _Evidence:_ specs/v2/session.md (Retry Is Narrow And Observable); V2CL v2.0.28, v2.0.29; V2D/build/plugins/index (Retry policy)
@@ -1197,7 +1197,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-19</b> Prompt caching (provider cache breakpoints)</summary>
 
 - **candy-code** 🟡 — `CacheBreakpoints` (wipe and reapply, ≤4: system tail, optional last tool, tail chain) on Vertex's Anthropic arm. Bedrock: system plus last-message `cachePoint`. OpenAI and SGLang cache prefixes server-side. Switches: `promptCache` and `CANDY_CODE_DISABLE_PROMPT_CACHE`. `CacheHealthWatch` warns after 3 zero-cache replies and counts cache breaks. Anthropic's docs: "Prompt caching is not supported" via the compat layer. — _Evidence:_ `src/Providers/CacheBreakpoints.php`; `src/Providers/VertexProvider.php:951-1000`; `src/Providers/BedrockProvider.php:691-712`; `src/Providers/ProviderFactory.php:983-1036`; https://platform.claude.com/docs/en/api/openai-sdk
-- **sugar-crush-web** 🟡 — `usage.updated` carries a usage object but the status bar shows `~tok · %` and spend. — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** 🟡 — `usage.updated` carries a usage object but the status bar shows `~tok · %` and spend. — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — CLAUDE.md/memory frozen per session; reminders appended, never inserted; tool list frozen at the first request; model/effort switch warns about cache cost; per-subagent `experimental.cacheTtl`; `--exclude-dynamic-system-prompt-sections` for cross-user reuse; idle compaction before the 1h TTL expires. — _Evidence:_ cc:prompt-caching; help; CL v2.1.299
 - **OpenCode 1.18.35** ✅ — `applyCaching` sets ephemeral breakpoints for anthropic, openrouter, openaiCompatible, copilot and alibaba, and cachePoint for bedrock. The system prompt is kept to at most 2 messages, [header, rest], and tools are sorted by name for prefix stability. Non-OpenCode providers get `x-session-affinity` and `X-Session-Id` (sticky routing for SGLang/vLLM routers). OpenAI-family and OpenCode providers get `promptCacheKey`; `setCacheKey` forces it. — _Evidence:_ OC/provider/transform.ts:356-385,1323-1336,1380; OC/session/llm/request.ts:68-78,180-201
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Auto cache breakpoints on first 2 system + last 2 msgs; promptCacheKey=sessionID; x-session-affinity header. 2.0.31 (✅): Cache markers per provider compatibility (Anthropic/Alibaba styles). Instruction changes become chronological deltas so the cached prefix survives edits. New `warming`: periodic keep-alive requests (every 4 min for 30 min by default) to keep provider caches warm; disabled by default. — _Evidence:_ V2CL v2.0.28; V2D/warming; specs/v2/session.md (Instructions Are Value Deltas)
@@ -1207,7 +1207,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-20</b> Long-context (1M) support / context-window detection</summary>
 
 - **candy-code** 🟡 — Absolute compaction caps (100k / 150k, `compaction.modelTokenCaps`) stop 1M windows compacting at 700k. `VertexProvider::contextWindow()` returns 200,000 for every model and ignores the setting. claude-code is fixed at 200k. No `[1m]` / beta-header handling on the anthropic type. — _Evidence:_ `src/Providers/CustomProvider.php:300`; `src/Providers/SglangProvider.php:1119`; `src/Providers/BedrockProvider.php:203-216`, `:437`; `src/Providers/VertexProvider.php:463`; `docs/SETTINGS.md:223`
-- **sugar-crush-web** ✅ — Status bar `~N tok · P%` plus a meter; grid tiles show step and spend. — _Evidence:_ `src-web/stores/session.ts:36-38`; `src-web/components/StatusBar.vue`
+- **candy-code-web** ✅ — Status bar `~N tok · P%` plus a meter; grid tiles show step and spend. — _Evidence:_ `src-web/stores/session.ts:36-38`; `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — Auto-compacts at ≈967K on native-1M models; `CLAUDE_CODE_DISABLE_1M_CONTEXT`; subagent window = its own model's; plan rules for 4.6 `[1m]` (usage credits on some plans). — _Evidence:_ cc:model-config#extended-context; cc:model-config#default-auto-compact-thresholds
 - **OpenCode 1.18.35** ✅ — Model `limit.context`, `limit.input` and `limit.output` come from the catalog or config. 1M-context models work (this host's config declares 1,000,000). Max output is min(limit.output, 32k) unless `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX` is set. — _Evidence:_ OC/session/overflow.ts:10-20; LOCAL: opencode.jsonc limit.context 1000000
 - **OpenCode 2.0.31** ✅ — Model `limit.context`, `limit.input` and `limit.output` come from the catalog or config. 1M-context models work (this host's config declares 1,000,000). Max output is min(limit.output, 32k) unless `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX` is set. — _Evidence:_ OC/session/overflow.ts:10-20; LOCAL: opencode.jsonc limit.context 1000000
@@ -1217,7 +1217,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-21</b> Vision input (images to model)</summary>
 
 - **candy-code** ✅ — supportsVision per provider (OpenAI family list, anthropic, Claude/Gemini on Vertex, Claude 3+/Nova on Bedrock, SGLang asks the server; custom/claude-code/echo answer no; override `supportsVision`). — _Evidence:_ `README.md:385-397`; `src/Providers/AttachmentEncoding.php`; `src/Providers/ClaudeCodeProvider.php:47-50`
-- **sugar-crush-web** ❌ — Images a tool generates are shown (MediaCard) but a user cannot send one. — _Evidence:_ `candy-code/src/Protocol/Schema/MethodSchemas.php:186-193`
+- **candy-code-web** ❌ — Images a tool generates are shown (MediaCard) but a user cannot send one. — _Evidence:_ `candy-code/src/Protocol/Schema/MethodSchemas.php:186-193`
 - **Claude Code 2.1.301** ✅ — Large images resized/recompressed (>500 KB re-encoded as JPEG); oldest images/PDFs pruned in batches at request limits to avoid repeated cache misses. — _Evidence:_ cc:interactive-mode; cc:tools-reference#read-tool-behavior; cc:prompt-caching#accumulating-many-images
 - **OpenCode 1.18.35** ✅ — Clipboard image paste (ctrl+v), @-mentioned image files, and read-tool image attachments (JPEG/PNG/GIF/WebP). `attachment.image` sets `auto_resize`, `max_width`, `max_height` (2000) and `max_base64_bytes` (5 MiB). Oversized tool images are omitted; oversized user images error. — _Evidence:_ DOCS/config (Image attachments); OC/tool/read.ts:19,304-306; TUI/component/prompt/index.tsx:378-384
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Images via paste, @file, read tool; auto-resize >2000px or >5 MB base64 (attachment.image). 2.0.31 (✅): Same auto-resize knobs under `media.image`. — _Evidence:_ V2D/attachments (Images); V2D/migrate-v1 (Media)
@@ -1227,7 +1227,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-22</b> PDF / document input</summary>
 
 - **candy-code** ❌ — `AttachmentType` is File (text, ≤256 KiB inline `<file>` block) or Image only. — _Evidence:_ `src/AttachmentType.php`; `README.md:378-383`
-- **sugar-crush-web** ❌ — `session.send` → `TurnMethods::admit()` resolves `@path` mentions server-side. — _Evidence:_ `candy-code/src/Protocol/Methods/TurnMethods.php:80-105`
+- **candy-code-web** ❌ — `session.send` → `TurnMethods::admit()` resolves `@path` mentions server-side. — _Evidence:_ `candy-code/src/Protocol/Methods/TurnMethods.php:80-105`
 - **Claude Code 2.1.301** ✅ — Notebooks returned with outputs; Remote Control file attachments arrive as `@` references. — _Evidence:_ cc:tools-reference#read-tool-behavior; cc:remote-control
 - **OpenCode 1.18.35** ✅ — `read` returns PDFs as attachments (`isPdfAttachment`). @file of a PDF becomes a base64 data-URL file part. MCP resource blobs may be PDF (≤10 MB). — _Evidence:_ OC/tool/read.ts:306; OC/session/tools.ts:32-38; OC/tool/read.txt
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): PDFs attached as file parts via @file or read tool (provider must support PDF input). 2.0.31 (🟡): V2 attachments doc: PDF, audio, video and other binaries attached to a prompt are excluded; convert to image/text first. The `read` tool passes PNG/JPEG/GIF/WebP/PDF up to 20 MiB. — _Evidence:_ V2D/attachments (Formats); V2D/tools (Read)
@@ -1237,7 +1237,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-23</b> Audio / voice input or output</summary>
 
 - **candy-code** ❌ — Only media output is image/video generation through an SD/sglang-diffusion server (separate TL row). — _Evidence:_ grep `whisper/speech/voice` in src → none
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — Not available with API keys, Bedrock, Agent Platform, Foundry, SSH or cloud sessions; WSL needs WSLg; transcription doesn't count toward usage. — _Evidence:_ cc:voice-dictation
 - **OpenCode 1.18.35** ❌ — `audio.ts` / `attention` play notification sound packs. There is no speech-to-text or TTS. — _Evidence:_ TUI/audio.ts; DOCS/tui (Attention)
 - **OpenCode 2.0.31** ❌ — `audio.ts` / `attention` play notification sound packs. There is no speech-to-text or TTS. — _Evidence:_ TUI/audio.ts; DOCS/tui (Attention)
@@ -1247,7 +1247,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-24</b> Structured output / JSON-schema mode</summary>
 
 - **candy-code** 🧪 — `SglangProvider` builds `response_format` when `jsonSchema` is non-null; grep finds no caller passing `jsonSchema:`; `supportsJsonSchema()` is advisory. Headless JSON mode is an envelope, not schema-constrained output. — _Evidence:_ `src/Providers/CompleteRequest.php:62`; `src/Providers/SglangProvider.php:1804-1840`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — Invalid schema exits with an error; internal side calls (titles, memory recall, prompt hooks) also use structured outputs (`CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS` for gateways that reject them). — _Evidence:_ help (`--json-schema`); cc:headless#get-structured-output; CL v2.1.288
 - **OpenCode 1.18.35** ✅ — When the latest user message has `format.type=json_schema`, the loop adds a `StructuredOutput` tool, sets toolChoice=required, and appends STRUCTURED_OUTPUT_SYSTEM_PROMPT. Failure yields StructuredOutputError. There is no CLI flag; use the SDK or HTTP API. — _Evidence:_ OC/session/prompt.ts:1243-1249,1269,1284-1290; DOCS/sdk (Structured Output)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): API/SDK `format: {type:'json_schema'}` forces a StructuredOutput tool; result in info.structured_output. 2.0.31 (❌): The v2 schema/protocol/client contain no json_schema or structured_output field (only packages/schema/src/v1). The v1 SDK feature has no v2 equivalent at 2.0.31. — _Evidence:_ grep packages/{schema,protocol,client}/src (only schema/src/v1/session.ts); services/www/openapi.json
@@ -1257,7 +1257,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-25</b> Credential storage (keychain, env, config file, auth.json)</summary>
 
 - **candy-code** 🟡 — Bedrock/Vertex use their SDK credential chains (AWS profile/role, GOOGLE_APPLICATION_CREDENTIALS). Project tiers cannot set `providers`/`provider` (trust model). Error messages are Guzzle-shaped (URI with userinfo obfuscated, no headers) — no key leakage found. — _Evidence:_ `src/Providers/ProviderFactory.php:407-436,690-700`; `src/Config/LayeredSettings.php:819-878`; `docs/ENVIRONMENT.md:185-200`
-- **sugar-crush-web** ✅ — `settings.get` masks secret-typed keys, credential-named keys and URL userinfo as `********`. Caveat: the cookie is not port-scoped (ISSUES P1). — _Evidence:_ `src-web/protocol/auth.ts:1-12`; `candy-code/src/Server/Http/ApiController.php:96-100`
+- **candy-code-web** ✅ — `settings.get` masks secret-typed keys, credential-named keys and URL userinfo as `********`. Caveat: the cookie is not port-scoped (ISSUES P1). — _Evidence:_ `src-web/protocol/auth.ts:1-12`; `candy-code/src/Server/Http/ApiController.php:96-100`
 - **Claude Code 2.1.301** ✅ — `CLAUDE_CONFIG_DIR` scopes creds; Keychain-locked SSH fallback to the file; MCP OAuth tokens stored per endpoint and deleted on server removal; slow-helper notice after 10 s; `--bare` never reads OAuth/keychain. — _Evidence:_ cc:authentication#credential-management; cc:security; cc:headless#start-faster-with-bare-mode
 - **OpenCode 1.18.35** 🟡 — `/connect` keys and OAuth tokens live in `~/.local/share/opencode/auth.json` (here mode 0600). MCP OAuth tokens live in `mcp-auth.json`. Provider env vars (ANTHROPIC_API_KEY etc.) are read automatically. Config can reference `{env:VAR}` / `{file:~/.secrets/x}`. `PUT /auth/:id` sets credentials over HTTP. No keychain integration. — _Evidence:_ DOCS/providers (Credentials); DOCS/config (Variables); DOCS/mcp-servers (mcp-auth.json); `ls -la ~/.local/share/opencode/auth.json`
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): auth.json (~/.local/share/opencode, 0600), env vars, {env:}/{file:} config substitution; no OS keychain. 2.0.31 (🟡): Stored outside project config (OAuth for MCP too). No OS keychain mentioned. — _Evidence:_ V2CLI: `opencode auth --help`; V2D/mcp-servers (OAuth)
@@ -1267,7 +1267,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-N1</b> 🆕 Advisor / second-opinion model the agent can consult mid-task</summary>
 
 - **candy-code** 🟡 — The main agent cannot ask a second model a quick question in the middle of a task with the conversation as context. The closest path: Task's `model` argument overrides the preset's and the session's model (a model the provider cannot serve falls back to the session model, and the result says so), so the agent can launch the built-in `architect` or `reviewer` preset on a stronger model of the same provider. That is a full sub-agent run with its own context and step budget, not a lightweight consult. Second models are used inside the harness, but the agent cannot call them: autoReview (the title model reviews flagged calls in auto mode), the `/goal` judge, and `/btw` side questions. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:717-723`, `:943`; `src/Permissions/ExecReviewer.php`; `src/Goal/GoalJudge.php`
-- **sugar-crush-web** 🟡 — No advisor surface. A sub-agent the model launches on another model appears as a Task card and a tree node; the agent view header shows status, step, tokens and cost, but not the model. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:717-723`; `sugar-crush-web/src-web/components/agents/AgentView.vue`
+- **candy-code-web** 🟡 — No advisor surface. A sub-agent the model launches on another model appears as a Task card and a tree node; the agent view header shows status, step, tokens and cost, but not the model. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:717-723`; `candy-code-web/src-web/components/agents/AgentView.vue`
 - **Claude Code 2.1.301** ✅ — Anthropic API and Claude Platform on AWS only; advisor sees the full conversation; billed separately. — _Evidence:_ cc:advisor; CL v2.1.300
 - **OpenCode 1.18.35** 🟡 — Configured, not built in. The agent must call `task` with that subagent. — _Evidence:_ DOCS/agents (Model)
 - **OpenCode 2.0.31** 🟡 — The description says to set `model` only when the user explicitly asks. — _Evidence:_ V2C/tool/plugin/subagent.ts:30-37; V2C/tool/plugin/opencode.ts:220
@@ -1277,7 +1277,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-N2</b> 🆕 Fast mode / priority service tier toggle</summary>
 
 - **candy-code** ❌ — A grep for service_tier, fast mode or priority tier finds nothing in `src/Providers`, and OpenAIProvider sends a fixed parameter set. `extraBody` (custom provider only; user tier, egress class, applies at restart) merges top-level request fields, so a user could hard-code `"service_tier":"priority"` for an OpenAI-compatible endpoint. That is untested, has no UI and cannot be switched per turn. — _Evidence:_ `src/Providers/CustomProvider.php:128-183`; `docs/SETTINGS.md:461`, `:1010`
-- **sugar-crush-web** ❌ — `session.create` takes no provider or model, `/model` is `ui_only`, and provider keys are egress/spend class, so `settings.set` cannot write them remotely. — _Evidence:_ `sugar-crush-web/src-web/components/StatusBar.vue:28-32`; `src/Protocol/Methods/SettingsMethods.php:110`
+- **candy-code-web** ❌ — `session.create` takes no provider or model, `/model` is `ui_only`, and provider keys are egress/spend class, so `settings.set` cannot write them remotely. — _Evidence:_ `candy-code-web/src-web/components/StatusBar.vue:28-32`; `src/Protocol/Methods/SettingsMethods.php:110`
 - **Claude Code 2.1.301** ✅ — Applies from the next turn. — _Evidence:_ cc:fast-mode
 - **OpenCode 1.18.35** 🟡 — Variants are arbitrary provider-option bundles merged last. — _Evidence:_ OC/session/llm/request.ts:80-95; DOCS/models (Variants)
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2D/models (variants example); V2D/providers (service_tier body); V2C/aisdk-native.ts:187,253
@@ -1287,7 +1287,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MOD-N3</b> 🆕 Cache warming (keep-alive requests that preserve provider prompt caches while idle)</summary>
 
 - **candy-code** ❌ — No code sends idle requests to keep a provider prefix warm, and a grep for keepalive or cache warm finds only transport/stream keepalives. Vertex and Bedrock cache marks carry no `ttl`, so the provider default of about 5 minutes applies (`BedrockProvider` says it is the only TTL it asks for). CacheHealthWatch deliberately does not count a cache miss after a gap of 240 s or more as a break, because 'providers evict an idle prefix after about five minutes'. The TUI status bar shows the cache hit % and the age of the last report but assumes no TTL. Byte-stable prefixes (PRM-N1) make the cache hit while a session is active; nothing keeps it alive between prompts. — _Evidence:_ `src/Backend/CacheHealthWatch.php:52-59`; `src/Providers/BedrockProvider.php:118-128`; `src/Providers/VertexProvider.php:240`; `src/Renderer.php:2956-2960`
-- **sugar-crush-web** ❌ — As SC. The status bar shows context % and spend only; the `usage.updated` cache fields are not displayed. — _Evidence:_ `src/Backend/CacheHealthWatch.php:52-59`; `sugar-crush-web/src-web/components/StatusBar.vue`
+- **candy-code-web** ❌ — As SC. The status bar shows context % and spend only; the `usage.updated` cache fields are not displayed. — _Evidence:_ `src/Backend/CacheHealthWatch.php:52-59`; `candy-code-web/src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** 🟡 — Main conversation gets a one-hour TTL by default on Claude subscriptions within plan usage (5 min on API keys/cloud/usage credits); `promptCacheTtl`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `ENABLE_PROMPT_CACHING_1H`, per-subagent `experimental.cacheTtl`; idle compaction (v2.1.299) compacts 200K+ chats ~54 min idle before the 1h cache expires; Pro/Max offer resume-from-summary after long breaks; VS Code shows a cache-expiry clock. Nothing re-sends requests just to keep a cache warm. — _Evidence:_ cc:prompt-caching#cache-lifetime; cc:settings-reference#promptcachettl; CL v2.1.299; cc:vs-code
 - **OpenCode 1.18.35** ❌ — Added in v2 (`warming`). — _Evidence:_ OC/ (no warming); V2D/warming
 - **OpenCode 2.0.31** ✅ — Not present in 1.18.35. `warming: true` → every 4 min after the last model request for up to 30 min; prompt/interval/duration configurable. — _Evidence:_ V2D/warming
@@ -1300,7 +1300,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-01</b> CLAUDE.md read</summary>
 
 - **candy-code** ✅ — `InstructionFileLoader::FILENAMES` puts `CLAUDE.md` first. Root files load at the session's first prompt build (lazily, at the first turn's prime in the parent) and are frozen in `SessionPromptMemo` for the session. Each one is its own `<project-instructions>` section with an authority preamble, and the body goes through `PromptFence::escape()`. A separate launch-time loader is built only to report deferrals and refusals. — _Evidence:_ `src/Context/InstructionFileLoader.php:131`, `:312`; `src/Runtime.php:4559-4590`, `:4875`; `src/Cli/Bootstrap.php:3548`, `:9571`
-- **sugar-crush-web** 🟡 — A test CLAUDE.md in the probe repo shows up in `/context` as `project-instructions ~89 per-session`; no file name, no content, no banner. — _Evidence:_ live `command.exec name=context`
+- **candy-code-web** 🟡 — A test CLAUDE.md in the probe repo shows up in `/context` as `project-instructions ~89 per-session`; no file name, no content, no banner. — _Evidence:_ live `command.exec name=context`
 - **Claude Code 2.1.301** ✅ — All discovered files are concatenated (no override), ordered filesystem root → cwd; block-level HTML comments stripped before injection; files ≤4 MiB. Delivered as a user-message system-reminder, not the system prompt. — _Evidence:_ cc:memory#how-claude-md-files-load; cc:memory#claude-isnt-following-my-claude-md
 - **OpenCode 1.18.35** 🟡 — The project name list is ["AGENTS.md","CLAUDE.md","CONTEXT.md" (deprecated)]. Each name is searched from cwd up to the worktree, and the first name with any hit wins, so one AGENTS.md anywhere in the chain suppresses every CLAUDE.md. Global: the first existing of ~/.config/opencode/AGENTS.md, ~/.claude/CLAUDE.md. No @imports and no CLAUDE.local.md. `OPENCODE_DISABLE_CLAUDE_CODE(_PROMPT)` drops CLAUDE.md from both lists. Consequence here: /home/sites/sugarcraft has a root AGENTS.md, so OpenCode never loads CLAUDE.md. That is harmless only because CLAUDE.md just @-includes AGENTS.md and CONTRIBUTING.md (which OpenCode also does not read). — _Evidence:_ OC/session/instruction.ts:60-68,122-133; DOCS/rules (Claude Code Compatibility, Precedence)
 - **OpenCode 2.0.31** ❌ — 1.18.35 used CLAUDE.md when no AGENTS.md was found, and ~/.claude/CLAUDE.md when no global AGENTS.md. 2.0.31 discovers only AGENTS.md; the migration guide tells users to move CLAUDE.md guidance into AGENTS.md (and file a compatibility issue). OPENCODE_DISABLE_CLAUDE_CODE* now only affect `.claude/skills`. — _Evidence:_ V2D/instructions (note: AGENTS.md only); V2D/migrate-v1 (Instruction files); V2C/config/plugin/instruction.ts:41,55,79
@@ -1310,7 +1310,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-02</b> AGENTS.md read</summary>
 
 - **candy-code** ✅ — Same code path as CLAUDE.md. When CLAUDE.md `@import`s AGENTS.md, AGENTS.md is inlined at the import site and deduplicated by realpath, so it is not emitted twice. — _Evidence:_ `src/Context/InstructionFileLoader.php:131`, `:1445`; `src/Commands/InitCommand.php:36`
-- **sugar-crush-web** 🟡 — As INS-01.
+- **candy-code-web** 🟡 — As INS-01.
 - **Claude Code 2.1.301** ✅ — `/config` → **Project instructions**: `claude-md-or-agents-md` (default), `claude-md-and-agents-md`, `claude-md`, `managed-only` (also `pluginConfigs."cc-plugin-agents-md@builtin"`). User/managed CLAUDE.md and rules don't count against AGENTS.md. Prints `no CLAUDE.md found; AGENTS.md loaded: <path>`. Subdir AGENTS.md loads on Read. Not read: AGENTS.local.md, AGENTS.override.md, `.agents/`. InstructionsLoaded hooks don't fire for directly read AGENTS.md. `@AGENTS.md` import in CLAUDE.md (this repo's setup) never double-loads. — _Evidence:_ cc:memory#agents-md; cc:plugins/mods/overview#mods-built-into-claude-code
 - **OpenCode 1.18.35** ✅ — `findUp(AGENTS.md, cwd, worktree)` returns every ancestor copy, nearest first, and all of them are included. The global AGENTS.md comes first in the system prompt. See INS-12 for timing and INS-13 for placement. — _Evidence:_ OC/session/instruction.ts:110-153; CORE/fs-util.ts:154-166
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): AGENTS.md from cwd up to git root (all ancestor copies) + global ~/.config/opencode/AGENTS.md, re-read every step. 2.0.31 (✅): Order: global ~/.config/opencode/AGENTS.md, then nearest-first ancestors (packages/web, packages, root). Walk stop = home if the workspace is under home, else project root (1.18.35 stopped at the git worktree). Files are watched (100 ms debounce) and changes are delivered as instruction updates. — _Evidence:_ V2C/config/plugin/instruction.ts:36-62,76-86,195-200; V2D/instructions (Scope)
@@ -1320,7 +1320,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-03</b> Other vendor rule files (.cursorrules, .cursor/rules, GEMINI.md, copilot-instructions.md, CONVENTIONS.md, .windsurfrules)</summary>
 
 - **candy-code** 🟡 — The aliases go through the same gates (containment, 60 KiB ceiling, UTF-8 scrub, @import, dedup). Not read: the `.clinerules/` directory form, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md` (`/init` reads it once as a source but the loader never does), `CONVENTIONS.md`, `.windsurfrules`, `.claude/rules/*.md`. PROMPT_ENGINEERING.md lists widening vendor discovery as deliberately not done. — _Evidence:_ `src/Context/InstructionFileLoader.php:131`; `docs/PROMPT_ENGINEERING.md` ("Widening context-file discovery")
-- **sugar-crush-web** 🟡 — As INS-01.
+- **candy-code-web** 🟡 — As INS-01.
 - **Claude Code 2.1.301** 🟡 — `/init` folds `.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md` into the generated CLAUDE.md (with `CLAUDE_CODE_NEW_INIT=1` also AGENTS.md, `.devin/rules/`, `.windsurf/rules/`, `.windsurfrules`, `.clinerules`). `claude import [codex/gemini/cursor] [--dry-run]` appends a one-time copy of instruction files to the matching CLAUDE.md and carries MCP servers, commands, subagents, skills. No GEMINI.md/CONVENTIONS.md live loading. — _Evidence:_ cc:memory#migrate-instructions-from-other-tools; help (`import`); cc:commands
 - **OpenCode 1.18.35** 🟡 — Only AGENTS.md, CLAUDE.md and CONTEXT.md are auto-discovered. Docs show `"instructions": [".cursor/rules/*.md"]` for reuse. The /init template tells the model to reference existing rule sources such as Cursor and Copilot rules inside AGENTS.md. — _Evidence:_ OC/session/instruction.ts:64-68; DOCS/rules (Custom Instructions, Initialize)
 - **OpenCode 2.0.31** 🟡 — Only AGENTS.md, CLAUDE.md and CONTEXT.md are auto-discovered. Docs show `"instructions": [".cursor/rules/*.md"]` for reuse. The /init template tells the model to reference existing rule sources such as Cursor and Copilot rules inside AGENTS.md. — _Evidence:_ OC/session/instruction.ts:64-68; DOCS/rules (Custom Instructions, Initialize)
@@ -1330,7 +1330,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-04</b> User-global instructions file (~/.claude/CLAUDE.md, ~/.config/opencode/AGENTS.md, ...)</summary>
 
 - **candy-code** ✅ — `loadPersonal()` reads only `AGENTS.md` under the owned home's `~/.candy-code`. It is priced first under the combined instruction budget and framed with `USER_RULES_AUTHORITY_PREAMBLE`, ahead of project docs. Imports are bounded to `~/.candy-code`. Also user-tier: `~/.candy-code/rules/*.md` and `rulebooks/*.md`. Cross-tool user files (`~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`) are not read. — _Evidence:_ `src/Context/InstructionFileLoader.php:134`, `:448`, `:499`; `src/Runtime.php:4889`
-- **sugar-crush-web** 🟡 — Sessions run as the `serve` process user, so its `~/.candy-code` and HOME files apply.
+- **candy-code-web** 🟡 — Sessions run as the `serve` process user, so its `~/.candy-code` and HOME files apply.
 - **Claude Code 2.1.301** ✅ — Loaded before project files; their @imports load without the external-import dialog (except Cowork); user rules precede project rules (neither overrides). — _Evidence:_ cc:memory#choose-where-to-put-claude-md-files; cc:memory#user-level-rules
 - **OpenCode 1.18.35** ✅ — Exactly one global file: the first that exists of the two. Its `Instructions from:` block comes before project files. `OPENCODE_CONFIG_DIR` does **not** change the global AGENTS.md path (it uses Global.Path.config). — _Evidence:_ OC/session/instruction.ts:60-63,115-120
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): ~/.config/opencode/AGENTS.md (else ~/.claude/CLAUDE.md) loaded into every session's system prompt. 2.0.31 (✅): Global file is always first. `OPENCODE_DISABLE_PROJECT_CONFIG=1` skips project discovery without disabling the global file. — _Evidence:_ V2C/config/plugin/instruction.ts:41,70-74; V2D/instructions
@@ -1340,7 +1340,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-05</b> Project-local private override (CLAUDE.local.md or equivalent)</summary>
 
 - **candy-code** 🟡 — No local-override tier exists. The user-tier `instructions: ["CLAUDE.local.md"]` setting force-loads that file in every project that has one (globs are repo-relative). — _Evidence:_ `src/Cli/Bootstrap.php:9632`; `src/Context/InstructionFileLoader.php:875`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Counts as a CLAUDE.md for the AGENTS.md check (so it suppresses AGENTS.md by default); per-worktree only, so docs suggest importing a `~/` file instead; skipped when `local` is excluded from `--setting-sources`. — _Evidence:_ cc:memory#import-additional-files; cc:memory#agents-md
 - **OpenCode 1.18.35** ❌ — No private per-project override file is discovered. Workarounds: a git-ignored file listed in project `instructions`, or the `OPENCODE_CONFIG` / `OPENCODE_CONFIG_CONTENT` env vars. — _Evidence:_ OC/session/instruction.ts:64-68
 - **OpenCode 2.0.31** ❌ — No private per-project override file is discovered. Workarounds: a git-ignored file listed in project `instructions`, or the `OPENCODE_CONFIG` / `OPENCODE_CONFIG_CONTENT` env vars. — _Evidence:_ OC/session/instruction.ts:64-68
@@ -1350,7 +1350,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-06</b> Managed / enterprise policy instructions</summary>
 
 - **candy-code** ❌ — Policy files (`PolicySnapshot`, `readPolicyFile`) govern permissions and hooks only. — _Evidence:_ `src/Cli/Bootstrap.php:7170`
-- **sugar-crush-web** ❓ — —
+- **candy-code-web** ❓ — —
 - **Claude Code 2.1.301** ✅ — Loads first; `managed-only` instruction mode; subagents with `omitClaudeMd` still get managed files. — _Evidence:_ cc:memory#deploy-organization-wide-claude-md
 - **OpenCode 1.18.35** 🟡 — Managed `opencode.json` in /etc/opencode (Linux), /Library/Application Support/opencode, or %ProgramData%\opencode, plus the macOS MDM plist domain `ai.opencode.managed`, overrides everything. Org remote config comes from `.well-known/opencode`. Because `instructions` arrays are concatenated across layers, a managed entry is always included, but users can add more. — _Evidence:_ OC/config/managed.ts; DOCS/config (Managed settings, Remote); OC/config/config.ts:48-49
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): No dedicated managed-instructions file; admins can push `instructions` via managed config (/etc/opencode, MDM) or .well-known. 2.0.31 (🟡): Policies (not instructions) are the admin-enforcement mechanism in v2; `instructions` from all config documents are combined. — _Evidence:_ V2D/migrate-v1 (Configuration); V2D/policies
@@ -1360,7 +1360,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-07</b> Discovery walks up parent dirs from cwd</summary>
 
 - **candy-code** 🟡 — `ancestorRoot()`: if cwd has `.git`, there is no walk. Otherwise it walks up to the first dir with `.git` and loads each level outermost-first, then cwd's own files. It stops (returns null) on reaching `$HOME` or `/` without a marker. So `~/code/CLAUDE.md` above several repos is never read, unlike Claude Code's walk to the filesystem root. — _Evidence:_ `src/Context/InstructionFileLoader.php:700-760`, `:766`
-- **sugar-crush-web** 🟡 — Each workspace host is a separate process with its own root statics. — _Evidence:_ `candy-code/docs/SERVER.md:768-812`
+- **candy-code-web** 🟡 — Each workspace host is a separate process with its own root statics. — _Evidence:_ `candy-code/docs/SERVER.md:768-812`
 - **Claude Code 2.1.301** ✅ — Project skills/agents also walk up (to the repo root; worktrees stop at the worktree root). — _Evidence:_ cc:memory#how-claude-md-files-load; cc:skills#discovery-from-parent-and-nested-directories; cc:sub-agents#choose-the-subagent-scope
 - **OpenCode 1.18.35** ✅ — The walk stops at `ctx.worktree` (git root). Relative `instructions` entries are `globUp`'d in every directory from cwd to the worktree. `OPENCODE_DISABLE_PROJECT_CONFIG` disables project discovery; relative globs then resolve in the global config dir only. — _Evidence:_ OC/session/instruction.ts:79-89,123-133; CORE/fs-util.ts:154-196
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): findUp from cwd to worktree (git root) for AGENTS.md→CLAUDE.md→CONTEXT.md; relative `instructions` globbed upward too. 2.0.31 (✅): For a workspace under $HOME an AGENTS.md in e.g. ~/code/ is now included. Relative `instructions` entries still resolve per directory from the workspace to the project root, not relative to the config file (same gotcha as v1: `./tools/philosophy.md` in this host's configs matches nothing in /home/sites/sugarcraft). — _Evidence:_ V2C/config/plugin/instruction.ts:38-40,88-102; V2D/instructions (Configuration table)
@@ -1370,7 +1370,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-08</b> Nested subdirectory instruction files loaded lazily when files there are touched</summary>
 
 - **candy-code** 🟡 — Verification correction (V1): on the default forked-turn path the announce-once marks are lost, so nested docs are re-injected every turn, one file per touch, innermost first (ISS-018, ISS-069); the text is prepended raw, with no path, fence or escaping (ISS-017). ∣ Original audit detail: `loadForPath()` walks from the touched file's dir up to (not including) the root and returns the first not-yet-emitted file. The text is prepended to Read output, and appended with a label in Glob/Grep. Deduped per session via `emittedPaths`, carried back across forks via `CarriesSessionState`. Gotchas, see ISSUES: one file per touch, raw/unfenced text, the shared set leaks across sub-agents and server sessions, and refresh points re-inject. — _Evidence:_ `src/Context/InstructionFileLoader.php:982-1110`; `src/Tools/BuiltIn/Read.php:458`; `Edit.php:304`; `Write.php:290`; `ApplyPatch.php:599`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Terminal prints a `Loaded <path>` line; such files never appear under `/context` Memory files; edits before first load apply, after load don't (they're in history); compaction summarizes them away and they reload on next touch. Also loads subdir `.claude/skills/`. — _Evidence:_ cc:memory#how-claude-md-files-load; cc:prompt-caching#editing-claude-md-mid-session; cc:tools-reference#edit-tool-behavior
 - **OpenCode 1.18.35** ✅ — `Instruction.resolve` walks from the read file's directory up to, but excluding, the instance directory. It attaches the first of AGENTS.md / CLAUDE.md / CONTEXT.md per directory that is not already a system file, not already in a non-compacted earlier read, and not claimed for this message. The content is appended to the **read tool result** inside `<system-reminder>`. `metadata.loaded` makes the TUI print `↳ Loaded <path>` under the Read row. It is re-attached after the carrying read was pruned. Only `read`, or an @file mention that goes through read, triggers it; edit, grep and glob do not. Files outside cwd never trigger it. — _Evidence:_ OC/session/instruction.ts:179-221; OC/tool/read.ts:300-356; TUI/routes/session/index.tsx:2149-2180
 - **OpenCode 2.0.31** ✅ — 1.18.35 appended nested files to the read tool result inside <system-reminder>. 2.0.31 publishes a separate durable synthetic message `Instructions from: …` with description `Loaded packages/web/AGENTS.md`; dedup by scanning model-visible history metadata (re-injected after compaction/revert). Edits to an already-loaded nested file are NOT detected (start a new session). — _Evidence:_ V2C/session/instructions.ts:40-90; V2C/tool/plugin/read.ts:16,82-90; V2D/instructions (Discovery)
@@ -1380,7 +1380,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-09</b> @path imports inside instruction files</summary>
 
 - **candy-code** ✅ — `ImportResolver` (MAX_DEPTH 4). Fenced ``` blocks are skipped. In the loader, the gate blocks out-of-repo targets (`<import-blocked>`), skips already-emitted ones (`<import-skipped>`), and defers oversize ones (`<import-deferred>` pointer). Absolute paths are not supported. Inline-code and `user@x.md` forms are expanded, contrary to the docs (ISSUES). Forced docs get no import expansion. — _Evidence:_ `src/Context/ImportResolver.php:27`, `:149`; `src/Context/InstructionFileLoader.php:1445`; `docs/MEMORY.md:713-732`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Backslash-escaped spaces; quoted paths not imported; imports load at launch (no context saving); approval dialog lists external files at first interactive start and is remembered (decline = disabled); network paths (UNC, /net) never followed. — _Evidence:_ cc:memory#import-additional-files
 - **OpenCode 1.18.35** ❌ — Docs: “opencode doesn't automatically parse file references in AGENTS.md”. They recommend `instructions` globs, or prose telling the agent to lazily Read `@rules/x.md`. — _Evidence:_ DOCS/rules (Referencing External Files)
 - **OpenCode 2.0.31** ❌ — Docs: “opencode doesn't automatically parse file references in AGENTS.md”. They recommend `instructions` globs, or prose telling the agent to lazily Read `@rules/x.md`. — _Evidence:_ DOCS/rules (Referencing External Files)
@@ -1390,7 +1390,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-10</b> Path-scoped rules (.claude/rules/*.md with globs, etc.)</summary>
 
 - **candy-code** ✅ — `RuleLoader` has three tiers: user `~/.candy-code/rules` and `rulebooks`, project `.candy-code/rules`, root `RULES.md`. A rule with a `PathTrigger` is skipped from the standing prompt and nudged by `RulePathNudge` in tool output on first matching touch. The nudge re-walks the rules on every consult, so mid-session edits are picked up. `keywords:` and `models:` are parsed but inert. It does not read `.claude/rules`. — _Evidence:_ `src/Runtime.php:4525-4545`; `src/Context/RuleLoader.php:290`, `:444`; `src/Context/RulePathNudge.php`
-- **sugar-crush-web** 🟡 — No path-scoped-rule UI; the output lands as a UI-only transcript row after a re-snapshot. — _Evidence:_ `candy-code/src/Host/Commands/RulesHostCommand.php`; live `command.list` (runsIn server)
+- **candy-code-web** 🟡 — No path-scoped-rule UI; the output lands as a UI-only transcript row after a re-snapshot. — _Evidence:_ `candy-code/src/Host/Commands/RulesHostCommand.php`; live `command.list` (runsIn server)
 - **Claude Code 2.1.301** ✅ — Brace expansion budget (1,000 patterns / 4 MiB); only `paths` frontmatter honored; symlinked shared rules (external targets need the import approval, then only unscoped ones load); `~/.claude/rules/` for user; path rules reload on demand after compaction. — _Evidence:_ cc:memory#organize-rules-with-claude/rules/
 - **OpenCode 1.18.35** ❌ — No `.claude/rules`-style frontmatter globs. Every `instructions` match is loaded unconditionally. — _Evidence:_ OC/session/instruction.ts (no glob-conditional logic)
 - **OpenCode 2.0.31** ❌ — No `.claude/rules`-style frontmatter globs. Every `instructions` match is loaded unconditionally. — _Evidence:_ OC/session/instruction.ts (no glob-conditional logic)
@@ -1400,7 +1400,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-11</b> Extra instruction files via config (opencode `instructions` array, globs, URLs)</summary>
 
 - **candy-code** 🟡 — `Bootstrap::forcedInstructions()` → `loadForced()`. Patterns starting `/` are `continue`d with no refusal recorded. `~/x` globs relative to the repo and matches nothing. No `@import` expansion. A project may not set it. — _Evidence:_ `src/Cli/Bootstrap.php:9632`; `src/Context/InstructionFileLoader.php:890`, `:946`; `docs/SETTINGS.md:262`
-- **sugar-crush-web** 🟡 — `settings.set` only writes cosmetic/tuning/narrowing keys. — _Evidence:_ `candy-code/docs/SERVER.md:670-686`
+- **candy-code-web** 🟡 — `settings.set` only writes cosmetic/tuning/narrowing keys. — _Evidence:_ `candy-code/docs/SERVER.md:670-686`
 - **Claude Code 2.1.301** 🟡 — With the env var, an added dir contributes CLAUDE.md, .claude/CLAUDE.md, .claude/rules/*.md, CLAUDE.local.md. `--append-system-prompt-file` for system-prompt-level text; SessionStart hooks can inject arbitrary text. — _Evidence:_ cc:memory#load-from-additional-directories; help
 - **OpenCode 1.18.35** ✅ — Gotcha: relative entries are **not** rebased to the config file's directory; they are globbed from cwd up to the git root. The `"./tools/philosophy.md"` entry in this host's global config (~/.config/opencode/opencode.jsonc) and in the repo's .opencode/opencode.jsonc therefore matches nothing inside /home/sites/sugarcraft (the file is at ~/.config/opencode/tools/philosophy.md). It is silently dropped with no warning. Missing files and failed or slow URLs are dropped silently too. — _Evidence:_ OC/session/instruction.ts:95-103,135-150,155-168; OC/config/config.ts:48-49; LOCAL: both opencode.jsonc `instructions`; `ls /home/sites/sugarcraft/tools/philosophy.md` → absent
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `instructions` array: files, globs, ~/, absolute paths, http(s) URLs (5 s timeout); merged+deduped across config layers. 2.0.31 (✅): No longer re-fetched every step. New files matching a glob load on the next config change. — _Evidence:_ V2C/config/plugin/instruction.ts:104-163; V2D/instructions (Configuration)
@@ -1410,7 +1410,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-12</b> WHEN loaded (session start / every turn / on demand) and re-read on change</summary>
 
 - **candy-code** ✅ — `SessionPromptMemo` plus the loader's own cache. `EngineBackend::beginSessionTurn()` detects refresh points from the history (`observeTurn`) and calls `InstructionFileLoader::refresh()`. Mid-session disk edits are not seen until then (same trade-off as Claude Code and Aider). Bug: a dream pass and multi-session server use also trigger refreshes (ISSUES). Path-scoped rules are re-walked per consult. — _Evidence:_ `src/Context/SessionPromptMemo.php:189`; `src/Backend/EngineBackend.php:2702-2717`; `src/Context/InstructionFileLoader.php:1328`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Project-root CLAUDE.md and unscoped rules are re-injected from disk after compaction; `InstructionsLoaded` hook fires at start and on every lazy load (with reason); the Project-instructions setting applies from the next message. — _Evidence:_ cc:prompt-caching#editing-claude-md-mid-session; cc:context-window#what-survives-compaction; cc:hooks#instructionsloaded
 - **OpenCode 1.18.35** ✅ — `instruction.system()` is called inside the agent loop for each step, together with `sys.environment()` and `sys.skills()`. Files are re-globbed and re-read, and http(s) instruction URLs are fetched again each step (up to 5 s each). Edits take effect mid-turn, but any change rewrites the system prefix and breaks the prompt cache. The v2 engine's frozen "context epoch" baseline exists in CORE/session/context-epoch.ts but is not used by the v1 loop. Nested files: once per assistant message (`claims` cleared per message), deduped against earlier read parts. — _Evidence:_ OC/session/prompt.ts:1257-1267; OC/session/instruction.ts:105-108,155-169; CORE/session/context-epoch.ts (v2 only)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Rebuilt from disk on EVERY LLM step (no cache): edits apply next step; remote URLs re-fetched each step. 2.0.31 (✅): Content-addressed values (SHA-256) per source key; first delta is the baseline; later changes render once as chronological System messages (`The instructions from X changed. Here's the diff:` with a unified patch, or `no longer apply`). Baseline resets after compaction or a committed revert; fork adopts parent's newest values. 1.18.35 instead rebuilt the system prompt from disk every step. — _Evidence:_ specs/v2/session.md (Instructions Are Value Deltas); V2C/instruction-discovery.ts:126-149; V2C/session/instruction-state.ts
@@ -1420,7 +1420,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-13</b> HOW injected (system prompt vs user-message reminder) and precedence order</summary>
 
 - **candy-code** ✅ — Each document is its own fenced section, `<user-rules>` or `<project-instructions>`, with a provenance preamble saying the harness and maxims layers outrank it. All sit after base, maxims, tool-guidance, repo-map and symbol-map, and before memory, skills and env. Nested files arrive in tool results; path rules arrive as `<system-reminder>` in tool results. — _Evidence:_ `src/Runtime.php:4333-4740`, `:122`, `:149`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Observed in this session: one reminder opens with "Codebase and user instructions are shown below… IMPORTANT: These instructions OVERRIDE any default behavior…", then each file as "Contents of <path> (project instructions, checked into the codebase):", with @-imported AGENTS.md and CONTRIBUTING.md following CLAUDE.md as their own blocks, and MEMORY.md labelled "(user's auto-memory, persists across conversations)". Lives in the cached "project context" layer. Use `--append-system-prompt` for true system-prompt placement. — _Evidence:_ obs; cc:memory#claude-isnt-following-my-claude-md; cc:agent-sdk/modifying-system-prompts#reminders-claude-code-adds-to-the-conversation; cc:prompt-caching#how-the-cache-is-organized
 - **OpenCode 1.18.35** ✅ — System content in order: (1) the agent `prompt` OR the model-family base prompt, (2) the `<env>` block, (3) `<available_references>`, (4) instruction blocks: global → project nearest-first → config files → URLs, (5) `<mcp_instructions>`, (6) the skills list, (7) an optional per-message `system` from the API. Plugin hook `experimental.chat.system.transform` runs next, then the result is collapsed to ≤2 system messages. Nested files ride in tool results. Plan and build-switch reminders are synthetic **user** text parts. — _Evidence:_ OC/session/llm/request.ts:56-78; OC/session/prompt.ts:1257-1268; OC/session/system.ts:69-137; OC/session/reminders.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Joined into the single system message after base/agent prompt + <env>; each prefixed 'Instructions from: <path>'. 2.0.31 (✅): Baseline goes into the system prompt; updates and nested loads arrive as in-history System/synthetic messages. Date and environment moved after instructions; `Today's date is now:` and `The environment you are running in is now:` deltas on change. — _Evidence:_ V2D/instructions (Ordering); V2C/instructions/builtins.ts:20-55
@@ -1430,7 +1430,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-14</b> Shown to the user at startup (banner / count / list)?</summary>
 
 - **candy-code** ❌ — The welcome text is "Welcome to CandyCode! Start typing to chat...". `reportPromptBudgetDeferrals()` and `reportProjectTierRefusals()` add warning rows only when a file was left out or refused. — _Evidence:_ `lang/en.php:1966`; `src/Cli/Bootstrap.php:5469-5530`
-- **sugar-crush-web** ❌ — `/notices` (server-run) prints this launch's warnings on demand. — _Evidence:_ `src-web/views/DashboardView.vue`; `candy-code/src/Host/Commands/NoticesHostCommand.php`
+- **candy-code-web** ❌ — `/notices` (server-run) prints this launch's warnings on demand. — _Evidence:_ `src-web/views/DashboardView.vue`; `candy-code/src/Host/Commands/NoticesHostCommand.php`
 - **Claude Code 2.1.301** 🟡 — Lazily loaded files print `Loaded <path>`; skipped files raise an `Instruction file not loaded` notice; size warnings repeat in `/status`. To see what loaded, run `/context` or `/memory`. — _Evidence:_ cc:memory#my-claude-md-is-too-large; cc:memory#when-claude-code-reads-agents-md; cc:errors#instruction-file-not-loaded
 - **OpenCode 1.18.35** ❌ — The home screen shows logo, prompt, tips and a footer (dir:branch, MCP count, version) but no instruction list. The TUI never mentions root, global or config instruction files. — _Evidence:_ TUI/feature-plugins/home/footer.tsx; TUI/routes/session/index.tsx:2172-2180
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (❌): No startup banner/count of loaded rule files; only lazily-loaded nested files show '↳ Loaded <path>' under Read. 2.0.31 (🟡): Clients can see which instruction sources changed (keys/paths) but not their contents (“Instruction values remain privileged”). The TUI groups consecutive instruction loads and counts them in activity summaries. — _Evidence:_ V2D/instructions (Updates); V2T/routes/session/index.tsx:1820,1971-1979; V2T/routes/session/group-view.tsx:234-240
@@ -1440,7 +1440,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-15</b> Inspect loaded instructions in the UI (/memory, /context, panel)</summary>
 
 - **candy-code** 🟡 — `/context` (also a server host command) prints per-label tokens and stability. No command lists the loaded paths: `/memory` is memory notes only, and `/rules` lists rule files but not CLAUDE.md/AGENTS.md. — _Evidence:_ `src/Commands/ContextCommand.php:48-56`; `src/Runtime.php:4253`
-- **sugar-crush-web** 🟡 — Verified: rows "System prompt ~2.8K … project-instructions ~89 per-session, project-memory ~442 …". — _Evidence:_ live probe
+- **candy-code-web** 🟡 — Verified: rows "System prompt ~2.8K … project-instructions ~89 per-session, project-memory ~442 …". — _Evidence:_ live probe
 - **Claude Code 2.1.301** ✅ — `/context all` expands the per-item list (fullscreen collapses it); `/memory` shows user/project entries even for files that don't exist yet; `/doctor prompt-audit` audits content (v2.1.283+). — _Evidence:_ cc:memory#view-and-edit-with-/memory; cc:commands
 - **OpenCode 1.18.35** ❌ — `/status` lists MCP, LSP, formatters and plugins only. There is no endpoint or UI that renders the assembled system prompt. — _Evidence:_ TUI/component/dialog-status.tsx:54-160; CLI: `opencode debug --help`
 - **OpenCode 2.0.31** ❌ — `/status` lists MCP, LSP, formatters and plugins only. There is no endpoint or UI that renders the assembled system prompt. — _Evidence:_ TUI/component/dialog-status.tsx:54-160; CLI: `opencode debug --help`
@@ -1450,7 +1450,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-16</b> Edit instructions from the UI (/memory opens editor, `#` quick-add)</summary>
 
 - **candy-code** ❌ — `/newrule [focus]` asks the agent to Write `.candy-code/rules/<name>.md` from the conversation, approval required. `/editor` edits the input box only. — _Evidence:_ `src/Host/Commands/NewRulePrompt.php`; `builtin-commands/1410-newrule.php`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src-web/components/panels/MemoryPanel.vue`
+- **candy-code-web** ❌ — — — _Evidence:_ `src-web/components/panels/MemoryPanel.vue`
 - **Claude Code 2.1.301** ✅ — Selecting a missing file creates it; `Ctrl+G` external editor for prompts. The old `#` shortcut was removed ("tell Claude to edit your CLAUDE.md instead"). — _Evidence:_ cc:memory#view-and-edit-with-/memory; CL v2.0.70 (removed # shortcut for quick memory entry)
 - **OpenCode 1.18.35** ❌ — No `/memory`, and no `#` prefix handling in the prompt; `!` is shell mode and `/` is commands. — _Evidence:_ TUI/component/prompt/index.tsx; DOCS/tui
 - **OpenCode 2.0.31** ❌ — No `/memory`, and no `#` prefix handling in the prompt; `!` is shell mode and `/` is commands. — _Evidence:_ TUI/component/prompt/index.tsx; DOCS/tui
@@ -1460,7 +1460,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-17</b> Generate instructions (/init)</summary>
 
 - **candy-code** ✅ — Sends `InitCommand::PROMPT` as a user turn. It reads the existing AGENTS.md, CLAUDE.md, GEMINI.md, .cursorrules, .clinerules and copilot-instructions first. The result is not in the prompt until the next refresh point. It has no host command, so `serve`/web reject it as `runsIn: client`. — _Evidence:_ `src/Commands/InitCommand.php:36`; `builtin-commands/2500-init.php`; `src/Host/SessionHost.php:967`
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `command.exec name=init`
+- **candy-code-web** ❌ — — — _Evidence:_ live `command.exec name=init`
 - **Claude Code 2.1.301** ✅ — Offers `/import` when Codex/Gemini config is found; `/doctor` proposes trims of derivable content; `/doctor prompt-audit` finds stale/conflicting instructions. — _Evidence:_ cc:memory#set-up-a-project-claude-md; cc:commands
 - **OpenCode 1.18.35** ✅ — The built-in server command `init` (template `initialize.txt`, with `${path}` = worktree). It scans the repo, may ask targeted questions (question tool), and writes or improves AGENTS.md in place. It focuses on build/lint/test commands, ordering, non-obvious architecture, quirks and existing Cursor/Copilot rules. Also exposed as `POST /session/:id/init`. — _Evidence:_ OC/command/index.ts:70-78; OC/command/template/initialize.txt; DOCS/rules (Initialize)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /init: guided AGENTS.md creation/improve-in-place; may ask questions; focuses on commands, gotchas, existing rule files. 2.0.31 (✅): /init (AGENTS.md setup) appends its template to your text and runs in the current session — _Evidence:_ V2C/plugin/command.ts:28-40
@@ -1470,7 +1470,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-18</b> Size limits / truncation / warnings for large instruction files</summary>
 
 - **candy-code** ✅ — Over-limit documents become `Instruction file deferred: budget (N bytes…). Read <path>` (≤1 KiB). At most 4 pointers, plus a "N further deferred" note. Imports that would overflow become `<import-deferred>`. Every decision is recorded in `refusedPaths()` and reported at launch. A nested file refused mid-session gets one transcript notice. — _Evidence:_ `src/Context/InstructionFileLoader.php:98`, `:580`; `src/Runtime.php:231`, `:251`, `:261`, `:4875`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Each CLAUDE.md, rule and import counts as a separate file; `/doctor` estimates cost and biggest contributors. — _Evidence:_ cc:memory#my-claude-md-is-too-large; cc:memory#how-it-works
 - **OpenCode 1.18.35** ❌ — `read()` returns the whole file and `system()` concatenates everything with no cap or warning. — _Evidence:_ OC/session/instruction.ts:91-93,155-169
 - **OpenCode 2.0.31** ❌ — `read()` returns the whole file and `system()` concatenates everything with no cap or warning. — _Evidence:_ OC/session/instruction.ts:91-93,155-169
@@ -1480,7 +1480,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-19</b> Workspace-trust gating before loading project instructions</summary>
 
 - **candy-code** ❌ — Trust lists cover hooks, MCP, `!cmd` in project commands and project settings, but not CLAUDE.md/AGENTS.md. Root docs are `PromptFence`-escaped. Nested docs are not escaped (ISSUES). — _Evidence:_ `src/Cli/Bootstrap.php:6382-6585`; `src/Runtime.php:122`
-- **sugar-crush-web** ❌ — Trust grants are not `settings.set`-writable; a picked directory runs in a workspace host under the same frozen allow-lists. — _Evidence:_ `candy-code/docs/SERVER.md:86-91,670-686`
+- **candy-code-web** ❌ — Trust grants are not `settings.set`-writable; a picked directory runs in a workspace host under the same frozen allow-lists. — _Evidence:_ `candy-code/docs/SERVER.md:86-91,670-686`
 - **Claude Code 2.1.301** 🟡 — Trust gates `permissions.allow`, `additionalDirectories`, subagent frontmatter hooks/MCP, headersHelper, `.mcp.json` servers (separate prompt). External `@` imports and external symlinked rules have their own approval. Project hooks, `env` and helpers still run under untrusted `-p`. — _Evidence:_ cc:permissions#what-runs-before-you-trust-a-folder; cc:security; cc:memory#import-additional-files
 - **OpenCode 1.18.35** ❌ — No trust prompt. A cloned repo's `.opencode/` plugins, tools, MCP servers and instructions load and run at startup. The only guard is the global env flag disabling all project config. — _Evidence:_ CORE/flag/flag.ts (OPENCODE_DISABLE_PROJECT_CONFIG); DOCS/plugins (auto-load at startup)
 - **OpenCode 2.0.31** ❌ — No trust prompt. A cloned repo's `.opencode/` plugins, tools, MCP servers and instructions load and run at startup. The only guard is the global env flag disabling all project config. — _Evidence:_ CORE/flag/flag.ts (OPENCODE_DISABLE_PROJECT_CONFIG); DOCS/plugins (auto-load at startup)
@@ -1490,7 +1490,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-20</b> Exclusion controls (claudeMdExcludes, disable flags)</summary>
 
 - **candy-code** ❌ — There is nothing like `claudeMdExcludes` and no flag to skip root, ancestor or nested docs. — _Evidence:_ `src/Context/InstructionFileLoader.php` (no switch); `docs/SETTINGS.md:1098`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/settings/SettingsView.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/settings/SettingsView.vue`
 - **Claude Code 2.1.301** ✅ — Per-subagent `omitClaudeMd`; built-in Explore/Plan skip CLAUDE.md; managed file can't be excluded. — _Evidence:_ cc:memory#exclude-specific-claude-md-files; cc:agent-sdk/modifying-system-prompts#turn-off-the-context-your-agent-replaces; help
 - **OpenCode 1.18.35** 🟡 — You can drop ~/.claude/CLAUDE.md and project CLAUDE.md, or all project config. There is no glob exclude for specific AGENTS.md files. — _Evidence:_ DOCS/rules; DOCS/cli (Environment variables)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Env toggles: OPENCODE_DISABLE_CLAUDE_CODE(_PROMPT), OPENCODE_DISABLE_PROJECT_CONFIG; no per-file exclude list. 2.0.31 (🟡): OPENCODE_DISABLE_PROJECT_CONFIG (project AGENTS.md only); no per-file excludes; CLAUDE flags now only affect skills — _Evidence:_ V2D/instructions; V2CL v2.0.30
@@ -1500,7 +1500,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>INS-N1</b> 🆕 Injection fencing / escaping of instruction-file content before it reaches the model</summary>
 
 - **candy-code** ✅ — `PromptFence::escape()` defangs `<project-instructions>`, `<system-reminder>`, `<∣im_start∣>` and the rest inside every root, ancestor, forced and personal doc, plus rules, memory and skills. Authority preambles tell the model a repo doc cannot override the harness. Pinned by `BaseSystemPromptTest` forgery guards. Exception: nested on-touch docs (ISSUES). — _Evidence:_ `src/Context/PromptFence.php`; `src/Runtime.php:122`, `:4896-4900`; `docs/PROMPT_ENGINEERING.md` "Fence and provenance rules"
-- **sugar-crush-web** ✅ — A served turn runs SessionHost → TurnRunner → EngineBackend → Runtime, the same path as the TUI. So `PromptFence::escape()` and the authority preambles cover every root, ancestor, forced and personal doc, plus rules, memory and skills, with the same exception SC has (nested on-touch docs, per a1). A workspace host for a picked directory fences that root's files. The browser shows none of this; `/context` (server-run) gives section sizes only. — _Evidence:_ `src/Host/SessionHost.php:48-60`; `src/Host/TurnRunner.php:488-496`; `src/Context/PromptFence.php`
+- **candy-code-web** ✅ — A served turn runs SessionHost → TurnRunner → EngineBackend → Runtime, the same path as the TUI. So `PromptFence::escape()` and the authority preambles cover every root, ancestor, forced and personal doc, plus rules, memory and skills, with the same exception SC has (nested on-touch docs, per a1). A workspace host for a picked directory fences that root's files. The browser shows none of this; `/context` (server-run) gives section sizes only. — _Evidence:_ `src/Host/SessionHost.php:48-60`; `src/Host/TurnRunner.php:488-496`; `src/Context/PromptFence.php`
 - **Claude Code 2.1.301** 🟡 — Since 2.1.284 auto-memory text has invisible characters and tags imitating CC markup neutralized before it reaches Claude. CLAUDE.md content is injected verbatim (minus block-level HTML comments) in a reminder that tells Claude the instructions override defaults. Related escaping elsewhere: hook `additionalContext` gets `<system-reminder>` tags escaped; synced skill descriptions have angle brackets escaped; subagent reports are scanned. — _Evidence:_ CL v2.1.284; cc:memory#how-claude-md-files-load; cc:hooks#add-context-for-claude; cc:skills#how-claude-code-handles-the-frontmatter-of-a-synced-skill
 - **OpenCode 1.18.35** ❌ — System-prompt instructions and nested AGENTS.md (inside `<system-reminder>`) are injected verbatim. There is no escaping of tags or delimiters in file content. — _Evidence:_ OC/session/instruction.ts:155-169,214; OC/tool/read.ts:356
 - **OpenCode 2.0.31** ❌ — Values are “privileged” and hidden from clients, but they are not escaped for the model. — _Evidence:_ V2C/instruction-discovery.ts:126-149; V2C/session/instructions.ts:73-79
@@ -1513,7 +1513,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-01</b> Persistent cross-session memory exists</summary>
 
 - **candy-code** ✅ — `MemoryStore` (one `.md` per note, YAML frontmatter). Home store: `~/.candy-code/memory/{user,project/<key>,agent}/`. Repo store: `<repo>/.candy-code/memory/project/`. — _Evidence:_ `src/Memory/MemoryStore.php`; `docs/MEMORY.md:15-60`
-- **sugar-crush-web** ✅ — `memory.list/search/add/edit/delete` are `/memory` over the wire. — _Evidence:_ `src-web/stores/agents/memory.ts`
+- **candy-code-web** ✅ — `memory.list/search/add/edit/delete` are `/memory` over the wire. — _Evidence:_ `src-web/stores/agents/memory.ts`
 - **Claude Code 2.1.301** ✅ — Machine-local; one auto-memory dir per git repo, shared across its worktrees and subdirectories. — _Evidence:_ cc:memory
 - **OpenCode 1.18.35** 🔌 — Core has no memory subsystem: no memory tool, file or prompt section in OC/. This host's global config loads `opencode-agent-memory@latest` (Letta-style blocks plus journal). The ecosystem page lists `opencode-supermemory`; awesome-opencode lists Honcho, oc-mnemoria, Magic Context, Harness Memory and Lemma. — _Evidence:_ `grep -rn memory OC/session`: none; LOCAL: ~/.config/opencode/opencode.jsonc plugin list; ~/.cache/opencode/packages/opencode-agent-memory@latest README; DOCS/ecosystem
 - **OpenCode 2.0.31** 🔌 — 1.18.35 (🔌): No native memory; plugins: opencode-agent-memory (used here), opencode-supermemory, opencode-honcho, oc-mnemoria, magic-context. 2.0.31 (🔌): `npm view opencode-agent-memory` 0.3.0 depends on `@opencode/plugin ^2.0.12` (v2). Other memory plugins (supermemory, honcho, mnemoria) need checking per version. No memory code in V2C (grep). — _Evidence:_ npm view opencode-agent-memory dependencies; V2D/migrate-v1 (Plugins warning)
@@ -1523,7 +1523,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-02</b> Auto-memory (model saves facts without being asked)</summary>
 
 - **candy-code** ✅ — `AutoMemoryConsolidator::call()` is scheduled from `Chat` when a turn settles and nothing is queued. It reads ≤24 msgs / 24 KB of user and assistant text, redacts secrets, writes in the parent process, and may only touch `auto-memory`-tagged notes. Disabled by `CANDY_CODE_DISABLE_AUTO_MEMORY` or `memory.autoConsolidate:false`. — _Evidence:_ `src/Chat.php:2468-2473`; `src/Memory/AutoMemoryConsolidator.php`; `docs/MEMORY.md:506-566`
-- **sugar-crush-web** 🟡 — No "memory saved" notice. — _Evidence:_ `src-web/components/ToolCard.vue`
+- **candy-code-web** 🟡 — No "memory saved" notice. — _Evidence:_ `src-web/components/ToolCard.vue`
 - **Claude Code 2.1.301** ✅ — Skips anything derivable from code or already in CLAUDE.md; "remember X" → auto memory, "add to CLAUDE.md" → CLAUDE.md. Toggle in `/memory` (`autoMemoryEnabled`) or `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; can't be switched on from background or Claude-spawned sessions; off by default in self-hosted environments; `--bare` disables. Changelog references background "memory-extraction" writes. — _Evidence:_ cc:memory#auto-memory; CL v2.1.77 (memory-extraction race fix)
 - **OpenCode 1.18.35** 🔌 — opencode-agent-memory's prompt encourages the agent to maintain its blocks. Harness Memory auto-captures evidence from tool interactions. Supermemory and Honcho capture conversation memory. — _Evidence:_ opencode-agent-memory README (Features); awesome-opencode (Harness Memory, Honcho)
 - **OpenCode 2.0.31** 🔌 — opencode-agent-memory's prompt encourages the agent to maintain its blocks. Harness Memory auto-captures evidence from tool interactions. Supermemory and Honcho capture conversation memory. — _Evidence:_ opencode-agent-memory README (Features); awesome-opencode (Harness Memory, Honcho)
@@ -1533,7 +1533,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-03</b> Memory scopes (user / project / local / agent / team)</summary>
 
 - **candy-code** ✅ — User and project reach the prompt; agent is for imports only. `MemoryScope::Local` maps to `agent`. Per-agent memory: the preset `memory:` key is inert. — _Evidence:_ `src/Memory/MemoryStore.php`; `src/Support/FrontmatterKeyAudit.php:90-95`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/agents/memory.ts:7-8`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/agents/memory.ts:7-8`
 - **Claude Code 2.1.301** ✅ — `autoMemoryDirectory` relocation; `CLAUDE_CODE_PROJECT_DIR_NAME` shares one dir across projects; `CLAUDE_MEMORY_STORES` team memory stores in remote sessions (changelog only); Claude Tag has workspace/channel memory (separate Slack product). — _Evidence:_ cc:memory#storage-location; cc:sub-agents#enable-persistent-memory; CL v2.1.172
 - **OpenCode 1.18.35** 🔌 — agent-memory: global blocks shared across projects, project blocks shared across sessions. oc-mnemoria tags entries by creating agent. — _Evidence:_ opencode-agent-memory README; awesome-opencode (oc-mnemoria)
 - **OpenCode 2.0.31** 🔌 — agent-memory: global blocks shared across projects, project blocks shared across sessions. oc-mnemoria tags entries by creating agent. — _Evidence:_ opencode-agent-memory README; awesome-opencode (oc-mnemoria)
@@ -1543,7 +1543,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-04</b> Storage format & location</summary>
 
 - **candy-code** ✅ — Index ≤200 lines / 25 KB, not written in the repo store. FTS5 search cache `.search-<key>.sqlite`. Embeddings cache `~/.candy-code/cache/embeddings.sqlite`. Every `/memory` mutation is a git commit (`/memory log`, `/memory restore`). — _Evidence:_ `docs/MEMORY.md:21-53`, `:194-222`; `src/Memory/MemoryHistory.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/panels/MemoryPanel.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/panels/MemoryPanel.vue`
 - **Claude Code 2.1.301** ✅ — `modified` ISO timestamp auto-maintained (v2.1.214+); excluded from the transcript retention sweep; plain files you can edit/delete. — _Evidence:_ cc:memory#storage-location; cc:memory#how-it-works
 - **OpenCode 1.18.35** 🔌 — Observed on this host: ~/.config/opencode/memory/{persona,human,orchestration-directives,…}.md and /home/sites/sugarcraft/.opencode/memory/*.md (dozens of lane and campaign notes). — _Evidence:_ LOCAL: `ls ~/.config/opencode/memory /home/sites/sugarcraft/.opencode/memory`
 - **OpenCode 2.0.31** 🔌 — Observed on this host: ~/.config/opencode/memory/{persona,human,orchestration-directives,…}.md and /home/sites/sugarcraft/.opencode/memory/*.md (dozens of lane and campaign notes). — _Evidence:_ LOCAL: `ls ~/.config/opencode/memory /home/sites/sugarcraft/.opencode/memory`
@@ -1553,7 +1553,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-05</b> Memory index/entry file loaded into the prompt each session</summary>
 
 - **candy-code** ✅ — `MemoryBlock::capture()`, capped at 40 entries / 4 KB / 512 B per line (user ≤4 / 1 KB), followed by `STANDING_INSTRUCTIONS` on when and what to save and to search before answering. Memoised per session, so a note saved mid-session is not in the index until a refresh point (docs say "next turn", see ISSUES). — _Evidence:_ `src/Context/MemoryBlock.php:141-231`; `src/Runtime.php:5650-5666`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `/context` probe
+- **candy-code-web** 🟡 — — — _Evidence:_ live `/context` probe
 - **Claude Code 2.1.301** ✅ — Observed as a "Contents of …/memory/MEMORY.md (user's auto-memory…)" block in the instruction reminder. Near-limit writes trigger a reminder to shorten; over-limit writes succeed but return an error telling Claude to rewrite the index; invisible chars and fake markup neutralized. Not loaded into non-fork subagents. — _Evidence:_ obs; cc:memory#how-it-works; cc:context-window#what-survives-compaction
 - **OpenCode 1.18.35** 🔌 — Memory blocks “appear in the system prompt, always in-context”. They use the plugin hooks, since core has no memory slot. — _Evidence:_ opencode-agent-memory README; PLUG/index.ts:291-298
 - **OpenCode 2.0.31** 🔌 — Memory blocks “appear in the system prompt, always in-context”. They use the plugin hooks, since core has no memory slot. — _Evidence:_ opencode-agent-memory README; PLUG/index.ts:291-298
@@ -1563,7 +1563,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-06</b> Relevance selection / retrieval (embedding / vector / keyword / hybrid)</summary>
 
 - **candy-code** ✅ — `HybridMemoryRanker` (0.7 vector + 0.3 BM25, gate 0.35, half-life 30 d, MMR λ0.7). Embeddings are opt-in (`embeddingModel`). The query is the latest user message. Primed in the parent before the fork. The embedding HTTP call is synchronous there (ISSUES). `/memory search` uses FTS5 BM25. — _Evidence:_ `src/Context/MemoryRecallBlock.php:126`; `src/Memory/HybridMemoryRanker.php`; `src/Backend/EngineBackend.php:3528-3560`
-- **sugar-crush-web** ✅ — Ranking is the server's. — _Evidence:_ `src-web/stores/agents/memory.ts:37-49`
+- **candy-code-web** ✅ — Ranking is the server's. — _Evidence:_ `src-web/stores/agents/memory.ts:37-49`
 - **Claude Code 2.1.301** 🟡 — Topic files read on demand with standard tools; changelog shows recall uses structured-output side calls (fixed on Mantle/gateways in 2.1.288) and restored memories carry an age note. Retrieval logic beyond that is undocumented. — _Evidence:_ cc:memory#how-it-works; CL v2.1.288
 - **OpenCode 1.18.35** 🔌 — agent-memory's `journal_search` is semantic. oc-mnemoria uses hybrid BM25 + semantic over an append-only store. Magic Context searches across history, memories and facts. — _Evidence:_ opencode-agent-memory README (Journal Tools); awesome-opencode
 - **OpenCode 2.0.31** 🔌 — 1.18.35 (🔌): agent-memory journal semantic search; oc-mnemoria hybrid BM25+semantic; magic-context unified search. 2.0.31 (🔌): agent-memory 0.3 journal search (v2 API); supermemory 2.0.17 supports v1+v2; others unverified on v2 — _Evidence:_ npm view opencode-agent-memory/opencode-supermemory dependencies
@@ -1573,7 +1573,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-07</b> Memory tools exposed to the model (search / get / write)</summary>
 
 - **candy-code** ✅ — Writes route through `MemoryWriter`, so a project note goes to the repo store when the tree can host one (it creates the dir), otherwise the home store. Recall searches every scope, agent-scope imports included. — _Evidence:_ `src/Tools/BuiltIn/MemoryTool.php:42`, `:232`; `src/Memory/MemoryWriter.php:87-114`, `:186`
-- **sugar-crush-web** 🟡 — `server.info` tools include Memory and Recall. — _Evidence:_ live `server.info`
+- **candy-code-web** 🟡 — `server.info` tools include Memory and Recall. — _Evidence:_ live `server.info`
 - **Claude Code 2.1.301** 🟡 — The API-level memory tool is a separate Claude API feature, not used by CC. Subagent `memory` auto-enables Read/Write/Edit for that agent. — _Evidence:_ cc:memory; cc:sub-agents#enable-persistent-memory; CL v2.1.283 (auto-memory edits no longer blocked as sensitive writes)
 - **OpenCode 1.18.35** 🔌 — Six plugin tools. Visible to the user as ordinary tool rows. — _Evidence:_ opencode-agent-memory README (Usage)
 - **OpenCode 2.0.31** 🔌 — Six plugin tools. Visible to the user as ordinary tool rows. — _Evidence:_ opencode-agent-memory README (Usage)
@@ -1583,7 +1583,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-08</b> Consolidation / dreaming / dedup / pruning</summary>
 
 - **candy-code** ✅ — `DreamPass::call()` runs at turn settle on the session engine with tools swapped to `DreamMemoryView` plus Read, 12 steps, the same JSON ops and caps as auto-memory, and one git commit per pass. It can draft up to 3 skills in `~/.candy-code/skills-proposed/` (opt-in). Side effect: it refreshes the main session's prompt memo (ISSUES). — _Evidence:_ `src/Memory/DreamPass.php:293-395`; `src/Chat.php:2484-2488`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/src/Host/Commands/SkillsHostCommand.php`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/src/Host/Commands/SkillsHostCommand.php`
 - **Claude Code 2.1.301** 🟡 — `/doctor prompt-audit` audits instruction files, not memory; 🔌 `claude-md-management` ("capture session learnings"), 🔌 `remember`. — _Evidence:_ cc:memory#how-it-works; local: claude-plugins-official catalog
 - **OpenCode 1.18.35** 🔌 — No native consolidation. Magic Context has a background historian and an “overnight dreamer” for memory maintenance. — _Evidence:_ awesome-opencode (Magic Context, Harness Memory)
 - **OpenCode 2.0.31** ❓ — 1.18.35 (🔌): magic-context 'overnight dreamer', harness-memory gated pipeline; nothing native. 2.0.31 (❓): No native consolidation; magic-context/harness-memory v2 compatibility unverified — _Evidence:_ npm metadata (not found/unverified)
@@ -1593,7 +1593,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-09</b> User UI to view/edit memory (/memory, panel)</summary>
 
 - **candy-code** 🟡 — Host command, so it also works over `serve` (web has a MemoryPanel). `add` always writes `type: pattern` with no tags. `edit` replaces the whole content inline. — _Evidence:_ `src/Host/Commands/MemoryCommand.php`; `builtin-commands/2400-memory.php`
-- **sugar-crush-web** ✅ — Covered by e2e "the memory panel adds, finds and deletes a note". — _Evidence:_ `src-web/components/panels/MemoryPanel.vue`; `e2e/panels.spec.ts:24`
+- **candy-code-web** ✅ — Covered by e2e "the memory panel adds, finds and deletes a note". — _Evidence:_ `src-web/components/panels/MemoryPanel.vue`; `e2e/panels.spec.ts:24`
 - **Claude Code 2.1.301** ✅ — Left/right arrows flip toggles; files open in $EDITOR/GUI editor. — _Evidence:_ cc:memory#view-and-edit-with-/memory; CL v2.1.274 (VS Code Memory/Instructions entries); CL v2.1.287 (arrow toggles)
 - **OpenCode 1.18.35** ❌ — No `/memory` command or panel. — _Evidence:_ DOCS/tui (commands list)
 - **OpenCode 2.0.31** ❌ — No `/memory` command or panel. — _Evidence:_ DOCS/tui (commands list)
@@ -1603,7 +1603,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-10</b> User is told when memory is saved or recalled</summary>
 
 - **candy-code** 🟡 — Recalled notes ride a hidden `<turn-context>` row. The pre-compaction memory flush writes notes with no notice at all (ISSUES). — _Evidence:_ `src/Chat.php:2533-2570`; `src/Context/Compaction/MemoryFlush.php`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Filenames highlight on hover and open on click. — _Evidence:_ cc:memory#how-it-works; CL v2.1.86 (memory filenames clickable)
 - **OpenCode 1.18.35** 🔌 — No native notification. Plugin tool calls render like any tool. — _Evidence:_ TUI/routes/session/index.tsx (generic tool rendering)
 - **OpenCode 2.0.31** 🔌 — No native notification. Plugin tool calls render like any tool. — _Evidence:_ TUI/routes/session/index.tsx (generic tool rendering)
@@ -1613,7 +1613,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-11</b> Daily logs / journal files</summary>
 
 - **candy-code** 🟡 — `~/.candy-code/memory/.compaction-journal-<key>.jsonl`, secrets redacted. Only the dream pass reads it. Unbounded growth (ISSUES). — _Evidence:_ `src/Memory/CompactionJournal.php:82-179`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ local: claude-plugins-official marketplace.json (`remember`)
 - **OpenCode 1.18.35** 🔌 — `journal_write` with title, body and tags; searchable later. — _Evidence:_ opencode-agent-memory README
 - **OpenCode 2.0.31** 🔌 — `journal_write` with title, body and tags; searchable later. — _Evidence:_ opencode-agent-memory README
@@ -1623,7 +1623,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-12</b> Session-summary memory (past sessions searchable)</summary>
 
 - **candy-code** 🟡 — The journal has no tool or command. Cross-session search lives in sessions features, outside this area. — _Evidence:_ `src/Memory/CompactionJournal.php`; `src/Memory/DreamPass.php:434`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src-web/components/SessionSidebar.vue:24-28`
+- **candy-code-web** ❌ — — — _Evidence:_ `src-web/components/SessionSidebar.vue:24-28`
 - **Claude Code 2.1.301** 🟡 — Background summarization feeds `--resume`; `/insights` analyzes up to 200 recent sessions; 🔌 `remember`, `session-report`. — _Evidence:_ cc:sessions; cc:costs#background-token-usage; cc:interactive-mode#session-recap
 - **OpenCode 1.18.35** 🟡 — Session list search is a SQL `LIKE` on title. There is no tool for the model to search past sessions. — _Evidence:_ OC/session/session.ts:561,991-992; TUI/component/dialog-session-list.tsx:24-92
 - **OpenCode 2.0.31** 🟡 — Session list search is a SQL `LIKE` on title. There is no tool for the model to search past sessions. — _Evidence:_ OC/session/session.ts:561,991-992; TUI/component/dialog-session-list.tsx:24-92
@@ -1633,7 +1633,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-13</b> Subagent-specific memory</summary>
 
 - **candy-code** ❌ — Sub-agents see the session's `<project-memory>` index and recall like the parent. — _Evidence:_ `src/Support/FrontmatterKeyAudit.php:90-95`; `docs/MEMORY.md:258-263`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/stores/agents/memory.ts:7`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/stores/agents/memory.ts:7`
 - **Claude Code 2.1.301** ✅ — Dirs `~/.claude/agent-memory/<agent>/`, `.claude/agent-memory/<agent>/`, `.claude/agent-memory-local/<agent>/`; main auto memory is never passed to non-fork subagents. — _Evidence:_ cc:sub-agents#enable-persistent-memory
 - **OpenCode 1.18.35** ❌ — The agent schema has no memory option. — _Evidence:_ OC/agent/agent.ts:270-290
 - **OpenCode 2.0.31** ❌ — The agent schema has no memory option. — _Evidence:_ OC/agent/agent.ts:270-290
@@ -1643,7 +1643,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-14</b> Memory import/export / cross-tool memory</summary>
 
 - **candy-code** 🟡 — `ForeignMemoryImporter` reads `~/.claude/projects/<slug>/memory` (honours `CLAUDE_CONFIG_DIR`) and `.opencode/memory`. Imports are reachable only via Memory tool `recall` and `/memory search`. — _Evidence:_ `src/Memory/ForeignMemoryImporter.php`; `src/Host/Commands/MemoryCommand.php:import`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — Export is just the plain files; `anthropic-skills:import-memory` ("import a memory export from another AI assistant") observed in this session's skill list (synced from claude.ai). — _Evidence:_ cc:memory#migrate-instructions-from-other-tools; obs
 - **OpenCode 1.18.35** 🟡 — CLAUDE.md fallback (INS-01) is the only Claude Code memory compatibility. Claude Code's auto-memory directory is not read. — _Evidence:_ OC/session/instruction.ts:60-68
 - **OpenCode 2.0.31** 🟡 — CLAUDE.md fallback (INS-01) is the only Claude Code memory compatibility. Claude Code's auto-memory directory is not read. — _Evidence:_ OC/session/instruction.ts:60-68
@@ -1653,7 +1653,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-15</b> Pre-compaction memory flush (save durable facts before compaction)</summary>
 
 - **candy-code** ✅ — `MemoryFlush`: other tools refused, asks answered no, once per compaction cycle (counted on the `ContextLedger`), skipped past the spend cap or on a PreCompact deny. — _Evidence:_ `src/Backend/EngineBackend.php:2008-2035`, `:4447`; `src/Context/Compaction/MemoryFlush.php:53`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ❌ — Compaction re-injects MEMORY.md from disk afterwards; nothing prompts Claude to save first. — _Evidence:_ cc:hooks#precompact; cc:context-window#what-survives-compaction
 - **OpenCode 1.18.35** 🔌 — Core has no pre-compaction flush. The hook can append `context[]` or replace the whole compaction prompt. System-prompt memory blocks survive compaction by construction. — _Evidence:_ PLUG/index.ts:301-315; DOCS/plugins (Compaction hooks)
 - **OpenCode 2.0.31** 🔌 — 1.18.35 (🔌): Hook experimental.session.compacting lets plugins inject durable context; agent-memory blocks survive compaction. 2.0.31 (🔌): The v2 compaction prompt tells the summarizer to leave out instruction files and environment details because “the next agent receives current versions of all of these separately”. — _Evidence:_ V2D/build/plugins/index (Model requests); V2C/session/compaction.ts:147
@@ -1663,7 +1663,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-N1</b> 🆕 Versioned memory (memory dir under git; log / diff / undo of memory changes)</summary>
 
 - **candy-code** ✅ — Pinned to its own `.git` with hooks, signing and pager off. Search cache, throttles and journal are gitignored. — _Evidence:_ `src/Memory/MemoryHistory.php`; `docs/MEMORY.md:194-222`
-- **sugar-crush-web** 🟡 — `/memory` is a server-run built-in (`command.exec`), so `log` and `restore` work on the home memory git repo from the composer; the output appears as a text row after the re-snapshot. The Memory panel calls `memory.add/edit/delete`, which write the store directly with no MemoryHistory commit. Such a change is only committed, under the generic "outside" subject, the next time a mutating `/memory` command runs. The browser has no log, diff or undo UI. — _Evidence:_ `src/Host/Commands/MemoryCommand.php:51-79`; `src/Protocol/Methods/MemoryMethods.php:58-91`; `sugar-crush-web/src-web/stores/agents/memory.ts`
+- **candy-code-web** 🟡 — `/memory` is a server-run built-in (`command.exec`), so `log` and `restore` work on the home memory git repo from the composer; the output appears as a text row after the re-snapshot. The Memory panel calls `memory.add/edit/delete`, which write the store directly with no MemoryHistory commit. Such a change is only committed, under the generic "outside" subject, the next time a mutating `/memory` command runs. The browser has no log, diff or undo UI. — _Evidence:_ `src/Host/Commands/MemoryCommand.php:51-79`; `src/Protocol/Methods/MemoryMethods.php:58-91`; `candy-code-web/src-web/stores/agents/memory.ts`
 - **Claude Code 2.1.301** ❌ — You can put the memory dir under your own git. Checkpoints cover files Claude's edit tools change in a session, but nothing documents history for the memory directory. — _Evidence:_ cc:memory#storage-location; cc:checkpointing
 - **OpenCode 1.18.35** ❌ — opencode-agent-memory stores plain markdown blocks with no git history or undo. — _Evidence:_ OC/ (no memory subsystem); opencode-agent-memory README
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2C/ (no memory subsystem)
@@ -1673,7 +1673,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-N2</b> 🆕 Repo-shareable project memory (project notes committed with the repo by default)</summary>
 
 - **candy-code** ✅ — Labelled apart in the prompt. Labelling bug: the user's own notes are called "not written by the user" (ISSUES). — _Evidence:_ `src/Context/ProjectMemoryWriter.php:119`; `src/Context/MemoryBlock.php:264`
-- **sugar-crush-web** 🟡 — Inherited: the model's Memory `save` and a typed `/memory add` go through MemoryWriter → ProjectMemoryWriter (repo-local and git-visible), and those notes reach the model's project-memory section. But `memory.list/search/add` work on `WorkspaceContext::$memoryStore`, which is `Bootstrap::memoryStore($root)`: `~/.candy-code/memory` with the project scope keyed under `project/<key>/`. So repo-shared notes never appear in the web Memory panel (list or search), and a note added on its Project tab stays private in HOME, never shared with the repo. — _Evidence:_ `src/Protocol/Methods/MemoryMethods.php:41-67`, `:93-97`; `src/Cli/Bootstrap.php:1974`, `:10309-10323`, `:5396`; `src/Host/Commands/MemoryCommand.php:155-160`; `src/Context/ProjectMemoryWriter.php:107-140`
+- **candy-code-web** 🟡 — Inherited: the model's Memory `save` and a typed `/memory add` go through MemoryWriter → ProjectMemoryWriter (repo-local and git-visible), and those notes reach the model's project-memory section. But `memory.list/search/add` work on `WorkspaceContext::$memoryStore`, which is `Bootstrap::memoryStore($root)`: `~/.candy-code/memory` with the project scope keyed under `project/<key>/`. So repo-shared notes never appear in the web Memory panel (list or search), and a note added on its Project tab stays private in HOME, never shared with the repo. — _Evidence:_ `src/Protocol/Methods/MemoryMethods.php:41-67`, `:93-97`; `src/Cli/Bootstrap.php:1974`, `:10309-10323`, `:5396`; `src/Host/Commands/MemoryCommand.php:155-160`; `src/Context/ProjectMemoryWriter.php:107-140`
 - **Claude Code 2.1.301** 🟡 — Subagent project memory lives in `.claude/agent-memory/<agent>/` ("shareable via version control"); auto memory in `~/.claude/projects/<project>/memory/` is never committed or synced across machines. — _Evidence:_ cc:sub-agents#enable-persistent-memory; cc:memory#storage-location
 - **OpenCode 1.18.35** 🔌 — Native project-shared guidance is AGENTS.md, which is instructions rather than memory. The agent-memory 0.2 project blocks sit under the repo's .opencode/memory/. 0.3.0 (current @latest) requires OpenCode v2.0.12+, so v1 must pin 0.2.x. — _Evidence:_ LOCAL: /home/sites/sugarcraft/.opencode/memory (untracked: `git ls-files` = 0); npm view opencode-agent-memory
 - **OpenCode 2.0.31** 🔌 — Native shared guidance is AGENTS.md (instructions). I did not verify the 0.3 storage paths; its journal is at ~/.config/opencode/journal. — _Evidence:_ npm view opencode-agent-memory (README: Requirements, Journal)
@@ -1683,7 +1683,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MEM-N3</b> 🆕 Standing intents (event-conditioned instructions stored and checked before acting)</summary>
 
 - **candy-code** ❌ — Neither the model nor the user can record "when X happens, do Y" and have it checked before the agent acts. Memory notes are recalled by relevance (the memory-recall block plus the Memory tool's `recall`), not by an event condition. Rule files with `paths:` frontmatter are the only condition-triggered instructions. RulePathNudge delivers a matching rule (or a pointer to it) beside the result of a Read, Grep, Glob, Edit or Write that touches the path. These are user-authored files, the condition can only be a path, and the agent cannot add them as prospective memory. Hooks are event-conditioned, but they are scripts, not instructions to the model. — _Evidence:_ `src/Context/RulePathNudge.php:9-40`; `src/Context/Rule.php` (PathTrigger); `src/Tools/BuiltIn/MemoryTool.php`; no intent tool in `src/Tools/BuiltIn/`
-- **sugar-crush-web** ❌ — As SC. The web has no rules view; `/rules` (server-run) prints rule packs as text. — _Evidence:_ `src/Host/Commands/RulesHostCommand.php`; `src/Context/RulePathNudge.php`
+- **candy-code-web** ❌ — As SC. The web has no rules view; `/rules` (server-run) prints rule packs as text. — _Evidence:_ `src/Host/Commands/RulesHostCommand.php`; `src/Context/RulePathNudge.php`
 - **Claude Code 2.1.301** ❌ — Nearest built-ins: hooks with matchers and `if` rules (deterministic, scripted), path-scoped rules, `/goal` completion conditions. — _Evidence:_ cc:hooks; cc:memory#path-specific-rules; cc:goal
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2C/
@@ -1696,7 +1696,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-01</b> Base system prompt (provider/model-specific variants)</summary>
 
 - **candy-code** ✅ — Single base by design. The family is resolved once per session from the served model. No per-provider base variants. — _Evidence:_ `src/Runtime.php:5217-5398`; `src/Context/Sections/FamilyPrompt.php`
-- **sugar-crush-web** 🟡 — `/context` gives its size and section list. — _Evidence:_ live `/context`
+- **candy-code-web** 🟡 — `/context` gives its size and section list. — _Evidence:_ live `/context`
 - **Claude Code 2.1.301** ✅ — `--system-prompt-snapshot on` (default) renders the prompt on the first request and reuses it verbatim on every later request and resume until compaction; model- and surface-gated tools change what's included (task tools only on older models, EndConversation only interactive on new models). Subagents get only their own prompt plus env details, not the CC prompt. — _Evidence:_ help (`--system-prompt-snapshot`); cc:agent-sdk/modifying-system-prompts; cc:sub-agents#what-loads-at-startup
 - **OpenCode 1.18.35** ✅ — Selected by `model.api.id` substring. Unknown families (DeepSeek, Qwen, GLM, MiniMax, so this host's SGLang models) get `default.txt`. An agent `prompt` replaces the base prompt entirely. — _Evidence:_ OC/session/system.ts:28-51; OC/session/prompt/*.txt
 - **OpenCode 2.0.31** 🟡 — 1.18.35 had full family prompts (anthropic, beast, gpt, codex, gemini, kimi, trinity, meta, default). 2.0.31: `runner/prompt/system.txt` (15 lines: harness, `<system-reminder>` semantics, parallel tools, tool guidance) for everyone; OptimizePlugin overrides for GPT/astra/kimi/trinity/meta and appends anthropic.txt for Claude. Gemini/codex/beast/default prompts are gone; DeepSeek/Qwen (this host) get only the generic prompt. — _Evidence:_ V2C/session/runner/prompt/system.txt; V2C/session/system-prompt.ts; V2C/plugin/optimize.ts:15-66
@@ -1706,7 +1706,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-02</b> Environment block (cwd, OS, platform, date, shell)</summary>
 
 - **candy-code** ✅ — Static half only, memoised per session and keyed by root and model. — _Evidence:_ `src/Context/EnvironmentBlock.php:1023-1059`; `src/Runtime.php:5500`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `/context`
+- **candy-code-web** 🟡 — — — _Evidence:_ live `/context`
 - **Claude Code 2.1.301** ✅ — Observed in this session's system prompt. `--exclude-dynamic-system-prompt-sections` moves the per-machine parts (cwd, env info, memory paths, git status) into the first user message for cross-user cache reuse. — _Evidence:_ obs; help; cc:how-claude-code-works
 - **OpenCode 1.18.35** ✅ — Lines: “You are powered by the model named X. The exact model ID is P/X”, then `<env>` with Working directory, Workspace root folder, Is directory a git repo, Platform, and Today's date (`toDateString`). The shell tool description adds OS, shell and a pre-approved tmp dir. — _Evidence:_ OC/session/system.ts:69-85; OC/tool/shell/shell.txt:1-7
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): <env>: model id, cwd, worktree root, is-git, platform, date; bash tool description adds OS, shell, tmp dir. 2.0.31 (✅): Built-in date + <env> (cwd, root, git, platform, OpenCode tmp dir) as instruction sources with change deltas — _Evidence:_ V2C/instructions/builtins.ts:20-55
@@ -1716,7 +1716,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-03</b> Git status / branch / recent commits in prompt</summary>
 
 - **candy-code** ✅ — Re-polled on a turn's first step and after any write step, with diffs capped (`env.diffMaxBytes`). Sent only when the bytes change. — _Evidence:_ `src/Runtime.php:5545`; `src/Backend/EngineBackend.php:1700-1716`; `src/Context/TurnContextBlock.php`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `includeGitInstructions:false` / `CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS=1` removes it together with built-in commit/PR instructions; Explore/Plan skip it; each other subagent gets its own snapshot (its worktree's branch when isolated). — _Evidence:_ obs; cc:prompt-caching#cache-scope; cc:sub-agents#what-loads-at-startup
 - **OpenCode 1.18.35** ❌ — Deliberately static for cache stability. The model must run git itself. — _Evidence:_ OC/session/system.ts:76-85
 - **OpenCode 2.0.31** ❌ — Deliberately static for cache stability. The model must run git itself. — _Evidence:_ OC/session/system.ts:76-85
@@ -1726,7 +1726,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-04</b> Directory tree / repo map in prompt</summary>
 
 - **candy-code** ✅ — Both per-session. `repoMap.enabled` and `repoMap.maxBytes` settings. The symbol map is primed in the parent before the fork. — _Evidence:_ `src/Context/RepoMapBlock.php`; `src/Context/SymbolMapBlock.php`; `src/Runtime.php:5774-5836`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ❌ — `/doctor` even proposes removing directory layouts from CLAUDE.md as derivable from the codebase. — _Evidence:_ cc:memory#my-claude-md-is-too-large; cc:how-claude-code-works
 - **OpenCode 1.18.35** ❌ — No file tree is emitted. — _Evidence:_ OC/session/system.ts
 - **OpenCode 2.0.31** ❌ — No file tree is emitted. — _Evidence:_ OC/session/system.ts
@@ -1736,7 +1736,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-05</b> Tool schemas & descriptions (dynamic per agent/mode)</summary>
 
 - **candy-code** ✅ — Same tool list in every permission mode (plan mode is enforced by the gate, kept stable for the cache). `disabledTools` and `allowedTools`. MCP tools appended. — _Evidence:_ `src/Runtime.php:4770`; `src/Backend/EngineBackend.php:3130`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `/context` ("Tool schemas: ~13.3K (29 tools)")
+- **candy-code-web** 🟡 — — — _Evidence:_ live `/context` ("Tool schemas: ~13.3K (29 tools)")
 - **Claude Code 2.1.301** ✅ — `--tools`, `--allowedTools`, `--disallowedTools`; subagent `tools`/`disallowedTools`; background subagents get a reduced built-in set; Glob/Grep absent by default on Unix; a bare-tool deny rule changes the list (cache bust) but scoped rules don't. — _Evidence:_ cc:tools-reference; cc:mcp#scale-with-mcp-tool-search; cc:prompt-caching#denying-an-entire-tool
 - **OpenCode 1.18.35** ✅ — `ToolRegistry.tools()` filters websearch by provider/flag and swaps patch vs edit/write for GPT. `Permission.disabled` removes any tool whose last matching rule is `'*'` deny. Plugin `tool.definition` can rewrite descriptions and schemas. Tools are sorted by name. Experimental code mode adds `execute`. — _Evidence:_ OC/tool/registry.ts:292-340; OC/permission/index.ts:204-219; OC/session/llm/request.ts:184
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Per-agent tool list: denied tools removed, gpt→apply_patch swap, task desc lists allowed subagents, tool.definition hook. 2.0.31 (✅): MCP servers default to `codemode: true`: their tools appear as one-line signatures in the `execute` tool's namespace catalog under a token budget rather than as separate tool schemas. Denying `execute` removes Code Mode and tools reached only through it. — _Evidence:_ V2D/tools (Execute, Extensions); V2D/mcp-servers (Permissions); V2C/codemode/catalog.ts:60-130
@@ -1746,7 +1746,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-06</b> Skills listing in prompt (names + descriptions)</summary>
 
 - **candy-code** ✅ — Enabled skill bodies go in full (5k / 25k-token budgets). The listing has no aggregate budget: 98 skills measured at 40 KB (ISSUES). — _Evidence:_ `src/Skills/SkillMatcher.php:86`; `src/Skills/SkillPromptLine.php:60`; `src/Runtime.php:4706-4712`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `/context`
+- **candy-code-web** 🟡 — — — _Evidence:_ live `/context`
 - **Claude Code 2.1.301** ✅ — Observed: "The following skills are available for use with the Skill tool: - name: description"; more entries can arrive in later reminders. Overflow drops descriptions of least-used skills first; `skillOverrides` name-only/off; `disable-model-invocation` hides from the listing; `skillListingBudgetFraction`. — _Evidence:_ obs; cc:skills#skill-descriptions-are-cut-short; cc:skills#override-skill-visibility-from-settings
 - **OpenCode 1.18.35** ✅ — `SystemPrompt.skills` adds “Use the skill tool to load a skill…” plus an XML list, filtered by the agent's `skill` permission. It is omitted if skill is denied. Skills without a description are not listed. — _Evidence:_ OC/session/system.ts:107-119; OC/skill/index.ts:321-345; OC/tool/skill.txt
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Skills listed twice: verbose <available_skills> (name, description, location) in system prompt + skill tool description. 2.0.31 (✅): Each step lists permitted skills (id, name, description); `opencode/autoinvoke:false` hides one; body via skill tool — _Evidence:_ V2D/skills (Loading, Frontmatter)
@@ -1756,7 +1756,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-07</b> Agents listing in prompt (subagent catalog)</summary>
 
 - **candy-code** 🟡 — `TaskTool::promptGuidance()` and `rosterNames()`. An unknown name is refused with the roster listed. The model chooses agents by name alone. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:674-683`, `:2480`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ grep `src-web/`
+- **candy-code-web** 🟡 — — — _Evidence:_ grep `src-web/`
 - **Claude Code 2.1.301** ✅ — The Agent tool's own description just says agent types "are listed in <system-reminder> messages". Startup warning if custom agent descriptions exceed 15,000 tokens. Subagents get a sibling-roster reminder of named agents they can `SendMessage`. — _Evidence:_ obs; cc:agent-sdk/modifying-system-prompts#reminders-claude-code-adds-to-the-conversation; cc:sub-agents#what-loads-at-startup
 - **OpenCode 1.18.35** ✅ — `describeTask` lists non-primary agents not denied by `task` permission, sorted. A denied subagent is “removed from the Task tool description entirely”. The catalog is **not** in the system prompt. — _Evidence:_ OC/tool/registry.ts:262-275; DOCS/agents (Task permissions)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Subagent catalog (name: description) appended to task tool description, filtered by the agent's task permission. 2.0.31 (✅): Tool renamed from `task` to `subagent`; permission action `subagent`. — _Evidence:_ V2C/tool/plugin/subagent.ts:169-180
@@ -1766,7 +1766,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-08</b> Mid-conversation system reminders (todo nudges, file-changed notices, mode notices)</summary>
 
 - **candy-code** ✅ — All are appended at the tail or inside tool output, so the cached prefix stays stable. — _Evidence:_ `src/Backend/EngineBackend.php:1700-1760`; `src/Context/Pruning/NudgePolicy.php`; `src/Context/Sections/PlanModeSection.php`
-- **sugar-crush-web** 🟡 — Rows with role `system` become notices. — _Evidence:_ `src-web/stores/reducer.ts:192-194`; live snapshot
+- **candy-code-web** 🟡 — Rows with role `system` become notices. — _Evidence:_ `src-web/stores/reducer.ts:192-194`; live snapshot
 - **Claude Code 2.1.301** ✅ — Always appended (never inserted) to keep the cache; `CLAUDE_CODE_DISABLE_ATTACHMENTS=1` turns off nudges, file notes and the skill list; post-compaction reminder lists still-running background work. — _Evidence:_ cc:agent-sdk/modifying-system-prompts#reminders-claude-code-adds-to-the-conversation; cc:prompt-caching#editing-files-in-your-repository; cc:context-window#what-survives-compaction
 - **OpenCode 1.18.35** 🟡 — All are synthetic user-message text parts, except nested instructions (in the read result) and max-steps (an extra assistant-role message on the last step). Experimental plan mode uses a 5-phase plan-file workflow reminder. No todo reminders, no external file-change notices, no context-usage nudges. — _Evidence:_ OC/session/reminders.ts:15-89; OC/session/prompt.ts:1281,531 (compaction continue)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Synthetic reminders: plan-mode, plan→build switch, nested AGENTS.md, max-steps, post-compaction continue; no todo/file nudges. 2.0.31 (✅): Plan reminders are reconciled per request near the tail (cache-friendly) and survive compaction/revert. No todo nudges (no todo tool). — _Evidence:_ V2C/plugin/plan.ts:5-60; specs/v2/session.md
@@ -1776,7 +1776,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-09</b> Custom system prompt override / append (flags or config)</summary>
 
 - **candy-code** 🟡 — PROMPT_ENGINEERING.md: "Do not add a user-supplied system-prompt override key." — _Evidence:_ `docs/PROMPT_ENGINEERING.md` ("do not do this" item 5)
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — SDK `systemPrompt` preset + append, `SYSTEM_PROMPT_DYNAMIC_BOUNDARY`; resumed conversations keep their original prompt by default. — _Evidence:_ help; cc:cli-reference; cc:agent-sdk/modifying-system-prompts
 - **OpenCode 1.18.35** 🟡 — No `--system-prompt` or `--append-system-prompt`. Options: set `agent.build.prompt` (replaces the base), the SDK/HTTP `system` field per message (appended), or a plugin with `experimental.chat.system.transform`. — _Evidence:_ OC/session/llm/request.ts:58-73; DOCS/server (POST /session/:id/message body `system`)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Agent `prompt` replaces base prompt; API per-message `system`; system.transform plugin hook; no CLI flag. 2.0.31 (🟡): Agent `system` replaces base prompt; API session instruction entries; `context` hook edits system; no CLI flag — _Evidence:_ V2D/agents (System); V2D/instructions (Ordering item 6); V2D/build/plugins/index (Model requests)
@@ -1786,7 +1786,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-10</b> Output styles / personas</summary>
 
 - **candy-code** 🟡 — `~/.candy-code/rulebooks/*.md`. — _Evidence:_ `src/Context/RuleLoader.php:410`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `/output-style` (v2.1.269+) or `/config`; mid-session switch delivered as a conversation message (cache-safe, v2.1.251+); not applied to non-fork subagents. — _Evidence:_ cc:output-styles; cc:prompt-caching#changing-output-style
 - **OpenCode 1.18.35** ❌ — No output-style concept. Users create agents (e.g. this host's `build` orchestrator prompt). — _Evidence:_ DOCS/agents
 - **OpenCode 2.0.31** ❌ — No output-style concept. Users create agents (e.g. this host's `build` orchestrator prompt). — _Evidence:_ DOCS/agents
@@ -1796,7 +1796,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-11</b> Per-agent prompt</summary>
 
 - **candy-code** ✅ — Task: `SystemMessage($preset prompt)` plus the engine's assembled prompt (CLAUDE.md, memory and the rest inherited). Workflow stages: `Agent::systemPrompt()`. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:1348`; `src/Agents/Agent.php:955`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `--agent <name>` makes the main thread use it; `initialPrompt` auto-submits a first turn. — _Evidence:_ cc:sub-agents#write-subagent-files
 - **OpenCode 1.18.35** ✅ — `{file:./prompts/x.txt}` resolves relative to the config file. Markdown agents use their body as the prompt. Explore, compaction, title and summary ship their own prompts. — _Evidence:_ OC/session/llm/request.ts:60; OC/agent/agent.ts:197-258; DOCS/agents (Prompt)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Agent `prompt` (inline or {file:...}) replaces the model-family base prompt for that agent. 2.0.31 (✅): Agent `system` (Markdown body) replaces provider prompt; instructions/skills/references still added — _Evidence:_ V2D/agents (System)
@@ -1806,7 +1806,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-12</b> Context-usage breakdown view (/context-style)</summary>
 
 - **candy-code** ✅ — Local, calls no model. Server host command. Omits the tool-guidance and plan-mode layers (ISSUES). — _Evidence:_ `src/Commands/ContextCommand.php`; `src/Host/Commands/ContextHostCommand.php:33`
-- **sugar-crush-web** 🟡 — Text only, no panel; arrives after the web re-snapshots. — _Evidence:_ live `command.exec name=context`
+- **candy-code-web** 🟡 — Text only, no panel; arrives after the web re-snapshots. — _Evidence:_ live `command.exec name=context`
 - **Claude Code 2.1.301** ✅ — Over-limit warning names the command that frees space; `/usage` warns about always-on context and large tool results (v2.1.299); `/doctor` estimates skill-listing cost. — _Evidence:_ cc:commands; cc:context-window#check-your-own-session; CL v2.1.299
 - **OpenCode 1.18.35** 🔌 — No category breakdown of system, tools or messages. Plugins: IgorWarzocha Opencode-Context-Analysis-Plugin; DCP `/dcp context`. — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx:17-44; awesome-opencode (Context Analysis)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🔌): Sidebar shows total tokens/% only; breakdown via plugins (Context Analysis plugin, DCP /dcp context). 2.0.31 (🟡): V1 plugins (Context Analysis, DCP) are v1-API only. — _Evidence:_ V2T/feature-plugins/sidebar/context.tsx:14-37; V2CL v2.0.29
@@ -1816,7 +1816,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-13</b> IDE/editor context injection (open file, selection, diagnostics)</summary>
 
 - **candy-code** 🟡 — `promptCapabilities.embeddedContext: true`. — _Evidence:_ `src/Acp/AcpServer.php:281`, `:640-660`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — Transcript shows `⧉ Selected N lines from <file>`; Read deny rules block it; `mcp__ide__executeCode` for Jupyter (always asks); `--ide` auto-connect. — _Evidence:_ cc:vs-code#the-built-in-ide-mcp-server; cc:jetbrains
 - **OpenCode 1.18.35** ✅ — The TUI connects to `ws://127.0.0.1:$CLAUDE_CODE_SSE_PORT` (or `OPENCODE_EDITOR_SSE_PORT`, or a discovered lock file), speaking MCP protocol 2025-11-25, so Claude-Code IDE plugins work. In Zed terminals it reads the selection from Zed's SQLite DB. A label (`file.ts:L10-20`) shows in the prompt and is sent once with the next message; it can be dismissed or toggled (app_toggle_file_context). The VS Code extension adds `@File#L37-42` insertion. I saw no IDE diagnostics injection. — _Evidence:_ TUI/context/editor.ts:9,112-121,362-372; TUI/editor-zed.ts; TUI/component/prompt/index.tsx:178-205; DOCS/ide
 - **OpenCode 2.0.31** ✅ — The TUI connects to `ws://127.0.0.1:$CLAUDE_CODE_SSE_PORT` (or `OPENCODE_EDITOR_SSE_PORT`, or a discovered lock file), speaking MCP protocol 2025-11-25, so Claude-Code IDE plugins work. In Zed terminals it reads the selection from Zed's SQLite DB. A label (`file.ts:L10-20`) shows in the prompt and is sent once with the next message; it can be dismissed or toggled (app_toggle_file_context). The VS Code extension adds `@File#L37-42` insertion. I saw no IDE diagnostics injection. — _Evidence:_ TUI/context/editor.ts:9,112-121,362-372; TUI/editor-zed.ts; TUI/component/prompt/index.tsx:178-205; DOCS/ide
@@ -1826,7 +1826,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-14</b> Date/time awareness & knowledge-cutoff note</summary>
 
 - **candy-code** 🟡 — — — _Evidence:_ `src/Context/EnvironmentBlock.php:1059`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Observed: "Today's date is 2026-10-16" and "Assistant knowledge cutoff is June 2026". — _Evidence:_ obs
 - **OpenCode 1.18.35** 🟡 — Day-granular for cache stability. Date rollover changes the prefix on the next step, because the env block is rebuilt per step. — _Evidence:_ OC/session/system.ts:83
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): 'Today's date' (day granularity) in env block; no knowledge-cutoff note; no clock time. 2.0.31 (🟡): Date (day granularity) is an instruction source; rollovers inject 'Today's date is now:' — _Evidence:_ V2C/instructions/builtins.ts:22-29
@@ -1836,7 +1836,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-15</b> Prompt debugging (view raw request / dump system prompt)</summary>
 
 - **candy-code** 🟡 — No `--debug` request log, no "show system prompt" command. — _Evidence:_ `src/Runtime.php:4253`; `tests/Prompt/PromptSnapshotDriftTest.php`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — SDK message streams omit reminders, so raw-body logging or a logging gateway is the documented way to see exactly what Claude received. — _Evidence:_ cc:agent-sdk/modifying-system-prompts#see-what-claude-received; cc:monitoring-usage
 - **OpenCode 1.18.35** 🟡 — `--log-level DEBUG --print-logs`. `opencode debug agent <name>` shows agent config. `GET /experimental/tool?provider&model` lists tool JSON schemas. AI-SDK OpenTelemetry spans are available with `experimental.openTelemetry`. Nothing prints the final system prompt. — _Evidence:_ CLI: `opencode debug --help`; DOCS/server (Tools Experimental); CORE/v1/config/config.ts:173-175
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): No raw-request/system-prompt dump; debug logs, `opencode debug agent`, /experimental/tool schemas, OTLP spans. 2.0.31 (🟡): `opencode api` hits any server operation; `debug agents/config/paths`; still no system-prompt dump — _Evidence:_ V2CLI: `opencode api --help`, `opencode debug --help`
@@ -1846,7 +1846,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-N1</b> 🆕 Byte-stable prompt prefix engineered for provider prompt-cache hits (volatile state moved to a tail)</summary>
 
 - **candy-code** ✅ — `SessionPromptMemo` primed in the parent, `<turn-context>` persisted, system rows past index 0 become `<system-notice>` user rows. Pinned by `PromptPrefixByteStabilityTest`. — _Evidence:_ `src/Context/SessionPromptMemo.php`; `docs/PROMPT_ENGINEERING.md` "Outside the system prompt"
-- **sugar-crush-web** ✅ — `EngineBackend::beginSessionTurn()` runs in the parent before every turn, whichever driver started it, so standing layers stay byte-stable and live git state rides the tail row. Any compaction is a memo refresh point; served sessions compact with the heuristic route. The browser shows no cache readout (the status bar has context % and spend only). — _Evidence:_ `src/Backend/EngineBackend.php:1390`, `:2702-2719`, `:3507-3508`; `src/Host/TurnRunner.php:488-496`
+- **candy-code-web** ✅ — `EngineBackend::beginSessionTurn()` runs in the parent before every turn, whichever driver started it, so standing layers stay byte-stable and live git state rides the tail row. Any compaction is a memo refresh point; served sessions compact with the heuristic route. The browser shows no cache readout (the status bar has context % and spend only). — _Evidence:_ `src/Backend/EngineBackend.php:1390`, `:2702-2719`, `:3507-3508`; `src/Host/TurnRunner.php:488-496`
 - **Claude Code 2.1.301** ✅ — `--system-prompt-snapshot on` reuses the recorded prompt across requests and resumes; `--exclude-dynamic-system-prompt-sections` moves cwd/env/memory paths/git status to the first user message; CLAUDE.md frozen per session; cache warnings on model/effort switches. — _Evidence:_ cc:prompt-caching#how-the-cache-is-organized; help (`--system-prompt-snapshot`, `--exclude-dynamic-system-prompt-sections`)
 - **OpenCode 1.18.35** 🟡 — Volatile items stay out of the system prompt: no git status, plan reminders go in the user turn. However AGENTS.md, URL instructions, skills and MCP instructions are rebuilt every step, so any change rewrites the prefix. Cache breakpoints sit on the first 2 system and last 2 messages, and `x-session-affinity` is sent. — _Evidence:_ OC/session/prompt.ts:1257-1267; OC/session/llm/request.ts:68-78,184,199; OC/provider/transform.ts:356-385
 - **OpenCode 2.0.31** ✅ — Content-hashed instruction epochs, so edits never rewrite the system prefix. `compatibility.cacheFormat` / supportsPromptCacheKey. Optional `warming`. — _Evidence:_ specs/v2/session.md (Instructions Are Value Deltas); V2C/plugin/plan.ts (reminders near tail); V2CL v2.0.28
@@ -1856,7 +1856,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-N2</b> 🆕 Project references (extra local dirs / git repos advertised to the model via config)</summary>
 
 - **candy-code** ❌ — The prompt advertises only the session root (EnvironmentBlock cwd) and that root's RepoMap or symbol map. The setting roster has no key that lists extra local directories or git repos for the model. The nearest key is `instructions` (StringList, prompt class, layered): files matching its globs "become authoritative system-prompt text", which is content injection, not a reference the model can explore. Read can open files outside the root (paths are not restricted; normal permission asks apply), but Grep and Glob are confined to the root. `serve` workspace hosts run separate sessions in other roots, but no single session can reference a second root. — _Evidence:_ `src/Config/Settings/Definitions/MemoryRuleSettings.php:124-131`; `src/Cli/ArgvParser.php:311-343` (`--root` only); `docs/PERMISSIONS.md:292`
-- **sugar-crush-web** ❌ — `fs.listDirs` and `workspace.open` give each picked root its own host process and sessions. No session can see two roots. — _Evidence:_ `sugar-crush-web/src-web/components/DirectoryPicker.vue`; `src/Server/Workspace/Gateway.php`
+- **candy-code-web** ❌ — `fs.listDirs` and `workspace.open` give each picked root its own host process and sessions. No session can see two roots. — _Evidence:_ `candy-code-web/src-web/components/DirectoryPicker.vue`; `src/Server/Workspace/Gateway.php`
 - **Claude Code 2.1.301** ✅ — Added dirs grant file access and load their `.claude/skills`, commands and agents; their CLAUDE.md loads with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`; `DirectoryAdded` hook; listed in the environment block. — _Evidence:_ cc:permissions#additional-directories-grant-file-access-not-configuration; cc:memory#load-from-additional-directories; obs
 - **OpenCode 1.18.35** ✅ — References are configured by alias (path, or repository + branch, plus description and hidden). Ones with a description are listed in the system prompt as `<available_references>`. Git references are cloned asynchronously into the repo cache. Reference directories are auto-allowed for external_directory. — _Evidence:_ DOCS/references; OC/session/system.ts:71-104; OC/agent/agent.ts:102-113
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): [NEW: Project references] `references` config: local dirs/git repos advertised in prompt, @alias autocomplete. 2.0.31 (✅): [NEW: Project references] still supported (`references` map), advertised with MCP/skill guidance — _Evidence:_ V2D/references; V2D/instructions (Ordering)
@@ -1866,7 +1866,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PRM-N3</b> 🆕 Behavioural completion contract (prompt sections / checks that the agent finishes promised work)</summary>
 
 - **candy-code** ✅ — Every system prompt includes MaximsSection (added at `Runtime.php:4347`), with OpenClaw's two sections restated: "Keep going until the task is done or a real blocker stops it, and name the blocker", and "Saying you are checking or fixing something is a progress note, not an answer: take that action in the same turn … promise later work only when something you started will deliver it". It also says "Report outcomes faithfully". The base prompt adds "When a change is nearly done, prove it before you say so … if you cannot find a runner, say that rather than implying the change is verified". Checks: TodoReminder re-shows the open todo list every 6 steps and after a compaction. `/goal <condition>` (TUI) runs a strict JSON judge on the title backend after each turn; a claimed but unshown requirement does not count as met, and the agent is re-prompted with what is missing. User Stop hooks, and the autoTest Stop hook, can also force more work. Missing: OpenClaw's automatic one-shot self-check when a final answer leaves work unfinished. — _Evidence:_ `src/Context/Sections/MaximsSection.php:73-123`; `src/Runtime.php:4347`, `:5325-5330`; `src/Goal/GoalJudge.php:14-50`; `src/Todo/TodoReminder.php:40-43`; `src/Backend/EngineBackend.php:1741-1752`; `builtin-commands/3400-goal.php`
-- **sugar-crush-web** 🟡 — The prompt clauses and between-step todo reminders apply to web sessions, and the Todo panel shows open items live. `/goal` and `/grind` are client-only (-32030 `ui_only`), so a browser user cannot start the evidence-checking judge loop. — _Evidence:_ `src/Context/Sections/MaximsSection.php:113-123`; `src/Protocol/Methods/CommandMethods.php`; `sugar-crush-web/src-web/components/panels/TodoPanel.vue`
+- **candy-code-web** 🟡 — The prompt clauses and between-step todo reminders apply to web sessions, and the Todo panel shows open items live. `/goal` and `/grind` are client-only (-32030 `ui_only`), so a browser user cannot start the evidence-checking judge loop. — _Evidence:_ `src/Context/Sections/MaximsSection.php:113-123`; `src/Protocol/Methods/CommandMethods.php`; `candy-code-web/src-web/components/panels/TodoPanel.vue`
 - **Claude Code 2.1.301** ✅ — Goal = session-scoped prompt-based Stop hook (clears when met or judged impossible); Stop hooks `decision: block` keep Claude working (8-in-a-row cap); built-in commit instructions run a `verify`/`simplify` skill before commits when one exists. Opt-in rather than always-on. — _Evidence:_ cc:goal; cc:hooks#stop-decision-control; cc:skills#run-your-checks-before-each-commit
 - **OpenCode 1.18.35** 🔌 — Native pieces only: model prompts such as beast.txt (“keep going until resolved”) and the max-steps summary. The goal plugin supports OpenCode 1.17.15 up to, but not including, 2. — _Evidence:_ OC/session/prompt/beast.txt; opencode-goal-plugin README (compat <2)
 - **OpenCode 2.0.31** ❌ — v2 adds output-limit auto-continuation, which is not a completion check. — _Evidence:_ opencode-goal-plugin README; V2CL v2.0.29
@@ -1879,7 +1879,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-01</b> Token counting method (provider-reported vs estimate)</summary>
 
 - **candy-code** 🟡 — `TokenEstimate` (script-weighted). `ContextMeter::calibrationFrom()` scales by observed/estimated, clamped to [1,3]. `ContextPressure::measure()` includes system and tools. `ContextCompactor::countTokens()` counts only message `content` (ISSUES). — _Evidence:_ `src/Host/ContextMeter.php`; `src/Context/ContextPressure.php:88`; `src/Context/ContextCompactor.php:1398`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — Status-line `context_window` fields (`used_percentage`, `current_usage`); window correction for unknown/gateway model IDs. — _Evidence:_ cc:statusline#context-window-fields; cc:model-config#correct-the-window-for-a-gateway-or-custom-model-id
 - **OpenCode 1.18.35** ✅ — `isOverflow` uses `tokens.total`, or input+output+cache.read+cache.write, from the last finished step. Sidebar % uses the same fields plus reasoning. — _Evidence:_ OC/session/overflow.ts:22-34; TUI/feature-plugins/sidebar/context.tsx:28-33
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Overflow decisions use provider-reported usage (total or in+out+cache); chars/4 estimates only for tail/prune sizing. 2.0.31 (✅): Runner estimates the complete model-visible request before each step; provider usage used for display — _Evidence:_ specs/v2/session.md (Compaction); V2CL v2.0.29 (lastAssistantWithUsage)
@@ -1889,7 +1889,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-02</b> Context usage display (% / tokens) in UI</summary>
 
 - **candy-code** ✅ — — — _Evidence:_ `src/Renderer.php:3088-3105`, `:2662`; `src/Context/TurnContextBlock.php:69`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue`; `src-web/components/grid/SessionTile.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue`; `src-web/components/grid/SessionTile.vue`
 - **Claude Code 2.1.301** ✅ — The default footer shows no % until near the limit; add a status line (`/statusline`) for always-on %. — _Evidence:_ cc:commands; cc:statusline#notifications-share-the-status-line-row; cc:vs-code
 - **OpenCode 1.18.35** ✅ — The sidebar “Context” block shows N tokens, % used and $ spent. The subagent footer shows the child's context % and cost. `opencode stats` gives history. — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx:39-44; TUI/routes/session/subagent-footer.tsx
 - **OpenCode 2.0.31** ✅ — The sidebar “Context” block shows N tokens, % used and $ spent. The subagent footer shows the child's context % and cost. `opencode stats` gives history. — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx:39-44; TUI/routes/session/subagent-footer.tsx
@@ -1899,7 +1899,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-03</b> Auto-compaction trigger (threshold)</summary>
 
 - **candy-code** ✅ — `CompactorConfig::tierThreshold()` uses the lower of percent and cap. The reminder tier pre-fetches summaries in the background. Futile absolute tiers stand down. Caveat: the tiers ignore system and tool tokens (ISSUES). Caps are not validated for ascending order. — _Evidence:_ `src/Context/CompactorConfig.php:264`, `:679`; `src/Chat.php:11269-11290`; `src/Context/ContextBudget.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/stores/reducer.ts:521-530`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/stores/reducer.ts:521-530`
 - **Claude Code 2.1.301** ✅ — `DISABLE_AUTO_COMPACT`; subagent `autoCompactWindow`; idle compaction compacts 200K+ conversations after ~54 min idle, before the 1h cache expires (`idleCompaction`, `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`). — _Evidence:_ cc:model-config#set-the-auto-compact-window; help (`--autocompact`); CL v2.1.299
 - **OpenCode 1.18.35** ✅ — usable = limit.input − (`compaction.reserved` ?? min(20000, maxOutput)), else context − maxOutput. Checked after every step (`takeUntil` stops the stream) and before each step. Disable with `compaction.auto:false` or `OPENCODE_DISABLE_AUTOCOMPACT`. — _Evidence:_ OC/session/overflow.ts:8-34; OC/session/processor.ts:495; OC/session/prompt.ts:1161-1167
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Auto-compact when reported tokens ≥ usable (input limit − min(20k, maxOut)); runs mid-turn; `compaction.auto`. 2.0.31 (✅): Runner estimates the complete model-visible request before each step. V1 `reserved` → V2 `buffer`. — _Evidence:_ specs/v2/session.md (Compaction Rebuilds Active History); V2D/compaction (Settings)
@@ -1909,7 +1909,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-04</b> Manual compaction (/compact [instructions])</summary>
 
 - **candy-code** ✅ — No host command, so `serve`/web report it as client-only. Automatic tiers still run server-side. — _Evidence:_ `builtin-commands/2000-compact.php`; `docs/SERVER.md:540-549`
-- **sugar-crush-web** ❌ — A web user cannot compact a session manually. — _Evidence:_ live `command.exec name=compact`
+- **candy-code-web** ❌ — A web user cannot compact a session manually. — _Evidence:_ live `command.exec name=compact`
 - **Claude Code 2.1.301** ✅ — A free-form "Compact Instructions" section in CLAUDE.md also steers summaries. — _Evidence:_ cc:commands; cc:how-claude-code-works#when-context-fills-up
 - **OpenCode 1.18.35** 🟡 — The TUI calls `session.summarize` with the current model only. There is no way to steer the summary except a plugin replacing the prompt. — _Evidence:_ TUI/routes/session/index.tsx:561-585; DOCS/tui (compact)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): /compact (alias /summarize, <leader>c) — no custom-instructions argument. 2.0.31 (🟡): `opencode api post /api/session/<id>/compact --data '{}'`; requests merge while pending; works with auto off. — _Evidence:_ V2D/compaction (Manual); V2T slash list (compact)
@@ -1919,7 +1919,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-05</b> Compaction method (LLM summary prompt, what survives, file re-reads)</summary>
 
 - **candy-code** ✅ — `COMPACT_SUMMARY_PROMPT`; derived headings filled mechanically. Cache-reusing summary request. Re-injection of ≤5 files (5k tokens each), latest plan, skill bodies, git and todos, within 10% of the window. Heuristic fallback. — _Evidence:_ `src/Host/CompactionService.php:622`; `src/Context/Compaction/StateSummaryTemplate.php`; `src/Context/Compaction/ReinjectionPlan.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/stores/reducer.ts:521-530`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/stores/reducer.ts:521-530`
 - **Claude Code 2.1.301** ✅ — Files >5K tokens come back as `Referenced file` paths; still-running background work is listed; SessionStart(`compact`) hooks re-run; summary inherits thinking config; PreCompact/PostCompact hooks. — _Evidence:_ cc:context-window#what-survives-compaction; cc:prompt-caching#compacting-the-conversation
 - **OpenCode 1.18.35** ✅ — Template sections: Objective, Important Details, Work State (Completed/Active/Blocked), Next Move, Relevant Files. Tool results are serialized to ≤2000 chars. A previous summary is passed as `<prior-summary>` with merge rules. The tail is kept verbatim: `preserve_recent_tokens` ?? min(15k, max(2k, 25% of usable)), optional `tail_turns`. The compaction user message is rendered as “What did we do so far?”. The run then appends “Continue if you have next steps…”, which plugins can disable. No file re-reads. — _Evidence:_ CORE/session/compaction.ts:14-55; OC/session/compaction.ts:115-269,531; OC/session/message-v2.ts:241
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Hidden compaction agent writes anchored 5-section summary; verbatim recent tail kept; prior summary merged; auto-continue. 2.0.31 (✅): `compaction.keep.tokens` (default 15000). OpenAI Responses models can use `native` compaction (opaque encrypted checkpoint). Summary omits instruction files/env. Instructions re-baseline after compaction. No separate compaction model. — _Evidence:_ V2D/compaction; V2C/session/compaction.ts:43-46,106-162,197-233
@@ -1929,7 +1929,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-06</b> Tool-output clearing / micro-compaction / pruning old tool results</summary>
 
 - **candy-code** ✅ — `EmergencyPrune`, `TurnStartPruning`, `PruningPolicy` (protects Task/Skill/Edit/Write, the newest 40k tokens and the last 2 prompts). — _Evidence:_ `src/Context/Pruning/*`; `src/Backend/EngineBackend.php:1965-1975`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `command.list`
+- **candy-code-web** 🟡 — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Thresholds for the clearing pass are not documented. — _Evidence:_ cc:how-claude-code-works#when-context-fills-up; cc:prompt-caching#accumulating-many-images
 - **OpenCode 1.18.35** 🟡 — Walks newest to oldest and skips the last 2 user turns. Protects 40k tokens of tool output and the `skill` tool. Applies only if more than 20k would be pruned. The stored output is kept for the UI. Runs after each finished loop. `OPENCODE_DISABLE_PRUNE` overrides. DCP plugin for more. — _Evidence:_ OC/session/compaction.ts:28-31,271-317; OC/session/message-v2.ts:304; OC/session/prompt.ts:1338
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🟡): Opt-in prune (`compaction.prune`, default false): old tool outputs → '[Old tool result content cleared]' beyond 40k. 2.0.31 (❌): No pruning: `compaction.prune`/`tail_turns` are ignored with a warning; recent tail just shortens long tool output — _Evidence:_ V2D/migrate-v1 (Compaction, Accepted but unsupported)
@@ -1939,7 +1939,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-07</b> Tool-output truncation at tool time (limits)</summary>
 
 - **candy-code** ✅ — `toolOutputCapBytes`, `mcpResultCapBytes`, `toolSpillWindowPercent`. — _Evidence:_ `src/Support/ToolOutputSpill.php`; `docs/CONTEXT.md:324-346`
-- **sugar-crush-web** ✅ — Up to 64 pages of 1 MiB are appended into the card. — _Evidence:_ `src-web/stores/session.ts:187-201`; `src-web/components/ToolCard.vue:67`
+- **candy-code-web** ✅ — Up to 64 pages of 1 MiB are appended into the card. — _Evidence:_ `src-web/stores/session.ts:187-201`; `src-web/components/ToolCard.vue:67`
 - **Claude Code 2.1.301** ✅ — Bash failures: 10K head+tail; `BASH_MAX_OUTPUT_LENGTH` ≤150K; `bashOutputMaxChars` ≤128K; 5 GB kill; MCP text >50K chars spilled to `tool-results/`; MCP errors trimmed to 5K+5K. — _Evidence:_ cc:tools-reference#output-limits; cc:mcp#mcp-output-limits-and-warnings; cc:hooks#json-output
 - **OpenCode 1.18.35** ✅ — The Tool.define wrapper truncates (configurable `tool_output.max_lines/max_bytes`), writes the full output to the truncation dir (pre-allowed for external_directory), and tells the model to use Task/explore or Grep/Read with offset. Applied to MCP tools too. — _Evidence:_ OC/tool/truncate.ts:14-15,77-80; OC/agent/agent.ts:293-306; OC/session/tools.ts:196-206
 - **OpenCode 2.0.31** ✅ — The Tool.define wrapper truncates (configurable `tool_output.max_lines/max_bytes`), writes the full output to the truncation dir (pre-allowed for external_directory), and tells the model to use Task/explore or Grep/Read with offset. Applied to MCP tools too. — _Evidence:_ OC/tool/truncate.ts:14-15,77-80; OC/agent/agent.ts:293-306; OC/session/tools.ts:196-206
@@ -1949,7 +1949,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-08</b> Large-file read handling (offset/limit, paging)</summary>
 
 - **candy-code** ✅ — — — _Evidence:_ `src/Tools/BuiltIn/Read.php:41-49`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS`; observed in this session's Read tool. — _Evidence:_ cc:tools-reference#large-files; CL v2.1.296; obs
 - **OpenCode 1.18.35** ✅ — Footer: “(Output capped at 50 KB. Showing lines a-b. Use offset=N to continue.)”. The description discourages tiny 30-line slices. — _Evidence:_ OC/tool/read.ts:13-17,345; OC/tool/read.txt
 - **OpenCode 2.0.31** ✅ — Footer: “(Output capped at 50 KB. Showing lines a-b. Use offset=N to continue.)”. The description discourages tiny 30-line slices. — _Evidence:_ OC/tool/read.ts:13-17,345; OC/tool/read.txt
@@ -1959,7 +1959,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-09</b> Agent-controlled self-pruning (DCP-style tools)</summary>
 
 - **candy-code** ✅ — Gated by `/pruning` mode. Ref tags `<ctx-ref r=N/>`. — _Evidence:_ `src/Tools/BuiltIn/Prune.php`; `Compress.php`; `Recall.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference
 - **OpenCode 1.18.35** 🔌 — DCP rewrites the outbound message list through `experimental.chat.messages.transform` (fired every step) without touching storage. It exposes `compress` to the model. Both configs here load `@tarquinen/opencode-dcp` (repo pins 3.1.3, global @latest; `dcp.jsonc` present). — _Evidence:_ PLUG/index.ts:282-290; OC/session/prompt.ts:1255; LOCAL: ~/.config/opencode/{opencode.jsonc,tui.json,dcp.jsonc}, repo .opencode/opencode.jsonc
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🔌): Only via 🔌 opencode-dynamic-context-pruning (compress tool, dedup/purge strategies) — installed here. 2.0.31 (❌): `npm view @tarquinen/opencode-dcp` 3.2.0 depends on `@opencode-ai/plugin >=1.18.29` (V1). No v2 port found; the v2 `context` hook would allow one. — _Evidence:_ npm view @tarquinen/opencode-dcp dependencies; V2D/migrate-v1 (Plugins)
@@ -1969,7 +1969,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-10</b> Rewind / drop messages from context</summary>
 
 - **candy-code** ✅ — — — _Evidence:_ `src/Host/Commands/RewindCommand.php`; `src/Context/SessionPromptMemo.php:189`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/stores/session.ts:140-158`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/stores/session.ts:140-158`
 - **Claude Code 2.1.301** ✅ — Rewind truncates to a cached prefix (cheap); originals stay in the transcript; `/clear` past-session entry. — _Evidence:_ cc:checkpointing#rewind-and-summarize; cc:prompt-caching#rewinding-the-conversation
 - **OpenCode 1.18.35** ✅ — `revert(messageID, partID?)` hides later messages and restores files, and is itself undoable via unrevert. `cleanup` deletes the hidden messages on the next prompt. — _Evidence:_ OC/session/revert.ts:38-124; TUI/routes/session/index.tsx:507-660
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /undo, /timeline revert-to-message, /fork from any message; reverted messages soft-hidden then deleted. 2.0.31 (✅): /undo stages a rollback (prompt back in composer) committed on next submit; /redo cancels; Revert on any message — _Evidence:_ V2D/snapshots (Workflow)
@@ -1979,7 +1979,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-11</b> Side questions without polluting context (/btw-style)</summary>
 
 - **candy-code** ✅ — Host command, works in server mode. — _Evidence:_ `src/Host/Commands/BtwHostCommand.php:65-105`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Methods/CommandMethods.php:91-115`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Methods/CommandMethods.php:91-115`
 - **Claude Code 2.1.301** ✅ — Runs while Claude works; cheap on a warm cache; overlay with history browsing and `c` copy. — _Evidence:_ cc:interactive-mode#side-questions-with-/btw
 - **OpenCode 1.18.35** ❌ — A command with `subtask: true` runs in a child session and only its summary returns, which is the closest equivalent. — _Evidence:_ DOCS/commands (Subtask)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (❌): No /btw side-question mode (subtask commands are the closest). 2.0.31 (✅): Uses `session.generate` with current model; answer opens in a dialog (C copies). — _Evidence:_ V2T/feature-plugins/prompt/btw.tsx:54-78; V2D/cli/tui (Side questions)
@@ -1989,7 +1989,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-12</b> Context warnings near limit</summary>
 
 - **candy-code** ✅ — — — _Evidence:_ `src/Context/ContextCompactor.php:539`; `src/Context/Pruning/NudgePolicy.php`; `src/Backend/EngineBackend.php:135`
-- **sugar-crush-web** ✅ — — — _Evidence:_ live snapshot; `src-web/stores/reducer.ts:532-541`
+- **candy-code-web** ✅ — — — _Evidence:_ live snapshot; `src-web/stores/reducer.ts:532-541`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:statusline#notifications-share-the-status-line-row; CL (context-left warning fixes)
 - **OpenCode 1.18.35** 🟡 — No toast or banner before auto-compaction. — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx
 - **OpenCode 2.0.31** 🟡 — No toast or banner before auto-compaction. — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx
@@ -1999,7 +1999,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-13</b> Overflow recovery (prompt-too-long → compact & retry)</summary>
 
 - **candy-code** ✅ — `ContextOverflow::matches()`; `$overflowRetried` per step. — _Evidence:_ `src/Backend/EngineBackend.php:2075-2128`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live snapshot (this audit)
+- **candy-code-web** 🟡 — — — _Evidence:_ live snapshot (this audit)
 - **Claude Code 2.1.301** ✅ — Reactive-only compaction available for unknown models (`CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT`). — _Evidence:_ cc:errors#automatic-retries; cc:how-claude-code-works#when-context-fills-up
 - **OpenCode 1.18.35** ✅ — `ContextOverflowError` → `needsCompaction`, then compaction with overflow=true. The overflowing user message is replayed with media replaced by `[Attached mime: name]`. If the summary itself cannot fit: “Session too large to compact”. — _Evidence:_ OC/session/processor.ts:621-631; OC/session/compaction.ts:468-550
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Provider context-overflow error triggers overflow compaction and replays the last user msg with media stripped. 2.0.31 (✅): One overflow-triggered compaction + rebuild of the same step before durable output; second overflow is terminal — _Evidence:_ specs/v2/session.md (Compaction); V2D/compaction (Limits)
@@ -2009,7 +2009,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-N1</b> 🆕 Ahead-of-need compaction (summaries prepared in the background before the limit is hit)</summary>
 
 - **candy-code** ✅ — Background summaries are spliced in when the auto tier fires if the history fingerprint still matches. `SummarisesWithCache` reuses the provider prefix cache. — _Evidence:_ `src/Chat.php:11273-11290`; `src/Backend/CacheReusingSummaryBackend.php`
-- **sugar-crush-web** ❌ — `SessionHost::submit()` calls `TurnController::inlineTier()` with no `$summaries`; per its own comment, "a server session's tier always writes the heuristic lines". The background pre-fetch at the reminder tier lives only in `Chat`. Summaries inside a turn (EngineBackend step summaries) are still model-written. The browser shows the reducer's "History compacted (kind): before → after tokens" notice. — _Evidence:_ `src/Host/SessionHost.php:72-74`, `:769-812`; `src/Host/TurnController.php:1061-1072`; `src/Chat.php:11273-11290`; `sugar-crush-web/src-web/stores/reducer.ts:521-530`
+- **candy-code-web** ❌ — `SessionHost::submit()` calls `TurnController::inlineTier()` with no `$summaries`; per its own comment, "a server session's tier always writes the heuristic lines". The background pre-fetch at the reminder tier lives only in `Chat`. Summaries inside a turn (EngineBackend step summaries) are still model-written. The browser shows the reducer's "History compacted (kind): before → after tokens" notice. — _Evidence:_ `src/Host/SessionHost.php:72-74`, `:769-812`; `src/Host/TurnController.php:1061-1072`; `src/Chat.php:11273-11290`; `candy-code-web/src-web/stores/reducer.ts:521-530`
 - **Claude Code 2.1.301** 🟡 — Normal auto-compaction runs when the window fills (configurable earlier with `/autocompact`); idle compaction (v2.1.299) is the only ahead-of-need pass. — _Evidence:_ CL v2.1.299; cc:model-config#set-the-auto-compact-window
 - **OpenCode 1.18.35** ❌ — Magic Context (cortexkit) advertises a background historian, but I could not find it on npm, so it is unverified. — _Evidence:_ OC/session/compaction.ts; awesome-opencode (Magic Context)
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ specs/v2/session.md (Compaction); V2D/compaction
@@ -2019,7 +2019,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-N2</b> 🆕 Idle compaction / resume-from-summary (compacts idle long chats before cache expiry)</summary>
 
 - **candy-code** 🟡 — `Chat::submit()` calls `shouldPromptIdleCompaction()`, which is `IdleCompactionPolicy::shouldPrompt()`: true when the session has been idle longer than `compaction.idleOfferSeconds` (default 3600) AND the estimate is past the ENTIRE context window. The prompt is then not sent; a UI-only advisory row says the session outgrew its window and suggests /compact. Because the 85%/95% tiers fire earlier, this happens only when automatic compaction could not get back under the window, so it is rare and reactive (it fires on the next prompt). Nothing compacts while the session is idle, and nothing targets a provider cache TTL: the status bar shows the cache hit % and the age of the last report, and deliberately assumes no TTL. There is no resume-from-summary offer. TUI only; serve's copy is dormant (see SCW). — _Evidence:_ `src/Chat.php:11214-11215`, `:19777-19792`; `src/Context/IdleCompactionPolicy.php:36-46,105`; `src/Context/CompactorConfig.php:108`; `src/Renderer.php:2956-2960`
-- **sugar-crush-web** 🧪 — The idle advisory is reached only from `Chat::submit()`. The host-side copy (`ContextMeter:182-189`) is exercised only by RuntimeTest; a grep finds no production caller. Not that the TUI version would help much here (see SC). — _Evidence:_ `src/Host/ContextMeter.php:172-189`; `tests/RuntimeTest.php:2002-2003`; `src/Chat.php:11214`
+- **candy-code-web** 🧪 — The idle advisory is reached only from `Chat::submit()`. The host-side copy (`ContextMeter:182-189`) is exercised only by RuntimeTest; a grep finds no production caller. Not that the TUI version would help much here (see SC). — _Evidence:_ `src/Host/ContextMeter.php:172-189`; `tests/RuntimeTest.php:2002-2003`; `src/Chat.php:11214`
 - **Claude Code 2.1.301** ✅ — Resume-from-summary dialog on Pro/Max for >100K sessions idle >1 h. — _Evidence:_ CL v2.1.299; cc:sessions#resume-from-a-summary
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/session/compaction.ts
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2D/warming; V2D/compaction
@@ -2029,7 +2029,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-N3</b> 🆕 Max-steps wrap-up (on the last allowed step tools are disabled and the agent must summarise)</summary>
 
 - **candy-code** ✅ — `EngineBackend::runTurn()` loops `for ($step = 0; $step < $this->maxSteps; ...)`. When the loop runs out with tool results still pending (`stepsTruncated`), or the loop guard ended the turn, `summariseStoppedTurn()` sends `BUDGET_EXHAUSTED_SUMMARY_PROMPT`: "tools are now disabled. Do not call any tools. Reply to the user with a concise summary of: what has been done, what remains to be done, and the next step". It goes through `StepSummarizer::summaryStep` (no tools). An empty summary leaves the last step's prose in place. Chat then appends the `chat.turn.steps_exhausted` notice: say "continue", or raise `maxToolSteps`. No summary follows a spend-cap stop, because it would be another billed call. Served turns report `stopReason: max_steps`. Task sub-agents default to 200 steps, and delegated runs also get an 80% context wrap-up nudge and a 90% stop. — _Evidence:_ `src/Backend/EngineBackend.php:183-185`, `:405`, `:2485-2514`, `:2784-2800`; `src/Chat.php:2423`, `:19704-19707`; `src/Config/Settings/Definitions/AgentLoopSettings.php:55`; `README.md:2066`
-- **sugar-crush-web** ✅ — EngineBackend's summary request runs for served turns. `TranscriptProjector::stopReason()` maps `stepsTruncated` to `max_steps`, and the reducer adds a warn notice. A turn the loop guard ended maps to `end_turn`, so it gets no harness notice; only the model's own summary says it was stopped. — _Evidence:_ `src/Host/TranscriptProjector.php:446-455`; `sugar-crush-web/src-web/stores/reducer.ts:507-513`, `:560-565`
+- **candy-code-web** ✅ — EngineBackend's summary request runs for served turns. `TranscriptProjector::stopReason()` maps `stepsTruncated` to `max_steps`, and the reducer adds a warn notice. A turn the loop guard ended maps to `end_turn`, so it gets no harness notice; only the model's own summary says it was stopped. — _Evidence:_ `src/Host/TranscriptProjector.php:446-455`; `candy-code-web/src-web/stores/reducer.ts:507-513`, `:560-565`
 - **Claude Code 2.1.301** ❌ — Nothing disables tools on the last step to force a summary. — _Evidence:_ cc:sub-agents#supported-frontmatter-fields; cc:cli-reference
 - **OpenCode 1.18.35** ✅ — When `steps` is reached, an assistant-role MAX_STEPS_PROMPT is appended: tools disabled, respond with what was done, what remains and next steps. — _Evidence:_ OC/session/prompt.ts:1177-1178,1281; CORE/session/runner/max-steps.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): [NEW: Agent max-steps wrap-up] on the last allowed step tools are disabled and a summary-of-progress message is forced. 2.0.31 (✅): [NEW: Agent max-steps wrap-up] `steps` still forces a text summary; new user input resets the allowance — _Evidence:_ V2D/agents (Steps); specs/v2/session.md
@@ -2039,7 +2039,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CTX-N4</b> 🆕 Output-limit auto-continuation (a reply cut off at max output tokens is continued automatically)</summary>
 
 - **candy-code** ✅ — In `EngineBackend::runTurn()`, a step whose reply has `lengthStopped()`, no tool results and continuable text is sent again, up to `ReplyContinuation::MAX_LENGTH_CONTINUATIONS` = 3 times, while the spend cap and any stop request allow it. Providers that implement AcceptsAssistantPrefill (sglang, vertex, bedrock) get the right-trimmed partial reply as an assistant prefill and continue that same message exactly; if the prefill is rejected, later attempts fall back to the other method. Other providers get the partial reply plus `LENGTH_PROMPT` with the last 64 chars quoted in `<already_delivered_tail>`. Each answer is merged into one reply. If it is still cut after 3 continuations, Chat appends the output-length-stopped notice and served turns report `stopReason: length`. A stream that drops after text was painted is resumed the same way (`RESUME_PROMPT`, Runtime stream retry), so the reply is not painted twice. A length stop on a step that called tools is not continued. — _Evidence:_ `src/Providers/ReplyContinuation.php:7-60`; `src/Backend/EngineBackend.php:1863-1880`, `:1950-1975`; `src/Runtime.php:1543-1569`; `src/Chat.php:2418`, `:19677`; `src/Providers/SglangProvider.php:34`
-- **sugar-crush-web** ✅ — The continuation loop runs inside EngineBackend for every served turn, and the joined reply arrives as one `assistant.completed`, so its deltas stream on without a break. After 3 continuations, `TranscriptProjector::stopReason()` returns `length`, and the reducer adds the warn notice "Turn stopped: the reply hit the output limit." — _Evidence:_ `src/Backend/EngineBackend.php:1950-1975`; `src/Host/TranscriptProjector.php:450`; `sugar-crush-web/src-web/stores/reducer.ts:507-513`, `:566`
+- **candy-code-web** ✅ — The continuation loop runs inside EngineBackend for every served turn, and the joined reply arrives as one `assistant.completed`, so its deltas stream on without a break. After 3 continuations, `TranscriptProjector::stopReason()` returns `length`, and the reducer adds the warn notice "Turn stopped: the reply hit the output limit." — _Evidence:_ `src/Backend/EngineBackend.php:1950-1975`; `src/Host/TranscriptProjector.php:450`; `candy-code-web/src-web/stores/reducer.ts:507-513`, `:566`
 - **Claude Code 2.1.301** 🟡 — Main conversation: "Claude's response exceeded the … output token maximum" error; user replies `continue` (text kept) or raises `CLAUDE_CODE_MAX_OUTPUT_TOKENS`. Subagents: when a response is cut mid-stream with text but no tool calls, Claude Code prompts them to continue; since 2.1.288 non-interactive sessions and subagents continue from partial responses after mid-response API timeouts; context-limit 400s retried with a smaller `max_tokens`. — _Evidence:_ cc:errors#response-exceeded-the-output-token-maximum; cc:sub-agents#api-errors-in-subagents; CL v2.1.288; cc:errors#automatic-retries
 - **OpenCode 1.18.35** ❌ — No length-finish continuation in the processor or loop. Added in v2.0.29. — _Evidence:_ OC/session/processor.ts; V2CL v2.0.29
 - **OpenCode 2.0.31** ✅ — Not present in 1.18.35. 2.0.29: preserves partial output and continues with bounded retries, with recovery for truncated tool calls; incomplete streams add a synthetic continuation instruction. — _Evidence:_ V2CL v2.0.29; specs/v2/session.md (Retry)
@@ -2052,7 +2052,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-01</b> Session persistence on disk (format / location)</summary>
 
 - **candy-code** ✅ — Transcript rows are interned into `checkpoint_blobs` so a save writes only what is new; flush at once on switch/branch/fork/quit. Legacy `messages`/`tool_calls` tables still created but never written (0 rows on the real DB). `-p` runs are NOT persisted at all (no session row, no transcript). — _Evidence:_ `src/Session/SessionStore.php:112-240`; `src/Session/EnhancedSessionStore.php:516-640,1761-1813`; `README.md:871-876`; repro: isolated HOME has no session.db after `-p`
-- **sugar-crush-web** ✅ — A browser reload or a different device sees the same transcript; seq-numbered event log per session (20,000 kept) for replay. — _Evidence:_ `src-web/stores/sessions.ts:31-56`; `candy-code/docs/SERVER.md:607-628`
+- **candy-code-web** ✅ — A browser reload or a different device sees the same transcript; seq-numbered event log per session (20,000 kept) for replay. — _Evidence:_ `src-web/stores/sessions.ts:31-56`; `candy-code/docs/SERVER.md:607-628`
 - **Claude Code 2.1.301** ✅ — `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_PROJECT_DIR_NAME`; subagent transcripts under `<session>/subagents/`; `--no-session-persistence` for `-p`; `CLAUDE_CODE_SKIP_PROMPT_HISTORY`. — _Evidence:_ cc:sessions#where-transcripts-are-stored
 - **OpenCode 1.18.35** ✅ — Sessions, messages and parts live in SQLite (WAL). `opencode db [query] --format json/tsv` and `opencode db path`. This host's DB is 11,678,072,832 bytes. Snapshots and tool-output files sit alongside. — _Evidence:_ LOCAL: `ls -la ~/.local/share/opencode`; CLI: `opencode db --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): SQLite at ~/.local/share/opencode/opencode.db (Drizzle); `opencode db` sqlite shell; 11.6 GB observed here. 2.0.31 (✅): Durable session events + inbox rows; channel-specific DB names for non-stable channels (`OPENCODE_DB`). V2 core contains a V1 import migration (sessions/messages/parts), so the 11.6 GB V1 DB here would be read on first v2 start (not exercised). — _Evidence:_ V2 packages/cli/src/database-path.ts; V2C/database/v1-migration*.ts; V2C/database/database.ts:102-103
@@ -2062,7 +2062,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-02</b> Continue most recent (--continue / -c)</summary>
 
 - **candy-code** 🟡 — `latestResumableSession()` orders by updated_at with no cwd filter, so `-c` in project B reopens project A's conversation while tools are rooted at B (ISSUES P2). Refused with `-p`/`--resume` (exit 2). — _Evidence:_ `src/Session/EnhancedSessionStore.php:2146-2160`; `src/Cli/Bootstrap.php:4141-4151`; `src/Cli/ArgvParser.php:646-655`
-- **sugar-crush-web** 🟡 — No explicit "continue latest" action; reopening the page restores tabs and the focused tile. — _Evidence:_ `src-web/stores/layout.ts:50-64`; `src-web/views/DashboardView.vue`
+- **candy-code-web** 🟡 — No explicit "continue latest" action; reopening the page restores tabs and the focused tile. — _Evidence:_ `src-web/stores/layout.ts:50-64`; `src-web/views/DashboardView.vue`
 - **Claude Code 2.1.301** ✅ — Restores permission mode in most cases; `-p --continue` for scripts; `--fork-session` to copy instead. — _Evidence:_ cc:sessions#resume-a-session; help
 - **OpenCode 1.18.35** ✅ — Also `-s <id>`. `--fork` requires `-c` or `-s`. — _Evidence:_ CLI: `opencode --help`, `opencode run --help`, `opencode attach --help`
 - **OpenCode 2.0.31** ✅ — Also `-s <id>`. `--fork` requires `-c` or `-s`. — _Evidence:_ CLI: `opencode --help`, `opencode run --help`, `opencode attach --help`
@@ -2072,7 +2072,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-03</b> Resume picker (--resume, /resume, session list)</summary>
 
 - **candy-code** ✅ — Unknown target → exit 2 before the TUI. CLI: `session list/show/rename/delete/pin/unpin/archive/unarchive` with JSON output. — _Evidence:_ `src/Cli/Bootstrap.php:4077-4092`; `src/Tui/SessionPicker.php:1334-1370`; `src/Cli/Subcommands.php:729-870`
-- **sugar-crush-web** ✅ — Sessions of other workspace roots are merged in when dir-browse is on (first page only). — _Evidence:_ `src-web/components/SessionSidebar.vue`; `src-web/stores/sessions.ts:64-76`
+- **candy-code-web** ✅ — Sessions of other workspace roots are merged in when dir-browse is on (first page only). — _Evidence:_ `src-web/components/SessionSidebar.vue`; `src-web/stores/sessions.ts:64-76`
 - **Claude Code 2.1.301** ✅ — Background sessions marked `bg` (resuming one attaches); `--from-pr` filters by PR; groups branched copies. — _Evidence:_ cc:sessions#use-the-session-picker; help
 - **OpenCode 1.18.35** ✅ — Debounced server search (title). Pinned sessions and quick-switch slots. ctrl+r rename, ctrl+d delete. `opencode session list -n N --format json` and `session delete`. — _Evidence:_ TUI/app.tsx:577-590; TUI/component/dialog-session-list.tsx:24-230; DOCS/cli (session)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /sessions (/resume,/continue, <leader>l) searchable picker with pins, rename, delete; `-s <id>`; `session list`. 2.0.31 (✅): /sessions + ctrl+o recent sessions & projects; `session list/delete/export/import` — _Evidence:_ V2D/cli/tui (Sessions); V2CLI: `opencode session --help`
@@ -2082,7 +2082,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-04</b> Auto session titles</summary>
 
 - **candy-code** ✅ — `sessions.autoTitle` setting; `/rename --auto` or saving an empty name re-asks. Title model defaults to the main model (MOD-13). — _Evidence:_ `src/Session/TitleSource.php`; `src/Session/SessionStore.php:377-400`; `README.md:903-911`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/sessions.ts:107-110`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/sessions.ts:107-110`
 - **Claude Code 2.1.301** ✅ — Direct `-p` runs don't get titles. — _Evidence:_ cc:sessions#name-your-sessions
 - **OpenCode 1.18.35** ✅ — `title()` runs on step 1 using the hidden `title` agent and small_model. Plugins such as opencode-smart-title (loaded here) can replace it. — _Evidence:_ OC/session/prompt.ts:1134; OC/agent/agent.ts:235-250; LOCAL: @tarquinen/opencode-smart-title in plugin list
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Hidden title agent (small model) names the session on the first step; `run --title`. 2.0.31 (✅): Title agent (model from small_model/agents.title.model); plugin `title` hook can supply the title — _Evidence:_ V2D/migrate-v1; V2D/build/plugins/index (Model requests: title)
@@ -2092,7 +2092,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-05</b> Rename session</summary>
 
 - **candy-code** ✅ — Refused in a read-only (locked elsewhere) window. — _Evidence:_ `builtin-commands/2700-rename.php`; `src/Cli/Subcommands.php:776-808`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/views/SessionView.vue:104-112`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/views/SessionView.vue:104-112`
 - **Claude Code 2.1.301** ✅ — Names work as resume handles (cleaned, ≤200 chars). — _Evidence:_ cc:commands; cc:sessions
 - **OpenCode 1.18.35** ✅ — Rename dialog. The title is also editable via the SDK. — _Evidence:_ TUI/config/keybind.ts:93; DOCS/server (PATCH /session/:id)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /rename or ctrl+r; PATCH /session/:id. 2.0.31 (✅): /rename; agent can rename via Code Mode `opencode.session_rename` — _Evidence:_ V2T slash list; V2D/tools (Sessions)
@@ -2102,7 +2102,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-06</b> Fork / branch a session</summary>
 
 - **candy-code** ✅ — `forkSession()` with SessionKind::Branch; picker nests branches under source. — _Evidence:_ `builtin-commands/2600-branch.php`; `builtin-commands/3000-fork.php`; `builtin-commands/3600-handoff.php`; `src/Session/EnhancedSessionStore.php:190`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `command.list` (fork, branch runsIn server); grep `src-web/`
+- **candy-code-web** 🟡 — — — _Evidence:_ live `command.list` (fork, branch runsIn server); grep `src-web/`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:sessions#branch-a-session; cc:commands
 - **OpenCode 1.18.35** ✅ — `dialog-fork-from-timeline` forks at any message. `--fork` with continue or session. — _Evidence:_ TUI/routes/session/index.tsx:540-560; TUI/routes/session/dialog-fork-from-timeline.tsx; DOCS/server
 - **OpenCode 2.0.31** ✅ — `dialog-fork-from-timeline` forks at any message. `--fork` with continue or session. — _Evidence:_ TUI/routes/session/index.tsx:540-560; TUI/routes/session/dialog-fork-from-timeline.tsx; DOCS/server
@@ -2112,7 +2112,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-07</b> Rewind conversation to an earlier message (with/without code restore)</summary>
 
 - **candy-code** ✅ — File restore refused if HEAD moved; restores into the recorded work tree; excluded paths (vendor, .env, >2 MiB untracked…) never touched. — _Evidence:_ `README.md:948-981`; `src/Workspace/WorkspaceCheckpointer.php:268-330,719-764`
-- **sugar-crush-web** 🟡 — After a built-in the store re-subscribes for a fresh snapshot. — _Evidence:_ `src-web/stores/session.ts:149-154`
+- **candy-code-web** 🟡 — After a built-in the store re-subscribes for a fresh snapshot. — _Evidence:_ `src-web/stores/session.ts:149-154`
 - **Claude Code 2.1.301** ✅ — Bash-made changes, background-subagent edits and external edits aren't restored; 100 checkpoints/session. — _Evidence:_ cc:checkpointing
 - **OpenCode 1.18.35** ✅ — /undo aborts a running turn, reverts files and messages back to the last user message, and puts that message's text and file attachments back in the input. /redo unreverts. Code restore needs a git project. Forking from the timeline is the conversation-only rewind. — _Evidence:_ TUI/routes/session/index.tsx:611-660; OC/snapshot/index.ts:167-168
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /undo reverts last turn's files (snapshots) and refills its prompt; /redo; timeline revert; fork = no code restore. 2.0.31 (✅): Snapshots scoped to the session's active directory; rollback rejected while running. — _Evidence:_ V2D/snapshots
@@ -2122,7 +2122,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-08</b> Export transcript (markdown / json / html)</summary>
 
 - **candy-code** ✅ — Path jailed to the project root; Exporter::toMarkdown/Html/Json/Text. — _Evidence:_ `src/Commands/ShareCommand.php:54-160`; `src/Share/ShareSession.php:109-118`; `src/Cli/Subcommands.php:741-751`
-- **sugar-crush-web** 🧪 — A browser user cannot download a transcript. — _Evidence:_ `candy-code/src/Protocol/Schema/MethodSchemas.php:177-180`; `candy-code/src/Host/Commands/ShareHostCommand.php`
+- **candy-code-web** 🧪 — A browser user cannot download a transcript. — _Evidence:_ `candy-code/src/Protocol/Schema/MethodSchemas.php:177-180`; `candy-code/src/Host/Commands/ShareHostCommand.php`
 - **Claude Code 2.1.301** 🟡 — No built-in Markdown or HTML export. — _Evidence:_ cc:sessions#export-and-locate-session-data
 - **OpenCode 1.18.35** ✅ — `/export` (<leader>x) writes a Markdown transcript and opens $EDITOR. “Copy session transcript” goes to the clipboard. CLI `export [id]` emits JSON. `--sanitize` redacts sensitive transcript and file data. — _Evidence:_ DOCS/tui (export); TUI/routes/session/index.tsx:917-1013; CLI: `opencode export --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /export Markdown to $EDITOR, /copy transcript, `opencode export` JSON (--sanitize redacts). 2.0.31 (✅): /export with options (thinking, tools, sanitize, copy/export); `session export` JSON — _Evidence:_ V2T/ui/dialog-export-options.tsx:13-22; V2CLI: `opencode session --help`
@@ -2132,7 +2132,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-09</b> Share link (public URL)</summary>
 
 - **candy-code** ❌ — Upload attempted only when `CANDY_CODE_SHARE_UPLOAD_URL` is set, and then reports failure. `--help` still describes a "public default" upload host (docs drift, ISSUES). — _Evidence:_ `src/Share/ShareUploader.php`; `src/Commands/ShareCommand.php:87-97`; `lang/en.php:435-437`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `candy-code/src/Host/Commands/ShareHostCommand.php`
+- **candy-code-web** ❌ — — — _Evidence:_ `candy-code/src/Host/Commands/ShareHostCommand.php`
 - **Claude Code 2.1.301** 🟡 — Artifacts and `/team-onboarding` produce share links. — _Evidence:_ cc:claude-code-on-the-web#share-sessions; cc:artifacts
 - **OpenCode 1.18.35** ✅ — The URL is copied to the clipboard. `share: "auto"` or `OPENCODE_AUTO_SHARE` shares every session. `run --share`. Enterprise can disable, SSO-restrict or self-host. — _Evidence:_ DOCS/share; OC/share/share-next.ts
 - **OpenCode 2.0.31** ❌ — 1.18.35 had /share → opncd.ai/s/<id>. v2 has none; pairing links share a live server instead. — _Evidence:_ V2CL v2.0.30 (Remove the retired session-sharing backend)
@@ -2142,7 +2142,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-10</b> Import session</summary>
 
 - **candy-code** ❌ — Only MCP configs and memory notes have importers. — _Evidence:_ grep `importSession/importTranscript` → none
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:sessions; cc:claude-code-on-the-web
 - **OpenCode 1.18.35** ✅ — Imports an exported JSON or a public share URL. — _Evidence:_ CLI: `opencode import --help`; DOCS/cli (import)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode import <file.json/share URL>`. 2.0.31 (✅): `opencode session import <file or URL>`; plus automatic V1 session import — _Evidence:_ V2CLI: `opencode session --help`; V2C/database/v1-migration.ts
@@ -2152,7 +2152,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-11</b> Search across past sessions</summary>
 
 - **candy-code** 🟡 — `@session:<id>` mention can pull another session's conversation into a prompt. — _Evidence:_ `src/Session/SessionQuery.php:1-113`
-- **sugar-crush-web** 🟡 — Also broken by the j/k hotkey while typing (ISSUES). — _Evidence:_ `src-web/components/SessionSidebar.vue:24-28,59-67`
+- **candy-code-web** 🟡 — Also broken by the j/k hotkey while typing (ISSUES). — _Evidence:_ `src-web/components/SessionSidebar.vue:24-28,59-67`
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:sessions#use-the-session-picker
 - **OpenCode 1.18.35** 🟡 — The CodeNomad desktop/web client (community) adds full-history search. — _Evidence:_ OC/session/session.ts:561,991-992; @neuralnomads/codenomad README
 - **OpenCode 2.0.31** 🟡 — The CodeNomad desktop/web client (community) adds full-history search. — _Evidence:_ OC/session/session.ts:561,991-992; @neuralnomads/codenomad README
@@ -2162,7 +2162,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-12</b> Multiple concurrent sessions in one UI (tabs)</summary>
 
 - **candy-code** 🟡 — `cycleSessionTab()` swaps history wholesale via `switchToSession()`; refused while a turn is in flight. The web UI/serve can run several sessions at once. — _Evidence:_ `src/Chat.php:3527-3533,3645-3664,12114-12117`; `src/Tui/SessionTabs.php`
-- **sugar-crush-web** ✅ — `client.viewing {narrate: true}` lets the server switch tiles between full and narration without resubscribing. Covered by e2e multi-session. — _Evidence:_ `src-web/stores/layout.ts:9-12,140-160`; `e2e/multi-session.spec.ts:20`
+- **candy-code-web** ✅ — `client.viewing {narrate: true}` lets the server switch tiles between full and narration without resubscribing. Covered by e2e multi-session. — _Evidence:_ `src-web/stores/layout.ts:9-12,140-160`; `e2e/multi-session.spec.ts:20`
 - **Claude Code 2.1.301** ✅ — Rows grouped by state (Needs input, Working, Completed) with Haiku summaries. — _Evidence:_ cc:agent-view; cc:desktop; cc:vs-code
 - **OpenCode 1.18.35** 🟡 — Switching sessions in the TUI does not stop a running one, because sessions are server-owned. Quick-switch slots exist. Concurrent side-by-side views are in the web/desktop clients and community clients. — _Evidence:_ TUI/component/dialog-session-list.tsx:205; DOCS/web
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): TUI shows one session at a time but others keep running server-side; web/desktop have multi-project tabs. 2.0.31 (✅): Session tabs in the TUI (ctrl+tab, vertical/horizontal, unread status) and desktop (Option+↑/↓) — _Evidence:_ V2D/cli/tui (Sessions); V2D/cli/config (Tabs); V2CL v2.0.30
@@ -2172,7 +2172,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-13</b> Background / detached sessions</summary>
 
 - **candy-code** ✅ — Results arrive as a user-role message (≤16k chars + stats line); index lives in the system temp dir (lost on reboot/temp clean); background sessions run in bypass-permissions and refuse every ASK. — _Evidence:_ `README.md:604-619`; `src/Sessions/BackgroundSupervisor.php`; `README.md:2197`
-- **sugar-crush-web** ✅ — Daemons outlive the server and are re-adopted on restart (`bg.started adopted:true`). — _Evidence:_ `src-web/components/panels/BackgroundPanel.vue`; `candy-code/docs/SERVER.md:695-719`
+- **candy-code-web** ✅ — Daemons outlive the server and are re-adopted on restart (`bg.started adopted:true`). — _Evidence:_ `src-web/components/panels/BackgroundPanel.vue`; `candy-code/docs/SERVER.md:695-719`
 - **Claude Code 2.1.301** ✅ — Survives sleep (not shutdown); each background session edits in its own worktree; `claude agents --json` for scripts. — _Evidence:_ help; cc:agent-view#how-background-sessions-are-hosted
 - **OpenCode 1.18.35** ✅ — The TUI is just a client of an embedded server. With `opencode serve`, sessions keep running independently of any client. `POST /session/:id/prompt_async` returns 204 immediately. — _Evidence:_ DOCS/server (How it works, prompt_async); CLI: `opencode attach --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Sessions are owned by the server: `opencode serve` + attach/run --attach/prompt_async run detached from any client. 2.0.31 (✅): `opencode service start/stop/status`; `--standalone` for private server. Startup recovery resumes claimed top-level sessions with bounded attempts. — _Evidence:_ V2D/cli/index (Background service); specs/v2/session.md (Execution Is Process-Local, Recovery)
@@ -2182,7 +2182,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-14</b> Session handoff across devices (web ↔ CLI, teleport)</summary>
 
 - **candy-code** 🟡 — Server reuses the same session store under HOME, so a TUI session on the server host is visible to the web UI; cross-machine needs `--allow-remote` + reverse proxy (no built-in TLS). — _Evidence:_ `src/Cli/Attach.php`; `src/Host/RemoteSessionHost.php`; `--help` serve/attach text
-- **sugar-crush-web** 🟡 — `attach` runs slash commands locally on its own copy (documented gap). — _Evidence:_ `candy-code/docs/SERVER.md:857-910`
+- **candy-code-web** 🟡 — `attach` runs slash commands locally on its own copy (documented gap). — _Evidence:_ `candy-code/docs/SERVER.md:857-910`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ help; cc:claude-code-on-the-web; cc:remote-control
 - **OpenCode 1.18.35** 🟡 — `opencode attach http://host:4096` (basic auth) and `opencode import <share-url>` move work between devices. There is no cloud session handoff. — _Evidence:_ CLI: `opencode attach --help`; DOCS/web (Attaching a Terminal)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): attach to remote server, share-URL import, TUI+web on one server; no one-click web↔CLI teleport. 2.0.31 (✅): `opencode pair` one-time links/QR for browser or iOS app; `pair --remote` via OpenTunnel E2E — _Evidence:_ V2D/cli/web; V2CL v2.0.29
@@ -2192,7 +2192,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-15</b> Per-session cost/usage history</summary>
 
 - **candy-code** 🟡 — `TokenTracker` is in-memory; `sessions` table has no cost column; `session list/show` print no cost; resuming an expensive session shows $0. `session_events` keeps usage events (capped) for server-hosted sessions. — _Evidence:_ `src/Util/TokenTracker.php:55-195`; `src/Host/SpendLedger.php:62-110`; `sqlite3` on real DB: 456 `usage.updated` events
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — Plan usage breakdown on subscriptions; prompt-cache statistics. — _Evidence:_ cc:costs#using-the-/usage-command
 - **OpenCode 1.18.35** ✅ — Each assistant message stores cost and tokens. The session total is shown in the sidebar. — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx:17-44; CLI: `opencode stats --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Per-session cost/tokens in sidebar; `opencode stats` (days, models, tools, project). 2.0.31 (✅): Session + subagent family cost/tokens; `stats` with --cost/--tools/--models/--json — _Evidence:_ V2CL v2.0.28, v2.0.29; V2CLI: `opencode stats --help`
@@ -2202,7 +2202,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-16</b> Session locking (two clients on one session)</summary>
 
 - **candy-code** ✅ — Read-only window refuses prompts and mutating commands, `/branch` forks out. Gap: `candy-code session delete` ignores the lock (ISSUES P3). — _Evidence:_ `src/Session/SessionLock.php:22-150`; `README.md:924-940`
-- **sugar-crush-web** ✅ — First valid permission answer wins; e2e "two tabs on one session". — _Evidence:_ `candy-code/src/Protocol/SessionFeed.php:61,222`; `e2e/multi-client.spec.ts:3`
+- **candy-code-web** ✅ — First valid permission answer wins; e2e "two tabs on one session". — _Evidence:_ `candy-code/src/Protocol/SessionFeed.php:61,222`; `e2e/multi-client.spec.ts:3`
 - **Claude Code 2.1.301** ✅ — Typed reply is saved and sent when the session next starts. — _Evidence:_ cc:agent-view#opening-a-session-says-the-conversation-is-already-open
 - **OpenCode 1.18.35** 🟡 — A prompt sent while busy is persisted and the running loop picks it up as the new latest user message. Clients see the same state over SSE. There is no lease or ownership. — _Evidence:_ OC/session/prompt.ts:1082-1130
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): No explicit lock; many clients attach to one session via the server, which serializes runs (busy → queued). 2.0.31 (🟡): Process-local execution ownership with write-ahead claims; clients share the service; no cross-process lock — _Evidence:_ specs/v2/session.md (Execution Is Process-Local)
@@ -2212,7 +2212,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-17</b> Session retention / cleanup</summary>
 
 - **candy-code** 🟡 — Prune SQL requires `name IS NULL OR name = ''`; the auto-titler fills `name` for every session with an exchange (title_source auto). Report counts the dead `messages` table (always 0). Pinned + sub-agent sessions exempt. — _Evidence:_ `src/Session/SessionStore.php:1107-1162`; `src/Cli/Bootstrap.php:9698-9735,9809-9827`; real DB: 12 auto-named + 33 named rows, all unprunable
-- **sugar-crush-web** 🧪 — A web user cannot delete a session. — _Evidence:_ `src-web/stores/sessions.ts:90-93`
+- **candy-code-web** 🧪 — A web user cannot delete a session. — _Evidence:_ `src-web/stores/sessions.ts:90-93`
 - **Claude Code 2.1.301** ✅ — `desktopSessionCleanupPeriodDays`; file-history snapshots swept too. — _Evidence:_ cc:claude-directory#cleaned-up-automatically; help (`purge`)
 - **OpenCode 1.18.35** 🟡 — `time_archived` is supported (desktop archive). The 11.6 GB DB here shows nothing prunes sessions automatically. — _Evidence:_ OC/session/session.ts:115,562; OC/snapshot/index.ts:23,305
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Session archive + `session delete`; no auto-retention (snapshots gc 7 d, tool-output files swept after 7 d). 2.0.31 (🟡): Projects auto-archive when their directories vanish; sessions never auto-pruned; uninstall keeps session data — _Evidence:_ V2CL v2.0.27; V2D/cli/index (Uninstall)
@@ -2222,7 +2222,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SES-N1</b> 🆕 Incognito / ephemeral sessions (not persisted, no memory flush)</summary>
 
 - **candy-code** ❌ — ArgvParser accepts only --prompt, --output-format, --root, --config, --model, --permission-mode, --continue and --resume, and no flag or command makes a session unsaved. The headless path wires the session store too. `memory.autoConsolidate` or `CANDY_CODE_DISABLE_AUTO_MEMORY=1` turns auto-memory and the dream pass off for a launch. That covers only the "no memory flush" half; the transcript is still persisted and only pruned by session retention. — _Evidence:_ `src/Cli/ArgvParser.php:239-521`; `src/Cli/NonInteractive.php:274`; `src/Memory/AutoMemoryConsolidator.php:61-68`; `src/Config/Settings/Definitions/MemoryRuleSettings.php:98-106`
-- **sugar-crush-web** ❌ — Nothing in `session.create` or the UI opts out of persistence or memory consolidation. — _Evidence:_ `src/Protocol/Schema/MethodSchemas.php`; `sugar-crush-web/src-web/stores/sessions.ts`
+- **candy-code-web** ❌ — Nothing in `session.create` or the UI opts out of persistence or memory consolidation. — _Evidence:_ `src/Protocol/Schema/MethodSchemas.php`; `candy-code-web/src-web/stores/sessions.ts`
 - **Claude Code 2.1.301** 🟡 — Auto memory can be disabled separately (`CLAUDE_CODE_DISABLE_AUTO_MEMORY`, `--bare`). — _Evidence:_ cc:sessions#where-transcripts-are-stored; help (`--no-session-persistence`)
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ CORE/database/database.ts:44-46; CORE/flag/flag.ts:47
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ packages/cli/src/database-path.ts; V2D/cli/index (Paths)
@@ -2235,7 +2235,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-01</b> Primary agent modes (build / plan / ask / ...)</summary>
 
 - **candy-code** 🟡 — The session always runs as one main agent. There is no primary build/plan agent pair, and the main chat cannot run as a preset. The closest thing to a mode is `PermissionMode` (six cases). Plan mode restricts tools to read-only through the gate, and the agent leaves it with the `PlanExit` tool, which puts the plan to the user for approval. A preset's `permissionMode` applies only to delegated runs. — _Evidence:_ `src/Permissions/PermissionMode.php:13-18`; `src/Commands/KeyBindingRegistry.php:535` (Alt+M); `src/Tools/BuiltIn/PlanExitTool.php`
-- **sugar-crush-web** 🟡 — Plan mode is a permission mode here, not an agent. — _Evidence:_ `src-web/components/StatusBar.vue:6`
+- **candy-code-web** 🟡 — Plan mode is a permission mode here, not an agent. — _Evidence:_ `src-web/components/StatusBar.vue:6`
 - **Claude Code 2.1.301** ✅ — Plan accept lets you pick the follow-up mode; `/plan [task]`; plan re-injected after compaction. — _Evidence:_ cc:permission-modes
 - **OpenCode 1.18.35** ✅ — build allows question and plan_enter. plan allows question and plan_exit, denies `task.general`, and denies edit except `.opencode/plans/*.md` and data/plans. `OPENCODE_EXPERIMENTAL_PLAN_MODE` swaps the classic read-only reminder for a 5-phase plan-file workflow with a plan_exit tool. — _Evidence:_ OC/agent/agent.ts:140-260; OC/session/reminders.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Primary: build (default), plan (edit-denied except plan files); hidden compaction/title/summary; experimental plan mode. 2.0.31 (✅): No experimental plan_exit flow; leaving plan = switching agent (a `leave` reminder is injected). — _Evidence:_ V2C/plugin/plan.ts:5-60; V2C/plugin/agent.ts:77-143
@@ -2245,7 +2245,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-02</b> Switch primary agent in UI (Tab, /agent)</summary>
 
 - **candy-code** 🟡 — Alt+M is "toggle plan mode (between turns)". `/permissions mode <name>` switches to any mode, and the model is told. The Ctrl+P palette row labelled "Switch agent" dispatches `/agents`, which lists running delegations; it switches nothing (see ISSUES). — _Evidence:_ `lang/en.php:1159`; `src/Chat.php:17508`; `lang/en.php:844`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `candy-code/src/Host/Commands/AgentsHostCommand.php`
+- **candy-code-web** ❌ — — — _Evidence:_ `candy-code/src/Host/Commands/AgentsHostCommand.php`
 - **Claude Code 2.1.301** 🟡 — `@<name>` shown in the startup header when `--agent` is active. — _Evidence:_ cc:interactive-mode; cc:sub-agents#invoke-subagents-explicitly
 - **OpenCode 1.18.35** ✅ — The current agent (colored) is shown in the prompt bar. `default_agent` must be a visible primary agent; otherwise it falls back to build. — _Evidence:_ TUI/config/keybind.ts:130-131; DOCS/agents (Usage); OC/agent/agent.ts:328-342
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Tab / Shift+Tab cycle primary agents, <leader>a or /agents picker, `--agent`, `default_agent`. 2.0.31 (✅): Shift+Tab cycles agents (Tab no longer), <leader>a / /agents; a command `agent:` switches the session agent — _Evidence:_ V2D/cli/keybinds (agent.cycle shift+tab); V2D/commands (Execution)
@@ -2255,7 +2255,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-03</b> Built-in sub-agent types (explore, general, plan, ...)</summary>
 
 - **candy-code** ✅ — `AgentDefinition` holds the six, registered between foreign imports and native presets. Their tool grants: coder Read/Edit/Bash/Skill (no Write, Grep or Glob); reviewer Read/Grep/`Bash(git *)`/Skill plus the php-best-practices and security-audit skills; debugger Read/Grep/Bash/Skill; architect Read/Grep/Glob/Skill; tester Read/Bash/Skill plus phpunit-master (no Write or Edit); devops Read/Bash/Glob/Skill. None lists `Task`, so the built-ins cannot nest. — _Evidence:_ `src/Agents/AgentDefinition.php:38-205`; `src/Cli/Bootstrap.php:2578`
-- **sugar-crush-web** 🟡 — Roster from live `server.info`. — _Evidence:_ live probe
+- **candy-code-web** 🟡 — Roster from live `server.info`. — _Evidence:_ live probe
 - **Claude Code 2.1.301** ✅ — Explore/Plan read-only, skip CLAUDE.md and git status; `CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS`; observed catalog in this session. — _Evidence:_ cc:sub-agents#built-in-subagents; obs
 - **OpenCode 1.18.35** ✅ — explore: `'*'` deny except grep, glob, list, bash, webfetch, websearch, read, with a read-only prompt and thoroughness levels. **Doc drift:** DOCS/agents and DOCS/cli (`OPENCODE_EXPERIMENTAL_SCOUT`) describe a `scout` subagent that exists neither in OC/agent/agent.ts at the tag nor in the installed binary. — _Evidence:_ OC/agent/agent.ts:183-218; DOCS/agents (Use scout); BIN: no 'clone a dependency repository' string
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Built-in subagents: general (full tools minus todo) and explore (read-only); 'scout' documented but absent in 1.18.35. 2.0.31 (✅): general (no subagents, no question) and explore (read/search/shell/web, external allowed); docs: no scout — _Evidence:_ V2C/plugin/agent.ts:87-118; V2D/agents (Builtins)
@@ -2265,7 +2265,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-04</b> Custom agent definitions (file format + locations)</summary>
 
 - **candy-code** ✅ — `AgentPresetRegistry::list()` takes the first search path on a name conflict, and the project path comes first. Both tiers are anchored (no link out of the root or $HOME). A malformed file is skipped on its own, with a launch notice. The roster is foreign < built-in < native. Combined, a cloned repo's `.candy-code/agents/reviewer.md` replaces both your own reviewer and the built-in (confirmed by script; see ISSUES). — _Evidence:_ `src/Cli/Bootstrap.php:3017-3049`; `src/Agents/AgentPresetRegistry.php:208-262`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Recursive scan; file watcher (new dirs need restart); precedence managed > CLI > project > user > plugin. — _Evidence:_ cc:sub-agents#choose-the-subagent-scope; cc:sub-agents#write-subagent-files
 - **OpenCode 1.18.35** ✅ — The file name becomes the agent name. `OPENCODE_CONFIG_DIR` adds another directory. This repo ships 13 agents in .opencode/agents/ (candy-code-orchestrator, -reviewer, -committer…). — _Evidence:_ DOCS/agents (Markdown); LOCAL: /home/sites/sugarcraft/.opencode/agents/
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Markdown w/ YAML frontmatter in .opencode/agents/, ~/.config/opencode/agents/ (or agent/), or JSON `agent` config. 2.0.31 (✅): .opencode/agents (also agent/, mode/, modes/), global dir, JSON `agents`; nested paths give IDs like team/reviewer — _Evidence:_ V2D/agents (Locations); V2D/migrate-v1 (Agent files)
@@ -2275,7 +2275,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-05</b> Agent definition fields (model, tools, permissions, prompt, color, memory, ...)</summary>
 
 - **candy-code** ✅ — Fields: name, description, tools, disallowedTools, model (`inherit`), permissionMode, maxTurns, skills, mcpServers, memory, background, effort, isolation, color, initialPrompt. The body is the prompt. Lists accept YAML or a comma string, natively. A foreign preset's permissionMode collapses to default. `effort` is honoured only on sglang (otherwise a note says it was ignored). `memory` and `color` are inert, and the launch says so (FrontmatterKeyAudit). `mcpServers` is only enforced when `tools:` is also declared (ISSUES). — _Evidence:_ `src/Agents/AgentPresetRegistry.php:534-552`; `src/Agents/Agent.php:283-319`; `src/Support/FrontmatterKeyAudit.php:56-107`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Also background, omitClaudeMd, color, initialPrompt, autoCompactWindow, experimental.cacheTtl; plugin agents ignore hooks/mcpServers/permissionMode; unknown fields logged with `--debug`. — _Evidence:_ cc:sub-agents#supported-frontmatter-fields
 - **OpenCode 1.18.35** ✅ — Unknown keys pass through as provider options (e.g. reasoningEffort). `tools` is deprecated in favor of `permission`. `steps` caps the loop, after which MAX_STEPS_PROMPT forces a text summary. There are no memory, skills-preload or isolation fields. — _Evidence:_ OC/agent/agent.ts:270-290; DOCS/agents (Options); OC/session/prompt.ts:1281
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): description, mode, model, variant, prompt, temperature, top_p, steps, permission, color, hidden, disable, provider options. 2.0.31 (🟡): Docs warning: “The V2 session runner preserves these values but does not yet send them with model requests” — so per-agent temperature/top_p/provider options (V1 `temperature`, `top_p`, `options`) currently have no effect; configure on provider/model/variant instead. — _Evidence:_ V2D/agents (Request warning); V2D/migrate-v1 (Agents and modes)
@@ -2285,7 +2285,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-06</b> Agents list UI (/agents) — HOW it is displayed</summary>
 
 - **candy-code** 🟡 — With nothing running, `/agents` prints "No agents are working right now. 7 agent(s) registered and idle — use /agent <name> for details." (confirmed by script). Its unknown-name hint says "Use /agents to see available agents", which is circular. `/agent <name>` shows description, model, provider, status, skills and tools. It does not show source or path, permissionMode, maxTurns, isolation or background. The Agents pane, dashboard and strip show runs and background sessions only. No surface browses the roster. — _Evidence:_ `src/Commands/AgentsCommand.php:107-160`; `lang/en.php:843,851`; `src/Tui/Components/AgentDashboardPane.php:132-190`
-- **sugar-crush-web** 🟡 — Also hangs under each Task card in the transcript. — _Evidence:_ `src-web/components/agents/AgentsPanel.vue`; `src-web/components/agents/SubAgentTree.vue`
+- **candy-code-web** 🟡 — Also hangs under each Task card in the transcript. — _Evidence:_ `src-web/components/agents/AgentsPanel.vue`; `src-web/components/agents/SubAgentTree.vue`
 - **Claude Code 2.1.301** 🟡 — Agents appear in the `@` typeahead (running ones with status), the subagent panel and `/tasks`; `claude agents` is agent view for background sessions, not definitions. — _Evidence:_ cc:commands; cc:sub-agents (quickstart note)
 - **OpenCode 1.18.35** 🟡 — The `DialogAgent` fuzzy-select shows title=name and description = “native” for built-ins or the agent description. There is no view of subagents, their tools or their models. `opencode agent list` prints all agents from the CLI. — _Evidence:_ TUI/component/dialog-agent.tsx; TUI/app.tsx:680-690; CLI: `opencode agent --help`
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): /agents picker lists switchable primary agents (name + description/'native'); subagents only in @ menu; `agent list`. 2.0.31 (🟡): /agents picker; `opencode debug agents` lists all; subagents via @ and composer subagent picker — _Evidence:_ V2CLI: `opencode debug --help`; V2D/cli/keybinds (composer.subagent.*)
@@ -2295,7 +2295,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-07</b> Agent creation wizard / AI-generated agent</summary>
 
 - **candy-code** ❌ — No `/agents new` or generator exists. Presets are written by hand. — _Evidence:_ `builtin-commands/` (55 specs, none creates agents)
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `claude plugin init <name> --with agents` scaffolds plugin agents. — _Evidence:_ cc:sub-agents#quickstart-create-your-first-subagent; help (`plugin init`)
 - **OpenCode 1.18.35** ✅ — Generation prompt in OC/agent/generate.txt. Unselected permissions are written as deny. — _Evidence:_ CLI: `opencode agent --help`; DOCS/agents (Create agents); OC/agent/generate.txt
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): `opencode agent create`: wizard asks scope + description, LLM generates name/prompt, pick allowed tools, writes .md. 2.0.31 (❌): `opencode agent create` wizard removed (no `agent` subcommand in v2 CLI) — _Evidence:_ V2CLI: `opencode --help` (no agent command)
@@ -2305,7 +2305,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-08</b> Sub-agent spawn tool (Task / Agent)</summary>
 
 - **candy-code** ✅ — The tool's guidance fragment, joined into the system prompt's tool-guidance layer, ends "Current agent roster: architect, coder, …" with names only. No agent description or tool list ever reaches the model, so a custom agent can only be chosen by its name. Unknown names are refused with the roster listed. Model resolution: call arg > preset > `subagentModel` > session. A model the provider cannot serve falls back with a `[model: …]` note. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:645-745,674-683,2480`; `src/Runtime.php:4770-4790`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:38-42,75`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:38-42,75`
 - **Claude Code 2.1.301** ✅ — Zero-tool configs fail with a named error; launching never prompts, the subagent's tool calls do. — _Evidence:_ cc:tools-reference#agent-tool-behavior
 - **OpenCode 1.18.35** ✅ — Checks the depth guard and asks `task` permission for the subagent type (bypassed for @-mentions). Creates a child session titled “<desc> (@agent subagent)” with derived permissions. — _Evidence:_ OC/tool/task.ts:43-140; OC/tool/task.txt
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): task tool (description, prompt, subagent_type, task_id, command) runs a child session. 2.0.31 (✅): `subagent` tool (agent, description, prompt, optional model, sessionID resume, background) — _Evidence:_ V2C/tool/plugin/subagent.ts:17-66; V2D/tools (Subagent)
@@ -2315,7 +2315,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-09</b> Parallel sub-agents</summary>
 
 - **candy-code** ✅ — Task is parallel-safe when it is bound to the engine. Each member is a forked process, and permission asks are relayed through the turn one at a time. Calls past a `subagentMaxConcurrent` cap wait on a "queued" row. Past a `subagentMaxActive` cap the call is refused, not queued. All `subagent*` keys are user-tier only. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:635-638`; `src/Runtime.php:2394,2495`; `src/Tools/ToolLimits.php:121,261`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/agents/tree.ts`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/agents/tree.ts`
 - **Claude Code 2.1.301** ✅ — Limit error tells Claude not to retry; `/subtask` forks take slots but aren't blocked. — _Evidence:_ cc:sub-agents#concurrent-subagent-limit
 - **OpenCode 1.18.35** ✅ — AI-SDK parallel tool calls execute concurrently, each in its own child session. — _Evidence:_ OC/agent/agent.ts:184-185; OC/tool/task.ts
 - **OpenCode 2.0.31** ✅ — AI-SDK parallel tool calls execute concurrently, each in its own child session. — _Evidence:_ OC/agent/agent.ts:184-185; OC/tool/task.ts
@@ -2325,7 +2325,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-10</b> Sub-agent isolated context window</summary>
 
 - **candy-code** ✅ — The sub-agent prompt is the preset prompt, granted skill bodies and the skill listing, plus the task. The parent conversation is not shared. Context watch: `SUB_AGENT_WRAP_UP_PERCENT` 80, stop margin 10. — _Evidence:_ `src/Backend/EngineBackend.php:135-146`; `src/Agents/AgentManager.php:732-735`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Subagent window sized by its own model. — _Evidence:_ cc:sub-agents#what-loads-at-startup; cc:sub-agents#how-forks-differ-from-other-subagents
 - **OpenCode 1.18.35** ✅ — The child runs the ordinary loop on `parentID`-linked session storage. — _Evidence:_ OC/tool/task.ts:140-225
 - **OpenCode 2.0.31** ✅ — The child runs the ordinary loop on `parentID`-linked session storage. — _Evidence:_ OC/tool/task.ts:140-225
@@ -2335,7 +2335,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-11</b> Sub-agent results returned (summary only? transcript?)</summary>
 
 - **candy-code** ✅ — `Context\DelegatedOutputFence`. A failure returns up to 12 KiB of tail. Spend counts toward the parent's cap. A finished run is stored as a child session named `<description> (@<agent>)`, and `session list --children` lists them. — _Evidence:_ `docs/AGENTS.md` "What comes back"; `src/Tools/BuiltIn/TaskTool.php:2380` (settle)
-- **sugar-crush-web** ✅ — Strings arrive scrubbed of terminal escapes. — _Evidence:_ `src-web/components/agents/AgentView.vue:19-50`; `candy-code/docs/SERVER.md:723-734`
+- **candy-code-web** ✅ — Strings arrive scrubbed of terminal escapes. — _Evidence:_ `src-web/components/agents/AgentView.vue:19-50`; `candy-code/docs/SERVER.md:723-734`
 - **Claude Code 2.1.301** ✅ — Partial marking on maxTurns or cut-off; in auto mode `SubagentHandback` reports are classifier-reviewed. — _Evidence:_ cc:sub-agents#subagent-output-scanning; cc:tools-reference
 - **OpenCode 1.18.35** ✅ — Errors become `<task_error>` / “Subagent failed (task_id…)”. The full child transcript stays navigable. — _Evidence:_ OC/tool/task.ts:64-79,346-353
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Only the child's final text returns, wrapped <task id state><task_result>; id enables resume. 2.0.31 (✅): Foreground returns final response + sessionID; background notifies parent on completion — _Evidence:_ V2C/tool/plugin/subagent.ts:19-27,52-60
@@ -2345,7 +2345,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-12</b> Sub-agent progress visible live in UI</summary>
 
 - **candy-code** ✅ — The live line is `└ ⠋ Grep … · 7 tools · 0:12 · 4.1K tok`. The strip (Alt+↓) lists live runs and keeps finished ones for 30 s. The dashboard pane takes c/r/s/q and Alt+1…9. Grandchild activity is relayed over the frame channel. Without pcntl the lines fill in only at turn end. — _Evidence:_ `src/Tui/AgentActivityLine.php`; `src/Tui/AgentStrip.php`; `src/Tui/Components/AgentDashboardPane.php`
-- **sugar-crush-web** ✅ — Panel badge counts running runs. — _Evidence:_ `src-web/components/panels/SidePanels.vue:35-39`
+- **candy-code-web** ✅ — Panel badge counts running runs. — _Evidence:_ `src-web/components/panels/SidePanels.vue:35-39`
 - **Claude Code 2.1.301** ✅ — Finished rows clear; failed rows linger 30 s; `x` stops. — _Evidence:_ cc:sub-agents#observe-and-steer-running-forks; cc:statusline#subagent-status-lines
 - **OpenCode 1.18.35** ✅ — The Task renderer syncs child messages and shows the current child tool, retry status, and on completion the tool count and duration. Child permission and question prompts bubble up to the parent view. — _Evidence:_ TUI/routes/session/index.tsx:200-240,2215-2300
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Task row shows subagent type, live '↳ <Tool> <title>' of child, tool count, duration; child footer 'Subagent N of M'. 2.0.31 (✅): Live child rows + composer subagent picker (↑/↓, Enter navigate, ctrl+d interrupt subagent) — _Evidence:_ V2D/cli/keybinds (composer.subagent.*, session.child.first)
@@ -2355,7 +2355,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-13</b> Background sub-agents</summary>
 
 - **candy-code** ✅ — The call returns `{"agent_id","status":"running"}`. Each turn carries an `<active-subagents>` row. The run uses the stricter of the daemon's and session's modes, and has no approver, so an ask is refused. It survives a TUI restart and is re-adopted. Only depth-0 calls may go to the background. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:940-1110`; `src/Sessions/BackgroundSupervisor.php`
-- **sugar-crush-web** ✅ — Nested runs refuse (`agent_nested`). — _Evidence:_ `src-web/components/agents/AgentView.vue`
+- **candy-code-web** ✅ — Nested runs refuse (`agent_nested`). — _Evidence:_ `src-web/components/agents/AgentView.vue`
 - **Claude Code 2.1.301** ✅ — Ctrl+B backgrounds a running task; bg subagents get a reduced tool set; their permission prompts surface in the main session. — _Evidence:_ cc:sub-agents#run-subagents-in-foreground-or-background
 - **OpenCode 1.18.35** 🟡 — Without the flag the `background` parameter is hidden and rejected. With it: BACKGROUND_STARTED text (“DO NOT sleep, poll…”); ctrl+b (`session_background`) promotes running foreground tasks; completion injects `<task…state=completed><summary>Background task completed…` into the parent, starting a turn if it is idle. 🔌 opencode-background-agents offers an alternative. — _Evidence:_ OC/tool/task.ts:25-41,98-103,227-265,336; TUI/routes/session/index.tsx:218-230,1022-1033; OC/server/routes/instance/httpapi/handlers/experimental.ts:159-171
 - **OpenCode 2.0.31** ✅ — 1.18.35 gated background behind OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS. — _Evidence:_ V2C/tool/plugin/subagent.ts:19-27; V2D/commands (Background)
@@ -2365,7 +2365,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-14</b> Resume / continue a sub-agent</summary>
 
 - **candy-code** ✅ — `SuspendedDelegations::MAX_AGE_SECONDS = 7*86400`. A resume gets a fresh step budget, and the model resumes with `Task {resume}`. A finished run can also be continued from the Agent View or with SendMessage. — _Evidence:_ `src/Agents/SuspendedDelegations.php:81`; `src/Tools/BuiltIn/TaskTool.php:2357`
-- **sugar-crush-web** ✅ — Needs the engine backend; `not_resumable` otherwise. — _Evidence:_ `candy-code/docs/SERVER.md:736-749`
+- **candy-code-web** ✅ — Needs the engine backend; `not_resumable` otherwise. — _Evidence:_ `candy-code/docs/SERVER.md:736-749`
 - **Claude Code 2.1.301** ✅ — Name-reuse guard; transcripts survive main compaction. — _Evidence:_ cc:sub-agents#resume-subagents
 - **OpenCode 1.18.35** ✅ — Pass `task_id`; the child continues “instead of creating a fresh one”. — _Evidence:_ OC/tool/task.ts:49-54,134-140
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): task_id resumes the same child session with prior messages/tool outputs (works after success or failure). 2.0.31 (✅): Pass the returned sessionID to continue the same child conversation — _Evidence:_ V2C/tool/plugin/subagent.ts:38-42
@@ -2375,7 +2375,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-15</b> Parent↔child messaging while running (SendMessage, mailboxes)</summary>
 
 - **candy-code** ✅ — Per-run mailboxes live under `~/.candy-code/mailboxes/<session>/<agent>/` and are drained at step boundaries. User messages are HMAC-signed with a per-launch key, and agent messages are fenced as task direction that cannot approve anything. Messages flow hub-and-spoke only (never between siblings). All three tools are no-ask. — _Evidence:_ `src/Tools/BuiltIn/SendMessageTool.php:66`; `src/Tools/BuiltIn/SubagentsTool.php:41`; `src/Agents/Live/AgentInbox.php`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/agents/agents.ts:120-140`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/agents/agents.ts:120-140`
 - **Claude Code 2.1.301** ✅ — Delivered between tool calls; Ctrl+Enter delivers mid-work; agent messages never count as user approval. — _Evidence:_ cc:sub-agents; cc:cross-session-messaging
 - **OpenCode 1.18.35** 🟡 — `background.extend` queues a prompt into a running child and returns BACKGROUND_UPDATED. There is no child→parent messaging before completion. The TUI hides the prompt input in child sessions, so the user cannot type into a child. — _Evidence:_ OC/tool/task.ts:36-41,267-282; TUI/routes/session/index.tsx:240
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Parent can push more context into a running background child via task_id (experimental); no mailbox/SendMessage. 2.0.31 (🟡): V1's experimental extend-a-running-background-task path is not documented for v2. — _Evidence:_ V2C/tool/plugin/subagent.ts:38-66; V2D/cli/keybinds (composer.subagent.interrupt)
@@ -2385,7 +2385,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-16</b> Agent teams / swarms / coordinators</summary>
 
 - **candy-code** ✅ — `Bootstrap::agentManager()` wires `setTeamManager(new TeamManager())`, and the Team tool is offered on every launch. Teammates are background Tasks. Dependency cycles are refused. Dead-session claims are reclaimed. `max_teammates` is optional (null means no cap). — _Evidence:_ `src/Cli/Bootstrap.php:2463`; `src/Tools/BuiltIn/TeamTool.php:64,161,234`; `src/Agents/TaskList.php:181,302,402`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools (Team)
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools (Team)
 - **Claude Code 2.1.301** ✅ — Teams: lead + teammates (in-process or tmux/iTerm panes), shared task list, mailboxes, TeammateIdle/TaskCreated/TaskCompleted hooks; one team per session. Workflows: paid plans, 1,000 agents/run, resumable, savable as commands. — _Evidence:_ cc:agent-teams; cc:workflows
 - **OpenCode 1.18.35** 🔌 — Core supports orchestration only via task and nesting. This repo builds a multi-agent pipeline from custom agents and commands (candy-code-orchestrator → phase-lead → reviewer → committer). — _Evidence:_ awesome-opencode (CrewBee, Oh My Opencode); DOCS/ecosystem; LOCAL: .opencode/agents, .opencode/commands/candy-code-build.md
 - **OpenCode 2.0.31** ❓ — 1.18.35 (🔌): No native teams/swarms; 🔌 oh-my-openagent, opencode-workspace, CrewBee, subtask2 orchestration. 2.0.31 (❓): No native teams; V1 swarm plugins (oh-my-openagent pins @opencode-ai/plugin 1.18.31) don't run; v2 options unverified — _Evidence:_ npm view oh-my-openagent dependencies
@@ -2395,7 +2395,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-17</b> Nested sub-agents (sub-agent spawns sub-agent)</summary>
 
 - **candy-code** ✅ — `TaskTool::MAX_DELEGATION_DEPTH = 3`. A nested Task is re-bound per child with `nestedFor()`. The six built-ins omit Task, so they never nest. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:259,1207-1216`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/agents/tree.ts`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/agents/tree.ts`
 - **Claude Code 2.1.301** ✅ — Parents wait for their background children before finishing. — _Evidence:_ cc:sub-agents#let-subagents-spawn-their-own-subagents
 - **OpenCode 1.18.35** ✅ — The depth is counted by walking `parentID`. Error: “Subagent depth limit reached”. This host sets `subagent_depth: 4`. — _Evidence:_ OC/tool/task.ts:104-117; OC/agent/subagent-permissions.ts:14-28; DOCS/config (Subagent depth)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Nested subagents via `subagent_depth` (default 1 = none; children get task denied unless granted). 2.0.31 (✅): This host's `subagent_depth: 4` would be ignored on v2 unless moved under `experimental`. — _Evidence:_ V2C/tool/plugin/subagent.ts:129-133; V2D/migrate-v1 (Accepted but unsupported)
@@ -2405,7 +2405,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-18</b> Worktree isolation for agents</summary>
 
 - **candy-code** ✅ — The tree is created under `.candy-code/worktrees/<run id>/` on branch `agent-<id>-<time>`, with `.worktreeinclude` files copied in. `BashEscapeDenyHook` is registered. A clean tree is removed; a tree with work is kept and named in the result. A run that cannot be isolated is refused. — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:1253-1262,2111,2160`; `src/Cli/Bootstrap.php:9082`; `src/Agents/WorktreeManager.php`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Auto-cleaned if unchanged; based on default branch (`worktree.baseRef`). — _Evidence:_ cc:sub-agents#write-subagent-files; cc:worktrees
 - **OpenCode 1.18.35** 🟡 — `/experimental/worktree` create/list/remove/reset “sandbox worktrees”. Workspace adapters (built-in `worktree`, plugins can register more). TUI `/workspaces`, `/warp`, `/move`. Subagents always share the parent's worktree. kdco opencode-worktree is installed in this repo's .opencode/plugins. — _Evidence:_ OC/worktree/index.ts; OC/control-plane/adapters/index.ts; OC/effect/runtime-flags.ts:50; LOCAL: .opencode/plugins/worktree.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Experimental workspaces/worktree API (OPENCODE_EXPERIMENTAL_WORKSPACES); no auto per-agent worktree (🔌 opencode-worktree). 2.0.31 (✅): Agents can create a worktree and move their session into it (worktree_remove needs edit approval). Not automatic per-subagent isolation. — _Evidence:_ V2D/tools (Worktrees, Sessions); V2C/tool/plugin/opencode.ts:106-190; V2CL v2.0.27
@@ -2415,7 +2415,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-19</b> Import foreign agent definitions (e.g. .claude/agents read by another tool)</summary>
 
 - **candy-code** 🟡 — `ForeignAgentPresetRegistry`: project beats user, and Claude beats opencode. The body becomes the prompt, and opencode `permission` rules collapse to tool lists. Gaps: `skills: a, b` becomes ONE bogus name, a `mcpServers:` mapping is kept as raw arrays, and `background: "false"` reads as true (all confirmed by script). Parse failures and `warnings()` go to `error_log()` only and never reach launch notices. Agents defined in opencode.json are not read. — _Evidence:_ `src/Agents/ForeignAgentPresetRegistry.php:284-311,442,498-529`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:commands; help (`import`)
 - **OpenCode 1.18.35** ❌ — The only `.claude` reads in OC/ and CORE/ are ~/.claude/CLAUDE.md and the `.claude` skills dir. — _Evidence:_ `grep -rn '\.claude' OC/ CORE/` → instruction.ts:62, skill/index.ts:21
 - **OpenCode 2.0.31** ❌ — The only `.claude` reads in OC/ and CORE/ are ~/.claude/CLAUDE.md and the `.claude` skills dir. — _Evidence:_ `grep -rn '\.claude' OC/ CORE/` → instruction.ts:62, skill/index.ts:21
@@ -2425,7 +2425,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-20</b> @-mention an agent to invoke it</summary>
 
 - **candy-code** ❌ — `ContextMentions` reserves only diff, session and http(s). There is no agent mention syntax. — _Evidence:_ `src/Attachments/ContextMentions.php:51-60`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src-web/components/Composer.vue:34-43`
+- **candy-code-web** ❌ — — — _Evidence:_ `src-web/components/Composer.vue:34-43`
 - **Claude Code 2.1.301** ✅ — Plugin agents by scoped name (`@agent-plugin:name`). — _Evidence:_ cc:sub-agents#invoke-subagents-explicitly
 - **OpenCode 1.18.35** ✅ — The `@` autocomplete lists non-hidden, non-primary agents. The part becomes an agent part plus a synthetic instruction. If task permission denies it, the hint says “Invoked by user; guaranteed to exist.” — _Evidence:_ OC/session/prompt.ts:978-990,1223; TUI/component/prompt/autocomplete.tsx:402-415
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): @agent in prompt adds synthetic 'call the task tool with subagent X' (bypasses task deny; hidden agents excluded). 2.0.31 (✅): @agent mention adds an agent mention to the prompt (does not switch the active agent) — _Evidence:_ V2D/build/plugins/index (Prompt admission: agent mentions)
@@ -2435,7 +2435,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-21</b> Navigate into a child agent's session view</summary>
 
 - **candy-code** ✅ — It reads `~/.candy-code/subagents/<session>/` live and keeps a header pinned. The composer sends to that agent. Ctrl+G broadcasts to the batch. Finished runs open from the session picker (Ctrl+R, Tab). — _Evidence:_ `src/App/App.php:2598`; `src/Commands/KeyBindingRegistry.php:778-795`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:44-46`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:44-46`
 - **Claude Code 2.1.301** ✅ — Built-in commands still route to main (with confirm for /compact, /clear, /rewind). — _Evidence:_ cc:sub-agents#observe-and-steer-running-forks
 - **OpenCode 1.18.35** ✅ — In a child: SubagentFooter (“Subagent N of M”, context %, cost) and no prompt input. Child permission asks appear in the parent. — _Evidence:_ TUI/config/keybind.ts:103-106; TUI/routes/session/index.tsx:1036-1080,1309-1311
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): <leader>↓ enters first child, ←/→ cycle siblings, ↑ to parent; clicking a Task row opens the child (read-only view). 2.0.31 (✅): Down opens the subagent picker in the composer; Enter navigates into the child session — _Evidence:_ V2D/cli/keybinds (session.child.first: down, composer.subagent.*)
@@ -2445,7 +2445,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-22</b> Multi-agent routing (different agents per channel / peer / workspace)</summary>
 
 - **candy-code** ➖ — Not applicable to a single-user coding agent. — _Evidence:_ `docs/SERVER.md:768`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ❌ — Claude Tag (Slack, Team/Enterprise) is a separate product with channel-level memory and admin access. — _Evidence:_ cc:channels; cc:claude-tag
 - **OpenCode 1.18.35** ➖ — Not a multi-channel assistant. — _Evidence:_ DOCS/config (Default agent)
 - **OpenCode 2.0.31** ➖ — Not a multi-channel assistant. — _Evidence:_ DOCS/config (Default agent)
@@ -2455,7 +2455,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-N1</b> 🆕 Shared board / blackboard for a parallel batch of sub-agents (post/read results, asks, vetoes)</summary>
 
 - **candy-code** ✅ — Two or more foreground Tasks in one message share a per-batch board. A member hears about posts addressed to it through `<shared-agent-board-notice>` on its next tool result (`BoardNoticeHook`). HOLD and VETO are advisory. The board is removed when the batch ends, and the main agent never sees it. — _Evidence:_ `src/Runtime.php:2394`; `src/Tools/BuiltIn/BoardPostTool.php`; `src/Hooks/BuiltIn/BoardNoticeHook.php`
-- **sugar-crush-web** 🟡 — Runtime creates the per-batch board server-side, and BoardNoticeHook is on the shared chain. The main agent and the browser user never see the board as such; each member's posts are visible only as tool calls in that run's agent-view transcript. — _Evidence:_ `src/Runtime.php:2391-2396`; `src/Cli/Bootstrap.php:5992`; `sugar-crush-web/src-web/components/agents/AgentView.vue`
+- **candy-code-web** 🟡 — Runtime creates the per-batch board server-side, and BoardNoticeHook is on the shared chain. The main agent and the browser user never see the board as such; each member's posts are visible only as tool calls in that run's agent-view transcript. — _Evidence:_ `src/Runtime.php:2391-2396`; `src/Cli/Bootstrap.php:5992`; `candy-code-web/src-web/components/agents/AgentView.vue`
 - **Claude Code 2.1.301** 🟡 — Workflows pass results between agents in script code rather than through a shared board. — _Evidence:_ cc:agent-teams; cc:workflows
 - **OpenCode 1.18.35** ❌ — Children report only via their final task result. — _Evidence:_ OC/tool/task.ts
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2C/tool/plugin/subagent.ts
@@ -2465,7 +2465,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-N2</b> 🆕 Live run control of sub-agents (cancel / pause / resume / send to background from the UI)</summary>
 
 - **candy-code** ✅ — Control lines are delivered through the HMAC-checked mailbox. Pause lasts at most 10 min, with a heartbeat to the parent watchdog. A second cancel within 3 s hard-stops: SIGTERM, then SIGKILL after 2 s. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:787-793`; `docs/SERVER.md:721-760`
-- **sugar-crush-web** ✅ — The buttons are shown only to clients with write scope. Background appears only for a run the conversation itself delegated (nested runs refuse with `agent_nested`). Messages go to the run's signed mailbox and show as "waiting for its next step" until read. — _Evidence:_ `sugar-crush-web/src-web/components/agents/AgentView.vue:71-115`; `sugar-crush-web/src-web/stores/agents/agents.ts:120-140`; `docs/SERVER.md:721-760`
+- **candy-code-web** ✅ — The buttons are shown only to clients with write scope. Background appears only for a run the conversation itself delegated (nested runs refuse with `agent_nested`). Messages go to the run's signed mailbox and show as "waiting for its next step" until read. — _Evidence:_ `candy-code-web/src-web/components/agents/AgentView.vue:71-115`; `candy-code-web/src-web/stores/agents/agents.ts:120-140`; `docs/SERVER.md:721-760`
 - **Claude Code 2.1.301** ✅ — Open a running subagent's transcript and send follow-ups (Ctrl+Enter delivers mid-work); `/workflows` view pauses/resumes/saves runs; no pause for ordinary subagents. — _Evidence:_ cc:sub-agents#observe-and-steer-running-forks; cc:interactive-mode#keyboard-shortcuts; cc:commands (/workflows)
 - **OpenCode 1.18.35** 🟡 — Background promotion needs OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS. There is no per-child cancel or pause from the UI. — _Evidence:_ OC/session/run-state.ts; TUI/routes/session/index.tsx:1022-1033; OC/tool/task.ts:98
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2D/cli/keybinds (composer.subagent.*); V2C/tool/plugin/subagent.ts
@@ -2475,7 +2475,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-N3</b> 🆕 Cross-session messaging between independent top-level sessions (local or remote)</summary>
 
 - **candy-code** 🟡 — SendMessage works hub-and-spoke inside one session: parent to its own sub-agents and back, "never a sibling, a grandchild or another session's run". `/bg`, `/fork` and `Task background:true` run separate daemon sessions. When one settles, its report arrives in the launching session as a user-role message ("[Background session <id> ('<name>') completed]" plus stats), queued behind any running turn. This is one-way and automatic. serve adds `bg.inject`: a client can send a settled background session's answer into any session as a prompt. There is no ListAgents-style discovery, no messaging between two foreground sessions, and nothing across machines. — _Evidence:_ `src/Tools/BuiltIn/SendMessageTool.php:37-45`; `docs/COMMANDS.md:435-442`; `src/Protocol/Methods/BgMethods.php:36-57`
-- **sugar-crush-web** 🟡 — In serve, background results do not land in chat by themselves; `bg.inject` closes that gap manually and admits the report like a typed prompt (queued by default). Agents cannot message other sessions (SendMessage is intra-session). — _Evidence:_ `sugar-crush-web/src-web/components/panels/BackgroundPanel.vue:72`; `sugar-crush-web/src-web/stores/agents/background.ts:89-91`; `src/Protocol/Methods/BgMethods.php:36-57`
+- **candy-code-web** 🟡 — In serve, background results do not land in chat by themselves; `bg.inject` closes that gap manually and admits the report like a typed prompt (queued by default). Agents cannot message other sessions (SendMessage is intra-session). — _Evidence:_ `candy-code-web/src-web/components/panels/BackgroundPanel.vue:72`; `candy-code-web/src-web/stores/agents/background.ts:89-91`; `src/Protocol/Methods/BgMethods.php:36-57`
 - **Claude Code 2.1.301** ✅ — Inbound policy accept/hold/refuse; can't approve anything. — _Evidence:_ cc:cross-session-messaging
 - **OpenCode 1.18.35** ❌ — Only external scripts using the HTTP API/SDK can prompt another session. — _Evidence:_ DOCS/server
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2D/tools (Sessions)
@@ -2485,7 +2485,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AGT-N4</b> 🆕 Thread-bound sub-agent sessions (child gets its own chat thread / channel binding)</summary>
 
 - **candy-code** 🟡 — The Agent View (a click, Enter, or `/agents <run>`) swaps in the run's live transcript under a pinned header. The composer then sends to that agent (an HMAC-signed mailbox, read at its next step boundary). Ctrl+G broadcasts to the batch, and Ctrl+X c/p/b cancel, pause or background the run. A finished Task run is stored as the child session `<description> (@<agent>)` with its whole conversation and listed under its parent in Ctrl+R; typing to it continues the run (resumable for 7 days). There are no external chat-channel threads, and no idle or max-age binding policy, because the product has no channels. — _Evidence:_ `docs/AGENTS.md:204-216`, `:256-262`; `src/App/App.php:2598`; `src/Agents/SuspendedDelegations.php`
-- **sugar-crush-web** 🟡 — Clicking a tree row, including one under a Task card, opens that run's view in the side panel. Messaging a finished run continues it from its `resumeId` under the same preset. There are no channel threads. — _Evidence:_ `sugar-crush-web/src-web/components/agents/AgentView.vue:19-65`; `sugar-crush-web/src-web/components/ToolCard.vue:44-46`
+- **candy-code-web** 🟡 — Clicking a tree row, including one under a Task card, opens that run's view in the side panel. Messaging a finished run continues it from its `resumeId` under the same preset. There are no channel threads. — _Evidence:_ `candy-code-web/src-web/components/agents/AgentView.vue:19-65`; `candy-code-web/src-web/components/ToolCard.vue:44-46`
 - **Claude Code 2.1.301** 🟡 — Subagent/fork transcripts open in-place from the panel; channels deliver into one session, not per-subagent threads. — _Evidence:_ cc:agent-teams; cc:sub-agents#observe-and-steer-running-forks; cc:channels
 - **OpenCode 1.18.35** 🟡 — Child sessions are viewable with <leader>↓, ←/→ and ↑. There is no Slack/Discord thread binding (the Slack sample is unpublished). — _Evidence:_ TUI/config/keybind.ts:103-106; packages/slack/README.md
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2D/agents (Modes); V2D/cli/keybinds
@@ -2498,7 +2498,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-01</b> SKILL.md format support (frontmatter name/description)</summary>
 
 - **candy-code** ✅ — A frontmatter block is required. Fields are typed through `SkillFrontmatter`, and a mistyped field skips that skill only. Bodies are scrubbed to valid UTF-8. Each file is capped at 1 MiB and its frontmatter at 64 KiB. Unknown or inert keys are named in one launch row. — _Evidence:_ `src/Skills/SkillFrontmatter.php`; `src/Skills/SkillFileReader.php:44,52`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Fields: name, description, when_to_use, argument-hint, arguments, disable-model-invocation, user-invocable, allowed-tools, disallowed-tools, model, effort, context, agent, background, hooks, paths, shell, metadata, license, compatibility. Unknown fields silently ignored; unparsable YAML loads with no fields. Uploads to claude.ai/Skills API accept only the six spec fields. — _Evidence:_ cc:skills#frontmatter-reference; cc:skills#using-skill-frontmatter-outside-claude-code
 - **OpenCode 1.18.35** ✅ — Docs: name 1-64 chars matching `^[a-z0-9]+(-[a-z0-9]+)*$` and equal to the directory name; description 1-1024 chars. The loader only requires `name` to be a string. Skills without a description load but are not advertised. Duplicate names are reported. — _Evidence:_ DOCS/skills; OC/skill/index.ts:50-56,120-140,321-323
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): SKILL.md with name (dir-matching, kebab) + description; license/compatibility/metadata accepted, others ignored. 2.0.31 (✅): Accepts license/compatibility but ignores them; `disable-model-invocation`/`metadata.opencode/autoinvoke:false` hide from the model. — _Evidence:_ V2D/skills (Discovery, Frontmatter, IDs)
@@ -2508,7 +2508,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-02</b> Discovery locations (user / project / plugin / bundled)</summary>
 
 - **candy-code** ✅ — The user tier beats the project tier, and every shadowing is reported. Symlinks are followed but confined. The walk is capped at depth 7 and 2000 directories. — _Evidence:_ `src/Skills/SkillLoader.php:830-856`; `src/Skills/SkillOrigin.php:69-72`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Precedence enterprise > personal > project; plugin skills namespaced `/plugin:skill`; nested dupes exposed as `/apps/web:deploy`; claude.ai skills sync into `~/.claude/skills/synced/` (checked every ~10 min active / ~40 min idle); worktrees fall back to the main checkout's skills (v2.1.277+). Reserved names `synced`, `anthropic-skills`. — _Evidence:_ cc:skills#where-skills-live; cc:skills#how-synced-skills-behave
 - **OpenCode 1.18.35** ✅ — Config directories are scanned with `{skill,skills}/**/SKILL.md`. Extra `skills.paths` directories are scanned with `**/SKILL.md`. `skills.urls` pull from a remote `index.json`, cached in ~/.cache/opencode/skills. The built-in `customize-opencode` is registered first so a disk skill can override it. — _Evidence:_ OC/skill/index.ts:20-34,175-230,272-286; OC/skill/discovery.ts:10-60
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): .opencode/skills (walk-up), ~/.config/opencode/skills, .claude/.agents skills, `skills.paths`, `skills.urls`, 1 built-in. 2.0.31 (✅): Precedence: built-ins < .claude < .agents < global opencode < project .opencode < explicit `skills` entries. — _Evidence:_ V2D/skills (Discovery, Sources, Precedence); V2C/plugin/skill.ts:31-41
@@ -2518,7 +2518,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-03</b> Cross-tool locations read (.claude/skills, .agents/skills, .opencode/skills, ...)</summary>
 
 - **candy-code** ✅ — Within a tier the order is spec < claude < opencode < native. Foreign skills are fully parsed at launch (no stage-1 manifest). The user tier is dropped when $HOME cannot be established. — _Evidence:_ `src/Skills/ForeignSkillDiscovery.php:21-140`; `src/Skills/SkillManager.php:109-161`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — `/import` copies Codex/Gemini/Cursor skills once; symlinking a shared folder into `.claude/skills/` works. — _Evidence:_ cc:skills#where-skills-live; cc:commands
 - **OpenCode 1.18.35** ✅ — `OPENCODE_DISABLE_EXTERNAL_SKILLS` turns off both. This host has 14 global skills in ~/.config/opencode/skills and 8 in the repo's .opencode/skills. — _Evidence:_ OC/skill/index.ts:184-202; DOCS/skills; LOCAL: skills dirs
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Reads .claude/skills and .agents/skills (project walk-up to git root + home); OPENCODE_DISABLE_CLAUDE_CODE_SKILLS. 2.0.31 (✅): .claude/skills and .agents/skills (global + ancestor walk); CLAUDE env flags honored since 2.0.30 — _Evidence:_ V2D/skills; V2CL v2.0.30
@@ -2528,7 +2528,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-04</b> Progressive disclosure (listing in prompt, body loaded on use)</summary>
 
 - **candy-code** ✅ — The listing sits under a preamble and a "MUST load" mandate, each line badged with its tier, escaped and clipped. `enabledSkills` (user config) bodies are standing system-prompt sections and are left out of the listing. `paths:` triggers `SkillPathNudge` inside tool results. Stage-3 `loadSkillAsset()` has no caller. — _Evidence:_ `src/Runtime.php:4706-4710`; `src/Skills/SkillListingSection.php:37-86`; `src/Cli/Bootstrap.php:5197`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `/context`
+- **candy-code-web** 🟡 — — — _Evidence:_ live `/context`
 - **Claude Code 2.1.301** ✅ — Body is a single message that stays (no re-read); identical re-invoke adds an "already loaded" note; after compaction the latest invocation of each skill is re-attached (first 5K tokens, 25K total). `disable-model-invocation` keeps even the description out of context. — _Evidence:_ cc:skills#skill-content-lifecycle; cc:skills#control-who-invokes-a-skill
 - **OpenCode 1.18.35** ✅ — The skill tool returns `<skill_content name>` containing the body, the base directory, “relative paths are relative to this base directory” and `<skill_files>` (ripgrep, limit 10). — _Evidence:_ OC/tool/skill.ts:34-66; OC/session/system.ts:107-119
 - **OpenCode 2.0.31** ✅ — The skill tool returns `<skill_content name>` containing the body, the base directory, “relative paths are relative to this base directory” and `<skill_files>` (ripgrep, limit 10). — _Evidence:_ OC/tool/skill.ts:34-66; OC/session/system.ts:107-119
@@ -2538,7 +2538,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-05</b> Model auto-invocation (Skill tool)</summary>
 
 - **candy-code** ✅ — The tool resolves the exact key, then a unique display name; an ambiguous name is refused. The result opens with a base-directory line. The tool is classed as read-only, so it never prompts. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:214,226`; `src/Skills/SkillListingSection.php:86`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools (Skill)
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools (Skill)
 - **Claude Code 2.1.301** ✅ — `disable-model-invocation: true` blocks and tells Claude not to reproduce steps; a `/name` typed after plain text grants permission without running it. — _Evidence:_ cc:skills#control-who-invokes-a-skill; cc:tools-reference
 - **OpenCode 1.18.35** ✅ — `ctx.ask({permission:'skill', patterns:[name]})`. Skill outputs are protected from pruning. — _Evidence:_ OC/tool/skill.ts:27-32; OC/skill/index.ts:306-317; OC/session/compaction.ts:31
 - **OpenCode 2.0.31** ✅ — `ctx.ask({permission:'skill', patterns:[name]})`. Skill outputs are protected from pruning. — _Evidence:_ OC/tool/skill.ts:27-32; OC/skill/index.ts:306-317; OC/session/compaction.ts:31
@@ -2548,7 +2548,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-06</b> User invocation (/skill-name)</summary>
 
 - **candy-code** 🟡 — `SkillMentions` is resolved in `TurnController::userTurnMessage()`; disabled or non-user-invocable skills get a notice. Typing `/php-best-practices` (the Claude Code habit) sends the literal text to the model. The Ctrl+S picker says "Enabled skill 'x'." but changes only the shell App's state (ISSUES). — _Evidence:_ `src/Skills/SkillMentions.php:45-60`; `src/Host/TurnController.php:1004`; `src/App/App.php:2595,4377-4422`
-- **sugar-crush-web** ❌ — `SessionHost::admit()`: "a `/word` that names none is prose". — _Evidence:_ `candy-code/src/Host/SessionHost.php:662-669`
+- **candy-code-web** ❌ — `SessionHost::admit()`: "a `/word` that names none is prose". — _Evidence:_ `candy-code/src/Host/SessionHost.php:662-669`
 - **Claude Code 2.1.301** ✅ — `user-invocable: false` hides from the menu; mid-prompt `/` completion; plugin skills match on bare name. — _Evidence:_ cc:skills#pass-arguments-to-skills; cc:commands
 - **OpenCode 1.18.35** ✅ — Registered as `source:"skill"` commands with the base-directory note. — _Evidence:_ OC/command/index.ts:134-152
 - **OpenCode 2.0.31** 🟡 — 1.18.35 registered every skill as a /command. v2 attaches selected skills to the prompt part list. — _Evidence:_ V2D/skills (Loading); V2T/component/prompt/autocomplete.tsx:427-436
@@ -2558,7 +2558,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-07</b> Skills list UI — HOW shown (/skills, palette, panel)</summary>
 
 - **candy-code** 🟡 — The pane shows the "enabled" list (the shell's own, which starts empty), or else the available names, dimmed. `/skills` and `/skills proposed` cover drafts only. The `/` popup lists no skills. Launch notices count skipped files, and `CANDY_CODE_DEBUG_SKILLS=1` lists them. — _Evidence:_ `src/Tui/Components/SkillsPane.php:20-78`; `src/Host/Commands/SkillsHostCommand.php:38-59`; `src/Commands/KeyBindingRegistry.php:585`
-- **sugar-crush-web** ❌ — Verified: "No skill drafts are waiting …". — _Evidence:_ live `command.exec name=skills`
+- **candy-code-web** ❌ — Verified: "No skill drafts are waiting …". — _Evidence:_ live `command.exec name=skills`
 - **Claude Code 2.1.301** ✅ — `/skill-doctor` (v2.1.252+, flag-gated) shows cost vs usage in the `/plugin` Stats tab; `/context` Skills row = post-budget listing size; synced skills grouped under `claude.ai sync`. — _Evidence:_ cc:commands; cc:skills#find-unused-skills; cc:skills#override-skill-visibility-from-settings
 - **OpenCode 1.18.35** ✅ — A large DialogSelect titled “Skills”, placeholder “Search skills…”, data from `GET /app/skills`. There is no indication of which skills the model has loaded this session beyond the tool rows (“Loaded skill: X”). — _Evidence:_ TUI/component/dialog-skill.tsx; TUI/component/prompt/index.tsx:519-535; OC/tool/skill.ts:46
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /skills opens searchable dialog (name + description); selecting inserts '/skill '; `opencode debug skill`. 2.0.31 (✅): /skills dialog; skill loads render as dedicated timeline rows — _Evidence:_ V2T/component/dialog-skill.tsx; V2T/routes/session/index.tsx:1820
@@ -2568,7 +2568,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-08</b> Bundled / built-in skills</summary>
 
 - **candy-code** ✅ — All are PHP-centric. The monorepo's own skills sit in its project tier, not the built-ins. — _Evidence:_ `src/Skills/BuiltIn/`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Also /artifact-capabilities, /artifact-diagramming, /claude-in-chrome, /dataviz, /design, /design-sync, /fewer-permission-prompts, /run-skill-generator, /slides, /update-config, /workflow-authoring; plus bundled workflow `/deep-research`. `disableBundledSkills` turns them off. — _Evidence:_ cc:commands (Skill-marked rows); cc:skills#bundled-skills
 - **OpenCode 1.18.35** 🟡 — Exists because “opencode hard-fails on invalid config”. It gives the model real schemas when it edits opencode config. — _Evidence:_ OC/skill/index.ts:26-34,272-286
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): One bundled skill: customize-opencode (config schemas, overridable by a same-name disk skill). 2.0.31 (🟡): Built-in skills: `OpenCode` (v2 docs index) and `Report` (file an issue); official Figma plugin ships 6 skills — _Evidence:_ V2C/plugin/skill.ts:31-41; V2C/plugin/skill/*.md; V2CL v2.0.28
@@ -2578,7 +2578,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-09</b> Skill registry / marketplace (ClawHub, plugin marketplaces, skills.sh)</summary>
 
 - **candy-code** ❌ — None.
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Third-party marketplaces via `claude plugin marketplace add`; Anthropic `pdf`/`xlsx` etc. always sync for claude.ai logins; `claude plugin eval` to measure. — _Evidence:_ local: claude-plugins-official marketplace.json; cc:plugins/overview; cc:skills#how-synced-skills-behave
 - **OpenCode 1.18.35** 🟡 — A remote index lists skills and files, which are downloaded and cached. ocx (installed globally, registry `registry.kdco.dev` configured here) distributes profiles, plugins, agents and skills. — _Evidence:_ OC/skill/discovery.ts; LOCAL: ~/.config/opencode/ocx.jsonc; ocx package.json
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): `skills.urls` pulls skills from a remote index.json registry; no marketplace UI (🔌 ocx registry, skills CLI). 2.0.31 (🟡): HTTP catalogs via `skills` URLs (index.json + version-based cache refresh); no marketplace — _Evidence:_ V2D/skills (Catalogs)
@@ -2588,7 +2588,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-10</b> Skill-bundled scripts / resources</summary>
 
 - **candy-code** 🟡 — Scripts and references are reached through ordinary tool calls, which go through the gate. The containment-checked stage-3 loader is not wired. — _Evidence:_ `src/Skills/SkillLoader.php` (loadSkillAsset, no production caller); `src/Tools/BuiltIn/SkillTool.php:226`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Same variables substituted inside `allowed-tools` Bash rules so bundled scripts run without prompts. — _Evidence:_ cc:skills#add-supporting-files; cc:skills#available-string-substitutions
 - **OpenCode 1.18.35** ✅ — Skill directories are whitelisted in the agent default `external_directory` rules, so scripts and references can be read or run. — _Evidence:_ OC/agent/agent.ts:101-113; OC/tool/skill.ts:34-60
 - **OpenCode 2.0.31** ✅ — Skill directories are whitelisted in the agent default `external_directory` rules, so scripts and references can be read or run. — _Evidence:_ OC/agent/agent.ts:101-113; OC/tool/skill.ts:34-60
@@ -2598,7 +2598,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-11</b> Skill-level tool restrictions (allowed-tools)</summary>
 
 - **candy-code** ❌ — They are listed in `FrontmatterKeyAudit::INERT`, and no tool-scoping code reads them. — _Evidence:_ `src/Support/FrontmatterKeyAudit.php:95-101`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Grants clear at your next message; not gated by workspace trust (review repo skills); `allowManagedPermissionRulesOnly` ignores them (v2.1.282+). — _Evidence:_ cc:skills#pre-approve-tools-for-a-skill
 - **OpenCode 1.18.35** ❌ — Unknown frontmatter fields are ignored (docs). — _Evidence:_ DOCS/skills (Write frontmatter)
 - **OpenCode 2.0.31** ❌ — Unknown frontmatter fields are ignored (docs). — _Evidence:_ DOCS/skills (Write frontmatter)
@@ -2608,7 +2608,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-12</b> Skill gating (requires bins / env / OS)</summary>
 
 - **candy-code** ✅ — The binary check is a PATH stat walk with no subprocess. It runs once per launch. — _Evidence:_ `src/Skills/SkillRegistry.php:263`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — `shell: bash` fails the invocation on Windows without Git Bash. — _Evidence:_ cc:skills#frontmatter-reference
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ DOCS/skills
 - **OpenCode 2.0.31** ❌ — 1.18.35 (❌): No requires-bins/env/OS gating (compatibility is free text). 2.0.31 (❌): No requirement gating; only `disable-model-invocation` / `autoinvoke:false` visibility control — _Evidence:_ V2D/skills (Frontmatter)
@@ -2618,7 +2618,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-13</b> Hot reload of skills</summary>
 
 - **candy-code** 🟡 — No watcher or reload exists. An accepted draft also takes effect from the next launch. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:226`; `docs/SKILLS.md:659`
-- **sugar-crush-web** ❓ — —
+- **candy-code-web** ❓ — —
 - **Claude Code 2.1.301** ✅ — SKILL.md text only; plugin-skill-folder components need `/reload-plugins`; not in bare mode. — _Evidence:_ cc:skills#live-change-detection; cc:commands
 - **OpenCode 1.18.35** ❌ — Discovery lives in InstanceState. Only `PATCH /config` or `/instance/dispose` reload the instance; there is no file watcher on skill dirs. — _Evidence:_ OC/skill/index.ts:257-286; OC/server/routes/instance/httpapi/handlers/config.ts:20
 - **OpenCode 2.0.31** ✅ — 1.18.35 (❌): Skills scanned once per instance; new/edited skills need restart (or instance reload via API config change). 2.0.31 (✅): Skill sources are watched; changes reload without restart — _Evidence:_ V2C/config/plugin/skill.ts (Watcher); V2D/plugins (Reload)
@@ -2628,7 +2628,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-14</b> Skill-creation helper</summary>
 
 - **candy-code** 🟡 — Drafts are written to `~/.candy-code/skills-proposed/`. `accept` validates with the loader, and it is user-only (no tool calls it). — _Evidence:_ `src/Skills/ProposedSkills.php:240`; `src/Host/Commands/SkillsHostCommand.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/src/Host/Commands/SkillsHostCommand.php`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/src/Host/Commands/SkillsHostCommand.php`
 - **Claude Code 2.1.301** ✅ — `claude plugin init <name>` scaffolds `~/.claude/skills/<name>/` as `<name>@skills-dir`; skill-creator runs evals/benchmarks. — _Evidence:_ help (`plugin init`); cc:skills#run-evals-with-skill-creator; obs (anthropic-skills:skill-creator listed)
 - **OpenCode 1.18.35** 🟡 — Its description: “Also use when creating or fixing opencode agents, subagents, skills, plugins, MCP servers…”. — _Evidence:_ OC/skill/index.ts:31-34
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): No skill wizard; built-in customize-opencode skill guides the model when creating skills/agents/config. 2.0.31 (🟡): Built-in `OpenCode` skill indexes v2 docs (incl. skills/plugins) for the model; no wizard — _Evidence:_ V2C/plugin/skill/opencode.md
@@ -2638,7 +2638,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SKL-15</b> Skill run in forked / sub-agent context</summary>
 
 - **candy-code** 🧪 — `isContextFork()` is consulted only by uncalled App methods and by the picker's status text. — _Evidence:_ `src/App/App.php:2213-2240,2409`; `src/Support/FrontmatterKeyAudit.php:100`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Not a conversation fork (no history); waits in `-p`/SDK. — _Evidence:_ cc:skills#run-skills-in-a-subagent
 - **OpenCode 1.18.35** ❌ — Skill-as-command has no subtask flag. Custom commands can use `subtask: true` instead. — _Evidence:_ OC/command/index.ts:134-152
 - **OpenCode 2.0.31** ❌ — Skill-as-command has no subtask flag. Custom commands can use `subtask: true` instead. — _Evidence:_ OC/command/index.ts:134-152
@@ -2651,7 +2651,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-01</b> Built-in slash commands (count + notable ones)</summary>
 
 - **candy-code** ✅ — Full list: /new /new-picker /sessions /session-pin /session-delete /model /share /docs /exit(quit) /theme /settings(config) /agents(agent) /mcp /keys /help /permissions /notices /context(tokens) /sweep /pruning /compress /decompress /recompress /rules /newrule /pane /layout /pane-dock-left /pane-dock-right /editor /compact /clear /budget /workflow /memory /skills /init /branch /rename /rewind /undo /redo /diff /bg(background) /fork /websearch /goal /grind /btw /handoff /generate /generate-form /sendto /play /rendermode. Absent: /loop /schedule /hooks /review /status /cost (/budget instead) /plan (Alt+M instead). Dispatch is table-driven, and slash commands are refused mid-turn except /exit and /btw. — _Evidence:_ `src/Commands/Specs/BuiltInCommands.php:44-120`; `src/Chat.php:12747-12780`
-- **sugar-crush-web** 🟡 — Server-run (verified): agents bg branch btw clear context decompress diff fork generate handoff mcp memory notices permissions play pruning recompress redo rename rendermode rewind rules sendto share skills sweep undo websearch workflow. — _Evidence:_ live `command.list`; `candy-code/src/Protocol/Methods/CommandMethods.php`
+- **candy-code-web** 🟡 — Server-run (verified): agents bg branch btw clear context decompress diff fork generate handoff mcp memory notices permissions play pruning recompress redo rename rendermode rewind rules sendto share skills sweep undo websearch workflow. — _Evidence:_ live `command.list`; `candy-code/src/Protocol/Methods/CommandMethods.php`
 - **Claude Code 2.1.301** ✅ — Notable: /agents (reminder only), /autocompact, /background, /batch, /branch, /fork, /subtask, /code-review (+ultra), /security-review, /doctor, /effort, /fast, /insights, /mcp, /memory, /model, /plugin, /permissions, /remote-control, /schedule, /skills, /tasks, /teleport, /tui, /usage, /voice, /workflows. Some run immediately mid-turn (/status, /tasks, /usage, /model, /effort, /fast, /permissions). Availability varies by plan/provider. — _Evidence:_ cc:commands#all-commands
 - **OpenCode 1.18.35** ✅ — TUI: sessions, new/clear, models, agents, mcps, variants, connect, org, status, debug, themes, help, exit, editor, skills, move, share, unshare, rename, timeline, fork, compact, undo, redo, timestamps, thinking, copy, export, diff; plus workspaces and warp (experimental). Server: init, review. Custom commands override built-ins of the same name. — _Evidence:_ TUI/app.tsx:577-833; TUI/component/prompt/index.tsx:427-553; TUI/routes/session/index.tsx:472-1013; TUI/feature-plugins/system/diff-viewer.tsx:1056-1068; OC/command/index.ts:46-88
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): ~33 built-in slash commands: /init /review /compact /undo /redo /fork /timeline /share /sessions /models /agents /diff.... 2.0.31 (✅): v2 slash list: agents, btw, cd, clear, compact, connect, copy, debug, diff, editor, exit, export, fork, help, highlights, mcps, models, new, open, pair, plugins, redo, reload, rename, restart, sessions, settings, skills, stats, status, terminal, themes, timeline, undo, update, variants, worktrees; server: init, review. — _Evidence:_ V2T (grep slash names); V2C/plugin/command.ts:28-55
@@ -2661,7 +2661,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-02</b> Custom commands (markdown files, locations)</summary>
 
 - **candy-code** ✅ — Merge order: built-in < user < project, by name. Only the 9 CONTROL_PLANE names are protected. A project file can replace /undo, /notices, /mcp and others with no notice (confirmed by script; ISSUES). Depth cap 4. — _Evidence:_ `src/Commands/CommandLoader.php:502-536`; `src/Commands/CommandRegistry.php:73`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/session.ts:140-158`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/session.ts:140-158`
 - **Claude Code 2.1.301** ✅ — Project, personal, enterprise, plugin; skill wins over a same-named command file; a local skill can replace a built-in command (not its aliases). — _Evidence:_ cc:skills; cc:skills#resolve-skills-that-share-a-name
 - **OpenCode 1.18.35** ✅ — The file name becomes the command name. This repo ships 4 (review, candy-code-build, candy-code-feat-build, candy-code-feat-review). — _Evidence:_ DOCS/commands; LOCAL: .opencode/commands
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Markdown in .opencode/commands/ or ~/.config/opencode/commands/ (command/ legacy), or JSON `command` config. 2.0.31 (✅): Markdown in commands/ (nested paths → /team/review) or JSON `commands`; hot-reloaded — _Evidence:_ V2D/commands (Markdown, Loading)
@@ -2671,7 +2671,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-03</b> Arguments ($ARGUMENTS, $1, ...)</summary>
 
 - **candy-code** ✅ — An expansion that comes out empty is refused rather than sent as an empty turn. — _Evidence:_ `src/Commands/CommandSpec.php:116,522`; `src/Chat.php:11180-11190`
-- **sugar-crush-web** ✅ — —
+- **candy-code-web** ✅ — —
 - **Claude Code 2.1.301** ✅ — `argument-hint` shown in autocomplete. — _Evidence:_ cc:skills#available-string-substitutions
 - **OpenCode 1.18.35** ✅ — `hints()` extracts `$N` / `$ARGUMENTS` for display. — _Evidence:_ OC/command/index.ts:36-44; OC/session/prompt.ts:1390-1391; DOCS/commands (Arguments)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): $ARGUMENTS plus positional $1..$n; hints shown in autocomplete. 2.0.31 (✅): $ARGUMENTS, quoted $1..$n (last consumes rest), args appended when no placeholder — _Evidence:_ V2D/commands (Arguments, Positions, Fallback)
@@ -2681,7 +2681,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-04</b> Frontmatter (description, model, agent, allowed-tools)</summary>
 
 - **candy-code** 🟡 — Display fields are sanitized (PaneLabel). Inert and unknown keys are named in a launch row. — _Evidence:_ `src/Commands/CommandSpec.php:288-352`; `src/Support/FrontmatterKeyAudit.php:66,102-105`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/Composer.vue:95-109`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/Composer.vue:95-109`
 - **Claude Code 2.1.301** ✅ — Command files accept all skill fields except `name` and `paths`. — _Evidence:_ cc:skills#frontmatter-reference
 - **OpenCode 1.18.35** 🟡 — When `agent` is a subagent the command runs as a subtask unless `subtask:false`. After a subtask the loop appends “Summarize the task tool output above and continue with your task.” — _Evidence:_ OC/command/index.ts:22-32,90-103; OC/session/prompt.ts:1438-1452
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Frontmatter: description, agent, model, subtask; no allowed-tools/argument-hint fields. 2.0.31 (✅): Frontmatter: description, agent, model#variant, subagent (background child; `subtask` alias) — _Evidence:_ V2D/commands (Fields, Background)
@@ -2691,7 +2691,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-05</b> Shell interpolation in commands (!`cmd`)</summary>
 
 - **candy-code** ✅ — Expansion is forked off the UI thread. An untrusted project form is replaced by a notice. A spent budget refuses later forms without consulting the gate. — _Evidence:_ `src/Commands/CommandSpec.php:143,155,522-600`; `src/Chat.php:11158`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `candy-code/src/Host/SessionHost.php:645-659`
+- **candy-code-web** ✅ — — — _Evidence:_ `candy-code/src/Host/SessionHost.php:645-659`
 - **Claude Code 2.1.301** ✅ — Never prompt: checked against permission rules (deny aborts; non-allow aborts outside auto mode); failure aborts the whole invocation; `disableSkillShellExecution`; not run for claude.ai-synced skills locally. — _Evidence:_ cc:skills#inject-dynamic-context
 - **OpenCode 1.18.35** ✅ — `bashRegex = /!\`([^\`]+)\`/g`; commands run before the prompt is sent. — _Evidence:_ OC/session/prompt.ts:1395-1407,1592
 - **OpenCode 2.0.31** ✅ — `bashRegex = /!\`([^\`]+)\`/g`; commands run before the prompt is sent. — _Evidence:_ OC/session/prompt.ts:1395-1407,1592
@@ -2701,7 +2701,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-06</b> File references in commands (@file)</summary>
 
 - **candy-code** ✅ — Resolved by tier. `@file` mentions in the expansion are NOT re-read as user mentions. — _Evidence:_ `src/Commands/CommandSpec.php:879`; `src/Chat.php:11160-11175`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Synced skills get them as literal text; `CLAUDE_CODE_DISABLE_FILE_MENTIONS` sends paths instead (v2.1.299). — _Evidence:_ cc:skills#how-claude-code-handles-the-body-of-a-synced-skill; CL v2.1.299
 - **OpenCode 1.18.35** ✅ — `resolvePromptParts(template)` turns @refs into file parts, deduped against user-attached files. — _Evidence:_ OC/session/prompt.ts:1431-1437; DOCS/commands (File references)
 - **OpenCode 2.0.31** ❌ — 1.18.35 resolved @file in templates through the Read pipeline. — _Evidence:_ V2D/commands (Attachments)
@@ -2711,7 +2711,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-07</b> Autocomplete popup for /</summary>
 
 - **candy-code** ✅ — `slashCommandRows()` merges both sources; a custom command overrides the same-named built-in. The popup shows name, description and hint but not the tier, so an overridden /undo looks unchanged. — _Evidence:_ `src/Chat.php:16624-16670`; `src/Renderer.php:5706`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:34-43,60-72`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:34-43,60-72`
 - **Claude Code 2.1.301** ✅ — Ghost-text completion with `+N` count outside fullscreen; plugin skills match by bare name. — _Evidence:_ cc:commands#how-the-command-menu-matches-what-you-type; cc:interactive-mode#complete-a-command-mid-prompt
 - **OpenCode 1.18.35** ✅ — fuzzysort over display names and descriptions; tab completes; aliases shown. — _Evidence:_ TUI/component/prompt/autocomplete.tsx:92,448-510; TUI/keymap.tsx:272-286
 - **OpenCode 2.0.31** ✅ — fuzzysort over display names and descriptions; tab completes; aliases shown. — _Evidence:_ TUI/component/prompt/autocomplete.tsx:92,448-510; TUI/keymap.tsx:272-286
@@ -2721,7 +2721,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-08</b> Command palette (Ctrl+P etc.)</summary>
 
 - **candy-code** 🟡 — Root items are `PaletteAction` rows derived from the spec files that carry a palette label. — _Evidence:_ `src/Chat.php:17166-17174`; `src/Palette/PaletteAction.php:24-45`; `src/Commands/KeyBindingRegistry.php:491,584`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/panels/CommandPalette.vue:41-75,142-147`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/panels/CommandPalette.vue:41-75,142-147`
 - **Claude Code 2.1.301** 🟡 — Desktop/VS Code have their own command surfaces. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts
 - **OpenCode 1.18.35** ✅ — `command_list: ctrl+p`. Palette entries carry categories (Session, Agent, Prompt, VCS…). The which-key overlay (ctrl+alt+k) shows pending leader groups. — _Evidence:_ DOCS/keybinds; TUI/component/command-palette.tsx; TUI/feature-plugins/system/which-key.tsx
 - **OpenCode 2.0.31** ✅ — `command_list: ctrl+p`. Palette entries carry categories (Session, Agent, Prompt, VCS…). The which-key overlay (ctrl+alt+k) shows pending leader groups. — _Evidence:_ DOCS/keybinds; TUI/component/command-palette.tsx; TUI/feature-plugins/system/which-key.tsx
@@ -2731,7 +2731,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-09</b> MCP prompts exposed as commands</summary>
 
 - **candy-code** ❌ — See MCP-07. — _Evidence:_ `docs/MCP.md`; `../sugar-mcp-client/src/StdioMcpServer.php:399`
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `command.list`
+- **candy-code-web** ❌ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Prompts from a server named `anthropic-skills` are hidden. — _Evidence:_ cc:mcp#use-mcp-prompts-as-commands
 - **OpenCode 1.18.35** ✅ — `source:"mcp"`; the template is resolved lazily via `getPrompt`. — _Evidence:_ OC/command/index.ts:105-132
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): MCP prompts become slash commands (arguments mapped to $1..$n). 2.0.31 (✅): MCP prompts become `/<server>:<prompt>` commands (args positional); refreshed on prompts/list_changed — _Evidence:_ V2C/plugin/command.ts:16-80; V2D/mcp-servers (Names)
@@ -2741,7 +2741,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-10</b> Commands from plugins</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — Manifest-defined commands; mods' `$.command.register`. — _Evidence:_ cc:plugins/components#commands; cc:plugins/mods/api#add-a-command
 - **OpenCode 1.18.35** 🟡 — Plugins such as subtask2 and the goal plugin mutate `config.command` or intercept `command.execute.before` to rewrite parts. TUI plugins register palette and slash commands via `api.keymap.registerLayer`. — _Evidence:_ PLUG/index.ts:225,262-265; PLUG/tui.ts:87-120; opencode-goal-plugin README
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): No command manifest for plugins; plugins add commands via `config` hook or TUI keymap layers; command.execute.before. 2.0.31 (✅): Plugins register commands via `ctx.command.transform` (first-class) — _Evidence:_ V2D/build/plugins/index (Commands)
@@ -2751,7 +2751,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-11</b> Bang-shell from the prompt (!cmd)</summary>
 
 - **candy-code** ✅ — It holds the turn slot. Typed mid-turn, it waits in the queue until the turn ends. — _Evidence:_ `src/Chat.php:11096-11132`; `src/Commands/BangShell.php`
-- **sugar-crush-web** 🟡 — The browser shows a red error and never the output until a re-snapshot (ISSUES P2). — _Evidence:_ live probe; `candy-code/src/Protocol/Methods/TurnMethods.php:104`
+- **candy-code-web** 🟡 — The browser shows a red error and never the output until a re-snapshot (ISSUES P2). — _Evidence:_ live probe; `candy-code/src/Protocol/Methods/TurnMethods.php:104`
 - **Claude Code 2.1.301** ✅ — History and path autocomplete; Ctrl+B backgrounding; runs outside the sandbox (except strict sandbox mode); pasted `!` enters shell mode. — _Evidence:_ cc:interactive-mode#shell-mode-with-prefix
 - **OpenCode 1.18.35** ✅ — Shell mode via `!`. Recorded with a synthetic “The following tool was executed by the user”. Also `POST /session/:id/shell`. — _Evidence:_ OC/session/prompt.ts:451-597; DOCS/tui (Bash commands)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): !cmd from prompt runs a shell command; output stored as a user-executed tool result the model sees. 2.0.31 (✅): `!` shell mode; user shells run immediately as background work, output kept in the session — _Evidence:_ V2D/cli/tui (Shell); specs/v2/session.md
@@ -2761,7 +2761,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-12</b> Per-command keybindings</summary>
 
 - **candy-code** ❌ — There is no keybindings file or config key. — _Evidence:_ `src/Commands/KeyBindingRegistry.php`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — Mods' Buttons can trigger keybinding actions. — _Evidence:_ cc:keybindings; cc:plugins/mods/reference
 - **OpenCode 1.18.35** 🟡 — Bindings take strings, arrays or objects (`key`, `event`, `preventDefault`, `fallthrough`). Leader key with `leader_timeout`. — _Evidence:_ DOCS/keybinds; TUI/config/keybind.ts
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): ~150 built-in actions rebindable in tui.json; custom markdown commands have no keybind field. 2.0.31 (🟡): Keybinds in global cli.json; custom commands still have no keybind field — _Evidence:_ V2D/cli/keybinds
@@ -2771,7 +2771,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CMD-N1</b> 🆕 Import foreign custom-command files (.claude/commands, .opencode/commands, etc.)</summary>
 
 - **candy-code** ❌ — `CommandLoader` walks only the two `.candy-code/commands` trees. — _Evidence:_ `src/Commands/CommandLoader.php:565-574`
-- **sugar-crush-web** ❌ — As SC (a2 CMD-X1). — _Evidence:_ `src/Commands/CommandLoader.php:565-574`; `sugar-crush-web/src-web/components/Composer.vue:34-43`
+- **candy-code-web** ❌ — As SC (a2 CMD-X1). — _Evidence:_ `src/Commands/CommandLoader.php:565-574`; `candy-code-web/src-web/components/Composer.vue:34-43`
 - **Claude Code 2.1.301** 🟡 — `claude import --dry-run` previews. — _Evidence:_ cc:skills; cc:commands (/import); help (`import`)
 - **OpenCode 1.18.35** ❌ — Only .opencode/command(s) and the JSON `command` key are read. — _Evidence:_ OC/config/; DOCS/commands
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2D/commands (Markdown)
@@ -2784,7 +2784,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-01</b> Hook system exists</summary>
 
 - **candy-code** ✅ — `HookManager` chain: built-ins, then hooks.yaml entries, then PermissionGateHook last. — _Evidence:_ `src/Hooks/HookManager.php:180-191`; `src/Cli/Bootstrap.php:5909`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Handlers run in parallel; identical handlers dedup across settings files; hooks also run inside subagents (with `agent_id`/`agent_type`). — _Evidence:_ cc:hooks; cc:plugins/mods/overview
 - **OpenCode 1.18.35** 🟡 — No `hooks` key in config. A hook means writing a plugin module (local file or npm). — _Evidence:_ PLUG/index.ts:221-335; DOCS/plugins
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Hooks exist only as in-process JS/TS plugin hooks; no declarative shell-command hook config. 2.0.31 (🟡): V1 plugin implementations do not run in V2. — _Evidence:_ V2D/build/plugins/index; V2D/migrate-v1 (Plugins)
@@ -2794,7 +2794,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-02</b> Events supported (list them)</summary>
 
 - **candy-code** ✅ — All have production dispatch sites. UserPromptSubmit and SessionStart are TUI/serve only, not `-p` or background sessions. SessionEnd fires on TUI exit and successful `-p`. There is no Notification or PermissionRequest event; naming one in hooks.yaml stops the launch. — _Evidence:_ `src/Hooks/HookEvent.php:24-67`; `src/Runtime.php:3007,3274`; `src/Backend/EngineBackend.php:1549,1578,2277`; `src/Chat.php:6862,14269,14306`; `bin/candy-code:576`; `src/Cli/NonInteractive.php:434`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Full list: SessionStart, Setup, UserPromptSubmit, UserPromptExpansion, PreToolUse, PermissionRequest, PermissionDenied, PostToolUse, PostToolUseFailure, PostToolBatch, Notification, MessageDisplay, SubagentStart, SubagentStop, TaskCreated, TaskCompleted, Stop, StopFailure, TeammateIdle, InstructionsLoaded, ConfigChange, CwdChanged, DirectoryAdded, FileChanged, WorktreeCreate, WorktreeRemove, PreCompact, PostCompact, PreModelSwitch, PostModelSwitch, Elicitation, ElicitationResult, SessionEnd. — _Evidence:_ cc:hooks#hook-lifecycle
 - **OpenCode 1.18.35** ✅ — Full set: event, config, tool, auth, provider, chat.message, chat.params, chat.headers, permission.ask (declared, see HK-05), command.execute.before, tool.execute.before/after, shell.env, experimental.chat.messages.transform, experimental.chat.system.transform, experimental.provider.small_model, experimental.session.compacting, experimental.compaction.autocontinue, experimental.text.complete, tool.definition, dispose. Bus events via `event`: session.*, message.*, permission.asked/replied, file.edited, file.watcher.updated, lsp.*, todo.updated, command.executed, tui.*, installation.updated, server.connected. — _Evidence:_ PLUG/index.ts:221-335; DOCS/plugins (Events)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Hooks: chat.message/params/headers, tool.execute.before/after, shell.env, command.execute.before, transforms, compaction, event. 2.0.31 (✅): Domain hooks: `ctx.session.hook(...)`, `ctx.permission.hook("evaluate")`, `ctx.shell.hook("create.before")`, `ctx.tool.hook("execute.before/after")`, `ctx.event.subscribe()`, plus transforms for agents, commands, tools, providers, models, skills, MCP, integrations, references, worktrees. No direct equivalents for experimental.compaction.autocontinue, experimental.provider.small_model, experimental.text.complete. — _Evidence:_ V2D/build/plugins/index (Hooks); V2D/build/plugins/migrate-v1 (mapping table)
@@ -2804,7 +2804,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-03</b> Hook kinds (shell command / LLM prompt / HTTP / in-process JS/PHP plugin)</summary>
 
 - **candy-code** 🟡 — Built-ins include protect-files, confirm-rm, audit, lint, diagnostics, auto-commit, auto-test, board-notice, sub-agent-grant and repeat-call guards. — _Evidence:_ `src/Hooks/ScriptHook.php`; `src/Hooks/BuiltIn/`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Plus mods (JS/TS functions in-process). Command hooks: exec or shell form, `shell: powershell`, `async: true` background. Defaults: 600 s command/http/mcp_tool, 30 s prompt, 60 s agent (30 s on UserPromptSubmit/model-switch). — _Evidence:_ cc:hooks#hook-handler-fields; cc:hooks#run-hooks-in-the-background
 - **OpenCode 1.18.35** 🟡 — Plugin context gives `client` (SDK), `$` (Bun shell), project, directory and worktree. TUI plugins are a separate kind (Solid components). — _Evidence:_ DOCS/plugins (Basic structure); PLUG/index.ts:55-62
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): In-process JS/TS functions only (can shell out via Bun $); no shell/HTTP/LLM-prompt hook types. 2.0.31 (🟡): In-process Effect or Promise plugin code (server) or CLI plugins (TUI); no shell/HTTP/LLM-prompt hook kinds — _Evidence:_ V2D/build/plugins/index; V2D/build/plugins/effect
@@ -2814,7 +2814,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-04</b> Matchers (by tool name / pattern)</summary>
 
 - **candy-code** ✅ — A bare `*` is refused at launch. Claude Code session-source matchers such as `startup` never match. — _Evidence:_ `src/Hooks/HookConfig.php:94-107`; `src/Hooks/HookRegistry.php:201-236`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Lists separated by commas or pipe characters; `if: "Bash(git *)"` checks each subcommand including `$()`; MCP tools `mcp__server__tool`. — _Evidence:_ cc:hooks#matcher-patterns; cc:hooks#common-fields
 - **OpenCode 1.18.35** 🟡 — e.g. `if (input.tool === "bash")`. — _Evidence:_ DOCS/plugins (.env protection example)
 - **OpenCode 2.0.31** 🟡 — e.g. `if (input.tool === "bash")`. — _Evidence:_ DOCS/plugins (.env protection example)
@@ -2824,7 +2824,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-05</b> Blocking / decision control (deny, modify input, inject context)</summary>
 
 - **candy-code** ✅ — A UserPromptSubmit deny discards the prompt. A PostToolUse deny withholds the output. A rewrite is re-gated. On turn and compaction events an ask counts as a deny. — _Evidence:_ `src/Hooks/ScriptHook.php:737-767,1297-1457`; `src/Chat.php:6903-6915`; `src/Runtime.php:3085,3289`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/docs/SERVER.md:575-578`; `src-web/components/PermissionCard.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/docs/SERVER.md:575-578`; `src-web/components/PermissionCard.vue`
 - **Claude Code 2.1.301** ✅ — Stop/SubagentStop block keeps Claude working (8-consecutive cap); PermissionRequest auto-answers; PermissionDenied `retry`; MessageDisplay rewrites display only; `defer` (print mode) pauses a tool for an external UI. — _Evidence:_ cc:hooks#decision-control; cc:hooks#defer-a-tool-call-for-later
 - **OpenCode 1.18.35** ✅ — `tool.execute.before` mutates `output.args` or throws (the error is returned to the model). `tool.execute.after` rewrites title, output and metadata. `chat.message` edits parts. The transforms add system or message content. **`permission.ask` is declared in the Hooks type but never triggered in 1.18.35**: no `trigger("permission.ask")` anywhere in OC/ or CORE/, and the permission service has no plugin dependency. — _Evidence:_ PLUG/index.ts:261,266-281; `grep trigger(` over OC/ (11 hook names, none permission.ask); OC/permission/index.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): before-hooks can mutate args or throw to block; after-hooks rewrite output; transforms inject context. permission.ask unwired. 2.0.31 (✅): The V1 gap (permission.ask declared but never fired) is closed: v2 `evaluate` hooks run for allow and ask decisions; configured deny stays final. Plugins can also `ctx.permission.assert` to use native prompts. — _Evidence:_ V2D/build/plugins/index (Permissions); V2CL v2.0.29
@@ -2834,7 +2834,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-06</b> Config location / scopes</summary>
 
 - **candy-code** 🟡 — The user file must be private and owned by you. Hook files are read once per launch. New project entries are quarantined when your own policy files changed since the last launch. — _Evidence:_ `src/Cli/Bootstrap.php:6071-6150,6271-6446,4568-4615`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Merge across levels; `allowManagedHooksOnly`, `allowedHttpHookUrls`, `httpHookAllowedEnvVars`; cloud sessions don't read `~/.claude/settings.json`. — _Evidence:_ cc:hooks#hook-locations
 - **OpenCode 1.18.35** ✅ — Load order: global config npm list, then project npm list, then global plugin dir, then project plugin dir. Hooks run sequentially in that order. Local plugin dependencies come from `package.json` in the config dir, installed with `bun install`. `--pure` / `OPENCODE_PURE` skip external plugins. — _Evidence:_ DOCS/plugins (Load order, Dependencies); OC/plugin/index.ts:284-297
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): .opencode/plugins, ~/.config/opencode/plugins, npm `plugin` list in global/project config; fixed load order. 2.0.31 (✅): `plugins` array (packages, git, paths, options objects; `-id`/wildcards disable) + .opencode/plugins discovery — _Evidence:_ V2D/plugins
@@ -2844,7 +2844,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-07</b> Claude-Code-compatible hook config</summary>
 
 - **candy-code** ❌ — stdin is closed immediately and the payload is in `CRUSH_TOOL_NAME/TOOL_INPUT/...` env vars. A Claude Code `hooks` block pasted into hooks.yaml is refused (unknown nested key). Only the exit-0 JSON envelope and exit-2-on-Pre/Stop/Prompt carry over. — _Evidence:_ `src/Hooks/ScriptHook.php:598-623,681`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:hooks
 - **OpenCode 1.18.35** ❌ — No `.claude/settings.json` parsing. — _Evidence:_ `grep '\.claude'` (see AGT-19); awesome-opencode (Froggy, Oh My Opencode)
 - **OpenCode 2.0.31** 🔌 — 1.18.35 (❌): Claude Code settings.json hooks not read (🔌 opencode-froggy / oh-my-openagent offer CC-style hook layers). 2.0.31 (🔌): CC settings.json hooks not read natively; 🔌 opencode-froggy 1.4.2 (v2 plugin API) adds Claude-Code-style hooks — _Evidence:_ npm view opencode-froggy dependencies (@opencode/plugin ^2.0.5); awesome-opencode (Froggy)
@@ -2854,7 +2854,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-08</b> Hook output surfaced in UI</summary>
 
 - **candy-code** 🟡 — Exit-0 stdout (up to 10 KB) is appended to the tool result for the model. Stop feedback becomes the next prompt. — _Evidence:_ `src/Hooks/HookManager.php:529-540`; `src/Cli/NonInteractive.php:445-452`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/ToolCard.vue:60`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/ToolCard.vue:60`
 - **Claude Code 2.1.301** ✅ — `additionalContext` becomes a system-reminder invisible in chat; `terminalSequence` OSC notifications; `--include-hook-events` in stream-json; 10K-char cap with file spill. — _Evidence:_ cc:hooks#exit-code-output; cc:hooks#json-output; cc:hooks#add-context-for-claude
 - **OpenCode 1.18.35** 🟡 — Also `/tui/show-toast` and `client.app.log` for structured logs. — _Evidence:_ DOCS/plugins (Logging); DOCS/server (TUI show-toast)
 - **OpenCode 2.0.31** 🟡 — Also `/tui/show-toast` and `client.app.log` for structured logs. — _Evidence:_ DOCS/plugins (Logging); DOCS/server (TUI show-toast)
@@ -2864,7 +2864,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-09</b> Hook timeout / failure handling</summary>
 
 - **candy-code** ✅ — Hooks run in the forked turn child, so the TUI does not freeze when pcntl is present. — _Evidence:_ `src/Hooks/ScriptHook.php:704-732`; `src/Hooks/HookRegistry.php:387-389`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Timed-out PreToolUse hooks don't block unless onFailure; stop-hook continuation cap; cwd fallback when dir deleted. — _Evidence:_ cc:hooks#timeouts; cc:hooks#block-the-action-when-a-hook-fails; CL v2.1.295
 - **OpenCode 1.18.35** 🟡 — `Plugin.trigger` loops over hooks with `Effect.promise(async () => fn(input, output))`. A hung hook stalls the step and a rejection propagates. — _Evidence:_ OC/plugin/index.ts:284-297
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Hooks awaited sequentially with no timeout; a throw aborts that tool call/request. 2.0.31 (🟡): Rejected Promise hooks/tools now become normal tool failures attributed to their call — _Evidence:_ V2CL v2.0.28, v2.0.29
@@ -2874,7 +2874,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>HK-10</b> Hooks management UI (/hooks)</summary>
 
 - **candy-code** ❌ — Not among the 55 spec files. — _Evidence:_ `builtin-commands/`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — File watcher applies edits live; `disableAllHooks`; 🔌 `hookify` creates hooks from markdown rules. — _Evidence:_ cc:hooks#the-/hooks-menu; cc:commands (/update-config)
 - **OpenCode 1.18.35** 🟡 — Palette entries “Plugins” and “Install plugin” (shift+i), with `plugins.toggle` on space. — _Evidence:_ TUI/feature-plugins/system/plugins.tsx:205-255
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): TUI Plugins dialog toggles/installs plugins; no per-hook management UI. 2.0.31 (🟡): /plugins dialog; `opencode plugin list/check/update/remove` — _Evidence:_ V2CLI: `opencode plugin --help`
@@ -2887,7 +2887,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-01</b> Plugin system exists (format)</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Also a skill folder with a manifest loads as `<name>@skills-dir`; `--plugin-dir` / `--plugin-url` session-only loading (.zip ok). — _Evidence:_ cc:plugins/overview; help (`--plugin-dir`, `--plugin-url`)
 - **OpenCode 1.18.35** ✅ — Server plugin: an async function `(ctx) => Hooks`. TUI plugin: slots (app, app_bottom, home_logo, home_prompt(_right), home_bottom, home_footer, session_prompt(_right), sidebar_title/content/footer), routes, keymap layers, dialogs, toasts, attention sounds and themes. The built-in sidebar and diff viewer are themselves feature-plugins. — _Evidence:_ PLUG/index.ts; PLUG/tui.ts:455-486,600-634; TUI/feature-plugins/
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Server plugins (JS/TS modules returning hooks) + TUI plugins (tui.json, OpenTUI/Solid slots, routes, keymaps). 2.0.31 (✅): Effect/Promise server plugins (setup, transforms, hooks, RPC contracts) + CLI plugins in cli.json; V1 plugins don't run — _Evidence:_ V2D/build/plugins/index; V2D/build/plugins/cli; V2D/plugins (Terminal)
@@ -2897,7 +2897,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-02</b> Plugin marketplace / install command</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Official marketplace auto-added on first interactive run; scopes user/project/local; `plugin details` shows token cost; `prune`, `tag`, `validate`, `eval`, `configure`; org allowlists/force-install. — _Evidence:_ help (`plugin`, `plugin marketplace`, `plugin install`); cc:plugins/install; cc:plugins/org
 - **OpenCode 1.18.35** ✅ — Unpinned plugins are re-resolved from npm on startup and cached under ~/.cache/opencode/packages. No curated marketplace: the ecosystem page, awesome-opencode and opencode.cafe, plus the ocx extension manager with registries. — _Evidence:_ CLI: `opencode plugin --help`; DOCS/plugins (How plugins are installed); LOCAL: ~/.cache/opencode/packages
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode plugin <npm> [-g]` installs + edits config; TUI plugin manager (shift+i); npm auto-install via Bun. 2.0.31 (✅): `opencode plugin add` from npm or git (incl. private/subdir), `check`/`update`; background install at startup — _Evidence:_ V2D/plugins (Manage, Reload)
@@ -2907,7 +2907,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-03</b> What plugins can add (commands, agents, skills, hooks, MCP, tools, themes, providers)</summary>
 
 - **candy-code** ➖ — —
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — Plus userConfig options and dependencies; plugin agents can't set hooks/mcpServers/permissionMode. — _Evidence:_ cc:plugins/components; cc:plugins/dependencies
 - **OpenCode 1.18.35** ✅ — Plus workspace adapters (`registerAdapter`) and `shell.env` injection. A plugin tool with a built-in's name overrides it. — _Evidence:_ PLUG/index.ts:221-231; OC/control-plane/adapters/index.ts:36-41; DOCS/plugins
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Tools, hooks, auth methods, provider model lists, config mutation (agents/commands/MCP), TUI routes/slots/themes/sounds. 2.0.31 (✅): Transforms for providers, models, agents, commands, skills, tools, MCP, integrations, references, worktrees; hooks — _Evidence:_ V2D/build/plugins/index (API)
@@ -2917,7 +2917,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-04</b> Custom tools defined in code</summary>
 
 - **candy-code** 🟡 — The tool catalog is a fixed attribute scan of `src/Tools/BuiltIn`. `Chat::registerTool()` has no caller in `bin/`. — _Evidence:_ `src/Backend/EngineBackend.php:741`; `src/Chat.php:10546`; `src/Tools/Catalog/ToolCatalog.php:49-51`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Mod tools can opt out of deferral (`isDeferred:false`, v2.1.293). — _Evidence:_ cc:plugins/mods/api#add-a-tool; cc:agent-sdk/custom-tools; CL v2.1.293
 - **OpenCode 1.18.35** ✅ — File tools are named `<file>` or `<file>_<export>`. The execute context includes directory and worktree. — _Evidence:_ OC/tool/registry.ts:183-203; DOCS/custom-tools
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): .opencode/tools/*.ts (or tool/) and plugin `tool` map using tool() + zod schema; override built-ins. 2.0.31 (✅): Tools via `ctx.tool.transform(...)`; may enforce permissions with `ctx.permission.assert` — _Evidence:_ V2D/build/plugins/index (Tools); V2CL v2.0.29
@@ -2927,7 +2927,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-05</b> Programmatic SDK</summary>
 
 - **candy-code** 🟡 — The protocol schema is generated (`scripts/gen-protocol-schema.php`). — _Evidence:_ `docs/ARCHITECTURE.md:208`; `README.md:2179-2218`
-- **sugar-crush-web** 🟡 — `generated.ts` (1,586 lines) is produced from the PHP-generated JSON Schema. — _Evidence:_ `src-web/protocol/client.ts`; `src-web/protocol/generated.ts`
+- **candy-code-web** 🟡 — `generated.ts` (1,586 lines) is produced from the PHP-generated JSON Schema. — _Evidence:_ `src-web/protocol/client.ts`; `src-web/protocol/generated.ts`
 - **Claude Code 2.1.301** ✅ — Built on the CLI; TS v2 preview; session storage adapters. — _Evidence:_ cc:agent-sdk/overview; cc:agent-sdk/typescript; cc:agent-sdk/python
 - **OpenCode 1.18.35** ✅ — `createOpencode()` starts server plus client. Types are generated from OpenAPI. — _Evidence:_ DOCS/sdk; awesome-opencode (Official Repositories)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): @opencode-ai/sdk (JS/TS, createOpencode/createOpencodeClient); official Go and Python SDKs. 2.0.31 (✅): @opencode/sdk embeds the whole server in-process (incl. Cloudflare Durable Objects); @opencode/client for network — _Evidence:_ V2D/build/sdk/index; V2D/build/sdk/cloudflare; V2D/build/client/index
@@ -2937,7 +2937,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-06</b> Agent Client Protocol (ACP) support</summary>
 
 - **candy-code** ✅ — Same SessionHub and hooks as serve. `session/new` ignores the editor's mcpServers. There is no `available_commands_update`. — _Evidence:_ `src/Cli/Subcommands.php:100`; `src/Acp/AcpServer.php:72,293-362`; `docs/SERVER.md:912-990`
-- **sugar-crush-web** ➖ — — — _Evidence:_ `candy-code/docs/SERVER.md:912-992`
+- **candy-code-web** ➖ — — — _Evidence:_ `candy-code/docs/SERVER.md:912-992`
 - **Claude Code 2.1.301** ❌ — Not mentioned anywhere in the docs; editor integrations are the VS Code/JetBrains extensions and `/ide`. (A third-party ACP adapter for Zed exists outside Anthropic's docs — not verified here.) — _Evidence:_ grep of all 228 cc: pages for "Agent Client Protocol"/"ACP" (no hits)
 - **OpenCode 1.18.35** ✅ — Supports tools, MCP, AGENTS.md, agents and permissions. Permission asks map to ACP permission requests. — _Evidence:_ DOCS/acp; OC/acp/permission.ts; CLI: `opencode acp --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode acp` (JSON-RPC stdio) for Zed, JetBrains, Avante.nvim, CodeCompanion; /undo /redo unsupported. 2.0.31 (✅): `opencode acp` (stdio JSON-RPC) with child sessions, questions, compaction, usage; `--login` — _Evidence:_ V2CLI: `opencode acp --help`; V2D/cli/acp
@@ -2947,7 +2947,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-07</b> Headless server / HTTP API</summary>
 
 - **candy-code** ✅ — Token or cookie auth, an allowed-IPs list, and TLS behind a proxy. — _Evidence:_ `src/Cli/Subcommands.php:98-99`; `docs/SERVER.md:18-300`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/protocol/client.ts`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/protocol/client.ts`
 - **Claude Code 2.1.301** 🟡 — Remote Control relays through Anthropic's API (outbound only); routines expose per-routine HTTP trigger endpoints in the cloud; `claude gateway` is an enterprise auth/telemetry gateway, not a session API. — _Evidence:_ cc:headless; cc:remote-control#connection-and-security; cc:routines; help
 - **OpenCode 1.18.35** ✅ — Endpoints for sessions (fork, abort, share, revert, summarize, prompt_async, command, shell, permissions), files and find, config, providers, MCP, agents, the TUI control channel, and experimental tools and worktrees. — _Evidence:_ DOCS/server
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode serve`: OpenAPI 3.1 HTTP API (/doc) + SSE; TUI itself is a client of this server. 2.0.31 (✅): New v2 HTTP API (breaking) served by the background service or `serve`; `opencode api` client — _Evidence:_ V2D/migrate-v1 (Server API and clients); services/www/openapi.json (142 operations)
@@ -2957,7 +2957,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-08</b> Event bus / subscription API</summary>
 
 - **candy-code** ✅ — `subagent.*`, `bg.completed`, `assistant.*` and others, with gap-free seq numbers per session. — _Evidence:_ `docs/SERVER.md:462-512`; `src/Events/`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/protocol/cursor.ts`; `src-web/stores/connection.ts:98-114`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/protocol/cursor.ts`; `src-web/stores/connection.ts:98-114`
 - **Claude Code 2.1.301** ✅ — Mods events cover tool calls, prompts, turns, rendering, agent spawns, model requests. — _Evidence:_ cc:hooks; cc:plugins/mods/events; cc:monitoring-usage
 - **OpenCode 1.18.35** ✅ — The first SSE event is `server.connected`. — _Evidence:_ DOCS/server (Events); PLUG/index.ts:224
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /event and /global/event SSE streams; plugin `event` hook receives every bus event. 2.0.31 (✅): Durable session event log with replay (`sessions.log`) + live instance event stream; `ctx.event.subscribe` — _Evidence:_ specs/v2/session.md (Durable Events); specs/v2/event-stream-architecture.md
@@ -2967,7 +2967,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-09</b> Custom providers via plugin</summary>
 
 - **candy-code** 🟡 — This is a command-backend contract, not a plugin. — _Evidence:_ `README.md:1948`; `docs/ENVIRONMENT.md` (BACKEND_CMD rows)
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ❌ — Mods can alter requests (e.g. send one request to a different model) but not add non-Claude providers. — _Evidence:_ cc:llm-gateway-protocol#api-formats; cc:plugins/mods/overview
 - **OpenCode 1.18.35** ✅ — Built-in auth plugins for azure, cerebras, cloudflare, digitalocean, github-copilot, modal, openai, snowflake and xai are disabled by `OPENCODE_DISABLE_DEFAULT_PLUGINS`. — _Evidence:_ OC/plugin/*.ts; PLUG/index.ts:88-219; DOCS/ecosystem
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Plugin `auth`/`provider` hooks (e.g. gemini/antigravity auth); any AI-SDK npm package as custom provider. 2.0.31 (✅): `ctx.provider/model/integration.transform` add providers, models and auth methods — _Evidence:_ V2D/build/plugins/index (Providers, Models, Integrations)
@@ -2977,7 +2977,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-10</b> Notable ecosystem plugins (names)</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Also commit-commands, pr-review-toolkit, claude-md-management, remember, ralph-loop, serena, context7, exa, playwright, github, telegram/discord/imessage, explanatory/learning-output-style, session-report, skill-creator, mcp-server-dev, 13 LSP plugins. — _Evidence:_ local: claude-plugins-official marketplace.json; local: installed_plugins.json
 - **OpenCode 1.18.35** ✅ — Installed or configured here: @tarquinen/opencode-dcp, opencode-agent-memory, opencode-agent-skills, opencode-handoff, @tarquinen/opencode-smart-title, opencode-conductor-plugin, @spoons-and-mirrors/subtask2, @plannotator/opencode, @zenobius/opencode-skillful, opencode-pty, @gotgenes/opencode-agent-identity, @franlol/opencode-md-table-formatter, cc-safety-net, oh-my-openagent (cached), kdco worktree/notify/background-agents (local). Global npm: opencode-goal-plugin 0.10.0, opencode-pty 0.3.6, ocx 2.0.15, CodeNomad 0.20.1 (needs v2). — _Evidence:_ LOCAL: ~/.config/opencode/opencode.jsonc; ~/.cache/opencode/packages; repo .opencode/plugins; global npm package.jsons
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): DCP, oh-my-openagent, opencode-pty, goal plugin, agent-memory, supermemory, subtask2, plannotator, worktree, wakatime…. 2.0.31 (🟡): npm deps: v2-only opencode-agent-memory 0.3.0 (@opencode/plugin ^2.0.12, needs v2.0.12+), opencode-froggy 1.4.2; dual v1+v2 @plannotator/opencode 0.28.22, opencode-supermemory 2.0.17; V1-only @tarquinen/opencode-dcp 3.2.0, opencode-pty 0.4.0, subtask2 0.3.5, oh-my-openagent 5.1.34, smart-title, skillful, handoff, conductor, agent-skills, agent-identity, wakatime, scheduler, gpt-imagegen. opencode-goal-plugin README: OpenCode 2 not supported. — _Evidence:_ npm view <pkg> dependencies; opencode-goal-plugin README
@@ -2987,7 +2987,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-N1</b> 🆕 In-process UI mods/plugins that draw panes, rewrite events, add commands/tools</summary>
 
 - **candy-code** ❌ — There is no plugin loader. Hooks are out-of-process scripts that can deny, ask or rewrite tool input but cannot draw UI. Command files add slash commands, MCP adds tools, and `statusLine` (a user-tier Map) runs a command whose output fills a status-bar segment. `Chat::registerTool()` exists for PHP embedders but nothing in `bin/` calls it. Nothing can add a pane, rewrite TUI events or add a tool in-process. — _Evidence:_ `src/Chat.php:10546`; `src/Config/Settings/Definitions/InterfaceSettings.php:65-72`; `src/Tools/Catalog/ToolCatalog.php`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src/Server/Http/Responses.php:29-36`; `sugar-crush-web/dist/`
+- **candy-code-web** ❌ — — — _Evidence:_ `src/Server/Http/Responses.php:29-36`; `candy-code-web/dist/`
 - **Claude Code 2.1.301** ✅ — Built-ins: cc-plugin-agents-md, -diff, -you-should-know, -telemetry, -sec-default, -plugin-authoring; `claude plugin test`. — _Evidence:_ cc:plugins/mods/overview
 - **OpenCode 1.18.35** ✅ — The built-in sidebar, diff viewer and notifications are themselves TUI feature-plugins. — _Evidence:_ PLUG/tui.ts:455-486; TUI/feature-plugins/; PLUG/index.ts:221-335
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ V2D/build/plugins/cli; V2D/build/plugins/index
@@ -2997,7 +2997,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PLG-N2</b> 🆕 Plugin evaluation / cost measurement tooling</summary>
 
 - **candy-code** ❌ — Nothing compares to `claude plugin eval`: no baseline, no A/B run, no scoring. The closest measurement is `/context`, which breaks the prompt into sections (project-instructions, available-skills, project-memory …) with token estimates and reports tool-schema tokens, so you can see what a skill set or MCP server costs per request. Launch notices flag inert or unknown frontmatter keys in skills, agents, commands and rules. — _Evidence:_ `src/Host/Commands/ContextHostCommand.php`; `README.md:2106` (diagnostics)
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src/Host/Commands/ContextHostCommand.php`
+- **candy-code-web** ❌ — — — _Evidence:_ `src/Host/Commands/ContextHostCommand.php`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ help (`plugin eval`, `plugin details`); cc:plugin-evals
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ DOCS/plugins
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2CLI: `opencode stats --help`
@@ -3010,7 +3010,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-01</b> Client: stdio</summary>
 
 - **candy-code** ✅ — Servers start once at launch and are shared across forked turns behind a cross-process lock. A shutdown hook stops them. — _Evidence:_ `src/MCP/McpClient.php:161,524`; `src/MCP/StdioMcpServer.php`; `src/Cli/Bootstrap.php:8408,8794`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Process-tree shutdown; `MCP_TIMEOUT` startup; 30-min idle tool timeout default for stdio. — _Evidence:_ help (`mcp add`); cc:mcp#option-3-add-a-local-stdio-server
 - **OpenCode 1.18.35** ✅ — Options: command, environment, cwd, enabled, timeout (tool fetch, default 5 s per docs; 30 s connect default in code). — _Evidence:_ DOCS/mcp-servers (Local); OC/mcp/index.ts:38,345-360
 - **OpenCode 2.0.31** ✅ — Options: command, environment, cwd, enabled, timeout (tool fetch, default 5 s per docs; 30 s connect default in code). — _Evidence:_ DOCS/mcp-servers (Local); OC/mcp/index.ts:38,345-360
@@ -3020,7 +3020,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-02</b> Client: SSE</summary>
 
 - **candy-code** ❌ — Only that one entry is lost. Import does not warn about it. — _Evidence:_ `src/MCP/McpClient.php:577`; `src/MCP/McpForeignTranslate.php:39`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Docs keep it as an option alongside HTTP. — _Evidence:_ cc:mcp#option-2-add-a-remote-sse-server
 - **OpenCode 1.18.35** ✅ — The transports list is [StreamableHTTP, SSE], tried in order. — _Evidence:_ OC/mcp/index.ts:268-300
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): Remote servers fall back to SSE transport if Streamable HTTP fails. 2.0.31 (❌): SSE transport removed: remote servers use Streamable HTTP only — _Evidence:_ V2C/mcp/client.ts:10,272-277; V2D/mcp-servers (Remote)
@@ -3030,7 +3030,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-03</b> Client: Streamable HTTP</summary>
 
 - **candy-code** 🟡 — Re-initialises on 404 and sends a session DELETE on stop. Advertises protocol 2024-11-05. — _Evidence:_ `src/MCP/HttpMcpServer.php:310,359,379`; `src/MCP/McpClient.php:109`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Two client runtimes (MCP TS SDK 1.x / 2.0 with protocol 2026-07-28); 16 MiB response cap; discovery cache opt-in. — _Evidence:_ cc:mcp#option-1-add-a-remote-http-server; cc:mcp#mcp-client-runtimes
 - **OpenCode 1.18.35** ✅ — Headers go via requestInit. — _Evidence:_ OC/mcp/index.ts:268-283; DOCS/mcp-servers (Remote)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): type remote: Streamable HTTP tried first, custom headers. 2.0.31 (✅): Streamable HTTP; optional MCP 2026-07-28 protocol via `protocol: auto/2026-07-28` — _Evidence:_ V2D/mcp-servers (Protocol version)
@@ -3040,7 +3040,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-04</b> OAuth for remote MCP servers</summary>
 
 - **candy-code** 🟡 — Tokens refresh before expiry. No RFC 8707 resource parameter, no scope, and no pre-registered client_id. A 401 at start is swallowed silently. — _Evidence:_ `src/MCP/OAuthLoopbackFlow.php:110,215`; `src/Commands/McpAuthCommand.php:150`; `src/MCP/HttpMcpServer.php:699`
-- **sugar-crush-web** ❓ — — — _Evidence:_ `candy-code/src/Host/Commands/McpAuthHostCommand.php`
+- **candy-code-web** ❓ — — — _Evidence:_ `candy-code/src/Host/Commands/McpAuthHostCommand.php`
 - **Claude Code 2.1.301** ✅ — Re-auth prompt when a server asks for more scope (v2.1.288); tokens per endpoint; claude.ai connectors pre-authenticated. — _Evidence:_ cc:mcp#authenticate-with-remote-mcp-servers; help (`mcp login`); CL v2.1.288
 - **OpenCode 1.18.35** ✅ — Status `needs_client_registration` / `needs_auth`. `oauth:false` disables it. `opencode mcp debug <name>` tests connectivity and discovery. — _Evidence:_ DOCS/mcp-servers (OAuth); OC/mcp/oauth-provider.ts; CLI: `opencode mcp --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Auto OAuth on 401 with DCR (RFC 7591) or pre-registered client; `mcp auth/logout/debug`; tokens in mcp-auth.json. 2.0.31 (✅): OAuth with PKCE via pre-registered client, CIMD, or DCR; snake_case oauth fields; /mcps sign-in — _Evidence:_ V2D/mcp-servers (OAuth)
@@ -3050,7 +3050,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-05</b> MCP tools</summary>
 
 - **candy-code** ✅ — Collision-free name escaping. Plan mode denies, auto mode asks. destructiveHint and outputSchema are ignored. — _Evidence:_ `src/Tools/McpToolBridge.php:160,214,272`; `src/Permissions/PermissionGate.php:862,1452`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Long calls auto-background after 2 min; per-tool approval via `requiresUserInteraction`; permission rules by tool name. — _Evidence:_ cc:mcp; cc:mcp#automatic-backgrounding-of-long-tool-calls
 - **OpenCode 1.18.35** ✅ — Server `instructions` are injected into the system prompt as `<mcp_instructions>`, unless all of that server's tools are denied. Tool lists refresh on `tools/list_changed`. — _Evidence:_ OC/mcp/index.ts:462; OC/mcp/catalog.ts:42-64; OC/session/system.ts:121-137
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Tools exposed as <server>_<tool>; permission/tools globs (e.g. mymcp_*); progress resets timeouts. 2.0.31 (✅): Session ID sent in `_meta["ai.opencode/sessionID"]`. — _Evidence:_ V2D/mcp-servers (Names, Permissions, Context)
@@ -3060,7 +3060,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-06</b> MCP resources (@-mention / read)</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `../sugar-mcp-client/src/` (no resources/*)
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — MCP Apps `ui://` resources excluded from suggestions. — _Evidence:_ cc:mcp#use-mcp-resources; cc:tools-reference
 - **OpenCode 1.18.35** ✅ — Text resources are inlined as synthetic text. pdf/png/jpeg/gif/webp blobs are attached; others are omitted with a note. — _Evidence:_ TUI/component/prompt/autocomplete.tsx:372-390; OC/session/tools.ts:27-39,225-330; OC/session/prompt.ts:703-775
 - **OpenCode 2.0.31** ✅ — Text resources are inlined as synthetic text. pdf/png/jpeg/gif/webp blobs are attached; others are omitted with a note. — _Evidence:_ TUI/component/prompt/autocomplete.tsx:372-390; OC/session/tools.ts:27-39,225-330; OC/session/prompt.ts:703-775
@@ -3070,7 +3070,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-07</b> MCP prompts (as slash commands)</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `command.list`
+- **candy-code-web** ❌ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Arguments passed positionally. — _Evidence:_ cc:mcp#use-mcp-prompts-as-commands
 - **OpenCode 1.18.35** ✅ — See CMD-09. — _Evidence:_ OC/command/index.ts:105-132
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): MCP prompts listed as slash commands. 2.0.31 (✅): Prompts as `/<server>:<prompt>` commands — _Evidence:_ V2D/mcp-servers (Names)
@@ -3080,7 +3080,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-08</b> Elicitation / sampling</summary>
 
 - **candy-code** ❌ — The client advertises empty capabilities. — _Evidence:_ `../sugar-mcp-client/src/StdioMcpServer.php:399,1143-1157`
-- **sugar-crush-web** ❓ — — — _Evidence:_ `candy-code/docs/protocol/candy-code.v1.schema.json`
+- **candy-code-web** ❓ — — — _Evidence:_ `candy-code/docs/protocol/candy-code.v1.schema.json`
 - **Claude Code 2.1.301** 🟡 — No mention of sampling anywhere in docs or changelog. — _Evidence:_ cc:mcp#respond-to-mcp-elicitation-requests; cc:hooks#elicitation
 - **OpenCode 1.18.35** ❌ — CLIENT_OPTIONS.capabilities has `sampling`, `elicitation` and `tasks` commented out. `roots` = project dir. — _Evidence:_ OC/mcp/index.ts:38-49,78
 - **OpenCode 2.0.31** 🟡 — 1.18.35 disabled both. — _Evidence:_ V2C/mcp/client.ts:151,188-212; V2D/mcp-servers (Input requests)
@@ -3090,7 +3090,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-09</b> Config scopes (user / project / local, .mcp.json)</summary>
 
 - **candy-code** 🟡 — Also `disabledMcpServers` globs, `mcp.enabled`, `CANDY_CODE_MCP_DISABLE`, and a user-only claude-mcp grant. — _Evidence:_ `src/Cli/Bootstrap.php:7841,8069,8258-8503`; `src/MCP/McpTrustPins.php`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `${VAR}` / `${VAR:-default}` expansion; `--strict-mcp-config`; `claude mcp reset-project-choices`. — _Evidence:_ cc:mcp#mcp-installation-scopes; help (`mcp`)
 - **OpenCode 1.18.35** 🟡 — Org `.well-known/opencode` can ship servers with `enabled:false` for opt-in. `POST /mcp` adds a server at runtime (not persisted). — _Evidence:_ DOCS/mcp-servers (Overriding remote defaults); DOCS/server (MCP)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): `mcp` key in global/project/remote/managed config; no .mcp.json and no local/private scope. 2.0.31 (🟡): `mcp.servers` in global/project/managed config; `mcp add [--global]`; still no .mcp.json — _Evidence:_ V2D/mcp-servers (Setup, Config)
@@ -3100,7 +3100,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-10</b> Management UI (/mcp, status, reconnect)</summary>
 
 - **candy-code** 🟡 — `list` renders the declared servers, up/down state, tool counts and "config changed since launch". Under `--root` it reads the cwd's project (ISSUES). — _Evidence:_ `builtin-commands/0900-mcp.php`; `src/Commands/McpAuthCommand.php:126-175`; `src/Tui/McpPanel.php`
-- **sugar-crush-web** 🟡 — Verified output: "MCP Project Config … Status: none". — _Evidence:_ live `command.exec name=mcp`
+- **candy-code-web** 🟡 — Verified output: "MCP Project Config … Status: none". — _Evidence:_ live `command.exec name=mcp`
 - **Claude Code 2.1.301** ✅ — Statuses: Connected, Needs authentication, Failed (with Issue detail), Pending approval, Disabled; config warnings (hidden whitespace, duplicate names, reserved names). — _Evidence:_ cc:mcp#managing-your-servers; help (`mcp list`, `mcp get`)
 - **OpenCode 1.18.35** ✅ — The sidebar MCP panel and home footer show connected counts and errors. — _Evidence:_ TUI/app.tsx:690-700; TUI/feature-plugins/sidebar/mcp.tsx; CLI: `opencode mcp --help`
 - **OpenCode 2.0.31** ✅ — The sidebar MCP panel and home footer show connected counts and errors. — _Evidence:_ TUI/app.tsx:690-700; TUI/feature-plugins/sidebar/mcp.tsx; CLI: `opencode mcp --help`
@@ -3110,7 +3110,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-11</b> Per-agent MCP enable/disable</summary>
 
 - **candy-code** 🟡 — `resolveGrantedTools()` returns null (full set) before the MCP filter, and no per-call check exists. `McpClient::setAgentPreset()` routing is dormant. — _Evidence:_ `src/Agents/AgentManager.php:1478-1489,1604`; `src/Tools/BuiltIn/TaskTool.php:1207`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Ignored for plugin agents; inline servers from untrusted repos skipped. — _Evidence:_ cc:sub-agents#scope-mcp-servers-to-a-subagent
 - **OpenCode 1.18.35** ✅ — Pattern: deny globally, allow in a specific agent. This repo denies context7_*, exa_* and gh_grep_* globally and allows them for `researcher`. — _Evidence:_ DOCS/mcp-servers (Per agent); LOCAL: .opencode/opencode.jsonc
 - **OpenCode 2.0.31** ✅ — Pattern: deny globally, allow in a specific agent. This repo denies context7_*, exa_* and gh_grep_* globally and allows them for `researcher`. — _Evidence:_ DOCS/mcp-servers (Per agent); LOCAL: .opencode/opencode.jsonc
@@ -3120,7 +3120,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-12</b> Tool search / deferred MCP tool loading</summary>
 
 - **candy-code** ❌ — There is no cap on tool count. — _Evidence:_ `src/Cli/Bootstrap.php:9181-9220`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `ENABLE_TOOL_SEARCH` true/auto/auto:N/false; `alwaysLoad` exempts a server; falls back to upfront loading on old models, non-1P base URLs, Azure Foundry; `WaitForMcpServers` when off. — _Evidence:_ cc:mcp#scale-with-mcp-tool-search; obs (deferred tools reminder)
 - **OpenCode 1.18.35** 🟡 — `OPENCODE_EXPERIMENTAL_CODE_MODE`: “Run a confined orchestration script with access to connected MCP tools”, with a catalog description grouped by server, via @opencode-ai/codemode. Otherwise all MCP tool schemas are sent every request; docs warn about context bloat. — _Evidence:_ OC/tool/code-mode.ts:12-20,188-240; OC/tool/registry.ts:118-119,276-286; DOCS/mcp-servers (Caveats)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): No deferred tool search; experimental code mode exposes MCP tools via one `execute` sandbox tool. 2.0.31 (✅): Equivalent to deferred tool loading: full MCP schemas are not sent per request; catalog listings are selected under a token budget. — _Evidence:_ V2D/tools (Execute); V2C/codemode/catalog.ts:60-130
@@ -3130,7 +3130,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-13</b> Act as an MCP server (expose self)</summary>
 
 - **candy-code** ❌ — README and MCP.md overclaim a server mode (ISSUES). — _Evidence:_ `src/MCP/GitMcpServer.php`; `docs/MCP.md:619-627`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — Usable from Claude Desktop and other clients. — _Evidence:_ help (`mcp serve`); cc:mcp#use-claude-code-as-an-mcp-server
 - **OpenCode 1.18.35** ❌ — The TUI is an MCP **client** to IDEs for selection context only. — _Evidence:_ DOCS/acp, DOCS/server; TUI/context/editor.ts
 - **OpenCode 2.0.31** ❌ — The TUI is an MCP **client** to IDEs for selection context only. — _Evidence:_ DOCS/acp, DOCS/server; TUI/context/editor.ts
@@ -3140,7 +3140,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-14</b> MCP output limits / truncation</summary>
 
 - **candy-code** 🟡 — The embedded `resource.text` is discarded. — _Evidence:_ `src/Tools/McpToolBridge.php:696`; `src/Tools/ToolLimits.php:266`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/stores/session.ts:187-201`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/stores/session.ts:187-201`
 - **Claude Code 2.1.301** ✅ — Error text trimmed to first/last 5K chars; images still bounded by the token limit. — _Evidence:_ cc:mcp#mcp-output-limits-and-warnings
 - **OpenCode 1.18.35** ✅ — `truncate.output()` is applied in SessionTools for MCP tools. `experimental.mcp_timeout` sets the request timeout. — _Evidence:_ OC/session/tools.ts:196-206,279-289; CORE/v1/config/config.ts:182-184
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): MCP results pass through the same 2000-line/50 KB truncation-to-file; resource blobs capped at 10 MB. 2.0.31 (✅): Per-server timeouts startup/catalog/execution (12 h default execution); large outputs shortened to managed file — _Evidence:_ V2D/mcp-servers (Timeouts); V2D/tools
@@ -3150,7 +3150,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-15</b> Import MCP config from other tools (Claude Desktop etc.)</summary>
 
 - **candy-code** 🟡 — It covers Claude Desktop and the top level of ~/.claude.json, but not per-project entries. — _Evidence:_ `src/Cli/Subcommands.php:1321`; `src/MCP/McpForeignTranslate.php`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Can also parse setup instructions written for other clients. — _Evidence:_ help (`mcp add-from-claude-desktop`, `add-json`, `import`); cc:mcp#add-a-server-from-setup-instructions-written-for-another-client
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ CLI: `opencode mcp add --help`
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ CLI: `opencode mcp add --help`
@@ -3160,7 +3160,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>MCP-N1</b> 🆕 MCP server trust pinning (config fingerprints; re-prompt when a server definition changes)</summary>
 
 - **candy-code** ✅ — A server is pinned on first use; a changed entry is refused until re-approved. — _Evidence:_ `src/MCP/McpTrustPins.php`; `src/Cli/Bootstrap.php:8459`
-- **sugar-crush-web** 🟡 — Pins are checked when the workspace (or a workspace host) starts project MCP. Trust grants cannot be written with `settings.set`, so a browser user can neither see the refused server in any panel nor re-approve it. — _Evidence:_ `src/Cli/Bootstrap.php:8098-8099`, `:8435-8440`; `src/MCP/McpTrustPins.php:7-50`; `docs/SERVER.md:86-91`
+- **candy-code-web** 🟡 — Pins are checked when the workspace (or a workspace host) starts project MCP. Trust grants cannot be written with `settings.set`, so a browser user can neither see the refused server in any panel nor re-approve it. — _Evidence:_ `src/Cli/Bootstrap.php:8098-8099`, `:8435-8440`; `src/MCP/McpTrustPins.php:7-50`; `docs/SERVER.md:86-91`
 - **Claude Code 2.1.301** 🟡 — Approvals in `enabledMcpjsonServers`/`disabledMcpjsonServers`; `claude mcp reset-project-choices`; repo can't self-approve; headersHelper waits for trust. — _Evidence:_ cc:mcp#project-server-approvals-and-workspace-trust; help (`mcp reset-project-choices`)
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/mcp/index.ts
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2D/mcp-servers (Config)
@@ -3173,7 +3173,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-01</b> Read file</summary>
 
 - **candy-code** ✅ — Returns `N: text` lines plus a footer naming the next offset; a long file read without offset/limit also gets an LSP or regex outline (at most 200 rows / 8 KiB); a single overlong line is clipped and marked. Refuses non-regular files (FIFOs, devices). Jailed via `PathJail::resolve` (realpath, NUL refused, root itself allowed) with one read-only exception for spilled tool-output files. Records mtime/size/inode/xxh128 into the shared ReadLedger. Surfaces nested CLAUDE.md/AGENTS.md and scoped skill/rule nudges the first time a directory is touched. Limits rebind per turn (`readMaxBytes`, `readPageLines`, `readPageBytes`). Read class, so it runs unasked in every mode. Gaps: no image/PDF/notebook support (binary files come back as U+FFFD-scrubbed mojibake), and every call scans and hashes the whole file whatever its size. — _Evidence:_ `src/Tools/BuiltIn/Read.php:27,41,49,57,72,341-372,382,647-788`; `src/Tools/PathJail.php:94-138`; `src/Runtime.php:3480` (UTF-8 scrub)
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue`
 - **Claude Code 2.1.301** ✅ — Absolute paths; empty-file and past-EOF notices; refuses directories; `cat`/`head`/`sed -n`/`rg` on one file also count as reads. — _Evidence:_ cc:tools-reference#read-tool-behavior
 - **OpenCode 1.18.35** ✅ — Rejects binary. `*.env` asks by default. Triggers nested AGENTS.md. — _Evidence:_ OC/tool/read.ts; OC/tool/read.txt
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): read: files, directories (listing), images, PDFs; offset/limit paging. 2.0.31 (✅): read: files, non-recursive dir listings, images/PDF ≤20 MiB; listings also trigger nested AGENTS.md — _Evidence:_ V2D/tools (Read); V2C/tool/plugin/read.ts
@@ -3183,7 +3183,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-02</b> Write file</summary>
 
 - **candy-code** ✅ — `resolveForCreate` anchors containment at the nearest existing ancestor, normalises `..` lexically first and refuses dangling symlinks. An existing file needs `overwrite: true`. `AtomicFileWriter::replace` writes temp+fsync+rename, keeps mode/uid/gid and writes hard-linked files in place. ReadLedger stale check runs if the file was read before. The result carries a unified diff of the overwrite (diff bound applies). — _Evidence:_ `src/Tools/BuiltIn/Write.php:49,146,197-208,233-279,286,299`; `src/Tools/PathJail.php:181-254`; `src/Support/AtomicFileWriter.php:184-220`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/DiffView.vue`; `e2e/session.spec.ts:27`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/DiffView.vue`; `e2e/session.spec.ts:27`
 - **Claude Code 2.1.301** ✅ — Refuses writing through symlinks; won't write back U+FFFD garbled text. — _Evidence:_ cc:tools-reference#write-tool-behavior
 - **OpenCode 1.18.35** ✅ — Gated by the `edit` permission; the diff is shown in the ask dialog. — _Evidence:_ OC/tool/write.ts:18,74-90; DOCS/tools (write)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): write: create/overwrite; formatter + LSP errors for the file and up to 5 others. 2.0.31 (✅): write creates/replaces files, may format; no LSP diagnostics — _Evidence:_ V2D/tools (Write); V2C/tool/plugin/write.ts:44
@@ -3193,7 +3193,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-03</b> Edit (exact string replace)</summary>
 
 - **candy-code** ✅ — `old_string` must be unique. `replace_all` applies to exact matches only, and a loose match never applies to more than one place. On failure the error names the matching lines or the closest lines. Output: `File updated: path (+a -r lines)` plus a diff payload for the TUI. Spilled tool-output paths are refused. — _Evidence:_ `src/Tools/BuiltIn/Edit.php:28,38,156-430`; `src/Tools/Edit/EditMatcher.php:71-155`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:55,60-65`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:55,60-65`
 - **Claude Code 2.1.301** ✅ — Read-before-edit (newer models may skip when a read needs no prompt); stale files editable if the match is still exact; UTF-16LE BOM ok, other non-UTF-8 refused. — _Evidence:_ cc:tools-reference#edit-tool-behavior
 - **OpenCode 1.18.35** ✅ — An empty oldString creates a file but refuses existing ones. A disproportionate-match guard refuses huge spans. — _Evidence:_ OC/tool/edit.ts:58-215,682-737
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): edit: oldString/newString/replaceAll with 9-stage fuzzy replacer chain; diff shown in ask dialog. 2.0.31 (✅): edit: exact match, then quote/dash/space-variant and trailing-whitespace retries; CRLF/mixed endings kept — _Evidence:_ V2C/tool/plugin/edit.ts:165-223
@@ -3203,7 +3203,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-04</b> Multi-edit / batch edit</summary>
 
 - **candy-code** ✅ — Each entry in `edits` applies to the text the previous ones produced. One failure writes nothing, and the error says which edit failed and how the line numbers shifted. ApplyPatch covers the multi-file case. — _Evidence:_ `src/Tools/BuiltIn/Edit.php:134-146,173,318-346,438-469`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ❌ — MultiEdit doesn't appear in tools reference or hooks inputs. — _Evidence:_ cc:tools-reference
 - **OpenCode 1.18.35** ❌ — The registry built-ins have no multiedit or batch. The config key is schema-only. — _Evidence:_ OC/tool/registry.ts:209-249; CORE/v1/config/config.ts:172
 - **OpenCode 2.0.31** ❌ — The registry built-ins have no multiedit or batch. The config key is schema-only. — _Evidence:_ OC/tool/registry.ts:209-249; CORE/v1/config/config.ts:172
@@ -3213,7 +3213,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-05</b> Apply patch (unified diff / V4A)</summary>
 
 - **candy-code** ✅ — `@@` anchor lines narrow the search. A hunk is matched by text, exact first and then through the EditMatcher chain. Unified-diff hunk headers are accepted but their line numbers are ignored; it is not a `git apply` of a plain diff. Every path goes through the jail, the read ledger and protect-files. Duplicate targets are refused, and a write failure rolls back every file already changed. — _Evidence:_ `src/Tools/BuiltIn/ApplyPatch.php:59,152-186,194-277,449-557`; `src/Tools/Edit/PatchParser.php:1-40`
-- **sugar-crush-web** ✅ — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** ✅ — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference
 - **OpenCode 1.18.35** 🟡 — Add, update, delete and move. LSP diagnostics per touched file. Paths are relative to the project root. — _Evidence:_ OC/tool/registry.ts:297-300; OC/tool/apply_patch.ts; DOCS/tools (apply_patch)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): apply_patch (Codex *** Begin Patch format) — only offered to gpt-* models, replacing edit/write. 2.0.31 (🟡): `patch` tool (renamed from apply_patch) only for supported GPT models — _Evidence:_ V2D/tools (Patch)
@@ -3223,7 +3223,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-06</b> Glob</summary>
 
 - **candy-code** ✅ — Default prune list plus .gitignore (`include_ignored` lifts it). Symlinked directories are not followed and the result says so. A pattern with a `..` segment is refused, and a second pass drops any match whose realpath is outside the root. Cap is `globMaxMatches`; a truncated list says it is partial. If `fd` is on PATH the description only mentions it. — _Evidence:_ `src/Tools/BuiltIn/Glob.php:25,59,306-313,946-969`
-- **sugar-crush-web** ✅ — —
+- **candy-code-web** ✅ — —
 - **Claude Code 2.1.301** 🟡 — Restored via `--tools`/`--allowedTools`, when Bash is denied, or in subagents listing it without Bash; mtime-sorted, 100-file cap; ignores .gitignore unless `CLAUDE_CODE_GLOB_NO_IGNORE=false`. — _Evidence:_ cc:tools-reference#glob-tool-behavior
 - **OpenCode 1.18.35** ✅ — `.ignore` with `!node_modules/` re-includes ignored paths. — _Evidence:_ DOCS/tools (glob, Internals)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): glob via ripgrep, sorted by mtime, respects .gitignore/.ignore. 2.0.31 (✅): glob with path/hidden/limit (default 100, 30 s timeout) — _Evidence:_ V2D/tools (Glob)
@@ -3233,7 +3233,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-07</b> Grep (ripgrep)</summary>
 
 - **candy-code** 🟡 — Option injection is closed (`-e PATTERN`, `--include=`, `--`, `-r` not `-R`). Never opens .env, .envrc, .env.* or key files. .gitignore rules are applied in post-filtering. There is no case-insensitive, context-lines, count or files-only mode. `rgAvailable` only adds a hint to "run rg via Bash". `runCaptured(... timeout null ...)` plus a heartbeat means a lone Grep is never cut off. — _Evidence:_ `src/Tools/BuiltIn/Grep.php:28,223-227,345-384,821`
-- **sugar-crush-web** ✅ — —
+- **candy-code-web** ✅ — —
 - **Claude Code 2.1.301** 🟡 — Same restore rules as Glob; modes files_with_matches/content/count, glob/type filters, multiline; respects .gitignore. — _Evidence:_ cc:tools-reference#grep-tool-behavior
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ OC/tool/grep.ts; DOCS/tools (grep)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): grep via ripgrep with regex + include filters. 2.0.31 (✅): grep with literal/include/caseSensitive/limit (default 100 lines, 30 s timeout) — _Evidence:_ V2D/tools (Grep)
@@ -3243,7 +3243,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-08</b> List directory</summary>
 
 - **candy-code** 🟡 — `ls`/`tree` are on the read-only auto-allow list in default and accept-edits. `src/StreamingDirectoryLister.php` (a gum ReadDirIter port) has no callers. — _Evidence:_ `src/Permissions/ReadOnlyCommands.php`; `src/StreamingDirectoryLister.php:15`
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** ❌ — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference#read-tool-behavior
 - **OpenCode 1.18.35** 🟡 — The `list` permission is still documented and still in explore's allow list. — _Evidence:_ OC/tool/registry.ts:228-249; OC/tool/read.txt; DOCS/agents (permission table)
 - **OpenCode 2.0.31** 🟡 — The `list` permission is still documented and still in explore's allow list. — _Evidence:_ OC/tool/registry.ts:228-249; OC/tool/read.txt; DOCS/agents (permission table)
@@ -3253,7 +3253,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-09</b> Bash / shell</summary>
 
 - **candy-code** ✅ — Command is `bash -c escapeshellarg(cd-guard + command)`, run as `setsid -w /bin/sh -c ...`. stdout is returned; stderr is appended only on non-zero exit, otherwise replaced by a marker. `interactive: true` gives the program a private pty. An optional bubblewrap wrapper applies. The description tells the model a `cd` does not persist and steers it to Read/Grep/Glob. A `<git_commits>` guidance block (with attribution trailers) is added to the prompt. Timeout bounds rebind per turn. — _Evidence:_ `src/Tools/BuiltIn/Bash.php:45,191-233,297-349,402-511,520-545`; `src/Support/ProcessContainment.php:81-131,207-217,266-276`
-- **sugar-crush-web** ✅ — —
+- **candy-code-web** ✅ — —
 - **Claude Code 2.1.301** ✅ — cwd carries over inside the project; env vars don't; shell aliases/functions snapshotted at start; `CLAUDE_ENV_FILE`. — _Evidence:_ cc:tools-reference#bash-tool-behavior; cc:tools-reference#powershell-tool
 - **OpenCode 1.18.35** ✅ — The description embeds OS, shell, tmp dir and a “# Git and GitHub” policy (commit only when asked, no force-push, use gh). — _Evidence:_ OC/tool/shell/prompt.ts:15-25; OC/tool/shell/shell.txt; OC/tool/shell.ts:378-413
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): bash: command, timeout ms, workdir; tree-sitter parse for per-command permissions; Git/GitHub guidance in desc. 2.0.31 (✅): `shell` tool (bash renamed): command, workdir, timeout (0 disables), background — _Evidence:_ V2C/tool/plugin/shell.ts:44-60; V2D/tools (Shell)
@@ -3263,7 +3263,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-10</b> Background shell + output polling / monitor</summary>
 
 - **candy-code** ❌ — `cmd &` with inherited stdout blocks until the timeout and is then group-killed. With output redirected, the child is orphaned and untracked; a timeout kill also misses it once the shell has exited (verified-by-repro). Background work exists only as Task sub-agents. — _Evidence:_ `src/Tools/Concerns/CapturesProcessOutput.php:225-281,350-365`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ✅ — Output to a file Claude reads; `/tasks` + `TaskStop`; bg time limits only in unattended runs (30 min default, 2 h max); Monitor watches 5–30 min, not on Bedrock/Vertex/Foundry or with telemetry off. — _Evidence:_ cc:interactive-mode#background-bash-commands; cc:tools-reference#monitor-tool
 - **OpenCode 1.18.35** 🔌 — opencode-pty: spawn, send input, read with regex filters, exit notifications, web UI. — _Evidence:_ opencode-pty README (global npm 0.3.6); OC/tool/shell/prompt.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🔌): Native bash is synchronous only; background processes via 🔌 opencode-pty (installed here). 2.0.31 (✅): Native background shell: returns immediately, streams output to a managed file, notifies on completion — _Evidence:_ V2C/tool/plugin/shell.ts:96-98,201-266
@@ -3273,7 +3273,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-11</b> Todo / task-list tool</summary>
 
 - **candy-code** ✅ — No-ask class, so it runs in every mode including plan and dont-ask. `TodoReminder` feeds nudges. — _Evidence:_ `src/Tools/BuiltIn/Todo.php:37-48`; `src/Todo/TodoReminder.php`
-- **sugar-crush-web** ✅ — e2e "the todo panel follows the agent's Todo tool live". — _Evidence:_ `src-web/stores/agents/todos.ts`; `e2e/panels.spec.ts:9`
+- **candy-code-web** ✅ — e2e "the todo panel follows the agent's Todo tool live". — _Evidence:_ `src-web/stores/agents/todos.ts`; `e2e/panels.spec.ts:9`
 - **Claude Code 2.1.301** 🟡 — Newer models get no task tools unless `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` or named in `--tools`/`--allowedTools`; always on in background/cloud sessions; `CLAUDE_CODE_TASK_LIST_ID` shares lists. — _Evidence:_ cc:tools-reference#task-tool-availability; cc:interactive-mode#task-list
 - **OpenCode 1.18.35** ✅ — Shown in the sidebar todo panel. `todo.updated` event. There is no separate todoread tool in the 1.18.35 registry. — _Evidence:_ OC/tool/todo.ts; OC/agent/subagent-permissions.ts:18-26; TUI/feature-plugins/sidebar/todo.tsx
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): todowrite (full-list replace, pending/in_progress/completed/cancelled, priority); denied to subagents by default. 2.0.31 (❌): No todo tool plugin in V2C/tool/plugin; 2.0.28 removed a stale `todowrite` label. V1 had todowrite + sidebar todo panel. — _Evidence:_ V2C/tool/plugin/ (no todo); V2CL v2.0.28
@@ -3283,7 +3283,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-12</b> Web fetch</summary>
 
 - **candy-code** 🟡 — Resolves once and pins the dial address. Blocks loopback, RFC1918, CGNAT/Tailscale, link-local/metadata, NAT64, 6to4, Teredo, ULA and multicast. Host header and SNI are kept. Ask class: asks in default/accept-edits/plan, denied in dont-ask. Rules support `WebFetch(domain:host)`. The description marks content as untrusted. Pages come back as raw HTML, which wastes context. — _Evidence:_ `src/Tools/BuiltIn/WebFetch.php:74,79-160,244-265,552-647,828-900`
-- **sugar-crush-web** ✅ — —
+- **candy-code-web** ✅ — —
 - **Claude Code 2.1.301** ✅ — Refuses localhost/dotless hosts; no cross-host redirect following; domain allow rules; preapproved docs domains; `CLAUDE_CODE_DISABLE_WEB_FETCH`. — _Evidence:_ cc:tools-reference#webfetch-tool-behavior
 - **OpenCode 1.18.35** ✅ — Permission patterns match the URL. — _Evidence:_ OC/tool/webfetch.ts:14-21
 - **OpenCode 2.0.31** ✅ — Permission patterns match the URL. — _Evidence:_ OC/tool/webfetch.ts:14-21
@@ -3293,7 +3293,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-13</b> Web search</summary>
 
 - **candy-code** 🟡 — Endpoint comes from `CANDY_CODE_SEARCH_ENDPOINT` or `webSearchEndpoint`. Ask class. A `/websearch` command also exists. — _Evidence:_ `src/Tools/BuiltIn/WebSearch.php:29,46,49,164`; `src/Tools/ToolLimits.php:87`
-- **sugar-crush-web** ✅ — — — _Evidence:_ live `command.list`
+- **candy-code-web** ✅ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Not on Bedrock; on Agent Platform only newer models; backend not configurable (use MCP for others). — _Evidence:_ cc:tools-reference#websearch-tool-behavior
 - **OpenCode 1.18.35** 🟡 — Parameters: query, numResults (8), type auto/fast/deep, context chars. Uses `https://mcp.exa.ai/mcp` (EXA_API_KEY optional) or `search.parallel.ai/mcp`. — _Evidence:_ OC/tool/registry.ts:58-65,294; OC/tool/websearch.ts:11-34; OC/tool/mcp-websearch.ts:5-7
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): websearch (Exa/Parallel hosted MCP, no key) only on OpenCode/Go providers or with OPENCODE_ENABLE_EXA/PARALLEL. 2.0.31 (✅): websearch with Exa, Firecrawl, Parallel, Tavily, TinyFish (key or /connect); provider chosen on first use — _Evidence:_ V2D/websearch
@@ -3303,7 +3303,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-14</b> External code search (e.g. Exa)</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `src/Tools/BuiltIn/` listing
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** ❌ — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** 🔌 — — — _Evidence:_ local: claude-plugins-official catalog
 - **OpenCode 1.18.35** 🟡 — Both configs here add context7, exa and gh_grep remote MCPs. — _Evidence:_ DOCS/mcp-servers (Context7, Grep by Vercel); LOCAL: opencode.jsonc `mcp`
 - **OpenCode 2.0.31** 🟡 — Both configs here add context7, exa and gh_grep remote MCPs. — _Evidence:_ DOCS/mcp-servers (Context7, Grep by Vercel); LOCAL: opencode.jsonc `mcp`
@@ -3313,7 +3313,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-15</b> Notebook (Jupyter) edit</summary>
 
 - **candy-code** ❌ — No ipynb handling anywhere in src. — _Evidence:_ grep `ipynb` = 0 hits
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** ❌ — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ✅ — UTF-8 only; `Edit(...)` permission paths; IDE `executeCode` runs cells (asks). — _Evidence:_ cc:tools-reference#notebookedit-tool-behavior
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/tool/ (no notebook tool)
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ OC/tool/ (no notebook tool)
@@ -3323,7 +3323,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-16</b> LSP tool (definition, references, hover)</summary>
 
 - **candy-code** ✅ — Lines and columns are zero-indexed, and the description says so. With no server configured every call returns an error (never an empty result). The tool is offered on every launch either way. — _Evidence:_ `src/Tools/BuiltIn/LspTool.php:59,140-176`; `src/LSP/LspLauncher.php:9-62`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** 🔌 — Official LSP plugins: typescript-lsp, pyright-lsp, php-lsp, gopls-lsp, rust-analyzer-lsp, clangd-lsp, jdtls-lsp, kotlin-lsp, csharp-lsp, swift-lsp, ruby-lsp, lua-lsp, liquid-lsp; you install the server binary; not started in cloud sessions. — _Evidence:_ cc:tools-reference#lsp-tool-behavior; cc:plugins/code-intelligence
 - **OpenCode 1.18.35** 🟡 — Also needs `lsp` enabled in config. — _Evidence:_ OC/tool/registry.ts:247; DOCS/tools (lsp experimental)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🟡): Experimental lsp tool (OPENCODE_EXPERIMENTAL_LSP_TOOL): definition, references, hover, symbols, call hierarchy. 2.0.31 (❌): No LSP tool: v2 has no LSP runtime (`lsp` config accepted but inert) — _Evidence:_ V2D/migrate-v1 (Supported fields: lsp); V2C/tool/plugin/edit.ts:205
@@ -3333,7 +3333,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-17</b> Ask-user structured question tool</summary>
 
 - **candy-code** ✅ — Keys: y = first choice, 1-6 = pick, r = own words, n = decline. With no user (`-p`, dont-ask) the model is told to decide and state its assumption. Withheld from sub-agents. Over serve it becomes `permission.requested`. — _Evidence:_ `src/Tools/BuiltIn/AskUserTool.php:64,71,95-107`; `docs/PERMISSIONS.md` (AskUser/PlanExit)
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/PermissionCard.vue:12-34`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/PermissionCard.vue:12-34`
 - **Claude Code 2.1.301** ✅ — Never auto-continues in background, screen-reader or Remote Control sessions; removed from subagents. — _Evidence:_ cc:tools-reference#askuserquestion-tool-behavior
 - **OpenCode 1.18.35** ✅ — Defaults to deny for other agents. Rejection stops the loop. Child-session questions surface in the parent view. — _Evidence:_ OC/tool/registry.ts:207; OC/agent/agent.ts:119-160; TUI/routes/session/question.tsx
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): question tool: header, options, multi-select, custom answer; enabled for TUI/desktop/app clients (build & plan). 2.0.31 (✅): question tool (header, prompt, choices, multiple, free-form); dismiss cancels — _Evidence:_ V2D/tools (Question)
@@ -3343,7 +3343,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-18</b> Plan-mode exit / plan tool</summary>
 
 - **candy-code** ✅ — Refuses outside plan mode or when nobody can answer. Plan mode returns to the mode it was entered from. Alt+M also leaves plan mode. — _Evidence:_ `src/Tools/BuiltIn/PlanExitTool.php:62,97-110`; `src/Permissions/PermissionGate.php:187,1031-1073`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/PermissionCard.vue:53-56`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/PermissionCard.vue:53-56`
 - **Claude Code 2.1.301** ✅ — ExitPlanMode removed from subagents unless their mode is plan; plan re-injected after compaction. — _Evidence:_ cc:tools-reference; cc:permission-modes#analyze-before-you-edit-with-plan-mode
 - **OpenCode 1.18.35** 🟡 — The experimental flow writes a plan file then calls plan_exit to switch to build. The classic flow has the user press Tab. — _Evidence:_ OC/tool/registry.ts:248; OC/tool/plan.ts; OC/session/reminders.ts:51-89
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🟡): plan_exit tool only with OPENCODE_EXPERIMENTAL_PLAN_MODE in CLI; default plan mode is just the plan agent. 2.0.31 (❌): No plan-exit tool; plan mode ends only when the user switches agent — _Evidence:_ V2C/plugin/plan.ts:5-18
@@ -3353,7 +3353,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-19</b> Image / screenshot read</summary>
 
 - **candy-code** 🟡 — `FileMentions::sniffImage` recognises PNG/JPEG/GIF/WebP. Read returns raw bytes. — _Evidence:_ `src/Attachments/FileMentions.php:37-54,232-240`; `src/Tools/BuiltIn/Read.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/MediaCard.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/MediaCard.vue`
 - **Claude Code 2.1.301** ✅ — Resized to model limits. — _Evidence:_ cc:tools-reference#read-tool-behavior
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ OC/tool/read.ts:19,304-306
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ OC/tool/read.ts:19,304-306
@@ -3363,7 +3363,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-20</b> PDF read</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `src/Tools/BuiltIn/Read.php`
-- **sugar-crush-web** ❓ — —
+- **candy-code-web** ❓ — —
 - **Claude Code 2.1.301** ✅ — Needs poppler for range reads. — _Evidence:_ cc:tools-reference#read-tool-behavior
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ OC/tool/read.ts:306
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ OC/tool/read.ts:306
@@ -3373,7 +3373,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-21</b> Browser control</summary>
 
 - **candy-code** ❌ — PtyRun can drive a terminal program only.
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** ❌ — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ✅ — Pauses on logins/CAPTCHAs; tab group per session; not in WSL; 🔌 alternatives playwright, browser-use, chrome-devtools-mcp. — _Evidence:_ cc:chrome; help (`--chrome`)
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ OC/tool/registry.ts (no browser tool); awesome-opencode
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🔌): No browser tool; via MCP (e.g. Playwright) or plugins like oh-my-openagent. 2.0.31 (🟡): Desktop-only `browser` Code Mode namespace drives the desktop app's attached browser (snapshots, clicks, Lighthouse) — _Evidence:_ V2D/tools (Browser)
@@ -3383,7 +3383,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-22</b> Cron / scheduling tool</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `src/Tools/BuiltIn/` listing
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Session crons restored on resume; RemoteTrigger needs claude.ai plan. — _Evidence:_ cc:tools-reference; cc:scheduled-tasks
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ DOCS/ecosystem (opencode-scheduler)
 - **OpenCode 2.0.31** ❓ — 1.18.35 (🔌): No cron tool; 🔌 opencode-scheduler (launchd/systemd). 2.0.31 (❓): No cron tool; opencode-scheduler is V1-API (@opencode-ai/plugin) — v2 support unverified — _Evidence:_ npm view opencode-scheduler dependencies
@@ -3393,7 +3393,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-23</b> Messaging tools (send to a channel / other session)</summary>
 
 - **candy-code** 🟡 — No messaging to channels or other sessions. — _Evidence:_ `src/Tools/BuiltIn/SendMessageTool.php:65`; `TeamTool.php:63`; `BoardPostTool.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ✅ — Channel plugins add reply tools for Telegram/Discord/iMessage. — _Evidence:_ cc:tools-reference; cc:cross-session-messaging; cc:channels
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/tool/
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ OC/tool/
@@ -3403,7 +3403,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-24</b> Canvas / visual output</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Mods can draw panes/bands inside the TUI. — _Evidence:_ cc:artifacts; cc:commands
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/tool/
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ OC/tool/
@@ -3413,7 +3413,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-25</b> Computer use (desktop control)</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — Not on Team/Enterprise; not in `-p`. — _Evidence:_ cc:computer-use; cc:desktop
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/tool/
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ OC/tool/
@@ -3423,7 +3423,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-26</b> Parallel tool calls in one turn</summary>
 
 - **candy-code** ✅ — `parallelToolCalls` (default true) and `parallelToolDeadlineSeconds`. ParallelSafe: Read, Glob, Grep, Lsp, WebFetch, WebSearch, Task, Workflow, MCP bridges, BoardRead. Parallel Task members relay permission asks to the modal. — _Evidence:_ `src/Config/Settings/Definitions/AgentLoopSettings.php:34`; `src/Tools/ParallelSafe.php`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/reducer.ts` (tool.started/finished)
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/reducer.ts` (tool.started/finished)
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:hooks#posttoolbatch
 - **OpenCode 1.18.35** ✅ — Prompts encourage parallel reads (“Call this tool in parallel…”). — _Evidence:_ OC/tool/edit.ts:35-45; OC/tool/read.txt
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Parallel tool calls executed concurrently; per-file semaphore serializes edits. 2.0.31 (✅): Parallel local tool calls start eagerly; Code Mode `execute` can run independent calls in parallel — _Evidence:_ specs/v2/session.md; V2D/tools (Execute)
@@ -3433,7 +3433,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-27</b> Mode-scoped tool sets (read-only tools in plan mode)</summary>
 
 - **candy-code** 🟡 — `turnTools()` filters only the ledger tools. Agent presets narrow `tools`/`disallowedTools`. A trusted project's `disabledTools` can remove tools. — _Evidence:_ `src/Backend/EngineBackend.php:3010-3115`; `docs/PERMISSIONS.md` (plan: "tool list is the same in every mode")
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — `--restricted` removes code-running tools. — _Evidence:_ cc:permission-modes; cc:sub-agents#available-tools; help (`--restricted`)
 - **OpenCode 1.18.35** ✅ — `experimental.primary_tools` restricts tools to primary agents. — _Evidence:_ OC/permission/index.ts:204-219; OC/agent/agent.ts:156-230; CORE/v1/config/config.ts:176-178
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Permission rules scope tools per agent; '*'-deny removes tools from schema (plan, explore, compaction). 2.0.31 (✅): Ordered `permissions` rules; '*' deny removes tools; deny `execute` removes Code Mode — _Evidence:_ V2D/permissions (Actions)
@@ -3443,7 +3443,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-28</b> Image generation / media tools</summary>
 
 - **candy-code** ✅ — Refuses when `sd.baseUrl` is unset. Saved artifacts carry their parameters. Also reachable as `/generate` in the TUI and over serve. — _Evidence:_ `src/Tools/BuiltIn/GenerateImage.php:104,149`; `GenerateVideo.php:87`; `docs/MEDIA.md`
-- **sugar-crush-web** 🟡 — `canGenerateImage`/`canGenerateVideo` are computed from `server.hello` but no component reads them. — _Evidence:_ `src-web/stores/connection.ts:76-78`; `e2e/media.spec.ts`
+- **candy-code-web** 🟡 — `canGenerateImage`/`canGenerateVideo` are computed from `server.hello` but no component reads them. — _Evidence:_ `src-web/stores/connection.ts:76-78`; `e2e/media.spec.ts`
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ awesome-opencode (GPT Imagegen)
 - **OpenCode 2.0.31** ❓ — 1.18.35 (🔌): No media generation; 🔌 opencode-gpt-imagegen. 2.0.31 (❓): No media generation; opencode-gpt-imagegen is V1-API — v2 support unverified — _Evidence:_ npm view opencode-gpt-imagegen dependencies
@@ -3453,7 +3453,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-N1</b> 🆕 Scripted PTY driver tool (run interactive programs on a pty and replay keystrokes)</summary>
 
 - **candy-code** ✅ — Up to 64 steps, named keys (`<Enter>`, `<C-x>`), `\xHH` escapes, substring or `/regex/` expects, cols/rows, 64 KiB default capture (the model can raise it to 1 MiB), transcript or final-screen output, TERM-then-KILL reaping. Unique among the five products, but the steps escape every safety layer (see ISSUES P0/P1). — _Evidence:_ `src/Tools/BuiltIn/PtyRun.php:45-170,334-374,382-463`; `src/Support/PtyDriver.php`
-- **sugar-crush-web** ✅ — The tool is in the served roster (`server.info`). Its permission card shows the raw JSON arguments, steps included. The unseen-keystrokes P0 from a4 applies equally. — _Evidence:_ `src/Tools/BuiltIn/PtyRun.php`; `sugar-crush-web/src-web/components/ToolCard.vue`; `sugar-crush-web/src-web/components/PermissionCard.vue:53-56`
+- **candy-code-web** ✅ — The tool is in the served roster (`server.info`). Its permission card shows the raw JSON arguments, steps included. The unseen-keystrokes P0 from a4 applies equally. — _Evidence:_ `src/Tools/BuiltIn/PtyRun.php`; `candy-code-web/src-web/components/ToolCard.vue`; `candy-code-web/src-web/components/PermissionCard.vue:53-56`
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference#bash-tool-behavior
 - **OpenCode 1.18.35** 🔌 — Native bash is non-PTY. opencode-pty 0.4.0 depends on @opencode-ai/plugin (V1). — _Evidence:_ opencode-pty README; npm view opencode-pty dependencies
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2C/persistent-pty/; npm view opencode-pty dependencies
@@ -3463,7 +3463,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-N2</b> 🆕 Tool-loop / doom-loop detection (identical repeated tool calls detected and interrupted)</summary>
 
 - **candy-code** ✅ — ToolCallLoopGuard keeps one ledger per turn, keyed by tool name + canonicalised arguments (map keys sorted recursively) + an xxh128 hash of the result. A poll whose output changes therefore never counts, and counting is per signature across the turn, so an A/B ping-pong is caught. It runs on the hook chain. RepeatCallCountHook (PostToolUse) appends "[Repeat-call loop guard: identical call #n …]" to the result from the 3rd call. RepeatCallGuardHook (PreToolUse) refuses from the 5th, and refused attempts keep counting. EngineBackend ends the turn at the 8th and asks for a no-tools summary that must say the turn was stopped; the TUI also adds the `chat.turn.loop_guard` notice. It is registered every turn, even when hooks are disabled, and sub-agents get it too. Limits: five identical calls in ONE message are all admitted (batch gating), and the thresholds cannot be configured. — _Evidence:_ `src/Backend/ToolCallLoopGuard.php:7-61`, `:93-160`; `src/Backend/EngineBackend.php:1525`, `:2495-2506`, `:5382-5383`; `src/Chat.php:2427-2429`, `:19721-19727`; `README.md:2066`
-- **sugar-crush-web** ✅ — The hooks are registered per turn inside EngineBackend, the path every served turn takes. The appended warning text and the refusal reason render in the cards. — _Evidence:_ `src/Backend/EngineBackend.php:5382-5383`; `src/Host/TranscriptProjector.php:446-455`
+- **candy-code-web** ✅ — The hooks are registered per turn inside EngineBackend, the path every served turn takes. The appended warning text and the refusal reason render in the cards. — _Evidence:_ `src/Backend/EngineBackend.php:5382-5383`; `src/Host/TranscriptProjector.php:446-455`
 - **Claude Code 2.1.301** ❌ — Workflow schema retries stop after 5; auto mode pauses after 3 consecutive / 20 total classifier blocks. — _Evidence:_ cc:how-claude-code-works#when-context-fills-up; cc:hooks#stop-decision-control; cc:permission-modes#when-auto-mode-falls-back
 - **OpenCode 1.18.35** ✅ — DOOM_LOOP_THRESHOLD=3. Defaults to ask. This host sets `doom_loop: allow` everywhere. — _Evidence:_ OC/session/processor.ts:29,356-373; DOCS/permissions (Available Permissions)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): [NEW: Doom-loop guard] same tool call repeated 3× with identical input triggers a `doom_loop` permission ask. 2.0.31 (❌): [NEW: Doom-loop guard] removed — `doom_loop` is not a v2 permission action — _Evidence:_ V2D/permissions (Actions note)
@@ -3473,7 +3473,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>TL-N3</b> 🆕 Code-mode execution tool (a sandboxed script tool that calls other tools / MCP namespaces and combines results)</summary>
 
 - **candy-code** ❌ — The 30 built-in tools include no sandbox that runs a script able to call other agent tools or MCP namespaces and combine their results in one step. `Workflow` composes whole sub-agent stages declaratively (`{{stage.output}}` interpolation), and every stage is its own agentic run, so it does not save round trips the way code mode does. Bash runs real scripts but cannot reach the agent's tools or MCP servers. Batched parallel tool calls in one message are the only round-trip saver. — _Evidence:_ `src/Tools/BuiltIn/WorkflowTool.php:59`; `src/Tools/BuiltIn/Bash.php:45`; `src/Tools/BuiltIn/` (roster)
-- **sugar-crush-web** ❌ — As SC. The Workflows panel can start, list, pause and resume workflow runs. — _Evidence:_ `src/Tools/BuiltIn/WorkflowTool.php:59`; `sugar-crush-web/src-web/components/panels/WorkflowPanel.vue`
+- **candy-code-web** ❌ — As SC. The Workflows panel can start, list, pause and resume workflow runs. — _Evidence:_ `src/Tools/BuiltIn/WorkflowTool.php:59`; `candy-code-web/src-web/components/panels/WorkflowPanel.vue`
 - **Claude Code 2.1.301** 🟡 — Workflows (`agent()`, `parallel()`, `pipeline()`, schema-validated outputs) execute in a background runtime and return one consolidated result, but each step is an LLM subagent, not a direct tool/MCP function call; mods can register custom tools in JS. — _Evidence:_ cc:workflows; cc:tools-reference (Workflow); cc:plugins/mods/api#add-a-tool
 - **OpenCode 1.18.35** 🟡 — MCP tools only. Off by default. — _Evidence:_ OC/tool/code-mode.ts:12-20,188-240; OC/tool/registry.ts:118-119
 - **OpenCode 2.0.31** ✅ — Not present in 1.18.35. Default home of MCP tools plus `opencode.*` utilities (session_rename/move, worktree_*, models) and desktop `browser.*`. — _Evidence:_ V2D/tools (Execute, Sessions, Worktrees, Browser)
@@ -3486,7 +3486,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-01</b> Edit fuzzy / whitespace-tolerant matching</summary>
 
 - **candy-code** ✅ — Disproportionately large or small loose matches are refused. new_string is re-indented to the shift, CRLF is kept by the fuzzy stages, and the result names the stage that matched. Failure hints list the closest lines. ApplyPatch uses the same chain. — _Evidence:_ `src/Tools/Edit/EditMatcher.php:43-213`; `src/Tools/Edit/IndentShift.php:50-53`; `src/Tools/Edit/*Matcher.php`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ❌ — One whitespace difference misses; Claude retries with more context. — _Evidence:_ cc:tools-reference#edit-tool-behavior
 - **OpenCode 1.18.35** ✅ — Block-anchor: ≥3 lines, trimmed first and last lines as anchors, similarity threshold 0.65. A candidate must be unique unless replaceAll. Refuses if the matched span is ≥2× the lines or >4× the chars of oldString. — _Evidence:_ OC/tool/edit.ts:217-701
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): Replacers: exact, line-trimmed, block-anchor (Levenshtein), whitespace, indentation, escape, boundary, context, multi. 2.0.31 (🟡): Only typographic-variant and trailing-whitespace fallbacks (v1 had a 9-stage replacer chain) — _Evidence:_ V2C/tool/plugin/edit.ts:223
@@ -3496,7 +3496,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-02</b> Read-before-write enforcement / stale-file detection</summary>
 
 - **candy-code** 🟡 — ReadLedger records the hash of the bytes Read saw and of what Edit/Write/Patch wrote. A later write of a file whose bytes changed is refused with "Read it again" (a plain `touch` does not count). At most 256 entries, merged across parallel and turn forks. A file never read is never refused. — _Evidence:_ `src/Tools/ReadLedger.php:12-70,203-220`; `Edit.php:295-302`; `Write.php:273-279`; `ApplyPatch.php:245`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/ToolCard.vue:60`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/ToolCard.vue:60`
 - **Claude Code 2.1.301** ✅ — File-changed system-reminder when a read file changes; symlink write refusal. — _Evidence:_ cc:tools-reference#edit-tool-behavior; cc:prompt-caching#editing-files-in-your-repository
 - **OpenCode 1.18.35** ❌ — edit.txt line 4: “This tool will error if you attempt an edit without reading the file.” No such check exists in edit.ts, write.ts or apply_patch.ts at the tag; only the external-directory assertion. — _Evidence:_ OC/tool/edit.txt:4; OC/tool/edit.ts (no FileTime/mtime check)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (❌): No read-before-edit or stale-file check despite edit.txt claiming one; only a per-file semaphore. 2.0.31 (❌): Still no read-before-edit/stale check; the false claim was removed from the edit description — _Evidence:_ V2C/tool/plugin/edit.ts:223
@@ -3506,7 +3506,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-03</b> Diff preview before applying (approval)</summary>
 
 - **candy-code** 🟡 — `permissionSubjectLines` hands non-shell calls to `Message::describeToolCall`, which clips every argument at 80 chars (verified-by-repro: a Write's content and a long WebFetch URL are both clipped). After the write, the tool row renders the diff (`diffPreviewRows`), and `/diff` exists. — _Evidence:_ `src/Renderer.php:6613-6648,5160-5175`; `src/Message.php:367,383-414`
-- **sugar-crush-web** 🟡 — A Write/Edit ask in the TUI-style flow is approved from JSON. — _Evidence:_ `src-web/components/PermissionCard.vue:53-56`
+- **candy-code-web** 🟡 — A Write/Edit ask in the TUI-style flow is approved from JSON. — _Evidence:_ `src-web/components/PermissionCard.vue:53-56`
 - **Claude Code 2.1.301** ✅ — acceptEdits/auto skip the prompt; for file edits "Yes, and don't ask again" lasts until session end. — _Evidence:_ cc:permissions#permission-system; cc:vs-code
 - **OpenCode 1.18.35** ✅ — The diff is passed in permission metadata and rendered with theme colors and line numbers. ctrl+f expands to fullscreen. — _Evidence:_ TUI/routes/session/permission.tsx:33-83; OC/tool/edit.ts
 - **OpenCode 2.0.31** ✅ — The diff is passed in permission metadata and rendered with theme colors and line numbers. ctrl+f expands to fullscreen. — _Evidence:_ TUI/routes/session/permission.tsx:33-83; OC/tool/edit.ts
@@ -3516,7 +3516,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-04</b> Auto-format after edit</summary>
 
 - **candy-code** ❌ — No formatter setting or hook. Formatting changes made outside the agent show up as stale-file refusals. — _Evidence:_ `src/Hooks/BuiltIn/` listing
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:hooks-guide#auto-format-code-after-edits
 - **OpenCode 1.18.35** ✅ — prettier, biome, ruff, gofmt, rustfmt, pint (PHP) and others. Custom formatter commands use `$FILE`. — _Evidence:_ DOCS/formatters; OC/format/index.ts:120-140; OC/tool/edit.ts:112,156
 - **OpenCode 2.0.31** ✅ — prettier, biome, ruff, gofmt, rustfmt, pint (PHP) and others. Custom formatter commands use `$FILE`. — _Evidence:_ DOCS/formatters; OC/format/index.ts:120-140; OC/tool/edit.ts:112,156
@@ -3526,7 +3526,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-05</b> Lint feedback loop after edit</summary>
 
 - **candy-code** ✅ — Runs on PostToolUse for Write/Edit/ApplyPatch through the bounded spawn path, 30 s per lint, and never refuses the call. A quoted `{file}` placeholder makes it injectable (ISSUES P2). — _Evidence:_ `src/Cli/Bootstrap.php:5920-5928`; `src/Lint/LintRunner.php:45-92,166-200`; `src/Hooks/BuiltIn/PostEditLintHook.php:66`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:hooks#exit-code-2; cc:plugins/code-intelligence
 - **OpenCode 1.18.35** 🟡 — Docs recommend putting lint commands in AGENTS.md instead. — _Evidence:_ DOCS/lsp (Best Practices)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🟡): No lint-command loop; lint feedback only via LSP servers like eslint/oxlint when LSP is enabled. 2.0.31 (❌): No LSP → no lint feedback; docs say run lint/typecheck commands instead — _Evidence:_ V2D/migrate-v1 (lsp)
@@ -3536,7 +3536,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-06</b> LSP diagnostics after edit fed back to the model</summary>
 
 - **candy-code** ✅ — Uses the same memoised servers as the Lsp tool. Only registered when `lsp` is configured. — _Evidence:_ `src/Hooks/BuiltIn/PostEditDiagnosticsHook.php:50,53,79,162`; `src/Cli/Bootstrap.php:5936-5939`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🔌 — IDE alternative: `mcp__ide__getDiagnostics` via `/ide`. — _Evidence:_ cc:tools-reference#lsp-tool-behavior; cc:vs-code#the-built-in-ide-mcp-server
 - **OpenCode 1.18.35** ✅ — touchFile → wait for publishDiagnostics (150 ms debounce, 5 s doc timeout) → “LSP errors detected in this file, please fix: <diagnostics>”. LSP is **disabled by default**; this host sets `lsp: true`. — _Evidence:_ OC/tool/edit.ts:197-200; OC/lsp/lsp.ts:151; DOCS/lsp
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): With `lsp` enabled: waits for fresh diagnostics, appends ≤20 ERRORs per file to edit/write/patch results. 2.0.31 (❌): No LSP diagnostics after edits (TODO comments in edit/write) — _Evidence:_ V2C/tool/plugin/edit.ts:205; V2C/tool/plugin/write.ts:44; V2C/file-mutation.ts:131
@@ -3546,7 +3546,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-07</b> LSP server auto-detect / auto-install</summary>
 
 - **candy-code** ❌ — Up to 8 servers, a 2 s handshake each, started once per launch and shut down at exit. Problems are reported in the transcript. — _Evidence:_ `src/LSP/LspLauncher.php:9-62`; `src/Cli/Bootstrap.php:8839-8863`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — Servers start lazily on first matching edit; restartOnCrash. — _Evidence:_ cc:plugins/code-intelligence#accept-or-dismiss-the-recommendation-dialog
 - **OpenCode 1.18.35** ✅ — Includes PHP Intelephense, auto-installed for PHP projects. Custom servers via `lsp.<name>.command`. — _Evidence:_ DOCS/lsp (Built-in table)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): 35+ LSP servers auto-detected by extension/markers, many auto-installed (OPENCODE_DISABLE_LSP_DOWNLOAD). 2.0.31 (❌): No LSP servers are started in v2 — _Evidence:_ V2D/migrate-v1 (lsp)
@@ -3556,7 +3556,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-08</b> Repo map / symbol index</summary>
 
 - **candy-code** ✅ — Cache lives under `~/.candy-code/cache/repomap/`. ctags runs with absolute paths and `--options=NONE`. `repoMap.enabled` adds a prompt block. — _Evidence:_ `src/Tools/BuiltIn/RepoMapTool.php:54`; `src/RepoMap/CtagsSymbolExtractor.php:411-427`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `server.info` tools
+- **candy-code-web** 🟡 — — — _Evidence:_ live `server.info` tools
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference; local: catalog (serena)
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ DOCS/server (Files); DOCS/tools (lsp)
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ DOCS/server (Files); DOCS/tools (lsp)
@@ -3566,7 +3566,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-09</b> External file-change watcher</summary>
 
 - **candy-code** 🟡 — `ReadLedger::notice()` feeds `TurnContextBlock::changedSinceRead` every turn. `AiCommentWatcher` (user-tier, off by default) polls every 2 s while idle, at most 5000 files. — _Evidence:_ `src/Tools/ReadLedger.php:230-283`; `src/Runtime.php:5551`; `src/Backend/EngineBackend.php:1730`; `src/Support/AiCommentWatcher.php:49-75`
-- **sugar-crush-web** ❓ — —
+- **candy-code-web** ❓ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:agent-sdk/modifying-system-prompts; cc:hooks#filechanged
 - **OpenCode 1.18.35** 🟡 — `watcher.ignore` globs. `OPENCODE_EXPERIMENTAL_FILEWATCHER` watches the whole dir; `…DISABLE_FILEWATCHER` turns it off. — _Evidence:_ DOCS/config (Watcher); DOCS/plugins (File Events)
 - **OpenCode 2.0.31** 🟡 — `watcher.ignore` globs. `OPENCODE_EXPERIMENTAL_FILEWATCHER` watches the whole dir; `…DISABLE_FILEWATCHER` turns it off. — _Evidence:_ DOCS/config (Watcher); DOCS/plugins (File Events)
@@ -3576,7 +3576,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-10</b> Line-ending / encoding preservation</summary>
 
 - **candy-code** 🟡 — Verified-by-repro: Edit `old_string:"line two"` with new_string `"line two\nX"` on a CRLF file writes `line two\nX\r\n` (mixed endings). Write and ApplyPatch Add write the model's bytes as given. — _Evidence:_ `src/Tools/Edit/IndentShift.php:50-53`; `src/Tools/Edit/ExactMatcher.php:266-280`; `src/Support/AtomicFileWriter.php:184-220`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:tools-reference#non-utf-8-files
 - **OpenCode 1.18.35** ✅ — Detects and normalizes line endings, then converts back. BOM is split and re-joined. — _Evidence:_ OC/tool/edit.ts:20-33,97-111
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): edit preserves BOM and CRLF/LF line endings. 2.0.31 (✅): Preserves BOM and mixed CRLF/LF endings per edited region — _Evidence:_ V2C/tool/plugin/edit.ts:42,105-185,301-308; V2CL v2.0.28
@@ -3586,7 +3586,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-N1</b> 🆕 Auto-test reflection loop (run tests after edits and feed failures back automatically)</summary>
 
 - **candy-code** ✅ — Both keys are user-tier. The run is beat-aware within the turn's idle ceiling. — _Evidence:_ `src/Hooks/BuiltIn/AutoTestHook.php:64`; `src/Cli/Bootstrap.php:5977-5984`
-- **sugar-crush-web** 🟡 — `Bootstrap::hooks()` registers AutoTestHook for the served workspace. The run is a Stop hook, so the browser sees only the follow-up step a failure triggers, not a card for the test run. `settings.set` refuses Exec-class keys. — _Evidence:_ `src/Cli/Bootstrap.php:1978`, `:5968-5984`; `src/Config/Settings/Definitions/ToolSettings.php:93-108`; `src/Config/Settings/RiskClass.php:46`
+- **candy-code-web** 🟡 — `Bootstrap::hooks()` registers AutoTestHook for the served workspace. The run is a Stop hook, so the browser sees only the follow-up step a failure triggers, not a card for the test run. `settings.set` refuses Exec-class keys. — _Evidence:_ `src/Cli/Bootstrap.php:1978`, `:5968-5984`; `src/Config/Settings/Definitions/ToolSettings.php:93-108`; `src/Config/Settings/RiskClass.php:46`
 - **Claude Code 2.1.301** 🟡 — Exit-2 PostToolUse hooks put stderr in front of Claude immediately; LSP plugins report type errors after edits. — _Evidence:_ cc:hooks#run-tests-after-file-changes; cc:skills#run-and-verify-your-app
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ OC/tool/edit.ts:197-200
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2C/tool/plugin/edit.ts:205
@@ -3596,7 +3596,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>EDT-N2</b> 🆕 AI-comment watch mode (`AI!` / `AI?` comments in saved files trigger the agent)</summary>
 
 - **candy-code** ✅ — Comments already present at startup are ignored. Each fires once. Dispatched through the normal submit path, so hooks and the gate apply. — _Evidence:_ `src/Support/AiCommentWatcher.php:9-75`; `src/Chat.php:18472-18477`
-- **sugar-crush-web** ❌ — The `watchFiles` setting shows in the Settings form, but nothing in SessionHost or the server reads it. — _Evidence:_ `src/Chat.php:18472-18477`; `src/Config/Settings/Definitions/InterfaceSettings.php:100-107`
+- **candy-code-web** ❌ — The `watchFiles` setting shows in the Settings form, but nothing in SessionHost or the server reads it. — _Evidence:_ `src/Chat.php:18472-18477`; `src/Config/Settings/Definitions/InterfaceSettings.php:100-107`
 - **Claude Code 2.1.301** ❌ — `FileChanged` hooks could be scripted to react to file saves, but nothing triggers the agent from code comments. — _Evidence:_ cc:hooks#filechanged
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -3609,7 +3609,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-01</b> PTY-backed execution</summary>
 
 - **candy-code** 🟡 — The interactive mode never accepts input and is killed once its output stops. Unavailable without ext-ffi and `/dev/ptmx`. — _Evidence:_ `src/Tools/Concerns/CapturesProcessOutput.php:379,428-555`; `src/Support/ProcessContainment.php:512-527`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ❌ — No PTY mode is documented; output is captured to a file and read back (5 GB kill, 30K inline); Windows notes confirm a stdin-waiting child gets EOF. — _Evidence:_ cc:tools-reference#bash-tool-behavior; cc:tools-reference#windows-encoding-and-exit-codes
 - **OpenCode 1.18.35** ❌ — `/pty` routes and CORE/pty back the interactive terminal panel, not the bash tool. — _Evidence:_ OC/tool/shell.ts:293-310; CORE/pty/; OC/server/routes/instance/httpapi/groups/pty.ts
 - **OpenCode 2.0.31** ❌ — 1.18.35 (❌): Agent bash runs as plain child processes (no PTY); PTY API exists only for user terminals in web/desktop. 2.0.31 (❌): Agent shell still non-PTY; persistent PTYs back the user /terminal panel (survive restarts) — _Evidence:_ V2C/persistent-pty/; V2T slash /terminal
@@ -3619,7 +3619,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-02</b> Persistent shell session (cwd/env persist between calls)</summary>
 
 - **candy-code** ❌ — Every call starts at the root through a cd guard. — _Evidence:_ `src/Tools/BuiltIn/Bash.php:200-202,428`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR`; `CLAUDE_ENV_FILE` and SessionStart hooks to persist env; subagents never carry cwd. — _Evidence:_ cc:tools-reference#what-persists-between-commands
 - **OpenCode 1.18.35** ❌ — The description says “Use workdir instead of cd”. — _Evidence:_ OC/tool/shell/prompt.ts:19-23; PLUG/index.ts:270-273
 - **OpenCode 2.0.31** ❌ — The description says “Use workdir instead of cd”. — _Evidence:_ OC/tool/shell/prompt.ts:19-23; PLUG/index.ts:270-273
@@ -3629,7 +3629,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-03</b> Timeouts (default / max)</summary>
 
 - **candy-code** ✅ — `bashTimeoutSeconds` / `bashMaxTimeoutSeconds` rebind per turn. On timeout the output so far is kept with a marker. LLM calls are separate and have no total timeout. — _Evidence:_ `src/Tools/BuiltIn/Bash.php:96-104,520-545`; `src/Tools/Concerns/CapturesProcessOutput.php:308-365`; `src/Tools/BuiltIn/PtyRun.php:55-57`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Background commands: unlimited interactively, 30 min/2 h in unattended runs. — _Evidence:_ cc:tools-reference#timeout-and-output-limits
 - **OpenCode 1.18.35** ✅ — On timeout the process is killed and the result says “retry with a larger timeout value”. — _Evidence:_ OC/tool/shell.ts:347,540-565,615-618
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Default 2 min (OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS); model may pass larger timeout; no max cap. 2.0.31 (✅): Foreground default 2 min; `timeout: 0` disables; background has no timeout by default — _Evidence:_ V2C/tool/plugin/shell.ts:44-60,201
@@ -3639,7 +3639,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-04</b> Background processes & kill</summary>
 
 - **candy-code** ❌ — Verified-by-repro: `sleep 61 & echo x` with timeout 3 reports "process group were killed", yet `sleep 61` is still alive afterwards. The group id is read from the leader pid after the leader has been reaped. — _Evidence:_ `src/Tools/Concerns/CapturesProcessOutput.php:272-276,350-365`; `src/Support/ProcessContainment.php:444-457`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/panels/BackgroundPanel.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/panels/BackgroundPanel.vue`
 - **Claude Code 2.1.301** ✅ — Memory-pressure reaping after 30 min idle; 5 GB output kill. — _Evidence:_ cc:interactive-mode#background-bash-commands
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ OC/tool/shell.ts:308,550-554
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): No background jobs natively; abort kills the (detached) process group with 3 s force-kill; 🔌 opencode-pty. 2.0.31 (✅): Native background jobs with completion notification; running commands can be moved to background — _Evidence:_ V2C/tool/plugin/shell.ts:254-266
@@ -3649,7 +3649,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-05</b> Interactive command handling</summary>
 
 - **candy-code** ✅ — sudo/ssh/git credential prompts fail on stderr instead of hanging. — _Evidence:_ `src/Support/ProcessContainment.php:81-99,165-217`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ❌ — Not documented as a feature; Windows docs state a child waiting on stdin gets EOF instead of hanging; Monitor can watch output but not answer prompts. — _Evidence:_ cc:tools-reference#bash-tool-behavior; cc:tools-reference#windows-encoding-and-exit-codes
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ opencode-pty README
 - **OpenCode 2.0.31** ❌ — 1.18.35 (❌): No stdin interaction with running commands (🔌 opencode-pty sends input). 2.0.31 (❌): No stdin interaction with agent commands; opencode-pty is V1-API (user /terminal is interactive) — _Evidence:_ npm view opencode-pty dependencies; V2T slash /terminal
@@ -3659,7 +3659,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-06</b> OS sandbox for shell (bubblewrap / Seatbelt / containers)</summary>
 
 - **candy-code** 🟡 — `--unshare-all --die-with-parent`. `.git/hooks`, `.git/config`, `.candy-code` and `.mcp.json` are ro-bound. Fails closed when bwrap cannot start (probed once). User tier only; restart to apply. It is a write jail, not a read jail. PtyRun, hooks, lint/test, LSP and MCP all run unsandboxed (PtyRun breaks the docs' "every command" claim). — _Evidence:_ `src/Tools/Sandbox/Bubblewrap.php:50-244`; `src/Tools/BuiltIn/Bash.php:463-482`; `src/Tools/BuiltIn/PtyRun.php:163-170`; `docs/PERMISSIONS.md:1165-1212`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Writes limited to cwd/added dirs/temp; protected paths denied inside; `sandbox.credentials` masks secrets; built on open-source sandbox-runtime; `dangerouslyDisableSandbox` retry goes through permissions. — _Evidence:_ cc:sandboxing
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ DOCS/ecosystem
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ DOCS/ecosystem
@@ -3669,7 +3669,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-07</b> Network restriction for shell</summary>
 
 - **candy-code** 🟡 — Without the sandbox there is no network control apart from the auto-mode classifier and asking for WebFetch. — _Evidence:_ `src/Tools/Sandbox/Bubblewrap.php:97-104,139-149`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — WebFetch domain rules honored by the sandbox; `allowManagedDomainsOnly`. — _Evidence:_ cc:sandboxing#network-isolation; cc:settings-reference
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -3679,7 +3679,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-08</b> Output streaming to UI</summary>
 
 - **candy-code** 🟡 — The heartbeat only keeps the turn's idle watchdog alive. Only Task streams live activity. — _Evidence:_ `src/Tools/AcceptsHeartbeat.php:7-42`; `src/Tools/StreamsActivity.php:7-30`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `candy-code/docs/protocol/candy-code.v1.schema.json` (no tool.progress)
+- **candy-code-web** ❌ — — — _Evidence:_ `candy-code/docs/protocol/candy-code.v1.schema.json` (no tool.progress)
 - **Claude Code 2.1.301** ✅ — Ctrl+O / click expands collapsed results. — _Evidence:_ cc:tools-reference#output-limits; cc:interactive-mode#shell-mode-with-prefix
 - **OpenCode 1.18.35** ✅ — `metadata.output` is updated as output arrives. — _Evidence:_ OC/tool/shell.ts:440-590
 - **OpenCode 2.0.31** ✅ — `metadata.output` is updated as output arrives. — _Evidence:_ OC/tool/shell.ts:440-590
@@ -3689,7 +3689,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-09</b> Output truncation</summary>
 
 - **candy-code** ✅ — `toolOutputCapBytes`, `toolSpillWindowPercent` (30%), `toolSpillMinCapBytes`. The cap reserves room for stderr first. MCP has its own `mcpResultCapBytes`. — _Evidence:_ `src/Tools/Concerns/TruncatesOutput.php:152`; `src/Support/ToolOutputSpill.php:57-87`; `src/Tools/ToolLimits.php:53-150`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/session.ts:187-201`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/session.ts:187-201`
 - **Claude Code 2.1.301** ✅ — Configurable up to 150K read-back / 128K inline. — _Evidence:_ cc:tools-reference#output-limits
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ OC/tool/shell.ts:440-590; OC/tool/truncate.ts
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ OC/tool/shell.ts:440-590; OC/tool/truncate.ts
@@ -3699,7 +3699,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-10</b> Dangerous-command detection</summary>
 
 - **candy-code** ✅ — The breaker reads quote-removed words, prefixes and abbreviated flags. ConfirmRemoveHook catches rm -r/-f, find -delete, shred and dd of=, and stands down in bypass. All of them look at `command` only, so PtyRun steps pass through unseen. — _Evidence:_ `src/Permissions/PermissionGate.php:605,1170-1365`; `src/Hooks/BuiltIn/ConfirmRemoveHook.php:57-94`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/PermissionCard.vue:52`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/PermissionCard.vue:52`
 - **Claude Code 2.1.301** ✅ — Exec wrappers always prompt; wrappers like `timeout`/`nice` stripped before matching; `curl`/`wget` never auto-approved. — _Evidence:_ cc:permissions#compound-commands; cc:permission-modes#critical-paths; cc:security
 - **OpenCode 1.18.35** 🟡 — `BashArity` derives “always” patterns (git=2, npm run=3…). cc-safety-net is cached on this host. — _Evidence:_ OC/tool/shell.ts:257-290,378-413; OC/permission/arity.ts; LOCAL: ~/.cache/opencode/packages/cc-safety-net@latest
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Commands parsed per sub-command for permission prefixes + external-path checks; no danger classifier (🔌 cc-safety-net). 2.0.31 (🟡): Tree-sitter scanner (or experimental portable scanner) infers commands/dirs; no danger classifier — _Evidence:_ V2D/permissions (Scanner)
@@ -3709,7 +3709,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>SH-N1</b> 🆕 Child-process environment hardening (credential stripping, setsid detach, non-interactive env)</summary>
 
 - **candy-code** ✅ — SECRET_ENV_PATTERNS plus provider key names, overridable with `secretEnvAllowlist`. `tools/check-child-lifetimes.php` currently reports 60 libs, 28 proc_open sites, 0 problems. — _Evidence:_ `src/Support/ProcessContainment.php:81-143,266-276`; `tools/check-child-lifetimes.php`
-- **sugar-crush-web** ✅ — Workspace-host processes also get their secrets on stdin, not argv (a6). — _Evidence:_ `src/Support/ProcessContainment.php:56`, `:234-276`; `src/Server/Workspace/WorkspaceHostProcess.php`
+- **candy-code-web** ✅ — Workspace-host processes also get their secrets on stdin, not argv (a6). — _Evidence:_ `src/Support/ProcessContainment.php:56`, `:234-276`; `src/Server/Workspace/WorkspaceHostProcess.php`
 - **Claude Code 2.1.301** ✅ — Sandbox `credentials` deny/mask modes (sentinel swapped at the proxy); `CLAUDE_CODE_SCRIPT_CAPS`; detached children of stopped tasks are killed; claude-code-action enables the scrub automatically for untrusted users. — _Evidence:_ cc:env-vars#what-the-subprocess-environment-scrub-removes; cc:sandboxing#protect-credentials; cc:interactive-mode#how-backgrounding-works
 - **OpenCode 1.18.35** 🟡 — `shell.env` lets plugins add env. Nothing is removed from the inherited environment. — _Evidence:_ OC/tool/shell.ts:293-310; PLUG/index.ts:270-273
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2C/shell.ts:305; V2D/build/plugins/index (Shell)
@@ -3722,7 +3722,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-01</b> Permission modes (default / acceptEdits / plan / bypass / auto)</summary>
 
 - **candy-code** ✅ — The order is breaker, then rules (first match), then the mode's evaluator. Read-only shell lines run unasked in default and accept-edits. accept-edits grants in-root Edit/Write/ApplyPatch and scoped mkdir/touch/rmdir. — _Evidence:_ `src/Permissions/PermissionMode.php:11-193`; `src/Permissions/PermissionGate.php:587-1108`; `src/Cli/Bootstrap.php:178-180`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue:6`; `candy-code/docs/SERVER.md:602-605`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue:6`; `candy-code/docs/SERVER.md:602-605`
 - **Claude Code 2.1.301** ✅ — Auto = classifier reviews actions (server-side review on 1P); deny rules apply in every mode; auto needs supported models (Opus/Sonnet 4.6+, Haiku 5.5, Fable). — _Evidence:_ cc:permission-modes#available-modes; cc:permission-modes#eliminate-prompts-with-auto-mode
 - **OpenCode 1.18.35** 🟡 — Defaults are permissive: `'*'` allow, with doom_loop, external_directory and *.env read on ask. Docs say *.env is **deny**; code says **ask**. — _Evidence:_ OC/agent/agent.ts:119-135; DOCS/permissions (Defaults)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): allow/ask/deny rules + `--auto` (approve all not denied); plan agent; no named acceptEdits-style modes. Default: allow. 2.0.31 (🟡): Ordered allow/ask/deny `permissions` array + `--auto`; per-project auto-accept (desktop mod+shift+a) — _Evidence:_ V2D/permissions; V2CL v2.0.28
@@ -3732,7 +3732,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-02</b> Mode toggle in UI (Shift+Tab etc.)</summary>
 
 - **candy-code** ✅ — A switch applies between turns, keeps rules and session grants, and is never written to settings. Every prompt names the current mode and how to change it. — _Evidence:_ `docs/PERMISSIONS.md:19-60`; `src/Permissions/PermissionGate.php:302-331`
-- **sugar-crush-web** ✅ — Offers all six even when the server will refuse two. — _Evidence:_ `src-web/views/SessionView.vue:88-94`
+- **candy-code-web** ✅ — Offers all six even when the server will refuse two. — _Evidence:_ `src-web/views/SessionView.vue:88-94`
 - **Claude Code 2.1.301** ✅ — VS Code/Desktop mode selectors. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts; cc:permissions#permission-system
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/permissions (Auto mode)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Palette 'Enable/Disable auto-approve permissions' (muted 'auto' tag); Tab switches build↔plan. 2.0.31 (🟡): Per-project auto-accept toggle (desktop mod+shift+a), `--auto` flag; Shift+Tab cycles agents (plan) — _Evidence:_ V2CL v2.0.28; V2CLI: `opencode --help`
@@ -3742,7 +3742,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-03</b> Allow / deny / ask rules with patterns (e.g. Bash(git:*))</summary>
 
 - **candy-code** ✅ — An allow rule must cover every segment and fails closed on substitution or a writing redirect. A deny/ask rule fires on any segment and also binds Bash and PtyRun to each other. Patterns written with operators are matched by structure. Verified-by-repro: deny `Bash(rm:*)` lets `rm -rf build` through (allow `Bash(git:*)` grants nothing). — _Evidence:_ `src/Permissions/PermissionRule.php:195-207,385-468,691-942,1012-1105`
-- **sugar-crush-web** 🧪 — — — _Evidence:_ `candy-code/src/Protocol/Methods/PermissionMethods.php:145-162`
+- **candy-code-web** 🧪 — — — _Evidence:_ `candy-code/src/Protocol/Methods/PermissionMethods.php:145-162`
 - **Claude Code 2.1.301** ✅ — Parameter rules (e.g. `Agent(model:opus)`) for deny/ask; compound commands split; read-only command allowlist. — _Evidence:_ cc:permissions#permission-rule-syntax; cc:tools-reference#configure-tools-with-permission-rules-and-hooks
 - **OpenCode 1.18.35** ✅ — `*` and `?` wildcards; `~` / `$HOME` expansion. An unmatched rule defaults to ask. — _Evidence:_ OC/permission/index.ts:27-37; DOCS/permissions
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Per-tool pattern objects (bash parsed commands, file globs, URLs, subagent/skill names), wildcards, last-match-wins. 2.0.31 (✅): Actions renamed: bash→shell, task→subagent, write/patch→edit; doom_loop and lsp actions gone. — _Evidence:_ V2D/permissions (Rules, Matching, Actions)
@@ -3752,7 +3752,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-04</b> Rule scopes (user / project / local / managed / session)</summary>
 
 - **candy-code** 🟡 — A trusted project can only add `disabledTools`, never grants. Session grants travel with `--resume` and tabs. — _Evidence:_ `src/Config/LayeredSettings.php:819-860`; `docs/PERMISSIONS.md:552-576`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Methods/PermissionMethods.php:61-66`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Methods/PermissionMethods.php:61-66`
 - **Claude Code 2.1.301** ✅ — "Don't ask again" saves to `.claude/settings.local.json` at the repo root (worktree-aware). — _Evidence:_ cc:permissions#settings-precedence
 - **OpenCode 1.18.35** 🟡 — The always dialog says “This will allow X until OpenCode is restarted.” Approved rules live in InstanceState only (v2 adds persisted approvals). — _Evidence:_ TUI/routes/session/permission.tsx:140-144; OC/permission/index.ts:23-60
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Remote, global, project, managed, OPENCODE_PERMISSION; 'always' approvals in-memory until restart (not persisted). 2.0.31 (✅): Saved approvals are durable, project-scoped allow rules (v1: in-memory until restart) — _Evidence:_ V2D/permissions (Approvals)
@@ -3762,7 +3762,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-05</b> Per-agent permission overrides</summary>
 
 - **candy-code** ✅ — The preset's gate rides the reserved `subagent-grant` hook, which cannot be disabled. Foreign presets fall back to default. — _Evidence:_ `docs/PERMISSIONS.md:85-110`; `src/Hooks/BuiltIn/SubAgentGrantHook.php:95`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Parent bypass/acceptEdits/auto override a subagent's mode; plugin agents can't set permissionMode. — _Evidence:_ cc:sub-agents#permission-modes
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ OC/agent/subagent-permissions.ts; DOCS/agents (Permissions, Task permissions)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Agent `permission` overrides; subagents inherit parent deny/external_directory rules; task perms per subagent. 2.0.31 (✅): V2 permissions doc: “A custom subagent uses its own permissions, not a subset of its parent's permissions.” The parent's `subagent` rules control which children it may launch. — _Evidence:_ V2D/permissions (Agents); V2D/agents (Modes)
@@ -3772,7 +3772,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-06</b> Approval UI options (once / session / always / edit / explain)</summary>
 
 - **candy-code** ✅ — Pipelines are granted one pattern per part. A leading in-project `cd` is ignored. Hook asks and security asks never offer "always". `/permissions revoke` removes grants. The full shell command is shown (control and bidi characters made visible, max 12 rows with head and tail kept). — _Evidence:_ `docs/PERMISSIONS.md:736-1000`; `src/Permissions/SessionPermissionMemo.php`; `src/Renderer.php:6658-6684`
-- **sugar-crush-web** ✅ — Same cards in the approvals drawer and grid tiles. — _Evidence:_ `src-web/components/PermissionCard.vue`
+- **candy-code-web** ✅ — Same cards in the approvals drawer and grid tiles. — _Evidence:_ `src-web/components/PermissionCard.vue`
 - **Claude Code 2.1.301** ✅ — "No" without comment stops the turn; one-time-only prompts when a rule couldn't be shown fully; numbered lists in screen-reader mode. — _Evidence:_ cc:permissions#permission-system; cc:permissions#add-a-comment-when-you-answer-a-permission-prompt
 - **OpenCode 1.18.35** ✅ — Reject → “Tell OpenCode what to do differently” → a CorrectedError carries the feedback to the model. Reject cascades to the session's other pending asks. Rejection stops the loop unless `experimental.continue_loop_on_deny`. — _Evidence:_ TUI/routes/session/permission.tsx:402-490; CORE/v1/config/config.ts:179-181
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Allow once / Allow always (bash arity prefix, e.g. 'git checkout *') / Reject with feedback; diff; fullscreen. 2.0.31 (✅): Allow once / Allow always (saved per project) / Reject (+feedback; cascades to pending) — _Evidence:_ V2D/permissions (Approvals); V2T/routes/session/permission.tsx:56,170,328
@@ -3782,7 +3782,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-07</b> Auto-mode classifier (AI decides what is safe)</summary>
 
 - **candy-code** 🟡 — Verified-by-repro (gate verdicts): `bash <(curl …)`, download-then-`sh`, `wget … piped to python3`, `git clean -fdx` and exfiltration through GET URL paths are all Allow. — _Evidence:_ `src/Permissions/SafetyClassifier.php:79-430`; `src/Permissions/PermissionGate.php:853-927`; `src/Permissions/ExecReviewer.php:50`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/docs/SERVER.md:575-578`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/docs/SERVER.md:575-578`
 - **Claude Code 2.1.301** ✅ — `/auto-mode-setup`, `claude auto-mode config/defaults/critique/reset`; 3-in-a-row / 20-total blocks fall back to prompts; Recently-denied tab with retry; reviews SendMessage and subagent handbacks. — _Evidence:_ cc:permission-modes#how-auto-mode-evaluates-actions; help (`auto-mode`)
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -3792,7 +3792,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-08</b> Protected paths (.git, .env, outside workspace)</summary>
 
 - **candy-code** ✅ — Bash is deliberately not jailed. Path checks are spelling-based (`cat .e?v` and `$var` indirection get through, as the docs admit). PtyRun is not covered at all. — _Evidence:_ `src/Hooks/BuiltIn/ProtectFilesHook.php:139-293,400,449-512`; `src/Permissions/WritePathScope.php:101`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Read deny rules also block Edit/Write; network paths not followed; symlink checks. — _Evidence:_ cc:permission-modes#protected-paths; cc:permission-modes#critical-paths
 - **OpenCode 1.18.35** 🟡 — Truncation, tmp and skill dirs are pre-allowed. — _Evidence:_ OC/agent/agent.ts:108-135
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): external_directory and *.env reads default to ask; .git and other paths not protected; edits allowed by default. 2.0.31 (🟡): Docs conflict: agents.mdx says build asks outside the workspace, but permissions.mdx/migrate-v1 and source say allow. — _Evidence:_ V2C/plugin/agent.ts:116 (explore), base policy in V2D/permissions (Defaults); V2D/migrate-v1 warning
@@ -3802,7 +3802,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-09</b> Secret redaction / env scrubbing</summary>
 
 - **candy-code** 🟡 — Not scrubbed: *_PASSWORD, PGPASSWORD, MYSQL_PWD, DATABASE_URL, *_DSN, SSH_AUTH_SOCK. `env` and `printenv` run unasked. — _Evidence:_ `src/Support/ProcessContainment.php:115-131,340-353`; `src/Memory/SecretRedactor.php:7-55`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `candy-code/docs/SERVER.md:666-668`
+- **candy-code-web** ✅ — — — _Evidence:_ `candy-code/docs/SERVER.md:666-668`
 - **Claude Code 2.1.301** 🟡 — No general secret redaction of transcripts or model context. — _Evidence:_ cc:sandboxing#protect-credentials; cc:data-usage
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ CLI: `opencode export --help`; DOCS/ecosystem
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ CLI: `opencode export --help`; DOCS/ecosystem
@@ -3812,7 +3812,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-10</b> Prompt-injection defenses (web content, tool results)</summary>
 
 - **candy-code** 🟡 — MCP results and file contents are not tagged as untrusted. Memory, instructions and env are fenced. — _Evidence:_ `src/Runtime.php:5370-5378`; `src/Tools/BuiltIn/WebFetch.php:244-252`; `docs/MEMORY.md:425-440`
-- **sugar-crush-web** ✅ — e2e "model and tool text cannot inject markup". — _Evidence:_ `src-web/lib/markdown.ts:11,34-40`; `e2e/session.spec.ts:17`
+- **candy-code-web** ✅ — e2e "model and tool text cannot inject markup". — _Evidence:_ `src-web/lib/markdown.ts:11,34-40`; `e2e/session.spec.ts:17`
 - **Claude Code 2.1.301** ✅ — Hook context/synced-skill text escaped to stop fake `<system-reminder>` tags. — _Evidence:_ cc:security#protect-against-prompt-injection; cc:sub-agents#subagent-output-scanning; cc:terminal-config#how-claude-treats-pasted-text
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -3822,7 +3822,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-11</b> Workspace-trust dialog</summary>
 
 - **candy-code** 🟡 — Entries must be absolute and are frozen per process; a refusal is announced on stderr and in the transcript. Instruction files and skills load without any trust step. — _Evidence:_ `docs/PERMISSIONS.md:1097-1163`; `src/Cli/Bootstrap.php:4567-4623`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Home-dir trust is per-session only; `-p`/SDK never show it. — _Evidence:_ cc:permissions#project-allow-rules-and-workspace-trust; cc:security
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ see INS-19
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ see INS-19
@@ -3832,7 +3832,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-12</b> Skip-all-permissions flag</summary>
 
 - **candy-code** ✅ — No `--dangerously-skip-permissions` alias. An unknown mode value exits with code 2. — _Evidence:_ `src/Cli/ArgvParser.php:443-480`; `docs/PERMISSIONS.md:186-191`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live probe; `candy-code/src/Protocol/Methods/BgMethods.php:72-99`
+- **candy-code-web** 🟡 — — — _Evidence:_ live probe; `candy-code/src/Protocol/Methods/BgMethods.php:72-99`
 - **Claude Code 2.1.301** ✅ — Deny/ask rules, protected/critical paths and `EndConversation` exemptions still apply; managed policy can forbid. — _Evidence:_ help; cc:permission-modes#skip-all-checks-with-bypasspermissions-mode
 - **OpenCode 1.18.35** ✅ — Headless `run` without `--auto` auto-**rejects** asks. — _Evidence:_ CLI: `opencode --help`; OC/cli/cmd/run.ts:801-822
 - **OpenCode 2.0.31** ✅ — Headless `run` without `--auto` auto-**rejects** asks. — _Evidence:_ CLI: `opencode --help`; OC/cli/cmd/run.ts:801-822
@@ -3842,7 +3842,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-13</b> Managed / enterprise policy enforcement</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ grep managed policy = 0
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `/status` shows setting sources; managed hooks can't be disabled by users. — _Evidence:_ cc:managed-settings; cc:server-managed-settings; cc:settings-reference
 - **OpenCode 1.18.35** ✅ — Global policies beat project policies. — _Evidence:_ OC/config/managed.ts; DOCS/config (Managed settings); DOCS/policies
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Managed config (/etc/opencode, ProgramData, macOS MDM plist) overrides all; experimental.policies provider.use. 2.0.31 (✅): `policies` (top-level, stable) incl. tool.use; Console-managed policies have final authority — _Evidence:_ V2D/policies; V2CL v2.0.29; specs/v2/provider-policy.md
@@ -3852,7 +3852,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-14</b> Permission audit log</summary>
 
 - **candy-code** ✅ — The excerpt is written only after PostToolUse hooks allow the output. Lines are injection-safe. The log sits in tmp (lost on reboot) and is unredacted. — _Evidence:_ `src/Hooks/BuiltIn/AuditHook.php:7-60,195-330`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:monitoring-usage; CL v2.1.301
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/plugins (Permission Events); OC/permission/index.ts (logInfo evaluated)
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ DOCS/plugins (Permission Events); OC/permission/index.ts (logInfo evaluated)
@@ -3862,7 +3862,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-15</b> Remote approval (approve from phone / web / chat)</summary>
 
 - **candy-code** ✅ — "Always" grants behave as in the TUI, `remember: project` is refused, and a cascade reject stops the turn. The web UI answers these. — _Evidence:_ `docs/PERMISSIONS.md` (serve bullet); `docs/SERVER.md`
-- **sugar-crush-web** ✅ — `permission.asked` reaches every client even for unfollowed sessions; opt-in desktop notifications. — _Evidence:_ `src-web/stores/approvals.ts:113-141`; `e2e/multi-session.spec.ts:61`
+- **candy-code-web** ✅ — `permission.asked` reaches every client even for unfollowed sessions; opt-in desktop notifications. — _Evidence:_ `src-web/stores/approvals.ts:113-141`; `e2e/multi-session.spec.ts:61`
 - **Claude Code 2.1.301** ✅ — Background-subagent prompts surface in the main session; channels relay messages but not approvals. — _Evidence:_ cc:remote-control#mobile-push-notifications; cc:sub-agents
 - **OpenCode 1.18.35** ✅ — 🔌 kimaki (Discord) built on the SDK. — _Evidence:_ DOCS/server (permissions endpoint); DOCS/ecosystem (kimaki)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Approve from web UI, desktop, an attached TUI, ACP editor or SDK (POST permission reply). 2.0.31 (✅): Approve from TUI, web/desktop, iOS app via pairing, ACP editors or API — _Evidence:_ V2D/cli/web; V2D/permissions (Approvals)
@@ -3872,7 +3872,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-N1</b> 🆕 Policy self-grant floor (agent cannot edit its own permission / hook / agent config)</summary>
 
 - **candy-code** ✅ — Blocks a model from granting itself trust (an end-to-end self-grant was measured). PtyRun bypasses this floor entirely (ISSUES P1). — _Evidence:_ `src/Hooks/BuiltIn/ProtectFilesHook.php:227-293,469-512`
-- **sugar-crush-web** ✅ — Writes to hooks.yaml, config.json, agent presets and `.git/hooks` are refused in every mode. Remote `settings.set` is limited to cosmetic, tuning and narrowing keys. — _Evidence:_ `src/Hooks/BuiltIn/ProtectFilesHook.php:227-293`; `src/Config/Settings/RiskClass.php:46`; `docs/SERVER.md:670-686`
+- **candy-code-web** ✅ — Writes to hooks.yaml, config.json, agent presets and `.git/hooks` are refused in every mode. Remote `settings.set` is limited to cosmetic, tuning and narrowing keys. — _Evidence:_ `src/Hooks/BuiltIn/ProtectFilesHook.php:227-293`; `src/Config/Settings/RiskClass.php:46`; `docs/SERVER.md:670-686`
 - **Claude Code 2.1.301** ✅ — Only bypassPermissions writes them silently; `--restricted` lets only a person or the permission handler approve such writes; agent messages can't change settings; `ConfigChange` hooks can block edits. — _Evidence:_ cc:permission-modes#protected-paths; help (`--restricted`); cc:hooks#configchange
 - **OpenCode 1.18.35** ❌ — A user could add `edit` deny rules for config paths manually. — _Evidence:_ OC/skill/index.ts:26-34; OC/agent/agent.ts:119-135
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2D/policies; V2D/permissions (Policies)
@@ -3882,7 +3882,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PER-N2</b> 🆕 Restricted / safe mode flag (drop code-running tools, confine file tools)</summary>
 
 - **candy-code** 🟡 — No CLI flag drops tools. `--permission-mode plan` runs reads and allow-listed read-only shell lines only: the only write allowed is a Markdown plan into `.candy-code/plans`, and WebFetch/WebSearch ask. `dont-ask` runs read-only tools and denies everything else, Bash included. Tools stay in the schema in both modes; the gate denies them rather than removing them. `disabledTools` and `allowedTools` (user tier) do remove tools, and `CANDY_CODE_MCP_DISABLE=1` silences project MCP. Project hooks, MCP, commands and settings stay off unless listed in `trustedProject*`, so the "disable customisations" half is already the default. File tools are not confined: Read can read outside the project. — _Evidence:_ `src/Cli/ArgvParser.php:239-521`; `src/Permissions/PermissionMode.php:173-190`; `src/Config/Settings/Definitions/ToolSettings.php:57`, `:67`; `src/Config/Settings/Definitions/PermissionSettings.php:117`; `docs/ENVIRONMENT.md:61`; `docs/PERMISSIONS.md:292`
-- **sugar-crush-web** 🟡 — The browser user can drop a session to `plan` (reads plus read-only shell) for its next turns. Tool roster changes (`disabledTools`) are not writable remotely. — _Evidence:_ `sugar-crush-web/src-web/components/StatusBar.vue:6`; `docs/SERVER.md:602-605`
+- **candy-code-web** 🟡 — The browser user can drop a session to `plan` (reads plus read-only shell) for its next turns. Tool roster changes (`disabledTools`) are not writable remotely. — _Evidence:_ `candy-code-web/src-web/components/StatusBar.vue:6`; `docs/SERVER.md:602-605`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ help
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/cli (OPENCODE_PERMISSION, --pure); OC/agent/agent.ts:157-180
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2D/permissions; V2C/plugin/plan.ts
@@ -3895,7 +3895,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-01</b> Git awareness (branch / status)</summary>
 
 - **candy-code** ✅ — Values are fence-escaped and capped. GitRunner adds `--no-optional-locks`. The session picker can filter by branch. — _Evidence:_ `src/Context/EnvironmentBlock.php:1290-1340`; `src/Tui/SessionPicker.php:304,1372`
-- **sugar-crush-web** ❌ — — — _Evidence:_ grep `src-web/`
+- **candy-code-web** ❌ — — — _Evidence:_ grep `src-web/`
 - **Claude Code 2.1.301** ✅ — Badge refreshes after push or gh/glab PR commands. — _Evidence:_ obs; cc:interactive-mode#pr-review-status
 - **OpenCode 1.18.35** 🟡 — `GET /vcs` returns VCS info. — _Evidence:_ OC/session/system.ts:81; TUI/feature-plugins/home/footer.tsx:17-24
 - **OpenCode 2.0.31** 🟡 — `GET /vcs` returns VCS info. — _Evidence:_ OC/session/system.ts:81; TUI/feature-plugins/home/footer.tsx:17-24
@@ -3905,7 +3905,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-02</b> Automatic commits</summary>
 
 - **candy-code** ✅ — User tier only. Never uses `--no-verify`. Author is the user; the trailer comes from `attribution.commit`. The session's own commits are recorded for `/undo`. — _Evidence:_ `src/Workspace/AutoCommitter.php:7-90,575-596`; `src/Hooks/BuiltIn/AutoCommitHook.php:67`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:agent-view; cc:commands (/batch)
 - **OpenCode 1.18.35** ❌ — Snapshots are shadow trees, not commits. — _Evidence:_ OC/snapshot/index.ts
 - **OpenCode 2.0.31** ❌ — Snapshots are shadow trees, not commits. — _Evidence:_ OC/snapshot/index.ts
@@ -3915,7 +3915,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-03</b> Commit-message generation / /commit</summary>
 
 - **candy-code** 🟡 — The model's reply is sanitised to a single type-prefixed line, with a fallback. Bash guidance teaches heredoc commit messages. — _Evidence:_ `src/Workspace/CommitMessageWriter.php:7-60`; `src/Tools/BuiltIn/Bash.php:297-349`
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `command.list`
+- **candy-code-web** ❌ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Runs a `verify`/`simplify` skill before commits when one exists (v2.1.286+); `includeGitInstructions:false` removes the guidance. — _Evidence:_ cc:skills#run-your-checks-before-each-commit; cc:settings-reference#attribution; local: catalog
 - **OpenCode 1.18.35** ❌ — This host has a user `/commit` command in ~/.config/opencode/command/commit.md. — _Evidence:_ OC/tool/shell/shell.txt; LOCAL: ~/.config/opencode/command/commit.md
 - **OpenCode 2.0.31** ❌ — This host has a user `/commit` command in ~/.config/opencode/command/commit.md. — _Evidence:_ OC/tool/shell/shell.txt; LOCAL: ~/.config/opencode/command/commit.md
@@ -3925,7 +3925,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-04</b> PR creation / GitHub integration</summary>
 
 - **candy-code** 🟡 — — — _Evidence:_ `src/Tools/BuiltIn/Bash.php:338-341`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — GitLab MR badge via `glab`; GitHub Enterprise Server support. — _Evidence:_ cc:commands; cc:sessions; cc:github-enterprise-server
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ CLI: `opencode pr --help`; DOCS/github
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): `opencode pr <n>` checks out a PR; GitHub agent opens branches/PRs; bash desc guides gh usage. 2.0.31 (🟡): No `opencode pr` or `github` commands in the v2 CLI; agent uses gh via shell — _Evidence:_ V2CLI: `opencode --help`
@@ -3935,7 +3935,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-05</b> Checkpoints of file edits</summary>
 
 - **candy-code** ✅ — .env*, binaries, build output and untracked files over 2 MiB are excluded. The capture is budgeted at 15 s and refused in $HOME, Desktop, Documents and Downloads. A failure never fails the turn. — _Evidence:_ `src/Workspace/WorkspaceCheckpointer.php:9-140`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ live `command.list`
+- **candy-code-web** 🟡 — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Not for Bash-made changes or most subagent edits. — _Evidence:_ cc:checkpointing#how-checkpoints-work
 - **OpenCode 1.18.35** ✅ — The snapshot is taken before streaming starts. A per-turn diff is computed for the diff viewer. — _Evidence:_ OC/session/processor.ts:102,425-440; OC/session/summary.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Shadow-git snapshot before/after every step; per-step patch parts list changed files. 2.0.31 (✅): Snapshot before model call and at step end, scoped to the active directory; packed object store — _Evidence:_ V2D/snapshots (Capture, Scope, Storage); V2CL v2.0.26
@@ -3945,7 +3945,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-06</b> Undo / redo / rewind code</summary>
 
 - **candy-code** ✅ — The restore deletes files created since the checkpoint and checks out the changed ones via a scratch index. — _Evidence:_ `builtin-commands/2800-rewind.php`, `2810-undo.php`, `2820-redo.php`; `src/Workspace/WorkspaceCheckpointer.php:268-335`; `src/Workspace/AutoCommitter.php:71-77`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — Symlinks/hard links skipped with a warning. — _Evidence:_ cc:checkpointing#rewind-and-summarize
 - **OpenCode 1.18.35** ✅ — Files absent from the snapshot are deleted on revert. — _Evidence:_ OC/session/revert.ts:38-100; OC/snapshot/index.ts:167-168
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /undo /redo and timeline revert restore files (git projects only); unrevert supported. 2.0.31 (✅): Staged rollback (/undo) committed on submit, /redo cancels; rejects while running — _Evidence:_ V2D/snapshots
@@ -3955,7 +3955,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-07</b> Snapshot mechanism (shadow git etc.)</summary>
 
 - **candy-code** ✅ — The user's stash list, index and branch are never touched. GitRunner uses `-c core.hooksPath=/dev/null` and `core.fsmonitor=false`, scrubs GIT_* env and avoids gpg. Old checkpoints are garbage-collected. — _Evidence:_ `src/Workspace/WorkspaceCheckpointer.php:61`; `src/Workspace/ShadowRepo.php`; `src/Workspace/GitRunner.php:28-83`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:checkpointing; cc:claude-directory
 - **OpenCode 1.18.35** ✅ — Mirrors info/exclude and uses index v4 / manyFiles. `snapshot:false` disables it for huge repos. — _Evidence:_ OC/snapshot/index.ts:23-24,195-233,305,341; DOCS/config (Snapshot)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Shadow git dir under data/snapshot/<project>/<hash>, alternates to repo objects, write-tree, gc 7 days, skip >2 MB. 2.0.31 (✅): Separate internal git object DB, crash/concurrency-safe capture, background packing; `snapshots` key — _Evidence:_ V2D/snapshots; V2CL v2.0.26; V2D/migrate-v1 (Snapshots)
@@ -3965,7 +3965,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-08</b> Worktree support</summary>
 
 - **candy-code** 🟡 — Inside the worktree the tools are re-jailed and the sandbox root moves; BashEscapeDenyHook is registered (Bash only). — _Evidence:_ `src/Tools/BuiltIn/TaskTool.php:1246-1260,2105-2170`; `src/Agents/WorktreeManager.php`; `src/Backend/EngineBackend.php:1318`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — `WorktreeCreate/Remove` hooks for non-git VCS; `.worktreeinclude`; cleanup sweeps. — _Evidence:_ help (`--worktree`); cc:worktrees
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ see AGT-18
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Experimental worktree/workspace API + /workspaces, /warp; desktop uses worktrees; 🔌 opencode-worktree. 2.0.31 (✅): Built-in worktree tools + /worktrees, /cd, session move — _Evidence:_ V2D/tools (Worktrees); V2T slash list
@@ -3975,7 +3975,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-09</b> Diff review UI (session diff)</summary>
 
 - **candy-code** 🟡 — — — _Evidence:_ `src/Host/Commands/DiffCommand.php:12-63`; `src/Workspace/CheckpointDiff.php:7-40`
-- **sugar-crush-web** 🧪 — — — _Evidence:_ `candy-code/src/Protocol/Methods/FilesMethods.php`; grep `src-web/`
+- **candy-code-web** 🧪 — — — _Evidence:_ `candy-code/src/Protocol/Methods/FilesMethods.php`; grep `src-web/`
 - **Claude Code 2.1.301** ✅ — Built-in `cc-plugin-diff` mod; auto-opens on wide terminals. — _Evidence:_ cc:interactive-mode#review-changes-with-/diff
 - **OpenCode 1.18.35** ✅ — `/session/:id/diff?messageID`. — _Evidence:_ TUI/feature-plugins/system/diff-viewer.tsx; TUI/feature-plugins/sidebar/files.tsx
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /diff viewer (file tree, git or session mode, split/stacked) + sidebar Modified Files with +/- counts. 2.0.31 (✅): /diff opens docked beside the session (f toggles full screen); desktop per-turn changed files — _Evidence:_ V2CL v2.0.30
@@ -3985,7 +3985,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-10</b> Code-review command (/review, security review)</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `docs/COMMANDS.md:4,74-80`
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `command.list`
+- **candy-code-web** ❌ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Ultrareview: research preview, 3 free runs on Pro/Max; Code Review GitHub service for Team/Enterprise. — _Evidence:_ cc:code-review-local; cc:ultrareview; cc:commands
 - **OpenCode 1.18.35** 🟡 — The template is review.txt. It runs as a subagent so the main context stays clean. This repo overrides it with its own review.md. — _Evidence:_ OC/command/index.ts:79-88; OC/command/template/review.txt; LOCAL: .opencode/commands/review.md
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): /review (subtask) for uncommitted/commit/branch/PR; no security-review command. 2.0.31 (🟡): /review now runs in the current session (no longer a subtask); no security review — _Evidence:_ V2C/plugin/command.ts:41-52
@@ -3995,7 +3995,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-11</b> CI integration (GitHub Actions / GitLab)</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ grep `github action` = 0
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — `claude ultrareview` CLI for CI; `-p` with exit codes. — _Evidence:_ cc:github-actions; cc:gitlab-ci-cd; help (`ultrareview`)
 - **OpenCode 1.18.35** ✅ — Events: issue_comment, PR review comments, issues, pull_request, schedule, workflow_dispatch. Options: model, agent, share, prompt, mentions, variant, OIDC/GITHUB_TOKEN. — _Evidence:_ DOCS/github; DOCS/gitlab
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): GitHub Action anomalyco/opencode/github (`opencode github install`); GitLab CI component + GitLab Duo. 2.0.31 (🟡): GitHub Action (repo github/action.yml) still installs v1 and runs `opencode github run`; no v2 CI docs — _Evidence:_ github/action.yml:61-70; V2D (no github/gitlab pages)
@@ -4005,7 +4005,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>GIT-12</b> PR comment / issue-triage bot</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:github-actions; cc:code-review; cc:claude-code-on-the-web#auto-fix-pull-requests
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/github (Supported Events, Examples)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): /opencode or /oc mentions in issues/PR (incl. line comments); auto PR review & issue triage workflows. 2.0.31 (🟡): Issue/PR comment bot only via the V1-based GitHub Action — _Evidence:_ github/action.yml
@@ -4018,7 +4018,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-01</b> Full-screen TUI vs inline rendering</summary>
 
 - **candy-code** ✅ — `bin/candy-code` boots `App`, a pane shell that hosts the `Chat` model as one component tree. It enters the alternate screen (`\e[?1049h`), so the transcript is in-app scrollback, not terminal scrollback. Frame = menu bar row (menus + pane tabs + "Currently: X"), optional session-tab strip, left/right docked pane columns, a bordered chat pane and a one-row status bar. Frame is clipped to `rows` and every line is fitted to `cols` (no overflow seen at 140, 80 or 50 columns). There is no inline/no-alt-screen mode like Claude Code's default. — _Evidence:_ `src/App/App.php`; `src/Tui/Renderer.php:133-210`; `src/Renderer.php:1918-1966`; `src/Chat.php:10603-10608` (alt screen); README.md:186-190
-- **sugar-crush-web** ➖ — — — _Evidence:_ `src-web/App.vue`
+- **candy-code-web** ➖ — — — _Evidence:_ `src-web/App.vue`
 - **Claude Code 2.1.301** ✅ — `/tui fullscreen/default` relaunches with the conversation intact; fullscreen keeps memory flat, adds mouse, fixed input box, in-app search; screen-reader mode forces classic. — _Evidence:_ cc:fullscreen#fullscreen-by-default; cc:commands (/tui)
 - **OpenCode 1.18.35** ✅ — Mini mode keeps scrollback immutable, with a repaintable footer for prompt, permission and question. It supports `--no-replay` / `--replay-limit`. — _Evidence:_ OC/cli/cmd/tui.ts:123-175; OC/cli/cmd/run/footer.ts:1-26
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Full-screen OpenTUI app by default; `--mini` / `run -i` inline split-footer mode writing to native scrollback. 2.0.31 (✅): Full-screen TUI by default; `opencode mini` inline interface — _Evidence:_ V2D/cli/index (Mini); V2CLI: `opencode mini --help`
@@ -4028,7 +4028,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-02</b> Themes (count) & custom themes</summary>
 
 - **candy-code** 🟡 — `/theme`, palette "Switch theme" or the settings view. Persisted to `config.json`. The `adaptive` theme follows the terminal background (OSC 11 reply, `COLORFGBG`, `CANDY_CODE_BACKGROUND`). Every chrome colour is projected along HSL lightness until it clears WCAG contrast against the detected background *and* the row-highlight fill, so even `light` stays readable on a dark terminal. No user theme files or overrides: `Theme::byName()` throws for any name not in the fixed list. The picker always opens on `dark`, not on the current theme. — _Evidence:_ `src/Theme.php:60,139-180,237-330`; `src/Tui/TerminalBackground.php`; live: `/theme`, palette
-- **sugar-crush-web** 🟡 — Several token pairs miss WCAG AA (ISSUES). — _Evidence:_ `src-web/styles/tokens.css`; `src-web/stores/settings.ts:30-32`
+- **candy-code-web** 🟡 — Several token pairs miss WCAG AA (ISSUES). — _Evidence:_ `src-web/styles/tokens.css`; `src-web/stores/settings.ts:30-32`
 - **Claude Code 2.1.301** ✅ — `/theme` → "New custom theme…" token editor; `custom:<slug>`. — _Evidence:_ cc:settings-reference#theme; cc:terminal-config#create-a-custom-theme
 - **OpenCode 1.18.35** ✅ — Truecolor is recommended. `/themes` (<leader>t). — _Evidence:_ TUI/theme/assets/*.json (33 files); DOCS/themes
 - **OpenCode 2.0.31** ✅ — Truecolor is recommended. `/themes` (<leader>t). — _Evidence:_ TUI/theme/assets/*.json (33 files); DOCS/themes
@@ -4038,7 +4038,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-03</b> Markdown rendering</summary>
 
 - **candy-code** ✅ — `Renderer::renderHistory()` builds `new Markdown($theme->markdown, wrapWidth: $width)`. Settled turns are memoised per (source, width, theme). Streaming text goes through `SectionStream`, so a growing reply does not re-render the whole body every frame. Only assistant text is Markdown. User and system rows are painted raw (sanitised). Links are OSC 8 hyperlinks (seen live in an error row). — _Evidence:_ `src/Renderer.php:446-520,4085-4110`; `sugar-markdown/src/Renderer.php`, `sugar-markdown/src/Render/SectionStream.php`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/lib/markdown.ts`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/lib/markdown.ts`
 - **Claude Code 2.1.301** ✅ — Optional response-width cap for wide terminals; clickable `owner/repo#123` links. — _Evidence:_ cc:terminal-config#cap-response-width-in-wide-terminals; cc:interactive-mode#issue-reference-links; CL v2.1.301
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/config/keybind.ts:149
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/config/keybind.ts:149
@@ -4048,7 +4048,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-04</b> Syntax highlighting</summary>
 
 - **candy-code** 🟡 — sugar-markdown `SyntaxHighlighter` wraps sugar-core `RegexHighlighter`. It covers PHP, JS, TS, JSON, Python, Go, Bash and SQL, with a 1 MB DoS cap. Unknown languages fall back to plain code style. Diffs and tool output are not syntax-highlighted. Not comparable to Shiki/tree-sitter-grade highlighting. — _Evidence:_ `sugar-markdown/src/SyntaxHighlighter.php:1-60`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/lib/highlight.ts:192,356-374`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/lib/highlight.ts:192,356-374`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#theme-and-display
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/parsers-config.ts
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/parsers-config.ts
@@ -4058,7 +4058,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-05</b> Diff rendering (side-by-side / unified)</summary>
 
 - **candy-code** 🟡 — Edit/Write results build a unified diff (`BuildsUnifiedDiff`). The renderer paints it boxed with a `DiffGutter`, capped at `diffPreviewRows` (default 24), and `Ctrl+O` expands it. No side-by-side view, no word-level or syntax highlighting. Headers use the absolute path (`--- a//tmp/...`). **The permission modal shows no diff** for an Edit/Write awaiting approval, only a one-line argument summary (see ISSUES P1). `/diff [n]` prints a checkpoint patch. — _Evidence:_ `src/Tui/DiffGutter.php`; `src/Renderer.php:289-297,5170`; `src/Tools/Concerns/BuildsUnifiedDiff.php:151`; live: Edit turn
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/DiffView.vue`; `src-web/lib/diff.ts`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/DiffView.vue`; `src-web/lib/diff.ts`
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:interactive-mode#review-changes-with-/diff; cc:vs-code; CL (word-level diff display)
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/tui (diff_style); TUI/routes/session/permission.tsx:33-80
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/tui (diff_style); TUI/routes/session/permission.tsx:33-80
@@ -4068,7 +4068,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-06</b> Multiline input</summary>
 
 - **candy-code** ✅ — The composer is sugar-forms `TextArea`, with cursor motion, word motion/delete and ↑/↓ between rows. `App::init` pushes the Kitty progressive-keyboard protocol (DISAMBIGUATE) so terminals that support it report Shift+Enter distinctly. Wide-character wrapping was verified live with CJK and emoji. The box shrink-wraps its content: it starts 5 columns wide and grows as you type. It follows the transcript tail rather than being pinned to the bottom of the frame. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:450`; `src/App/App.php:2477-2501`; `src/Renderer.php:7140-7200`; live
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:73-77`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:73-77`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#multiline-input; cc:terminal-config#enter-multiline-prompts
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/keybinds (input_*)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/keybinds (input_*)
@@ -4078,7 +4078,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-07</b> Vim mode</summary>
 
 - **candy-code** ❌ — `sugar-forms/src/Vim/*` (VimKeyHandler, operators, text objects) is wired into `TextInput`, but the chat composer is `TextArea`, which has no vim layer. No setting or command toggles one. — _Evidence:_ `sugar-forms/src/Vim/`; `sugar-forms/src/TextInput/TextInput.php`; `src/Chat.php:16514-16515`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `/config` → Editor mode; remaps only from user/managed settings. — _Evidence:_ cc:interactive-mode#vim-editor-mode; CL v2.1.301
 - **OpenCode 1.18.35** ❌ — No vim keymap in TUI sources (the only “vim” hit is a parser config). — _Evidence:_ TUI/ (grep vim)
 - **OpenCode 2.0.31** ❌ — No vim keymap in TUI sources (the only “vim” hit is a parser config). — _Evidence:_ TUI/ (grep vim)
@@ -4088,7 +4088,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-08</b> External editor ($EDITOR)</summary>
 
 - **candy-code** ✅ — The editor is run from a Cmd and the result returns to the draft. No dedicated hotkey: TextArea's own Ctrl+O "open in editor" is shadowed because Chat binds Ctrl+O to tool-output expand. — _Evidence:_ `src/Commands/EditorCommand.php`; `builtin-commands/1900-editor.php`; README.md:333-337
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `v` in transcript viewer opens the conversation in $EDITOR. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/tui (editor, export)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/tui (editor, export)
@@ -4098,7 +4098,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-09</b> Input history & search (Ctrl+R)</summary>
 
 - **candy-code** 🟡 — History is persisted per user and the first ↑ of a new launch recalls the previous session's last prompt. Editing a recalled prompt ends the walk. Ctrl+R opens the **session picker**, not a history search, and no other chord searches prompt history. — _Evidence:_ `src/Chat.php:3200-3202`; README.md:225-226 (Keys table); `KeyBindingRegistry.php` chat.recall, chat.session-picker
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src-web/stores/layout.ts:51`
+- **candy-code-web** ❌ — — — _Evidence:_ `src-web/stores/layout.ts:51`
 - **Claude Code 2.1.301** ✅ — Ctrl+S stash; Up restores a Ctrl+C-cleared draft (v2.1.288). — _Evidence:_ cc:interactive-mode#command-history; CL v2.1.288
 - **OpenCode 1.18.35** 🟡 — Prompt stash: push, pop and list. — _Evidence:_ DOCS/keybinds (history_*, prompt_stash*); LOCAL: ~/.local/state/opencode/prompt-history.jsonl
 - **OpenCode 2.0.31** 🟡 — Prompt stash: push, pop and list. — _Evidence:_ DOCS/keybinds (history_*, prompt_stash*); LOCAL: ~/.local/state/opencode/prompt-history.jsonl
@@ -4108,7 +4108,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-10</b> @file mention autocomplete / fuzzy file picker</summary>
 
 - **candy-code** 🟡 — Typing `@sr` shows nothing. Tab completes to the unique match (`@src/`), descends directories and stops at a common prefix, with no candidate list shown (verified live). Mentions are attached on Enter (snapshot, max 20 files, 256 KiB each). Keyword mentions inject `<context>` blocks. `$name` attaches a skill body for one turn, also Tab-completable. — _Evidence:_ README.md:368-427; `KeyBindingRegistry.php` chat.mention-complete; live
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Methods/TurnMethods.php:80-90`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Methods/TurnMethods.php:80-90`
 - **Claude Code 2.1.301** ✅ — Custom `fileSuggestion` command setting; mouse selection in fullscreen. — _Evidence:_ cc:interactive-mode#quick-commands; cc:mcp#use-mcp-resources; cc:sub-agents
 - **OpenCode 1.18.35** ✅ — @file#L10-20 ranges are supported; a single line expands to the enclosing LSP symbol. — _Evidence:_ TUI/component/prompt/autocomplete.tsx:280-430; OC/session/prompt.ts:826-858
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): @ fuzzy picker (frecency) for files/dirs, subagents, MCP resources, configured references. 2.0.31 (✅): @ picker: files (with #start-end ranges), skills, agents, references — _Evidence:_ V2D/cli/tui (Context); V2T/component/prompt/autocomplete.tsx:47,427-436
@@ -4118,7 +4118,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-11</b> Large-paste collapse</summary>
 
 - **candy-code** ❌ — Bracketed paste is enabled and a paste that is only an image path becomes a mention, but text is never folded into a "[Pasted N lines]" chip. The input box has no height cap: the renderer's tail clip keeps the box and drops transcript rows, so the transcript disappears and the box's own top is clipped. There is no clear-line chord: Ctrl+U types `u`, and clearing took ~1,200 Ctrl+W presses. — _Evidence:_ `src/Renderer.php:7178-7181`; `src/Chat.php:9182`; live 300-line paste
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Delete/restore whole placeholders; recalled history resends content. — _Evidence:_ cc:terminal-config#paste-large-content
 - **OpenCode 1.18.35** ✅ — `experimental.disable_paste_summary` turns it off. — _Evidence:_ DOCS/keybinds; CORE/v1/config/config.ts:171
 - **OpenCode 2.0.31** ✅ — `experimental.disable_paste_summary` turns it off. — _Evidence:_ DOCS/keybinds; CORE/v1/config/config.ts:171
@@ -4128,7 +4128,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-12</b> Image paste / drag-drop</summary>
 
 - **candy-code** ✅ — The image is saved to a private temp dir and inserted as an `@` mention. A missing tool or no image gives a notice. Images are checked by magic bytes, max 5 MiB, and sent as provider-native parts. A non-vision model gets a text placeholder plus a notice. — _Evidence:_ `KeyBindingRegistry.php` chat.paste-image; `src/ClipboardImagePastedMsg.php`; README.md:29,383-404
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Remote Control attachments from phone/browser. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts; CL (dragged image paths honor Read deny)
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/clipboard.ts:32-56; TUI/component/prompt/index.tsx:378-384
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/clipboard.ts:32-56; TUI/component/prompt/index.tsx:378-384
@@ -4138,7 +4138,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-13</b> Message queueing while agent busy</summary>
 
 - **candy-code** ✅ — Queued count shows in the status bar (`N queued`). A `!cmd` typed mid-turn waits in the queue. Slash commands are refused mid-turn except `/btw` and `/exit`. — _Evidence:_ `KeyBindingRegistry.php:448-449`; README.md:333-366; lang `tui.status.queued`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:121-131`; `src-web/components/QueueStrip.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:121-131`; `src-web/components/QueueStrip.vue`
 - **Claude Code 2.1.301** ✅ — Commands and `!` queue until the turn ends; Up takes the queue back. — _Evidence:_ cc:interactive-mode#queue-messages-while-claude-works
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/routes/session/index.tsx:1450; OC/session/prompt.ts:1092-1130
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Messages typed while busy are queued (QUEUED badge) and picked up at the next step. 2.0.31 (✅): Durable inbox: steer delivers at next safe step boundary, queue waits for idle. — _Evidence:_ V2D/cli/tui; specs/v2/session.md (Prompt Admission)
@@ -4148,7 +4148,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-14</b> Interrupt (Esc) / mid-turn steering</summary>
 
 - **candy-code** ✅ — The status bar walks through `step N · Esc to stop, Esc Esc to cancel` and then `stopping after step N · Esc to cancel now`. A cancelled call reads "Cancelled by the user (Esc)". `doubleEscSeconds` is configurable. — _Evidence:_ README.md:207-208; `src/Renderer.php:2648-2675`; `src/Backend/CancellationToken.php`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:78-87`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/Composer.vue:78-87`
 - **Claude Code 2.1.301** ✅ — Ctrl+B backgrounds current tools; Ctrl+X Ctrl+K stops all background subagents. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts; cc:how-claude-code-works#interrupt-and-steer
 - **OpenCode 1.18.35** ✅ — `session_interrupt: escape`. Aborting cancels child jobs too. — _Evidence:_ DOCS/keybinds; OC/session/prompt.ts:1092
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Esc interrupts; queued messages steer mid-turn because the loop reloads history each step. 2.0.31 (✅): Interrupt + steer by default; interrupt keeps pending input — _Evidence:_ specs/v2/session.md
@@ -4158,7 +4158,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-15</b> Edit / resubmit an earlier message</summary>
 
 - **candy-code** 🟡 — The checkpoint restore puts the draft and caret back, and you resend from there. You cannot select an arbitrary earlier user message in the transcript to edit (unlike CC's Esc Esc message picker). — _Evidence:_ README.md:948-981; `src/Chat.php:12838,16081`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:checkpointing#rewind-and-summarize
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ TUI/routes/session/index.tsx:611-645
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ TUI/routes/session/index.tsx:611-645
@@ -4168,7 +4168,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-16</b> Copy message / code block to clipboard</summary>
 
 - **candy-code** 🟡 — The status bar confirms `✓ copied N chars`. Only the transcript text column is selectable, so borders never land on the clipboard. There is no "copy last reply" or "copy code block" command or key. — _Evidence:_ README.md:257-277; `src/Tui/TextSelection.php`; `src/Support/SystemClipboard.php`; `src/Chat.php:2869-2892`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `src-web/components/MessageMarkdown.vue:35`
+- **candy-code-web** ❌ — — — _Evidence:_ `src-web/components/MessageMarkdown.vue:35`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:commands (/copy); cc:fullscreen#use-the-mouse
 - **OpenCode 1.18.35** ✅ — `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`. — _Evidence:_ DOCS/keybinds (messages_copy); TUI/routes/session/index.tsx:877-940
 - **OpenCode 2.0.31** ✅ — `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`. — _Evidence:_ DOCS/keybinds (messages_copy); TUI/routes/session/index.tsx:877-940
@@ -4178,7 +4178,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-17</b> Mouse support (click, scroll, select)</summary>
 
 - **candy-code** ✅ — Zones are registered during the render pass so clicks hit what is drawn. Click and drag are discriminated. The settings view also takes clicks and wheel. Verified live: clicking the Todo tab undocked it and the wheel scrolled the transcript. `CANDY_CODE_DISABLE_MOUSE=1` or the `mouse` setting turns it off. — _Evidence:_ README.md:257-331; `src/Tui/PaneDragController.php`; live SGR clicks
-- **sugar-crush-web** ✅ — —
+- **candy-code-web** ✅ — —
 - **Claude Code 2.1.301** ✅ — `/scroll-speed`; mouse capture can be turned off to keep native selection. — _Evidence:_ cc:fullscreen#use-the-mouse
 - **OpenCode 1.18.35** ✅ — Scroll acceleration option. — _Evidence:_ DOCS/tui (mouse, scroll_*)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Mouse click, scroll, selection (tui `mouse`, OPENCODE_DISABLE_MOUSE). 2.0.31 (✅): Mouse + clickable OSC 8 hyperlinks (FORCE_HYPERLINK=1) — _Evidence:_ V2CL v2.0.26
@@ -4188,7 +4188,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-18</b> Scrollback / transcript viewer</summary>
 
 - **candy-code** ✅ — The scroll window slides over transcript plus input box, so the **input box scrolls off-screen** and typing while scrolled edits an invisible draft (ISSUES P2). `/share md` exports the transcript. No in-transcript search. — _Evidence:_ `src/Renderer.php:1952-1966`; lang `tui.status.scrolled`; live
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/Transcript.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/Transcript.vue`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#transcript-viewer; cc:fullscreen#search-and-review-the-conversation
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/keybinds (messages_*); TUI/routes/session/dialog-timeline.tsx
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/keybinds (messages_*); TUI/routes/session/dialog-timeline.tsx
@@ -4198,7 +4198,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-19</b> Sidebar / panels (files, todos, agents, LSP, MCP)</summary>
 
 - **candy-code** ✅ — Menu-bar pane tabs show the state (muted = undocked, bright = docked, bold-underline = focused). `/pane dock`, `/pane toggle`, `/layout reset`. Panes auto-dock the first time they have content (Tools, Todo, Agents, Files), each side taking a third of the window: at 140 cols chat shrank to 49 columns, at 80 cols to 23 (ISSUES P2). Panes are content-height, so most of a side column is often blank. MCP has no pane: `/mcp` prints into the transcript. — _Evidence:_ `src/App/App.php:1793-1796,2036-2087`; `src/Tui/Components/*Pane.php`; `src/Tui/Renderer.php:1677-1720`; live
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/panels/SidePanels.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/panels/SidePanels.vue`
 - **Claude Code 2.1.301** 🟡 — No general sidebar for files/LSP/MCP; Desktop app adds file editor/terminal panes. — _Evidence:_ cc:interactive-mode#diff-panel; cc:sub-agents; cc:plugins/mods/interface
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/feature-plugins/sidebar/*.tsx; PLUG/tui.ts:476-486
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): Sidebar (<leader>b): context, MCP, LSP, todo, modified files; plugins can add via slots. 2.0.31 (🟡): Sidebar: context + MCP only (no LSP, todo or modified-files panels); diff viewer separate — _Evidence:_ V2T/feature-plugins/sidebar/{context,mcp,footer}.tsx
@@ -4208,7 +4208,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-20</b> Todo-list display</summary>
 
 - **candy-code** ✅ — Auto-docks on the first Todo write. The list survives compaction and `/resume`. In the transcript the Todo tool card shows raw JSON-escaped arguments (`Todo(todos: "[{\"content\":...`), not a rendered list. — _Evidence:_ `src/Tui/Components/TodoPane.php`; README.md:139-146 (pane docking section); live
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/panels/TodoPanel.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/panels/TodoPanel.vue`
 - **Claude Code 2.1.301** 🟡 — Expanded state restored on resume. — _Evidence:_ cc:interactive-mode#task-list; cc:tools-reference#task-tool-availability
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/feature-plugins/sidebar/todo.tsx; TUI/component/todo-item.tsx
 - **OpenCode 2.0.31** ❌ — 1.18.35 (✅): Todo list rendered in sidebar from todowrite. 2.0.31 (❌): No todo list (no todo tool) — _Evidence:_ V2C/tool/plugin/
@@ -4218,7 +4218,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-21</b> Tool-call display (collapsible, running → done)</summary>
 
 - **candy-code** ✅ — Each card: `🔧 tool: Bash ✓ ok — <description>` plus `… N lines hidden (ctrl+o)`. Expanding shows `$ command` or `key: value` invocation, then output. `Ctrl+O` walks older rows within 3 s. Tools without a `description` argument (Todo, Prune) show escaped JSON. A model's optional `Prune` that does nothing renders as a red `✗ error` card, which is noise. The Tools pane mirrors calls (newest first, sub-agent calls prefixed `coder ›`). — _Evidence:_ `src/Message.php:383-414`; `src/Renderer.php:5300-5345`; README.md:753-765; live
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:16-57`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/ToolCard.vue:16-57`
 - **Claude Code 2.1.301** ✅ — Hooks `statusMessage` on spinner; LSP "Found N new diagnostic issues (ctrl+o to expand)". — _Evidence:_ cc:interactive-mode#keyboard-shortcuts; cc:commands (/focus)
 - **OpenCode 1.18.35** ✅ — Read shows ↳ Loaded files; Task shows live child progress; Bash streams output. — _Evidence:_ TUI/routes/session/index.tsx:2149-2300
 - **OpenCode 2.0.31** ✅ — Read shows ↳ Loaded files; Task shows live child progress; Bash streams output. — _Evidence:_ TUI/routes/session/index.tsx:2149-2300
@@ -4228,7 +4228,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-22</b> Thinking display toggle</summary>
 
 - **candy-code** ✅ — No global "always show/hide thinking" setting. Thought rows are per message. — _Evidence:_ `src/Renderer.php:4554`; README.md:762-765; live
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/ReasoningFold.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/ReasoningFold.vue`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:model-config#extended-thinking
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/tui (thinking)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): /thinking toggles reasoning display. 2.0.31 (✅): cli.json `session.thinking: show/hide` (no /thinking command) — _Evidence:_ V2D/cli/config (Sessions)
@@ -4238,7 +4238,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-23</b> Status line (customizable / scriptable)</summary>
 
 - **candy-code** 🟡 — Refreshes every 2 s (configurable slower, up to 1 h). Output is stripped of ANSI, zone sentinels and newlines and fitted last (lowest priority). The command gets no session context: stdin is closed and only the inherited env is passed (no model/cost/context JSON like CC). The `run()` call blocks the event loop for up to ~1.5 s per tick (ISSUES P2). — _Evidence:_ `src/Config/StatusLineCommand.php:85-160,396-470`; `src/Chat.php:2628-2641`; `src/Renderer.php:2779-2800`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — Multi-line, OSC 8 links, refresh interval, `subagentStatusLine` per-subagent rows; managed lock under `allowManagedHooksOnly`. — _Evidence:_ cc:statusline
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ PLUG/tui.ts:455-486
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): No scriptable status line; TUI plugins can render into slots (app_bottom, sidebar_footer, prompt_right). 2.0.31 (🟡): No scriptable status line; CLI plugins (cli.json `plugins`) can extend the TUI — _Evidence:_ V2D/build/plugins/cli; V2D/cli/config (Plugins)
@@ -4248,7 +4248,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-24</b> Cost / token display</summary>
 
 - **candy-code** ✅ — Estimates carry a `~` and the provider's billed figures carry a `$`; the two are never summed. Before anything is reported a capped session shows `$?`. A narrow bar degrades through a form ladder (`0% context`), dropping the model name first. — _Evidence:_ lang/en.php:2297-2322; `src/Renderer.php:2252-2730`; README.md:768-806
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.301** ✅ — Usage-limit banner and reset times. — _Evidence:_ cc:costs#track-your-costs; cc:costs#read-the-token-count-beside-the-spinner
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/feature-plugins/sidebar/context.tsx
@@ -4258,7 +4258,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-25</b> Keybinding customization</summary>
 
 - **candy-code** ❌ — The registry drives the `?` reference and the drift tests but cannot be overridden from config. sugar-forms has a `HasKeyOverrides` seam (`'ctrl+u' => action`) that candy-code does not expose. — _Evidence:_ `src/Commands/KeyBinding.php:8-16`; `src/Commands/KeyBindingRegistry.php:440-520`; `sugar-forms/src/TextArea/TextArea.php:175-179`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Readline word-edit keys not remappable. — _Evidence:_ cc:keybindings
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/keybinds
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): tui.json keybinds (~150 actions, leader key, multi-binding objects, 'none' to disable). 2.0.31 (✅): Keybinds in global cli.json (migrated from tui.json) — _Evidence:_ V2D/cli/keybinds; V2D/migrate-v1 (Terminal client configuration)
@@ -4268,7 +4268,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-26</b> Notifications (bell / desktop / when done)</summary>
 
 - **candy-code** ✅ — Sent as a `Cmd::raw()`, never from view(). Under tmux only `bell` arrives (no OSC passthrough). README calls it a live setting; code and SETTINGS.md say it applies at restart (ISSUES P3). — _Evidence:_ `src/Tui/TerminalNotifier.php:1-40`; `src/Config/Settings/Definitions/InterfaceSettings.php:88-97`; `src/Chat.php:3951`
-- **sugar-crush-web** ✅ — Silently unavailable on a plain-HTTP remote IP (ISSUES P3). — _Evidence:_ `src-web/components/approvals/attention.ts:185-234`
+- **candy-code-web** ✅ — Silently unavailable on a plain-HTTP remote IP (ISSUES P3). — _Evidence:_ `src-web/components/approvals/attention.ts:185-234`
 - **Claude Code 2.1.301** ✅ — Phone push via Remote Control; `PushNotification` tool. — _Evidence:_ cc:terminal-config#get-a-terminal-bell-or-notification; CL v2.1.295
 - **OpenCode 1.18.35** ✅ — Distinct `subagent_done` sound. Volume and sound packs are configurable. Disabled by default. Plugins such as kdco notify (installed here) add OS notifications. — _Evidence:_ DOCS/tui (Attention); TUI/feature-plugins/system/notifications.ts; LOCAL: ~/.config/opencode/plugins/notify.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Opt-in `attention`: desktop notification when terminal blurred + sounds for done/permission/question/error. 2.0.31 (✅): cli.json `attention` (notifications, sounds) + terminal program-status notifications — _Evidence:_ V2D/cli/config (Alerts); V2CL v2.0.29
@@ -4278,7 +4278,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-27</b> Terminal image rendering (sixel / kitty / iTerm2)</summary>
 
 - **candy-code** ✅ — Tool results carrying images are labelled and painted inline. Live image-generation preview slots. Capability probe runs at launch (DA1 + XTWINOPS), but **in cooked mode**: replies are echoed to the primary screen and appear as garbage after exit, and detection can fail (ISSUES P2). — _Evidence:_ `src/ToolResult.php:440-470`; `sugar-image/src/Mosaic.php:80-125`; `sugar-image/src/Detect.php:49-150`; `src/Commands/RenderModeCommand.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/MediaCard.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/MediaCard.vue`
 - **Claude Code 2.1.301** 🟡 — `CLAUDE_CODE_FORCE_TERMINAL_IMAGES`. — _Evidence:_ cc:env-vars; cc:plugins/mods/gallery
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ TUI/app.tsx:199
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (❌): No inline image rendering (sixel/kitty graphics); only kitty keyboard protocol. 2.0.31 (🟡): TUI diff viewer renders changed PNG/JPEG/WebP/GIF via OpenTUI image element (terminal-dependent) — _Evidence:_ V2T/feature-plugins/system/diff-viewer-image.tsx:3-45
@@ -4288,7 +4288,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-28</b> Help screen / shortcuts overlay</summary>
 
 - **candy-code** ✅ — The reference covers chat, panes, palette, session picker, folder picker, permission prompt, agent view/strip/transcript, skill picker, settings view, media form, menu bar and mouse. A test presses every listed row. The overlay is confined to the chat pane, so with panes docked descriptions are hard-cut with no ellipsis. `??` types a literal `?`. — _Evidence:_ `src/Commands/KeyBindingRegistry.php`; `src/Renderer.php:6230-6290`; `builtin-commands/1000-keys.php`, `1100-help.php`; live
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#quick-commands; cc:commands
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/app.tsx:814; TUI/feature-plugins/system/which-key.tsx
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/app.tsx:814; TUI/feature-plugins/system/which-key.tsx
@@ -4298,7 +4298,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-29</b> Onboarding / first-run setup</summary>
 
 - **candy-code** 🟡 — The notice is a transcript row (Message::notice). Provider selection is the palette's "Switch model" list. No guided key entry or provider login flow in the TUI. — _Evidence:_ `src/Chat.php:10685-10706`; lang/en.php:2609
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/views/LoginView.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/views/LoginView.vue`
 - **Claude Code 2.1.301** ✅ — `/powerup`, `/init`, `/terminal-setup`, `/mobile` QR. — _Evidence:_ cc:quickstart; cc:fullscreen#fullscreen-by-default; cc:plugins/code-intelligence
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/index (Configure); TUI/component/dialog-provider.tsx
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/index (Configure); TUI/component/dialog-provider.tsx
@@ -4308,7 +4308,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-30</b> Accessibility (screen reader, reduced motion, colour-blind)</summary>
 
 - **candy-code** 🟡 — Reduced motion only freezes the agent-live spinner (the main spinner never animates anyway). Colour-blind palettes and a screen-reader/plain-text mode are absent. All strings go through `Lang::t()`, but only `en` ships. — _Evidence:_ docs/ENVIRONMENT.md:62; `src/Theme.php:139-147,410-480`; `sugar-core/src/Util/ColorProfile.php`; `lang/en.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/styles/tokens.css:132`; `src-web/views/SessionView.vue:125`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/styles/tokens.css:132`; `src-web/views/SessionView.vue:125`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:accessibility
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/keybinds (app_toggle_animations)
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ DOCS/keybinds (app_toggle_animations)
@@ -4318,7 +4318,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-31</b> Spinner / progress / elapsed time</summary>
 
 - **candy-code** 🟡 — The `⠴ assistant is thinking…` row and the status bar glyph are hard-coded strings that never advance, and the main turn shows no elapsed timer while it runs. A stalled request looks the same as a working one. `StallDetector` is wired only for background sessions. Sub-agent live lines (`└ ⠋ Grep … · 7 tools · 0:12 · 4.1K tok`) do animate. — _Evidence:_ `src/Renderer.php:1825,2648-2675`; `src/Tui/AgentActivityLine.php`; `src/Sessions/BackgroundSupervisor.php:190-232`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue:17-25`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue:17-25`
 - **Claude Code 2.1.301** ✅ — `spinnerVerbs`, `spinnerTipsOverride`, `prefersReducedMotion`. — _Evidence:_ cc:costs#read-the-token-count-beside-the-spinner; cc:settings-reference
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/component/spinner.tsx; TUI/component/bg-pulse.tsx; TUI/routes/session/index.tsx:1481-1570
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/component/spinner.tsx; TUI/component/bg-pulse.tsx; TUI/routes/session/index.tsx:1481-1570
@@ -4328,7 +4328,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-32</b> Compact / verbose transcript toggle</summary>
 
 - **candy-code** 🟡 — There is no single chord that flips the whole transcript between compact and verbose (CC: Ctrl+O transcript mode; OC: /details). — _Evidence:_ `src/Config/Settings/Definitions/InterfaceSettings.php:252-260`; `KeyBindingRegistry.php` chat.tool-output
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `viewMode` setting. — _Evidence:_ cc:interactive-mode; cc:commands (/focus); help
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ TUI/config/keybind.ts:101,149-150
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Separate toggles for tool details, generic tool output, timestamps, concealment; no single compact mode. 2.0.31 (✅): `session.verbosity` low/high groups tools, thoughts and instruction loads into summaries — _Evidence:_ V2T/routes/session/group-view.tsx:201-240; V2CL v2.0.26
@@ -4338,7 +4338,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-33</b> Startup banner content (model, cwd, loaded files, tips)</summary>
 
 - **candy-code** ❌ — Nothing shows version, cwd, provider/model, or which CLAUDE.md/AGENTS.md, memory, skills, agents or MCP servers loaded. The model appears only at the right end of the status bar, truncated (`Qwen3.8-Flash-Ne…`). Launch notices appear only when something degraded (dropped rules, echo backend, …). `/context` later shows `project-instructions ×2` without file names. — _Evidence:_ `src/Renderer.php:4085`; `src/Chat.php:10600-10670`; live startup capture
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/views/DashboardView.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/views/DashboardView.vue`
 - **Claude Code 2.1.301** ✅ — Header names a model pinned by project/managed settings; `@agent` shown with `--agent`; warnings for big CLAUDE.md, >15K-token agent descriptions, unknown model IDs. — _Evidence:_ cc:model-config#adjust-effort-level; cc:settings-reference (companyAnnouncements); CL (welcome banner fixes)
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ TUI/feature-plugins/home/footer.tsx; TUI/feature-plugins/home/tips-view.tsx
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Home: logo, prompt (agent·model·variant), tips, footer dir:branch, MCP count, version; no loaded-files list. 2.0.31 (🟡): Home shows release highlights once after update (/highlights); still no loaded-files list — _Evidence:_ V2CL v2.0.28
@@ -4348,7 +4348,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-34</b> Prompt suggestions / tips</summary>
 
 - **candy-code** ✅ — It costs an extra title-model call per turn and is disabled with `CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1` or the setting. Verified live ("commit the change (→ to accept)"). No rotating tips. — _Evidence:_ `src/Config/Settings/Definitions/InterfaceSettings.php` (promptSuggestions); `KeyBindingRegistry.php` chat.accept-suggestion; live
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Suggestions skipped on cold cache/plan mode/near limits; flag-gated. — _Evidence:_ cc:interactive-mode#prompt-suggestions; cc:interactive-mode#you-should-know-suggestions
 - **OpenCode 1.18.35** ✅ — Tips include “Use instructions in config…” and “Commit your project's AGENTS.md…”. — _Evidence:_ TUI/feature-plugins/home/tips-view.tsx:256,279
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): ~60 rotating home tips (<leader>h) and prompt placeholders. 2.0.31 (🟡): Rotating home tips removed; release highlights shown once after updates (/highlights) — _Evidence:_ V2T (no tips view); V2CL v2.0.28
@@ -4358,7 +4358,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-N1</b> 🆕 Contrast-aware themes (colours adjusted against the detected terminal background)</summary>
 
 - **candy-code** ✅ — `Theme::pair()` projects each chrome token (labels, borders, success/warn/error) along HSL lightness until it is legible on both the real background (OSC 11 / COLORFGBG / env override) and the row-highlight fill. The OSC 11 query is sent asynchronously from `App::init`, so the first frames may re-colour once the reply lands. — _Evidence:_ `src/Theme.php:237-480`; `src/Tui/TerminalBackground.php`
-- **sugar-crush-web** ❌ — The web has no counterpart of `Theme::pair()`; the stylesheets contain no contrast logic. — _Evidence:_ `sugar-crush-web/src-web/styles/tokens.css`; `sugar-crush-web/src-web/stores/settings.ts:14-31`
+- **candy-code-web** ❌ — The web has no counterpart of `Theme::pair()`; the stylesheets contain no contrast logic. — _Evidence:_ `candy-code-web/src-web/styles/tokens.css`; `candy-code-web/src-web/stores/settings.ts:14-31`
 - **Claude Code 2.1.301** 🟡 — Custom themes override tokens by hand. — _Evidence:_ cc:settings-reference#theme; cc:terminal-config#match-the-color-theme
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/themes (System theme)
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2T/theme/system.ts:1-20
@@ -4368,7 +4368,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-N2</b> 🆕 Menu bar (F10-style menus / clickable chrome)</summary>
 
 - **candy-code** ✅ — Menus are built from `CommandRegistry` categories. Rows fall back to bare command names (`compact`, `clear`, `rewind`, `bg`) beside Title-case labels (ISSUES P3). Below ~100 columns the tabs collapse to icons and the menus drop names. — _Evidence:_ `src/Tui/Components/MenuBar.php`; `src/Commands/CommandSpec.php:359-362`; live
-- **sugar-crush-web** ✅ — The top bar has a sessions drawer toggle, approvals button, settings link, theme cycle, notify and sign out. The palette covers sessions, commands, panels and new session. — _Evidence:_ `sugar-crush-web/src-web/App.vue:77-87`; `sugar-crush-web/src-web/components/panels/CommandPalette.vue`
+- **candy-code-web** ✅ — The top bar has a sessions drawer toggle, approvals button, settings link, theme cycle, notify and sign out. The palette covers sessions, commands, panels and new session. — _Evidence:_ `candy-code-web/src-web/App.vue:77-87`; `candy-code-web/src-web/components/panels/CommandPalette.vue`
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:interactive-mode; cc:desktop
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ APP/desktop-menu.ts
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ packages/desktop; packages/app/src/shell
@@ -4378,7 +4378,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-N3</b> 🆕 In-UI media generation (image / video generation forms inside the client)</summary>
 
 - **candy-code** ✅ — Media artifacts render with sugar-image, with live preview slots while generating. No competitor has an equivalent inside the TUI. — _Evidence:_ `src/Tui/MediaForm/`; `src/Tui/VideoPlayer/`; README.md:31; docs/MEDIA.md
-- **sugar-crush-web** 🧪 — `canGenerateImage/Video` are computed from `server.hello`, but no component reads them, and the web never calls `generate.*`. Typed `/generate <prompt> [flags]` runs txt2img server-side; a bare `/generate` (which opens the TUI form) is refused as client-only. — _Evidence:_ `sugar-crush-web/src-web/stores/connection.ts:77-78`; `src/Host/SessionHost.php:973-980`; `src/Host/Commands/GenerateHostCommand.php`; `sugar-crush-web/src-web/components/MediaCard.vue`
+- **candy-code-web** 🧪 — `canGenerateImage/Video` are computed from `server.hello`, but no component reads them, and the web never calls `generate.*`. Typed `/generate <prompt> [flags]` runs txt2img server-side; a bare `/generate` (which opens the TUI form) is refused as client-only. — _Evidence:_ `candy-code-web/src-web/stores/connection.ts:77-78`; `src/Host/SessionHost.php:973-980`; `src/Host/Commands/GenerateHostCommand.php`; `candy-code-web/src-web/components/MediaCard.vue`
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:tools-reference
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -4388,7 +4388,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-N4</b> 🆕 Session recap after inactivity (one-line "where were we" summary)</summary>
 
 - **candy-code** ❌ — A grep of src/ and lang/en.php for recap, "where were we" or "welcome back" finds nothing. Prompt suggestions (a title-model call after each turn) propose your next message, Ctrl+R shows session previews, and `/handoff` starts a new session seeded with a state summary. Nothing fires after the terminal loses focus or after time passes. — _Evidence:_ `src/Host/TitleService.php:95`; `src/Host/Commands/HandoffHostCommand.php:7-25`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `sugar-crush-web/src-web/stores/layout.ts:140-160`
+- **candy-code-web** ❌ — — — _Evidence:_ `candy-code-web/src-web/stores/layout.ts:140-160`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#session-recap
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2CL v2.0.28
@@ -4398,7 +4398,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-N5</b> 🆕 Prompt hygiene (strip invisible Unicode before sending; spellcheck)</summary>
 
 - **candy-code** 🟡 — sugar-core's InputReader sanitises bracketed paste (`ProgramOptions::$sanitizePaste`, default true, which applies `Sanitize::untrusted`). That removes every ESC/CSI/OSC/DCS sequence, C0 controls except TAB/LF/CR, DEL and C1. The Renderer draws the in-progress input and user rows through `untrustedForDisplay()` → `markInvisibleFormatting()`, so these become visible `<U+XXXX>` markers: U+200B, U+202A-202E, U+2066-2069, U+2060 and U+FEFF always, and ZWJ/ZWNJ/LRM/RLM/ALM unless they follow a non-ASCII character. That makes Trojan-Source text visible. `untrusted()` keeps these characters for paste fidelity, so they reach the model unchanged (CC strips them). There is no spellcheck. — _Evidence:_ `sugar-core/src/ProgramOptions.php:160`; `sugar-core/src/Util/Sanitize.php:239-262`, `:320-380`; `src/Renderer.php:84-89`, `:1628`; `src/Chat.php:2798-2800`
-- **sugar-crush-web** 🟡 — The composer `<textarea>` sets no `spellcheck` attribute, so the browser default applies (on for textareas in Chrome and Firefox). `session.send` passes the text through unchanged. — _Evidence:_ `sugar-crush-web/src-web/components/Composer.vue:109-119`; `src/Protocol/Methods/TurnMethods.php:56-67`
+- **candy-code-web** 🟡 — The composer `<textarea>` sets no `spellcheck` attribute, so the browser default applies (on for textareas in Chrome and Firefox). `session.send` passes the text through unchanged. — _Evidence:_ `candy-code-web/src-web/components/Composer.vue:109-119`; `src/Protocol/Methods/TurnMethods.php:56-67`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:interactive-mode#invisible-characters-in-prompts; cc:interactive-mode#check-spelling-as-you-type
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ TUI/component/prompt/ (grep)
 - **OpenCode 2.0.31** ❌ — — — _Evidence:_ V2T/component/prompt/ (grep)
@@ -4408,7 +4408,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>UI-N6</b> 🆕 Cross-session attention model (server-wide approvals inbox, badge counts, title/desktop notifications)</summary>
 
 - **candy-code** 🟡 — `notify` (TerminalNotifier: off by default, or bell, or osc9; applies at restart) signals the end of a turn and a waiting approval for the CURRENT session. The tab strip (Ctrl+Tab) swaps the single live session and is refused mid-turn, so there is no other running session to badge. Background sessions never ask (asks are refused) and report back as messages. The Agents strip and pane show live sub-agents. The window title shows no count. The cross-session inbox exists only in the web UI (server-scope `permission.asked`), and `candy-code attach` follows one session. — _Evidence:_ `src/Tui/TerminalNotifier.php:9-40`; `src/Config/Settings/Definitions/InterfaceSettings.php:88`; `src/Chat.php:2157`, `:3645`
-- **sugar-crush-web** ✅ — Every open question of every open session, oldest first, grouped by session, answerable in place; re-seeded on every handshake and every `server.tick`. — _Evidence:_ `src-web/components/approvals/ApprovalsDrawer.vue`; `src-web/stores/approvals.ts`
+- **candy-code-web** ✅ — Every open question of every open session, oldest first, grouped by session, answerable in place; re-seeded on every handshake and every `server.tick`. — _Evidence:_ `src-web/components/approvals/ApprovalsDrawer.vue`; `src-web/stores/approvals.ts`
 - **Claude Code 2.1.301** ✅ — Notifications via `preferredNotifChannel` and `Notification` hook types `agent_needs_input`/`agent_completed`; OSC 7501 per-session status in terminals; phone push via Remote Control; background-subagent prompts surface in the main session. — _Evidence:_ cc:agent-view#monitor-sessions-with-agent-view; cc:terminal-config#see-session-status-in-your-terminal; cc:remote-control#mobile-push-notifications
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/tui (Attention); TUI/routes/session/index.tsx:231-240
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ V2D/cli/config (Tabs, Alerts); V2CL v2.0.29, v2.0.30
@@ -4421,7 +4421,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-01</b> Web UI</summary>
 
 - **candy-code** ✅ — Static files are GET/HEAD only, dotfiles and `..` refused, realpath-contained, hashed assets cached immutable; with no bundle installed `/` explains how to get it. — _Evidence:_ `candy-code/src/Server/Http/StaticFiles.php:83-162`; `candy-code/docs/SERVER.md:994-1004`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `sugar-crush-web/README.md`
+- **candy-code-web** ✅ — — — _Evidence:_ `candy-code-web/README.md`
 - **Claude Code 2.1.301** ✅ — Diff pane, model/effort controls, attachments. — _Evidence:_ cc:claude-code-on-the-web; cc:remote-control
 - **OpenCode 1.18.35** ✅ — `OPENCODE_DISABLE_EMBEDDED_WEB_UI` turns it off. — _Evidence:_ DOCS/web; CLI: `opencode web --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode web` serves the embedded web app (sessions, server picker, terminal panel). 2.0.31 (✅): Web UI from the same server, password-protected by default, opened via `opencode pair`; installable PWA — _Evidence:_ V2D/cli/web; V2CL v2.0.27
@@ -4431,7 +4431,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-02</b> Server mode (HTTP / WebSocket API)</summary>
 
 - **candy-code** ✅ — Durable events are logged before broadcast with gap-free per-session `seq` (20,000 kept) → resume/replay; live deltas carry byte offsets; backpressure outbox (1 MiB soft / 16 MiB hard, `server.overflow`, close 1013); 50 req/s burst 200 (verified: 59 of 260 burst requests refused -32011). Schema + doc tables generated from PHP and drift-tested (`--check` up to date). — _Evidence:_ `candy-code/src/Protocol/Dispatcher.php`; `candy-code/docs/protocol/candy-code.v1.schema.json`; `candy-code/tests/Protocol/ProtocolSchemaDriftTest.php`
-- **sugar-crush-web** ✅ — Unused: agents.list, files.changed/diff/read, generate.status/submit, permission.rules, server.health/info/shutdown, session.close/export/fork/get/queue, workflow.status, workspace.close. — _Evidence:_ grep `src-web/` vs `candy-code/docs/protocol/candy-code.v1.schema.json`
+- **candy-code-web** ✅ — Unused: agents.list, files.changed/diff/read, generate.status/submit, permission.rules, server.health/info/shutdown, session.close/export/fork/get/queue, workflow.status, workspace.close. — _Evidence:_ grep `src-web/` vs `candy-code/docs/protocol/candy-code.v1.schema.json`
 - **Claude Code 2.1.301** 🟡 — `claude mcp serve` (stdio MCP); self-hosted environments run cloud sessions on your infra. — _Evidence:_ cc:headless; cc:remote-control#connection-and-security; cc:self-hosted-environments
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/server; CORE/flag/flag.ts (OPENCODE_EXPERIMENTAL_WEBSOCKETS)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): HTTP OpenAPI 3.1 + SSE event stream; experimental websockets flag. 2.0.31 (✅): Default ports 49374 (macOS/Linux/WSL), 45278 (Windows). — _Evidence:_ V2D/cli/web; V2D/cli/index
@@ -4441,7 +4441,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-03</b> Multiple clients attached to the same session</summary>
 
 - **candy-code** ✅ — The gateway fans a workspace host's events out per client with per-client cursors; a TUI holding the session is refused `session_locked`/read-only. Verified live: an unsubscribed second client heard `permission.asked`; second answer got `already_resolved` with the winner. — _Evidence:_ `candy-code/src/Protocol/Methods/PermissionMethods.php:53-126`; live probe
-- **sugar-crush-web** ✅ — — — _Evidence:_ `e2e/multi-client.spec.ts`
+- **candy-code-web** ✅ — — — _Evidence:_ `e2e/multi-client.spec.ts`
 - **Claude Code 2.1.301** ✅ — Cross-session messaging also spans machines. — _Evidence:_ cc:remote-control
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/web (Attaching a Terminal)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/web (Attaching a Terminal)
@@ -4451,7 +4451,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-04</b> Remote control from phone / browser</summary>
 
 - **candy-code** 🟡 — Host check (DNS rebinding), Origin check, `--allowed-ips`, trusted-proxy X-Forwarded-For/Proto (Secure cookie only behind a trusted HTTPS proxy). Pre-auth slowloris stalls the listener (ISSUES). — _Evidence:_ `candy-code/docs/SERVER.md:1144-1270`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/App.vue:180-207`; Playwright probe
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/App.vue:180-207`; Playwright probe
 - **Claude Code 2.1.301** ✅ — Outbound-only, short-lived creds, Trusted Devices option; unavailable on 3P providers, ZDR, HIPAA. — _Evidence:_ cc:remote-control
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/web; DOCS/ecosystem (portal, CodeNomad)
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): LAN access via --hostname 0.0.0.0/mDNS + basic auth; phone use via community Portal/CodeNomad. 2.0.31 (✅): `opencode pair --remote` exposes the server via OpenTunnel (E2E encrypted, password); QR for phones — _Evidence:_ V2D/cli/web (Remote access); V2CL v2.0.29
@@ -4461,7 +4461,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-05</b> Desktop app</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Dispatch from phone (Pro/Max); `/desktop` hands off a CLI session. — _Evidence:_ cc:desktop; cc:desktop-linux
 - **OpenCode 1.18.35** ✅ — Can connect to a remote server URL instead. — _Evidence:_ DOCS/troubleshooting (Desktop app); packages/desktop
 - **OpenCode 2.0.31** ✅ — Can connect to a remote server URL instead. — _Evidence:_ DOCS/troubleshooting (Desktop app); packages/desktop
@@ -4471,7 +4471,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-06</b> VS Code extension</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — Built-in IDE MCP server for selection/diagnostics. — _Evidence:_ cc:vs-code
 - **OpenCode 1.18.35** ✅ — Ctrl+Esc opens a split terminal. Shares selection and tab context. — _Evidence:_ DOCS/ide; OC/ide/index.ts:6-40
 - **OpenCode 2.0.31** ✅ — Ctrl+Esc opens a split terminal. Shares selection and tab context. — _Evidence:_ DOCS/ide; OC/ide/index.ts:6-40
@@ -4481,7 +4481,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-07</b> JetBrains plugin</summary>
 
 - **candy-code** 🟡 — ACP stdio agent sharing the TUI's SessionHub/session store; `session/request_permission` for asks. — _Evidence:_ `candy-code/docs/SERVER.md:912-992`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:jetbrains
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/acp (JetBrains IDEs)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/acp (JetBrains IDEs)
@@ -4491,7 +4491,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-08</b> Other editors (Zed, Neovim, Emacs via ACP etc.)</summary>
 
 - **candy-code** ✅ — initialize/new/load/prompt/cancel/set_mode mapped; diffs as ACP `diff` blocks; ids echoed exactly. Documented, not run here. — _Evidence:_ `candy-code/docs/SERVER.md:912-992`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:terminal-config; cc:commands
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/acp; DOCS/ecosystem
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/acp; DOCS/ecosystem
@@ -4501,7 +4501,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-09</b> Chat-channel integrations (Slack, Telegram, WhatsApp, Discord, iMessage, ...)</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Channels need Bun and an open session; Team/Ent must enable channels. — _Evidence:_ cc:slack; cc:claude-tag; cc:channels
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ packages/slack/README.md; DOCS/ecosystem (kimaki)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🟡): Repo ships an unpublished Slack bot sample (packages/slack); Discord via community kimaki. 2.0.31 (❌): The Slack bot sample (packages/slack) is gone from the v2 tree; community kimaki targets v1 SDK — _Evidence:_ V2 packages/ (no slack)
@@ -4511,7 +4511,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-10</b> Mobile app</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — — — _Evidence:_ `sugar-crush-web/dist/manifest.json`
+- **candy-code-web** ❌ — — — _Evidence:_ `candy-code-web/dist/manifest.json`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:mobile
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ DOCS/index
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (❌): No mobile app. 2.0.31 (🟡): Evidence: pairing docs mention scanning the QR “from the OpenCode app”; desktop renders iOS voice delegations. — _Evidence:_ V2D/cli/web; V2CL v2.0.30; packages/app/src/session/timeline/voice-delegation.ts
@@ -4521,7 +4521,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-11</b> Web UI auth & security model</summary>
 
 - **candy-code** ✅ — Plus Host allow-list, Origin check on every upgrade and non-GET (absent Origin → only bearer/subprotocol accepted), Sec-Fetch-Site cross-site refused, CSP/nosniff/DENY/no-referrer/COOP/CORP, logs never record query/headers/bodies, token rotation signs everyone out (4001). Gaps (ISSUES): cookie shared across ports, logout leaves sockets, per-address lockout blocks the valid token, slowloris before the IP guard. — _Evidence:_ `candy-code/src/Server/Auth/*.php`; `candy-code/src/Server/Http/AuthMiddleware.php`; `candy-code/src/Server/Http/HostAndOriginGuard.php`; live curl/ws probes
-- **sugar-crush-web** ✅ — Detail in DEEP-DIVE security review and ISSUES. — _Evidence:_ `src-web/protocol/auth.ts`; `candy-code/src/Server/Http/AuthMiddleware.php`
+- **candy-code-web** ✅ — Detail in DEEP-DIVE security review and ISSUES. — _Evidence:_ `src-web/protocol/auth.ts`; `candy-code/src/Server/Http/AuthMiddleware.php`
 - **Claude Code 2.1.301** ✅ — Transcript stored server-side while RC is connected; Trusted Devices enrollment policy. — _Evidence:_ cc:remote-control#connection-and-security; cc:claude-code-on-the-web
 - **OpenCode 1.18.35** 🟡 — The docs warn that the server is unsecured without a password. No TLS, tokens or per-user accounts. — _Evidence:_ DOCS/web (Authentication); DOCS/server
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Optional HTTP basic auth (OPENCODE_SERVER_PASSWORD); unsecured by default on 127.0.0.1; CORS allowlist. 2.0.31 (✅): Generated server password, one-time 5-min pairing links, 30-day cookies, OpenTunnel E2E for remote — _Evidence:_ V2D/cli/web
@@ -4531,7 +4531,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-12</b> Cloud / hosted execution (sandboxed cloud sessions)</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `--cloud`, `/teleport`, setup scripts, environments; Projects coordinate many cloud sessions. — _Evidence:_ cc:claude-code-on-the-web; cc:self-hosted-environments; cc:claude-projects
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ DOCS/ecosystem (opencode-daytona); OC/control-plane/adapters
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🔌): No hosted execution; 🔌 opencode-daytona sandboxes / experimental workspace adapters. 2.0.31 (🟡): No hosted sessions, but @opencode/sdk/workerd embeds OpenCode in Cloudflare Durable Objects — _Evidence:_ V2D/build/sdk/cloudflare
@@ -4541,7 +4541,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-13</b> Voice interface</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:voice-dictation
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (❌): No voice interface. 2.0.31 (🟡): Voice only via the iOS app's voice-call delegation; no voice in TUI/desktop — _Evidence:_ packages/app/src/session/timeline/voice-delegation.ts:1-30
@@ -4551,7 +4551,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-14</b> Approvals from web / remote</summary>
 
 - **candy-code** ✅ — `always` remembered per session with argument-scoped patterns and cascades only to questions the pattern covers; `reject` + `cascade` stops the turn; `server.askTimeoutSeconds` optional. But `bg.spawn` work never asks at all (P1). — _Evidence:_ `candy-code/docs/SERVER.md:555-605`; `candy-code/src/Protocol/Methods/PermissionMethods.php`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/approvals.ts:113-141`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/approvals.ts:113-141`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:remote-control#mobile-push-notifications
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/server
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/server
@@ -4561,7 +4561,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-N1</b> 🆕 New-session directory picker / browse server folders from the web UI</summary>
 
 - **candy-code** ✅ — Verified live: `..`, `/etc`, `proj1/../..` and an in-root symlink pointing out all refused `-32003 outside_browse_root`; dot-dirs only with showHidden; `workspace.open {browse:true}` re-checks. — _Evidence:_ `candy-code/src/Support/Directories/DirectoryBrowser.php:77-161`; live probe
-- **sugar-crush-web** ✅ — Starts a workspace host for a non-primary root; Esc cancels. Containment verified (.., absolute paths, out-of-root symlink refused). — _Evidence:_ `src-web/components/DirectoryPicker.vue`; `e2e/dir-picker.spec.ts`
+- **candy-code-web** ✅ — Starts a workspace host for a non-primary root; Esc cancels. Containment verified (.., absolute paths, out-of-root symlink refused). — _Evidence:_ `src-web/components/DirectoryPicker.vue`; `e2e/dir-picker.spec.ts`
 - **Claude Code 2.1.301** 🟡 — Agent view (terminal) dispatches to child repos via `@<repo>`; Desktop app opens local folders. — _Evidence:_ cc:claude-code-on-the-web; cc:remote-control#start-a-remote-control-session; cc:agent-view#dispatch-to-a-specific-directory
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ APP/components/directory-picker.tsx; APP/components/dialog-select-directory-v2.tsx
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ packages/app/src/new-session/project/selector.tsx
@@ -4571,7 +4571,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-N2</b> 🆕 Multi-root workspaces (sessions in other project roots served by one server)</summary>
 
 - **candy-code** ✅ — Token-authenticated UNIX socket bound after spawn; secrets on stdin not argv; host death announced as `server.overflow {sessionId, resubscribe}` (which the web ignores — ISSUES). — _Evidence:_ `candy-code/src/Server/Workspace/Gateway.php`; `candy-code/src/Server/Workspace/WorkspaceHostProcess.php`
-- **sugar-crush-web** 🟡 — The web ignores `server.overflow {sessionId, action: resubscribe}`. — _Evidence:_ `src-web/stores/sessions.ts:64-76`; `candy-code/src/Server/Workspace/Gateway.php:579-601`
+- **candy-code-web** 🟡 — The web ignores `server.overflow {sessionId, action: resubscribe}`. — _Evidence:_ `src-web/stores/sessions.ts:64-76`; `candy-code/src/Server/Workspace/Gateway.php:579-601`
 - **Claude Code 2.1.301** ✅ — `claude agents --cwd` filters by project; Remote Control servers are per directory (up to 32 sessions, worktree spawn mode). — _Evidence:_ cc:agent-view#monitor-sessions-with-agent-view; cc:remote-control
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/server (Project, /project); OC/project/instance-store.ts
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ V2D/cli/index (Background service); specs/v2/session.md
@@ -4581,7 +4581,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-N3</b> 🆕 Lossless reconnect (resume the event stream from a cursor without gaps or duplicates)</summary>
 
 - **candy-code** 🟡 — Server: durable events are logged with a gap-free per-session `seq` before broadcast (20,000 kept, in the session DB, so seqs continue across restarts). `server.hello {resume: {sessionId: cursor}}`, or subscribing again, replays exactly what was missed. The subscription is registered before the catch-up is read, so there are no gaps or duplicates. A cursor older than the log gets a reset snapshot. Idempotency keys make a resent request safe. The SC terminal client is weaker: RemoteSessionHost keeps `lastSeq` but nothing reads it. When the socket closes, pending calls are rejected and the running turn fails with "the connection to the server closed", and the user has to re-run `candy-code attach`. — _Evidence:_ `docs/SERVER.md:375`, `:607-628`; `src/Host/RemoteSessionHost.php:99`, `:418-421`, `:583-606`; `src/Backend/RemoteBackend.php:433`
-- **sugar-crush-web** ✅ — Watchdog closes a socket silent for 2× tick (30 s). Verified by e2e "a dropped socket reconnects and resumes". — _Evidence:_ `src-web/protocol/client.ts:149-174,321-339`; `e2e/reconnect.spec.ts:5`
+- **candy-code-web** ✅ — Watchdog closes a socket silent for 2× tick (30 s). Verified by e2e "a dropped socket reconnects and resumes". — _Evidence:_ `src-web/protocol/client.ts:149-174,321-339`; `e2e/reconnect.spec.ts:5`
 - **Claude Code 2.1.301** 🟡 — After compaction or `/resume` a connected device doesn't receive earlier history; `/remote-control` reconnects manually. — _Evidence:_ cc:remote-control#what-connected-devices-see; cc:remote-control#connection-and-security
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/server (Events)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ specs/v2/session.md (Durable Events)
@@ -4591,7 +4591,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-N4</b> 🆕 Background / detached server mode (serve --detach, status / stop / logs)</summary>
 
 - **candy-code** ✅ — `serve url` mints a fresh code over the token-authenticated control socket; `--parent-pid` watchdog; drain on SIGTERM with `server.shutdown {graceSeconds}`. — _Evidence:_ `candy-code/docs/SERVER.md:123-212`
-- **sugar-crush-web** 🟡 — `server.shutdown` and `server.health` are unused by the web, a server drain shows only "reconnecting…", and logs are CLI-only (`serve logs`). — _Evidence:_ `docs/SERVER.md:123-212`; `sugar-crush-web/src-web/components/ConnectionBanner.vue`
+- **candy-code-web** 🟡 — `server.shutdown` and `server.health` are unused by the web, a server drain shows only "reconnecting…", and logs are CLI-only (`serve logs`). — _Evidence:_ `docs/SERVER.md:123-212`; `candy-code-web/src-web/components/ConnectionBanner.vue`
 - **Claude Code 2.1.301** ✅ — Survives sleep and restarts crashed sessions; `claude remote-control` server mode runs in the foreground (resumable for ~4 h after stop). — _Evidence:_ cc:cli-reference (`claude daemon`); cc:agent-view#how-background-sessions-are-hosted; help
 - **OpenCode 1.18.35** ❌ — — — _Evidence:_ CLI: `opencode serve --help`
 - **OpenCode 2.0.31** ✅ — Server logs go to the log dir; `--print-logs` for server logs needs `--standalone`. — _Evidence:_ V2CLI: `opencode service --help`; V2D/cli/web
@@ -4601,7 +4601,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>WEB-N5</b> 🆕 Terminal client that attaches to a running server session (remote TUI)</summary>
 
 - **candy-code** 🟡 — Documented gaps: slash commands run locally on the attached window's copy; a turn started by another client shows only on re-attach. — _Evidence:_ `candy-code/docs/SERVER.md:857-910`
-- **sugar-crush-web** ➖ — Approvals answered in either client close the card everywhere (first answer wins). — _Evidence:_ `docs/SERVER.md:857-910`
+- **candy-code-web** ➖ — Approvals answered in either client close the card everywhere (first answer wins). — _Evidence:_ `docs/SERVER.md:857-910`
 - **Claude Code 2.1.301** ✅ — Local machine only (per-session sockets); remote attach is via web/mobile Remote Control, not a TUI. — _Evidence:_ help (`attach`); cc:sessions; cc:agent-view#attach-to-a-session
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ CLI: `opencode attach --help`, `opencode run --help`
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ V2CLI: `opencode --help`; V2D/cli/web (Standalone)
@@ -4614,7 +4614,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-01</b> Non-interactive mode (-p / run)</summary>
 
 - **candy-code** 🟡 — `NonInteractive::run()` builds the engine backend, closes AskUser/PlanExit, prints the final message. Default permission mode for `-p` is bypass-permissions (owner ruling, documented); maxToolSteps default 1000; `CANDY_CODE_MAX_COST` is neither validated nor enforced on this path (ISSUES P1). — _Evidence:_ `bin/candy-code:439-441`; `src/Cli/NonInteractive.php:196-310`; `src/Backend/EngineBackend.php:395-405`; repro `CANDY_CODE_MAX_COST=5USD … -p hi` → exit 0
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — `--bare` for reproducible CI; `--permission-prompts none`, `--permission-prompt-tool`. — _Evidence:_ help (`-p`); cc:headless
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ CLI: `opencode run --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode run [message]` with --agent/--model/--variant/--file/--command/--continue/--attach. 2.0.31 (✅): No --command, --share or --variant flags (variant via model ref). — _Evidence:_ V2CLI: `opencode run --help`
@@ -4624,7 +4624,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-02</b> Output formats (text / json / stream-json)</summary>
 
 - **candy-code** 🟡 — Error types usage/provider_configuration/installation/backend/encoding/mcp-config/not-found. Subcommands share the envelope. `stream-json` → exit 2. — _Evidence:_ `src/Cli/ParsedArgs.php:33`; `src/Cli/NonInteractive.php:1175-1188,723-800`; README `1662-1690`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — `--forward-subagent-text`; `prompt_suggestion` messages. — _Evidence:_ help; cc:headless#stream-responses
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ CLI: `opencode run --help`; DOCS/sdk
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ CLI: `opencode run --help`; DOCS/sdk
@@ -4634,7 +4634,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-03</b> Stdin piping</summary>
 
 - **candy-code** 🟡 — `readStdinIfPiped()` does a blocking `stream_get_contents()` whenever stdin is not a TTY; `echo x ∣ candy-code -p` → "no prompt given" exit 2; `sleep 4 ∣ candy-code -p hi` takes 4 s. — _Evidence:_ `src/Cli/NonInteractive.php:171,840-856,1054-1077`; repro timings
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:headless#pipe-data-through-claude
 - **OpenCode 1.18.35** ✅ — `Bun.stdin.text()` when stdin is not a TTY. — _Evidence:_ OC/cli/cmd/run.ts:416-418
 - **OpenCode 2.0.31** ✅ — `Bun.stdin.text()` when stdin is not a TTY. — _Evidence:_ OC/cli/cmd/run.ts:416-418
@@ -4644,7 +4644,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-04</b> Max-turns / budget limits for headless runs</summary>
 
 - **candy-code** 🟡 — `--max-turns` → unrecognized option (exit 2). `CANDY_CODE_MAX_COST`/`maxCostUsd` reach only the TUI/host path via `TurnRunner::withSpendCap()`. — _Evidence:_ `src/Host/TurnRunner.php:286`; `src/Cli/NonInteractive.php:261`; repro `--max-turns 3` → exit 2
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:cli-reference; help (`--max-budget-usd`)
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/agents (Max steps)
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ DOCS/agents (Max steps)
@@ -4654,7 +4654,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-05</b> GitHub Action / CI recipe</summary>
 
 - **candy-code** 🟡 — README "Running in CI and containers" + systemd unit for serve. — _Evidence:_ `README.md:1823-1842`; `docs/examples/candy-code.service`
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:github-actions; cc:gitlab-ci-cd
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/github; DOCS/gitlab
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (✅): Official GitHub Action (comments, PRs, issues, schedule, dispatch); GitLab CI component. 2.0.31 (🟡): GitHub Action exists only for the v1 CLI; no v2 CI recipe beyond `opencode run` — _Evidence:_ github/action.yml; V2D/cli/commands (run → CI)
@@ -4664,7 +4664,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-06</b> SDK (TS / Python / PHP)</summary>
 
 - **candy-code** 🟡 — `docs/protocol/candy-code.v1.schema.json`; README shows ProviderFactory/ProviderInterface usage; `examples/*.php`. No TS/Python client (python_port is an incubating port of the app). — _Evidence:_ `README.md:1412-1419,2202-2220`; `docs/protocol/candy-code.v1.schema.json`; `src/Cli/Acp.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/protocol/`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/protocol/`
 - **Claude Code 2.1.301** ✅ — Same tools, hooks, subagents, sessions, permissions. — _Evidence:_ cc:agent-sdk/overview
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/sdk
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): JS/TS SDK (+ official Go and Python SDKs). 2.0.31 (✅): @opencode/sdk (in-process host, Effect + Promise, workerd) and @opencode/client — _Evidence:_ V2D/build/sdk/index
@@ -4674,7 +4674,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-07</b> Scheduled tasks / cron</summary>
 
 - **candy-code** ❌ — No scheduler code exists (`crontab` appears only in a shell deny list). — _Evidence:_ `src/Permissions/SessionPermissionMemo.php:148`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `/schedule`; routines need claude.ai plans; session crons expire after 7 days. — _Evidence:_ cc:routines; cc:desktop-scheduled-tasks; cc:scheduled-tasks
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/github (Schedule); DOCS/ecosystem
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Scheduled runs via GitHub Actions `schedule`; local cron via 🔌 opencode-scheduler. 2.0.31 (🟡): Only via the V1-based GitHub Action schedule or external cron; scheduler plugin is V1-API — _Evidence:_ github/action.yml; npm view opencode-scheduler
@@ -4684,7 +4684,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-08</b> Loop / recurring prompts (/loop)</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `builtin-commands/`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:scheduled-tasks
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ awesome-opencode (hiai-opencode)
 - **OpenCode 2.0.31** ❓ — 1.18.35 (🔌): No /loop; 🔌 oh-my-openagent / hiai-opencode ralph-loop style continuation. 2.0.31 (❓): No native loop; ralph-loop style plugins are V1-API — v2 compatibility not verified — _Evidence:_ npm metadata (see PLG-10)
@@ -4694,7 +4694,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-09</b> Goal / long-running autonomous mode</summary>
 
 - **candy-code** ✅ — Needs a title backend; respects the spend cap. `/goal clear` stops it, and the state is stored in history. — _Evidence:_ `src/Chat.php:3726-3800,2513,3877`; `src/Goal/GoalMode.php:25,28`; `src/Goal/GoalJudge.php:118`
-- **sugar-crush-web** ❌ — — — _Evidence:_ live `command.list`
+- **candy-code-web** ❌ — — — _Evidence:_ live `command.list`
 - **Claude Code 2.1.301** ✅ — Goal is a session-scoped prompt-based Stop hook; 🔌 `ralph-loop` for iterate-until-done loops. — _Evidence:_ cc:goal; cc:workflows#let-claude-decide-with-ultracode
 - **OpenCode 1.18.35** 🔌 — It relies on experimental hooks. Tested to 1.18.29 and pinned to <2. — _Evidence:_ opencode-goal-plugin README (global npm 0.10.0)
 - **OpenCode 2.0.31** ❌ — 1.18.35 (🔌): 🔌 opencode-goal-plugin (installed here): /goal with auto-continue, limits, evidence-gated completion. 2.0.31 (❌): opencode-goal-plugin explicitly does not support OpenCode 2; no native goal mode — _Evidence:_ opencode-goal-plugin README (OpenCode 2 not supported)
@@ -4704,7 +4704,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-10</b> Workflows / multi-step orchestration scripts</summary>
 
 - **candy-code** ✅ — Stage types: sequential, tasks:, parallel; pipeline and verification are PHP-only. Each stage agent runs the real engine loop in a forked child under hooks and the gate, with retries and timeouts. A model-authored plan cannot be resumed. The project tier is YAML-only. — _Evidence:_ `src/Workflows/WorkflowEngine.php:690`; `src/Workflows/WorkflowRegistry.php:300-385,1074`; `src/Tools/BuiltIn/WorkflowTool.php:59`; `docs/WORKFLOWS.md:406-454`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/components/panels/WorkflowPanel.vue`; `src-web/stores/agents/workflows.ts`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/panels/WorkflowPanel.vue`; `src-web/stores/agents/workflows.ts`
 - **Claude Code 2.1.301** ✅ — Bundled `/deep-research`; `/workflows` progress view; Pro must enable. — _Evidence:_ cc:workflows
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ DOCS/ecosystem; awesome-opencode
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🔌): Subtask commands natively; orchestration via 🔌 subtask2, opencode-conductor, open-dynamic-workflows. 2.0.31 (🟡): Native background `subagent` commands; V1 orchestration plugins (subtask2, conductor) don't run — _Evidence:_ V2D/commands (Background); npm view subtask2
@@ -4714,7 +4714,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-11</b> Webhooks / external triggers</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `docs/SERVER.md:260-267`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:routines; cc:channels
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/server
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): External triggers via HTTP API (prompt_async) and GitHub events; no generic webhook receiver. 2.0.31 (🟡): `opencode api` + HTTP API; still no webhook receiver — _Evidence:_ V2CLI: `opencode api --help`
@@ -4724,7 +4724,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>AUT-12</b> Exit codes / scripting ergonomics</summary>
 
 - **candy-code** ✅ — Unknown flags, flag-as-prompt, stray operands, bad --root/--config, unusable explicitly-selected provider (never silently falls back to echo), unusable permission policy → 2. Shell completion for bash/zsh/fish. Warnings to stderr only (display_errors=stderr). — _Evidence:_ `bin/candy-code:13-208,291-362,585-591`; `src/Cli/NonInteractive.php:486-576`; `--help` exit-code section
-- **sugar-crush-web** ➖ — —
+- **candy-code-web** ➖ — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:headless; cc:cli-reference
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ OC/cli/cmd/run.ts:278-466,801-822
 - **OpenCode 2.0.31** 🟡 — — — _Evidence:_ OC/cli/cmd/run.ts:278-466,801-822
@@ -4737,7 +4737,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-01</b> Settings-file hierarchy</summary>
 
 - **candy-code** ✅ — Project files ignored until the root is listed in `trustedProjectSettings`; project tier limited to a whitelist (no provider, permission or instruction keys); `permissionMode/Rules` from user files only and a malformed one stops launch; `--config <file>` replaces config.json. — _Evidence:_ `README.md:994-1100`; `src/Config/LayeredSettings.php:819-943`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/settings/serverSettings.ts:60-70`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/settings/serverSettings.ts:60-70`
 - **Claude Code 2.1.301** ✅ — Arrays merge; some keys only honored in user/managed scopes; `--setting-sources`. — _Evidence:_ cc:settings#settings-precedence; cc:settings-reference
 - **OpenCode 1.18.35** ✅ — Configs are merged, not replaced. `instructions` arrays concatenate. `tui.json` is separate (OPENCODE_TUI_CONFIG). — _Evidence:_ DOCS/config (Precedence order); OC/config/config.ts:48-49
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): Remote .well-known → global → OPENCODE_CONFIG → project (walk to git root) → .opencode → inline → managed → MDM. 2.0.31 (✅): Same locations (V1 shapes normalized in memory) + global cli.json for the terminal client; managed > project — _Evidence:_ V2D/migrate-v1 (Configuration); V2CL v2.0.29
@@ -4747,7 +4747,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-02</b> Settings UI (/config)</summary>
 
 - **candy-code** ✅ — Writes go through `SettingsWriter` + `SettingValidator`; save preview names the file; toast, not transcript row. — _Evidence:_ `builtin-commands/0750-settings.php`; `docs/SETTINGS.md:1164-1270`
-- **sugar-crush-web** ✅ — Targets: your config, a trusted project's local or committed shared file. e2e covers preview/save/read-back. — _Evidence:_ `src-web/components/settings/SettingsView.vue`; `e2e/settings.spec.ts:17`
+- **candy-code-web** ✅ — Targets: your config, a trusted project's local or committed shared file. e2e covers preview/save/read-back. — _Evidence:_ `src-web/components/settings/SettingsView.vue`; `e2e/settings.spec.ts:17`
 - **Claude Code 2.1.301** ✅ — Settings that grant unattended execution can't be turned on via key=value. — _Evidence:_ cc:commands (/config); cc:settings
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/tui (Customization); DOCS/server
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): No /config screen; palette toggles persist (kv); desktop settings; PATCH /config API. 2.0.31 (✅): TUI /settings dialog and desktop Settings (projects, providers, pairing) — _Evidence:_ V2T slash list (settings); V2T/component/dialog-config.tsx
@@ -4757,7 +4757,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-03</b> JSON schema / validation</summary>
 
 - **candy-code** 🟡 — Repro: `{"permisionMode":"plan","maxCostUsd":"lots",…}` → `-p` ran in bypass-permissions, no cap, and `doctor` printed "No problems detected". Only maxToolSteps/maxOutputTokens get "nonsense" notices. No JSON Schema file for editors (the shipped schema is the RPC protocol's). — _Evidence:_ `src/Config/LayeredSettings.php:1155-1185`; `src/Cli/Bootstrap.php:5615-5645`; `src/Config/Settings/SettingsSchema.php`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `src-web/stores/settings/fields.ts`; `e2e/settings.spec.ts:59`
+- **candy-code-web** ✅ — — — _Evidence:_ `src-web/stores/settings/fields.ts`; `e2e/settings.spec.ts:59`
 - **Claude Code 2.1.301** ✅ — In `-p`, invalid settings files are silently ignored. — _Evidence:_ cc:settings; help (`-p` note)
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/config (Schema); OC/skill/index.ts:26-30
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): JSON Schemas opencode.ai/config.json + tui.json; invalid config hard-fails at startup. 2.0.31 (✅): Schema accepts both V1 and V2 shapes; warnings for ignored/conflicting fields — _Evidence:_ V2CL v2.0.30; V2D/migrate-v1
@@ -4767,7 +4767,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-04</b> Environment variables</summary>
 
 - **candy-code** ✅ — Precedence flag > env > config files documented per key. A few rows drift from code (CONNECT_TIMEOUT "connection only", SHARE_UPLOAD_URL "public default" in --help). — _Evidence:_ `docs/ENVIRONMENT.md`; `lang/en.php:300-520`; `tests/Config/EnvRosterDriftTest.php`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/settings/SettingsField.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/settings/SettingsField.vue`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:env-vars
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ CORE/flag/flag.ts; DOCS/cli (Environment variables)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ CORE/flag/flag.ts; DOCS/cli (Environment variables)
@@ -4777,7 +4777,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-05</b> Hot reload of config</summary>
 
 - **candy-code** 🟡 — `ToolLimits::current()` and EngineBackend re-read merged config per turn. `docs/SETTINGS.md` prose says "only three keys actually change behaviour mid-session", contradicting its own generated apply table (≈50 next-turn keys). — _Evidence:_ `docs/SETTINGS.md:1272-1345`; `src/Tools/ToolLimits.php:164-186`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/components/settings/SettingsField.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/settings/SettingsField.vue`
 - **Claude Code 2.1.301** ✅ — `ConfigChange` hook can block changes. — _Evidence:_ cc:settings; cc:hooks#configchange
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ OC/server/routes/instance/httpapi/handlers/config.ts:20; OC/server/routes/instance/httpapi/lifecycle.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Config changed through the API reloads the instance; on-disk edits need a restart. 2.0.31 (✅): Watched config/commands/skills/instructions reload automatically; `opencode reload` — _Evidence:_ V2D/plugins (Reload); V2D/commands (Loading); V2CLI: `opencode reload --help`
@@ -4787,7 +4787,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-06</b> Doctor / diagnostics command</summary>
 
 - **candy-code** 🟡 — Gaps: provider probe only checks the name is known — `CANDY_CODE_PROVIDER=anthropic` with no key reports OK while `-p` exits 2; config keys not schema-checked; no network/auth probe. — _Evidence:_ `src/Cli/Subcommands.php:298-470`; repro doctor vs `-p`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `/status` connectivity and policy lines. — _Evidence:_ help (`doctor`); cc:skills#check-your-setup-with-/doctor
 - **OpenCode 1.18.35** 🟡 — `debug` commands that touch the DB failed here with `PRAGMA wal_checkpoint` (DB busy or sandbox); `debug paths` worked. — _Evidence:_ CLI: `opencode debug --help`
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): `opencode debug config/paths/info/lsp/rg/skill/snapshot/startup/agent`, `mcp debug`; no single doctor. 2.0.31 (🟡): `opencode debug agents/config/paths [selector]`; service status; no doctor — _Evidence:_ V2CLI: `opencode debug --help`
@@ -4797,7 +4797,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-07</b> Per-project config</summary>
 
 - **candy-code** ✅ — `trustedProjectSettings`, `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands` read from user config.json only, frozen for the process. — _Evidence:_ `README.md:1088-1110`; `docs/SETTINGS.md:124-150`
-- **sugar-crush-web** ✅ — — — _Evidence:_ `candy-code/docs/SERVER.md:670-686`
+- **candy-code-web** ✅ — — — _Evidence:_ `candy-code/docs/SERVER.md:670-686`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:settings
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/config
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/config
@@ -4807,7 +4807,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>CFG-08</b> Config migration / import from other tools</summary>
 
 - **candy-code** 🟡 — Foreign agent/skill dirs are read by other subsystems (other agents' rows). — _Evidence:_ `--help` mcp import text; `src/Host/Commands/MemoryCommand.php:211`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `--dry-run`, `--yes=<digest>`. — _Evidence:_ help (`import`); cc:commands
 - **OpenCode 1.18.35** 🟡 — 🔌 opencode-ccs-sync imports CCS providers. — _Evidence:_ DOCS/config (TUI); OC/config/tui-migrate.ts; CORE/v1/config/migrate.ts
 - **OpenCode 2.0.31** ✅ — 1.18.35 (🟡): Auto-migrates legacy keys (tools→permission, maxSteps→steps, TUI keys); no import of other tools' settings. 2.0.31 (✅): Reads V1 config, migrates tui.json → cli.json, imports V1 sessions; `ask OpenCode to migrate` path — _Evidence:_ V2D/migrate-v1
@@ -4820,7 +4820,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>OBS-01</b> Debug logs</summary>
 
 - **candy-code** ✅ — Before Program starts, `error_log` is redirected (fd 2 is the screen); fatal → one line naming the log. `-p`/subcommands keep stderr. — _Evidence:_ `bin/candy-code:484-521`; `src/Diagnostics/TuiErrorLog.php`; `README.md:136`
-- **sugar-crush-web** ❌ — — — _Evidence:_ `candy-code/src/Protocol/Dispatcher.php:365-370`
+- **candy-code-web** ❌ — — — _Evidence:_ `candy-code/src/Protocol/Dispatcher.php:365-370`
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ help; cc:debug-your-config
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ DOCS/troubleshooting (Logs)
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ DOCS/troubleshooting (Logs)
@@ -4830,7 +4830,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>OBS-02</b> OpenTelemetry / metrics export</summary>
 
 - **candy-code** ❌ — An internal typed event bus exists (`src/Events/*`: UsageUpdated, ToolStarted/Finished, StepStarted…) that could feed an exporter. — _Evidence:_ grep otel/otlp/prometheus → none
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — `tool_decision` events, raw API bodies opt-in, GenAI semantic conventions (v2.1.300). — _Evidence:_ cc:monitoring-usage; CL v2.1.300
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ CORE/observability/otlp.ts:7-58; CORE/observability.ts; OC/session/llm.ts:208,345
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): OTLP traces + logs via OTEL_EXPORTER_OTLP_ENDPOINT; experimental.openTelemetry adds AI SDK spans. 2.0.31 (✅): OTLP export via util/observability (OTEL_* env); V1 experimental.openTelemetry ignored — _Evidence:_ packages/util/src/observability/otlp.ts; V2D/migrate-v1
@@ -4840,7 +4840,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>OBS-03</b> Usage / cost reports (/cost, /usage, stats)</summary>
 
 - **candy-code** 🟡 — Honest distinctions: `$?` when nothing priced vs `$0.0000`; unpriced models flagged as lower bound. No per-day/per-model stats command. — _Evidence:_ `builtin-commands/2200-budget.php`; `src/Host/SpendLedger.php:161-230`; `README.md:794-801`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — 🔌 `session-report`, `receipts`. — _Evidence:_ cc:costs; cc:analytics
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ CLI: `opencode stats --help`
 - **OpenCode 2.0.31** ✅ — 1.18.35 (✅): `opencode stats` token/cost by days, tools, models, project. 2.0.31 (✅): `opencode stats` with --days/--year/--all, --models, --tools (reliability), --cost, --json — _Evidence:_ V2CLI: `opencode stats --help`
@@ -4850,7 +4850,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>OBS-04</b> Status command (/status)</summary>
 
 - **candy-code** 🟡 — 55 built-in commands; none named status/cost/usage. — _Evidence:_ `ls builtin-commands` (55 specs); `docs/COMMANDS.md:305-362`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `src-web/App.vue:83`; `src-web/views/DashboardView.vue`
+- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/App.vue:83`; `src-web/views/DashboardView.vue`
 - **Claude Code 2.1.301** ✅ — Runs mid-turn. — _Evidence:_ cc:commands (/status)
 - **OpenCode 1.18.35** ✅ — — — _Evidence:_ TUI/component/dialog-status.tsx
 - **OpenCode 2.0.31** ✅ — — — _Evidence:_ TUI/component/dialog-status.tsx
@@ -4860,7 +4860,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>OBS-05</b> Raw transcript files on disk</summary>
 
 - **candy-code** 🟡 — No plain JSONL transcript files; durable per-session event log in `session_events` (capped). — _Evidence:_ `src/Session/EnhancedSessionStore.php:594-640,2065`; `src/Agents/Live/SubAgentTranscriptLog.php`
-- **sugar-crush-web** 🟡 — —
+- **candy-code-web** 🟡 — —
 - **Claude Code 2.1.301** ✅ — — — _Evidence:_ cc:sessions#where-transcripts-are-stored
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ CLI: `opencode db --help`
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Transcripts live in SQLite (not per-session files); `opencode db` shell, `opencode export` JSON. 2.0.31 (🟡): SQLite durable events + `session export`; `debug paths db` for sqlite3 — _Evidence:_ V2D/cli/index (Paths)
@@ -4870,7 +4870,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>OBS-06</b> Insights / analytics over sessions</summary>
 
 - **candy-code** ❌ — `/agents` dashboard shows per-agent tokens/cost for the live launch only. — _Evidence:_ `src/Agents/AgentManager.php:830-875`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ✅ — Stored in `~/.claude/usage-data/`. — _Evidence:_ cc:costs#analyze-your-usage-patterns; cc:commands
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/ecosystem
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Only `opencode stats`; 🔌 wakatime, helicone-session, sentry-monitor. 2.0.31 (🟡): Only `opencode stats` (now with tool reliability); wakatime etc. are V1-API plugins — _Evidence:_ V2CLI: `opencode stats --help`; npm view opencode-wakatime dependencies
@@ -4883,7 +4883,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-01</b> Always-on daemon / gateway</summary>
 
 - **candy-code** 🟡 — serve status/stop/logs/url/token management; `--parent-pid` ties a private server to an editor. — _Evidence:_ `--help` serve section; `docs/SERVER.md:201-210`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/docs/SERVER.md:123-212`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/docs/SERVER.md:123-212`
 - **Claude Code 2.1.301** 🟡 — Channels only deliver while a session is open. — _Evidence:_ cc:agent-view#the-supervisor-process; cc:channels
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/server
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): `opencode serve` can run headless/always-on (mDNS), but there is no assistant gateway or channels. 2.0.31 (🟡): Always-on per-user background service + remote pairing; still no assistant channels — _Evidence:_ V2D/cli/index (Background service)
@@ -4893,7 +4893,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-02</b> Heartbeat / proactive check-ins</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `builtin-commands` (goal, grind)
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:scheduled-tasks; cc:routines
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -4903,7 +4903,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-03</b> Multi-channel inbox</summary>
 
 - **candy-code** ❌ — Only TUI, web UI, ACP.
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🔌 — Slack is a separate cloud integration. — _Evidence:_ cc:channels; local: catalog
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -4913,7 +4913,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-04</b> Persona / identity files (SOUL.md, IDENTITY.md, USER.md)</summary>
 
 - **candy-code** ❌ — — — _Evidence:_ `src/Runtime.php:4882-4890`
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:output-styles; cc:sub-agents
 - **OpenCode 1.18.35** 🔌 — — — _Evidence:_ LOCAL: ~/.config/opencode/memory/persona.md, human.md
 - **OpenCode 2.0.31** 🔌 — — — _Evidence:_ LOCAL: ~/.config/opencode/memory/persona.md, human.md
@@ -4923,7 +4923,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-05</b> Device nodes (camera, screen, location)</summary>
 
 - **candy-code** ❌ — Clipboard image paste only.
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🟡 — — — _Evidence:_ cc:computer-use; cc:chrome
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -4933,7 +4933,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-06</b> Voice wake / talk mode</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** ❌ — — — _Evidence:_ cc:voice-dictation
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (❌): No voice wake/talk mode. 2.0.31 (🟡): iOS app voice calls delegate requests to OpenCode; no wake word — _Evidence:_ packages/app/src/session/timeline/voice-delegation.ts
@@ -4943,7 +4943,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-07</b> Email / calendar integrations</summary>
 
 - **candy-code** ❌ — —
-- **sugar-crush-web** ❌ — —
+- **candy-code-web** ❌ — —
 - **Claude Code 2.1.301** 🔌 — — — _Evidence:_ cc:mcp#use-mcp-servers-from-claude-ai
 - **OpenCode 1.18.35** ❌ — —
 - **OpenCode 2.0.31** ❌ — —
@@ -4953,7 +4953,7 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 <details><summary><b>PA-08</b> Multi-user access control (DM pairing, allowlists)</summary>
 
 - **candy-code** 🟡 — `--allowed-ips`, `--allowed-host`, `--allowed-origin`, rate-limited sign-in, root refused. — _Evidence:_ `--help` serve section; `src/Server/Auth/RateLimiter.php`; `src/Server/Http/AuthMiddleware.php:55-62`
-- **sugar-crush-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Dispatcher.php` (Scope::owner); `candy-code/docs/SERVER.md:1199-1236`
+- **candy-code-web** 🟡 — — — _Evidence:_ `candy-code/src/Protocol/Dispatcher.php` (Scope::owner); `candy-code/docs/SERVER.md:1199-1236`
 - **Claude Code 2.1.301** 🔌 — — — _Evidence:_ local: catalog (telegram/discord/imessage descriptions); cc:claude-tag
 - **OpenCode 1.18.35** 🟡 — — — _Evidence:_ DOCS/server (Authentication)
 - **OpenCode 2.0.31** 🟡 — 1.18.35 (🟡): Single shared basic-auth credential for the server; no per-user ACLs or pairing. 2.0.31 (🟡): Server password + one-time pairing links; still single-user — _Evidence:_ V2D/cli/web
@@ -4966,13 +4966,13 @@ Every cell of the matrix in §3 is expanded below with the researching agent's f
 ## Appendix B — Method and sources
 
 **Process.**
-1. **Shared taxonomy.** Nine research agents filled the same 356-row taxonomy across 25 categories. Six audited candy-code and sugar-crush-web: context/memory, extensibility, engine/sessions/CLI, tools/safety, TUI, and web/server. Three researched Claude Code, OpenCode and OpenClaw.
+1. **Shared taxonomy.** Nine research agents filled the same 356-row taxonomy across 25 categories. Six audited candy-code and candy-code-web: context/memory, extensibility, engine/sessions/CLI, tools/safety, TUI, and web/server. Three researched Claude Code, OpenCode and OpenClaw.
 2. **Extra rows.** Features found outside the taxonomy were merged into 42 🆕 rows; every product was then rated on each of them. A follow-up pass compared OpenCode 1.18.35 with 2.0.31.
 3. **Verification.** Every issue an audit reported was re-checked by a separate adversarial verifier (6 passes). Verifiers confirmed, corrected, downgraded or rejected each claim; see `sugar_issues.md`.
 4. **Merge.** Rows were merged mechanically by row ID, so every cell in §3 is the rating of the agent that studied that product. Narrative sections §1, §4 and §6 were written from the agents' deep-dive reports.
 
-**candy-code and sugar-crush-web.**
-- Source under `candy-code/src/`, `candy-code/docs/`, `candy-code/README.md`, `sugar-crush-web/src-web/`, `candy-code/src/Server/`, `candy-code/src/Protocol/`. Reachability was traced from `bin/candy-code`.
+**candy-code and candy-code-web.**
+- Source under `candy-code/src/`, `candy-code/docs/`, `candy-code/README.md`, `candy-code-web/src-web/`, `candy-code/src/Server/`, `candy-code/src/Protocol/`. Reachability was traced from `bin/candy-code`.
 - Live runs:
   - the TUI in tmux (isolated HOME, scratch project, dev SGLang endpoint);
   - headless `-p`;

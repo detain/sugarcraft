@@ -3,7 +3,7 @@
   "params": {
     "minProtocol": 1,
     "maxProtocol": 1,
-    "client": {"name": "sugar-crush-web", "version": "0.1.0", "instanceId": "tab-7f3a"},
+    "client": {"name": "candy-code-web", "version": "0.1.0", "instanceId": "tab-7f3a"},
     "caps": ["deltas"],
     "resume": {"a1b2c3d4e5f60718": 812}
   },

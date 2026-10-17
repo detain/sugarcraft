@@ -82,7 +82,7 @@ under [`docs/`](docs/) for the full detail.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
 | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear |
-| [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) | The browser UI that `candy-code serve` hosts |
+| [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) | The browser UI that `candy-code serve` hosts |
 
 ## Install
 
@@ -98,7 +98,7 @@ width and locale handling, used directly by the rendering stack). `ext-pcntl` is
 each turn runs in a forked child, and without it turns, parallel tool calls and
 sub-agents run in-process and the screen only updates when they finish.
 `candy-code serve` additionally needs `ext-pcntl`, `ext-posix` and `ext-ffi`,
-and serves the browser UI when `sugarcraft/sugar-crush-web` is installed
+and serves the browser UI when `sugarcraft/candy-code-web` is installed
 beside it. `candy-code doctor` checks all of this for you.
 
 ### Install as a user
@@ -2027,7 +2027,7 @@ curl -sN http://localhost:11434/api/chat -d "$payload" | jq -r '.message.content
 server on `127.0.0.1:7420`, and prints a one-time sign-in URL. Three kinds of
 client drive it over the `candy-code.v1` JSON-RPC protocol:
 
-- **A browser.** With [`sugarcraft/sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web)
+- **A browser.** With [`sugarcraft/candy-code-web`](https://github.com/sugarcraft/candy-code-web)
   installed, `serve` hands out its pre-built Vue UI on the same port: a
   sessions sidebar, a streaming transcript with tool cards and diffs,
   permission cards, a composer that queues, steers or interrupts, tabs and a

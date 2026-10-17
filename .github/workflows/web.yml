@@ -1,8 +1,8 @@
 name: web
 
-# Node CI for sugar-crush-web, the Vite + Vue 3 browser UI. The PHP shim and
+# Node CI for candy-code-web, the Vite + Vue 3 browser UI. The PHP shim and
 # its AssetsTest run in ci.yml like every other lib (scripts/affected-libs.php
-# discovers sugar-crush-web through composer.json + phpunit.xml); this
+# discovers candy-code-web through composer.json + phpunit.xml); this
 # workflow owns the TypeScript side and the committed bundle.
 #
 # THE LOAD-BEARING STEP is the dist/ diff. `dist/` is committed so PHP users
@@ -27,7 +27,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'sugar-crush-web/**'
+      - 'candy-code-web/**'
       - 'candy-code/docs/protocol/**'
       - 'candy-code/src/Server/**'
       - 'candy-code/src/Protocol/**'
@@ -36,7 +36,7 @@ on:
       - '.github/workflows/web.yml'
   pull_request:
     paths:
-      - 'sugar-crush-web/**'
+      - 'candy-code-web/**'
       - 'candy-code/docs/protocol/**'
       - 'candy-code/src/Server/**'
       - 'candy-code/src/Protocol/**'
@@ -54,20 +54,20 @@ concurrency:
 
 jobs:
   build:
-    name: 'sugar-crush-web · lint, typecheck, test, dist parity'
+    name: 'candy-code-web · lint, typecheck, test, dist parity'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: sugar-crush-web
+        working-directory: candy-code-web
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: sugar-crush-web/.nvmrc
+          node-version-file: candy-code-web/.nvmrc
           cache: npm
-          cache-dependency-path: sugar-crush-web/package-lock.json
+          cache-dependency-path: candy-code-web/package-lock.json
 
       - name: Install (lockfile only)
         run: npm ci
@@ -76,7 +76,7 @@ jobs:
         run: |
           npm run gen:protocol
           if ! git diff --exit-code -- src-web/protocol/generated.ts; then
-            echo "::error::sugar-crush-web/src-web/protocol/generated.ts is stale. Run 'npm run gen:protocol' in sugar-crush-web/ and commit it."
+            echo "::error::candy-code-web/src-web/protocol/generated.ts is stale. Run 'npm run gen:protocol' in candy-code-web/ and commit it."
             exit 1
           fi
 
@@ -99,13 +99,13 @@ jobs:
         run: |
           if ! git diff --exit-code -- dist/ || [ -n "$(git status --porcelain -- dist/)" ]; then
             git status --short -- dist/
-            echo "::error::sugar-crush-web/dist/ is stale. Run 'npm ci && npm run build' in sugar-crush-web/ and commit dist/ with the source change."
+            echo "::error::candy-code-web/dist/ is stale. Run 'npm ci && npm run build' in candy-code-web/ and commit dist/ with the source change."
             exit 1
           fi
           echo "OK: dist/ is byte-identical to a clean build of src-web/"
 
   e2e:
-    name: 'sugar-crush-web · e2e against candy-code serve'
+    name: 'candy-code-web · e2e against candy-code serve'
     needs: build
     runs-on: ubuntu-latest
     env:
@@ -134,33 +134,33 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: sugar-crush-web/.nvmrc
+          node-version-file: candy-code-web/.nvmrc
           cache: npm
-          cache-dependency-path: sugar-crush-web/package-lock.json
+          cache-dependency-path: candy-code-web/package-lock.json
 
       - name: Install (lockfile only)
-        working-directory: sugar-crush-web
+        working-directory: candy-code-web
         run: npm ci
 
       - name: Install Chromium
-        working-directory: sugar-crush-web
+        working-directory: candy-code-web
         run: npx playwright install --with-deps chromium
 
       - name: Build
-        working-directory: sugar-crush-web
+        working-directory: candy-code-web
         run: npm run build
 
       - name: End-to-end
-        working-directory: sugar-crush-web
+        working-directory: candy-code-web
         run: npm run e2e
 
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: sugar-crush-web-playwright-report
+          name: candy-code-web-playwright-report
           path: |
-            sugar-crush-web/playwright-report
-            sugar-crush-web/test-results
+            candy-code-web/playwright-report
+            candy-code-web/test-results
           if-no-files-found: ignore
           retention-days: 7

@@ -104,7 +104,7 @@ final class StaticFilesTest extends TestCase
 
         $notice = $this->fetch($files, '/');
         self::assertSame(200, $notice->getStatusCode());
-        self::assertStringContainsString('composer require sugarcraft/sugar-crush-web', (string) $notice->getBody());
+        self::assertStringContainsString('composer require sugarcraft/candy-code-web', (string) $notice->getBody());
         self::assertSame(404, $this->fetch($files, '/assets/app.js')->getStatusCode());
         self::assertNull($files->root());
     }

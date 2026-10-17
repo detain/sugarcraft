@@ -1,0 +1,44 @@
+{
+  "name": "candy-code-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser UI for candy-code's WebSocket server mode (Vite + Vue 3 + TypeScript + Pinia + vue-router).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "gen:protocol": "node scripts/gen-protocol.mjs"
+  },
+  "dependencies": {
+    "@tanstack/vue-virtual": "^3.13.39",
+    "dompurify": "^3.4.16",
+    "markdown-it": "^14.3.2",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/markdown-it": "^14.2.0",
+    "@types/node": "^24.19.1",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "@vue/test-utils": "^2.5.1",
+    "eslint": "^10.12.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "happy-dom": "^20.14.5",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3",
+    "vue-tsc": "^3.3.12"
+  }
+}
