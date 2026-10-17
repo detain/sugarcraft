@@ -489,7 +489,16 @@ final class ReasoningProgressTest extends TestCase
             null,
             null,
             static function (string $t) use (&$tokens): void { $tokens[] = $t; },
-            static function (string $p) use (&$progress): void { $progress[] = $p; },
+            // ISS-074 (W1 review fix): the retry backoff now slices its silence
+            // with one-second liveness beats down this same channel — empty
+            // strings whose COUNT is wall-clock dependent, never announcement
+            // text. This pin is about WHO SPEAKS (the think lands once), so the
+            // beats are filtered and non-empty announcements stay fully pinned.
+            static function (string $p) use (&$progress): void {
+                if ($p !== '') {
+                    $progress[] = $p;
+                }
+            },
         ));
 
         $this->assertSame(
@@ -534,8 +543,15 @@ final class ReasoningProgressTest extends TestCase
         // so it beats the heartbeat on its way past. That is the behaviour and
         // not an artefact - a failing stream is still a live one until the
         // retry decides otherwise, and the parent's idle timer needs to hear
-        // from it.
-        $this->assertSame(['a first thought ', ''], $progress);
+        // from it. ISS-074 (W1 review fix) appends liveness BEATS after that
+        // pair: same empty spelling, wall-clock-dependent count, so the tail
+        // is pinned by SHAPE (nothing but beats can follow) not by equality.
+        $this->assertSame(['a first thought ', ''], \array_slice($progress, 0, 2));
+        $this->assertSame(
+            [],
+            \array_filter(\array_slice($progress, 2), static fn (string $p): bool => $p !== ''),
+            'after the think and the error chunk\'s empty content, only ISS-074 liveness beats may follow',
+        );
     }
 
     /**
@@ -582,7 +598,13 @@ final class ReasoningProgressTest extends TestCase
             $messages[0]->content(),
             "'half a the answer' would mean the retry did not reset the accumulator",
         );
-        $this->assertSame(['a first thought '], $progress);
+        $this->assertSame(
+            ['a first thought '],
+            \array_filter($progress, static fn (string $p): bool => $p !== ''),
+            'ISS-074 (W1 review fix) appends wall-clock-dependent empty liveness beats to this '
+                . 'channel during the retry backoff; the announcement this pin exists for is the think, '
+                . 'and this provider\'s chunk never contributes an empty string of its own',
+        );
     }
 
     /**

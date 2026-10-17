@@ -2156,15 +2156,24 @@ PHP);
 
         $caught = [];
         foreach ([1, 2] as $attempt) {
+            $error = null;
             try {
                 // A fresh registry per attempt mirrors WorkflowTool: the
                 // poison must live in the PROCESS-wide static, not on any
                 // one instance.
                 (new WorkflowRegistry($userDir))->load('poisons');
-                $this->fail("attempt {$attempt} must not return");
-            } catch (\RuntimeException $error) {
-                $caught[$attempt] = $error;
+            } catch (\RuntimeException $caughtAttempt) {
+                $error = $caughtAttempt;
             }
+            // ISS-045 weld cure: this used to be a fail() INSIDE the try —
+            // ExpectationFailedException extends RuntimeException, so the
+            // wide catch swallowed it and the census (SwallowingCatchCensus +
+            // AssertionSwallowingCatch) reddened the file. Record-then-assert
+            // after the try: if the load returns, the fail() is uncatched.
+            if ($error === null) {
+                $this->fail("attempt {$attempt} must not return");
+            }
+            $caught[$attempt] = $error;
         }
 
         $this->assertSame(
