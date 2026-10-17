@@ -12,9 +12,11 @@ use SugarCraft\Code\Skills\SkillRegistry;
 
 /**
  * The curation SkillMatcher::listForPrompt() applies before rendering:
- * tier-grouped, alphabetical ordering, exact-duplicate lines collapsed to the
- * shadow winner, and lines keyed by Skill::displayName() so a synced bundle's
- * uuid path never eats the reader's budget (skills QA, inv1 §4-§6).
+ * tier-grouped, newest-file-first within a tier (ISS-022), ties alphabetical,
+ * exact-duplicate lines collapsed to the shadow winner, lines keyed by
+ * Skill::displayName() so a synced bundle's uuid path never eats the reader's
+ * budget (skills QA, inv1 §4-§6), and the joined listing held to an aggregate
+ * byte budget with the tail collapsed to a counted line (ISS-022).
  */
 final class SkillMatcherListingTest extends TestCase
 {
@@ -149,5 +151,127 @@ final class SkillMatcherListingTest extends TestCase
         $listing = (new SkillMatcher())->listForPrompt($registry, ['a']);
 
         $this->assertSame(['- [project] b: Bravo body.'], $this->lines($listing));
+    }
+
+    public function testTheAggregateBudgetCollapsesTheTailIntoOneCountedLine(): void
+    {
+        // ISS-022: the listing was clipped per line and never as a whole — 98
+        // skills cost ~40 KB on every request. Now the SUM is bounded, and
+        // what the budget cannot name is announced as a count, never a
+        // silent gap. The notice-channel twin of this drop is deliberately
+        // NOT pinned here: the announcement is once per process through a
+        // function-local static, so asserting it would make the suite depend
+        // on which test asked for an overflow first.
+        $registry = $this->registryWith(
+            $this->skill('a', 'Alpha line body.'),
+            $this->skill('b', 'Bravo line body.'),
+            $this->skill('c', 'Charlie line body.'),
+            $this->skill('d', 'Delta line body.'),
+        );
+        $lines = (new SkillMatcher())->listForPrompt($registry, excludeNames: [], maxTotalBytes: 0);
+        // Budget 0 cannot seat line two with room reserved for the collapse
+        // line, so exactly one skill and the count survive.
+        $this->assertSame([
+            '- [project] a: Alpha line body.',
+            '- 3 more skills; call Skill to list them',
+        ], $this->lines($lines));
+
+        $firstTwo = strlen('- [project] a: Alpha line body.') + 1 + strlen('- [project] b: Bravo line body.');
+        $reserve = strlen('- 999999999 more skills; call Skill to list them');
+        $roomy = $firstTwo + 1 + $reserve + strlen('- [project] c: Charlie line body.') - 1;
+        $this->assertSame([
+            '- [project] a: Alpha line body.',
+            '- [project] b: Bravo line body.',
+            '- 2 more skills; call Skill to list them',
+        ], $this->lines((new SkillMatcher())->listForPrompt($registry, excludeNames: [], maxTotalBytes: $roomy)));
+    }
+
+    public function testTheDefaultBudgetKeepsAnOrdinaryRosterWhole(): void
+    {
+        // The 8 KiB default is a ceiling for essays, not for rosters: a
+        // typical dozen lines must ride it untouched, with no collapse line.
+        $skills = [];
+        for ($i = 0; $i < 12; ++$i) {
+            $skills[] = $this->skill('skill-' . $i, 'Description number ' . $i . ' of the ordinary roster.');
+        }
+
+        $listing = (new SkillMatcher())->listForPrompt($this->registryWith(...$skills));
+
+        $this->assertCount(12, $this->lines($listing));
+        $this->assertStringNotContainsString('more skills', $listing);
+    }
+
+    public function testRecencyOrdersTheTierAndThePathlessSkillSortsLastInsideIt(): void
+    {
+        // ISS-022: with an aggregate budget the order decides WHO SURVIVES, so
+        // the tier is walked newest-file-first (memory's index argument). The
+        // fixtures elsewhere all carry unreadable paths, which is exactly the
+        // floor timestamp — this test gives three skills real files with three
+        // different mtimes and one skill whose source file vanished.
+        $dir = \sys_get_temp_dir() . '/memctx-recency-' . getmypid() . '-' . uniqid();
+        mkdir($dir, 0700);
+        $old = $dir . '/old.md';
+        $new = $dir . '/new.md';
+        $mid = $dir . '/mid.md';
+        foreach ([$old => time() - 86400, $mid => time() - 3600, $new => time()] as $path => $when) {
+            file_put_contents($path, 'x');
+            touch($path, $when);
+        }
+
+        $withPath = function (string $key, string $description, string $sourcePath): Skill {
+            return new Skill(
+                name: $key,
+                description: $description,
+                userInvocable: true,
+                disableModelInvocation: false,
+                allowedTools: null,
+                disallowedTools: null,
+                model: null,
+                effort: 'medium',
+                context: 'thread',
+                paths: [],
+                content: '',
+                sourcePath: $sourcePath,
+                origin: SkillOrigin::Project,
+            );
+        };
+
+        try {
+            $listing = (new SkillMatcher())->listForPrompt($this->registryWith(
+                // Registered oldest-first: recency must REORDER, not echo input.
+                $withPath('oldest', 'Old note.', $old),
+                $this->skill('manifest-vanished', 'No readable source file.'), // unreadable path = floor timestamp
+                $withPath('newest', 'Fresh note.', $new),
+                $withPath('middle', 'Aging note.', $mid),
+            ));
+
+            $this->assertSame([
+                '- [project] newest: Fresh note.',
+                '- [project] middle: Aging note.',
+                '- [project] oldest: Old note.',
+                '- [project] manifest-vanished: No readable source file.',
+            ], $this->lines($listing));
+        } finally {
+            foreach ([$old, $mid, $new] as $path) {
+                unlink($path);
+            }
+            rmdir($dir);
+        }
+    }
+
+    public function testListingMaxBytesReadsTheSettingAndRefusesNonsense(): void
+    {
+        // Same resolver shape as ProjectMemoryWriter::maxContentBytes():
+        // nonsense costs the default, never a fatal, and no clamp widens a
+        // lowered (or raised) budget. Floats that ARE whole integers land —
+        // JSON round-trips through some config readers hand them back.
+        $this->assertSame(12345, SkillMatcher::listingMaxBytes(['skills.listingMaxBytes' => 12345]));
+        $this->assertSame(1024, SkillMatcher::listingMaxBytes(['skills.listingMaxBytes' => 1024.0]));
+        $this->assertSame(8192, SkillMatcher::listingMaxBytes([]));
+        $this->assertSame(8192, SkillMatcher::listingMaxBytes(['skills.listingMaxBytes' => 0]));
+        $this->assertSame(8192, SkillMatcher::listingMaxBytes(['skills.listingMaxBytes' => -5]));
+        $this->assertSame(8192, SkillMatcher::listingMaxBytes(['skills.listingMaxBytes' => 'nope']));
+        $this->assertSame(8192, SkillMatcher::listingMaxBytes(['skills.listingMaxBytes' => 8192.5]));
+        $this->assertSame(SkillMatcher::DEFAULT_LISTING_MAX_BYTES, SkillMatcher::listingMaxBytes([]));
     }
 }

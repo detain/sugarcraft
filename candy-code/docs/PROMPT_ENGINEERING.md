@@ -95,6 +95,10 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
     opened with a provenance badge from `SkillOrigin::badge()` — `[built-in]`, `[user]`,
     `[project]`, plus `foreign: claude` or `foreign: opencode` for another tool's format
     (audit 15d-02). `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
+    Beyond the per-line clip the joined listing is bounded in AGGREGATE (ISS-022): lines ride newest
+    source file first within a tier, and whatever `skills.listingMaxBytes` (default 8192) cannot seat
+    together with the collapse line is replaced by one `- N more skills; call Skill to list them`
+    line, the drop announced once per process through `RuntimeNoticeSink` — never a silent gap.
 12. **Plan mode** (`PlanModeSection`) — fenced `system-reminder`, present only while the turn's
     permission gate is in `plan` mode (read off the hook chain's `PermissionGateHook`, which the TUI's
     `Alt+M` toggle swaps between turns). It states what the gate enforces — read-only

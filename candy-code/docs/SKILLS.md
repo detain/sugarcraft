@@ -124,12 +124,27 @@ segment of the registry key — and exact-duplicate lines (same display name and
 description, the shape synced bundles produce) collapse to the stronger-tier
 entry, so the model sees one line per distinct offer. The lines are grouped by
 tier — built-in, then project, then user, the reading order
-`SkillOrigin::precedence()` states — and alphabetical by display name within a
-tier. A skill registered
+`SkillOrigin::precedence()` states — newest source file first within a tier,
+and alphabetical by display name among equal or unreadable mtimes (ISS-022:
+once the aggregate budget below can drop lines, the order decides which
+survive; a skill with no readable file — a manifest registration or a vanished
+path — carries the floor timestamp and sorts last inside its tier). A skill registered
 by some other route, with no tier stated, is badged `project` — the least
 trusted tier, so an unknown origin is never presented as the operator's or
 the harness's. The path nudge's lines (`SkillPathNudge`) carry no badge; its
 `<system-reminder>` header does not explain one.
+
+Beyond the per-line clip, the whole listing carries an **aggregate** byte
+budget (ISS-022): lines are kept from the top while `skills.listingMaxBytes`
+(default 8192, `SkillMatcher::DEFAULT_LISTING_MAX_BYTES`) can still seat the
+next line *and* the collapse line; everything past it is replaced by one
+`- N more skills; call Skill to list them` line, and the drop is announced
+once per process through `RuntimeNoticeSink` — the same channel that carries
+every other "this session got smaller" warning — never silently. The first
+line is kept unconditionally: a roster of one is still a roster, and the
+collapse line names what the budget could not. Before this the per-line clip
+bounded a line and nothing bounded the SUM: a skill-heavy checkout paid
+~40 KB (~10k tokens) of `<available-skills>` on every request, every turn.
 
 Who sees this fence: the main chat assembles it every turn, and every
 sub-agent worker's prompt carries the same layer too — `AgentManager` renders
