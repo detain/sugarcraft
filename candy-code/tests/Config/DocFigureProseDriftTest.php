@@ -6876,4 +6876,43 @@ final class DocFigureProseDriftTest extends TestCase
 
         return $spans;
     }
+
+    /**
+     * ISS-098: the README names the "/" popup's fitting order; this arm keeps
+     * the sentence and the fitter describing the same policy. Leg one pins the
+     * sentence itself, leg two derives the order from the body of
+     * {@see \SugarCraft\Code\Renderer::fitSlashMenuRow()}: the description
+     * floor gates the tail, the hint floor gates the hint, and the two clip
+     * sites between them never touch the name — the name is only ever cut by
+     * its own budget line in renderSlashMenu(), never by this fitter.
+     */
+    public function testTheSlashMenuFittingOrderREADMEClaimStillDescribesTheFitter(): void
+    {
+        $readme = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/README.md'));
+
+        self::assertStringContainsString(
+            'the description gives up columns first, then the hint, and the name (the row\'s identity) last.',
+            $readme,
+            'README.md no longer states the popup fitting order this arm exists to check — flip it with the code',
+        );
+
+        $file = self::sourceOf('Renderer.php');
+        $position = strpos($file, 'function fitSlashMenuRow(');
+        self::assertNotFalse($position, 'the fitter the README order belongs to vanished');
+        $nextMethod = strpos($file, 'private static function', (int) $position + 10);
+        $body = substr($file, (int) $position, $nextMethod === false ? 3000 : $nextMethod - (int) $position);
+
+        // Description first: the floor constant gates the tail room and is
+        // also what the tail is clipped to when the hint survives.
+        self::assertGreaterThanOrEqual(2, substr_count($body, 'self::SLASH_MENU_DESC_MIN_COLS'), 'the description floor left the fitter — the row can now eat the whole description before the hint');
+        self::assertStringContainsString('self::SLASH_MENU_MIN_HINT_COLS', $body, 'the hint floor left the fitter — a hint can now be reduced to a stub');
+
+        // Name last: every clip inside the fitter acts on the hint or the
+        // tail, never on a name variable.
+        preg_match_all('/self::clipToWidth\(\$(\w+)/', $body, $clipped);
+        self::assertNotSame([], $clipped[1], 'the fitter stopped clipping anything — the row can overrun again');
+        foreach ($clipped[1] as $variable) {
+            self::assertContains($variable, ['full', 'tail'], "the fitter clipped {$variable} — the name must stay outside its budgets");
+        }
+    }
 }

@@ -397,6 +397,14 @@ final class Renderer
     private const SLASH_MENU_MIN_HINT_COLS = 4;
 
     /**
+     * Below this many columns the description stops giving columns up and the
+     * hint is cut instead - the README's fitting order (ISS-098) keeps some
+     * prose on every row: "the name (the row's identity)" is protected last,
+     * and a row that says only `/cmd <arg>` does not say what `/cmd` is for.
+     */
+    private const SLASH_MENU_DESC_MIN_COLS = 12;
+
+    /**
      * How many times {@see wrapToPane()} may re-ask {@see Width::wrapAnsi()} for
      * a narrower wrap before it gives up and cuts.
      *
@@ -5817,8 +5825,6 @@ final class Renderer
             // treats every piece of a row as hostile input).
             $badge = $spec->tierBadge() === null ? '' : ' ' . self::slashMenuText($spec->tierBadge());
 
-            $hint = self::fitSlashMenuHint($specName . $badge, $description, $argumentHint, $budget);
-
             // The name keeps its columns ahead of everything else, so this clip
             // only bites on a name wider than the whole budget - which the
             // max(12, …) floor above rules out for every built-in row (the
@@ -5830,10 +5836,7 @@ final class Renderer
             // 1-cell budget a 1-cell name plus the slash would be one cell
             // wider than the popup was sized for.
             $plainName = self::clipToWidth($specName, max(0, $budget - 1));
-            $tail = self::clipToWidth(
-                ' — ' . $description,
-                $budget - Width::string('/' . $plainName . $badge . $hint),
-            );
+            [$hint, $tail] = self::fitSlashMenuRow($plainName, $badge, $description, $argumentHint, $budget);
 
             // Highlight the NAME only, and against the plain text: the styled
             // run carries SGR bytes that no width budget can measure, so every
@@ -5908,28 +5911,49 @@ final class Renderer
     }
 
     /**
-     * The argument hint as it fits on one popup row, ' '-prefixed, or '' when
-     * this row has no hint or no room for one.
+     * The two fitted right-hand pieces of one "/" popup row, as
+     * [hint, description-tail] with their leading spaces included.
      *
-     * Truncated to whatever is left after the name and the description have had
-     * their columns, and dropped outright rather than rendered as a bare "…"
-     * when fewer than {@see SLASH_MENU_MIN_HINT_COLS} columns remain - a
-     * one-character stub is noise, and a row with no hint is exactly what every
-     * row looked like before Phase 4.
+     * The fitting order is the one README.md states (and that the popup
+     * promised in its own docblock before this existed): the DESCRIPTION
+     * gives up columns first - down to {@see SLASH_MENU_DESC_MIN_COLS}, so a
+     * row never loses its last clue about what the command is FOR - then the
+     * HINT gives up columns, and below {@see SLASH_MENU_MIN_HINT_COLS} it is
+     * dropped outright and the description reclaims its columns (a
+     * one-character hint stub is noise, and a row with no hint is exactly
+     * what every row looked like before Phase 4). The NAME never gives
+     * anything up here; {@see renderSlashMenu()} clips it only when the name
+     * alone exceeds the budget.
+     *
+     * @return array{0: string, 1: string}
      */
-    private static function fitSlashMenuHint(string $name, string $description, ?string $hint, int $budget): string
+    private static function fitSlashMenuRow(string $plainName, string $badge, string $description, ?string $hint, int $budget): array
     {
+        $tail = ' — ' . $description;
+
         if ($hint === null || $hint === '') {
-            return '';
+            return ['', self::clipToWidth($tail, max(0, $budget - Width::string('/' . $plainName . $badge)))];
         }
 
-        $spent = Width::string('/' . $name . ' — ' . $description);
-        $room = $budget - $spent - 1;
-        if ($room < self::SLASH_MENU_MIN_HINT_COLS) {
-            return '';
+        $full = ' ' . $hint;
+
+        if (Width::string($full . $tail) <= $budget - Width::string('/' . $plainName . $badge)) {
+            return [$full, $tail];
         }
 
-        return ' ' . self::clipToWidth($hint, $room);
+        // The description yields the first columns: the hint keeps all of it.
+        $descRoom = $budget - Width::string('/' . $plainName . $badge . $full);
+        if ($descRoom >= self::SLASH_MENU_DESC_MIN_COLS) {
+            return [$full, self::clipToWidth($tail, $descRoom)];
+        }
+
+        // Below the description's floor the hint starts giving columns back.
+        $hintRoom = $budget - Width::string('/' . $plainName . $badge) - self::SLASH_MENU_DESC_MIN_COLS;
+        if ($hintRoom >= self::SLASH_MENU_MIN_HINT_COLS) {
+            return [self::clipToWidth($full, $hintRoom), self::clipToWidth($tail, self::SLASH_MENU_DESC_MIN_COLS)];
+        }
+
+        return ['', self::clipToWidth($tail, max(0, $budget - Width::string('/' . $plainName . $badge)))];
     }
 
     /**

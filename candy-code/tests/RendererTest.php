@@ -796,8 +796,8 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * The width half of Phase 4 item 5, and the reason the hint is what gets
-     * cut before the name: three different widths are involved here and every
+     * The width half of Phase 4 item 5, and the reason the row is fitted as a
+     * whole: three different widths are involved here and every
      * one of them is `/websearch`'s, so each is named with the domain it is
      * true of - all measured with `Width::string()` over
      * `CommandRegistry::all()`, never `strlen()`:
@@ -816,9 +816,10 @@ final class RendererTest extends TestCase
      *
      * - A bound six columns clear of the boundary (the old
      *   `assertLessThanOrEqual(60, …)` against an actual 54) cannot see a
-     *   one-column budget error. Dropping the `- 1`
-     *   {@see Renderer::fitSlashMenuHint()} spends on the hint's leading space
-     *   moves a column from the description to the hint, which no width
+     *   one-column budget error. Moving a column between the hint's leading
+     *   space (carried inside the fitted hint by
+     *   {@see Renderer::fitSlashMenuRow()}) and the description tail shifts it
+     *   from one to the other, which no width
      *   assertion can catch now that the row as a whole is fitted - only the
      *   exact row can.
      * - The 40-column row was MEASURED and then not asserted, at exactly the
@@ -837,16 +838,18 @@ final class RendererTest extends TestCase
     {
         // The popup box, and the box only: the input box below it also contains
         // the '/websearch' draft, so the "▸" marker is what identifies the row.
-        // Rows re-measured at CL-3: the budget gained the shell's 6 columns, so
-        // every width below shows six more cells of hint/description than the
-        // pre-CL-3 table did; 120 is unchanged because the natural row fits.
+        // Rows re-measured for ISS-098: the fitting order is now the README's
+        // (the description gives up columns first, down to its 12-column
+        // floor, then the hint, then the name), so the hint survives - clipped
+        // - wherever it used to be dropped, and the description sits at its
+        // floor from 40 to 80.
         $expected = [
             20 => '▸ /websearch — …',
             30 => '▸ /websearch — Search the…',
-            40 => '▸ /websearch — Search the web via S…',
-            60 => '▸ /websearch <query> [--sa… — Search the web via SearXNG',
-            80 => '▸ /websearch <query> [--safesearch 0|1|2] [--t… — Search the web via SearXNG',
-            100 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|… — Search the web via SearXNG',
+            40 => '▸ /websearch <query> [-… — Search t…',
+            60 => '▸ /websearch <query> [--safesearch 0|1|2] [… — Search t…',
+            80 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|mon… — Search t…',
+            100 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search the web via Se…',
             120 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search the web via SearXNG',
         ];
 
@@ -889,11 +892,54 @@ final class RendererTest extends TestCase
         );
         $this->assertStringContainsString('…', $expected[60], 'at 60 the hint is truncated, not dropped');
         $this->assertStringNotContainsString('month', $expected[60]);
-        $this->assertStringNotContainsString(
+        $this->assertStringContainsString(
             '<query>',
             $expected[40],
-            'at 40 there is no room for a hint at all, so the description gets every column the name leaves',
+            'ISS-098: at 40 the hint still earns its columns - it is the description that gives them up',
         );
+        $this->assertStringContainsString(
+            '— Search t…',
+            $expected[40],
+            'and the description keeps its 12-column floor while a hint survives',
+        );
+    }
+
+    /**
+     * ISS-098 as a property: across every width from 20 to 130 the row fits
+     * its terminal, the description never silently vanishes below its floor
+     * while a hint survives, and the hint - once it has appeared - never
+     * disappears again as the terminal widens.
+     */
+    public function testSlashMenuDescriptionYieldsColumnsBeforeTheHint(): void
+    {
+        $seenHintAt = null;
+
+        for ($cols = 20; $cols <= 130; $cols++) {
+            $out = Renderer::render(
+                (new Chat(history: [Message::user('hi')], inputBuf: '/websearch'))->withSize($cols, 30)
+            );
+
+            foreach (explode("\n", $out) as $line) {
+                $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+                if (!str_contains($plain, '▸ /websearch')) {
+                    continue;
+                }
+
+                $this->assertLessThanOrEqual($cols, Width::string($plain), "the popup box overruns a {$cols}-column terminal");
+                $hasHint = str_contains($plain, '<query>');
+                $hasProse = str_contains($plain, '— Search');
+
+                $this->assertTrue(!$hasHint || $hasProse, "at {$cols} columns a hint survived while the description gave up entirely");
+
+                if ($hasHint) {
+                    $seenHintAt ??= $cols;
+                } else {
+                    $this->assertTrue($seenHintAt === null, "the hint vanished again at {$cols} columns");
+                }
+            }
+        }
+
+        $this->assertSame(37, $seenHintAt, 'from the first width where a clipped hint and a floored description both fit (measured)');
     }
 
     public function testSlashMenuNotRenderedOnceArgumentsStart(): void
