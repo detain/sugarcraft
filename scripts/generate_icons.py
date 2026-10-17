@@ -198,9 +198,8 @@ def write_targets(img, slug: str):
 # real (KB-range, non-stub) icon for a lib still awaiting bespoke kawaii art.
 # ---------------------------------------------------------------------------
 _HUE_FAMILY = {
-    "candy": 336.0,   # rose / pink   — foundation/system libs
-    "sugar": 275.0,   # violet        — components / data / apps
-    "honey":  40.0,   # amber / gold  — math / physics
+    "candy": 336.0,   # rose / pink   — apps / CLI tools (2026-10 law)
+    "sugar": 275.0,   # violet        — libraries (components / data)
     "super": 210.0,   # hero blue     — showcase apps
 }
 _BRAND_HUE = 200.0    # sugarcraft brand fallback

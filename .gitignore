@@ -1,4 +1,4 @@
-.sugar-crush/
+.candy-code/
 .claude/scheduled_tasks.lock
 .codenomad
 .caliber
@@ -21,8 +21,6 @@
 *.log
 .cache/
 .claude/settings.local.json
-.candy-code/memory
-.candy-code/settings.local.json
 .claude/shell-snapshots
 .claude/paste-cache
 .claude/file-history

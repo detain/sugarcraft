@@ -25,7 +25,7 @@ Scaffold a new immutable+fluent class that looks byte-identical to the rest of t
 ### Step 1 — Resolve name, path, namespace
 Given the target lib slug `<slug>` and class `<Class>`:
 - File: `<slug>/src/<Class>.php`, or `<slug>/src/<Sub>/<Class>.php` if it groups with sibling types (Msg, enums) — e.g. `sugar-widgets/src/Stopwatch/Stopwatch.php`.
-- Namespace: kebab slug → PascalCase, drop the `candy-`/`sugar-`/`honey-` idea into `SugarCraft\<Sub>\`. Confirm against an existing file in that lib: `head -6 <slug>/src/*.php`.
+- Namespace: kebab slug → PascalCase, keep only the descriptive suffix — the `candy-`/`sugar-` prefix never reaches `SugarCraft\<Sub>\`. Confirm against an existing file in that lib: `head -6 <slug>/src/*.php`.
 - **Verify** the namespace matches a sibling file before writing. Do not guess.
 
 ### Step 2 — Pick the shape

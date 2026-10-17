@@ -20,7 +20,7 @@ vendor/bin/phpunit
 
 # Or, for the whole monorepo (from the repo root):
 cd ..   # the one-library run above left you inside sugar-core/
-for d in candy-* sugar-* honey-*; do
+for d in candy-* sugar-*; do
     [ -f "$d/phpunit.xml" ] || continue
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
@@ -144,16 +144,17 @@ terminal apps that fill gaps in the PHP stack. The flow:
 1. Open an issue proposing the library. Include a one-line role
    summary, any prior art, and the expected dependencies on existing
    SugarCraft libraries.
-2. Decide on a name following the `Candy*` / `Sugar*` / `Honey*` +
-   technical-suffix pattern documented in
-   [`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
+2. Decide on a name under the two-prefix role law documented in
+   [`PROJECT_NAMES.md`](./PROJECT_NAMES.md): `sugar-*` for libraries,
+   `candy-*` for runnable apps / CLI tools, with a plain descriptive suffix
+   (the `Honey*` family was retired with the 2026-10 rename).
 3. Add the new library's row to the root `README.md` table —
    proposed name, subdir, namespace, and dependency list — and to the package
    roster in `docs/MATCHUPS.md`.
 4. Scaffold the new directory:
 
    ```text
-   candy-newlib/
+   sugar-newlib/
    ├── composer.json     # canonical metadata (see existing libs)
    ├── phpunit.xml
    ├── README.md         # composer require + quickstart

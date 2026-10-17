@@ -1,6 +1,6 @@
 # SugarCraft
 
-PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 40 TUI libraries and 21 terminal apps (Charmbracelet ecosystem ports). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md
@@ -15,7 +15,7 @@ Cross-cuts: `docs/MATCHUPS.md` (upstream→port map) · `PROJECT_NAMES.md` · `L
 
 Audit/plan trees: `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) · `docs/plans/leftover/` phased step files · `docs/repo_map/` per-upstream maps (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`).
 
-**Foundation** (`candy-*`): `sugar-core` `sugar-ansi-parser` `sugar-cellbuffer` `sugar-async` `sugar-constraints` `sugar-style` `sugar-forms` `candy-files` `sugar-animation` `sugar-testing` `sugar-vterm` `candy-vcr` `sugar-pty` `sugar-markdown` `candy-scriptui` `sugar-cli` `candy-sql` `candy-flappy` … **Components/apps** (`sugar-*`): `sugar-widgets` `sugar-charts` `sugar-dashboard` `candy-code` `sugar-table` `sugar-overlay` `sugar-focus` … **Physics** (`honey-*`): `sugar-spring`.
+**Libraries** (`sugar-*`): `sugar-core` `sugar-ansi-parser` `sugar-cellbuffer` `sugar-async` `sugar-constraints` `sugar-style` `sugar-forms` `sugar-animation` `sugar-testing` `sugar-vterm` `sugar-pty` `sugar-markdown` `sugar-cli` `sugar-input` `sugar-focus` `sugar-fuzzy` `sugar-gallery` `sugar-log` `sugar-metrics` `sugar-mouse` `sugar-navstack` `sugar-overlay` `sugar-panels` `sugar-quickpick` `sugar-readline` `sugar-spring` `sugar-ssh-server` `sugar-table` `sugar-toast` `sugar-treelist` `sugar-video` `sugar-widgets` `sugar-charts` `sugar-dashboard` `sugar-datepicker` `sugar-diff` `sugar-flexbox` `sugar-colorprofile` `sugar-image` `sugar-mcp-client`. **Apps** (`candy-*`): `candy-code` `candy-code-web` `candy-files` `candy-git` `candy-sql` `candy-top` `candy-vcr` `candy-scriptui` `candy-mdview` `candy-ansi-inspect` `candy-codeshot` `candy-codetime` `candy-flappy` `candy-gifview` `candy-git-server` `candy-kv` `candy-mail` `candy-minesweeper` `candy-ssh-launcher` `candy-starter` `candy-tetris`.
 
 ## Commands
 
@@ -42,7 +42,7 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 - Bare accessors (no `get`). Factories mirror upstream: `Theme::ansi()`, `Spinner::line()`. `::new()` is the default root — never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`sugar-core/src/Model.php`): `init()` · `update(Msg): [Model, ?Cmd]` · `view()`. Side effects → `Cmd`, never `view()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`sugar-pty/src/Lang.php`).
-- Slug→namespace: `sugar-markdown/` → `SugarCraft\Markdown\` (quirk: `sugar-core` → `SugarCraft\Core\`).
+- Slug→namespace: `sugar-markdown/` → `SugarCraft\Markdown\` — the namespace is the descriptive suffix; `sugar-core/` → `SugarCraft\Core\` follows the same rule.
 - TEA test harness: `sugar-testing` provides `ProgramSimulator`, `ScriptedInput`, `Assertions::assertGoldenAnsi()`, and `LoopPin::pinStableClock()` (`sugar-testing/src/LoopPin.php`) — call it from `<slug>/tests/bootstrap.php`, since ext-uv arms timers against a per-iteration cached clock and waits bounded on `Loop::get()` then fire early. `sugar-pty/tests/bootstrap.php` adds `HangWatchdog::install()` after it — an out-of-process watchdog that kills a stalled runner with a forensic dump instead of hanging.
 - `candy-code` docs are test-pinned: drift guards (`candy-code/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `candy-code/tests/Commands/KeyBindingDriftTest.php`) re-derive the rosters in `candy-code/README.md` + `candy-code/docs/*.md` from `candy-code/src/` — add a tool/command/env var/key binding and the doc edit is mandatory.
 

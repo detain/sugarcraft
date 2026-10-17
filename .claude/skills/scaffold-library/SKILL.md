@@ -1,6 +1,6 @@
 ---
 name: scaffold-library
-description: Scaffolds a new SugarCraft library end-to-end per the AGENTS.md checklist. Creates <slug>/composer.json (path-repo closure copied from sugar-charts), README.md, CALIBER_LEARNINGS.md, phpunit.xml, src/<Class>.php with declare(strict_types=1) + PSR-4 namespace, tests/ stub, and updates root composer.json + MATCHUPS.md + PROJECT_NAMES.md + README.md table + docs/index.html tile + docs/lib/<slug>.html + .github/workflows/ci.yml + .github/workflows/vhs.yml + codecov.yml. Use when user says 'add new library', 'port <upstream>', 'create candy-X', 'create sugar-Y', or 'create honey-Z'. Do NOT use for adding features to an existing lib (follow that lib's CALIBER_LEARNINGS.md instead) or for renaming libs (separate flow).
+description: Scaffolds a new SugarCraft library end-to-end per the AGENTS.md checklist. Creates <slug>/composer.json (path-repo closure copied from sugar-charts), README.md, CALIBER_LEARNINGS.md, phpunit.xml, src/<Class>.php with declare(strict_types=1) + PSR-4 namespace, tests/ stub, and updates root composer.json + MATCHUPS.md + PROJECT_NAMES.md + README.md table + docs/index.html tile + docs/lib/<slug>.html + .github/workflows/ci.yml + .github/workflows/vhs.yml + codecov.yml. Use when user says 'add new library', 'port <upstream>', 'create candy-X' or 'create sugar-Y'. Do NOT use for adding features to an existing lib (follow that lib's CALIBER_LEARNINGS.md instead) or for renaming libs (separate flow).
 paths:
   - '*/composer.json'
   - '*/phpunit.xml'
@@ -20,7 +20,7 @@ End-to-end scaffolding of a new SugarCraft monorepo library. The output MUST be 
 
 ## Critical
 
-- **Pick the prefix from `PROJECT_NAMES.md`** before writing anything. `Candy-` = foundation/runtime, `Sugar-` = components/data/apps, `Honey-` = math/physics. If the role is ambiguous, ASK the user; do not guess.
+- **Pick the prefix from `PROJECT_NAMES.md`** before writing anything. `Candy-` = runnable apps / CLI tools, `Sugar-` = libraries (components, data, engines). The `Honey-` math/physics family was retired with the 2026-10 rename. If the role is ambiguous, ASK the user; do not guess.
 - **Naming chain is rigid**: PascalCase upstream-style → kebab dir + composer pkg suffix → `sugarcraft/<slug>` composer pkg → `SugarCraft\<Sub>` namespace (drop the prefix). The one quirk: `SugarCraft\Core` keeps the umbrella name.
 - **Copy the path-repo closure from an existing leaf lib** when wiring sibling deps. Every transitive `@dev` sibling needs BOTH a `require` entry AND a `repositories` path entry with `symlink: true`. Missing one = install fails.
 - **`composer validate` MUST run without `--strict`**. `--strict` flags every `"sugarcraft/*": "@dev"` — this is EXPECTED before 1.0. Drop the flag.

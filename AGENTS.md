@@ -1,6 +1,6 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/`; siblings resolve from Packagist, and path repositories are injected at build time (never committed to a lib manifest).
+PHP monorepo of 40 TUI libraries and 21 terminal apps (Charmbracelet ecosystem ports). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/`; siblings resolve from Packagist, and path repositories are injected at build time (never committed to a lib manifest).
 
 ## Source-of-truth files
 
@@ -16,7 +16,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 ## Naming
 
-`Candy-` foundation/system, `Sugar-` components/data/apps, `Honey-` math/physics. Slug → kebab dir → composer pkg → namespace: `SugarMarkdown` → `sugar-markdown/` → `sugarcraft/sugar-markdown` → `SugarCraft\Markdown\` (quirk: `sugar-core` → `SugarCraft\Core\`). Foundation `sugar-forms` is the form-primitives base that `sugar-widgets` + `candy-scriptui` depend on.
+`Candy-` runnable apps / CLI tools / games, `Sugar-` libraries (components, data, engines, primitives); the `Honey-` math/physics family was retired with the 2026-10 rename. Slug → kebab dir → composer pkg → namespace: `SugarMarkdown` → `sugar-markdown/` → `sugarcraft/sugar-markdown` → `SugarCraft\Markdown\` — the namespace is the descriptive suffix, so `sugar-core` → `SugarCraft\Core\` follows the rule like every other package. Foundation `sugar-forms` is the form-primitives base that `sugar-widgets` + `candy-scriptui` depend on.
 
 ## Lib skeleton & composer.json
 

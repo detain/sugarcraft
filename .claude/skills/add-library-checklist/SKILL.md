@@ -1,6 +1,6 @@
 ---
 name: add-library-checklist
-description: Scaffolds a new SugarCraft monorepo port end-to-end across every touchpoint: creates <slug>/composer.json + phpunit.xml + README.md + CALIBER_LEARNINGS.md + src/<Class>.php, then wires it into root composer.json (require + repositories[]), docs/MATCHUPS.md, PROJECT_NAMES.md, root README.md table, docs/index.html tiles, docs/_data/<slug>.{json,body.html} → tools/gen-docs.php, media/icons/<slug>.png, .github/workflows/vhs.yml matrix, and codecov.yml (flag + component). Use when the user says 'add a library', 'port <upstream>', 'scaffold lib <slug>', 'new candy-/sugar-/honey- lib', 'create SugarX'. Do NOT use to edit an existing lib's metadata (use direct Edit), add a feature to an existing lib (follow that lib's CALIBER_LEARNINGS.md), rename a lib, or add a plain sugarcraft dep to an existing lib (use path-repo-closure).
+description: Scaffolds a new SugarCraft monorepo port end-to-end across every touchpoint: creates <slug>/composer.json + phpunit.xml + README.md + CALIBER_LEARNINGS.md + src/<Class>.php, then wires it into root composer.json (require + repositories[]), docs/MATCHUPS.md, PROJECT_NAMES.md, root README.md table, docs/index.html tiles, docs/_data/<slug>.{json,body.html} → tools/gen-docs.php, media/icons/<slug>.png, .github/workflows/vhs.yml matrix, and codecov.yml (flag + component). Use when the user says 'add a library', 'port <upstream>', 'scaffold lib <slug>', 'new candy-/sugar- lib', 'create SugarX'. Do NOT use to edit an existing lib's metadata (use direct Edit), add a feature to an existing lib (follow that lib's CALIBER_LEARNINGS.md), rename a lib, or add a plain sugarcraft dep to an existing lib (use path-repo-closure).
 paths:
   - "*/composer.json"
   - "*/phpunit.xml"
@@ -17,7 +17,7 @@ Scaffold a new port so it looks byte-identical to existing libs and passes every
 ## Critical
 
 - **Namespace derivation is mechanical.** Slug `sugar-panels/` → composer `sugarcraft/sugar-panels` → namespace `SugarCraft\Panels\`. The Sub is the PascalCase of the part after the prefix. **Quirk:** `sugar-core` → `SugarCraft\Core\` (not `SugarCraft\Candy\Core`). Prefix picks the family, NOT the namespace root — every lib is under `SugarCraft\`.
-- **Prefix = role.** `candy-` = foundation/system, `sugar-` = components/data/apps, `honey-` = math/physics. Confirm with the user which family before naming; cross-check `PROJECT_NAMES.md`.
+- **Prefix = role.** `candy-` = runnable app / CLI tool / game, `sugar-` = library. (The `honey-` math/physics family was retired with the 2026-10 rename.) Confirm with the user which family before naming; cross-check `PROJECT_NAMES.md`.
 - **Every `sugarcraft/*` require needs a path-repo for the FULL transitive closure**, not just direct deps. Copy the `repositories[]` block from a sibling that already depends on the same set (canonical: `sugar-charts/composer.json`). Verify with `php tools/check-path-repos.php` (add `--fix` to auto-insert).
 - **`composer validate --strict` is EXPECTED to fail** on `"@dev"` constraints — drop `--strict`.
 - **NEVER hand-edit the generated pages in `docs/lib/`** — they are produced by `tools/gen-docs.php` from the sources in `docs/_data/` (copy `docs/_data/sugar-panels.json` + `docs/_data/sugar-panels.body.html` and swap identity).
