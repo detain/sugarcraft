@@ -50,7 +50,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-ansi"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-ansi" alt="CandyAnsi code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. Used by CandyVt to drive the VT500 state machine.</p>
+    <p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. Used by SugarVterm to drive the VT500 state machine.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ansi</code></pre>
@@ -88,7 +88,7 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>ANSI stream inspection</strong> — parse escape sequences into structured events without spawning a terminal.</li>
-      <li><strong>Feeding CandyVt</strong> — drive the VT500 state machine by passing parsed events to the terminal emulator.</li>
+      <li><strong>Feeding SugarVterm</strong> — drive the VT500 state machine by passing parsed events to the terminal emulator.</li>
       <li><strong>SGR decoding</strong> — receive every SGR parameter list, colon sub-parameters included, as the stream arrives.</li>
     </ul>
 

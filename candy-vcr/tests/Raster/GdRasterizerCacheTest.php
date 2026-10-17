@@ -7,10 +7,10 @@ namespace SugarCraft\Vcr\Tests\Raster;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\FontLoader;
 use SugarCraft\Vcr\Raster\GdRasterizer;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cursor;
-use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Snapshot;
 
 /**
  * Asserts that the GdRasterizer's persistent Glyphs cache survives across

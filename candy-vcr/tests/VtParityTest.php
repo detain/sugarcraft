@@ -6,22 +6,22 @@ namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vt\Color\Color;
-use SugarCraft\Vt\Screen\Scrollback;
-use SugarCraft\Vt\Sgr\Sgr;
-use SugarCraft\Vt\Sgr\UnderlineStyle;
-use SugarCraft\Vt\Terminal as RendererTerminal;
-use SugarCraft\Vt\Terminal\Terminal as EmulatorTerminal;
+use SugarCraft\Vterm\Color\Color;
+use SugarCraft\Vterm\Screen\Scrollback;
+use SugarCraft\Vterm\Sgr\Sgr;
+use SugarCraft\Vterm\Sgr\UnderlineStyle;
+use SugarCraft\Vterm\Terminal as RendererTerminal;
+use SugarCraft\Vterm\Terminal\Terminal as EmulatorTerminal;
 
 /**
  * Differential guard between the two cell-grid consumers of candy-ansi's
  * parser that candy-vcr depends on:
  *
- *  - {@see RendererTerminal} (`SugarCraft\Vt\Terminal`) — the vcr renderer
+ *  - {@see RendererTerminal} (`SugarCraft\Vterm\Terminal`) — the vcr renderer
  *    path: candy-ansi Parser + HandlerAdapter + Parser\CsiHandlerImpl.
  *    Frame rendering (Render\Renderer, Encode\TapeToGif) feeds recorded
  *    bytes HERE.
- *  - {@see EmulatorTerminal} (`SugarCraft\Vt\Terminal\Terminal`) — the full
+ *  - {@see EmulatorTerminal} (`SugarCraft\Vterm\Terminal\Terminal`) — the full
  *    emulator: candy-ansi Parser + Handler\ScreenHandler stack.
  *    ScreenAssertion and `vt`-style emulation HERE.
  *
@@ -64,7 +64,7 @@ final class VtParityTest extends TestCase
      *    dedicated field by the emulator.
      *
      * GRADUATED to agreement by the unified Cell + renderer ESC dispatch
-     * ({@see \SugarCraft\Vt\Parser\RendererHandler}) — no longer a gap:
+     * ({@see \SugarCraft\Vterm\Parser\RendererHandler}) — no longer a gap:
      *  - truecolor SGR 38;2 / 48;2 — the renderer now keeps an exact RGB slot
      *    (Cell::$fgTruecolor/$bgTruecolor), matching the emulator value-for-
      *    value ({@see testParityTruecolorAgreesOnBothPaths}).
@@ -169,7 +169,7 @@ final class VtParityTest extends TestCase
     // ------------------------------------------------------------------
     // Per-escape emulator↔renderer parity. Each DEC line rendition and
     // each two-byte ESC the renderer now handles (via
-    // {@see \SugarCraft\Vt\Parser\RendererHandler}) is pinned individually
+    // {@see \SugarCraft\Vterm\Parser\RendererHandler}) is pinned individually
     // so a divergence names its own escape instead of hiding in a
     // full-grid diff. The sequences also appear in {@see curatedStreams}.
     // ------------------------------------------------------------------
@@ -473,7 +473,7 @@ final class VtParityTest extends TestCase
         // candy-core EMITS `38;2;R;G;B` / `48;2;R;G;B` at truecolor profiles
         // (Util/Color::toSgr). Both engines now STORE the exact value — the
         // emulator in its Sgr {@see Color}, the renderer in
-        // {@see \SugarCraft\Vt\Cell::$fgTruecolor}/$bgTruecolor — so the grids
+        // {@see \SugarCraft\Vterm\Cell::$fgTruecolor}/$bgTruecolor — so the grids
         // agree VALUE-FOR-VALUE, not merely on "some truecolour". The former
         // "renderer has no RGB slot" catalogue divergence is closed by the
         // unified Cell (it used to pin the renderer at the default pen 'I7').
@@ -532,19 +532,19 @@ final class VtParityTest extends TestCase
     public function testCataloguedDivergenceEmulatorErasesWithActiveBackground(): void
     {
         // xterm BCE: erase cells inherit ONLY the pen's BACKGROUND colour —
-        // foreground and attributes reset to default. The w4-vt candy-vt fix
+        // foreground and attributes reset to default. The w4-vt sugar-vterm fix
         // removed the pen-foreground bleed, so the emulator's erased-cell fg
         // now agrees with the renderer's default blank. What remains is the
         // background itself: the renderer blanks with a bare default cell,
         // the erases with the pen background (SGR 100 → bright black,
-        // index 8) as the erase colour. (candy-vt Parser\CsiHandlerImpl
+        // index 8) as the erase colour. (sugar-vterm Parser\CsiHandlerImpl
         // erase — renderer side is the outlier.)
         $bytes = "\x1b[31m\x1b[100m\x1b[1;3H\x1b[2K";
         $renderer = self::feedRenderer($bytes);
         $emulator = self::feedEmulator($bytes);
 
         // Published-mode caveat: while the w4 BCE fix is unmerged (or the
-        // split-repo sync lags), candy-vcr's CI resolves candy-vt from
+        // split-repo sync lags), candy-vcr's CI resolves sugar-vterm from
         // Packagist dev-master, whose erase still bleeds the pen fg into
         // erased cells ('I1'). Scrollback::clear() is the public marker that
         // shipped with the BCE fix, so it discriminates the two engines
@@ -892,7 +892,7 @@ final class VtParityTest extends TestCase
     }
 
     /**
-     * Does the candy-vt actually installed in vendor/ carry $method on $marker?
+     * Does the sugar-vterm actually installed in vendor/ carry $method on $marker?
      * Routing through a parameter defeats PHPStan's constant folding: it
      * analyses the body once against `class-string`, so the probe is neither
      * "always true" (linked monorepo vt) nor "always false" (the stale

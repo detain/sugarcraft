@@ -1,6 +1,6 @@
-# Step 07.03 — candy-vt subparameter parsing CSI 38:2:… (P0.3)
+# Step 07.03 — sugar-vterm subparameter parsing CSI 38:2:… (P0.3)
 
-**Source:** `leftover_updates_later.md` candy-vt P0.3
+**Source:** `leftover_updates_later.md` sugar-vterm P0.3
 **Branch:** `ai/vt-subparams`
 
 ## Deliverable
@@ -13,18 +13,18 @@ to recognize `:` as a sub-parameter separator distinct from `;`.
 
 **Modify:**
 
-- `candy-vt/src/Parser/Parser.php` — sub-parameter aware tokenization.
-- `candy-vt/src/Handler/SgrHandler.php` — handle the colon forms.
+- `sugar-vterm/src/Parser/Parser.php` — sub-parameter aware tokenization.
+- `sugar-vterm/src/Handler/SgrHandler.php` — handle the colon forms.
 
 ## Tests
 
-- `candy-vt/tests/Parser/SubparamTest.php` — feed `\x1b[38:2:255:100:50m`,
+- `sugar-vterm/tests/Parser/SubparamTest.php` — feed `\x1b[38:2:255:100:50m`,
   assert SGR yields FG RGB 255,100,50.
 - Also `\x1b[38;2;255;100;50m` (semicolon form) still parses identically.
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter Subparam` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter Subparam` green.
 
 ---
 

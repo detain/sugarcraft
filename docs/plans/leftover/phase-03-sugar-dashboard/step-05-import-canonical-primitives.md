@@ -16,8 +16,8 @@ from canonical homes:
 - `Rect` → `\SugarCraft\Core\Rect`
 - `Theme` → `\SugarCraft\Sprinkles\Theme` (from step 02.01)
 - `StyleParser` → `\SugarCraft\Sprinkles\StyleParser` (from step 02.02)
-- `Buffer` → `\SugarCraft\Vt\Buffer\Buffer`
-- `Cell` → `\SugarCraft\Vt\Cell\Cell`
+- `Buffer` → `\SugarCraft\Vterm\Buffer\Buffer`
+- `Cell` → `\SugarCraft\Vterm\Cell\Cell`
 
 `Foundation/` shrinks to just `Drawable.php`, `Item.php`, `Sizer.php`
 (sugar-dashboard-specific interfaces).
@@ -32,7 +32,7 @@ the canonical import.
 
 **Modify:** `sugar-dashboard/composer.json`:
 - `require` adds `"sugarcraft/candy-sprinkles": "@dev"` and
-  `"sugarcraft/candy-vt": "@dev"`.
+  `"sugarcraft/sugar-vterm": "@dev"`.
 - `repositories[]` adds path-repos for both.
 - `tools/check-path-repos.php` green.
 

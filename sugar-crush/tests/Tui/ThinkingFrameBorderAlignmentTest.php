@@ -31,7 +31,7 @@ use SugarCraft\Layout\Dock\Side;
  * the screen exactly where the paste shows them missing.
  *
  * The frame is measured with an INDEPENDENT physical oracle — per-codepoint
- * `mb_strwidth` — because the candy-vt cell grid delegates to the very same
+ * `mb_strwidth` — because the sugar-vterm cell grid delegates to the very same
  * `Width::string()` table and could not falsify it (this repo has that
  * delegation pinned; see the L5 precedent in {@see PaneTest}).
  */

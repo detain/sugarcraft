@@ -10,7 +10,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\Renderer;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Terminal;
 use SugarCraft\Testing\Snapshot\Assertions;
 use PHPUnit\Framework\TestCase;
 
@@ -37,7 +37,7 @@ final class GoldenRenderTest extends TestCase
             createdAt: '2026-05-31T00:00:00Z',
             cols: 10,
             rows: 3,
-            runtime: 'sugarcraft/candy-vt@dev',
+            runtime: 'sugarcraft/sugar-vterm@dev',
         );
         $events = [
             new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => "\x1b[31mRed\x1b[0m"]),

@@ -1,6 +1,6 @@
-# Step 07.06 — candy-vt DECOM origin + DECSCUSR cursor shape + focus events 1004 (P1.3-5)
+# Step 07.06 — sugar-vterm DECOM origin + DECSCUSR cursor shape + focus events 1004 (P1.3-5)
 
-**Source:** `leftover_updates_later.md` candy-vt P1.3 + P1.4 + P1.5
+**Source:** `leftover_updates_later.md` sugar-vterm P1.3 + P1.4 + P1.5
 **Branch:** `ai/vt-decom-decscusr-focus`
 
 ## Deliverable
@@ -19,12 +19,12 @@ Three small mode-handler additions:
 
 **Modify:**
 
-- `candy-vt/src/Mode/Mode.php` — add `$originMode`, `$cursorShape`
+- `sugar-vterm/src/Mode/Mode.php` — add `$originMode`, `$cursorShape`
   (enum), `$reportFocusEvents` fields with immutable withers.
-- `candy-vt/src/Handler/{CursorHandler,ModeParser,SgrHandler}.php`
+- `sugar-vterm/src/Handler/{CursorHandler,ModeParser,SgrHandler}.php`
   honor them.
-- New `candy-vt/src/CursorShape.php` enum.
-- New `candy-vt/src/Msg/FocusInMsg.php` + `FocusOutMsg.php`.
+- New `sugar-vterm/src/CursorShape.php` enum.
+- New `sugar-vterm/src/Msg/FocusInMsg.php` + `FocusOutMsg.php`.
 
 ## Tests
 
@@ -32,7 +32,7 @@ Three small mode-handler additions:
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter "Origin|CursorShape|FocusEvent"` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter "Origin|CursorShape|FocusEvent"` green.
 
 ---
 

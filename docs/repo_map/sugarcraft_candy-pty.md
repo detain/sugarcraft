@@ -12,7 +12,7 @@
 | **PHP** | `^8.3` |
 | **FFI** | `ext-ffi` (required), `ext-pcntl` (optional, for signal handling) |
 | **Platforms** | Linux (glibc/musl), macOS (Darwin/xnu) |
-| **Dependencies** | `sugarcraft/candy-core` (dev: `candy-vt`, `candy-vcr`) |
+| **Dependencies** | `sugarcraft/candy-core` (dev: `sugar-vterm`, `candy-vcr`) |
 
 ---
 

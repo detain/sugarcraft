@@ -485,7 +485,7 @@ Already implemented:
 Already implemented:
 - `ByteAssertion` — strict byte equality
 
-- `ScreenAssertion` — cell-grid equality (via candy-vt)
+- `ScreenAssertion` — cell-grid equality (via sugar-vterm)
 
 - `ContainsAssertion` — substring match
 
@@ -561,7 +561,7 @@ Already implemented:
 | `src/EventKind.php` | Enum: resize, input, output, quit, snapshot, hide, show |
 | `src/ReplayResult.php` | DTO: ok, diff, event counts |
 | `src/Assert/ByteAssertion.php` | Strict byte equality with hex window diff |
-| `src/Assert/ScreenAssertion.php` | Cell-grid equality via candy-vt Terminal |
+| `src/Assert/ScreenAssertion.php` | Cell-grid equality via sugar-vterm Terminal |
 | `src/Assert/ContainsAssertion.php` | Substring match assertion |
 | `src/Assert/RegexAssertion.php` | PCRE pattern assertion |
 | `src/Matcher/EventMatcher.php` | Interface for event matching |

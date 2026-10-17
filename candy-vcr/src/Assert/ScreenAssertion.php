@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Assert;
 
-use SugarCraft\Vt\Terminal\Terminal;
+use SugarCraft\Vterm\Terminal\Terminal;
 
 /**
  * Cell-grid screen-equality assertion.
  *
  * Feeds the expected and actual byte streams into separate
  * {@see Terminal} instances and compares their final cell grids via
- * {@see \SugarCraft\Vt\Screen\Screen::diff()}. Cell-grid equality is
+ * {@see \SugarCraft\Vterm\Screen\Screen::diff()}. Cell-grid equality is
  * semantically stronger than byte equality — it tolerates ANSI-level
  * reordering (redundant SGR re-emission, equivalent cursor-position
  * sequences, partial vs full repaints) that doesn't change what the
  * user actually sees on screen.
  *
- * Requires `sugarcraft/candy-vt`. If candy-vt isn't installed, fall
+ * Requires `sugarcraft/sugar-vterm`. If sugar-vterm isn't installed, fall
  * back to {@see ByteAssertion}.
  *
  * Mirrors charmbracelet/x/vcr Assert/Screen.
@@ -30,7 +30,7 @@ final class ScreenAssertion implements Assertion
     ) {
         if (!class_exists(Terminal::class)) {
             throw new \RuntimeException(
-                'ScreenAssertion requires sugarcraft/candy-vt — install it or use ByteAssertion.',
+                'ScreenAssertion requires sugarcraft/sugar-vterm — install it or use ByteAssertion.',
             );
         }
         if ($cols <= 0 || $rows <= 0) {
@@ -63,7 +63,7 @@ final class ScreenAssertion implements Assertion
      * Compact human-readable diff: count + first few cell coordinates
      * with their expected vs actual graphemes.
      *
-     * @param array<array{row:int,col:int,prev:\SugarCraft\Vt\Cell,next:\SugarCraft\Vt\Cell}> $changes
+     * @param array<array{row:int,col:int,prev:\SugarCraft\Vterm\Cell,next:\SugarCraft\Vterm\Cell}> $changes
      */
     private function summarize(array $changes): string
     {

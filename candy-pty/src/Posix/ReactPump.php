@@ -182,7 +182,7 @@ final class ReactPump
      * Start pumping. Parameter order mirrors {@see PosixPump::run()};
      * `$stdinStream` and `$stdoutStream` are optional here so callers
      * can consume master output purely through `$onData` (e.g. feeding
-     * a candy-vt Terminal) without wiring host stdio.
+     * a sugar-vterm Terminal) without wiring host stdio.
      *
      * The pump is single-flight: calling start() while a previous run
      * is still active throws.

@@ -2,8 +2,8 @@
 
 **Date:** 2026-05-21
 **Question:** Can candy-vcr's own PHP pipeline render `.tape` → `.gif` in place of the `vhs` binary (charmbracelet/vhs) the CI workflow currently uses?
-**Verdict:** Yes — with a focused **6–10 week** build. The biggest hidden cost is that **candy-vt** (the terminal-grid emulator candy-vcr would render through) did not exist yet. candy-vcr's existing Cassette + Player layer is solid and reusable; the tape compiler, renderer, rasterizer, and GIF encoder are net-new.
-**Status (2026-10):** the pipeline shipped — candy-vcr's `Tape/` → `Render/` → `Raster/` → `Encode/` stack and candy-vt are live, and CI runs `candy-vcr render-batch` as a non-blocking seed soak. The `vhs` binary still renders the main demo matrix, so the §4 Phase 7 / §9 cutover is pending, not done. Section numbers in this file are external citation anchors — do not renumber or merge them. Looking for how to *use* candy-vcr? See `candy-vcr/README.md` — this file is the story of how the renderer was designed and built.
+**Verdict:** Yes — with a focused **6–10 week** build. The biggest hidden cost is that **sugar-vterm** (the terminal-grid emulator candy-vcr would render through) did not exist yet. candy-vcr's existing Cassette + Player layer is solid and reusable; the tape compiler, renderer, rasterizer, and GIF encoder are net-new.
+**Status (2026-10):** the pipeline shipped — candy-vcr's `Tape/` → `Render/` → `Raster/` → `Encode/` stack and sugar-vterm are live, and CI runs `candy-vcr render-batch` as a non-blocking seed soak. The `vhs` binary still renders the main demo matrix, so the §4 Phase 7 / §9 cutover is pending, not done. Section numbers in this file are external citation anchors — do not renumber or merge them. Looking for how to *use* candy-vcr? See `candy-vcr/README.md` — this file is the story of how the renderer was designed and built.
 
 ---
 
@@ -12,7 +12,7 @@
 candy-vcr today is a **terminal-session recorder/replayer** — it captures what your app renders and every key press (Program → JSONL cassette → replay with assertions). The `vhs` binary is a **declarative tape DSL → terminal rendering → GIF**. They solve different problems. To make candy-vcr cover what vhs does, we build a new pipeline on top of the existing Cassette + Player layer:
 
 ```
-.tape  →  Lexer/Parser/Compiler  →  Cassette  →  Player  →  Terminal (candy-vt)
+.tape  →  Lexer/Parser/Compiler  →  Cassette  →  Player  →  Terminal (sugar-vterm)
                                                               ↓
                                                           Snapshot stream
                                                               ↓
@@ -51,11 +51,11 @@ Phases 0–6 shipped sequentially as individual PRs per the repo's standard cycl
 
 | Component | Status | Effort |
 |---|---|---|
-| candy-vt terminal emulator | ❌ Only `CursorShape.php` exists | **2–3 weeks** |
+| sugar-vterm terminal emulator | ❌ Only `CursorShape.php` exists | **2–3 weeks** |
 | Tape lexer/parser/compiler | ❌ Not started | 1 week |
 | Frame stream / dedup | ❌ Not started | 1 week |
 | Rasterizer (gd / imagick) | ❌ Not started | 1–2 weeks |
-| Theme system + ANSI palette | ❌ Not started | included in candy-vt |
+| Theme system + ANSI palette | ❌ Not started | included in sugar-vterm |
 | GIF encoder | ❌ Not started | ½ week |
 | Bundled monospace TTF | ❌ Need to vendor JetBrainsMono or similar | ½ day |
 | `render-tape` CLI subcommand | ❌ Not started | ½ week |
@@ -68,7 +68,7 @@ Phases 0–6 shipped sequentially as individual PRs per the repo's standard cycl
 Names follow project conventions: `final` classes, `declare(strict_types=1)`, immutable + fluent, public `readonly` properties.
 
 ```
-candy-vt/src/                                  (new — terminal-grid emulator)
+sugar-vterm/src/                                  (new — terminal-grid emulator)
   Terminal.php             — public surface; cell grid + cursor state + scroll region
   Cell.php                 — char + fg + bg + attrs (readonly)
   CellGrid.php             — 2D grid with diff & dirty-region tracking
@@ -128,8 +128,8 @@ This phase exists to make every later phase faster. Bundle into 1 PR.
 
 - **Fix candy-vcr PHPUnit suite.** Implement the missing `TickModel::subscriptions()` (likely just `return null;`).
 - **Add `candy-vcr/phpstan.neon`** at `level: max`, with paths `src/` and `tests/`. Fix any findings inline; if any can't be fixed without scope creep, add `// @phpstan-ignore-next-line` with an inline comment referencing this phase.
-- **Add `candy-vt/phpstan.neon`** same shape (still mostly empty source tree but the gate is in place for Phase 1).
-- **Add root `.php-cs-fixer.dist.php`** with PSR-12 + strict types + readonly preferences. Run it across `candy-core`, `candy-vcr`, `candy-vt` to seed the baseline (other libs adopt over time).
+- **Add `sugar-vterm/phpstan.neon`** same shape (still mostly empty source tree but the gate is in place for Phase 1).
+- **Add root `.php-cs-fixer.dist.php`** with PSR-12 + strict types + readonly preferences. Run it across `candy-core`, `candy-vcr`, `sugar-vterm` to seed the baseline (other libs adopt over time).
 - **Baseline benchmark.** Run the existing Player on a medium cassette (~150 events) and capture wall time + memory. Establishes the per-event cost the render work will add to.
 - **Decision log** committed to `candy-vcr/CALIBER_LEARNINGS.md`:
   - Primary rasterizer backend: `ext-gd` (universal availability).
@@ -139,9 +139,9 @@ This phase exists to make every later phase faster. Bundle into 1 PR.
   - `candy-vcr/README.md` — note the new gates (phpstan + cs-fixer) under "Development".
   - Root `README.md` — note php-cs-fixer in the development section.
 
-### Phase 1 — Build candy-vt terminal emulator (2–3 weeks)
+### Phase 1 — Build sugar-vterm terminal emulator (2–3 weeks)
 
-The longest pole. candy-vt is its own self-contained foundation lib; the renderer is just its first consumer.
+The longest pole. sugar-vterm is its own self-contained foundation lib; the renderer is just its first consumer.
 
 **Scope priorities (deliver smallest useful surface first):**
 
@@ -157,7 +157,7 @@ The longest pole. candy-vt is its own self-contained foundation lib; the rendere
 - Snapshot tests: drive Terminal with output from real commands (captured separately — e.g., `ls --color`, `htop -bn1`); assert the rendered cells match a golden file.
 - Theme test: every named color in TokyoNight resolves to its hex.
 
-**Deliverable:** candy-vt v0.1 with public API: `Terminal::new(cols, rows, theme) → feed(bytes) → snapshot()`.
+**Deliverable:** sugar-vterm v0.1 with public API: `Terminal::new(cols, rows, theme) → feed(bytes) → snapshot()`.
 
 ### Phase 2 — Tape lexer/parser/compiler (1 week)
 
@@ -309,7 +309,7 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 
 | Bottleneck | Where | Mitigation |
 |---|---|---|
-| CSI parser hot loop in pure PHP | candy-vt Parser | Profile after Phase 1; convert inner state machine to a switch-table; consider memoizing common SGR-only sequences. |
+| CSI parser hot loop in pure PHP | sugar-vterm Parser | Profile after Phase 1; convert inner state machine to a switch-table; consider memoizing common SGR-only sequences. |
 | Glyph rendering dominates rasterization | Raster/Rasterizer | The `Glyphs` cache **is** the mitigation — without it, expect 10× slower. Measure cache hit rate; aim for >95% on typical tapes. |
 | ffmpeg `palettegen` runs per-frame by default | Encode/FfmpegGifEncoder | Use `palettegen=stats_mode=diff` once globally with `paletteuse=dither=bayer:bayer_scale=5`. |
 | PHP startup overhead × 841 tapes | CLI invocation | `render-batch` command processes a whole directory in one PHP process. |
@@ -330,7 +330,7 @@ Performance work is gated on real numbers from Phase 0 and Phase 4 benchmarks, n
 | `Set FontSize <n>` | 266 | ✅ supported | Scales cell metrics linearly |
 | `Set Width <n>` / `Set Height <n>` | 201 | ✅ supported | Terminal cols/rows |
 | `Set TypingSpeed <Xms>` | 101 | ✅ supported | Inter-keystroke delay during `Type` |
-| `Set Theme "..."` | 277 | ✅ supported (TokyoNight first; others lazy-loaded) | Maps to candy-vt theme catalog |
+| `Set Theme "..."` | 277 | ✅ supported (TokyoNight first; others lazy-loaded) | Maps to sugar-vterm theme catalog |
 | `Set Padding` / `Set Margin` | 0 | ⚠️ parsed, no-op | Cosmetic chrome; defer to v2 |
 | `Set FontFamily` | 0 | ⚠️ parsed, no-op | v1 ships JetBrainsMono only |
 | `Type "..."` | 311+ | ✅ supported | Each char as KeyMsg at TypingSpeed cadence |
@@ -354,10 +354,10 @@ v1 covers everything actually used in the monorepo. v2 covers the remainder for 
 
 ## §8. Test strategy
 
-- **Unit tests per phase** live in the matching lib (`candy-vt/tests/`, `candy-vcr/tests/Tape/`, `candy-vcr/tests/Render/`, etc.).
+- **Unit tests per phase** live in the matching lib (`sugar-vterm/tests/`, `candy-vcr/tests/Tape/`, `candy-vcr/tests/Render/`, etc.).
 - **Visual regression:** ~10 curated golden GIFs checked into the repo. CI re-renders and compares against goldens — file-hash for byte-deterministic builds; SSIM threshold if we need fuzziness.
 - **Corpus parse test:** assert every `.tape` file in the monorepo parses without error. No rendering required — just lexer/parser/compiler coverage.
-- **Smoke test:** `php candy-vcr/bin/candy-vcr render-tape candy-vt/.vhs/snapshot-demo.tape` must produce a non-empty GIF. Commit one canonical golden.
+- **Smoke test:** `php candy-vcr/bin/candy-vcr render-tape sugar-vterm/.vhs/snapshot-demo.tape` must produce a non-empty GIF. Commit one canonical golden.
 - **Performance smoke test:** `time render-batch` against a 10-tape directory; CI fails if wall time exceeds threshold.
 
 ---
@@ -365,7 +365,7 @@ v1 covers everything actually used in the monorepo. v2 covers the remainder for 
 ## §9. Workflow migration playbook
 
 1. **Phase 0 PR:** Fix candy-vcr PHPUnit; commit baseline benchmark to CALIBER_LEARNINGS.md.
-2. **Phase 1 PRs (multiple):** candy-vt incremental — `Cell` + `CellGrid` + `Cursor`; then Parser/state-machine; then CSI handler; then Theme + Themes.
+2. **Phase 1 PRs (multiple):** sugar-vterm incremental — `Cell` + `CellGrid` + `Cursor`; then Parser/state-machine; then CSI handler; then Theme + Themes.
 3. **Phase 2 PR:** Tape lexer/parser/compiler; corpus parse test passes.
 4. **Phase 3 PR:** Renderer + FrameDedup.
 5. **Phase 4 PRs:** GdRasterizer + Glyphs + FontLoader; bundle TTF.
@@ -383,7 +383,7 @@ Each PR ends with `vendor/bin/phpunit` per affected lib and (for Phase 7) a visu
 |---|---|---|
 | Visual drift from the vhs binary (font, theme palette, kerning) | High | Tune until "close enough"; document the expectation; offer `ImagickRasterizer` as a fallback if needed. |
 | Performance overshoot (>30 min CI budget) | Medium | Phase 0 + Phase 4 benchmarks gate Phase 7; if budget breaks, expand matrix sharding before reverting. |
-| candy-vt scope creep (terminal emulator is its own project) | High | Strict v1 scope: only what the renderer needs. Defer DECSAVE, alt-screen, mouse, BiDi to v2. |
+| sugar-vterm scope creep (terminal emulator is its own project) | High | Strict v1 scope: only what the renderer needs. Defer DECSAVE, alt-screen, mouse, BiDi to v2. |
 | Hidden directives in newer tapes break parser | Low | Corpus parse test runs before render; `--strict` flag for opt-in rejection. |
 | Determinism change (vhs is non-deterministic, candy-vcr is byte-deterministic) breaks `git diff --quiet` re-render check | Medium | Switch the re-render check to a manifest-hash comparison; deterministic output is actually an upgrade. |
 
@@ -427,7 +427,7 @@ Things the Go tooling couldn't easily do that PHP can leverage:
 | Phase | Estimate | Critical path |
 |---|---|---|
 | 0 — Unblock | ½ day | yes |
-| 1 — candy-vt | **2–3 weeks** | **yes (longest pole)** |
+| 1 — sugar-vterm | **2–3 weeks** | **yes (longest pole)** |
 | 2 — Tape parser | 1 week | yes |
 | 3 — Renderer | 1 week | yes |
 | 4 — Rasterizer | 1–2 weeks | yes |
@@ -440,9 +440,9 @@ Things the Go tooling couldn't easily do that PHP can leverage:
 
 ## §15. Verdict
 
-**Yes, achievable.** The biggest hidden cost is building candy-vt itself, not the candy-vcr work. With ffmpeg already in CI and gd/imagick available in PHP, the PHP-native path is realistic without re-introducing the Chromium/ttyd container weight.
+**Yes, achievable.** The biggest hidden cost is building sugar-vterm itself, not the candy-vcr work. With ffmpeg already in CI and gd/imagick available in PHP, the PHP-native path is realistic without re-introducing the Chromium/ttyd container weight.
 
-Recommended sequencing: ship Phase 0 first (cheap, unblocks measurement), then Phase 1 (the candy-vt base) as a long-running parallel workstream, then Phases 2–7 in order once Phase 1 has a usable Terminal API. Each phase ships as its own PR(s); the renderer is additive throughout — the vhs binary keeps running in CI until Phase 7's soak proves the candy-vcr path is reliable.
+Recommended sequencing: ship Phase 0 first (cheap, unblocks measurement), then Phase 1 (the sugar-vterm base) as a long-running parallel workstream, then Phases 2–7 in order once Phase 1 has a usable Terminal API. Each phase ships as its own PR(s); the renderer is additive throughout — the vhs binary keeps running in CI until Phase 7's soak proves the candy-vcr path is reliable.
 
 ---
 

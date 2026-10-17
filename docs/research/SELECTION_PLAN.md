@@ -139,22 +139,22 @@
 - **Effort**: 30 minutes
 - **Research**: `libraries/sugar-image-research.md`
 
-### candy-vt
+### sugar-vterm
 
 ### [ ] Add DECSTBM scroll margins
 
 - **Effort**: 2-3 hours
-- **Research**: `libraries/candy-vt-research.md`
+- **Research**: `libraries/sugar-vterm-research.md`
 
 ### [ ] Add Auto-wrap (DECAWM)
 
 - **Effort**: 2 hours
-- **Research**: `libraries/candy-vt-research.md`
+- **Research**: `libraries/sugar-vterm-research.md`
 
 ### [ ] Add subparameter parsing (CSI 38:2::186:93:0m)
 
 - **Effort**: 2-3 hours
-- **Research**: `libraries/candy-vt-research.md`
+- **Research**: `libraries/sugar-vterm-research.md`
 
 ### candy-kv
 
@@ -450,7 +450,7 @@ All 45 research documents available at:
 | candy-sprinkles | 15KB |
 | candy-tetris | 18KB |
 | candy-vcr | 23KB |
-| candy-vt | 26KB |
+| sugar-vterm | 26KB |
 | candy-wish | 24KB |
 | sugar-mouse | 14KB |
 | sugar-spring | 25KB |

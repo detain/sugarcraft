@@ -394,13 +394,13 @@ This is a notable architectural difference — Go sequin's golden files ensure o
 
 ---
 
-## 8. How It Uses candy-vt (for parsing)
+## 8. How It Uses sugar-vterm (for parsing)
 
-### 8.1 Relationship to candy-vt
+### 8.1 Relationship to sugar-vterm
 
-candy-ansi-inspect and candy-vt serve **different purposes** despite both parsing ANSI:
+candy-ansi-inspect and sugar-vterm serve **different purposes** despite both parsing ANSI:
 
-| Aspect | candy-ansi-inspect | candy-vt |
+| Aspect | candy-ansi-inspect | sugar-vterm |
 |--------|-------------|----------|
 | **Purpose** | Debugging/explaining sequences | Terminal emulation |
 | **Output** | Human-readable labels | Rendered cell grid |
@@ -408,17 +408,17 @@ candy-ansi-inspect and candy-vt serve **different purposes** despite both parsin
 | **Input** | Byte stream | Byte stream |
 | **Output** | Text descriptions | Screen buffer |
 
-### 8.2 candy-vt Comparison
+### 8.2 sugar-vterm Comparison
 
-From `repo_map/sugarcraft_candy-vt.md` section 10.2:
+From `repo_map/sugarcraft_sugar-vterm.md` section 10.2:
 
-> **Sequin has features candy-vt lacks:**
+> **Sequin has features sugar-vterm lacks:**
 > - Sequence explanation/human-readable output
 > - PTY execution for capturing real output
 > - Theme support (Charm adaptive dark/light)
 > - Golden file testing infrastructure
 >
-> **candy-vt has features sequin lacks:**
+> **sugar-vterm has features sequin lacks:**
 > - Terminal state emulation
 > - Cell grid output
 > - Scrollback buffer
@@ -430,9 +430,9 @@ From `repo_map/sugarcraft_candy-vt.md` section 10.2:
 
 - **candy-ansi-inspect** → Manual byte-by-byte loop with explicit sequence detection
 
-- **candy-vt** → Paul Williams VT500 state machine directly ported from `charmbracelet/x/ansi/parser`
+- **sugar-vterm** → Paul Williams VT500 state machine directly ported from `charmbracelet/x/ansi/parser`
 
-candy-ansi-inspect does NOT use candy-vt for parsing — it implements its own lightweight parser optimized for explanation rather than emulation.
+candy-ansi-inspect does NOT use sugar-vterm for parsing — it implements its own lightweight parser optimized for explanation rather than emulation.
 
 ---
 
@@ -635,7 +635,7 @@ Sleep 5s
 
 candy-ansi-inspect is a mature, well-tested PHP port of Go sequin that provides comprehensive ANSI escape sequence inspection for TUI debugging. It covers virtually all sequence types with detailed human-readable labels, and adds unique value through streaming incremental parsing and JSON output.
 
-The implementation is clean and portable (pure PHP, no native deps), though it lacks some upstream features (PTY execution, theme support, golden file tests). The manual byte-by-byte parsing approach, while functional, differs from the state-machine approach used by Go sequin and candy-vt.
+The implementation is clean and portable (pure PHP, no native deps), though it lacks some upstream features (PTY execution, theme support, golden file tests). The manual byte-by-byte parsing approach, while functional, differs from the state-machine approach used by Go sequin and sugar-vterm.
 
 As a debugging tool within the SugarCraft ecosystem, candy-ansi-inspect plays a crucial role in understanding what ANSI sequences the TUI libraries generate — serving as a mirror to the raw output that `candy-core` and other libraries produce.
 

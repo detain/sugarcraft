@@ -171,3 +171,11 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   (old-brand artwork moved to the new path). <!-- @rename-keep -->
 - `.vhs/*.gif` recorded frames may show the pre-rename prompt; CI `vhs.yml` re-renders from the <!-- @rename-keep -->
   already-clean `.tape` files on the next tape run. <!-- @rename-keep -->
+
+## E7 candy-vt → sugar-vterm (2026-10-16, lane rename/e7) <!-- @rename-keep -->
+- `ansi/sugarcraft/*.ansi` (8 files carry `candy-vt`; `sugarcraft-2-tc-l-3.ansi` carries a `SugarCraft\\Vt`) embed the old roster cell in <!-- @rename-keep -->
+  banner art CONTENT (`*.ansi` is C.3 content-excluded; paths untouched). Redraw at the ansi tagger pass. <!-- @rename-keep -->
+- `sugar-vterm/.vhs/snapshot-demo.gif` recorded frames show the pre-rename CandyVt demo title; <!-- @rename-keep -->
+  CI `vhs.yml` re-renders from the already-rewritten `.tape` on the next tape run. <!-- @rename-keep -->
+- `media/icons/sugar-vterm.png` + `docs/img/icons/sugar-vterm.png` — bytes unchanged <!-- @rename-keep -->
+  (old-brand artwork moved to the new path). <!-- @rename-keep -->

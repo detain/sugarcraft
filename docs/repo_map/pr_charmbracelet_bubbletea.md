@@ -516,7 +516,7 @@ The v2 Cursed Renderer is a complete rewrite modeled on ncurses:
 
 Reduces tearing and cursor flickering by atomically updating the terminal. Enabled by default in v2.
 
-**SugarCraft Status:** Terminal mode 2026 support should be part of sugar-colorprofile or candy-vt.
+**SugarCraft Status:** Terminal mode 2026 support should be part of sugar-colorprofile or sugar-vterm.
 
 ---
 

@@ -103,11 +103,11 @@ OSC 8 hyperlink support is deferred to "v2" per comments, but this is a signific
 **Severity**: Medium  
 **Category**: Missing Functionality  
 
-`CsiHandlerImpl` is explicitly documented as a "minimal CSI handler stub" that does nothing. The real implementations require "CellGrid + Cursor from terminal state" that will be wired in step-12 when candy-vt migrates.
+`CsiHandlerImpl` is explicitly documented as a "minimal CSI handler stub" that does nothing. The real implementations require "CellGrid + Cursor from terminal state" that will be wired in step-12 when sugar-vterm migrates.
 
 **Impact**: Any code trying to use `CsiHandlerImpl` as a real handler will get no-ops. This is by design but represents incomplete functionality.
 
-**Note**: This is acknowledged in the README as "🟡 Initial port — consumer handlers remain in candy-vt".
+**Note**: This is acknowledged in the README as "🟡 Initial port — consumer handlers remain in sugar-vterm".
 
 ### 2.3 No Support for OSC 1 (Icon Name) / OSC 4 (Color Palette)
 
@@ -296,7 +296,7 @@ Missing:
 **Severity**: Info  
 **Category**: Compatibility  
 
-As noted in CALIBER_LEARNINGS.md, there's an acknowledged future refactor when "candy-vt migrates onto candy-ansi" in step-12. There's no deprecation path or version compatibility strategy documented.
+As noted in CALIBER_LEARNINGS.md, there's an acknowledged future refactor when "sugar-vterm migrates onto candy-ansi" in step-12. There's no deprecation path or version compatibility strategy documented.
 
 ### 5.2 Missing Interface for CsiHandler Consumers
 
@@ -398,7 +398,7 @@ This regex is called for every OSC dispatch. While OSC dispatch is not as freque
 
 ### Won't Fix (Known/Expected)
 
-- CsiHandlerImpl being all no-ops (by design, deferred to candy-vt)
+- CsiHandlerImpl being all no-ops (by design, deferred to sugar-vterm)
 - Synchronous-only design for now (future async work)
 
 ---
@@ -439,7 +439,7 @@ The codebase is well-structured:
 
 ## 10. INHERITED vt PARSER FINDINGS (r82, E728 — moved in with the de-fork 9952e3f5c)
 
-Six findings were recorded in `findings/candy-vt.md` against vt's forked copy of the parser and moved here when candy-vt de-forked onto candy-ansi. Each is re-verified below against current candy-ansi `src/` (lane q18, 2026-09-15); marks follow the house convention (✅ fixed / ❗ still-live / ⏭️ obsolete-or-feature-idea). The vt-side entries keep their history in place with appended dispositions.
+Six findings were recorded in `findings/sugar-vterm.md` against vt's forked copy of the parser and moved here when sugar-vterm de-forked onto candy-ansi. Each is re-verified below against current candy-ansi `src/` (lane q18, 2026-09-15); marks follow the house convention (✅ fixed / ❗ still-live / ⏭️ obsolete-or-feature-idea). The vt-side entries keep their history in place with appended dispositions.
 
 ### vt#3. `Transitions::$table` static cache is not thread-safe ⏭️ r82: obsolete in candy-ansi — PHP execution model has no shared-memory userland threads (ZTS/parallel isolate statics per context; ReactPHP is single-loop); the lazy `??=` at src/Parser/Transitions.php:37 was the identical shape vt recorded, and the finding itself conceded `build()` is pure so a hypothetical double-build is byte-identical
 

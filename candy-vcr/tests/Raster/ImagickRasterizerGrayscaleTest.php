@@ -6,7 +6,7 @@ namespace SugarCraft\Vcr\Tests\Raster;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\ImagickRasterizer;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Regression: ImagickRasterizer::indexToHex returns the proper grayscale

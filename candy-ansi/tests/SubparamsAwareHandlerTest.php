@@ -209,7 +209,7 @@ final class SubparamsAwareHandlerTest extends TestCase
      * {@see Parser::__construct()}. A capable handler nested behind a plain
      * wrapper therefore receives no push at all.
      *
-     * Pinned because candy-vt's renderer path is shaped like this: `Terminal.php`
+     * Pinned because sugar-vterm's renderer path is shaped like this: `Terminal.php`
      * hands the parser a plain {@see HandlerAdapter} and keeps the
      * colon-consuming `CsiHandlerImpl` inside it, as that adapter's constructor
      * argument. So the consumer migration cannot be mechanical — either the
@@ -438,7 +438,7 @@ final class SubparamsAwareHandlerTest extends TestCase
     }
 
     /**
-     * Regression pin for the legacy pull route that candy-vt
+     * Regression pin for the legacy pull route that sugar-vterm
      * (`attachSubparamsProvider`) and candy-codeshot (`bindParser`) still use: a
      * NON-capable handler consulting {@see Parser::subparams()} mid-dispatch must
      * still resolve colon SGRs, and resolve them to exactly what the new push

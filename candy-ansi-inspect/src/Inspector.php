@@ -545,8 +545,8 @@ final class Inspector
 
     /**
      * Name an SGR underline style sub-parameter (`4:n`, ECMA-48). Mirrors the
-     * SugarCraft\Vt\Sgr\UnderlineStyle enum shipped by candy-vt step 07.05 —
-     * candy-ansi-inspect carries no candy-vt dependency, so this table is the local
+     * SugarCraft\Vterm\Sgr\UnderlineStyle enum shipped by sugar-vterm step 07.05 —
+     * candy-ansi-inspect carries no sugar-vterm dependency, so this table is the local
      * reflection of that enum and must be kept in step with it.
      */
     private static function underlineStyleName(int $n): string

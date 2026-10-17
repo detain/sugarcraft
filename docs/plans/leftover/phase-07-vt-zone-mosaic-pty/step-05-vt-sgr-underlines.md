@@ -1,6 +1,6 @@
-# Step 07.05 — candy-vt SGR underline styles 4:1–4:5 (P1.2)
+# Step 07.05 — sugar-vterm SGR underline styles 4:1–4:5 (P1.2)
 
-**Source:** `leftover_updates_later.md` candy-vt P1.2
+**Source:** `leftover_updates_later.md` sugar-vterm P1.2
 **Branch:** `ai/vt-sgr-underlines`
 
 ## Deliverable
@@ -13,21 +13,21 @@ handled.
 
 **Modify:**
 
-- `candy-vt/src/SgrState.php` (in candy-core, actually — check;
-  candy-vt likely has its own copy) — add `UnderlineStyle` enum
+- `sugar-vterm/src/SgrState.php` (in candy-core, actually — check;
+  sugar-vterm likely has its own copy) — add `UnderlineStyle` enum
   field. SgrState becomes immutable+fluent for it.
-- `candy-vt/src/Handler/SgrHandler.php` — recognize `4:N` forms.
-- `candy-vt/src/Output/Render.php` — emit the corresponding ANSI
+- `sugar-vterm/src/Handler/SgrHandler.php` — recognize `4:N` forms.
+- `sugar-vterm/src/Output/Render.php` — emit the corresponding ANSI
   sequences when rendering.
 
 ## Tests
 
-- `candy-vt/tests/SgrUnderlineStylesTest.php` — feed each form, assert
+- `sugar-vterm/tests/SgrUnderlineStylesTest.php` — feed each form, assert
   state captures correctly; round-trip render.
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter Underline` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter Underline` green.
 
 ---
 

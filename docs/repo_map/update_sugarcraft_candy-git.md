@@ -349,7 +349,7 @@
 
 **External (bubbletea):** Cell-based renderer with delta updates, only redraws changed lines, synchronized output mode (ANSI 2026).
 
-**Applicability:** Consider integrating `candy-vt` or candy-core's renderer improvements for partial redraws. The current approach is simpler but may flicker on some terminals.
+**Applicability:** Consider integrating `sugar-vterm` or candy-core's renderer improvements for partial redraws. The current approach is simpler but may flicker on some terminals.
 
 ### Spring Animations: Instant vs. Spring-based
 

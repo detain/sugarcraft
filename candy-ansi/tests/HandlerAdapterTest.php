@@ -166,7 +166,7 @@ final class HandlerAdapterTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Emulator CSI finals grown onto CsiHandler for the candy-vt de-fork.
+    // Emulator CSI finals grown onto CsiHandler for the sugar-vterm de-fork.
     // -------------------------------------------------------------------------
 
     public function testCsiDispatchHVP(): void
@@ -273,7 +273,7 @@ final class HandlerAdapterTest extends TestCase
      * carry an empty interm marker for ('s',"")/('u',"") only (input.c:345,
      * 347) so a marked query misses dispatch (input.c:1483-1487). Running
      * `CSI ? u` (the kitty keyboard-capability QUERY) as SCORC teleports the
-     * render cursor — the emulator gates the same hole in candy-vt
+     * render cursor — the emulator gates the same hole in sugar-vterm
      * ScreenHandler::csiDispatch().
      */
     public function testCsiDispatchPrivateMarkerNeverReachesScopeCursor(): void

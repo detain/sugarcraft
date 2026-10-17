@@ -7,7 +7,7 @@
 
 - C0 (0x00-0x1F) and C1 (0x80-0x9F) control-code descriptions in the
   Inspector output.
-- SGR underline-style variants 4:1–4:5 (consume from candy-vt
+- SGR underline-style variants 4:1–4:5 (consume from sugar-vterm
   step 07.05's enum).
 - SOS / PM (start-of-string / privacy-message) sequence handling.
 

@@ -19,7 +19,7 @@ From the first analysis, the following mappings were identified:
 | Package | SugarCraft Lib | Status |
 |---------|---------------|--------|
 | `ansi` | `candy-core` (planned) | ANSI escape sequences, cursor control, color SGR sequences |
-| `vt` | `candy-vt` (existing) | Full virtual terminal emulator |
+| `vt` | `sugar-vterm` (existing) | Full virtual terminal emulator |
 | `cellbuf` | None yet | Cell-based buffer for terminal rendering |
 | `term` | `candy-core` | Raw mode, terminal size, password input |
 | `wcwidth` | `candy-core` | Wide char width calculation |
@@ -57,7 +57,7 @@ The first analysis identified these gaps:
 
 **Maintainer Note**: "TruncateLeft removes n characters from the left" — indicates the bug is in the width calculation, not the character removal logic itself.
 
-**SugarCraft Direct Risk**: **HIGH** — If `candy-core` or `candy-vt` implement `Truncate` or similar width-constrained operations, they could inherit this same bug. The issue stems from conflating byte-length with display-width in edge cases.
+**SugarCraft Direct Risk**: **HIGH** — If `candy-core` or `sugar-vterm` implement `Truncate` or similar width-constrained operations, they could inherit this same bug. The issue stems from conflating byte-length with display-width in edge cases.
 
 ---
 
@@ -157,7 +157,7 @@ The first analysis identified these gaps:
 
 **Maintainer Guidance**: "use v0.4.5" as workaround; "ansi is good for a release while input needs some work"
 
-**SugarCraft Direct Risk**: **HIGH** — The same pattern occurs in any monorepo with interdependent experimental packages. SugarCraft's `candy-core`, `candy-vt`, and `candy-pty` have similar interdependencies.
+**SugarCraft Direct Risk**: **HIGH** — The same pattern occurs in any monorepo with interdependent experimental packages. SugarCraft's `candy-core`, `sugar-vterm`, and `candy-pty` have similar interdependencies.
 
 ---
 
@@ -302,7 +302,7 @@ The first analysis identified these gaps:
 
 **Status**: Merged (March 2026)
 
-**SugarCraft Direct Risk**: **LOW** — This is vt-specific. SugarCraft's `candy-vt` could benefit from scrollback support.
+**SugarCraft Direct Risk**: **LOW** — This is vt-specific. SugarCraft's `sugar-vterm` could benefit from scrollback support.
 
 ---
 
@@ -316,7 +316,7 @@ The first analysis identified these gaps:
 
 **Status**: Merged (March 2025)
 
-**SugarCraft Opportunity**: Style-aware wrapping is important for complex TUI applications. SugarCraft's `candy-vt` or `candy-core` should consider this pattern.
+**SugarCraft Opportunity**: Style-aware wrapping is important for complex TUI applications. SugarCraft's `sugar-vterm` or `candy-core` should consider this pattern.
 
 ---
 
@@ -474,7 +474,7 @@ type Terminal interface {
 }
 ```
 
-**Lesson**: This interface is very large (30+ methods). SugarCraft's `candy-vt` should consider if a smaller, more focused interface would be better.
+**Lesson**: This interface is very large (30+ methods). SugarCraft's `sugar-vterm` should consider if a smaller, more focused interface would be better.
 
 ---
 
@@ -770,7 +770,7 @@ type Terminal interface {
 
 **Value**: More realistic testing environment
 
-**SugarCraft Pattern**: Consider similar testing approach for `candy-vt`.
+**SugarCraft Pattern**: Consider similar testing approach for `sugar-vterm`.
 
 ---
 
@@ -877,7 +877,7 @@ type Terminal interface {
 
 **Value**: More realistic testing without requiring actual terminal
 
-**Implementation**: Use `candy-vt` to simulate terminal environment
+**Implementation**: Use `sugar-vterm` to simulate terminal environment
 
 **Priority**: MEDIUM — valuable for testing components
 
@@ -1095,7 +1095,7 @@ type Terminal interface {
 
 ### 5. Virtual Terminal for Testing
 
-**Opportunity**: Use `candy-vt` for headless component testing
+**Opportunity**: Use `sugar-vterm` for headless component testing
 
 **Approach**: Run components in virtual terminal; inspect rendered output
 

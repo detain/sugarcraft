@@ -10,18 +10,18 @@ use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
-use SugarCraft\Vt\Terminal\Terminal;
+use SugarCraft\Vterm\Terminal\Terminal;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.5 — Shirley-style integration: record a real vim session
  * (`iHello<Esc>:wq<CR>`), then replay the cassette's output stream
- * through candy-vt::Terminal to confirm the recorded byte stream
+ * through sugar-vterm::Terminal to confirm the recorded byte stream
  * parses into a valid screen state. Vim is the canonical "scary"
  * case because of full-screen alt-screen + cursor positioning + CSR.
  *
  * Bounded at ~15 s wallclock. Skipped when vim isn't installed (CI
- * images frequently strip it), and when candy-vt isn't autoloadable.
+ * images frequently strip it), and when sugar-vterm isn't autoloadable.
  */
 final class ShirleyVimTest extends TestCase
 {
@@ -31,7 +31,7 @@ final class ShirleyVimTest extends TestCase
     {
         $this->requirePtySyscalls();
         if (!\class_exists(Terminal::class)) {
-            $this->markTestSkipped('sugarcraft/candy-vt is not autoloadable.');
+            $this->markTestSkipped('sugarcraft/sugar-vterm is not autoloadable.');
         }
         $vim = '/usr/bin/vim';
         if (!\is_executable($vim)) {
@@ -110,7 +110,7 @@ final class ShirleyVimTest extends TestCase
             $this->assertTrue($sawOutput, 'cassette must contain vim output bytes');
             $this->assertTrue($sawQuit, 'cassette must close with a quit event');
 
-            // Feed the concatenated output through candy-vt's
+            // Feed the concatenated output through sugar-vterm's
             // Terminal to confirm the byte stream parses into a valid
             // screen state. We don't assert specific cells — vim's
             // exit-sequence varies across versions/builds, and the

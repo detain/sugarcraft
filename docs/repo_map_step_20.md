@@ -1,7 +1,7 @@
 # Step 20 — Replace byte-loop ANSI parsers with candy-ansi
 
 **Branch:** `ai/ansi-consumers`
-**Depends on:** step-01 (candy-ansi), step-12 (candy-vt aliased — so no two-truth situation)
+**Depends on:** step-01 (candy-ansi), step-12 (sugar-vterm aliased — so no two-truth situation)
 **Blocks:** —
 
 ## Goal

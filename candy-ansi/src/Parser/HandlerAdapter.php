@@ -57,7 +57,7 @@ final class HandlerAdapter implements Handler
         // (input.c:345,347) and lets `CSI ? u` miss the table entirely
         // (input.c:1483-1487). Executing the kitty keyboard-capability QUERY
         // (`CSI ? u`) as SCORC teleports the render cursor — the same defect
-        // the emulator gates in SugarCraft\Vt\Handler\ScreenHandler::csiDispatch().
+        // the emulator gates in SugarCraft\Vterm\Handler\ScreenHandler::csiDispatch().
         if ($prefix !== 0 && ($finalChar === 's' || $finalChar === 'u')) {
             return;
         }

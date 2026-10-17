@@ -54,7 +54,7 @@ User decisions (confirmed up front):
 - Replacing ReactPHP as the event loop primitive.
 - Pure-PHP termios via ext-readline or custom PECL extension.
 - Sidecar binary distribution.
-- ANSI parsing (lives in `candy-core::InputReader` + `candy-vt`, stays there).
+- ANSI parsing (lives in `candy-core::InputReader` + `sugar-vterm`, stays there).
 - VT-state recording semantics (lives in `candy-vcr`, stays there).
 - Changes to `candy-core::Util\Tty::WindowsBackend` (it handles native Windows console mode, not PTY allocation; out of scope for this plan).
 
@@ -223,7 +223,7 @@ Cross-shell integration tests under `candy-pty/tests/Integration/`:
 - `BashInteractiveTest` — spawn `bash -i`, send commands, assert prompt + output.
 - `ZshTest`, `FishTest`, `DashTest` — same script, different shells. Skip gracefully if shell absent (`require($this)->markTestSkipped('zsh not installed')`).
 - `PythonReplTest` — spawn `python3 -u -i`, exercise multi-line input.
-- `VimSmokeTest` — spawn `vim`, send `:q!`, assert clean exit. (Pulls in vt-parsing via `candy-vt` for screen state.)
+- `VimSmokeTest` — spawn `vim`, send `:q!`, assert clean exit. (Pulls in vt-parsing via `sugar-vterm` for screen state.)
 - `ResizeRaceTest` — spawn `tput cols` in a loop while resizing the PTY; assert no torn reads.
 - `LargeBufferTest` — write 1 MB through master, read on slave, assert byte-identical (catches non-blocking write loops).
 - `EOFGraceTest` — close stdin while child is mid-write; assert pump drains output before returning.
@@ -290,7 +290,7 @@ The current `candy-vcr` only records sessions attached as a library to a `SugarC
 **Acceptance:**
 
 - `candy-vcr record --output /tmp/bash.cas -- bash -c 'echo hello; sleep 0.2; echo world'` produces a cassette with `output` events totalling "hello\nworld\n" (after CR/LF normalization) and a `quit` event with exit 0.
-- `candy-vcr record --output /tmp/vim.cas -- vim /tmp/scratch.txt` then `<Esc>:wq<CR>` produces a cassette that replays into a `candy-vt` Terminal showing an empty buffer post-replay.
+- `candy-vcr record --output /tmp/vim.cas -- vim /tmp/scratch.txt` then `<Esc>:wq<CR>` produces a cassette that replays into a `sugar-vterm` Terminal showing an empty buffer post-replay.
 - `candy-vcr replay /tmp/bash.cas` round-trips on the same host (timing tolerance applied).
 - `candy-vcr stats /tmp/bash.cas` (from P6 stats CLI in `candy-vcr-research.md` H1) reports plausible event counts.
 - Recording overhead measured at ≤2% wall-clock vs running the same command without `record` (on `time bash -c 'seq 100000'`).
@@ -344,7 +344,7 @@ To create:
 - `candy-vcr/src/Cli/RecordCommand.php` *(P6.5 — Shirley-style CLI)*
 - `candy-vcr/tests/Cli/RecordCommandTest.php` *(P6.5)*
 - `candy-vcr/tests/Integration/ShirleyBashTest.php` *(P6.5 — record `bash -c '...'`, replay, assert)*
-- `candy-vcr/tests/Integration/ShirleyVimTest.php` *(P6.5 — record `vim`, screen-assert via candy-vt)*
+- `candy-vcr/tests/Integration/ShirleyVimTest.php` *(P6.5 — record `vim`, screen-assert via sugar-vterm)*
 
 To modify:
 
@@ -377,7 +377,7 @@ To leave alone:
 - `candy-pty/bin/pty-shim.php` — already correct
 - `candy-core/src/Util/Tty/WindowsBackend.php` — out of scope
 - `candy-core/src/InputReader.php` — ANSI parsing, not PTY plumbing
-- `candy-vt/` — VT-state machine, not PTY plumbing
+- `sugar-vterm/` — VT-state machine, not PTY plumbing
 - `candy-vcr/` — recording semantics, not PTY plumbing
 
 ---

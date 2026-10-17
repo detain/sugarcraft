@@ -5,8 +5,8 @@
 
 ## Deliverable
 
-- OSC 52 clipboard wiring — route through candy-vt OSC handler (after
-  candy-vt OSC support exists per its research; if missing, add a
+- OSC 52 clipboard wiring — route through sugar-vterm OSC handler (after
+  sugar-vterm OSC support exists per its research; if missing, add a
   minimal OSC handler in candy-git-server and document the dependency).
 - HTTP smart protocol server (git-over-HTTP).
 

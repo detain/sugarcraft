@@ -11,7 +11,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\Renderer;
-use SugarCraft\Vt\Terminal;
+use SugarCraft\Vterm\Terminal;
 
 /**
  * Tests for FrameStream playback speed scaling.

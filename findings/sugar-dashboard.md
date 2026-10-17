@@ -418,7 +418,7 @@ The code uses `JSON_THROW_ON_ERROR` flag which is correct. No issue here — thi
 **Category:** Compatibility Issues
 
 The CALIBER_LEARNINGS.md lines 43-44 document the dual-cell pattern:
-> "sugar-dashboard Cell (rune + Style for inline-termui renderer) vs candy-vt Cell (grapheme + Sgr + continuation + hyperlink for VT emulation). Both canonical for their lib."
+> "sugar-dashboard Cell (rune + Style for inline-termui renderer) vs sugar-vterm Cell (grapheme + Sgr + continuation + hyperlink for VT emulation). Both canonical for their lib."
 
 This dual-type pattern is a known project convention. However, `Chart.php` importing from `SugarCraft\Buffer\*` (which doesn't exist) suggests there may be a third `Buffer`/`Cell` type being attempted. This creates confusion about which type to use where.
 

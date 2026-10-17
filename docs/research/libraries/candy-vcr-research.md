@@ -7,7 +7,7 @@
 **Current Status:** candy-vcr is functionally complete with:
 
 - JSONL + YAML cassette formats
-- ByteAssertion + ScreenAssertion (via candy-vt)
+- ByteAssertion + ScreenAssertion (via sugar-vterm)
 - CLI tools: inspect, replay, diff
 - Event kinds: resize, input (msg-form + raw byte), output, quit
 - Streaming JSONL recorder with crash-safety
@@ -37,7 +37,7 @@
 | `Event` | `Event.php` | Timestamp + kind + payload |
 | `EventKind` | `EventKind.php` | Enum: resize, input, output, quit |
 | `ByteAssertion` | `Assert/ByteAssertion.php` | Exact byte comparison with hex window diff |
-| `ScreenAssertion` | `Assert/ScreenAssertion.php` | Cell-grid diff via candy-vt Terminal |
+| `ScreenAssertion` | `Assert/ScreenAssertion.php` | Cell-grid diff via sugar-vterm Terminal |
 | `JsonlFormat` | `Format/JsonlFormat.php` | Primary streaming format |
 | `YamlFormat` | `Format/YamlFormat.php` | Human-readable fixture format |
 | `BuiltinSerializer` | `Msg/BuiltinSerializer.php` | Msg→array for KeyMsg, MouseMsg, WindowSizeMsg, etc. |
@@ -293,7 +293,7 @@ let contents = harness.screen_contents();
 
 ### 6.2 Screen Assertion Implementation
 
-**candy-vcr ScreenAssertion** uses candy-vt Terminal:
+**candy-vcr ScreenAssertion** uses sugar-vterm Terminal:
 ```php
 $expectedTerminal = Terminal::create($this->cols, $this->rows);
 $expectedTerminal->feed($expected);
@@ -578,7 +578,7 @@ final class ContentMatcher implements EventMatcher {
   },
   "require-dev": {
     "phpunit/phpunit": "^10.5",
-    "sugarcraft/candy-vt": "dev-master",
+    "sugarcraft/sugar-vterm": "dev-master",
     "symfony/yaml": "^6.4 || ^7.0"
   }
 }

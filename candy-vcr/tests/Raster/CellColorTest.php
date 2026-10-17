@@ -6,10 +6,10 @@ namespace SugarCraft\Vcr\Tests\Raster;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\CellColor;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Color\Color;
-use SugarCraft\Vt\Sgr\Sgr;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Color\Color;
+use SugarCraft\Vterm\Sgr\Sgr;
+use SugarCraft\Vterm\Theme;
 
 /**
  * The pure palette-vs-truecolour decision behind both rasterizers, tested without

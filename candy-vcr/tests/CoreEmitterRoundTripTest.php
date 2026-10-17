@@ -8,20 +8,20 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Ansi\Parser\DebugHandler;
 use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Charset\Charsets;
-use SugarCraft\Vt\Handler\ScreenHandler;
-use SugarCraft\Vt\Terminal\Terminal as EmulatorTerminal;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Charset\Charsets;
+use SugarCraft\Vterm\Handler\ScreenHandler;
+use SugarCraft\Vterm\Terminal\Terminal as EmulatorTerminal;
 
 /**
  * Round-trip guard between the two halves of the ANSI wire that live in
  * different libs: the byte strings candy-core emits ({@see Ansi}) and what
- * candy-vt's VT500 parser + emulator actually make of them.
+ * sugar-vterm's VT500 parser + emulator actually make of them.
  *
- * Why the test lives HERE: candy-vt `require`s candy-core, so core can never
+ * Why the test lives HERE: sugar-vterm `require`s candy-core, so core can never
  * depend back on the emulator without a cycle — the only suites that can see
  * both sides are the ones that already dev-depend on vt. Same reason
- * {@see VtParityTest} lives here rather than in candy-vt.
+ * {@see VtParityTest} lives here rather than in sugar-vterm.
  *
  * Each case asserts the intended *effect*, not merely that the bytes were
  * consumed, because an emitter whose receiver ignores it is exactly the defect
@@ -125,7 +125,7 @@ final class CoreEmitterRoundTripTest extends TestCase
      * the SGR pen and the G0 designation — so those assertions are discriminating
      * rather than passing on values already at their default. (displayAlignmentTest
      * also resets gl and carries the cursor shape through — both pinned by
-     * candy-vt's own DecalnWireTest — and clears singleShift/wrapPending, which no
+     * sugar-vterm's own DecalnWireTest — and clears singleShift/wrapPending, which no
      * suite pins yet and which is deliberately out of scope here.) The
      * cursor park comes LAST because `ESC [ r` (DECSTBM) homes the cursor as a
      * side effect — parking before it would let "cursor homed" pass whether or
@@ -239,7 +239,7 @@ final class CoreEmitterRoundTripTest extends TestCase
 
     public function testCsiHash8MisquoteDoesNotArmDecaln(): void
     {
-        // Negative pin, consistent with candy-vt's
+        // Negative pin, consistent with sugar-vterm's
         // DecalnWireTest::testCsiHash8MisquoteDoesNotArmDecaln. `ESC [ # 8` is
         // the circulating misquote (xterm's palette-stack `CSI # P/Q/R/S`), not
         // the DEC encoding, and must NOT arm DECALN. Under the correct parser the
@@ -277,7 +277,7 @@ final class CoreEmitterRoundTripTest extends TestCase
         // pinned directly — the very method the `ESC # 8` wire sequence now
         // dispatches to since PR #1431. The wire seam itself is covered by
         // {@see testDecalnEmitterArmsTheAlignmentFillAndResetsTheReceiver}; this is
-        // the direct-API guarantee other libs (and candy-vt's own reset matrix)
+        // the direct-API guarantee other libs (and sugar-vterm's own reset matrix)
         // rely on, so the two entry points cannot drift apart.
         $h = $this->feed(self::DECALN_DIRTY);
         $h->displayAlignmentTest();
@@ -319,12 +319,12 @@ final class CoreEmitterRoundTripTest extends TestCase
             // pass with the mapping silently retired. Demand the names first.
             $this->assertTrue(
                 $core->hasConstant($coreConstant) && $emulator->hasConstant($emulatorConstant),
-                "candy-core Ansi::{$coreConstant} and candy-vt Charsets::{$emulatorConstant} must both exist",
+                "candy-core Ansi::{$coreConstant} and sugar-vterm Charsets::{$emulatorConstant} must both exist",
             );
             $this->assertSame(
                 $emulator->getConstant($emulatorConstant),
                 $core->getConstant($coreConstant),
-                "candy-core Ansi::{$coreConstant} must name the same designator as candy-vt Charsets::{$emulatorConstant}",
+                "candy-core Ansi::{$coreConstant} must name the same designator as sugar-vterm Charsets::{$emulatorConstant}",
             );
         }
 
@@ -404,7 +404,7 @@ final class CoreEmitterRoundTripTest extends TestCase
 
     public function testScsDesignatorsTheParserDoesNotModelLeaveTheCharsetAlone(): void
     {
-        // Fail-soft on the receiving end (candy-vt ignores unknown finals). The
+        // Fail-soft on the receiving end (sugar-vterm ignores unknown finals). The
         // emitter's job is to produce a syntactically complete sequence, which
         // this proves by showing the next graphic still prints normally.
         $h = $this->feed(Ansi::scsG0('q') . 'abc');

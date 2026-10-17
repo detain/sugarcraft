@@ -1,0 +1,372 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Vterm\Tests\Handler;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Handler\ScreenHandler;
+use SugarCraft\Vterm\Rendition;
+use SugarCraft\Vterm\Terminal\Terminal;
+
+/**
+ * DECALN on the wire: `ESC # 8` (bytes 1B 23 38) must arm
+ * {@see ScreenHandler::displayAlignmentTest()} through the parser, and the
+ * '#' intermediate must not be swallowed by charset designation on the way.
+ *
+ * The authoritative encoding is the ESC-family form, NOT `ESC [ # 8` —
+ * VT510 ch.4 ("ESC # 8 invokes the Screen Alignment test"), DEC
+ * ansicode.txt `#8 DECALN`, xterm ctlseqs, and the vttest vector
+ * `decaln(){ esc("#8"); }`. In xterm the CSI spelling belongs to the
+ * palette-stack substate (csi_hash_table[], `CSI # P/Q/R/S`); no surveyed
+ * emulator dispatches DECALN from it, so neither do we — the last test in
+ * this file pins that the misquote stays inert.
+ *
+ * ResetTest covers the programmatic entry point and the reset matrix;
+ * this file owns the parser→handler seam that made DECALN unreachable
+ * from terminal input before (escDispatch routed every non-zero
+ * intermediate, '#' included, to designate()).
+ *
+ * @see https://vt100.net/docs/vt510-rm/DECALN.html (DECALN)
+ * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (ESC # 8; CSI # = palette stack)
+ */
+final class DecalnWireTest extends TestCase
+{
+    private function handler(string $bytes, int $cols = 6, int $rows = 3): ScreenHandler
+    {
+        $h = new ScreenHandler(new Buffer($cols, $rows));
+        (new Parser($h))->feed($bytes);
+        return $h;
+    }
+
+    private function cellRun(ScreenHandler $h, int $row, int $len): string
+    {
+        $line = '';
+        for ($c = 0; $c < $len; $c++) {
+            $line .= $h->buffer->cell($row, $c)->grapheme;
+        }
+        return $line;
+    }
+
+    /** State dirty enough that DECALN must visibly reset every dimension. */
+    private const DIRTY =
+        "\x1b[2;3HNAUGHTY" .   // cursor parked mid-screen, content printed
+        "\x1b[2;4r" .          // DECSTBM margins
+        "\x1b[41m" .           // SGR pen
+        "\x1b(0\x1b)U";        // non-default G0/G1 designations
+
+    // ─── The wire seam (point of the change) ───────────────────────────────
+
+    public function testEscHash8ArmsDecalnFromTheWire(): void
+    {
+        $h = $this->handler(self::DIRTY . "\x1b#8", cols: 6, rows: 3);
+
+        for ($r = 0; $r < 3; $r++) {
+            $this->assertSame('EEEEEE', $this->cellRun($h, $r, 6), "row {$r} filled with E");
+        }
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(0, $h->cursor->col, 'cursor homed');
+        $this->assertSame(0, $h->scrollRegionTop);
+        $this->assertSame(2, $h->scrollRegionBottom, 'margins back to full screen');
+        $this->assertNull($h->sgr->background, 'pen reset');
+        $this->assertSame(['B', 'B', 'B', 'B'], $h->charsets, 'SCS back to ASCII');
+        $this->assertSame(0, $h->gl, 'GL back to G0');
+    }
+
+    public function testDecalnCellsCarryTheDefaultRendition(): void
+    {
+        // Per-cell pen reset: the DIRTY pen (\x1b[41m) must not leak into
+        // any E cell — DECALN fills with the DEFAULT rendition.
+        $h = $this->handler(self::DIRTY . "\x1b#8", cols: 4, rows: 2);
+        for ($r = 0; $r < 2; $r++) {
+            for ($c = 0; $c < 4; $c++) {
+                $this->assertNull($h->buffer->cell($r, $c)->sgr, "cell {$r},{$c} has no per-cell SGR");
+            }
+        }
+    }
+
+    public function testEscHash8FiresThroughTheTerminalFacadeFeedApi(): void
+    {
+        // The documented public entry point, not just Parser→ScreenHandler.
+        $t = Terminal::new(5, 2);
+        $t->feed("hello\r\nworld\x1b#8");
+        $this->assertSame('EEEEE', $this->facadeRun($t, 0, 5));
+        $this->assertSame('EEEEE', $this->facadeRun($t, 1, 5));
+        $this->assertSame(0, $t->cursor()->row);
+        $this->assertSame(0, $t->cursor()->col);
+    }
+
+    private function facadeRun(Terminal $t, int $row, int $len): string
+    {
+        $line = '';
+        for ($c = 0; $c < $len; $c++) {
+            $line .= $t->screen()->cell($row, $c)->grapheme;
+        }
+        return $line;
+    }
+
+    // ─── Not-a-designation: charset regressions impossible ─────────────────
+
+    public function testEscHash8LeavesGlMappingUntouchedAndDesignationStillWorks(): void
+    {
+        // If `ESC # 8` still reached designate() as a would-be SCS, GL
+        // would be remapped or the following designation misrouted. It
+        // must not be: after DECALN, G0 is the default ASCII set (which is
+        // DECALN's own charset reset, not a designation), a plain 'q'
+        // prints as 'q', and a subsequent ESC ( 0 designation still lands
+        // and still transforms print output.
+        $h = $this->handler("\x1b#8q", cols: 6, rows: 3);
+        $this->assertSame('q', $h->buffer->cell(0, 0)->grapheme, 'ESC # 8 must not arm DEC Special Graphics in GL');
+        $this->assertSame(0, $h->gl, 'GL invocation unchanged by ESC # 8 alone');
+
+        $h2 = $this->handler("\x1b#8\x1b(0q", cols: 6, rows: 3);
+        $this->assertSame('0', $h2->charsets[0], 'ESC ( 0 after DECALN still designates G0');
+        $this->assertSame("\u{2500}", $h2->buffer->cell(0, 0)->grapheme, 'and the designation still maps q → box-drawing');
+    }
+
+    public function testScsDesignationsStillReachDesignate(): void
+    {
+        // Full SCS matrix regression: every designating intermediate must
+        // keep flowing to designate() exactly as before.
+        $h = $this->handler("\x1b(0\x1b)A\x1b*U\x1b+B", cols: 4, rows: 2);
+        $this->assertSame(['0', 'A', 'U', 'B'], $h->charsets);
+
+        $ascii = $this->handler("\x1b(B\x1b)B", cols: 4, rows: 2);
+        $this->assertSame(['B', 'B', 'B', 'B'], $ascii->charsets, 'explicit ASCII designation intact');
+    }
+
+    public function testNonHashIntermediatesKeepHistoricalFallthrough(): void
+    {
+        // Intermediates that designate() ignores (ESC - .) plus the
+        // ESC-family direct dispatches (ESC =) must behave byte-for-byte as
+        // before the '#' arm was added. '.' (0x2E) is itself an
+        // intermediate-range byte, so `ESC - .` keeps the parser in
+        // EscapeIntermediate and the following 'X' is consumed as the
+        // dispatch final — nothing prints. '=' (0x3D) dispatches straight
+        // from Escape (RKM — unimplemented, a no-op here) and the '8' that
+        // follows prints as an ordinary ground byte.
+        $h = $this->handler("\x1b(0\x1b-.X", cols: 4, rows: 2);
+        $this->assertSame(['0', 'B', 'B', 'B'], $h->charsets, 'ESC - . still a no-op designation');
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme, 'X swallowed as the ESC dispatch final');
+
+        $h2 = $this->handler("\x1b(0\x1b=8X", cols: 4, rows: 2);
+        $this->assertSame(['0', 'B', 'B', 'B'], $h2->charsets, 'ESC = still ignored (RKM not modelled)');
+        $this->assertSame('8', $h2->buffer->cell(0, 0)->grapheme, "'8' after ESC = is a ground print, not DECALN");
+        $this->assertSame('X', $h2->buffer->cell(0, 1)->grapheme);
+    }
+
+    // ─── DECOM / DECSTBM semantics (xterm-411 CASE_DECALN parity) ──────────
+
+    public function testDecalnClearsOriginModeAndItCanBeSetAgain(): void
+    {
+        // xterm-411 charproc.c CASE_DECALN does `UIntClr(xw->flags, ORIGIN)`
+        // and never restores it: DECALN turns DECOM OFF. Before the alignment
+        // fix sugar-vterm left it ON, an undocumented divergence.
+        $h = $this->handler("\x1b[?6h\x1b#8", cols: 6, rows: 3);
+        $this->assertFalse($h->mode->originMode, 'DECALN must clear DECOM (xterm-411 UIntClr ORIGIN)');
+
+        // The clear must not wedge the mode: a later DECSET 6 still turns it on.
+        (new Parser($h))->feed("\x1b[?6h");
+        $this->assertTrue($h->mode->originMode, 'DECOM remains settable after DECALN cleared it');
+        (new Parser($h))->feed("\x1b[?6l");
+        $this->assertFalse($h->mode->originMode, 'and still resettable');
+    }
+
+    public function testDecalnFillsWholeScreenDespiteScrollRegionAndLeavesDecomOff(): void
+    {
+        // The fill walks rows x cols of the buffer rather than the active
+        // region, and homes to absolute 0,0, so a DECSTBM sub-region plus DECOM
+        // must not shrink the 'E' pattern. Margins go back to full screen and
+        // origin mode is off afterwards.
+        $h = $this->handler("\x1b[2;3r\x1b[?6h\x1b#8", cols: 5, rows: 4);
+
+        for ($r = 0; $r < 4; $r++) {
+            $this->assertSame('EEEEE', $this->cellRun($h, $r, 5), "row {$r} filled outside the old region");
+        }
+        $this->assertSame(0, $h->cursor->row, 'cursor homed to absolute top-left');
+        $this->assertSame(0, $h->cursor->col);
+        $this->assertSame(0, $h->scrollRegionTop, 'DECSTBM reset to full screen');
+        $this->assertSame(3, $h->scrollRegionBottom);
+        $this->assertFalse($h->mode->originMode, 'DECOM off after DECALN');
+    }
+
+    // ─── DECSCUSR / Cursor-mode agreement ──────────────────────────────────
+
+    public function testDecalnPreservesCursorShapeKeepingCursorAndModeInAgreement(): void
+    {
+        // xterm-411 CASE_DECALN does not touch cursor style. The CSI Ps SP q
+        // handler sets Cursor::$shape and Mode::$cursorShape together, so DECALN
+        // must carry the shape through rather than dropping it to the default
+        // 0 while the mode still reports 5.
+        $h = $this->handler("\x1b[5\x20q\x1b#8", cols: 4, rows: 2);
+        $this->assertSame(5, $h->cursor->shape, 'DECALN must not reset the DECSCUSR shape');
+        $this->assertSame(5, $h->mode->cursorShape);
+        $this->assertSame($h->mode->cursorShape, $h->cursor->shape, 'renderer and mode state cannot diverge');
+
+        // Same guarantee through the programmatic entry point.
+        $direct = $this->handler("\x1b[6\x20q", cols: 4, rows: 2);
+        $direct->displayAlignmentTest();
+        $this->assertSame(6, $direct->cursor->shape);
+        $this->assertSame($direct->mode->cursorShape, $direct->cursor->shape);
+    }
+
+    // ─── Line-rendition family: `ESC # 3`–`ESC # 6` stamp the cursor row ────
+
+    /**
+     * The four DEC special-line escapes now dispatch from the '#' intermediate
+     * to {@see ScreenHandler}'s line-rendition setter rather than falling
+     * through to designate(). Each marks the current cursor row with its
+     * {@see Rendition} while leaving the graphemes, cursor position, pen and
+     * charset state exactly as they were — the attribute travels on the cells,
+     * it does not reflow them.
+     *
+     * @return array<string, array{0: int, 1: Rendition}>
+     */
+    public static function renditionFinals(): array
+    {
+        return [
+            'DECDHL top (ESC # 3)' => [0x33, Rendition::DoubleTop],
+            'DECDHL bottom (ESC # 4)' => [0x34, Rendition::DoubleBottom],
+            'DECSWL single (ESC # 5)' => [0x35, Rendition::None],
+            'DECDWL double (ESC # 6)' => [0x36, Rendition::DoubleWidth],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('renditionFinals')]
+    public function testHashRenditionFinalsStampTheCursorRow(int $final, Rendition $expected): void
+    {
+        // Park the cursor on row 1 and print content so the stamped row is
+        // distinguishable from its untouched neighbours.
+        $h = $this->handler("\x1b[2;2Hab\x1b" . '#' . chr($final), cols: 4, rows: 3);
+
+        for ($c = 0; $c < 4; $c++) {
+            $this->assertSame(
+                $expected,
+                $h->buffer->cell(1, $c)->rendition,
+                sprintf('ESC # %s marks every column of the cursor row %s', chr($final), $expected->name),
+            );
+        }
+        // Neighbouring rows are untouched.
+        $this->assertSame(Rendition::None, $h->buffer->cell(0, 0)->rendition, 'row above keeps its rendition');
+        $this->assertSame(Rendition::None, $h->buffer->cell(2, 0)->rendition, 'row below keeps its rendition');
+
+        // The stamp is an attribute-only change: content and pointer survive.
+        $this->assertSame('ab', substr($this->cellRun($h, 1, 4), 1, 2), 'graphemes preserved');
+        $this->assertSame(1, $h->cursor->row, 'cursor not moved by the rendition escape');
+    }
+
+    public function testDecswlClearsAPreviousDoubleWidthStamp(): void
+    {
+        // `ESC # 6` then `ESC # 5` on the same row returns it to single width.
+        $h = $this->handler("\x1b#6\x1b#5", cols: 3, rows: 2);
+        foreach ([0, 1, 2] as $c) {
+            $this->assertSame(Rendition::None, $h->buffer->cell(0, $c)->rendition, 'DECSWL overrides DECDWL');
+        }
+    }
+
+    public function testDoubleWidthStampMakesTheNextGlyphSpanTwoColumns(): void
+    {
+        // With DECDWL armed on the cursor row, a subsequent narrow glyph writes
+        // its own cell plus a continuation cell so it occupies two columns.
+        $h = $this->handler("\x1b#6X", cols: 4, rows: 2);
+        $this->assertSame('X', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertTrue($h->buffer->cell(0, 1)->continuation, 'the trailing column is a continuation');
+        $this->assertSame(Rendition::DoubleWidth, $h->buffer->cell(0, 0)->rendition);
+        $this->assertSame(2, $h->cursor->col, 'the pen advances two columns');
+    }
+
+    public function testDoubleWidthPairRespectsTheRightMargin(): void
+    {
+        // Same `col+width+1 <= cols` bound as the renderer (MIN-4): a DW glyph
+        // at col 2 of a 4-col grid claims the (2,3) pair, but at col 3 there is
+        // no room for the tail — it stays a single cell and never overruns.
+        $pair = $this->handler("\x1b[1;3H\x1b#6X", cols: 4, rows: 2);
+        $this->assertSame('X', $pair->buffer->cell(0, 2)->grapheme);
+        $this->assertTrue($pair->buffer->cell(0, 3)->continuation, 'pair reaches the last column');
+
+        $edge = $this->handler("\x1b[1;4H\x1b#6Y", cols: 4, rows: 2);
+        $this->assertSame('Y', $edge->buffer->cell(0, 3)->grapheme, 'no room for a tail — stays single');
+    }
+
+    // ─── Negative: other '#' finals must stay silent designator-ignores ──────
+
+    public function testUnsupportedHashFinalsRemainSilentIgnores(): void
+    {
+        // Finals outside the rendition family and DECALN (0x38) still fall
+        // through to designate(), which treats '#' as a non-designator and
+        // ignores them. Screen, pen, margins, cursor and GL/SCS state must be
+        // exactly what DIRTY left behind — and critically NO rendition is
+        // stamped, distinguishing these from the implemented `# 3`–`# 6`.
+        foreach ([0x30, 0x31, 0x32, 0x37, 0x39] as $final) {
+            $before = $this->handler(self::DIRTY, cols: 6, rows: 3);
+            $after = $this->handler(self::DIRTY . chr(0x1b) . '#' . chr($final), cols: 6, rows: 3);
+            $this->assertSame(
+                $this->cellRun($before, 0, 6) . $this->cellRun($before, 1, 6) . $this->cellRun($before, 2, 6),
+                $this->cellRun($after, 0, 6) . $this->cellRun($after, 1, 6) . $this->cellRun($after, 2, 6),
+                sprintf('ESC # %s must not alter the screen', chr($final)),
+            );
+            $this->assertSame($before->charsets, $after->charsets);
+            $this->assertSame($before->gl, $after->gl);
+            $this->assertSame($before->cursor->row, $after->cursor->row);
+            $this->assertSame($before->cursor->col, $after->cursor->col);
+            $this->assertSame($before->scrollRegionTop, $after->scrollRegionTop);
+            $this->assertSame($before->scrollRegionBottom, $after->scrollRegionBottom);
+            for ($r = 0; $r < 3; $r++) {
+                $this->assertSame(
+                    Rendition::None,
+                    $after->buffer->cell($r, 0)->rendition,
+                    sprintf('ESC # %s must not stamp a rendition', chr($final)),
+                );
+            }
+        }
+    }
+
+    // ─── Cross-lib seam: candy-core emitter → sugar-vterm emulator ────────────
+
+    public function testAnsiDecalnRoundTripMatchesProgrammaticCall(): void
+    {
+        // The broken seam this change closes: Ansi::decaln() emits the
+        // bytes ESC # 8 (1B 23 38). Feeding them must land the emulator in
+        // exactly the state displayAlignmentTest() produces directly.
+        $viaWire = $this->handler(self::DIRTY . Ansi::decaln(), cols: 6, rows: 3);
+        $direct = $this->handler(self::DIRTY, cols: 6, rows: 3);
+        $direct->displayAlignmentTest();
+
+        $this->assertSame(Ansi::decaln(), "\x1b#8", 'candy-core emits the DEC encoding');
+        for ($r = 0; $r < 3; $r++) {
+            for ($c = 0; $c < 6; $c++) {
+                $this->assertEquals(
+                    $direct->buffer->cell($r, $c),
+                    $viaWire->buffer->cell($r, $c),
+                    "cell {$r},{$c} identical between wire and programmatic DECALN",
+                );
+            }
+        }
+        $this->assertSame($direct->cursor->row, $viaWire->cursor->row);
+        $this->assertSame($direct->cursor->col, $viaWire->cursor->col);
+        $this->assertSame($direct->charsets, $viaWire->charsets);
+        $this->assertSame($direct->gl, $viaWire->gl);
+        $this->assertSame($direct->scrollRegionTop, $viaWire->scrollRegionTop);
+        $this->assertSame($direct->scrollRegionBottom, $viaWire->scrollRegionBottom);
+    }
+
+    // ─── The misquote stays inert ──────────────────────────────────────────
+
+    public function testCsiHash8MisquoteDoesNotArmDecaln(): void
+    {
+        // `ESC [ # 8` is a circulating transcription error (see class
+        // docblock): xterm's CSI '#' substate treats the 8 as a collected
+        // digit waiting for a `P/Q/R/S` colour-stack final, and the
+        // candy-ansi transition table we mirror drops it to Ground without
+        // dispatch. Deliberately NOT accepted; must stay a screen no-op so
+        // a future "fix" that makes it dispatch is caught here.
+        $h = $this->handler("\x1b[#8X", cols: 6, rows: 3);
+        $this->assertSame('X', $this->cellRun($h, 0, 6)[0], 'screen not filled with E');
+        $this->assertNotSame('EEEEEE', $this->cellRun($h, 0, 6));
+        $this->assertSame(0, $h->cursor->row, 'cursor not homed');
+        $this->assertSame(1, $h->cursor->col, 'only the printed X landed');
+    }
+}

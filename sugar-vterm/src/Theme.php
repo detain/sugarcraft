@@ -1,0 +1,329 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Vterm;
+
+use SugarCraft\Core\Util\Palettes;
+use SugarCraft\Vterm\Theme\TokyoNight;
+use SugarCraft\Vterm\Theme\TokyoNightLight;
+use SugarCraft\Vterm\Theme\TokyoNightStorm;
+
+/**
+ * Terminal theme with 256-color palette and default fg/bg.
+ *
+ * Mirrors charmbracelet/x/vt Theme (simplified for renderer use).
+ */
+final class Theme
+{
+    public const ATTR_BOLD = 1 << 0;
+    public const ATTR_ITALIC = 1 << 1;
+    public const ATTR_UNDERLINE = 1 << 2;
+    public const ATTR_INVERSE = 1 << 3;
+    public const ATTR_STRIKETHROUGH = 1 << 4;
+
+    public const ANSI_OFFSET = 0;
+    public const CUBE_OFFSET = 16;
+    public const GRAYSCALE_OFFSET = 232;
+
+    /** @var array<int, int> 256-color palette as RGB ints (0xRRGGBB). */
+    private array $palette;
+
+    /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (foreground). Identity map. */
+    private static array $fgIndexMap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+    /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (background). Identity map. */
+    private static array $bgIndexMap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+    /**
+     * @param array<int, int>|null $palette
+     */
+    public function __construct(
+        public readonly int $defaultFg = 7,
+        public readonly int $defaultBg = 0,
+        ?array $palette = null,
+    ) {
+        $this->palette = $palette ?? self::defaultPalette();
+    }
+
+    /**
+     * Canonical 0..255 xterm default palette (E742): the sixteen hand-tuned
+     * base colours followed by the shared 16..255 extension. The extension is
+     * keyed by ABSOLUTE index, so the `+` union lands every cube and grayscale
+     * slot at its true xterm position — a positional (0..215) cube would shift
+     * the whole region by −16 and shadow its first sixteen entries under the
+     * base block.
+     *
+     * @return array<int, int>
+     */
+    public static function defaultPalette(): array
+    {
+        return [
+            0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xc0c0c0,
+            0x808080, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
+        ] + self::extendedPalette();
+    }
+
+    /**
+     * The canonical 16..255 colour extension (E742 — mirrors the xterm-256
+     * table candy-core's Color::ansi256() parses): the 6×6×6 cube at indices
+     * CUBE_OFFSET..231 with idx = 16 + 36r + 6g + b and component levels
+     * 0 | 55+40·L, then the 24-step grayscale ramp at GRAYSCALE_OFFSET..255
+     * with value 8 + 10·(i − 232). Keyed by absolute index so it unions
+     * cleanly beneath any sixteen-entry manual base.
+     *
+     * Process-lifetime memo (E736 6.3): the region is a pure constant yet was
+     * rebuilt six times per request — once by defaultPalette() and once by
+     * each factory's spread. PHP arrays are copy-on-write values, so handing
+     * every caller the cached array cannot corrupt it.
+     *
+     * @return array<int, int>
+     */
+    private static function extendedPalette(): array
+    {
+        static $extended = null;
+        if ($extended !== null) {
+            return $extended;
+        }
+
+        $extended = [];
+        for ($r = 0; $r < 6; $r++) {
+            for ($g = 0; $g < 6; $g++) {
+                for ($b = 0; $b < 6; $b++) {
+                    $extended[self::CUBE_OFFSET + 36 * $r + 6 * $g + $b] =
+                        (($r ? 55 + 40 * $r : 0) << 16) | (($g ? 55 + 40 * $g : 0) << 8) | ($b ? 55 + 40 * $b : 0);
+                }
+            }
+        }
+        for ($i = 0; $i < 24; $i++) {
+            $gray = 8 + 10 * $i;
+            $extended[self::GRAYSCALE_OFFSET + $i] = ($gray << 16) | ($gray << 8) | $gray;
+        }
+        return $extended;
+    }
+
+    public function color(int $index): int
+    {
+        if ($index < 0 || $index > 255) {
+            return 0;
+        }
+        if (isset($this->palette[$index])) {
+            return $this->palette[$index];
+        }
+        // The lib's own palettes carry the full 0..255 table (E742); this
+        // fallback serves custom palettes that omit slots — a caller-supplied
+        // base-only sixteen, say — by computing the standard xterm mapping
+        // for the index via self::rgb().
+        [$r, $g, $b] = self::rgb($index);
+        return ($r << 16) | ($g << 8) | $b;
+    }
+
+    public static function tokyoNight(): self
+    {
+        return new self(
+            defaultFg: 7,
+            defaultBg: 0,
+            palette: [
+                0x15161e,
+                0xf7768e,
+                0x9ece6a,
+                0xe0af68,
+                0x7aa2f7,
+                0xbb9af7,
+                0x7dcfff,
+                0xa9b1d6,
+                0x414868,
+                0xf7768e,
+                0x9ece6a,
+                0xe0af68,
+                0x7aa2f7,
+                0xbb9af7,
+                0x7dcfff,
+                0xc0caf5,
+            ] + self::extendedPalette(),
+        );
+    }
+
+    public static function dracula(): self
+    {
+        return new self(
+            defaultFg: 7,
+            defaultBg: 0,
+            palette: [
+                // slot 0: sugar-vterm's own darker bg (0x21222c), intentionally NOT
+                // the Dracula named `background` (#282a36) — stays lib-local.
+                0x21222c,
+                // slots 1-8: the seven Dracula named colours sugar-vterm overlaps —
+                // re-sourced from candy-core's Palettes SSOT (string→int).
+                hexdec(ltrim(Palettes::DRACULA['red'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['green'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['yellow'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['pink'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['cyan'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['foreground'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
+                // slots 9-15: bright ANSI variants absent from the Dracula named
+                // set — intentionally stay lib-local.
+                0xff6e6e,
+                0x69ff94,
+                0xffffa5,
+                0xd6acff,
+                0xff92df,
+                0xa4ffff,
+                0xffffff,
+            ] + self::extendedPalette(),
+        );
+    }
+
+    public static function solarizedDark(): self
+    {
+        return new self(
+            defaultFg: 7,
+            defaultBg: 0,
+            palette: [
+                0x073642,
+                0xdc322f,
+                0x859900,
+                0xb58900,
+                0x268bd2,
+                0xd33682,
+                0x2aa198,
+                0xeee8d5,
+                0x586e75,
+                0xcb4b16,
+                0x93a1a1,
+                0x839496,
+                0x6c71c4,
+                0xcb4b16,
+                0x2aa198,
+                0xfdf6e3,
+            ] + self::extendedPalette(),
+        );
+    }
+
+    /**
+     * Tokyo Night Light theme variant.
+     */
+    public static function tokyoNightLight(): self
+    {
+        return new self(
+            defaultFg: 7,
+            defaultBg: 15,
+            palette: [
+                0x15161e,
+                0xf7768e,
+                0x9ece6a,
+                0xe0af68,
+                0x7aa2f7,
+                0xbb9af7,
+                0x7dcfff,
+                0xa9b1d6,
+                0x414868,
+                0xf7768e,
+                0x9ece6a,
+                0xe0af68,
+                0x7aa2f7,
+                0xbb9af7,
+                0x7dcfff,
+                0xc0caf5,
+            ] + self::extendedPalette(),
+        );
+    }
+
+    /**
+     * Tokyo Night Storm theme variant.
+     */
+    public static function tokyoNightStorm(): self
+    {
+        return new self(
+            defaultFg: 7,
+            defaultBg: 0,
+            palette: [
+                0x1a1b26,
+                0xf7768e,
+                0x9ece6a,
+                0xe0af68,
+                0x7aa2f7,
+                0xbb9af7,
+                0x7dcfff,
+                0xc0caf5,
+                0x414868,
+                0xf7768e,
+                0x9ece6a,
+                0xe0af68,
+                0x7aa2f7,
+                0xbb9af7,
+                0x7dcfff,
+                0xc0caf5,
+            ] + self::extendedPalette(),
+        );
+    }
+
+    /**
+     * Given an ANSI slot 0-15, return the corresponding 256-color index for foreground.
+     */
+    public static function fgIndex(int $slot): int
+    {
+        if ($slot < 0 || $slot > 15) {
+            return 0;
+        }
+        return self::$fgIndexMap[$slot];
+    }
+
+    /**
+     * Given an ANSI slot 0-15, return the corresponding 256-color index for background.
+     */
+    public static function bgIndex(int $slot): int
+    {
+        if ($slot < 0 || $slot > 15) {
+            return 0;
+        }
+        return self::$bgIndexMap[$slot];
+    }
+
+    /**
+     * Given a 256-color index, return [r, g, b].
+     *
+     * @return array{0:int, 1:int, 2:int}
+     */
+    public static function rgb(int $index): array
+    {
+        if ($index < 0 || $index > 255) {
+            return [0, 0, 0];
+        }
+
+        if ($index < 16) {
+            /** @var int $color */
+            $color = self::defaultPalette()[$index];
+            return self::fromRgbInt($color);
+        }
+
+        if ($index < 232) {
+            $adjusted = $index - 16;
+            $r = (int) floor($adjusted / 36);
+            $g = (int) floor(($adjusted % 36) / 6);
+            $b = $adjusted % 6;
+            return [
+                $r ? $r * 40 + 55 : 0,
+                $g ? $g * 40 + 55 : 0,
+                $b ? $b * 40 + 55 : 0,
+            ];
+        }
+
+        $gray = (int) floor(($index - 232) * 10 + 8);
+        return [$gray, $gray, $gray];
+    }
+
+    /**
+     * @return array{0:int, 1:int, 2:int}
+     */
+    private static function fromRgbInt(int $rgb): array
+    {
+        return [
+            ($rgb >> 16) & 0xff,
+            ($rgb >> 8) & 0xff,
+            $rgb & 0xff,
+        ];
+    }
+}

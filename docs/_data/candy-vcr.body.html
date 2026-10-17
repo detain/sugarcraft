@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a candy-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="candy-vt.html">CandyVt</a>).</p>
+<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a candy-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">SugarVterm</a>).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-vcr</code></pre>
@@ -61,10 +61,10 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <div class="feature-grid">
       <div class="feature"><strong>Cassette format</strong><span>JSONL (absolute <code>t</code>) or RelativeFormat (delta <code>dt</code>, asciinema v3 style), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object; <code>Player::open()</code> auto-detects format.</span></div>
       <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
-      <div class="feature"><strong>Msg serializers</strong><span>19 builtin Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are candy-vt CSI I/O focus events that round-trip through VCR.</span></div>
+      <div class="feature"><strong>Msg serializers</strong><span>19 builtin Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
       <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
       <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>
-      <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="candy-vt.html">CandyVt</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
+      <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="sugar-vterm.html">SugarVterm</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>

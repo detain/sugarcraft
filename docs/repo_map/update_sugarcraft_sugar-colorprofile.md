@@ -1,6 +1,6 @@
 # Overview
 
-sugar-colorprofile is a well-engineered PHP port of charmbracelet/colorprofile (~111 stars Go library) that provides terminal color profile detection and automatic ANSI color degradation for PHP CLI applications. It is the foundational terminal color infrastructure within SugarCraft, consumed directly by candy-log, sugar-image, candy-codeshot, and candy-vt.
+sugar-colorprofile is a well-engineered PHP port of charmbracelet/colorprofile (~111 stars Go library) that provides terminal color profile detection and automatic ANSI color degradation for PHP CLI applications. It is the foundational terminal color infrastructure within SugarCraft, consumed directly by candy-log, sugar-image, candy-codeshot, and sugar-vterm.
 
 **Biggest opportunity areas:**
 

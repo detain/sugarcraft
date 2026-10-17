@@ -34,7 +34,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | | Library | Role |
 |---|---|---|
 | <img src="media/icons/candy-core.png" width="48" alt=""> | **[SugarCraft](candy-core/)** | MVC-style Model–Update–View TUI runtime — `Model` / `Msg` / `Cmd` / `Program`, plus a frame-diff renderer with an opt-in cursed cell-diff mode. |
-| <img src="media/icons/candy-ansi.png" width="48" alt=""> | **[CandyAnsi](candy-ansi/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from candy-vt. |
+| <img src="media/icons/candy-ansi.png" width="48" alt=""> | **[CandyAnsi](candy-ansi/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from sugar-vterm. |
 | <img src="media/icons/candy-buffer.png" width="48" alt=""> | **[CandyBuffer](candy-buffer/)** | Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (`rune`/style/link/width). Shared foundation for all rendering; `Buffer::diff()` included. |
 | <img src="media/icons/candy-layout.png" width="48" alt=""> | **[CandyLayout](candy-layout/)** | Constraint-based layout solver — `LayoutSolver` interface with a Cassowary engine (`CassowarySolver`) and a `GreedySolver` fallback. |
 | <img src="media/icons/candy-async.png" width="48" alt=""> | **[CandyAsync](candy-async/)** | Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). |
@@ -45,7 +45,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-spring.png" width="48" alt=""> | **[SugarSpring](sugar-spring/)** | Damped spring physics + Newtonian projectile simulation. |
 | <img src="media/icons/sugar-fuzzy.png" width="48" alt=""> | **[SugarFuzzy](sugar-fuzzy/)** | Fuzzy string matching with scored match indices — powers filter-as-you-type highlighting across the ecosystem. |
 | <img src="media/icons/sugar-widgets.png" width="48" alt=""> | **[SugarWidgets](sugar-widgets/)** | Components: TextInput, TextArea, ItemList, Table, Tabs, Tree, Scrollbar, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. |
-| <img src="media/icons/candy-vt.png" width="48" alt=""> | **[CandyVt](candy-vt/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. |
+| <img src="media/icons/sugar-vterm.png" width="48" alt=""> | **[SugarVterm](sugar-vterm/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. |
 | <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay candy-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. |
 | <img src="media/icons/candy-pty.png" width="48" alt=""> | **[CandyPty](candy-pty/)** | Pseudo-terminal primitive — `Pty::open()` master/slave round-trip via FFI to libc; spawn/resize/non-blocking I/O. Linux + macOS only. |
 | <img src="media/icons/sugar-forms.png" width="48" alt=""> | **[SugarForms](sugar-forms/)** | Form library (port of charmbracelet/huh) and shared form engine behind SugarWidgets — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, Date, Slider, Color; multi-page Groups; stock themes; validators; fuzzy / async suggestions; ActionSpinner. |

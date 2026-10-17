@@ -132,7 +132,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarQuickpick** | sugar + quickpick = fuzzy quick-pick / filter overlay component. "quickpick" says the function plainly, matching the established terminal picker concept (was CandyHermit — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarNavstack** | nav stack = push/pop navigation stack + breadcrumb trail IS the function. delightful. (renamed from SugarCrumbs 2026-10). <!-- @rename-keep --> |
-| **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from candy-vt. |
+| **CandyAnsi** | candy + ansi = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from sugar-vterm. |
 | **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
 | **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
 | **CandyKv** | candy + kv = personal key/value store app. `kv` says the domain plainly (was SugarSkate — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
@@ -141,7 +141,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original honey (bee) + flap wordplay retired with the `honey-` family placement. |
 | **CandyStarter** | candy + starter = the create-project skeleton you start from. ✓✓ |
 | **SugarImage** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |
-| **CandyVt**     | candy + vt = virtual terminal emulator. "vt" is the established term. |
+| **SugarVterm**     | candy + vt = virtual terminal emulator. "vt" is the established term. |
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. "vcr" carries the cassette / playback metaphor for free. |
 | **SugarAnimation**   | candy + flip = flip-book frames — the GIF member of the visual family beside SugarImage (still images) and SugarVideo (video). "flip" carries the frame-by-frame animation metaphor for free. |
 | **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/sugar-animation`, split into its own package (rename campaign step 1.3). "view" states the app role beside the SugarAnimation toolkit. |

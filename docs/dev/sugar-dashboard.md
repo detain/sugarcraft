@@ -568,8 +568,8 @@ families grew independently, so their API shapes differ.
 | `Foundation\Style` | `\SugarCraft\Sprinkles\Style` | Both canonical | Dash carries `toAnsi(ColorProfile)` + public `?Color $foreground/$background`; Sprinkles carries padding/margin/borders + private `$fg/$bg`. Consumers access `$style->foreground->r` on the Dash shape. |
 | `Foundation\Theme` | `\SugarCraft\Sprinkles\Theme` | Both canonical | Dash has 10 colour slots + `bar()/text()/fg()/bg()/color()/highlight()` helpers; Sprinkles has 13 colour slots (adds muted/info/border/separator/cursor) with readonly properties only. |
 | `Foundation\Rect` | `\SugarCraft\Core\Rect` | Both canonical | Dash uses the rectmath bounds model (`minX, minY, maxX, maxY`); Core\Rect uses an offset+size model (`x, y, width, height`). Choose by the geometry model your code needs. |
-| `Foundation\Buffer` | `\SugarCraft\Vt\Buffer\Buffer` | Both canonical | Dash Buffer is an immutable ANSI renderer (`Sizer`/`Drawable`); Vt Buffer is a mutable VT-output grid for terminal emulation. |
-| `Foundation\Cell` | `\SugarCraft\Vt\Cell\Cell` | Both canonical | Dash Cell holds `(rune, Style)`; Vt Cell holds `(grapheme, Sgr, continuation, hyperlink)`. |
+| `Foundation\Buffer` | `\SugarCraft\Vterm\Buffer\Buffer` | Both canonical | Dash Buffer is an immutable ANSI renderer (`Sizer`/`Drawable`); Vt Buffer is a mutable VT-output grid for terminal emulation. |
+| `Foundation\Cell` | `\SugarCraft\Vterm\Cell\Cell` | Both canonical | Dash Cell holds `(rune, Style)`; Vt Cell holds `(grapheme, Sgr, continuation, hyperlink)`. |
 | `Foundation\StyleParser` | `\SugarCraft\Sprinkles\StyleParser` | Both canonical | Parses the same `[text](fg:red,bg:blue)` syntax, but produces Dash `Cell/Style` (which expose public `?Color $foreground`). NOT drop-in compatible with `Sprinkles\StyleParser`. |
 
 **Implication for extension authors.** When implementing a custom `Module`

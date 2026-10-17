@@ -1223,7 +1223,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
      * existed only as an `fwrite(STDERR, …)`, and on the interactive path that
      * is a surface the operator does not have: measured on a real
      * `bin/sugarcrush` launch under a pty, the line printed 0.47s before
-     * `\e[?1049h` and replaying the captured stream through a `candy-vt`
+     * `\e[?1049h` and replaying the captured stream through a `sugar-vterm`
      * `Terminal(120, 40)` found no trace of it on the visible screen.
      *
      * THIS TEST IS NOT THE EVIDENCE FOR THAT, and it should not be read as such.

@@ -6,7 +6,7 @@
 ## Deliverable
 
 `BuiltinSerializer` should cover `FocusLostMsg` and `FocusGainedMsg`
-(from step 07.06's candy-vt focus-events work). Today they may not
+(from step 07.06's sugar-vterm focus-events work). Today they may not
 round-trip correctly.
 
 ## Files
@@ -14,8 +14,8 @@ round-trip correctly.
 **Modify:**
 
 - `candy-vcr/src/BuiltinSerializer.php` — add cases for
-  `\SugarCraft\Vt\Msg\FocusInMsg` and `FocusOutMsg`.
-- `candy-vcr/composer.json` — confirm `sugarcraft/candy-vt` is in
+  `\SugarCraft\Vterm\Msg\FocusInMsg` and `FocusOutMsg`.
+- `candy-vcr/composer.json` — confirm `sugarcraft/sugar-vterm` is in
   `require-dev`.
 
 ## Tests
@@ -29,7 +29,7 @@ round-trip correctly.
 
 ## Notes
 
-- Depends on step 07.06 having shipped (candy-vt focus events).
+- Depends on step 07.06 having shipped (sugar-vterm focus events).
 
 ---
 

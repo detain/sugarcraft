@@ -268,7 +268,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 | `glamour` | `sugar-markdown` | Markdown rendering |
 | `colorprofile` | `sugar-colorprofile` | Terminal color detection |
 | `exec` (internal) | `candy-pty` | Process spawning (PTY) |
-| `x/vt` | `candy-vt` | Virtual terminal emulation |
+| `x/vt` | `sugar-vterm` | Virtual terminal emulation |
 | `x/vcr` | `candy-vcr` | Session recording/replay |
 
 ### Many-to-Many Feature Mapping

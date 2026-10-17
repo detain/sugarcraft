@@ -1,6 +1,6 @@
-# Step 07.02 — candy-vt DECAWM auto-wrap (P0.2)
+# Step 07.02 — sugar-vterm DECAWM auto-wrap (P0.2)
 
-**Source:** `leftover_updates_later.md` candy-vt P0.2
+**Source:** `leftover_updates_later.md` sugar-vterm P0.2
 **Branch:** `ai/vt-decawm`
 
 ## Deliverable
@@ -13,20 +13,20 @@ disabled, characters overwrite the rightmost column.
 
 **Modify:**
 
-- `candy-vt/src/Mode/Mode.php` — add `bool $autoWrap` field with
+- `sugar-vterm/src/Mode/Mode.php` — add `bool $autoWrap` field with
   `withAutoWrap(bool): self` immutable wither.
-- `candy-vt/src/Handler/ScreenHandler.php` — character-write path
+- `sugar-vterm/src/Handler/ScreenHandler.php` — character-write path
   respects `mode->autoWrap`.
-- `candy-vt/src/Parser/ModeParser.php` — recognize `? 7 h` / `? 7 l`.
+- `sugar-vterm/src/Parser/ModeParser.php` — recognize `? 7 h` / `? 7 l`.
 
 ## Tests
 
-- `candy-vt/tests/Mode/AutoWrapTest.php` — feed text past margin with
+- `sugar-vterm/tests/Mode/AutoWrapTest.php` — feed text past margin with
   autowrap on/off; assert respective behaviour.
 
 ## Acceptance
 
-- `cd candy-vt && vendor/bin/phpunit --filter AutoWrap` green.
+- `cd sugar-vterm && vendor/bin/phpunit --filter AutoWrap` green.
 
 ---
 

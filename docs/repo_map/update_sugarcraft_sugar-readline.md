@@ -90,7 +90,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Source:** `docs/repo_map/sugarcraft_sugar-readline.md` (mapping file, weakness #1)
 - **Source repo:** `charmbracelet/bubbletea.md` — `charmbracelet/bubbletea` handles full key decoding including Kitty keyboard protocol
 - **Implementation ideas:**
-  1. Create `candy-readline` input driver package that wraps `candy-vt` for escape sequence parsing
+  1. Create `candy-readline` input driver package that wraps `sugar-vterm` for escape sequence parsing
   2. Use `candy-pty` PTY support for raw mode input
   3. Adapt `charmbracelet/bubbletea`'s key decoding logic (KeyPressMsg, modifier support, Kitty protocol)
 - **Expected impact:** Enables real-world usage; unlocks all other missing features (mouse, cursor blink depend on input loop)
@@ -581,7 +581,7 @@ $prompt = TextPrompt::new('Search: ')
 
 5. **Style system integration** — adopt `candy-sprinkles/Style` objects instead of ANSI strings
 6. **Cursor blink** — use sugar-forms Cursor pattern or timer-based blink
-7. **Input driver** — create `TtyInputDriver` or integrate with `candy-vt`
+7. **Input driver** — create `TtyInputDriver` or integrate with `sugar-vterm`
 8. **Mouse support** — click to position cursor, click to select items
 9. **Fuzzy filtering** — adapt Smith-Waterman from `sugar-forms` for SelectionPrompt
 
@@ -623,7 +623,7 @@ $prompt = TextPrompt::new('Search: ')
 
 `sugar-readline` occupies a valuable niche in the SugarCraft ecosystem as the **lightweight, single-shot prompt library** — complementary to, not competitive with, the full form framework `sugar-forms`/`sugar-forms`. Its pure-PHP, dependency-free design is a significant engineering achievement that makes it trivially embeddable.
 
-The most critical gap is **input handling** — the library cannot read actual terminal input today. This is the single blocker preventing real-world usage. Fixing this requires either creating a new `candy-readline` input driver package or clearly documenting how to wire `candy-vt` into these prompts.
+The most critical gap is **input handling** — the library cannot read actual terminal input today. This is the single blocker preventing real-world usage. Fixing this requires either creating a new `candy-readline` input driver package or clearly documenting how to wire `sugar-vterm` into these prompts.
 
 The second most impactful improvement is the **style system** — hardcoded ANSI codes are a maintainability liability and prevent proper theming, color profile adaptation, and visual polish. Adopting `candy-sprinkles/Style` would bring sugar-readline in line with the rest of the ecosystem.
 

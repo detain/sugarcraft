@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Raster;
 
-use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vterm\Snapshot;
 
 /**
  * Interface for Snapshot-to-image rasterizers.

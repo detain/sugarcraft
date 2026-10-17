@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 
 /**
  * Sugar-dash immutable ANSI renderer Buffer (Sizer/Drawable pattern).
- * Intentionally distinct from \SugarCraft\Vt\Buffer\Buffer, which is
+ * Intentionally distinct from \SugarCraft\Vterm\Buffer\Buffer, which is
  * a mutable VT-output grid (resize/cell/put/each). Different role:
  * this composes layout output for inline-termui; the VT version
  * stores terminal state during emulation.

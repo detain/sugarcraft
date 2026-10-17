@@ -728,7 +728,7 @@ parallel (different lib roots; no MATCHUPS.md conflict).
   MP4 / WebM — that is a separate strategic question (no consumer
   asks for it yet).
 - Receive-side graphics-protocol decode — covered by
-  `plans/candy-vt-graphics.md` (step 11.03), which is a different
+  `plans/sugar-vterm-graphics.md` (step 11.03), which is a different
   axis entirely.
 - A `bin/sugar-image-play` binary — out of scope; if anyone wants
   a CLI demo, it lives in `sugar-image/examples/animation.php`.

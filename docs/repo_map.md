@@ -775,9 +775,9 @@
 **SugarCraft Mapping:**
 - `candy-core` → ansi, term, termios, cellbuf
 - `sugar-widgets` → colors, charmtone
-- `candy-vt` → virtual terminal emulator
+- `sugar-vterm` → virtual terminal emulator
 
-**Note:** `candy-vt` exists in MATCHUPS (🟡 partial).
+**Note:** `sugar-vterm` exists in MATCHUPS (🟡 partial).
 
 ---
 

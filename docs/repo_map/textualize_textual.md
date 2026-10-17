@@ -285,7 +285,7 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `Switch`, `Checkbox`, `RadioButton`, `RadioSet` | `sugar-widgets/` | Toggle/selection controls |
 | `Button` | `sugar-widgets/` | Button widget |
 | `Toast`, `Notification` | `sugar-toast/` | Toast notifications |
-| `_xterm_parser` | `candy-vt/` | Terminal escape sequence parsing |
+| `_xterm_parser` | `sugar-vterm/` | Terminal escape sequence parsing |
 | `timer.Timer` | `candy-core/` | Timer functionality |
 | `worker.Worker`, `WorkerManager` | `candy-core/` | Background workers |
 | `command.CommandPalette`, `Provider` | `sugar-cli/` | Command palette system |

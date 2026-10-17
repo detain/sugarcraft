@@ -1,0 +1,637 @@
+# sugar-vterm Caliber Learnings
+
+Accumulated patterns and gotchas for this library.
+
+---
+
+## Parser table
+
+The VT500 state machine transition table is generated in PHP at first
+use as a 4096-byte string (15 states × 256 codes), packed one byte per
+entry as `(action << 4) | nextState`. State and Action enums hold the
+canonical numeric values; their order is load-bearing because the
+transition table is keyed by `state.value << 8 | byte`. The build
+function in `Transitions::build()` is a direct port of upstream
+`charmbracelet/x/ansi/parser.GenerateTransitionTable` — keep them in
+sync if upstream changes the table.
+
+## ESC dispatch is separate from CSI dispatch
+
+Two-byte ESC sequences (e.g. ESC D = IND, ESC 7 = DECSC) emit
+`Handler::escDispatch($final, $intermediate)`, not `csiDispatch` or
+`execute`. Downstream handlers translate ESC + 0x40-0x5F to the
+equivalent C1 control if they want; the parser stays neutral.
+
+## ESC \ (ST) emits a trailing escDispatch
+
+When OSC/DCS/SOS/PM/APC are terminated by `ESC \` (ST in 7-bit form),
+the parser dispatches the string sequence on the ESC, transitions to
+Escape state, then dispatches the trailing `\` as `escDispatch(0x5C)`.
+Most consumers ignore it. BEL and 8-bit ST (0x9C) terminators don't
+have this trailing event.
+
+## UTF-8 multi-byte handling
+
+Lead bytes (0xC2-0xF4) transition to a synthetic `State::Utf8` and the
+parser accumulates continuation bytes (0x80-0xBF) internally. The full
+rune arrives at the handler as a single `printChar(string $rune)` call
+— callers don't need to reassemble bytes themselves. An ASCII byte
+arriving mid-rune drops the partial sequence and processes the byte
+fresh from Ground.
+
+## CSI default params surface as -1
+
+`\x1b[;H` produces `params = [-1, -1]` (two slots, both default).
+`\x1b[1;H` produces `[1, -1]`. Sentinel `-1` means "missing/default";
+handlers downstream should resolve to spec-defined defaults
+(`?: 1` for cursor moves, `?: 0` for SGR, etc.).
+
+## CSI subparameters — ':' as sub-param separator (step 07.03)
+
+VT500 sequences use `:` as a sub-parameter separator (e.g. `CSI 38:2:R:G:B`
+for truecolor with subparams). In `Parser::param()`, both `;` (0x3B) and
+`:` (0x3A) start a new param slot. Subparams surface as additional entries
+in `$this->params` — handlers that need them consume them from the param
+array directly. No separate subparam storage is maintained; the flat
+`params` array is passed as-is to `csiDispatch`.
+
+## ScreenHandler holds mutable state; Terminal delegates
+
+`ScreenHandler` owns `Buffer` (mutable in place), `Cursor` / `Sgr` /
+`Mode` (immutable values, reassigned on update), and `?string $windowTitle`.
+`Terminal::feed()` drives bytes through the Parser; accessors delegate
+to the handler. `Terminal::__clone()` deep-clones the handler so that
+`withCursor()` / `withMode()` etc. don't share mutable state with the
+original instance — without that, mutating one Terminal's cursor
+would silently affect every Terminal cloned from it.
+
+## SGR sub-handlers are stateless
+
+`SgrHandler::apply($params, $current)` and
+`CursorHandler::apply($final, $params, $cursor, $buffer)` take state
+as input and return the new state. ScreenHandler owns the only stateful
+copy; sub-handlers are reusable across handlers and tests. New CSI
+final-byte routes (erase, scroll, mode, OSC) should follow the same
+shape so they unit-test in isolation.
+
+## Auto-wrap is deferred; scroll lives in ScrollHandler (PR4)
+
+> **DEPRECATED — DECAWM is now implemented (step 07.02).**
+> This entry is retained for historical context only.
+
+`ScreenHandler::printChar()` used to clamp the cursor at the right edge
+rather than auto-wrapping. Vertical scroll lived in PR4: `LF` (and
+`IND`, `NEL`, `ESC D`, `ESC E`) at the bottom row scrolled the buffer
+up by one and kept the cursor at the bottom. `RI` / `ESC M` at the top
+scrolled the buffer down. Scrolled-off rows were dropped; scrollback
+comes later.
+
+## DECAWM auto-wrap implementation (step 07.02)
+
+DECAWM (`CSI ? 7 h` / `CSI ? 7 l`) is implemented as:
+
+- `Mode::$autoWrap` — public readonly property on `Mode`
+- `Mode::withAutoWrap(bool)` — fluent setter returning new `Mode`
+- `ModeHandler` CSI `?7` dispatch — maps 7 → `withAutoWrap($set)`
+- `ScreenHandler::printChar()` — when `$mode->autoWrap && $nextCol >= $cols`:
+  wrap cursor to `(row + 1, 0)` then write; if the cursor is at
+  `$scrollRegionBottom`, a scroll is triggered before the write so
+  the new content appears on the newly scrolled-in line.
+
+The scroll-region-aware path is: `printChar` detects wrap → calls
+`ScrollHandler::index()` to scroll the region if needed → moves cursor
+to column 0 of the next row → writes. This ensures wrapping at the
+bottom of a scroll region scrolls that region, not the whole buffer —
+matching VT100/xterm behavior.
+
+## EraseHandler erase fills with BCE behavior (step 07.07)
+
+`CSI K`, `CSI J`, `CSI X` erase operations fill cells via `fillRow()`:
+
+- When `$sgr?->background !== null` (BCE mode, CSI ?12 h was sent):
+  creates `Cell(grapheme: ' ', sgr: $sgr)` — blank cell carrying the
+  current SGR so the erased region inherits the background color.
+- When no SGR background is set: creates `Cell::empty()` — plain blank
+  cell with no styling.
+
+`CSI P` (DCH) and `CSI @` (ICH) always use `Cell::empty()` since they
+shift cells rather than erasing a region.
+
+## Mode field ↔ DEC private mode mapping (PR5)
+
+`Mode`'s field names predate the DEC mode numbering and don't align
+1:1. The canonical mapping `ModeHandler` uses:
+
+| DEC mode | Mode field         | Notes                              |
+|----------|--------------------|------------------------------------|
+| 25       | `cursorVisible`    | also mirrored on `Cursor::visible` |
+| 1000     | `mouseAny`         | X11 button-only                    |
+| 1002     | `mouseCellMotion`  | button + drag motion               |
+| 1003     | `mouseExtended`    | any motion (button or not)         |
+| 1006     | `mouseSgr`         | SGR coordinate format              |
+| 1049     | `altScreen`        | + buffer/cursor/sgr swap           |
+| 2004     | `bracketedPaste`   |                                    |
+| 2026     | `syncUpdate`       | batch queue + flush on disable    |
+
+`Mode::$mouseHighlights` is reserved for 1001 (highlight tracking)
+but no handler currently sets it. Don't read it as "highlights mode is
+on"; read it as "1001 was sent to ModeHandler if/when wired."
+
+## Alt-screen swap (DEC 1049) is held on ScreenHandler
+
+Entering alt mode saves the current `Buffer`/`Cursor`/`Sgr` into
+`ScreenHandler` private fields and replaces the active buffer with a
+fresh blank one. Leaving restores them. Mutations on the alt buffer
+don't bleed to the saved main state (it's a different `Buffer`
+instance). Re-entering while already in alt mode is a no-op so it
+won't clobber alt content; leaving without entering is a no-op too.
+
+Resize while in alt mode currently resizes only the active (alt)
+buffer; the saved main buffer keeps its old dimensions. Real terminals
+typically resize both — revisit if a downstream TUI exercises this.
+
+## OSC dispatch lives in OscHandler; ScreenHandler holds the slots (PR6)
+
+`OscHandler::apply($data, ScreenHandler)` parses the OSC payload (the
+text between `ESC ]` and the terminator) and writes into specific
+public slots on the handler:
+
+| OSC cmd  | Slot                              |
+|----------|-----------------------------------|
+| 0/1/2    | `windowTitle`                     |
+| 4        | `palette[idx]` (`array<int, Color>`) |
+| 8        | `currentHyperlink`                |
+| 52       | `clipboardEvents[]` log            |
+
+Unknown OSC commands and malformed payloads silently no-op — matches
+xterm behavior. Read responses for OSC 52 (`?` payload) are recorded
+as `kind=read` events; the parser doesn't synthesize the reply, so a
+real PTY consumer needs to walk `Terminal::clipboardEvents()` and
+emit a response itself.
+
+## Hyperlink span attribution
+
+`OscHandler` flips `ScreenHandler::$currentHyperlink` between a
+`Hyperlink` instance and `null`. Every `printChar()` while non-null
+attaches that exact reference to the new `Cell`. Cells written before
+the hyperlink opened keep their previous hyperlink (typically null);
+cells written after it closes get null again. There's no "hyperlink
+ranges" structure — attribution is per-cell.
+
+OSC 8 form is `OSC 8 ; params ; URI`. An empty URI (`OSC 8;;`) closes
+the link. The `id=` param is parsed out of `params` if present;
+other key=value pairs (separated by `:`) are ignored for now.
+
+## OSC 4 color spec parsing
+
+xterm's `rgb:RRRR/GGGG/BBBB` form allows 1-4 hex digits per component;
+they're MSB-aligned. `OscHandler::scaleHexComponent()` scales to 8
+bits by either left-padding (1 digit → high nibble) or right-shifting
+to keep the most-significant byte. We also accept the CSS-style
+`#RRGGBB` shorthand. Other formats (named colors, hsl, etc.) are
+rejected — the entry is silently dropped.
+
+## Width-aware printChar: wide chars take 2 cells, combining marks attach (step 07.07)
+
+`ScreenHandler::printChar()` consults `SugarCraft\Core\Util\Width::string`
+for each rune the parser emits.
+
+- `width >= 2`: write the cell at `(row, col)` + `Cell::continuation()`
+  cells at `col+1..col+width-1`, advance cursor by `width`. CJK and
+  most emoji land here. The continuation inherits the original cell's
+  SGR + hyperlink so style spans look right.
+- `width == 1`: usual ASCII path.
+- `width == 0`: combining marks (U+0300–U+036F) and certain ZWJ sequences
+  that don't contribute width but should still render as part of the
+  preceding character. These call `attachCombiningChar()` to modify the
+  previous cell's grapheme rather than being silently discarded.
+- Wide char that doesn't fit at the right edge: clamp cursor at
+  `cols - 1` without writing. Auto-wrap lands when DECSTBM margins do.
+
+## Fixtures are committed as binary `.ansi` files (PR8)
+
+`sugar-vterm/tests/fixtures/*.ansi` are raw byte captures of small
+realistic ANSI streams. They MUST be LF-only and MUST NOT be
+git-normalised. The dir-local `.gitattributes` (`*.ansi binary`)
+prevents CRLF rewriting on checkout.
+
+To regenerate or add fixtures, write the bytes via `printf` rather
+than an editor — most editors will silently insert/strip BOMs or
+normalise newlines. Example:
+
+```sh
+printf '\x1b[31mR\x1b[0m' > tests/fixtures/example.ansi
+```
+
+`SnapshotTest` reads each fixture with `file_get_contents()` and
+asserts specific cells/cursor/mode. Keep fixtures small (≤100 bytes
+each) — they're for the Parser/handler integration sanity check, not
+for full-frame golden images.
+
+## Fuzzer: feed() must never throw
+
+`FuzzerTest` runs a deterministic-seed RNG and pumps 100 B – 100 KB of
+random bytes through `Terminal::feed()` and `Terminal::flush()`. The
+contract is that no input — even pathologically malformed — causes an
+exception. Cursor must stay in bounds throughout. If a real-world
+input ever crashes, add a regression case using its bytes verbatim
+(or an isolated reduction) before fixing.
+
+## Tab stops live on ScreenHandler as `array<int, bool>` (PR7)
+
+`ScreenHandler::$tabStops` is a sparse map keyed by column index.
+Defaults are every 8 columns starting at column 8 (so column 0 is
+never a stop). Operations:
+
+- HT (`0x09`)        → `TabHandler::forward(col, stops, cols)`; clamps at `cols-1`
+- HTS (`ESC H` / C1 `0x88`) → set stop at current cursor column
+- TBC (`CSI g`)      → mode 0 clears stop at cursor; mode 3 clears all
+- CHT (`CSI I`)      → repeat forward N times (default 1)
+- CBT (`CSI Z`)      → repeat backward N times; clamps at 0
+- `Terminal::withTabStops($cols)` → replace the map with explicit columns
+
+Tab stops are NOT regenerated on `Terminal::resize()` — custom stops
+survive resize, and stops past a shrunken width are simply unreachable
+(harmless; HT would clamp at the new right edge before reaching them).
+If a downstream consumer needs default stops to fill in when growing,
+explicitly call `withTabStops` after resize.
+
+## Wide-character handling
+
+CJK and emoji graphemes occupy 2 cells. The second cell is marked with
+`Cell::continuation()`. Width queries delegate to `SugarCraft\Core\Util\Width`
+to stay consistent with the rest of the stack.
+
+## Scroll region lives on ScreenHandler, not Screen (DECSTBM pattern)
+
+`ScreenHandler` holds two public properties tracking the DECSTBM scroll region:
+
+| Property              | Type   | Meaning                                    |
+|-----------------------|--------|--------------------------------------------|
+| `$scrollRegionTop`    | `int`  | Top row of scroll region (0-indexed incl.)|
+| `$scrollRegionBottom`| `int`  | Bottom row of scroll region (0-indexed incl.)|
+
+`Screen` is a **readonly immutable snapshot** constructed from a `Buffer` copy
+— it has no scroll region state and no setter. All mutable scroll region
+state lives on `ScreenHandler`, which is the correct place for it.
+
+The scroll region is set via CSI `r` dispatch → `ScreenHandler::setScrollRegion()`:
+
+- Params: `[top;bottom]` (1-indexed, VT100 spec defaults top=1, bottom=rows)
+- Reset when top == bottom or either is out of range
+- Converted to 0-indexed inclusive bounds and stored on the handler
+
+Scroll-region-aware movement primitives (all in `ScrollHandler`):
+
+- `index()`        — IND / `ESC D` / LF / `CSI S`: move down; at bottom of region → scroll up
+- `reverseIndex()` — RI / `ESC M`: move up; at top of region → scroll down
+- `nextLine()`     — NEL / `CSI E`: CR + IND
+- `applyCsi()`     — SU (`CSI S`) / SD (`CSI T`): scroll region by N rows
+
+All four operations pass `scrollRegionTop` / `scrollRegionBottom` explicitly so
+`ScreenHandler` doesn't need to maintain a separate scroll-mode flag. The
+handler initializes to the full screen (`rows - 1`) on construction.
+
+## Scrollback ring buffer (step 07.04)
+
+`ScreenHandler::$scrollback` is a `Scrollback` ring buffer that stores rows
+scrolled off the top of the screen. The ring is fixed-capacity (default
+1000 rows, configurable via `Terminal::withScrollbackSize()` or the
+`scrollbackSize` constructor param). Once full, new pushes silently
+overwrite the oldest entry (tail advances). Iteration yields rows from
+oldest to newest.
+
+`Screen::fromBuffer()` receives the current handler's `Scrollback` reference,
+so `Screen::scrollback()` exposes it as a read-only accessor on the
+immutable snapshot.
+
+The scrollback is pushed by `ScrollHandler` operations:
+
+- `index()` / `reverseIndex()` — when LF at bottom or RI at top would
+  scroll the region
+- `nextLine()` — NEL (CR + IND)
+- `applyCsi()` — SU (`CSI S`) / SD (`CSI T`)
+
+And cleared by `EraseHandler` when it handles `CSI 3 J` (erase
+scrollback). The ring is replaced wholesale on `Terminal::withScrollbackSize()`
+— existing content is dropped, not preserved at a different capacity.
+
+## SGR underline styles CSI 4:N mapping (step 07.05)
+
+`Sgr::$underlineStyle` is an `UnderlineStyle` enum. `SgrHandler::underlineStyle()`
+handles the CSI `4:N` dispatch:
+
+- `4` (no subparam) or `4:1` → `UnderlineStyle::Single`
+- `4:0` → `UnderlineStyle::None`
+- `4:2` → `UnderlineStyle::Double`
+- `4:3` → `UnderlineStyle::Curly`
+- `4:4` → `UnderlineStyle::Dotted`
+- `4:5` → `UnderlineStyle::Dashed`
+- `24` → `withUnderline(false)->withUnderlineStyle(UnderlineStyle::None)` (clears any underline style)
+
+`Sgr::withUnderlineStyle()` automatically sets `$underline = ($style !== UnderlineStyle::None)`
+so the legacy boolean `$underline` flag stays consistent with the enum. `equals()` compares
+both fields.
+
+## DECOM origin mode implementation (step 07.06)
+
+DECOM (`CSI ?6 h` / `CSI ?6 l`) is implemented as:
+
+- `Mode::$originMode` — public readonly bool on `Mode`
+- `Mode::withOriginMode(bool)` — fluent setter returning new `Mode`
+- `ModeHandler` CSI `?6` dispatch — maps 6 → `withOriginMode($set)`
+- When `$originMode` is true, cursor-addressing commands (CUP, HVP)
+  treat `(1,1)` as the top-left of the DECSTBM scroll region rather
+  than the absolute screen origin.
+
+DECOM and DECSTBM interact: setting a scroll region with DECSTBM, then
+enabling DECOM, resets the cursor to the top-left of that region. The
+cursor is confined within the region while origin mode is active.
+Leaving origin mode (`CSI ?6 l`) does NOT reset the scroll region —
+the two must be handled explicitly by the consumer if both are active.
+
+## DECSCUSR cursor shape implementation (step 07.06)
+
+DECSCUSR (`CSI Ps SP q`) sets the cursor shape. Implemented as:
+
+- `Mode::$cursorShape` — public readonly int (0–6) on `Mode`
+- `Mode::withCursorShape(int)` — fluent setter returning new `Mode`
+- `CursorShape` enum at root namespace (`SugarCraft\Vterm\CursorShape`)
+  with values: `BlinkingBlock=0/1`, `SteadyBlock=2`, `BlinkingUnderline=3`,
+  `SteadyUnderline=4`, `BlinkingBar=5`, `SteadyBar=6`
+- `CursorShape::fromInt(int)` — normalises `0` and `1` to `BlinkingBlock`
+  per VT spec; unknown values fall back to `BlinkingBlock`
+- `CursorShape::toInt()` — returns `$this->value`
+
+`CSI Ps SP q` is dispatched by `ScreenHandler::csiDispatch()` in the `case 'q':`
+arm (guarded on `$intermediate === 0x20 && $prefix === 0`), NOT by
+`ModeHandler` — `ModeHandler` has no `'q'` case at all. The handler writes
+`$this->cursor = $this->cursor->withShape($shape)` and
+`$this->mode = $this->mode->withCursorShape($shape)` — i.e. **the shape lives in
+TWO fields, and they are written together.**
+
+**Gotcha: keep `Cursor::$shape` and `Mode::$cursorShape` equal.** Believing the
+shape "is stored in `Mode`" is the mental model behind every instance of this
+bug so far — four `new Cursor(...)` sites that dropped the field, three of them
+still unfixed on master (`softReset()`, `enterAltScreen()`,
+`enterAltScreenCursorOnly()`) plus `displayAlignmentTest()`, fixed earlier in
+d110bb398 — and a fifth, independent way to desynchronise the pair found in
+review: the constructor. Any site that rebuilds the cursor with `new Cursor(...)` and
+omits the `shape:` named argument silently drops the renderer's copy to its 0
+default while the mode keeps the DECSCUSR value. Audit every `new Cursor(` when
+touching reset or screen-swap code. Current policy, each backed by xterm-411
+line citations at the site: `softReset()`/DECSTR and `hardReset()`/RIS reset
+BOTH to 0 (xterm's `ReallyReset()` cursor block at `charproc.c:14377-14387` sits
+above the RIS-only `if (full)` gate at `charproc.c:14432`, and `InitCursorShape`
+recomputes from the `cursorUnderLine`/`cursorBar` *resources*, so DECSCUSR does
+not outlive a soft reset); `displayAlignmentTest()`/DECALN and both alt-screen
+carries (`enterAltScreen()` 1049, `enterAltScreenCursorOnly()` 1048) PRESERVE it
+(`SavedCursor` at `ptyx.h:2347-2363` has no style member and `cursor_shape` is
+one per-terminal field, `ptyx.h:2806`). The constructor reconciles a lone
+injected `Cursor` or `Mode` so the pair is consistent from time zero. Two ways
+the invariant is NOT enforced, both deliberate: a caller supplying BOTH halves
+takes them verbatim (an explicit pair, resynced by the next `CSI Ps SP q`), and
+because `$cursor`/`$mode` are public properties that
+`Terminal::withCursor()`/`withMode()` assign singly, an outside writer can still
+split them — so treat the pair as "equal for every path the handler itself
+takes", not as a theorem. `CursorShapeAgreementTest` pins the handler's own
+paths; every behavioural case is seeded from a non-default shape (4, 5 or 6) so
+no behavioural assertion can be satisfied by the accidental 0 that is the
+symptom, and the two tests that intentionally pin 0 (default construction, RIS)
+say so in place.
+
+Consumers that need the `CursorShape` enum call
+`CursorShape::fromInt($mode->cursorShape)`.
+
+## Focus event reporting implementation (step 07.06)
+
+Focus event reporting (`CSI ?1004 h` / `CSI ?1004 l`) is implemented as:
+
+- `Mode::$reportFocusEvents` — public readonly bool on `Mode`
+- `Mode::withReportFocusEvents(bool)` — fluent setter returning new `Mode`
+- `ModeHandler` CSI `?1004` dispatch — maps 1004 → `withReportFocusEvents($set)`
+- `ScreenHandler::$focusEvents` — public `array` accumulating `FocusInMsg` /
+  `FocusOutMsg` value objects
+- `FocusInMsg` / `FocusOutMsg` — `final readonly` value objects in the
+  `Msg` namespace (`SugarCraft\Vterm\Msg\FocusInMsg`), both `implement Msg`
+  for VCR serialization compatibility (step 07.22)
+- `ScreenHandler::focusIn()` — appends `FocusInMsg` to `$focusEvents`
+  when `$mode->reportFocusEvents` is true
+- `ScreenHandler::focusOut()` — same for `FocusOutMsg`
+
+No `Terminal` accessor is wired for `$focusEvents` in this step; the array
+is accessible via `$vt->{internal handler reference}->focusEvents` or can
+be exposed via a future `Terminal::focusEvents()` accessor.
+
+## BCE background-color erase in EraseHandler (step 07.07)
+
+When CSI ?12 h (BCE mode) is active, `EraseHandler::fillRow()` creates
+`Cell(grapheme: ' ', sgr: $sgr)` — a blank cell carrying the full
+current SGR, so the erased region visually inherits the background
+color instead of going dark. When BCE is off or no background is set,
+`Cell::empty()` is used. The `$sgr` is passed into `apply()` from
+`ScreenHandler::csiDispatch()`.
+
+## Combining-character composition via attachCombiningChar (step 07.07)
+
+`ScreenHandler::attachCombiningChar()` appends a zero-width combining mark
+(U+0300–U+036F) to the cell at `(row, col-1)` — the previous column:
+
+- Silently dropped if `col == 0` (nothing before cursor to attach to).
+- Silently dropped if the previous cell is a wide-char continuation cell.
+- When DEC 2026 synchronized-output mode is active, the mutation is
+  queued in `$pendingMutations[]` instead of written directly.
+- Otherwise applied immediately via `$buffer->put()`.
+
+## Stream writes
+
+Never `ftruncate; rewind;` between writes — slice deltas with
+`ftell` / `fseek` / `stream_get_contents`.
+
+## Fixture encoding
+
+Fixtures must be LF-only (`\n`). Add `*.ansi binary` to `.gitattributes`
+to prevent CRLF normalization on checkout.
+
+## Renderer value objects — Phase 1a patterns
+
+The `SugarCraft\Vterm` root namespace holds simplified value objects
+(`Cell`, `Cursor`) for the vcr renderer path, distinct from
+the full VT parser stack in subdirectories. (The old `CellGrid` was
+collapsed into `Buffer\Buffer` — one grid serves both pipelines.)
+
+### Private mutate() helper for fluent with*() methods
+
+Each root-namespace value object uses a private `mutate()` helper to
+avoid repeating all fields in every `with*()` method:
+
+```php
+private function mutate(array $changes): self
+{
+    return new self(
+        char: $changes['char'] ?? $this->char,
+        fg: $changes['fg'] ?? $this->fg,
+        ...
+    );
+}
+
+public function withFg(int $c): self
+{
+    return $this->mutate(['fg' => $c]);
+}
+```
+
+This keeps `with*()` methods to a single line while remaining explicit
+about which field changes.
+
+### Cell attribute bitfield
+
+`Cell::$attrs` is an int bitfield (not booleans) to match the raw SGR
+model upstream. Constants are defined on `Cell`:
+
+```php
+Cell::ATTR_BOLD | Cell::ATTR_ITALIC | Cell::ATTR_UNDERLINE ...
+```
+
+### Buffer dirty-region tracking (one grid since the CellGrid collapse)
+
+`Buffer` is the single 2D cell grid for BOTH the emulator (`ScreenHandler`)
+and the vcr renderer path (`Terminal` → `Snapshot`) — the old root-namespace
+`CellGrid` was retired into it (decision 1B). It tracks a minimal bounding
+box of dirty cells (`minRow`, `maxRow`, `minCol`, `maxCol`) as **private**
+properties, not constructor parameters. Constructor params are `cols` +
+`rows` only. The `dirtyRegion()` method exposes the bounds as a typed array
+return.
+
+`clear()` creates a fresh grid (dirty region resets to the sentinels).
+`resize()` creates a fresh grid with content copied, also resetting the
+dirty region. `put()` writes in place and expands the bounding box to
+include the written cell — Buffer is deliberately MUTABLE; the immutable
+frame view is `Snapshot`, not the grid.
+
+### Cursor shape values
+
+Cursor `shape` uses raw int values matching the VT spec:
+`0` = block (blinking), `1` = underline, `2` = pipe (bar).
+`CursorShape` enum (in root namespace) maps symbolic names to these ints.
+
+## Parser::reset() flushes then clears
+
+`Parser::reset()` calls `flush()` first (dispatching any in-flight
+string sequences) then `clear()` (resetting params/cmd/stringBuffer).
+Calling reset() mid-sequence flushes that sequence rather than
+discarding it silently — use this when repositioning the parser at a
+known sync point rather than waiting for proper termination.
+
+## CsiHandler / OscHandler interfaces (PR11)
+
+`Parser\CsiHandler` and `Parser\OscHandler` are the handler contracts
+for Phase 1c. They are currently empty shells; the implementation
+fills in during Phase 1c. The Parser itself uses a separate `Handler`
+interface internally — CsiHandler/OscHandler are for external consumers
+who only need CSI or OSC handling without the full ScreenHandler
+complexity.
+
+## 256-color palette structure
+
+The 256-color palette is structured as:
+- Indexes 0-15: standard ANSI 16 colors
+- Indexes 16-231: 6×6×6 RGB color cube (216 colors)
+- Indexes 232-255: 24-step grayscale (dark to light)
+
+The `cubePalette()` method generates the color cube:
+```php
+for ($r = 0; $r < 6; $r++) {
+    for ($g = 0; $g < 6; $g++) {
+        for ($b = 0; $b < 6; $b++) {
+            $cube[] = (($r ? $r * 40 + 55 : 0) << 16)
+                     | (($g ? $g * 40 + 55 : 0) << 8)
+                     | ($b ? $b * 40 + 55 : 0);
+        }
+    }
+}
+```
+
+The `rgb()` method reverses this: for the cube range it extracts r/g/b
+components; for grayscale it computes `floor($i * 10 + 8)`.
+
+## Theme attribute constants match Cell
+
+`Theme::ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_INVERSE`,
+and `ATTR_STRIKETHROUGH` have the same bitfield values as `Cell::ATTR_*`
+so they can be used interchangeably when building SGR state.
+
+## TokyoNight palette specifics
+
+TokyoNight uses `defaultFg: 7` (Ansi7 White) and `defaultBg: 0`
+(Ansi0 Black). The 16 ANSI slots (Ansi0–Ansi15) in the TokyoNight
+palette map to:
+- 0: #15161e (Black), 1: #f7768e (Red), 2: #9ece6a (Green), 3: #e0af68 (Yellow)
+- 4: #7aa2f7 (Blue), 5: #bb9af7 (Magenta), 6: #7dcfff (Cyan), 7: #a9b1d6 (White)
+- 8: #414868 (BrightBlack), 9–14: bright variants, 15: #c0caf5 (BrightWhite)
+
+The `Theme::color($index)` method handles out-of-range indices by
+returning 0 (black), matching the expected safe-default behavior.
+
+## Themes catalog
+
+`Themes::all()` returns all named themes including deferred stubs.
+`Themes::v1()` returns only the v1-ready themes (TokyoNight family) with
+TokyoNight first in the array to match its priority as the monorepo
+standard. Both methods return `array<string, Theme>`.
+
+## Golden-file snapshot tests
+
+Use `assertGoldenAnsi` for any new `render()` test. Fixture files live
+in `tests/fixtures/` with a `.golden` extension. Re-record goldens with
+`UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes.
+Mirrors: `docs/repo_map_step_28.md`.
+
+
+## Async input surface (finding #29)
+
+`Terminal\Terminal::feedAsync()` / `feedStream()` deliver the query→reply
+channel as promise values (`react/promise` + `react/stream`, require-lines
+only). `feedStream` feeds per `data` event (parser state persists across
+chunk boundaries), flushes at `end`, and rejects on `error` or close-without-
+end so truncated transport can never look complete. Tests use `ThroughStream`
+— its events fire synchronously, so no loop run and no timers are armed;
+if that ever changes, `tests/bootstrap.php` must call
+`LoopPin::pinStableClock()` FIRST.
+
+## Type internal cells with the canonical FQN, not the BC alias
+
+Since the Cell unification, `SugarCraft\Vterm\Cell\Cell` is a pure
+`class_alias` shim. phpstan cannot see through `class_alias`, so lib-internal
+`use SugarCraft\Vterm\Cell\Cell;` imports made every cell-returning API an
+unknown class and cascaded false errors repo-wide. Internal code must
+`use SugarCraft\Vterm\Cell;`; only the alias-pinning tests (CellTest,
+CellAliasTest, tests/Cell/*) may keep the historical FQN.
+
+## Grid→SGR re-emit: closed with a verdict (W8-F, 2026-09-16)
+
+The w7 handoff asked whether anything should consume `Cell::colorSgr()`
+(grid→SGR re-emit) and recorded "zero production callers, nothing to build
+today". Fresh repo-wide re-derivation on `ai/w8-vcr-tail` (grep
+`\->(colorSgr|fgRgb|bgRgb)\(` across all 58 libs, vendor excluded):
+
+- `Cell::fgRgb()` / `Cell::bgRgb()` — the premise drifted: the candy-vcr
+  raster pipeline consumes them for real (`src/Raster/CellColor.php`
+  `foreground()/background()/pack()` → `GdRasterizer` lines 141/142/248/249/291,
+  `ImagickRasterizer` lines 185/186/337). Pixels want triples, not SGR — the
+  correct seam is the RGB getters, and it is already wired.
+- `Cell::colorSgr()` — still zero production callers anywhere. The only
+  non-Cell.php references are its pins: `sugar-vterm/tests/Parser/
+  RendererTruecolorAndEscTest` and `candy-vcr/tests/CellColorSgrTest` (which
+  itself states "rasterizers do not yet consume colorSgr()").
+
+**Decision: do not wire a caller; do not fabricate a feature.** The two
+candidate consumers decline the offer on inspection — rasterizers draw pixels
+(RGB triples), and the terminal-output paths (`Player`, `DiffWriter`,
+`InspectCommand`) replay prebuilt byte streams or dump ints; re-emitting SGR
+from a rendered grid would invent a second, lossier encoding of bytes the
+tape already carries. `colorSgr()` stays a tested public parity bridge
+(cell-level SGR 38;2/48;5 emitter): if a consumer appears (e.g. a future
+"diff two snapshots as coloured ANSI" view), build on it rather than
+hand-rolling `38;2;` sprintf. Silence is not an outcome — this entry closes
+the item.

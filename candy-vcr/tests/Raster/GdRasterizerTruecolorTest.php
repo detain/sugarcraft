@@ -7,11 +7,11 @@ namespace SugarCraft\Vcr\Tests\Raster;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\FontLoader;
 use SugarCraft\Vcr\Raster\GdRasterizer;
-use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\Cursor;
-use SugarCraft\Vt\Snapshot;
-use SugarCraft\Vt\Theme;
+use SugarCraft\Vterm\Buffer\Buffer;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Cursor;
+use SugarCraft\Vterm\Snapshot;
+use SugarCraft\Vterm\Theme;
 
 /**
  * Proves the GD rasterizer paints the EXACT 24-bit colour when a cell carries

@@ -53,7 +53,7 @@ final class Ansi
     public const BRACKETED_PASTE    = 2004; // Bracketed paste mode
     public const SYNCHRONIZED_OUTPUT = 2026; // Synchronized output
 
-    // SCS designator finals — the four sets candy-vt's `Charset\Charsets`
+    // SCS designator finals — the four sets sugar-vterm's `Charset\Charsets`
     // translates. Named here so an emitter call site can only spell a
     // designator the receiver actually models; candy-vcr/tests/
     // CoreEmitterRoundTripTest.php pins this roster against the emulator's own
@@ -355,7 +355,7 @@ final class Ansi
      * The full power-on reset. Distinct from {@see reset()}, which is only
      * `SGR 0` (the pen): RIS also restores modes, margins, tab stops, the SCS
      * designations and — on a physical terminal — the screen contents, which is
-     * why it is the right teardown for a crashed or replayed session. candy-vt
+     * why it is the right teardown for a crashed or replayed session. sugar-vterm
      * models it as `ScreenHandler::hardReset()`, which like the hardware
      * PRESERVES scrollback, the window title and the OSC 4 palette — matching
      * charmbracelet/x/vt `Emulator.fullReset()`.
@@ -384,7 +384,7 @@ final class Ansi
      * never DECALN; in candy-ansi's mirrored table the sequence drops in
      * CsiIntermediate without dispatching. The misquote stays deliberately inert.
      *
-     * candy-vt executes this pattern from the wire: `ESC # 8` reaches
+     * sugar-vterm executes this pattern from the wire: `ESC # 8` reaches
      * `ScreenHandler::escDispatch()` as (0x38, 0x23), whose `#`-family arm
      * routes it to `displayAlignmentTest()` — closing the emitter→emulator
      * round trip (the emulator used to swallow it as a failed charset
@@ -417,7 +417,7 @@ final class Ansi
      * The designation itself is state, not output: it changes how *later*
      * graphics are translated. G0 is invoked by default; G1 needs
      * {@see shiftOut()}, G2/G3 need a single shift. Recognised designators
-     * in candy-vt are `B` (US ASCII), `0` (DEC Special Graphics), `A` (UK),
+     * in sugar-vterm are `B` (US ASCII), `0` (DEC Special Graphics), `A` (UK),
      * `U` (ISO Latin-1 no-break space); see {@see decSpecialGraphics()}.
      *
      * Fails fast on an unknown slot or a designator outside the 0x30-0x7E
@@ -426,7 +426,7 @@ final class Ansi
      * of bug this emitter exists to prevent.
      *
      * Mirrors charmbracelet/x/ansi. SelectCharacterSet — the same
-     * `ESC <intermediate> <final>` helper that candy-vt's `Charsets` docblock
+     * `ESC <intermediate> <final>` helper that sugar-vterm's `Charsets` docblock
      * records as its own upstream source (same wire shape; this port keys the
      * designation on a 0-3 slot index).
      *

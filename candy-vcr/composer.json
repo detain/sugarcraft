@@ -40,12 +40,12 @@
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.65",
-        "sugarcraft/candy-vt": "dev-master",
+        "sugarcraft/sugar-vterm": "dev-master",
         "sugarcraft/candy-testing": "dev-master",
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {
-        "sugarcraft/candy-vt": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
+        "sugarcraft/sugar-vterm": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
         "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
     },
     "autoload": {

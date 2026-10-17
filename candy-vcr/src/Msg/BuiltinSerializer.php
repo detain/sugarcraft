@@ -15,8 +15,8 @@ use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Vt\Msg\FocusInMsg;
-use SugarCraft\Vt\Msg\FocusOutMsg;
+use SugarCraft\Vterm\Msg\FocusInMsg;
+use SugarCraft\Vterm\Msg\FocusOutMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
@@ -35,7 +35,7 @@ use SugarCraft\Vcr\Support\Scalars;
  * - MouseClickMsg / MouseMotionMsg / MouseWheelMsg / MouseReleaseMsg
  * - WindowSizeMsg
  * - FocusGainedMsg / FocusLostMsg / BlurMsg
- * - FocusInMsg / FocusOutMsg (candy-vt CSI I/O focus events)
+ * - FocusInMsg / FocusOutMsg (sugar-vterm CSI I/O focus events)
  * - PasteStartMsg / PasteEndMsg / PasteMsg
  * - BackgroundColorMsg / ForegroundColorMsg
  * - CursorPositionMsg

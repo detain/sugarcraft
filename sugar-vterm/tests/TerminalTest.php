@@ -1,0 +1,276 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Vterm\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Vterm\Cell;
+use SugarCraft\Vterm\Terminal;
+use SugarCraft\Vterm\Theme;
+
+final class TerminalTest extends TestCase
+{
+    public function testNewCreatesTerminal(): void
+    {
+        $t = Terminal::new(80, 24);
+
+        $this->assertSame(80, $t->cols);
+        $this->assertSame(24, $t->rows);
+    }
+
+    public function testFeedAcceptsBytes(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("Hello");
+
+        $cell = $t->grid()->cell(0, 0);
+        $this->assertSame('H', $cell->char);
+    }
+
+    public function testFeedReturnsTerminalForChaining(): void
+    {
+        $t = Terminal::new();
+
+        $result = $t->feed("X");
+
+        $this->assertSame($t, $result);
+    }
+
+    public function testFeedCSICup(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[3;5H");
+
+        $this->assertSame(2, $t->cursor()->row);
+        $this->assertSame(4, $t->cursor()->col);
+    }
+
+    public function testFeedCSIRedForeground(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[31mX");
+
+        $cell = $t->grid()->cell(0, 0);
+        $this->assertSame('X', $cell->char);
+        $this->assertSame(1, $cell->fg);
+    }
+
+    /**
+     * The BRIGHT halves of the 4-bit palette, SGR 90-97 and 100-107.
+     *
+     * A regression test for a silent drop: this parser had arms for 30-37 and
+     * 40-47 only, and an unhandled SGR parameter falls through to `default`,
+     * which keeps the PREVIOUS colour rather than erroring. MEASURED before the
+     * fix: `\e[31mX\e[90mB` left BOTH cells at fg 1, so every cell-grid
+     * assertion about a bright colour was really re-asserting the colour before
+     * it — and candy-vcr renders GIFs through this same handler, so a rendered
+     * frame painted the wrong colour too. The preceding red is deliberate: it is
+     * what makes an inherited colour distinguishable from a correct one.
+     */
+    public function testFeedCSIBrightPaletteHalves(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[31mX\x1b[90mB\x1b[97mW");
+
+        $this->assertSame(1, $t->grid()->cell(0, 0)->fg, 'red, the control');
+        $this->assertSame(8, $t->grid()->cell(0, 1)->fg, 'SGR 90 is palette slot 8');
+        $this->assertSame(15, $t->grid()->cell(0, 2)->fg, 'SGR 97 is palette slot 15');
+
+        $t = Terminal::new();
+
+        $t->feed("\x1b[41mX\x1b[100mB\x1b[107mW");
+
+        $this->assertSame(1, $t->grid()->cell(0, 0)->bg, 'red background, the control');
+        $this->assertSame(8, $t->grid()->cell(0, 1)->bg, 'SGR 100 is palette slot 8');
+        $this->assertSame(15, $t->grid()->cell(0, 2)->bg, 'SGR 107 is palette slot 15');
+    }
+
+    public function testFeedCSIBold(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[1mX");
+
+        $cell = $t->grid()->cell(0, 0);
+        $this->assertSame('X', $cell->char);
+        $this->assertSame(Cell::ATTR_BOLD, $cell->attrs & Cell::ATTR_BOLD);
+    }
+
+    public function testFeedCSISgrReset(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[1;31mX\x1b[0mY");
+
+        $xCell = $t->grid()->cell(0, 0);
+        $yCell = $t->grid()->cell(0, 1);
+
+        $this->assertSame('X', $xCell->char);
+        $this->assertSame(Cell::ATTR_BOLD, $xCell->attrs & Cell::ATTR_BOLD);
+        $this->assertSame(1, $xCell->fg);
+
+        $this->assertSame('Y', $yCell->char);
+        $this->assertSame(0, $yCell->attrs & Cell::ATTR_BOLD);
+        $this->assertSame(7, $yCell->fg);
+    }
+
+    public function testFeedCSIEdClearScreen(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[2J");
+
+        $this->assertSame(' ', $t->grid()->cell(0, 0)->char);
+        $this->assertSame(' ', $t->grid()->cell(23, 79)->char);
+    }
+
+    public function testFeedCSIElClearLine(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("Hello\x1b[K");
+
+        $this->assertSame('H', $t->grid()->cell(0, 0)->char);
+        $this->assertSame(' ', $t->grid()->cell(0, 5)->char);
+    }
+
+    public function testFeedCSIDectcemHidesCursor(): void
+    {
+        // DECTCEM `CSI ? 25 l` hides; `h` shows. (These two tests used to
+        // pin the renderer's inverted mapping — corrected with the emulator
+        // parity pass, see candy-vcr VtParityTest DECTCEM case.)
+        $t = Terminal::new();
+
+        $t->feed("\x1b[?25l");
+
+        $this->assertFalse($t->cursor()->visible);
+    }
+
+    public function testFeedCSIDectcemShowsCursor(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[?25l\x1b[?25h");
+
+        $this->assertTrue($t->cursor()->visible);
+    }
+
+    public function testSnapshotCreatesSnapshot(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("X");
+
+        $snap = $t->snapshot(1.5);
+
+        $this->assertSame('X', $snap->grid->cell(0, 0)->char);
+        $this->assertSame(1.5, $snap->time);
+    }
+
+    public function testCursorReturnsCurrentCursor(): void
+    {
+        $t = Terminal::new();
+        $t->feed("\x1b[5;10H");
+
+        $cursor = $t->cursor();
+
+        $this->assertSame(4, $cursor->row);
+        $this->assertSame(9, $cursor->col);
+    }
+
+    public function testGridReturnsCurrentGrid(): void
+    {
+        $t = Terminal::new();
+        $t->feed("ABC");
+
+        $grid = $t->grid();
+
+        $this->assertSame('A', $grid->cell(0, 0)->char);
+        $this->assertSame('B', $grid->cell(0, 1)->char);
+        $this->assertSame('C', $grid->cell(0, 2)->char);
+    }
+
+    public function testWindowTitleFromOSC(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b]2;My Title\x07");
+
+        $this->assertSame('My Title', $t->windowTitle());
+    }
+
+    public function testFeedWithTheme(): void
+    {
+        $theme = new Theme(defaultFg: 0, defaultBg: 15);
+        $t = Terminal::new(80, 24, $theme);
+
+        $cell = $t->grid()->cell(0, 0);
+        $this->assertSame(' ', $cell->char);
+    }
+
+    public function testFeedComplexSequence(): void
+    {
+        $t = Terminal::new();
+
+        $t->feed("\x1b[31m\x1b[1mRed Bold\x1b[0m Normal");
+
+        $this->assertSame('R', $t->grid()->cell(0, 0)->char);
+        $this->assertSame(1, $t->grid()->cell(0, 0)->fg);
+        $this->assertSame(Cell::ATTR_BOLD, $t->grid()->cell(0, 0)->attrs & Cell::ATTR_BOLD);
+    }
+
+    // ─── flush() — E736 4.3 ────────────────────────────────────────────────
+
+    public function testFlushDispatchesInFlightOscTitle(): void
+    {
+        $t = Terminal::new();
+        $t->feed("\x1b]0;Partial Title");
+        $this->assertSame('', $t->windowTitle());
+
+        $t->flush();
+
+        $this->assertSame('Partial Title', $t->windowTitle());
+    }
+
+    public function testFlushAtGroundIsNoOpAndKeepsGridConsistent(): void
+    {
+        $t = Terminal::new();
+        $t->feed("AB");
+        $t->flush();
+
+        $this->assertSame('A', $t->grid()->cell(0, 0)->char);
+        $this->assertSame('B', $t->grid()->cell(0, 1)->char);
+        $this->assertSame('', $t->windowTitle());
+    }
+
+    public function testFlushThenFeedContinuesNormally(): void
+    {
+        $t = Terminal::new();
+        $t->feed("\x1b]0;First");
+        $t->flush();
+        $t->feed("\x1b]1;Second\x07");
+
+        $this->assertSame('Second', $t->windowTitle());
+    }
+
+    // ─── alt-screen parity stubs — E736 4.4 ────────────────────────────────
+
+    public function testEnableAltScreenThrowsLogicExceptionNamingFullPath(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('full Terminal\Terminal path');
+        Terminal::new()->enableAltScreen();
+    }
+
+    public function testDisableAltScreenThrowsLogicExceptionNamingFullPath(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('full Terminal\Terminal path');
+        Terminal::new()->disableAltScreen();
+    }
+}

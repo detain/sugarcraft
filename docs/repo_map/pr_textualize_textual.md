@@ -52,7 +52,7 @@ From the first-stage analysis, SugarCraft ports map to textual components as fol
 | Switch, Checkbox, RadioButton, RadioSet | `sugar-widgets/` | ✅ Mapped |
 | Button | `sugar-widgets/` | ✅ Mapped |
 | Toast, Notification | `sugar-toast/` | ✅ Mapped |
-| _xterm_parser | `candy-vt/` | ✅ Mapped |
+| _xterm_parser | `sugar-vterm/` | ✅ Mapped |
 | timer.Timer, worker.Worker | `candy-core/` | ✅ Mapped |
 | command.CommandPalette, Provider | `sugar-cli/` | ✅ Mapped |
 | binding.Binding | `candy-scriptui/` | ✅ Mapped |

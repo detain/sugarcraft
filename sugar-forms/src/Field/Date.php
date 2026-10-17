@@ -23,7 +23,7 @@ use SugarCraft\Forms\Validator\Validator;
  * walks it with arrows, and every movement commits.
  *
  * Hand-rolled on {@see \DateTimeImmutable} — no calendar library, no
- * candy-vt, ext-agnostic. All state lives in the constructor, so every
+ * sugar-vterm, ext-agnostic. All state lives in the constructor, so every
  * rebuild path funnels through the single strict parse boundary
  * (parse-don't-validate); only the label-trait closures ride outside and
  * are carried by {@see CarriesNonCtorState}.

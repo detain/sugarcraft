@@ -33,7 +33,7 @@ The audit categories:
    broken `ExternalModule`, wire a real interactive dashboard, kill the
    chart duplication.
 6. **Strategic-decision items** — candy-mail (email vs social), candy-git-server
-   TUI scope, candy-vt P3 graphics protocols.
+   TUI scope, sugar-vterm P3 graphics protocols.
 7. **Sequencing recommendation** — order of operations so SSoT cleanup
    does not collide with feature work.
 
@@ -57,8 +57,8 @@ Today:
 | `Style` | `candy-sprinkles/src/Style.php` (Lipgloss-style) | `sugar-dashboard/src/Foundation/Style.php` (~100 LOC bespoke) |
 | `Color` | `candy-core/src/Util/Color.php` | `sugar-dashboard/src/Foundation/Color.php` (thin alias that re-exposes every method) |
 | `Rect` | `candy-core/src/Rect.php` | `sugar-dashboard/src/Foundation/Rect.php` (62 LOC bespoke) |
-| `Buffer` | `candy-vt/src/Buffer/Buffer.php` | `sugar-dashboard/src/Foundation/Buffer.php` (288 LOC) + `sugar-dashboard/src/Grid/Buffer.php` (legacy) |
-| `Cell` | `candy-vt/src/Cell/Cell.php` | `sugar-dashboard/src/Foundation/Cell.php` |
+| `Buffer` | `sugar-vterm/src/Buffer/Buffer.php` | `sugar-dashboard/src/Foundation/Buffer.php` (288 LOC) + `sugar-dashboard/src/Grid/Buffer.php` (legacy) |
+| `Cell` | `sugar-vterm/src/Cell/Cell.php` | `sugar-dashboard/src/Foundation/Cell.php` |
 | `Theme` | (none yet — gap) | `sugar-dashboard/src/Foundation/Theme.php` (349 LOC) |
 | `Border` / `BorderTitle` | `candy-sprinkles/src/Border/*` | sugar-panels plans to add its own; sugar-dashboard has `Components/Modal` border re-rolls |
 | `Viewport` / `Scrollbar` | `sugar-widgets/src/Viewport/`, `sugar-widgets/src/Scrollbar/` | `sugar-flexbox` research plans to add these from scratch |
@@ -70,7 +70,7 @@ Today:
   in the Lipgloss ecosystem; promoting Theme there gives every lib a
   shared theme surface (`Theme::dracula()`, `Theme::tokyoNight()`,
   `Theme::oneDark()`, `Theme::adaptive()`).
-- **`Buffer` + `Cell` live in `candy-vt`.** It is the lowest-level lib
+- **`Buffer` + `Cell` live in `sugar-vterm`.** It is the lowest-level lib
   that needs cells (VT state machine). Promoting Theme out of vt would
   invert dependency direction.
 - **`StyleParser` lives in `candy-sprinkles`.** It belongs with Style.
@@ -87,7 +87,7 @@ Today:
   `\SugarCraft\Core\Rect`.
 - SSOT-01e — Replace `sugar-dashboard/src/Foundation/Buffer.php` and
   `sugar-dashboard/src/Foundation/Cell.php` with re-export aliases of
-  `\SugarCraft\Vt\Buffer\Buffer` and `\SugarCraft\Vt\Cell\Cell`.
+  `\SugarCraft\Vterm\Buffer\Buffer` and `\SugarCraft\Vterm\Cell\Cell`.
 - SSOT-01f — Delete `sugar-dashboard/src/Grid/Buffer.php` (legacy
   pre-reorg duplicate).
 - SSOT-01g — Move `sugar-dashboard/src/Foundation/StyleParser.php` to
@@ -154,7 +154,7 @@ Found in `sugar-image/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Contr
 **Actions:**
 
 - SSOT-08a — Pull all env-var probes into `sugar-colorprofile/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
-- SSOT-08b — `candy-log`, `sugar-image`, `candy-codeshot` (themes), `candy-vt` (truecolor accept) all consume it.
+- SSOT-08b — `candy-log`, `sugar-image`, `candy-codeshot` (themes), `sugar-vterm` (truecolor accept) all consume it.
 - SSOT-08c — Implement the missing sugar-colorprofile items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
 
 ### SSOT-09 — `Module\Module` contract aligns with candy-core `Model`
@@ -231,7 +231,7 @@ short bullet list; treat them as backlog items, not sequenced steps.
 - `FocusLostMsg` coverage check in `BuiltinSerializer` (H4).
 - (asciinema .cast format conversion lives in `plans/leftover_updates.md` P6.5-LO-05.)
 
-### candy-vt
+### sugar-vterm
 
 - **P0.1 DECSTBM scroll margins** (`Handler/ScrollHandler.php:14-16` TODO).
 - **P0.2 Auto-wrap with DECAWM** (`Handler/ScreenHandler.php:101` ref).
@@ -276,7 +276,7 @@ because research adds three items the PTY plan did not call out:)
 - HTTP smart protocol server (§3.2).
 - `git://` daemon (§3.3).
 - Real daemon mode (§3.4).
-- OSC 52 clipboard — wire through candy-vt OSC handler once added.
+- OSC 52 clipboard — wire through sugar-vterm OSC handler once added.
 
 ### sugar-crush
 
@@ -654,7 +654,7 @@ homes. The `src/Foundation/` directory shrinks to just `Drawable.php`,
 `Item.php`, `Sizer.php` (sugar-dashboard-specific interfaces).
 
 **Acceptance:** `wc -l sugar-dashboard/src/Foundation/*.php` shows < 200 LOC
-total. Composer require lists `candy-vt` + `candy-sprinkles` + `candy-core`.
+total. Composer require lists `sugar-vterm` + `candy-sprinkles` + `candy-core`.
 
 **Size:** 1 PR (combines a–h since they touch the same lib).
 
@@ -887,7 +887,7 @@ until a real profiler trace flags the cost.
 - **candy-git-server TUI scope** — soft-serve's marquee feature is the
   interactive SSH-served repo browser. That is a substantial TUI app on
   its own; merits a `plans/candy-git-server-tui.md` milestone doc.
-- **candy-vt P3 graphics protocols** — Kitty image, Sixel decode. Each
+- **sugar-vterm P3 graphics protocols** — Kitty image, Sixel decode. Each
   is months of work. Defer post-1.0 unless a specific app needs it.
 - **sugar-animation vs sugar-image image-output split** — animation rendering
   (P10) overlaps both libs. Recommendation: sugar-animation emits frame
@@ -922,7 +922,7 @@ are 1 PR each.
 - candy-sprinkles features (Color string parsing, HSL, markup parser, etc.).
 - candy-bits Table sort/filter/paginate (Phase 2/3).
 - candy-prompt validators + fuzzy autocomplete.
-- candy-vt P0 items (DECSTBM, DECAWM, subparams).
+- sugar-vterm P0 items (DECSTBM, DECAWM, subparams).
 - sugar-mouse hover/drag/click-counter.
 - sugar-image quarter-block renderer + delete API.
 - … (each lib's bullet list above is its own backlog.)
@@ -937,7 +937,7 @@ inline strings. Approx 8 PRs.
 Do not ship until product call:
 - candy-mail identity
 - candy-git-server TUI scope plan
-- candy-vt P3 graphics
+- sugar-vterm P3 graphics
 
 ---
 

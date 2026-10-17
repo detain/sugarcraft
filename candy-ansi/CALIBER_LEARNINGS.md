@@ -3,12 +3,12 @@
 > What the team learned while building candy-ansi. Accumulated across
 > sessions; each entry is time-stamped, tagged, and attributed.
 
-## 2026-05-28 — step-01: extracted from candy-vt
+## 2026-05-28 — step-01: extracted from sugar-vterm
 
-**candy-ansi** was extracted from `candy-vt/src/Parser/` in step-01 as the
+**candy-ansi** was extracted from `sugar-vterm/src/Parser/` in step-01 as the
 shared ANSI state machine. The upstream is `charmbracelet/x/ansi` — a
 Paul-Williams VT500 state machine that maps byte → action → next state.
-`candy-vt` still carries its own copy of the parser classes (CsiHandlerImpl
+`sugar-vterm` still carries its own copy of the parser classes (CsiHandlerImpl
 specifically) until step-12, when the terminal-state coupling is resolved.
 
 ## 2026-05-30 — step-20 ansi-consumers: Parser state machine — don't clear buffers in start() before dispatch
@@ -27,14 +27,14 @@ sugar-quickpick and candy-codeshot consumers.
 
 ## 2026-07-10 — W1 defork-prep: grow CsiHandler, route CR/LF, fix OSC-8, configurable buffer cap
 
-Prepared candy-ansi to become the single parser candy-vt implements (instead of
+Prepared candy-ansi to become the single parser sugar-vterm implements (instead of
 forking its own copy). Four changes, all inside candy-ansi:
 
 - **`CsiHandler` interface grown.** Added `cr()`, `lf()`, `hvp(int,int)`,
   `gridCols(): int`, and the emulator CSI finals `su`/`sd` (SU `S` / SD `T`),
   `il`/`dl` (IL `L` / DL `M`), `ich`/`dch` (ICH `@` / DCH `P`), `rep` (REP `b`),
-  and `scosc`/`scorc` (SCO save/restore `s`/`u`). Signatures match candy-vt's
-  `CsiHandlerImpl` (count methods take `int $count = 1`) so the later candy-vt
+  and `scosc`/`scorc` (SCO save/restore `s`/`u`). Signatures match sugar-vterm's
+  `CsiHandlerImpl` (count methods take `int $count = 1`) so the later sugar-vterm
   reimplementation is a drop-in. **BC-critical:** growing an interface breaks
   every implementer — the only in-repo implementer of `SugarCraft\Ansi\Parser\CsiHandler`
   is `CsiHandlerImpl` (all dependents — candy-pty, candy-ansi-inspect, candy-codeshot —
@@ -55,7 +55,7 @@ forking its own copy). Four changes, all inside candy-ansi:
 
 - **String-buffer cap is now a ctor param.** `Parser::__construct(..., int $maxStringBuffer = 65536)`
   defaults to 64 KiB (unchanged behaviour) but lets emulator front-ends raise it
-  (candy-vt historically used 1 MiB) for large DCS/OSC/SOS/PM/APC passthrough
+  (sugar-vterm historically used 1 MiB) for large DCS/OSC/SOS/PM/APC passthrough
   payloads. `put()` now checks `$this->maxStringBuffer` instead of the const.
 
 **Gotcha:** CSI final bytes are `0x40`–`0x7E`, so `@` (0x40), `s`, `u`, `b` are
@@ -65,20 +65,20 @@ needed to reach the new handler methods.
 ## 2026-07-12 — deadcode: deleted inert `CsiHandlerImpl` stub (step-12 never landed)
 
 The de-fork (W1, PRs #1262/#1263) put the REAL grid-mutating CSI impl in
-`candy-vt` (`SugarCraft\Vt\Parser\CsiHandlerImpl`), wired through candy-ansi's
+`sugar-vterm` (`SugarCraft\Vterm\Parser\CsiHandlerImpl`), wired through candy-ansi's
 `HandlerAdapter`. candy-ansi's own `SugarCraft\Ansi\Parser\CsiHandlerImpl` was
 only ever the "step-12 pending" placeholder: **all 30 methods no-op**,
 `gridRows()`/`gridCols()` return `0`, and its test was 30 `assertTrue(true)`
 smoke assertions. Grep confirmed **zero real consumers** — the only references
 were the class's own file + its own test, and every dependent (candy-pty,
-candy-ansi-inspect, candy-codeshot) implements the `Handler` interface, while candy-vt
+candy-ansi-inspect, candy-codeshot) implements the `Handler` interface, while sugar-vterm
 supplies its own `CsiHandler` implementation. So both files were deleted.
 
 - **The `CsiHandler` interface stays** — it is the contract `HandlerAdapter`
   type-hints (`__construct(private CsiHandler $csi, ...)`) and that
   `HandlerAdapterTest` exercises via `createMock(CsiHandler::class)`. candy-ansi
   intentionally ships the interface + adapter with **no concrete in-repo
-  implementer**; emulator front-ends (candy-vt) provide the real one. This
+  implementer**; emulator front-ends (sugar-vterm) provide the real one. This
   supersedes the W1 note above that called `CsiHandlerImpl` "the only in-repo
   implementer".
 - **`OscHandlerImpl` was NOT deleted** — unlike the CSI stub it is *not* inert:

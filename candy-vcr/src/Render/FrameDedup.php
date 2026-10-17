@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Render;
 
-use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vterm\Snapshot;
 
 /**
  * Collapse identical adjacent frames in a FrameStream.

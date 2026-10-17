@@ -1,6 +1,6 @@
 ---
 name: tea-snapshot-test
-description: Writes PHPUnit 10 tests for SugarCraft TEA libs in the four project modes — snapshot byte (view()→raw SGR), cell-grid (SugarCraft\Vt\Terminal / Buffer), behaviour (update()→[Model,?Cmd]), and coercion (clamp/throw edges) — plus golden-file and program-driving helpers from candy-testing (Assertions::assertGoldenAnsi/assertCellGrid/assertViewIdempotent, ProgramSimulator, ScriptedInput). Use when the user says 'write a test', 'add snapshot test', 'add golden test', 'test this Model', 'test update()', or 'test view() output' for any candy-*/sugar-*/honey-* lib. Do NOT use to duplicate a canonical lib's suite into a class_alias façade lib (ship a single AliasesTest asserting each alias resolves to its canonical FQN instead), and do NOT use for non-TUI plain-PHP unit tests that have no view()/update()/Model.
+description: Writes PHPUnit 10 tests for SugarCraft TEA libs in the four project modes — snapshot byte (view()→raw SGR), cell-grid (SugarCraft\Vterm\Terminal / Buffer), behaviour (update()→[Model,?Cmd]), and coercion (clamp/throw edges) — plus golden-file and program-driving helpers from candy-testing (Assertions::assertGoldenAnsi/assertCellGrid/assertViewIdempotent, ProgramSimulator, ScriptedInput). Use when the user says 'write a test', 'add snapshot test', 'add golden test', 'test this Model', 'test update()', or 'test view() output' for any candy-*/sugar-*/honey-* lib. Do NOT use to duplicate a canonical lib's suite into a class_alias façade lib (ship a single AliasesTest asserting each alias resolves to its canonical FQN instead), and do NOT use for non-TUI plain-PHP unit tests that have no view()/update()/Model.
 paths:
   - "**/tests/**/*Test.php"
   - "**/*Test.php"
@@ -25,7 +25,7 @@ Map slug→namespace: `sugar-markdown/` → `SugarCraft\Markdown\`. Grep the tar
 
 ### 2. Pick the mode(s) — cover every relevant one
 - **Snapshot byte** — the class has a `view()` (or `render()`) returning SGR bytes → Step 3.
-- **Cell-grid** — output is easier to assert as a 2-D grid, or you render into a `SugarCraft\Buffer\Buffer` / drive a `SugarCraft\Vt\Terminal` → Step 4.
+- **Cell-grid** — output is easier to assert as a 2-D grid, or you render into a `SugarCraft\Buffer\Buffer` / drive a `SugarCraft\Vterm\Terminal` → Step 4.
 - **Behaviour** — the class implements `update(Msg): [Model, ?Cmd]` → Step 5.
 - **Coercion** — the class clamps or rejects out-of-range input → Step 6.
 - **Program-level** — you need to drive `init()`→`update()`→`view()` with scripted input → Step 7.
@@ -54,7 +54,7 @@ public function testProgressBarWithFillColorRendersAnsi(): void
 Create the baseline once: `cd <slug> && UPDATE_GOLDENS=1 vendor/bin/phpunit --filter testProgressBar...`. This writes the `.golden` file only when missing. **Inspect the generated `.golden` by eye — a wrong baseline locks in a wrong result.** Optionally add `Assertions::assertViewIdempotent($p);` to guard render purity. **Verify: the fixture file exists and re-running without `UPDATE_GOLDENS` passes.**
 
 ### 4. Cell-grid test
-For grid assertions use `Assertions::assertCellGrid($expected, $buffer)` where `$expected[row][col] = ['rune' => 'a', 'style' => $style]` and `$buffer` is a `SugarCraft\Buffer\Buffer`. For full-terminal parsing (SGR → cells), feed bytes to `SugarCraft\Vt\Terminal` and read cells back (see `candy-pty/tests/Integration/VimSmokeTest.php`). Dimensions are checked first, so size the expected grid to match `$buffer->width()`/`$buffer->height()`. **Verify: expected grid dimensions equal the buffer's.**
+For grid assertions use `Assertions::assertCellGrid($expected, $buffer)` where `$expected[row][col] = ['rune' => 'a', 'style' => $style]` and `$buffer` is a `SugarCraft\Buffer\Buffer`. For full-terminal parsing (SGR → cells), feed bytes to `SugarCraft\Vterm\Terminal` and read cells back (see `candy-pty/tests/Integration/VimSmokeTest.php`). Dimensions are checked first, so size the expected grid to match `$buffer->width()`/`$buffer->height()`. **Verify: expected grid dimensions equal the buffer's.**
 
 ### 5. Behaviour test (`update()`)
 Destructure the tuple; the second element is the optional `Cmd`. Pattern from `sugar-mouse/tests/Zones/ZoneHoverTrackerTest.php`:

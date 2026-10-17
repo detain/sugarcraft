@@ -8,7 +8,7 @@ namespace SugarCraft\Ansi\Tests\Support;
  * A plain, NON-capable {@see \SugarCraft\Ansi\Parser\Handler} that reads the
  * colon flags the legacy way — through a late-bound closure over the owning
  * parser's accessor, which is exactly what
- * `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()` and
+ * `SugarCraft\Vterm\Handler\ScreenHandler::attachSubparamsProvider()` and
  * `SugarCraft\CodeShot\SgrStateHandler::bindParser()` do.
  *
  * It exists to pin the back-compat half of the
