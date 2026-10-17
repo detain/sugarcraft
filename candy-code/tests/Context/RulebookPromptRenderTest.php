@@ -413,7 +413,70 @@ final class RulebookPromptRenderTest extends TestCase
         self::assertSame($expected, (int) $reserve->invoke(null), 'production agrees with the independent sum');
     }
 
+    /**
+     * ISS-068 review fix — the WING the W2 lane left unpinned.
+     *
+     * `Runtime::systemPromptSections()` threads `$app->model` into the
+     * `RuleLoader(sessionModel:)` constructor; deleting that argument keeps
+     * the whole suite green (the loader's own gating is pinned standalone in
+     * RuleLoaderTest) while silently re-inerting `models:` in every real
+     * launch — and actively blessing that regression, because
+     * `FrontmatterKeyAuditTest` asserts `models` is NOT named by the audit
+     * precisely because this wiring is live. This is the end-to-end proof the
+     * blessing now rests on: the SAME rule file on disk, rendered under two
+     * session models, produces different bytes, and the difference is exactly
+     * the model-scoped rule.
+     */
+    public function testThePromptSplicesAModelScopedRuleOnlyForTheSessionModelItNames(): void
+    {
+        file_put_contents(
+            $this->packsDir . '/qwen-only.md',
+            "---\nname: Qwen only\nmodels: [qwen3-coder]\n---\nMODEL-GATED-BODY\n"
+        );
+
+        $matching = $this->renderPrompt($this->appForModel('sglang/qwen3-coder'));
+        self::assertStringContainsString(
+            'MODEL-GATED-BODY',
+            $matching,
+            'a session on the named model receives the rule'
+        );
+
+        $other = $this->renderPrompt($this->appForModel('anthropic/claude-sonnet-4-5'));
+        self::assertStringNotContainsString(
+            'MODEL-GATED-BODY',
+            $other,
+            'the identical rule is absent for a non-matching session model — the wiring is load-bearing, not the loader alone'
+        );
+    }
+
+    /**
+     * The null half of the same seam: an App whose model could never match
+     * still gets every UNscoped rule, so pinning the gate above cannot be
+     * satisfied by a splice that simply drops all user rules.
+     */
+    public function testModelGatingNeverSubtractsAnUnscopedStandingRule(): void
+    {
+        file_put_contents($this->packsDir . '/qwen-only.md', "---\nmodels: [qwen3-coder]\n---\nMODEL-GATED-BODY\n");
+        file_put_contents($this->packsDir . '/always.md', "UNSCOPED-BODY\n");
+
+        $rendered = $this->renderPrompt($this->appForModel('anthropic/claude-sonnet-4-5'));
+        self::assertStringNotContainsString('MODEL-GATED-BODY', $rendered);
+        self::assertStringContainsString('UNSCOPED-BODY', $rendered, 'the gate subtracts only what names a model');
+    }
+
     // -- helpers --------------------------------------------------------------
+
+    /**
+     * The same sandbox App the other renders build, but on a chosen session
+     * model — the only input this pin varies, so a red can mean exactly one
+     * thing: the prompt stopped consulting the model.
+     */
+    private function appForModel(string $model): App
+    {
+        return App::new($this->provider(), $model)
+            ->withRoot($this->sandbox . '/repo')
+            ->withRulesState(RulesState::new());
+    }
 
     private function provider(): ProviderInterface
     {

@@ -50,6 +50,10 @@ final class FrontmatterKeyAuditTest extends TestCase
         // ISS-068: `keywords` has no matcher and stays inert. `models` left
         // INERT[RULE] when the seam closed — Runtime threads the session model
         // into RuleLoader — so declaring it is acted on and must NOT be named.
+        // The live expectation rests on the end-to-end pins in
+        // RulebookPromptRenderTest::testThePromptSplicesAModelScopedRuleOnlyForTheSessionModelItNames(),
+        // which redden if the threading disappears; before those existed this
+        // `[]` alone would have blessed a silent un-wiring.
         self::assertSame(
             ['`keywords` is not acted on'],
             FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, ['keywords' => ['a']]),
