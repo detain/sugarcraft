@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EventEnvelope, SessionSnapshot } from '../../protocol/generated'
-import { applyEvent, applyPendingAsks, applySnapshot, createState, itemsFromRow, type SessionState, type ToolItem } from '../reducer'
+import { applyEvent, applyPendingAsks, applySnapshot, createState, itemsFromRow, stopText, type SessionState, type ToolItem } from '../reducer'
 
 let seq = 0
 function ev(type: string, data: Record<string, unknown>, extra: Partial<EventEnvelope> = {}): EventEnvelope {
@@ -251,5 +251,16 @@ describe('reducer: snapshot', () => {
     applyPendingAsks(state, [{ askId: 'a', toolCallId: 'c', tool: 'Bash', arguments: {}, options: ['once'] }])
     expect(state.status).toBe('waiting_permission')
     expect(state.asks).toHaveLength(1)
+  })
+})
+
+describe('reducer: stopText', () => {
+  it('names the loop guard instead of echoing the raw reason (ISS-113)', () => {
+    expect(stopText('loop_guard')).toBe('Turn stopped: the loop guard cut a repeating tool call.')
+    expect(stopText('loop_guard')).not.toContain('(loop_guard)')
+  })
+
+  it('keeps the generic row only for unrecognised reasons', () => {
+    expect(stopText('mystery_reason')).toBe('Turn ended (mystery_reason).')
   })
 })

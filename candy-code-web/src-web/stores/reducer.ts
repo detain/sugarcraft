@@ -625,6 +625,11 @@ export function stopText(stopReason: string, error?: string): string {
       return 'Turn stopped: the reply hit the output limit.'
     case 'spend_cap':
       return 'Turn stopped: the spend cap was reached.'
+    case 'loop_guard':
+      // ISS-113: was falling through to the generic `Turn ended (loop_guard).`
+      // row; the TUI names the guard (chat.turn.loop_guard), so the web
+      // transcript must not read it as an unexplained end.
+      return 'Turn stopped: the loop guard cut a repeating tool call.'
     case 'error':
       return error ? `Turn failed: ${error}` : 'Turn failed.'
     default:
