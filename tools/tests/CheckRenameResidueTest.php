@@ -121,6 +121,38 @@ final class CheckRenameResidueTest extends TestCase
         $this->assertSame(0, $result['rc'], $result['out']);
     }
 
+    public function testBrandProtectExemptsSiblingBrandAndEnvFromResidue(): void
+    {
+        $files = [
+            'keep.md' => "CandyAnsiInspect ships as candy-ansi-inspect with CANDY_ANSI_INSPECT_BIN\n",
+            'flag.md' => "brand CandyAnsi is stale\n",
+        ];
+        $entry = ['batch' => 'T', 'kind' => 'rename', 'old' => 'candy-ansi', 'new' => 'sugar-ansi-parser',
+            'ns_old' => 'Ansi', 'ns_new' => 'AnsiParser', 'type' => 'lib', 'bins' => [],
+            'protect' => ['candy-ansi-inspect'], 'status' => 'renamed'];
+        $brand = $entry;
+        $brand['brand_protect'] = true;
+
+        $with = $this->runTool($this->makeRepo($files), ['--old=candy-ansi'], $this->makeMap([$brand]));
+        $this->assertSame(1, $with['rc']);
+        $this->assertSame(
+            "flag.md:1: [R2] CandyAnsi\n"
+            . "check-rename-residue: 1 entries checked, 1 findings\n",
+            $with['out'],
+            'brand_protect must keep the sibling brand/env out of the findings',
+        );
+
+        $without = $this->runTool($this->makeRepo($files), ['--old=candy-ansi'], $this->makeMap([$entry]));
+        $this->assertSame(
+            "flag.md:1: [R2] CandyAnsi\n"
+            . "keep.md:1: [R2] CandyAnsi\n"
+            . "keep.md:1: [R5] CANDY_ANSI_\n"
+            . "check-rename-residue: 1 entries checked, 3 findings\n",
+            $without['out'],
+            'the default must keep folding uppercase continuations (batch F law)',
+        );
+    }
+
     public function testEveryRuleShapeIsCaughtWithItsTagAndLine(): void
     {
         $result = $this->runTool($this->makeRepo([

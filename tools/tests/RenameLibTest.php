@@ -188,6 +188,39 @@ final class RenameLibTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Case 6b — brand_protect: a SIBLING entity sharing the prefix keeps its
+    // Pascal brand and env prefix (candy-ansi vs candy-ansi-inspect), while
+    // the entry's own brand/prefix/env still fold. Without the flag (case
+    // 6c) the C.1 uppercase-continuation fold applies to everything —
+    // batch F's SugarCrushWeb -> CandyCodeWeb depends on that default.
+    // ------------------------------------------------------------------
+
+    public function testBrandProtectExemptsSiblingBrandAndEnv(): void
+    {
+        $root = $this->brandRepo();
+        $run = $this->runTool($root, 'candy-ansi', ['--map=' . $this->brandMap(true)]);
+        $this->assertSame(0, $run['rc'], $run['out']);
+
+        $readme = $this->read($root, 'sugar-ansi-parser/README.md');
+        $this->assertStringContainsString('SugarAnsiParser and CandyAnsiInspect', $readme, 'own brand folds, sibling brand stays');
+        $this->assertStringContainsString('SUGAR_ANSI_PARSER_TOKEN=1 CANDY_ANSI_INSPECT_BIN=2', $readme, 'own env prefix folds, sibling env prefix stays');
+        $this->assertStringContainsString('sugar-ansi-parser vs candy-ansi-inspect', $readme, 'R3 protect stays independent of brand_protect');
+        $this->assertStringContainsString('namespace SugarCraft\AnsiParser;', $this->read($root, 'sugar-ansi-parser/src/Parser.php'));
+    }
+
+    public function testWithoutBrandProtectSiblingFoldsByDefault(): void
+    {
+        $root = $this->brandRepo();
+        $run = $this->runTool($root, 'candy-ansi', ['--map=' . $this->brandMap(false)]);
+        $this->assertSame(0, $run['rc'], $run['out']);
+
+        $readme = $this->read($root, 'sugar-ansi-parser/README.md');
+        $this->assertStringContainsString('SugarAnsiParser and SugarAnsiParserInspect', $readme, 'default keeps the C.1 uppercase-continuation fold');
+        $this->assertStringContainsString('SUGAR_ANSI_PARSER_INSPECT_BIN', $readme);
+        $this->assertStringContainsString('candy-ansi-inspect', $readme, 'R3 protect still guards the slug itself');
+    }
+
+    // ------------------------------------------------------------------
     // Case 7 — @rename-keep line-skip.
     // ------------------------------------------------------------------
 
@@ -530,6 +563,50 @@ final class RenameLibTest extends TestCase
         $this->assertIsString($contents, "expected readable $rel");
 
         return $contents;
+    }
+
+    /**
+     * Sibling-brand fixture repo for cases 6b/6c: our parser lib next to a
+     * DIFFERENT lib whose slug/brand/env prefix extends ours.
+     */
+    private function brandRepo(): string
+    {
+        return $this->makeRepo([
+            'candy-ansi/composer.json' => <<<'JSON'
+                {"name":"sugarcraft/candy-ansi","description":"fixture","autoload":{"psr-4":{"SugarCraft\\Ansi\\":"src/"}}}
+                JSON . "\n",
+            'candy-ansi/src/Parser.php' => <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace SugarCraft\Ansi;
+
+                final class Parser
+                {
+                }
+                PHP . "\n",
+            'candy-ansi/README.md' => "CandyAnsi and CandyAnsiInspect tools\nexport CANDY_ANSI_TOKEN=1 CANDY_ANSI_INSPECT_BIN=2\npkg candy-ansi vs candy-ansi-inspect\n",
+        ]);
+    }
+
+    /** @return string absolute path of a throwaway map outside any repo */
+    private function brandMap(bool $brandProtect): string
+    {
+        $dir = $this->makeTmpTree('brand-map-');
+        $this->dirs[] = $dir;
+        $entry = [
+            'batch' => 'T', 'kind' => 'rename', 'old' => 'candy-ansi', 'new' => 'sugar-ansi-parser',
+            'ns_old' => 'Ansi', 'ns_new' => 'AnsiParser', 'type' => 'lib', 'bins' => new \stdClass(),
+            'protect' => ['candy-ansi-inspect'], 'status' => 'pending',
+        ];
+        if ($brandProtect) {
+            $entry['brand_protect'] = true;
+        }
+        $path = "$dir/map.json";
+        file_put_contents($path, json_encode(['entries' => [$entry]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return $path;
     }
 
     private function shineRepo(): string

@@ -181,11 +181,11 @@ final class CheckRenameResidue
         if ($d['ns_old'] !== '' && $d['ns_old'] !== $d['ns_new']) {
             $rules[] = ['tag' => 'R1', 'pattern' => '#SugarCraft(\\\\+)' . preg_quote((string) $d['ns_old'], '#') . '(?![A-Za-z0-9_])#'];
         }
-        $rules[] = ['tag' => 'R2', 'pattern' => '#(?<![A-Za-z0-9_])' . preg_quote((string) $d['pascal_old'], '#') . '(?![a-z0-9])#'];
+        $rules[] = ['tag' => 'R2', 'pattern' => RenameLib::r2Pattern($d)];
         $rules[] = ['tag' => 'R3', 'pattern' => RenameLib::r3Pattern($d)];
         $rules[] = ['tag' => 'R4', 'pattern' => RenameLib::r4Pattern($d)];
         foreach ($d['env_old_prefixes'] as $prefix) {
-            $rules[] = ['tag' => 'R5', 'pattern' => '#(?<![A-Za-z0-9_])' . preg_quote((string) $prefix, '#') . '(?=[A-Z0-9])#'];
+            $rules[] = ['tag' => 'R5', 'pattern' => RenameLib::r5Pattern($d, (string) $prefix)];
         }
         foreach (array_keys((array) $d['extra_literals']) as $literal) {
             if (is_string($literal) && $literal !== '') {
