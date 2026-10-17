@@ -30,3 +30,8 @@ NEVER tag any line inside candy-log/** (all files — self-lock sentinel would s
 ## Steps log
 
 - (pending) R0 baseline re-measure.
+- R0 (base 6709f44bd, linked vendor): candy-log 190T/372A EXACT vs record + D7 re-measure. <!-- @rename-keep -->
+- tag-prep e4ad2f68d (8 files, 8 lines incl CONTEXT :975, baseline :45, D-weld REPORT :24, crush backlog :13592, monorepo-audit :79/:86, resume_prompt :74, pr_charmbracelet_log :29) + notes-self-lock 0ea169bbe (NOTES old-token lines tagged; tool preflight requires clean tree → NOTES hygiene must commit BEFORE dry-run). <!-- @rename-keep -->
+- R1 dry-run: 95 content files / 10+1 paths; R2=27 R3=242 R6=1 (R6 'log'→'log' idempotent — ns unchanged); zero R4/R5/R7 hits; `candy-logo`/`candy-logger` FPs boundary-safe (verified untouched). R3 tool run rc=0; php -l all changed clean. R2-remote/remote ops skipped per brief law.
+- R4 manual sweeps: (a) glued `plan_candy-log.md` ×9 (findings_resume_plan ×8, plan.md ×1) + `sugarcraft_candy-log.md` ×2 (update_sugarcraft_sugar-log) — content lookbehind `_` blindspot, rewritten to new file names (paths themselves auto-moved); (b) **NEW BLINDSPOT: U+2011 non-breaking hyphen `candy‑log` ×2 in php74_branch.md :303/:463** — R3 is ASCII-hyphen, evaded tool + residue; flipped to `sugar‑log` (NB char preserved); (c) Formerly notice added post-move to sugar-log/README.md (colorprofile form, keep-tagged); no ns-change line (ns unchanged); (d) PROJECT_NAMES has no lib row (generic prefix table "Log, Trail, Trace" untouched — generic word).
+- renames.json :51 pending→renamed via targeted sed on own line; gen-docs after flip → redirect stub docs/lib/candy-log.html (generator self-keeps) + 99 files regenerated. <!-- @rename-keep -->

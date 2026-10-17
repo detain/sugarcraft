@@ -291,7 +291,7 @@ Textual is a **sister project** to the Charmbracelet ecosystem (bubbletea, lipgl
 | `command.CommandPalette`, `Provider` | `sugar-cli/` | Command palette system |
 | `binding.Binding` | `candy-scriptui/` | Key binding configuration |
 | `Pilot` (testing) | `candy-vcr/` | Testing infrastructure |
-| `Logger` + `log()` | `candy-log/` | Logging system |
+| `Logger` + `log()` | `sugar-log/` | Logging system |
 | Web driver/rendering | _no equivalent_ | Browser-based TUI (unique to textual) |
 | `signal.Signal` | _partial in candy-core_ | Event signals |
 

@@ -29,7 +29,7 @@ declare(strict_types=1);
 // -----------------------------------------------------------------------
 // OPT-IN: Panic handler — uncomment to catch uncaught exceptions and
 // display a styled backtrace on crash.  Run `composer require
-// sugarcraft/candy-log` first; in a monorepo add a path-repo to
+// sugarcraft/sugar-log` first; in a monorepo add a path-repo to
 // composer.json repositories[] as well.
 // -----------------------------------------------------------------------
 // use SugarCraft\Log\Log;

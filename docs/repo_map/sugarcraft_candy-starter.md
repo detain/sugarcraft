@@ -474,7 +474,7 @@ This searches two locations (sibling `vendor/` and parent `vendor/`) so the scri
 // Log::installPanicHandler();
 ```
 
-The `bin/start` comments out the panic handler, making it opt-in. This keeps the default experience clean while documenting that `candy-log` support exists.
+The `bin/start` comments out the panic handler, making it opt-in. This keeps the default experience clean while documenting that `sugar-log` support exists.
 
 ---
 

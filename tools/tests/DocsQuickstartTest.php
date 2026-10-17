@@ -39,7 +39,7 @@ declare(strict_types=1);
  * (candy-ansi `AnsiState`, sugar-dashboard's `Layout\StackedGrid`, candy-kv's
  * `Backend\MemoryStore`), invented methods (candy-git-server `Repo::create()` and
  * `SSHServer::listen()`, sugar-datepicker `withMinDate()`, candy-mail `from()`),
- * wrong arguments (sugar-video `cols:`/`rows:`, candy-log `with('k', 'v')`), a
+ * wrong arguments (sugar-video `cols:`/`rows:`, sugar-log `with('k', 'v')`), a
  * private constructor (sugar-table `new Table()`), and two `Model`
  * implementations without `subscriptions()` (candy-core, sugar-widgets). The
  * argument-type check came later. candy-sql's programmatic sample handed

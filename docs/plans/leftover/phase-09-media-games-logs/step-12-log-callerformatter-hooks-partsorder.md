@@ -1,6 +1,6 @@
-# Step 09.12 — candy-log CallerFormatter + slog/PSR-3 + hooks + PartsOrder
+# Step 09.12 — sugar-log CallerFormatter + slog/PSR-3 + hooks + PartsOrder
 
-**Source:** `leftover_updates_later.md` candy-log §4.1 #7-10
+**Source:** `leftover_updates_later.md` sugar-log §4.1 #7-10
 **Branch:** `ai/log-caller-hooks-partsorder`
 
 ## Deliverable
@@ -15,10 +15,10 @@ Four enhancements:
 
 **Create:**
 
-- `candy-log/src/CallerFormatter.php`.
-- `candy-log/src/PsrBridge.php`.
-- `candy-log/src/Hook/Hook.php` (interface) + `HookRegistry.php`.
-- `candy-log/src/PartsOrder.php` (config DTO).
+- `sugar-log/src/CallerFormatter.php`.
+- `sugar-log/src/PsrBridge.php`.
+- `sugar-log/src/Hook/Hook.php` (interface) + `HookRegistry.php`.
+- `sugar-log/src/PartsOrder.php` (config DTO).
 
 ## Tests
 
@@ -26,7 +26,7 @@ Four enhancements:
 
 ## Acceptance
 
-- `cd candy-log && vendor/bin/phpunit` green.
+- `cd sugar-log && vendor/bin/phpunit` green.
 
 ---
 

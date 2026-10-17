@@ -567,7 +567,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 ### Related Libraries
 
-- `candy-log` — Logging primitives (observability sibling — different axis)
+- `sugar-log` — Logging primitives (observability sibling — different axis)
 
 - `candy-core` — Provides `SugarCraft\Core\I18n\Lang` which `candy-metrics\Lang` extends
 

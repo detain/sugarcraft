@@ -31,7 +31,7 @@
 | [charmbracelet/harmonica](#charmbraceletharmonica) | Go | 1530 | sugar-spring |
 | [charmbracelet/huh](#charmbracelethuh) | Go | ~2800 | sugar-forms, sugar-widgets, sugar-markdown |
 | [charmbracelet/lipgloss](#charmbraceletlipgloss) | Go | ~3500 | candy-sprinkles |
-| [charmbracelet/log](#charmbraceletlog) | Go | ~700 | candy-log |
+| [charmbracelet/log](#charmbraceletlog) | Go | ~700 | sugar-log |
 | [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-scriptui |
 | [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, sugar-forms |
 | [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | candy-mail, candy-scriptui, sugar-markdown |
@@ -345,7 +345,7 @@
 **SugarCraft Mapping:**
 - `sugar-cli` → Primary port (Output, Banner, Section, Stage, HelpText)
 - `sugar-markdown` → Styling
-- `candy-log` → Colored output
+- `sugar-log` → Colored output
 
 ---
 
@@ -520,9 +520,9 @@
 **Features:** 6 log levels, atomic level checking, string builder pooling, sub-logger pattern, slog.Handler implementation.
 
 **SugarCraft Mapping:**
-- `candy-log` → Primary port
+- `sugar-log` → Primary port
 
-**Note:** Port exists as `candy-log` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `sugar-log` (🟢 in MATCHUPS.md).
 
 ---
 

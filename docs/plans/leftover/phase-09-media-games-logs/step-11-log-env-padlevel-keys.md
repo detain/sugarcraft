@@ -1,6 +1,6 @@
-# Step 09.11 — candy-log env detection (via palette) + PadLevelText + level values + key styles
+# Step 09.11 — sugar-log env detection (via palette) + PadLevelText + level values + key styles
 
-**Source:** `leftover_updates_later.md` candy-log §4.1 #1-4
+**Source:** `leftover_updates_later.md` sugar-log §4.1 #1-4
 **Branch:** `ai/log-env-padlevel-keys`
 
 ## Deliverable
@@ -15,10 +15,10 @@
 
 **Modify:**
 
-- `candy-log/src/Logger.php` — Probe-driven color decision.
-- `candy-log/src/Level.php` — numeric values.
-- `candy-log/src/Styles.php` — Keys map.
-- `candy-log/composer.json` — add `sugarcraft/sugar-colorprofile`.
+- `sugar-log/src/Logger.php` — Probe-driven color decision.
+- `sugar-log/src/Level.php` — numeric values.
+- `sugar-log/src/Styles.php` — Keys map.
+- `sugar-log/composer.json` — add `sugarcraft/sugar-colorprofile`.
 
 ## Tests
 
@@ -26,7 +26,7 @@
 
 ## Acceptance
 
-- `cd candy-log && vendor/bin/phpunit` green.
+- `cd sugar-log && vendor/bin/phpunit` green.
 
 ---
 

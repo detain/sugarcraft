@@ -64,7 +64,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 **15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy).
 
 ### Deferred to future plan
-See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
+See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, sugar-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
 
 ---
 

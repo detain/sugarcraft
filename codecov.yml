@@ -155,8 +155,8 @@ flag_management:
     - name: sugar-treelist
       paths: ["sugar-treelist/src/**"]
       carryforward: true
-    - name: candy-log
-      paths: ["candy-log/src/**"]
+    - name: sugar-log
+      paths: ["sugar-log/src/**"]
       carryforward: true
     - name: sugar-colorprofile
       paths: ["sugar-colorprofile/src/**"]
@@ -463,12 +463,12 @@ component_management:
         - "sugar-treelist/src/**"
       flag_regexes:
         - "^sugar-treelist$"
-    - component_id: candy-log
-      name: candy-log
+    - component_id: sugar-log
+      name: sugar-log
       paths:
-        - "candy-log/src/**"
+        - "sugar-log/src/**"
       flag_regexes:
-        - "^candy-log$"
+        - "^sugar-log$"
     - component_id: sugar-colorprofile
       name: sugar-colorprofile
       paths:

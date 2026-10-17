@@ -48,11 +48,11 @@ Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async):
 
 ## Active Items
 
-_All items in this section have been resolved by the completion of steps 20–40 (PRs #899–#920 merged). Step-15 (sugar-forms) was confirmed complete (PRs #870, #895) — all 7 namespace imports map to candy-* packages; 709 tests pass; no sugar-* dependencies remain. Step-37 catch-all confirmed no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, sugar-mouse, candy-starter). See the Resolved Items section below for the full archive._
+_All items in this section have been resolved by the completion of steps 20–40 (PRs #899–#920 merged). Step-15 (sugar-forms) was confirmed complete (PRs #870, #895) — all 7 namespace imports map to candy-* packages; 709 tests pass; no sugar-* dependencies remain. Step-37 catch-all confirmed no further actionable libs. 4 items deferred to followups (candy-metrics, sugar-log, sugar-mouse, candy-starter). See the Resolved Items section below for the full archive._
 
 ## Resolved Items
 
-- [RESOLVED | 2026-06-01 | step-41 | scribe] All Active Items drained — steps 20–40 complete (PRs #899–#920 merged). Step-15 (sugar-forms) confirmed complete — PRs #870, #895 wired sugar-forms onto shared foundations; step-37 verified no further actionable libs. 4 items deferred to followups (candy-metrics, candy-log, sugar-mouse, candy-starter).
+- [RESOLVED | 2026-06-01 | step-41 | scribe] All Active Items drained — steps 20–40 complete (PRs #899–#920 merged). Step-15 (sugar-forms) confirmed complete — PRs #870, #895 wired sugar-forms onto shared foundations; step-37 verified no further actionable libs. 4 items deferred to followups (candy-metrics, sugar-log, sugar-mouse, candy-starter).
 
 - [RESOLVED | 2026-06-01 | step-35 | coder] candy-codetime + candy-mail + candy-git-server: adopt candy-async — MERGED PR #915:
   - candy-codetime: added CancellationToken support to Store::append()
@@ -163,7 +163,7 @@ _All items in this section have been resolved by the completion of steps 20–40
 - [2026-06-01 | step-37 | shipper] NO-OP — step-37 catch-all: deferral sweep complete, no remaining actionable libs — MERGED PR #917:
   - Branch ai/sweep-catchall merged to master
   - 1 file changed, 8 insertions(+) in docs/repo_map_update_followups.md (DEFERRED notes only, no source code changes)
-  - All 4 remaining libs from step-30 audit have DEFERRED status in followups (candy-pty, sugar-mouse, candy-metrics, candy-log, candy-starter)
+  - All 4 remaining libs from step-30 audit have DEFERRED status in followups (candy-pty, sugar-mouse, candy-metrics, sugar-log, candy-starter)
   - No source code changes; PR is documentation-only marker for end of actionable migration work
   - Commit SHA: 237fad86
 
