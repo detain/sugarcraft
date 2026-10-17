@@ -1,8 +1,10 @@
 /**
  * Per-viewer conveniences in localStorage — drafts, layout, theme. Every
  * access is guarded: storage can be absent, full or blocked (private mode,
- * cleared site data), and the UI must work the same without it. Never a
- * credential: the session cookie is HttpOnly and the token is never kept.
+ * cleared site data), and the UI must work the same without it. The token is
+ * never kept here; the one secret that is (the login secret, ISS-007, stored
+ * by `protocol/auth.ts` under its own key) is origin-scoped, minted by this
+ * very sign-in, and useless without the HttpOnly cookie beside it.
  */
 const PREFIX = 'candy-code-web:'
 
