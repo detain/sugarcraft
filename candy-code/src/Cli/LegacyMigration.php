@@ -32,7 +32,7 @@ use SugarCraft\Code\Support\HomeDirectory;
  * match the moved bytes) rather than trusting this paragraph.
  *
  * WHY A RUNNING SERVER BLOCKS THE MOVE. A live pre-rename server holds
- * `~/.sugar-crush/server/server.lock` via `flock` and has paths under the old
+ * `~/.sugar-crush/server/server.lock` via `flock` and has paths under the old  @rename-keep
  * directory open; moving the directory out from under it would split its
  * state across two trees. `LegacyPaths::migrate` never merges, so a second
  * partial launch would also be unrecoverable — refusing with an actionable
