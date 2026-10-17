@@ -206,6 +206,109 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $this->assertSame(['Bash'], $preset->disallowedTools);
     }
 
+    public function testDiscoverClaudeSplitsCommaSeparatedSkillAndServerStrings(): void
+    {
+        // ISS-086: the `(array)` cast made `skills: a, b` ONE name no skill
+        // can match, and AgentManager fail-closes every Task to the agent on
+        // the unknown skill. Same grammar as `tools:` above, same split.
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/csv-grants';
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'csvg',
+            "description: CSV grants\nskills: php-best-practices, security-audit\nmcpServers: alpha, beta",
+        );
+
+        $preset = $registry->discoverClaude($projectRoot)['csvg'];
+
+        $this->assertSame(['php-best-practices', 'security-audit'], $preset->skills);
+        $this->assertSame(['alpha', 'beta'], $preset->mcpServers);
+        $this->assertSame([], $registry->warnings(), 'well-formed CSV must cost nothing');
+    }
+
+    public function testDiscoverClaudeKeepsInlineServerDefinitionNamesAndWarns(): void
+    {
+        // ISS-086: Claude files may define a server inline. AgentPreset
+        // carries allow-list NAMES only — the name survives, the loss is
+        // recorded, and the scalar-keyed form (alpha: true) names the server
+        // through its key without any loss to report.
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/inline-servers';
+        $this->writeAgent($projectRoot . '/.claude/agents', 'inl', <<<'YAML'
+            description: Inline servers
+            mcpServers:
+              alpha: true
+              filesystem:
+                command: npx
+            YAML);
+
+        $preset = $registry->discoverClaude($projectRoot)['inl'];
+
+        $this->assertSame(['alpha', 'filesystem'], $preset->mcpServers);
+        $this->assertCount(1, $registry->warnings());
+        $this->assertStringContainsString('mcpServers.filesystem', $registry->warnings()[0]);
+        $this->assertStringContainsString('inline definition', $registry->warnings()[0]);
+    }
+
+    public function testDiscoverClaudeReadsQuotedFalseBackgroundAsFalse(): void
+    {
+        // ISS-086: `(bool) "false"` is TRUE — the cast gave a quoted word the
+        // exact opposite of what its author wrote.
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/bool-words';
+        $this->writeAgent($projectRoot . '/.claude/agents', 'quoted-false', "description: q\background: \"false\"");
+        $this->writeAgent($projectRoot . '/.claude/agents', 'word-yes', "description: y\nbackground: yes");
+        $this->writeAgent($projectRoot . '/.claude/agents', 'absent', 'description: a');
+
+        $presets = $registry->discoverClaude($projectRoot);
+
+        $this->assertFalse($presets['quoted-false']->background);
+        $this->assertTrue($presets['word-yes']->background);
+        $this->assertFalse($presets['absent']->background, 'an absent key is a default, not junk to warn about');
+        $this->assertSame([], $registry->warnings());
+    }
+
+    public function testDiscoverClaudeReadsUnspellableBackgroundAsFalseAndWarns(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/bool-junk';
+        $this->writeAgent($projectRoot . '/.claude/agents', 'odd', "description: o\nbackground: maybe");
+
+        $preset = $registry->discoverClaude($projectRoot)['odd'];
+
+        $this->assertFalse($preset->background, 'the conservative reading: foreground, not background');
+        $this->assertCount(1, $registry->warnings());
+        $this->assertStringContainsString('background was string', $registry->warnings()[0]);
+    }
+
+    public function testDiscoverClaudeDropsJunkNameEntriesWithWarnings(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/junk-names';
+        $this->writeAgent($projectRoot . '/.claude/agents', 'mixed', "description: m\nskills:\n  - good\n  - 42");
+        $this->writeAgent($projectRoot . '/.claude/agents', 'scalar', "description: s\nskills: 5");
+
+        $presets = $registry->discoverClaude($projectRoot);
+
+        $this->assertSame(['good'], $presets['mixed']->skills);
+        $this->assertSame([], $presets['scalar']->skills);
+        $this->assertCount(2, $registry->warnings(), implode(' || ', $registry->warnings()));
+        $this->assertStringContainsString('entry was int', $registry->warnings()[0]);
+        $this->assertStringContainsString('was int, not a list of names', $registry->warnings()[1]);
+    }
+
+    public function testOpencodeCommaSeparatedSkillsSplitToo(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/oc-csv-skills';
+        $this->writeAgent($projectRoot . '/.opencode/agents', 'csv', "description: d\nskills: alpha, beta");
+
+        $preset = $registry->discoverOpencode($projectRoot)['csv'];
+
+        $this->assertSame(['alpha', 'beta'], $preset->skills);
+        $this->assertSame([], $registry->warnings());
+    }
+
     public function testDiscoverClaudeFallsBackToDefaultsForUnknownEnumValues(): void
     {
         $registry = new ForeignAgentPresetRegistry();

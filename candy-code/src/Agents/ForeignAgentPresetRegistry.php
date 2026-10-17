@@ -148,6 +148,17 @@ final class ForeignAgentPresetRegistry
     /** Strictest-wins ordering used when one tool picks up several decisions. */
     private const DECISION_RANK = ['allow' => 0, 'ask' => 1, 'deny' => 2];
 
+    /**
+     * YAML boolean spellings accepted for foreign scalar flags (ISS-086).
+     * Same roster as {@see \SugarCraft\Code\Skills\SkillFrontmatter}'s
+     * private twin; a quoted `background: "false"` is the word, not the
+     * truth — `(bool)` would have made it true.
+     */
+    private const TRUE_WORDS = ['true', 'yes', 'on', '1'];
+
+    /** @see TRUE_WORDS */
+    private const FALSE_WORDS = ['false', 'no', 'off', '0', ''];
+
     /** @var list<string> Lossy-mapping notices from the most recent discover* call. */
     private array $warnings = [];
 
@@ -485,9 +496,11 @@ final class ForeignAgentPresetRegistry
 
     /**
      * Map Claude Code subagent frontmatter onto an AgentPreset. The key names
-     * already line up field-for-field; only `tools`/`disallowedTools` need
-     * normalising, because Claude Code accepts them as a comma-separated
-     * string as well as a list.
+     * already line up field-for-field; `tools`/`disallowedTools`, `skills` and
+     * `mcpServers` need normalising because Claude Code accepts them as a
+     * comma-separated string as well as a list, `mcpServers` additionally
+     * arrives as inline server definitions (ISS-086), and `background` needs
+     * a strict bool parse for the same reason.
      *
      * Claude Code writes a subagent's system prompt as the markdown BODY, so
      * $body is the prompt whenever no `initialPrompt:` key declares one; a
@@ -497,18 +510,20 @@ final class ForeignAgentPresetRegistry
      */
     private function claudePreset(array $data, string $fallbackName, string $body = ''): AgentPreset
     {
+        $agentName = isset($data['name']) ? (string) $data['name'] : $fallbackName;
+
         return new AgentPreset(
-            name: isset($data['name']) ? (string) $data['name'] : $fallbackName,
+            name: $agentName,
             description: isset($data['description']) ? (string) $data['description'] : '',
             tools: $this->toolList($data['tools'] ?? []),
             disallowedTools: $this->toolList($data['disallowedTools'] ?? $data['disallowed-tools'] ?? []),
             model: isset($data['model']) ? (string) $data['model'] : 'inherit',
             permissionMode: $this->enum(PermissionMode::class, $data['permissionMode'] ?? null) ?? PermissionMode::Default,
             maxTurns: isset($data['maxTurns']) ? (int) $data['maxTurns'] : null,
-            skills: (array) ($data['skills'] ?? []),
-            mcpServers: (array) ($data['mcpServers'] ?? []),
+            skills: $this->importNameList($data['skills'] ?? null, 'claude', $agentName, 'skills'),
+            mcpServers: $this->importNameList($data['mcpServers'] ?? null, 'claude', $agentName, 'mcpServers'),
             memory: $this->enum(MemoryScope::class, $data['memory'] ?? null) ?? MemoryScope::User,
-            background: (bool) ($data['background'] ?? false),
+            background: $this->strictFlag($data['background'] ?? null, 'claude', $agentName, 'background'),
             effort: $this->enum(Effort::class, $data['effort'] ?? null),
             isolation: $this->enum(Isolation::class, $data['isolation'] ?? null),
             color: isset($data['color']) ? (string) $data['color'] : null,
@@ -538,7 +553,7 @@ final class ForeignAgentPresetRegistry
             tools: $allowed,
             disallowedTools: $denied,
             model: isset($data['model']) ? (string) $data['model'] : 'inherit',
-            skills: (array) ($data['skills'] ?? []),
+            skills: $this->importNameList($data['skills'] ?? null, 'opencode', $fallbackName, 'skills'),
             initialPrompt: self::resolveInitialPrompt($data['prompt'] ?? null, $body),
             source: SkillSource::Opencode,
         );
@@ -756,6 +771,147 @@ final class ForeignAgentPresetRegistry
         }
 
         return $names;
+    }
+
+    /**
+     * Normalise a foreign `skills:`/`mcpServers:` value to a list of names
+     * (ISS-086).
+     *
+     * Claude Code writes both keys as a comma-separated string as readily as
+     * a YAML list, and writes `mcpServers:` inline DEFINITIONS (name =>
+     * launch config) as readily as bare allow-list names. The `(array)` cast
+     * this replaces handled none of that grammar: a comma string became ONE
+     * name no skill can match — and AgentManager then fail-closes every Task
+     * to that agent on the unknown skill, the loud failure this split turns
+     * into the intended grant — while a definition map cast to a list of
+     * ARRAYS, which AgentPreset cannot carry at all.
+     *
+     * {@see AgentPresetRegistry::nameList()} is the native twin of this
+     * reader; it THROWS on junk and the whole file is skipped. Foreign
+     * imports keep this class's standing rule instead — one bad line must not
+     * cost the operator the agent — so every refusal here is a recorded
+     * warning and a dropped element.
+     *
+     * @return list<string>
+     */
+    private function importNameList(mixed $value, string $dialect, string $agentName, string $key): array
+    {
+        if ($value === null) {
+            return [];
+        }
+
+        $items = is_string($value) ? explode(',', $value) : $value;
+        if (!is_array($items)) {
+            $this->warn(sprintf(
+                '%s agent "%s": %s was %s, not a list of names — ignored.',
+                $dialect,
+                $agentName,
+                $key,
+                get_debug_type($value),
+            ));
+
+            return [];
+        }
+
+        $names = [];
+        foreach ($items as $name => $item) {
+            if (is_string($item)) {
+                $listed = trim($item);
+                if ($listed !== '') {
+                    $names[] = $listed;
+                }
+
+                continue;
+            }
+
+            if (is_array($item)) {
+                // An inline server definition. AgentPreset carries allow-list
+                // NAMES only; the launch config belongs to the server file,
+                // not the agent. Keeping the name preserves what the author
+                // allowed; the warning records what the import could not.
+                $defined = is_string($name) && trim($name) !== ''
+                    ? trim($name)
+                    : (isset($item['name']) && is_string($item['name']) ? trim($item['name']) : '');
+                if ($defined !== '') {
+                    $names[] = $defined;
+                    $this->warn(sprintf(
+                        '%s agent "%s": %s.%s was an inline definition — imported as the name "%s"; AgentPreset carries the allow list only, not the server config.',
+                        $dialect,
+                        $agentName,
+                        $key,
+                        $defined,
+                        $defined,
+                    ));
+                    continue;
+                }
+
+                $this->warn(sprintf(
+                    '%s agent "%s": %s had a nested entry with no readable name — dropped.',
+                    $dialect,
+                    $agentName,
+                    $key,
+                ));
+                continue;
+            }
+
+            // `mcpServers:\n  alpha: true` still names the server in its key.
+            if (is_string($name) && trim($name) !== '') {
+                $names[] = trim($name);
+                continue;
+            }
+
+            $this->warn(sprintf(
+                '%s agent "%s": %s entry was %s, not a name — dropped.',
+                $dialect,
+                $agentName,
+                $key,
+                get_debug_type($item),
+            ));
+        }
+
+        return $names;
+    }
+
+    /**
+     * Parse a foreign boolean strictly (ISS-086). `(bool) "false"` is TRUE,
+     * and quoted booleans are a routine authoring mistake; the word rosters
+     * decide instead, case-insensitively. Anything unrecognised reads FALSE —
+     * the conservative direction: the agent runs where it was asked rather
+     * than being parked in the background on a typo — and is recorded.
+     */
+    private function strictFlag(mixed $value, string $dialect, string $agentName, string $key): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $word = match (true) {
+            is_string($value) => strtolower(trim($value)),
+            is_int($value) => (string) $value,
+            default => "\0",
+        };
+
+        if (in_array($word, self::TRUE_WORDS, true)) {
+            return true;
+        }
+
+        if (in_array($word, self::FALSE_WORDS, true)) {
+            return false;
+        }
+
+        $this->warn(sprintf(
+            '%s agent "%s": %s was %s, not a boolean — read as false.',
+            $dialect,
+            $agentName,
+            $key,
+            get_debug_type($value),
+        ));
+
+        return false;
     }
 
     /**
