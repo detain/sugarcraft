@@ -545,9 +545,18 @@ reason each stays out:
   rule `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge` into Read,
   Edit, Write, ApplyPatch, Glob and Grep, which deliver the rule in their tool output on the first touch of a
   matching file. The nudge re-walks the rules on every consult, so a scoped rule added or edited
-  mid-session is delivered too. The other two are not applied: `KeywordTrigger` and
+  mid-session is delivered too. `keywords:` is still not applied: `KeywordTrigger` and
   `IntentTrigger` have no consumer in `src/`, so a `keywords:`- or `description:`-only rule
-  renders into every session; and `Rule::$models` is parsed and read by nothing. Framing and
+  renders into every session — but what is ignored is now NAMED, not silent: the
+  `FrontmatterKeyAudit` `INERT[RULE]` roster carries `keywords` (and `models` for the reason
+  below), so a rule file declaring either gets an audit row at launch. The `models:` half
+  shipped its mechanism (ISS-068): `RuleLoader::matchesSessionModel()` judges a rule's
+  `models:` globs against the session model — case-insensitive `fnmatch` against both the
+  full identifier and the part after its last `/` — and `load()` drops the rule when the
+  model is known and no pattern matches. The loader takes the session model as an optional
+  constructor operand; no production call site threads one yet (the seam is the `RuleLoader`
+  construction in `Runtime::buildSystemPrompt()`), and until that lands `models` stays in
+  `INERT[RULE]`, which states exactly that. Framing and
   escape are tier-blind, so this is a scoping gap, not a safety gap — named in the code comment,
   not hidden.
 - **The agent-side second assembler.** `Agents\Agent::systemPrompt()` renders its own copy of the

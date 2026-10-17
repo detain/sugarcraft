@@ -783,6 +783,83 @@ final class RuleLoaderTest extends TestCase
         );
     }
 
+    // -- Model-scoped rules (ISS-068) ------------------------------------------
+
+    public function testARuleScopedToAnotherModelIsDroppedWhenTheSessionModelIsKnown(): void
+    {
+        $root = $this->scopedRulesRepo();
+
+        $loaded = (new RuleLoader($root, sessionModel: 'sglang/qwen3-coder'))->load();
+
+        self::assertSame(['unscoped', 'qwen-family', 'qwen-exact'], $this->ruleNames($loaded));
+    }
+
+    public function testASessionModelMatchesTheBareIdentifierBehindAProviderPrefix(): void
+    {
+        $root = $this->scopedRulesRepo();
+
+        // `models: qwen3-coder` and session `sglang/qwen3-coder` are the same
+        // model spelled with and without the provider — both directions of
+        // the prefix must answer to each other.
+        $loaded = (new RuleLoader($root, sessionModel: 'qwen3-coder'))->load();
+
+        self::assertContains('qwen-exact', $this->ruleNames($loaded));
+    }
+
+    public function testModelPatternsAreCaseInsensitiveGlobs(): void
+    {
+        $root = $this->scopedRulesRepo();
+
+        $loaded = (new RuleLoader($root, sessionModel: 'OpenAI/GPT-4o'))->load();
+
+        self::assertContains('gpt-scoped', $this->ruleNames($loaded));
+    }
+
+    public function testAnUnscopedRuleLoadsWhateverTheSessionModelIs(): void
+    {
+        $root = $this->scopedRulesRepo();
+
+        $loaded = (new RuleLoader($root, sessionModel: 'nothing-matches-this'))->load();
+
+        self::assertSame(['unscoped'], $this->ruleNames($loaded));
+    }
+
+    public function testASessionModelOfNullIncludesScopedRulesAsBefore(): void
+    {
+        $root = $this->scopedRulesRepo();
+
+        // No model to compare against must not silently retire standing
+        // guidance — the silent drop is the ISS-068 defect itself.
+        $loaded = (new RuleLoader($root))->load();
+
+        self::assertContains('qwen-family', $this->ruleNames($loaded), 'the loader without a session model behaves exactly as before the gate');
+        self::assertContains('gpt-scoped', $this->ruleNames($loaded));
+    }
+
+    public function testAKnowledgeOfTheSessionModelDoesNotResurrectADisabledRule(): void
+    {
+        $root = $this->sandbox . '/repo-off';
+        $rules = $root . '/.candy-code/rules';
+        mkdir($rules, 0o755, true);
+        $this->emitRule($rules . '/off.md', "---\nname: off\nenabled: false\nmodels:\n  - qwen*\n---\nO\n");
+
+        self::assertSame([], (new RuleLoader($root, sessionModel: 'qwen3-coder'))->load());
+    }
+
+    /** @return string repo root whose single project tier holds the fixture set */
+    private function scopedRulesRepo(): string
+    {
+        $root = $this->sandbox . '/repo-models-' . uniqid();
+        $rules = $root . '/.candy-code/rules';
+        mkdir($rules, 0o755, true);
+        $this->emitRule($rules . '/1-unscoped.md', "---\nname: unscoped\n---\nU\n");
+        $this->emitRule($rules . '/2-qwen-family.md', "---\nname: qwen-family\nmodels:\n  - qwen3*\n---\nQ\n");
+        $this->emitRule($rules . '/3-qwen-exact.md', "---\nname: qwen-exact\nmodels: qwen3-coder\n---\nE\n");
+        $this->emitRule($rules . '/4-gpt-scoped.md', "---\nname: gpt-scoped\nmodels:\n  - gpt-4o\n---\nG\n");
+
+        return $root;
+    }
+
     // -- Rule value object immutability / fail-fast ---------------------------
 
     public function testWithReturnsANewInstanceAndLeavesTheOriginalUntouched(): void

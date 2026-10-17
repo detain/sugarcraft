@@ -25,7 +25,11 @@ use SugarCraft\Code\Support\Frontmatter;
  * (the `---` fence, scalar coercion, list-of-scalars) is {@see Frontmatter},
  * reached through the same single fenced-block read {@see \SugarCraft\Code\Commands\CommandSpec::fromFile()}
  * uses, so a rules file and a command file cannot disagree about what a block
- * of YAML means.
+ * of YAML means. Of these, `models` is acted on outside this class: since
+ * ISS-068 {@see RuleLoader::matchesSessionModel()} judges it against the
+ * session model at emission; `keywords` reaches {@see $triggers} and awaits
+ * the wiring named below, its inertness announced at launch by
+ * {@see \SugarCraft\Code\Support\FrontmatterKeyAudit}.
  *
  * THE TRIGGERS ARE BUILT, NOT FIRED. P6.S1 shipped {@see KeywordTrigger},
  * {@see PathTrigger} and {@see IntentTrigger} unwired precisely so this class

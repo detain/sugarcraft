@@ -244,11 +244,13 @@ final class RuleLoader
      * @param string           $repoRoot       The checkout these tiers are anchored to - the project and root tiers resolve inside it, the user tier does not use it.
      * @param bool|null        $reportRefusals Force stderr reporting on (true) or off (false); null (every production caller) lets {@see DEBUG_RULES_REFUSALS_ENV} decide. Present so a test can exercise the reporting half without a leaking putenv().
      * @param RulesState|null  $rulesState     The session's rulebook toggle set, applied inside {@see load()} through {@see RulesState::effectiveRule()}. Null - which is what every caller that predates P6.S3 passes and what a test gets by default - means no pack is turned off, so `load()` behaves exactly as it did before this operand existed. It is a constructor argument rather than a `load()` parameter because the set is a fact about the SESSION, and the loader outlives one call: `Runtime::buildSystemPrompt()` constructs one per prompt build and the toggles must survive every tier walk it makes.
+     * @param string|null      $sessionModel   The model this session is running, applied inside {@see load()} through {@see matchesSessionModel()} against each rule's `models:` frontmatter (ISS-068). Null — the default, and what every call site that predates the wiring passes — includes every model-scoped rule: with no model to compare against, dropping a rule that named one would silently retire standing guidance. It is a constructor argument for the same session-fact reason as `$rulesState`.
      */
     public function __construct(
         private readonly string $repoRoot,
         private readonly ?bool $reportRefusals = null,
         private readonly ?RulesState $rulesState = null,
+        private readonly ?string $sessionModel = null,
     ) {
     }
 
@@ -271,15 +273,18 @@ final class RuleLoader
     public const DEBUG_RULES_REFUSALS_ENV = 'CANDY_CODE_DEBUG_RULES';
 
     /**
-     * Every tier loaded, in load order, deduplicated, enabled only.
+     * Every tier loaded, in load order, deduplicated, enabled, and model-matched.
      *
      * The single assembly-facing entry point: it walks user rules, user rulebooks,
      * then project, then root, and folds the lists through the two de-dup passes
      * so a file reached by more than one tier is emitted once (first-seen wins).
      * The returned rules are those whose `enabled:` frontmatter is true (or
-     * absent) AND whose pack this session has not turned off; a rule excluded
-     * either way is still parsed (so it can still occupy a de-dup slot and cannot
-     * reappear as an enabled twin) but not emitted here.
+     * absent) AND whose pack this session has not turned off AND whose
+     * `models:` list the session model passes (ISS-068 — the list was parsed
+     * into {@see Rule::$models} and never read; see {@see matchesSessionModel()}
+     * for the matching rules and the null-session behaviour); a rule excluded
+     * by any of the three is still parsed (so it can still occupy a de-dup
+     * slot and cannot reappear as an enabled twin) but not emitted here.
      *
      * The session half is applied by {@see RulesState::effectiveRule()}, which is
      * the only production caller of {@see Rule::withEnabled()} - see that method
@@ -337,10 +342,58 @@ final class RuleLoader
                 continue;
             }
 
+            // ISS-068: `models:` frontmatter used to reach Rule::$models and be
+            // read by nothing — a rule scoped to a model arrived in every
+            // model's prompt. The slot is kept even when the model gate drops
+            // the rule (see the paragraph above the enabled check: an excluded
+            // twin must not resurrect), and unlike `enabled` a drop here is
+            // silent by construction: the operator selected the model, not the
+            // rule, so there is no unfulfilled expectation to announce.
+            if (!$this->matchesSessionModel($rule->models)) {
+                continue;
+            }
+
             $result[] = $rule;
         }
 
         return $result;
+    }
+
+    /**
+     * Whether a rule's `models:` list accepts the session model.
+     *
+     * An empty list matches every model — scoping is opt-in per rule. A null
+     * (or blank) session model matches every scoped rule too: with nothing to
+     * compare against, the alternative would be to silently retire standing
+     * guidance, and silent retirement is the exact defect ISS-068 names. The
+     * loader itself therefore does not require its caller to know the model;
+     * production threading of the real value is a one-line seam at the
+     * `Runtime::buildSystemPrompt()` construction, listed as owed.
+     *
+     * Patterns are fnmatch globs, case-insensitively, matched against both the
+     * full session model string and the part after its last `/` — so
+     * `qwen3-coder` and `sglang/qwen3-coder` each answer `qwen3*` in either
+     * direction of provider prefix. An exact identifier is its own trivial
+     * glob, so plain names match plainly.
+     *
+     * @param list<string> $models the rule's declared model patterns
+     */
+    public function matchesSessionModel(array $models): bool
+    {
+        if ($models === [] || $this->sessionModel === null || $this->sessionModel === '') {
+            return true;
+        }
+
+        $short = substr($this->sessionModel, (int) strrpos($this->sessionModel, '/') + 1);
+
+        foreach ($models as $pattern) {
+            if (fnmatch($pattern, $this->sessionModel, FNM_CASEFOLD)
+                || fnmatch($pattern, $short, FNM_CASEFOLD)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

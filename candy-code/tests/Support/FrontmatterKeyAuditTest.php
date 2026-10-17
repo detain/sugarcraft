@@ -37,7 +37,7 @@ final class FrontmatterKeyAuditTest extends TestCase
             'name' => 'pdf', 'description' => 'x', 'paths' => ['*.pdf'], 'license' => 'MIT',
         ]));
         self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, [
-            'name' => 'r', 'enabled' => false, 'keywords' => ['a'],
+            'name' => 'r', 'enabled' => false, 'paths' => ['*.php'],
         ]));
     }
 
@@ -46,6 +46,13 @@ final class FrontmatterKeyAuditTest extends TestCase
         self::assertSame(
             ['`allowed-tools` is not acted on', '`effort` is not acted on'],
             FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['effort' => 'high', 'allowed-tools' => 'Read']),
+        );
+        // ISS-068: both rule keys the loader does not act on in a real launch
+        // — `keywords` has no matcher, and `models` has its gate but no
+        // production call site threads a session model yet (see INERT).
+        self::assertSame(
+            ['`keywords` is not acted on', '`models` is not acted on'],
+            FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::RULE, ['keywords' => ['a'], 'models' => ['qwen3-coder']]),
         );
     }
 
