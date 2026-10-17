@@ -113,7 +113,7 @@ jobs:
           # Packagist auto-update: a sugarcraft/<lib> split repo only re-crawls
           # on Packagist if it carries the per-repo Packagist webhook, and a
           # FRESHLY-CREATED split repo starts WITHOUT it — which is how several
-          # libs (candy-buffer, sugar-forms, sugar-focus, sugar-gallery, …)
+          # libs (sugar-cellbuffer, sugar-forms, sugar-focus, sugar-gallery, …)
           # silently stopped auto-updating, forcing a manual "Update" on
           # packagist.org. To make the system self-healing, we ALSO ping
           # Packagist's update-package API for every lib we push here, so a

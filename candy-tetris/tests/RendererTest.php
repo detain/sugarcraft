@@ -135,7 +135,7 @@ final class RendererTest extends TestCase
     {
         // Byte-exact pin: renderMini() is now Buffer-backed (no hand-rolled
         // SGR via the removed block() helper). The O tetromino fills the
-        // middle two columns of both rows. The candy-buffer SGR emitter
+        // middle two columns of both rows. The sugar-cellbuffer SGR emitter
         // prefixes a reset ("0;") and Buffer::toAnsi() is canonical: equal
         // adjacent styles share ONE SGR open and one trailing reset per
         // style run — so the two 2-space blocks merge into a single 4-space

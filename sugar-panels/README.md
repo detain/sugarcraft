@@ -158,7 +158,7 @@ the join, so a nested layout reads as doubled `││` seams rather than crosses
 The renderer keeps the previous frame's cell grid across renders and rebuilds a
 `Buffer` from it (widths re-derived per cell, so wide graphemes and embedded SGR
 spans stay intact), computes `current->diff(previous)` (from
-[candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
+[sugar-cellbuffer](https://github.com/detain/sugarcraft-sugar-cellbuffer)), and emits only
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
 the stored one for the next render.
 

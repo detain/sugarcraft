@@ -275,7 +275,7 @@ video file (mp4/gif/avi/webm)
 ```
 
 - **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps sugar-animation's pure-PHP GIF decoder.
-- **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses sugar-colorprofile for color mapping. Delta repaint via candy-buffer.
+- **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses sugar-colorprofile for color mapping. Delta repaint via sugar-cellbuffer.
 - **Pace:** `Cmd::tick()` wall-clock alignment via `Sync`, no busy-waiting.
 - **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio master clock.
 

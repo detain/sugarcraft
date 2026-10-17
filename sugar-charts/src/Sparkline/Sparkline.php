@@ -8,9 +8,9 @@ use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\Range;
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Style as BufferStyle;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style as BufferStyle;
 use SugarCraft\Sprinkles\Style;
 
 /**

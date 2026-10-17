@@ -338,7 +338,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 
 ## Shared foundations
 
-- **[candy-buffer](https://github.com/sugarcraft/candy-buffer)** — alert queue
+- **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — alert queue
 
 
 

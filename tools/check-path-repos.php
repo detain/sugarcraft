@@ -252,7 +252,7 @@ EOF
 // Composer's PathRepository refuses a url that does not exist and the sibling
 // directory only exists inside the monorepo:
 //
-//   PathRepository.php: The `url` supplied for the path (../candy-buffer)
+//   PathRepository.php: The `url` supplied for the path (../sugar-cellbuffer)
 //   repository does not exist
 //
 // It is NOT a problem for consumers who merely `require` the package —

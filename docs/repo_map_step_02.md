@@ -1,33 +1,33 @@
-# Step 02 — Create candy-buffer
+# Step 02 — Create sugar-cellbuffer
 
-**Branch:** `ai/candy-buffer-new`
+**Branch:** `ai/sugar-cellbuffer-new`
 **Depends on:** step-00 ✅ (independent of step-01 — buffer/cell don't need the parser)
-**Blocks:** step-10 (candy-sprinkles uses candy-buffer), step-14/15/16/17/18 (UI consumers), step-26 (Buffer::diff impl), step-27 (consumers of diff)
+**Blocks:** step-10 (candy-sprinkles uses sugar-cellbuffer), step-14/15/16/17/18 (UI consumers), step-26 (Buffer::diff impl), step-27 (consumers of diff)
 
 ## Goal
 
-Create the `candy-buffer` foundation package — `Buffer` (Cell grid) and `Cell` (rune, style, link, width) value objects enabling per-cell dirty tracking and SGR-transition optimisation across the ecosystem. Provides the *data model* this step; the `Buffer::diff()` delta-ANSI emitter is built in step-26.
+Create the `sugar-cellbuffer` foundation package — `Buffer` (Cell grid) and `Cell` (rune, style, link, width) value objects enabling per-cell dirty tracking and SGR-transition optimisation across the ecosystem. Provides the *data model* this step; the `Buffer::diff()` delta-ANSI emitter is built in step-26.
 
 Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell components), §387.5 (consolidation of string-composition rendering).
 
 ## Files expected to be created
 
-- `candy-buffer/composer.json`
-- `candy-buffer/phpunit.xml`
-- `candy-buffer/README.md`
-- `candy-buffer/CALIBER_LEARNINGS.md`
-- `candy-buffer/src/Buffer.php` — final, immutable, fluent.
-- `candy-buffer/src/Cell.php` — readonly value object.
-- `candy-buffer/src/Position.php` — readonly (row, col).
-- `candy-buffer/src/Region.php` — readonly (Position, width, height).
-- `candy-buffer/src/Style.php` — minimal style record (fg, bg, attrs bitmask); the rich `SugarCraft\Sprinkles\Style` keeps its place in candy-sprinkles.
-- `candy-buffer/src/Hyperlink.php` — readonly (url, id).
-- `candy-buffer/tests/BufferTest.php`, `CellTest.php` (sanity).
+- `sugar-cellbuffer/composer.json`
+- `sugar-cellbuffer/phpunit.xml`
+- `sugar-cellbuffer/README.md`
+- `sugar-cellbuffer/CALIBER_LEARNINGS.md`
+- `sugar-cellbuffer/src/Buffer.php` — final, immutable, fluent.
+- `sugar-cellbuffer/src/Cell.php` — readonly value object.
+- `sugar-cellbuffer/src/Position.php` — readonly (row, col).
+- `sugar-cellbuffer/src/Region.php` — readonly (Position, width, height).
+- `sugar-cellbuffer/src/Style.php` — minimal style record (fg, bg, attrs bitmask); the rich `SugarCraft\Sprinkles\Style` keeps its place in candy-sprinkles.
+- `sugar-cellbuffer/src/Hyperlink.php` — readonly (url, id).
+- `sugar-cellbuffer/tests/BufferTest.php`, `CellTest.php` (sanity).
 
 ## Files expected to be modified
 
 - repo root `composer.json` — add require + path-repo.
-- `docs/MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/lib/candy-buffer.html` · `codecov.yml`.
+- `docs/MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/lib/sugar-cellbuffer.html` · `codecov.yml`.
 
 ## Acceptance criteria
 
@@ -41,12 +41,12 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
 - [ ] Wide chars (CJK, emoji) handled: `width` of 2 means the next cell is the empty "continuation" cell.
 - [ ] `Buffer::diff()` is **declared but not implemented** — returns `[]` or `throw new \LogicException('not yet — see step-26')`. Step-26 implements.
 - [ ] ≥95 % coverage on Buffer + Cell + Region + Position + Style + Hyperlink.
-- [ ] No deps on other `sugarcraft/*` packages — candy-buffer is leaf.
+- [ ] No deps on other `sugarcraft/*` packages — sugar-cellbuffer is leaf.
 - [ ] `git status` clean on master at end.
 
 ## Coder brief
 
-1. **Invoke `scaffold-library`** with slug `candy-buffer`, namespace `SugarCraft\Buffer\`, role "Cell-grid value objects for terminal rendering (shared)".
+1. **Invoke `scaffold-library`** with slug `sugar-cellbuffer`, namespace `SugarCraft\CellBuffer\`, role "Cell-grid value objects for terminal rendering (shared)".
 2. **Invoke `sugarcraft-model-pattern`** when designing Cell + Buffer — they are canonical immutable value objects:
    - `Cell` is `readonly`, all-arg constructor, no `with*()` (it's tiny; rebuild via `new`).
    - `Buffer` uses the `Mutable` trait from candy-core for `mutate()` — `with*()` returns new instance.
@@ -56,7 +56,7 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
    /** @return list<DiffOp> */
    public function diff(Buffer $previous): array;
    ```
-   and return `[]`. Add a class `SugarCraft\Buffer\DiffOp` as a placeholder so the signature compiles, but its real shape is step-26's job. Mark with `@todo step-26`.
+   and return `[]`. Add a class `SugarCraft\CellBuffer\DiffOp` as a placeholder so the signature compiles, but its real shape is step-26's job. Mark with `@todo step-26`.
 5. **Inline sanity tests**: construct a 10×3 buffer, set a few cells, withRegion-blit a 2×2 sub-buffer, assert rune+style at the right coords.
 6. Run phpunit + check-path-repos.
 
@@ -74,23 +74,23 @@ Reference: `docs/repo_map_update.md` §327.3 (framework), §345.1 (Buffer/Cell c
 
 - README: Quickstart constructing a Buffer, setting cells, blitting; cite the future `diff()` work pointing at step-26.
 - CALIBER_LEARNINGS: one entry — "Buffer/Cell are intentionally minimal — rich styling lives in candy-sprinkles, diff() ships in step-26. Don't put rendering logic here."
-- MATCHUPS row, PROJECT_NAMES Candy table row, root README, docs/index.html tile, docs/lib/candy-buffer.html.
+- MATCHUPS row, PROJECT_NAMES Candy table row, root README, docs/index.html tile, docs/lib/sugar-cellbuffer.html.
 
 ## Ship brief
 
-- **PR title**: `candy-buffer: new shared Buffer/Cell grid foundation`
+- **PR title**: `sugar-cellbuffer: new shared Buffer/Cell grid foundation`
 - **PR body**:
   ```
   ## Summary
-  - New foundation lib candy-buffer adds Buffer (Cell grid) + Cell value objects for terminal rendering.
+  - New foundation lib sugar-cellbuffer adds Buffer (Cell grid) + Cell value objects for terminal rendering.
   - Buffer::diff() declared but unimplemented — step-26 ships the delta-ANSI emitter (ECH/REP/ICH/DCH).
   - Wide-char (CJK/emoji) handled via Width::of from candy-core.
   - Unblocks consumer migration in steps 14-18 (sugar-widgets, sugar-forms, sugar-forms, sugar-charts, sugar-table).
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-buffer (≥95% coverage)
+  - [x] vendor/bin/phpunit in sugar-cellbuffer (≥95% coverage)
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_02.md, docs/repo_map_update.md §327.3, §345.1, §387.5
   ```
-- Commit subject: `candy-buffer: add shared Buffer/Cell value objects`.
+- Commit subject: `sugar-cellbuffer: add shared Buffer/Cell value objects`.

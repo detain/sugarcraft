@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Layout;
 
 /**
- * Own type to keep candy-layout a leaf package (no dep on candy-buffer).
+ * Own type to keep candy-layout a leaf package (no dep on sugar-cellbuffer).
  *
  * Mirrors ratatui's `Rect` — axis-aligned rectangle within a terminal grid.
  *
- * NOTE: this is intentionally NOT the same class as {@see \SugarCraft\Buffer\Region}
- * in candy-buffer — a deliberate leaf-package name collision so candy-layout
+ * NOTE: this is intentionally NOT the same class as {@see \SugarCraft\CellBuffer\Region}
+ * in sugar-cellbuffer — a deliberate leaf-package name collision so candy-layout
  * stays dependency-free. The two are converted at the boundary by
  * candy-sprinkles' `RegionBridge`; do not conflate them.
  */

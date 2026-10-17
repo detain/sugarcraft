@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Tests\Plot\Chart;
 
-use SugarCraft\Buffer\Buffer;
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Dashboard\Plot\Chart\Chart;
 use SugarCraft\Dashboard\Plot\Chart\ChartDataPoint;
 use SugarCraft\Dashboard\Plot\Chart\ChartType;
@@ -1088,7 +1088,7 @@ final class ChartTest extends TestCase
      * F1 gate pin: a dataCount change resizes the diff buffer (diffWidth()
      * tracks the bar run: 30 points → 70 cols, 31 → 72), so the next render
      * must fall back to a FULL frame. Diffing across mismatched dimensions
-     * throws InvalidArgumentException from Buffer::diff (candy-buffer
+     * throws InvalidArgumentException from Buffer::diff (sugar-cellbuffer
      * Buffer.php:416-422); the pre-F1 gate compared chart-area keys, which
      * a dataCount change never moves, and silently emitted a stale delta.
      */

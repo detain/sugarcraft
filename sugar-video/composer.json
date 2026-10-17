@@ -34,7 +34,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-buffer": "dev-master",
+        "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-image": "dev-master",
         "sugarcraft/sugar-animation": "dev-master"

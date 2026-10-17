@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
 
 /**
  * Mutable render-session state for diff-based frame emission.

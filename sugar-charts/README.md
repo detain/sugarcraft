@@ -197,7 +197,7 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 
 ## Shared foundations
 
-All chart renderers build their output via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer).
+All chart renderers build their output via [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer).
 Do not re-implement string padding or cell-grid assembly — use the `Buffer` class directly.
 
 ## Graph primitives at a glance

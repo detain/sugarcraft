@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Tests\Buffer;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Style as BufferStyle;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style as BufferStyle;
 use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;

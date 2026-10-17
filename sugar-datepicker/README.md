@@ -75,7 +75,7 @@ if ($key === 'esc')   $picker = $picker->ClearDate();
 
 ## Shared foundations
 
-- **[candy-buffer](https://github.com/sugarcraft/candy-buffer)** — month grid
+- **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — month grid
   rendered as a 7-column × N-row `Buffer`; events placed into target cells;
   `Buffer::toAnsi()` produces canonical ANSI SGR output.
 - **[candy-testing](https://github.com/sugarcraft/candy-testing)** — golden-file

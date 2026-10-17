@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
-use SugarCraft\Buffer\Buffer;
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Overlay\RenderSession;
 use PHPUnit\Framework\TestCase;
 

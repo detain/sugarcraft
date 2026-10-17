@@ -1336,7 +1336,7 @@ final class PlayerTest extends TestCase
      * A future divergence in the grid ordering or wrapping would change view()
      * and fail this test.
      *
-     * Re-captured after the candy-buffer value-equality fix made Buffer::toAnsi()
+     * Re-captured after the sugar-cellbuffer value-equality fix made Buffer::toAnsi()
      * canonical: equal styles now emit ONE SGR per run instead of one per cell
      * (the HalfBlock pin below lost its per-glyph repeats). Parity semantics —
      * grid ordering, glyph choice, wrapping — are unchanged.

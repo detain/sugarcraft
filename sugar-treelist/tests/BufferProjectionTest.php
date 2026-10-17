@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\TreeList\Tests;
 
-use SugarCraft\Buffer\Buffer;
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\TreeList\Model;
 use SugarCraft\TreeList\StringItem;
 use PHPUnit\Framework\TestCase;

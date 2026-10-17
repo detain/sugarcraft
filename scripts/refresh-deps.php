@@ -54,7 +54,7 @@ declare(strict_types=1);
  *
  * WHY LINKED MODE COMPUTES ITS OWN CLOSURE. `check-path-repos.php --fix
  * --strict-closure` injects only the `require` graph. Verified: it injects
- * ZERO entries for `candy-buffer`, whose only sibling dep sits in
+ * ZERO entries for `sugar-cellbuffer`, whose only sibling dep sits in
  * `require-dev`; that lib's assertion count moved 1,621 -> 1,661 once it
  * finally tested the real dependency. The checker is left alone because CI
  * depends on its current behaviour.

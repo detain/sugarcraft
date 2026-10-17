@@ -441,7 +441,7 @@ This replaced the old nested `Ansi::FAINT` passes, which only produced about two
 
 ### Diff Pen Colour Clamping (`Veil::penFromSgr()` / `Veil::xterm256ToHex()`)
 
-`composite()` re-encodes the pen into every delta it emits, so the pen must mean what the full frame meant. Out-of-range colour operands are clamped into 0–255, never bit-masked: truecolor components and `38;5` / `48;5` palette indices alike, the same rule candy-buffer's `styleFromSgr()` applies. Before the index clamp, `38;5;300` ran the grey-ramp formula to 688 per channel and produced `0x2b2b2b0`, a value wider than `0xRRGGBB`, and a negative index fell back to white.
+`composite()` re-encodes the pen into every delta it emits, so the pen must mean what the full frame meant. Out-of-range colour operands are clamped into 0–255, never bit-masked: truecolor components and `38;5` / `48;5` palette indices alike, the same rule sugar-cellbuffer's `styleFromSgr()` applies. Before the index clamp, `38;5;300` ran the grey-ramp formula to 688 per channel and produced `0x2b2b2b0`, a value wider than `0xRRGGBB`, and a negative index fell back to white.
 
 ### UTF-8 Character Replacement (`Veil::replaceCharAt()` at lines 461–521)
 

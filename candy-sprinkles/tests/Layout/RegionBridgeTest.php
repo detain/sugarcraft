@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Sprinkles\Tests\Layout;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Buffer\Position;
-use SugarCraft\Buffer\Region as BufferRegion;
+use SugarCraft\CellBuffer\Position;
+use SugarCraft\CellBuffer\Region as BufferRegion;
 use SugarCraft\Layout\Region as LayoutRegion;
 use SugarCraft\Sprinkles\Layout\RegionBridge;
 

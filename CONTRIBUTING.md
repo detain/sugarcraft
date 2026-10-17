@@ -28,7 +28,7 @@ done
 
 Sibling libraries resolve from Packagist, **not** from committed path
 repositories. Each `<lib>/` is published standalone as `sugarcraft/<lib>`,
-and a `{"type":"path","url":"../candy-buffer"}` entry in a published
+and a `{"type":"path","url":"../sugar-cellbuffer"}` entry in a published
 manifest is a hard fatal for anyone who clones that split repo — Composer
 refuses a path url that does not exist. So per-lib manifests carry no
 `repositories[]` block at all; only the root does, because the monorepo

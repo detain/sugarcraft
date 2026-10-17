@@ -41,11 +41,11 @@ final class PortReadinessTest extends TestCase
         return self::stripAnsi(\explode("\n", $view));
     }
 
-    private static function renderBuffer(Table $t): \SugarCraft\Buffer\Buffer
+    private static function renderBuffer(Table $t): \SugarCraft\CellBuffer\Buffer
     {
         $m = new \ReflectionMethod($t, 'renderToBuffer');
         $m->setAccessible(true);
-        /** @var \SugarCraft\Buffer\Buffer */
+        /** @var \SugarCraft\CellBuffer\Buffer */
         return $m->invoke($t);
     }
 

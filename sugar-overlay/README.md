@@ -247,11 +247,11 @@ The scanned zones travel with the veil: a `with*()` call made after `scan()` (sa
 
 The `composite()` method maintains a `?Buffer $previousFrame` across calls. On each
 call it builds the current Buffer, computes `current->diff(previous)` (from
-[candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
+[sugar-cellbuffer](https://github.com/detain/sugarcraft-sugar-cellbuffer)), and emits only
 the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
 `previousFrame` for the next render.
 
-Frames are modeled as candy-buffer cell grids with terminal-faithful layout: wide
+Frames are modeled as sugar-cellbuffer cell grids with terminal-faithful layout: wide
 graphemes (CJK, emoji) occupy two cells with a continuation tail, SGR sequences set
 a per-cell style pen, OSC 8 hyperlinks attach real `Hyperlink` metadata, and the
 invisible sugar-mouse zone sentinels consume no columns. Style-only, link-only and

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\DatePicker;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Style;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\DatePicker\Lang;
 use SugarCraft\Core\Util\Color;
 

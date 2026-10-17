@@ -15,7 +15,7 @@ Fix all identified critical, high, medium, and low severity issues in the sugar-
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Fix C-1 first (Stack.php parse error) | Blocking issue — entire class fails to autoload | `findings/sugar-dashboard.md:C-1` |
-| C-2 requires namespace resolution | `SugarCraft\Buffer\*` must be resolved against actual candy-buffer package namespace | `findings/sugar-dashboard.md:C-2` |
+| C-2 requires namespace resolution | `SugarCraft\CellBuffer\*` must be resolved against actual sugar-cellbuffer package namespace | `findings/sugar-dashboard.md:C-2` |
 | EventDispatcher must use immutable dispatch pattern | All other methods use clone-based immutability; dispatch() is inconsistent | `findings/sugar-dashboard.md:C-3` |
 | RingBuffer oldest() bug confirmed for wrapped partial buffer | toArray() and oldest() disagree after buffer wraps but is not yet full | `findings/sugar-dashboard.md:H-4` investigation |
 | ClockModule H-2 is a false positive | `$time` is NOT declared `readonly` — `withTime()` clone pattern works correctly | investigation at `src/Modules/Clock/ClockModule.php:19` |
@@ -58,9 +58,9 @@ The fix is simply inserting a space: `Sizer &&`
 **Severity:** Critical
 **Category:** Compatibility Issues / Wrong Imports
 
-**What is expected:** Replace the three `SugarCraft\Buffer\*` imports with the correct namespace that corresponds to actual monorepo classes. The `composer.json` shows `sugarcraft/candy-buffer` is a dependency with a path repository entry. The actual namespace exposed by candy-buffer needs to be determined and used, OR the imports should reference classes that exist within sugar-dashboard itself (e.g., `SugarCraft\Dashboard\Foundation\Buffer` if those classes exist there).
+**What is expected:** Replace the three `SugarCraft\CellBuffer\*` imports with the correct namespace that corresponds to actual monorepo classes. The `composer.json` shows `sugarcraft/sugar-cellbuffer` is a dependency with a path repository entry. The actual namespace exposed by sugar-cellbuffer needs to be determined and used, OR the imports should reference classes that exist within sugar-dashboard itself (e.g., `SugarCraft\Dashboard\Foundation\Buffer` if those classes exist there).
 
-**Why the change should be done:** Any code that instantiates or renders a `Chart` object will fatal with `Class "SugarCraft\Buffer\Buffer" not found`. This is a blocking issue — Chart is completely unusable.
+**Why the change should be done:** Any code that instantiates or renders a `Chart` object will fatal with `Class "SugarCraft\CellBuffer\Buffer" not found`. This is a blocking issue — Chart is completely unusable.
 
 **Conditions for success:**
 
@@ -71,16 +71,16 @@ The fix is simply inserting a space: `Sizer &&`
 **Related code locations:**
 
 - `sugar-dashboard/src/Plot/Chart/Chart.php:7-9` (the wrong imports)
-- `sugar-dashboard/composer.json:38,102-106` (candy-buffer dependency and path repo)
+- `sugar-dashboard/composer.json:38,102-106` (sugar-cellbuffer dependency and path repo)
 - `sugar-dashboard/src/Foundation/Buffer.php` (if it exists — needs investigation)
 - `sugar-dashboard/src/Foundation/Cell.php` (if it exists — needs investigation)
 
 **Investigation notes:**
-The composer.json at lines 38 and 102-106 shows `sugarcraft/candy-buffer` is available via path repository. The imports in Chart.php use `SugarCraft\Buffer\*` which does not match the `SugarCraft\Dashboard\*` namespace prefix used throughout sugar-dashboard. The actual Buffer/Cell classes may be in:
-1. `candy-buffer` package with namespace `SugarCraft\Buffer\` (if that package exposes this namespace)
+The composer.json at lines 38 and 102-106 shows `sugarcraft/sugar-cellbuffer` is available via path repository. The imports in Chart.php use `SugarCraft\CellBuffer\*` which does not match the `SugarCraft\Dashboard\*` namespace prefix used throughout sugar-dashboard. The actual Buffer/Cell classes may be in:
+1. `sugar-cellbuffer` package with namespace `SugarCraft\CellBuffer\` (if that package exposes this namespace)
 2. `sugar-dashboard/src/Foundation/` with names like `SugarCraft\Dashboard\Foundation\Buffer`
 
-The fix requires determining the actual namespace of Buffer/Cell in candy-buffer and updating Chart.php imports accordingly. If `DiffEncoder` does not exist anywhere, it may need to be implemented or the diff logic in Chart.php lines 700-717 may need redesign.
+The fix requires determining the actual namespace of Buffer/Cell in sugar-cellbuffer and updating Chart.php imports accordingly. If `DiffEncoder` does not exist anywhere, it may need to be implemented or the diff logic in Chart.php lines 700-717 may need redesign.
 
 ---
 
@@ -553,5 +553,5 @@ Every public method in the following classes must have at least one test coverin
 ## Notes
 
 - **2026-06-30:** Investigation completed. Key corrections to findings report: (1) H-2 (ClockModule readonly) is a false positive — `$time` is not declared `readonly`. (2) L-5 (Sizer/Drawable interfaces missing) is a false positive — both interfaces exist at `src/Foundation/`. (3) H-4 (RingBuffer) bug description in the findings was incorrect about the "full buffer" case — the actual bug manifests in the wrapped-partial buffer case, which is a different scenario.
-- **2026-06-30:** C-2 (Chart.php imports) requires investigating the actual namespace exposed by `candy-buffer` package. The composer.json shows `sugarcraft/candy-buffer` as a path dependency, but the namespace `SugarCraft\Buffer\*` needs to be verified against candy-buffer's actual PSR-4 autoload configuration.
+- **2026-06-30:** C-2 (Chart.php imports) requires investigating the actual namespace exposed by `sugar-cellbuffer` package. The composer.json shows `sugarcraft/sugar-cellbuffer` as a path dependency, but the namespace `SugarCraft\CellBuffer\*` needs to be verified against sugar-cellbuffer's actual PSR-4 autoload configuration.
 - **2026-06-30:** The 25+ chart files duplication (D-2) is a long-term refactoring goal, not a blocker. Focus on critical and high severity items first.

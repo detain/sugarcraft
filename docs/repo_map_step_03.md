@@ -22,7 +22,7 @@ Reference: `docs/repo_map_update.md` §327.2 (framework), §345.2 (LayoutSolver 
 - `candy-layout/src/Solver/CassowarySolver.php` — Cassowary simplex implementation.
 - `candy-layout/src/Solver/GreedySolver.php` — port of candy-sprinkles' existing 5-phase distribution.
 - `candy-layout/src/Direction.php` — enum (Horizontal, Vertical).
-- `candy-layout/src/Region.php` — alias of candy-buffer's? Or own? **Decision**: own type to keep candy-layout leaf.
+- `candy-layout/src/Region.php` — alias of sugar-cellbuffer's? Or own? **Decision**: own type to keep candy-layout leaf.
 - `candy-layout/tests/CassowarySolverTest.php`, `GreedySolverTest.php`, `ConstraintTest.php`.
 
 ## Files expected to be modified

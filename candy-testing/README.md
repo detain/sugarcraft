@@ -40,7 +40,7 @@ $counter = $sim->model; // CounterModel with updated count
 
 - PHP 8.3+
 - `sugarcraft/candy-core` (Program, Msg, Model, Cmd)
-- `sugarcraft/candy-buffer` (Buffer for cell-grid assertions)
+- `sugarcraft/sugar-cellbuffer` (Buffer for cell-grid assertions)
 
 ## Install
 

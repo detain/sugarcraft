@@ -195,7 +195,7 @@ final class DiffCellModelTest extends TestCase
     public function testResetClearsTransientSessionFlags(): void
     {
         $session = new RenderSession();
-        $factory = static fn(string $o, int $w, int $h) => \SugarCraft\Buffer\Buffer::fromString($o, $w, $h);
+        $factory = static fn(string $o, int $w, int $h) => \SugarCraft\CellBuffer\Buffer::fromString($o, $w, $h);
 
         $session->rememberFull("frame one", 9, 1, );
         $session->diff("frame two", 9, 1, $factory);

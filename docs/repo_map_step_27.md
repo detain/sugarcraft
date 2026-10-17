@@ -12,7 +12,7 @@ Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 
 ## Files expected to be modified
 
-- Each of the 6 lib's composer.json — add `sugarcraft/candy-buffer` if not already there (sugar-overlay and friends already got it earlier).
+- Each of the 6 lib's composer.json — add `sugarcraft/sugar-cellbuffer` if not already there (sugar-overlay and friends already got it earlier).
 - Each lib's main renderer:
   - Maintain a `?Buffer $previousFrame` field.
   - On render: build current `Buffer`, compute `current->diff(previous)`, emit only the delta via `DiffEncoder::encode($ops)`, store current as previous.
@@ -31,7 +31,7 @@ Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 
 ## Coder brief
 
-1. **path-repo closure**: candy-buffer in each lib (most are already requiring it).
+1. **path-repo closure**: sugar-cellbuffer in each lib (most are already requiring it).
 2. **Per lib**: introduce `previousFrame` instance state; refactor render() to compute Buffer first, then either full-emit (first frame / forced) or diff-emit (subsequent).
 3. **Window resize handling**: when the lib receives a WindowSize change, reset previousFrame to null.
 4. **Tests**: pin first-frame output (existing); add bytes-emitted assertion for subsequent frames with small changes.
@@ -54,7 +54,7 @@ Reference: §59 (six libs cited), §89.1 (SSH bandwidth), §387.5.
 - **PR body**:
   ```
   ## Summary
-  - Six renderers wired to candy-buffer's diff() (step-26).
+  - Six renderers wired to sugar-cellbuffer's diff() (step-26).
   - Subsequent frames emit only delta ANSI ops — major SSH-bandwidth & flicker win.
   - First-frame output + window-resize trigger full re-render (correct behavior).
   - Per-lib bytes-emitted tests document the win.

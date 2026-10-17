@@ -354,7 +354,7 @@ final class IntegrationTest extends TestCase
     }
 
     /**
-     * Security (candy-buffer #1362 defense-in-depth): a raw item value carrying
+     * Security (sugar-cellbuffer #1362 defense-in-depth): a raw item value carrying
      * bare C0 control bytes (BEL 0x07, NUL 0x00) and DEL 0x7F must be scrubbed
      * before it reaches the terminal wire, while the legitimate SGR ESC injected
      * by the current/line style must survive. Covers BOTH View() sinks — the

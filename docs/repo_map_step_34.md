@@ -1,18 +1,18 @@
-# Step 34 — sugar-datepicker + sugar-toast adopt candy-buffer + candy-testing
+# Step 34 — sugar-datepicker + sugar-toast adopt sugar-cellbuffer + candy-testing
 
 **Branch:** `ai/widget-shared`
-**Depends on:** step-02 (candy-buffer), step-04 (candy-testing), step-30 (audit)
+**Depends on:** step-02 (sugar-cellbuffer), step-04 (candy-testing), step-30 (audit)
 **Blocks:** —
 
 ## Goal
 
-Two widget libs (sugar-datepicker, sugar-toast) adopt candy-buffer for grid rendering and candy-testing for snapshot coverage. sugar-datepicker's date grid is naturally cell-based; sugar-toast's notification queue benefits from per-cell composition for overlapping toasts.
+Two widget libs (sugar-datepicker, sugar-toast) adopt sugar-cellbuffer for grid rendering and candy-testing for snapshot coverage. sugar-datepicker's date grid is naturally cell-based; sugar-toast's notification queue benefits from per-cell composition for overlapping toasts.
 
 Reference: step-30 audit. sugar-toast superiority cited (§427).
 
 ## Files expected to be modified
 
-- 2 composer.json — add candy-buffer (prod) + candy-testing (dev) via `path-repo-closure`.
+- 2 composer.json — add sugar-cellbuffer (prod) + candy-testing (dev) via `path-repo-closure`.
 - sugar-datepicker date grid + event overlay → Buffer cells.
 - sugar-toast positioning + multi-alert stacking → Buffer composition.
 - Tests in each: assertGoldenAnsi snapshot for canonical layouts.
@@ -45,7 +45,7 @@ Reference: step-30 audit. sugar-toast superiority cited (§427).
 
 ## Ship brief
 
-- **PR title**: `sugar-datepicker + sugar-toast: adopt candy-buffer + candy-testing`
+- **PR title**: `sugar-datepicker + sugar-toast: adopt sugar-cellbuffer + candy-testing`
 - **PR body**:
   ```
   ## Summary
@@ -60,4 +60,4 @@ Reference: step-30 audit. sugar-toast superiority cited (§427).
 
   Refs: docs/repo_map_step_34.md, docs/repo_map_update_followups.md
   ```
-- Commit subject: `sugar-datepicker + sugar-toast: adopt candy-buffer + candy-testing`.
+- Commit subject: `sugar-datepicker + sugar-toast: adopt sugar-cellbuffer + candy-testing`.

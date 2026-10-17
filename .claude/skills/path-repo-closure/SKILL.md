@@ -11,7 +11,7 @@ The policy is **inverted between the committed tree and the build**, and getting
 
 | where | sibling path-repos | why |
 |---|---|---|
-| `<lib>/composer.json` in git | **absent** | each lib is published standalone as `sugarcraft/<lib>`; `../candy-buffer` does not exist in a split-repo clone |
+| `<lib>/composer.json` in git | **absent** | each lib is published standalone as `sugarcraft/<lib>`; `../sugar-cellbuffer` does not exist in a split-repo clone |
 | CI / local build | **injected** | so a PR's own sibling code is what gets tested, not whatever is on Packagist |
 | root `composer.json` in git | **present, complete** | the monorepo root IS the directory those `../` urls resolve against |
 
@@ -20,7 +20,7 @@ So wiring a new `sugarcraft/<dep>` is **one edit**: the `require` line. Do not a
 ## Critical
 
 - **One edit per new dep, not two.** A `require` line is complete on its own — the dep resolves from Packagist, where all 58 libs are published (verified: every `sugarcraft/*` name returns 200 from `repo.packagist.org/p2/<name>.json`).
-- **Never commit a sibling path-repo into `<lib>/composer.json`.** `Composer\Repository\PathRepository` **hard fails** — not warns — on a url that does not exist: `The `url` supplied for the path (../candy-buffer) repository does not exist`, exit 1. In a clone of `sugarcraft/candy-files` the sibling directory is absent, so the entry breaks `composer install` outright.
+- **Never commit a sibling path-repo into `<lib>/composer.json`.** `Composer\Repository\PathRepository` **hard fails** — not warns — on a url that does not exist: `The `url` supplied for the path (../sugar-cellbuffer) repository does not exist`, exit 1. In a clone of `sugarcraft/candy-files` the sibling directory is absent, so the entry breaks `composer install` outright.
 - **It is invisible to consumers, which is why this went unnoticed for so long.** Composer honours `repositories` **only on the root package** and ignores a dependency's entirely (measured both directions). Anyone who merely `require`s the package was never affected; only cloners were.
 - **`--fix` is now a BUILD step, not an authoring step.** CI runs `php tools/check-path-repos.php --fix --strict-closure` before every `composer install` (9 sites across `ci.yml`, `pty-matrix.yml`, `vhs.yml`). If you run it locally, treat the result as scratch and do not commit it.
 - **Only `sugarcraft/*` deps are in scope at all.** A plain Packagist dep (`react/event-loop`, `phpstan/phpstan`) is a `require`/`require-dev` bump — this skill adds nothing.

@@ -4137,7 +4137,7 @@ final class Renderer
                 continue;
             }
             $condensed = $lastBoundary !== null && $key < $lastBoundary;
-            // Defense-in-depth (candy-buffer #1362): User and System content is
+            // Defense-in-depth (sugar-cellbuffer #1362): User and System content is
             // untrusted and reaches the terminal wire verbatim. A raw ESC would
             // desync the frame-diff line model or forge SGR that escapes the
             // renderer's own styling (e.g. a smuggled reset() breaking out of the

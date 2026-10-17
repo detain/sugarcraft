@@ -59,7 +59,7 @@ private function mutate(array $changes): self
 }
 ```
 
-**`candy-buffer/src/Style.php:L77`**
+**`sugar-cellbuffer/src/Style.php:L77`**
 ```php
 private function mutate(array $changes): static
 {

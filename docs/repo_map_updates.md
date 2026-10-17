@@ -60,14 +60,14 @@ _All items in this section have been resolved by the completion of steps 20–40
   - candy-git-server: added Subscriptions for graceful shutdown in GitDaemon
   - Branch ai/async-adopters merged to master; Commit SHA: 30ea7afa
 
-- [RESOLVED | 2026-05-31 | step-32 | coder] candy-tetris + candy-minesweeper: adopt candy-buffer + sugar-mouse + candy-testing — MERGED PR #911:
+- [RESOLVED | 2026-05-31 | step-32 | coder] candy-tetris + candy-minesweeper: adopt sugar-cellbuffer + sugar-mouse + candy-testing — MERGED PR #911:
   - candy-tetris: Buffer-based playfield rendering; candy-minesweeper: Buffer-based minefield
   - Branch ai/games-shared merged to master
 
 - [RESOLVED | 2026-05-31 | step-30 | coder] Ecosystem audit: adoption opportunity matrix for 19 remaining libs — MERGED PR #909:
   - Created docs/repo_map_update_followups.md; Branch ai/ecosystem-audit merged to master
 
-- [RESOLVED | 2026-06-01 | step-34 | coder] sugar-datepicker + sugar-toast: adopt candy-buffer + candy-testing — MERGED PR #914:
+- [RESOLVED | 2026-06-01 | step-34 | coder] sugar-datepicker + sugar-toast: adopt sugar-cellbuffer + candy-testing — MERGED PR #914:
   - sugar-datepicker: DatePicker widget + candy-testing golden-files; sugar-toast: border styling + queue management
   - Branch ai/widget-shared merged to master
 
@@ -105,7 +105,7 @@ _All items in this section have been resolved by the completion of steps 20–40
     - Branch: `ai/mouse-consumers`
 
 
-- [2026-05-31 | step-26 | coder] candy-buffer: implemented Buffer::diff() with delta ANSI ops:
+- [2026-05-31 | step-26 | coder] sugar-cellbuffer: implemented Buffer::diff() with delta ANSI ops:
   - Created 9 new files: DiffOp abstract base, MoveCursorOp, SetCellOp, EraseRunOp, RepeatRunOp, SetStyleOp, SetHyperlinkOp, DiffEncoder, DiffOptimiser
   - Buffer.php: implemented diff(Buffer $prev) and applyDiff(list<DiffOp> $ops) — pure round-trip pair
   - diff() algorithm: walks cell grid; emits MoveCursorOp + SetStyleOp + SetCellOp for changes; RepeatRunOp for horizontal identical-cell runs; EraseRunOp for ≥3 consecutive blank default cells
@@ -177,7 +177,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch ai/docs-site merged to master
   - 17 files changed, 47 insertions(+)
   - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
-  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
+  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, sugar-cellbuffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing)
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
 

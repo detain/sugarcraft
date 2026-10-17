@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Testing\Snapshot;
 
 use PHPUnit\Framework\Assert;
-use SugarCraft\Buffer\Buffer;
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Core\Model;
 
 /**

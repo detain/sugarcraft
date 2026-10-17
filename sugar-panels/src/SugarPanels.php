@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Panels;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Layout\Constraint\Constraint;
 use SugarCraft\Layout\Direction;

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Hyperlink;
-use SugarCraft\Buffer\Style as BufferStyle;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Hyperlink;
+use SugarCraft\CellBuffer\Style as BufferStyle;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
@@ -929,16 +929,16 @@ final class Veil
     /**
      * Merge one CSI SGR parameter string into the live pen.
      *
-     * Mirrors Buffer::styleFromSgr() (private in candy-buffer) — reset,
+     * Mirrors Buffer::styleFromSgr() (private in sugar-cellbuffer) — reset,
      * 16-colour + bright ranges, 38;5/38;2 and 48;5/48;2 colour keys,
      * 39/49 default colours, and the attribute on-codes — so veil's diff
-     * pen and candy-buffer's own parse agree on what a style means.
+     * pen and sugar-cellbuffer's own parse agree on what a style means.
      * SGR reset deliberately does NOT clear the link pen (xterm scopes
      * links to the OSC 8 protocol).
      *
      * Out-of-range colour operands are CLAMPED into 0–255 (see channel()),
      * never bit-masked — truecolor components and 38;5/48;5 palette indices
-     * alike, the same rule candy-buffer's styleFromSgr() applies. The pen is
+     * alike, the same rule sugar-cellbuffer's styleFromSgr() applies. The pen is
      * re-encoded into every delta, so a wrapped component or an index past
      * the palette would repaint a cell in a colour the full frame never
      * showed.
@@ -1044,7 +1044,7 @@ final class Veil
     /**
      * Standard xterm 256-colour palette index → 0xRRGGBB: 0-7 and 8-15 map
      * through ansiColorToHex(), 16-231 the 6×6×6 cube, 232-255 the grayscale
-     * ramp. The index is clamped into 0-255 first (channel(), as candy-buffer
+     * ramp. The index is clamped into 0-255 first (channel(), as sugar-cellbuffer
      * does): unclamped, `38;5;300` ran the gray-ramp formula to 688 per
      * channel and returned 0x2b2b2b0, a value outside 0xRRGGBB.
      */

@@ -1,7 +1,7 @@
-# Step 26 — candy-buffer::diff() — delta ANSI emission
+# Step 26 — sugar-cellbuffer::diff() — delta ANSI emission
 
 **Branch:** `ai/buffer-diff-impl`
-**Depends on:** step-02 (candy-buffer skeleton)
+**Depends on:** step-02 (sugar-cellbuffer skeleton)
 **Blocks:** step-27 (consumers of buffer-diff)
 
 ## Goal
@@ -12,14 +12,14 @@ Reference: `docs/repo_map_update.md` §59 (buffer diffing called critical for 6+
 
 ## Files expected to be created
 
-- `candy-buffer/src/DiffOp.php` — abstract base (or interface) for delta ops.
-- `candy-buffer/src/Diff/SetCellOp.php`, `EraseRunOp.php`, `RepeatRunOp.php`, `MoveCursorOp.php`, `SetStyleOp.php`, `SetHyperlinkOp.php` — concrete ops.
-- `candy-buffer/src/Diff/DiffEncoder.php` — `encode(list<DiffOp>): string` produces the raw ANSI byte stream.
-- `candy-buffer/src/Diff/DiffOptimiser.php` — peephole pass: coalesce adjacent SetStyle into one SGR; coalesce adjacent SetCells into RepeatRunOp; etc.
+- `sugar-cellbuffer/src/DiffOp.php` — abstract base (or interface) for delta ops.
+- `sugar-cellbuffer/src/Diff/SetCellOp.php`, `EraseRunOp.php`, `RepeatRunOp.php`, `MoveCursorOp.php`, `SetStyleOp.php`, `SetHyperlinkOp.php` — concrete ops.
+- `sugar-cellbuffer/src/Diff/DiffEncoder.php` — `encode(list<DiffOp>): string` produces the raw ANSI byte stream.
+- `sugar-cellbuffer/src/Diff/DiffOptimiser.php` — peephole pass: coalesce adjacent SetStyle into one SGR; coalesce adjacent SetCells into RepeatRunOp; etc.
 
 ## Files expected to be modified
 
-- `candy-buffer/src/Buffer.php` — `diff(Buffer $previous): list<DiffOp>` real impl + `applyDiff(list<DiffOp> $ops): self` for round-trip testing.
+- `sugar-cellbuffer/src/Buffer.php` — `diff(Buffer $previous): list<DiffOp>` real impl + `applyDiff(list<DiffOp> $ops): self` for round-trip testing.
 
 ## Acceptance criteria
 
@@ -59,12 +59,12 @@ Reference: `docs/repo_map_update.md` §59 (buffer diffing called critical for 6+
 
 ## Scribe brief
 
-- `candy-buffer/README.md`: a new `## Diffing & delta ANSI` section with worked example (before / after buffer + emitted diff bytes).
-- `candy-buffer/CALIBER_LEARNINGS.md`: "DiffEncoder tracks cursor + SGR state across ops — don't reset between op emits unless necessary. The optimiser is what makes the byte stream minimal; don't bypass it."
+- `sugar-cellbuffer/README.md`: a new `## Diffing & delta ANSI` section with worked example (before / after buffer + emitted diff bytes).
+- `sugar-cellbuffer/CALIBER_LEARNINGS.md`: "DiffEncoder tracks cursor + SGR state across ops — don't reset between op emits unless necessary. The optimiser is what makes the byte stream minimal; don't bypass it."
 
 ## Ship brief
 
-- **PR title**: `candy-buffer: implement diff() with delta ANSI emission (ECH/REP/ICH/DCH)`
+- **PR title**: `sugar-cellbuffer: implement diff() with delta ANSI emission (ECH/REP/ICH/DCH)`
 - **PR body**:
   ```
   ## Summary
@@ -75,11 +75,11 @@ Reference: `docs/repo_map_update.md` §59 (buffer diffing called critical for 6+
   - Step-27 wires this into 6 renderers (sugar-panels, sugar-dashboard, sugar-crush, sugar-overlay, sugar-flexbox, sugar-treelist).
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-buffer (≥95% coverage, round-trip property tests)
+  - [x] vendor/bin/phpunit in sugar-cellbuffer (≥95% coverage, round-trip property tests)
   - [x] Byte-count assertion: 1-char change in 80×24 stays under 30 bytes
   - [x] Wide-char handling correct
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_26.md, docs/repo_map_update.md §59, §89.1, §327.3
   ```
-- Commit subject: `candy-buffer: implement Buffer::diff() with delta ANSI ops`.
+- Commit subject: `sugar-cellbuffer: implement Buffer::diff() with delta ANSI ops`.

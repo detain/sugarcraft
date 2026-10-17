@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList;
 
 use Psr\Log\LoggerInterface;
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -827,7 +827,7 @@ final class Model
             return [''];
         }
 
-        // Defense-in-depth (candy-buffer #1362): Cell::new() does NOT strip
+        // Defense-in-depth (sugar-cellbuffer #1362): Cell::new() does NOT strip
         // control bytes — its contract is "caller sanitizes". Ansi::strip()
         // alone removes only ESC-initiated sequences, so bare C0 (NUL/BEL/BS/
         // VT/FF/SO-US) and DEL from the untrusted item value would flow through
@@ -1018,7 +1018,7 @@ final class Model
         // called Buffer::withCellAt() once per cell, and every such call copies
         // the ENTIRE grid — O((width×height)²). A 500×200 frame exceeded 120 s.
         // Building the flat cell list once and handing it to Buffer::fromGrid()
-        // (the candy-buffer bulk API) makes this O(width×height).
+        // (the sugar-cellbuffer bulk API) makes this O(width×height).
         //
         // Cell model is UNCHANGED from the prior implementation, byte for byte:
         // one code point per cell, width 1, SGR escapes ride the grid as plain
