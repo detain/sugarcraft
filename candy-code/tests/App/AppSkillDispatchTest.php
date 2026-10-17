@@ -362,7 +362,7 @@ final class AppSkillDispatchTest extends TestCase
 
         $this->assertStringContainsString('THE-BODY-MARKER', $prompt);
         $this->assertMatchesRegularExpression(
-            '/<available-skills>.*demo.*<\/available-skills>/s',
+            '/<available-skills>.{0,}demo.{0,}<\/available-skills>/s',
             $prompt,
             'an enabled skill is never invisible through both channels'
         );
@@ -388,7 +388,7 @@ final class AppSkillDispatchTest extends TestCase
         $prompt = (string) ($provider->requests[0]->systemPrompt ?? '');
 
         $this->assertStringNotContainsString('THE-BODY-MARKER', $prompt);
-        $this->assertMatchesRegularExpression('/<available-skills>.*demo.*<\/available-skills>/s', $prompt);
+        $this->assertMatchesRegularExpression('/<available-skills>.{0,}demo.{0,}<\/available-skills>/s', $prompt);
     }
 
     // -------------------------------------------------------------------------
