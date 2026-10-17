@@ -35,7 +35,7 @@
 | [charmbracelet/melt](#charmbraceletmelt) | Go | ~800 | candy-scriptui |
 | [charmbracelet/mods](#charmbraceletmods) | Go | 5316 | candy-scriptui, sugar-forms |
 | [charmbracelet/pop](#charmbraceletpop) | Go | ~2800 | candy-mail, candy-scriptui, sugar-markdown |
-| [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
+| [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | sugar-metrics |
 | [charmbracelet/sequin](#charmbraceletsequin) | Go | 804 | candy-core, candy-ansi-inspect |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 | [charmbracelet/skate](#charmbraceletskate) | Go | ~2000 | candy-kv |
@@ -74,7 +74,7 @@
 | charmbracelet/tree-sitter-vhs | Go/C | ~50 | (grammar, not TUI lib) |
 | charmbracelet/winget-pkgs | YAML | ~1000 | (Windows distribution manifests) |
 | charmbracelet/git-lfs-transfer | Go | ~50 | (Git infrastructure, not TUI) |
-| [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
+| [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | sugar-metrics |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-scriptui |
 
 ---
@@ -597,9 +597,9 @@
 **Features:** wish middleware + metrics server, 3 metrics (sessions created/finished/duration).
 
 **SugarCraft Mapping:**
-- `candy-metrics` → Primary port
+- `sugar-metrics` → Primary port
 
-**Note:** Port exists as `candy-metrics` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `sugar-metrics` (🟢 in MATCHUPS.md).
 
 ---
 

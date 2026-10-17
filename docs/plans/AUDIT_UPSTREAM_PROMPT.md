@@ -157,7 +157,7 @@ that are tiny but together justify a PR.
 - charmbracelet/glamour → sugar-markdown
 - charmbracelet/fang → sugar-cli
 - charmbracelet/wish → candy-wish
-- charmbracelet/promwish → candy-metrics
+- charmbracelet/promwish → sugar-metrics
 - charmbracelet/log → candy-log
 - charmbracelet/colorprofile → sugar-colorprofile
 - treilik/bubblelister → sugar-treelist

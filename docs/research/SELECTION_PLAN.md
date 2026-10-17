@@ -438,7 +438,7 @@ All 45 research documents available at:
 | sugar-quickpick | 21KB |
 | sugar-treelist | 15KB |
 | candy-log | 17KB |
-| candy-metrics | 20KB |
+| sugar-metrics | 20KB |
 | candy-minesweeper | 15KB |
 | candy-starter | 18KB |
 | sugar-image | 24KB |

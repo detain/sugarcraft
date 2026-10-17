@@ -215,7 +215,7 @@ matching package turns out to be.
 | **SundaeServe** | SSH-served app aggregator |
 | **MochiTunnel** | SSH multiplexer |
 | **GumdropTimer** | stopwatch / countdown |
-| **PuddingMetrics** | telemetry (CandyMetrics alternative) |
+| **PuddingMetrics** | telemetry (SugarMetrics alternative) |
 
 ---
 

@@ -138,7 +138,7 @@ The shared-foundation refactor is **complete**. Summary:
 - **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 sugar-forms migration which was not completed)
 - **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, sugar-mouse, candy-input, sugar-fuzzy, candy-async
 - **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy
-- **4 items deferred** to future plan (candy-metrics, candy-log, sugar-mouse, candy-starter — see docs/repo_map_update_followups.md)
+- **4 items deferred** to future plan (sugar-metrics, candy-log, sugar-mouse, candy-starter — see docs/repo_map_update_followups.md)
 - **1 step not completed** (step-15 sugar-forms — FuzzyMatcher API incompatibility; deferred)
 - Retrospective: docs/repo_map_update.md § Plan retrospective
 - All Active Items drained to docs/repo_map_updates.md Resolved section

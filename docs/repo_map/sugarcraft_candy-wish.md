@@ -448,7 +448,7 @@ The handler is injectable into `InProcessTransport` via `setChannelHandler()`, e
 
 ### vs. charmbracelet/promwish (Prometheus Metrics)
 
-Promwish exposes SSH session metrics (created/finished/duration) to Prometheus. CandyWish has no built-in metrics middleware (deferred to `candy-metrics` in the SugarCraft ecosystem). The `SessionMetrics` middleware in `candy-metrics` follows a similar pattern — wrap session lifecycle — but generalizes beyond SSH to any server using `Context`/`Session`.
+Promwish exposes SSH session metrics (created/finished/duration) to Prometheus. CandyWish has no built-in metrics middleware (deferred to `sugar-metrics` in the SugarCraft ecosystem). The `SessionMetrics` middleware in `sugar-metrics` follows a similar pattern — wrap session lifecycle — but generalizes beyond SSH to any server using `Context`/`Session`.
 
 ### vs. charmbracelet/wishlist (SSH Directory)
 
@@ -580,7 +580,7 @@ CandyWish is a leaf-level library in the dependency graph. It is not depended on
 | `candy-core` | Dependency — provides `Context`, i18n, exception types |
 | `candy-pty` | Dependency — PTY syscalls, pump, signal forwarding |
 | `sugar-widgets` | Potential consumer — BubbleTea middleware mounts sugar-widgets Programs over SSH |
-| `candy-metrics` | Parallel — `SessionMetrics` middleware pattern mirrors promwish; both are SSH session middleware |
+| `sugar-metrics` | Parallel — `SessionMetrics` middleware pattern mirrors promwish; both are SSH session middleware |
 | `candy-sshconfig` | Future — wishlist's `sshconfig.ParseFile()` would be a natural `candy-sshconfig` leaf lib |
 
 ---

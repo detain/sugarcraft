@@ -1,0 +1,51 @@
+{
+    "name": "sugarcraft/sugar-metrics",
+    "description": "Telemetry primitives for SugarCraft / CandyWish \u2014 counters, gauges, histograms with pluggable backends (in-memory, StatsD UDP, Prometheus textfile, JSON stream). Drop-in middleware for SSH session metrics.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "metrics",
+        "telemetry",
+        "observability",
+        "prometheus",
+        "statsd",
+        "counter",
+        "histogram",
+        "ssh",
+        "wish"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-metrics",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-metrics/issues",
+        "source": "https://github.com/sugarcraft/sugar-metrics",
+        "docs": "https://sugarcraft.github.io/lib/sugar-metrics.html"
+    },
+    "require": {
+        "php": ">=8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-wish": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Metrics\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Metrics\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -7,7 +7,7 @@ CandyWish is a PHP port of `charmbracelet/wish` — an SSH server middleware fra
 - Full SFTP subsystem implementation (currently stub only)
 - Git server middleware (upstream has complete implementation)
 - SCP protocol support
-- Metrics middleware integration with `candy-metrics`
+- Metrics middleware integration with `sugar-metrics`
 - Mosh support for connection resilience
 
 **Biggest missing capabilities:**
@@ -259,9 +259,9 @@ Server::new()
 
 ## Medium Priority
 
-### 8. Metrics Integration with candy-metrics
+### 8. Metrics Integration with sugar-metrics
 
-**Description:** `promwish` exposes SSH session metrics to Prometheus. `candy-metrics` has `SessionMetrics` middleware but not yet integrated with candy-wish.
+**Description:** `promwish` exposes SSH session metrics to Prometheus. `sugar-metrics` has `SessionMetrics` middleware but not yet integrated with candy-wish.
 
 **Why it matters:** Production deployments need observability — session counts, durations, error rates.
 
@@ -269,7 +269,7 @@ Server::new()
 
 **Implementation ideas:**
 
-- Create `SugarCraft\Wish\Middleware\Metrics` that uses `candy-metrics` SessionMetrics
+- Create `SugarCraft\Wish\Middleware\Metrics` that uses `sugar-metrics` SessionMetrics
 - Expose `wish.session.connect`, `wish.session.duration`, `wish.session.error` counters
 - Add `extraTags` callback for custom labels (user, term, command)
 
@@ -405,7 +405,7 @@ Server::new()
 
 ### Duration Metrics: Histogram vs Counter
 
-**Current (candy-metrics SessionMetrics):** Proper histogram with configurable buckets for duration.
+**Current (sugar-metrics SessionMetrics):** Proper histogram with configurable buckets for duration.
 
 **External (promwish):** Counter (cumulative seconds), not histogram — cannot see percentiles.
 
@@ -431,7 +431,7 @@ interface ConnectionCallback {
 
 **Problem:** Go promwish evolved from implicit HTTP server goroutine to explicit `Server` struct with `ListenAndServe()`/`Shutdown()`.
 
-**Proposed:** Add `start()`/`stop()` methods to `Backend` interface in `candy-metrics`:
+**Proposed:** Add `start()`/`stop()` methods to `Backend` interface in `sugar-metrics`:
 ```php
 interface Backend {
     public function start(): void;
@@ -600,9 +600,9 @@ new BubbleTea(fn ($session) => new MyApp($session))
 
 # Ecosystem / Integration Opportunities
 
-## 1. candy-metrics Integration
+## 1. sugar-metrics Integration
 
-**Already planned:** `SessionMetrics` middleware using `candy-metrics`.
+**Already planned:** `SessionMetrics` middleware using `sugar-metrics`.
 
 **Implementation:** 
 ```php
@@ -695,7 +695,7 @@ Server::new()
 
 1. **Banner middleware** — MOTD-style text at session start
 2. **Recovery middleware** — Panic recovery with stack trace logging  
-3. **Metrics middleware** — Integrate with `candy-metrics` SessionMetrics
+3. **Metrics middleware** — Integrate with `sugar-metrics` SessionMetrics
 4. **Authorized keys hot-reloading** — Watch file changes, re-read on new auth
 5. **Rate limit before auth documentation** — Document RateLimit should be first middleware
 
@@ -758,7 +758,7 @@ CandyWish represents a well-architected port of `charmbracelet/wish` that makes 
 
 2. **Git middleware gap** — While git server functionality is niche, it represents a key differentiator for wish in the Go ecosystem. A future `candy-git` leaf library would complete the SSH serving story.
 
-3. **Observability gap** — Integration with `candy-metrics` is documented but not implemented. Production deployments need metrics.
+3. **Observability gap** — Integration with `sugar-metrics` is documented but not implemented. Production deployments need metrics.
 
 4. **Transport complexity** — The dual-transport model (InProcess vs HostSshd) creates complexity for users. A unified `TeaTransport` bridge could simplify this.
 

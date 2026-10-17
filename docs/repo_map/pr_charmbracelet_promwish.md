@@ -18,7 +18,7 @@
 
 ## 2. Existing SugarCraft Mapping
 
-| promwish | SugarCraft (candy-metrics) | Notes |
+| promwish | SugarCraft (sugar-metrics) | Notes |
 |----------|---------------------------|-------|
 | `Middleware()`, `MiddlewareWithCommand()` | `SessionMetrics` | Both wrap SSH session lifecycle |
 | `wish_sessions_created_total` | `wish.session.connect` counter | Direct mapping |
@@ -409,7 +409,7 @@ The rejected idea in #39 (MiddlewareWithServer) tried to let middleware hold a s
 
 With only ~200 stars and no feature requests, promwish has found its niche. The maintainer closed the v2 PR that would have introduced breaking changes.
 
-**SugarCraft:** Be wary of feature creep. `candy-metrics` is already more featureful than `promwish` (multiple backends, cardinality management). Don't add features just because they're possible.
+**SugarCraft:** Be wary of feature creep. `sugar-metrics` is already more featureful than `promwish` (multiple backends, cardinality management). Don't add features just because they're possible.
 
 ### Lesson 4: Examples Are Documentation
 
@@ -562,4 +562,4 @@ promwish is a small, stable, feature-complete library that has found its niche a
 3. **SugarCraft has addressed key limitations** — Histogram buckets, cardinality management, multiple backends
 4. **Focus areas for SugarCraft** — Backend lifecycle, graceful shutdown, expanded examples
 
-The PHP port (`candy-metrics`) is architecturally superior in several ways (histogram, cardinality, backends). The main opportunity is cleaning up lifecycle management and expanding documentation/examples to match the Go library's community sophistication.
+The PHP port (`sugar-metrics`) is architecturally superior in several ways (histogram, cardinality, backends). The main opportunity is cleaning up lifecycle management and expanding documentation/examples to match the Go library's community sophistication.

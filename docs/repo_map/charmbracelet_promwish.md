@@ -105,7 +105,7 @@ Metrics are created with `promauto.With(registry).NewCounterVec(...)` — promau
 
 ## SugarCraft Mapping
 
-| promwish | SugarCraft (candy-metrics) | Notes |
+| promwish | SugarCraft (sugar-metrics) | Notes |
 |----------|---------------------------|-------|
 | `Middleware()`, `MiddlewareWithCommand()` | `SessionMetrics` middleware | Both wrap SSH session lifecycle |
 | `wish_sessions_created_total` | `wish.session.connect` counter | Session connection tracking |
@@ -117,9 +117,9 @@ Metrics are created with `promauto.With(registry).NewCounterVec(...)` — promau
 
 **Many-to-Many Mapping Details:**
 
-- **candy-metrics** (`SugarCraft\Metrics`) is a broader telemetry library that *includes* session metrics as one use case
+- **sugar-metrics** (`SugarCraft\Metrics`) is a broader telemetry library that *includes* session metrics as one use case
 - The upstream `promwish` is specifically a `wish` middleware — the PHP port generalizes this to work with any SSH server via `SessionMetrics` middleware
-- `candy-metrics` has multiple backends (InMemory, JsonStream, StatsD, PrometheusFile, Multi) vs. Go's single HTTP/prometheus approach
+- `sugar-metrics` has multiple backends (InMemory, JsonStream, StatsD, PrometheusFile, Multi) vs. Go's single HTTP/prometheus approach
 - The PHP version adds cardinality management (max 10,000 label combinations per metric) which the Go original lacks
 - PHP version uses proper histograms with percentile buckets vs. Go's cumulative counter for duration
 
@@ -129,6 +129,6 @@ Metrics are created with `promauto.With(registry).NewCounterVec(...)` — promau
 
 The library's simplicity is both its strength and limitation. It tracks only session-level events (created, finished, duration) with a single label dimension (command). There are no CPU, memory, or custom application metrics — you can't emit business-level KPIs through this middleware. The Go implementation uses cumulative counters for duration rather than proper histograms, meaning you lose visibility into percentile latencies (p50, p99) which are typically more actionable than total duration.
 
-The SugarCraft port (`candy-metrics`) significantly extends the upstream design. While the Go library is tightly coupled to Prometheus, the PHP version provides pluggable backends (StatsD, JSON streaming, Prometheus textfile, multi-backend fanout) and uses proper histogram instruments with classic bucket boundaries. The cardinality management feature — evicting oldest label combinations when exceeding 10,000 — addresses a real production issue that the Go original doesn't consider. The `SessionMetrics` middleware in PHP also includes richer session metadata (user, term, exception info) compared to the Go version's command-only label.
+The SugarCraft port (`sugar-metrics`) significantly extends the upstream design. While the Go library is tightly coupled to Prometheus, the PHP version provides pluggable backends (StatsD, JSON streaming, Prometheus textfile, multi-backend fanout) and uses proper histogram instruments with classic bucket boundaries. The cardinality management feature — evicting oldest label combinations when exceeding 10,000 — addresses a real production issue that the Go original doesn't consider. The `SessionMetrics` middleware in PHP also includes richer session metadata (user, term, exception info) compared to the Go version's command-only label.
 
-For projects already in the Charmbracelet/Go ecosystem, `promwish` is the canonical choice for SSH observability. For PHP projects, `candy-metrics` provides equivalent functionality with more flexibility and better production readiness for high-cardinality scenarios.
+For projects already in the Charmbracelet/Go ecosystem, `promwish` is the canonical choice for SSH observability. For PHP projects, `sugar-metrics` provides equivalent functionality with more flexibility and better production readiness for high-cardinality scenarios.

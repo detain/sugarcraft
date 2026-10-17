@@ -86,8 +86,8 @@ flag_management:
     - name: candy-ssh-launcher
       paths: ["candy-ssh-launcher/src/**"]
       carryforward: true
-    - name: candy-metrics
-      paths: ["candy-metrics/src/**"]
+    - name: sugar-metrics
+      paths: ["sugar-metrics/src/**"]
       carryforward: true
     - name: candy-starter
       paths: ["candy-starter/src/**"]
@@ -325,12 +325,12 @@ component_management:
         - "candy-ssh-launcher/src/**"
       flag_regexes:
         - "^candy-ssh-launcher$"
-    - component_id: candy-metrics
-      name: candy-metrics
+    - component_id: sugar-metrics
+      name: sugar-metrics
       paths:
-        - "candy-metrics/src/**"
+        - "sugar-metrics/src/**"
       flag_regexes:
-        - "^candy-metrics$"
+        - "^sugar-metrics$"
     - component_id: candy-starter
       name: candy-starter
       paths:

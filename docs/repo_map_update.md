@@ -64,7 +64,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 **15 consumer libs migrated** in Phase 6 (candy-pty, candy-tetris, candy-minesweeper, candy-kv, candy-ssh-launcher, candy-git, sugar-datepicker, sugar-toast, candy-codetime, candy-mail, candy-git-server, sugar-animation, sugar-cli, sugar-spring, candy-flappy).
 
 ### Deferred to future plan
-See docs/repo_map_update_followups.md for the full list (4 items: candy-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
+See docs/repo_map_update_followups.md for the full list (4 items: sugar-metrics, candy-log, sugar-mouse, candy-starter — all deferred from step-37 catch-all).
 
 ---
 
@@ -163,7 +163,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 7. **Mouse event deduplication helpers in sugar-mouse** — Upstream issue #10: drag operations produce duplicate `MouseDown` events. `ZoneClickTracker` class would be competitive differentiation.
 
-8. **Persistent storage backend** — candy-git-server has zero persistence (in-memory only; upstream soft-serve uses SQLite/PostgreSQL). candy-metrics needs HTTP scrape endpoint.
+8. **Persistent storage backend** — candy-git-server has zero persistence (in-memory only; upstream soft-serve uses SQLite/PostgreSQL). sugar-metrics needs HTTP scrape endpoint.
 
 9. **TUI implementation missing** — candy-git-server has zero TUI (the defining upstream feature). SSH-server mode is #1 requested feature in candy-ssh-launcher.
 

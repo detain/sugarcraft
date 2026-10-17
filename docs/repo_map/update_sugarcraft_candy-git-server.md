@@ -274,7 +274,7 @@ candy-git-server/
 
 - Follow `promwish` pattern: `wish_sessions_created_total`, `wish_sessions_finished_total`, `wish_sessions_duration_seconds`
 - Expose `/metrics` endpoint in Prometheus format
-- Add `candy-metrics` integration for session metrics middleware
+- Add `sugar-metrics` integration for session metrics middleware
 - Add custom metrics: repo_operations_total, connection_count, lfs_transfer_bytes
 
 **Estimated complexity:** Medium
@@ -657,7 +657,7 @@ Add optional PHP web dashboard for:
 
 ## 4. Prometheus Metrics Export
 
-Integrate with `candy-metrics` for Prometheus scraping:
+Integrate with `sugar-metrics` for Prometheus scraping:
 
 ```yaml
 
