@@ -988,7 +988,8 @@ final class Subcommands
      * reported: 2 for a missing target or an ambiguous prefix (the candidates
      * are listed in the hint), 1 for a target nothing matches.
      */
-    private static function resolveSessionTarget(        string $verb,
+    private static function resolveSessionTarget(
+        string $verb,
         ParsedArgs $args,
         EnhancedSessionStore $store,
     ): SessionRow|int {
