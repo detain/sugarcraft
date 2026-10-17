@@ -2219,7 +2219,7 @@ final class DocFigureProseDriftTest extends TestCase
         $bulletStart = $moreAt[0][1];
         $bullets = substr($hooksRaw, $bulletStart);
         self::assertSame(1, preg_match('/`(\w+)` — registered by `Bootstrap::(\w+)\(\)` when a gate exists,\s*which is every CLI launch\. It is what makes the (\w+)-mode gate/', $bullets, $gateRow), 'the gate bullet no longer names its class, its Bootstrap seam, and the gate mode count together');
-        self::assertSame(1, preg_match('/`(\w+)` — opt-in, constructed with a jail root/', $bullets, $jailRow), 'the opt-in bullet moved');
+        self::assertSame(1, preg_match('/`(\w+)` — constructed with a jail root, and NOT part of\s*`registerBuiltIns\(\)`/', $bullets, $jailRow), 'the jail-bullet moved (ISS-121: its registrant is EngineBackend on worktree-isolated runs, not a user opt-in)');
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — the repeat-call loop guard,\s*registered per turn by `EngineBackend::(\w+)\(\)`/', $bullets, $guardRow), 'the loop-guard bullet no longer names its pair and the EngineBackend seam that registers them');
         self::assertSame(1, preg_match('/`(\w+)` — the delegated run\'s own tool declaration, registered\s*by `EngineBackend::(\w+)\(\)`/', $bullets, $grantRow), 'the sub-agent grant bullet no longer names its class and the EngineBackend seam that registers it (step 4.2)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit lint, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the three above and ahead of the hook files/', $bullets, $lintRow), 'the post-edit lint bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.E)');

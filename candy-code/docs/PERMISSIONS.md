@@ -738,10 +738,22 @@ Its limits, stated because each one is real:
   `tools: [Bash]`), only a real call — one `Deny Bash(rm *)` should not make
   every stage that declares `Bash` unusable.
 
-The tool names a pattern can start with: `Bash`, `Edit`, `Write`, `Read`,
-`Grep`, `Glob`, `WebFetch`, `WebSearch`, `Lsp`, `Skill`, `doctor`, and
-`mcp__<server>__<tool>` for bridges (`mcp__git__*`). To constrain a command
-beyond what a glob can say, use a hook matcher instead — see
+The tool names a pattern can start with are the tool catalog's names —
+`ToolCatalog::names()`. The earlier version of this page listed `Bash`,
+`Edit`, `Write`, `Read`, `Grep`, `Glob`, `WebFetch`, `WebSearch`, `Lsp`,
+`Skill`, `doctor`; the roster is now the whole catalog — also `ApplyPatch`,
+`PtyRun`, `Task`, `Team`, `Workflow`, `Memory`,
+`RepoMap`, `Prune`, `Todo`, `Compress`, `Recall`, `AskUser`, `PlanExit`,
+`SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`,
+`GenerateVideo`, `BoardPost`, `BoardRead` — and
+`mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
+the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path
+spellings for `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp`, per-path union for
+`ApplyPatch`, domains for `WebFetch`, whole-subject globs for `WebSearch` and
+`Skill`; for the rest — and for `doctor` and `mcp__*`, which map no subject —
+the argument is unknowable, so the rule's action decides alone: a restrictive
+rule matches every call of that tool and an allow matches none. To constrain
+a command beyond what a glob can say, use a hook matcher instead — see
 [`HOOKS.md`](HOOKS.md).
 
 **`doctor` is lower-case**, and this list said `Doctor` — not a typo without a
@@ -1229,8 +1241,11 @@ What it holds and what it does not:
 
 The model is told about the sandbox in the `Bash` tool's description while it
 is on, so a "Read-only file system" error reads as a boundary rather than
-something to work around. Where bubblewrap is unavailable, the opt-in
-heuristic `BashEscapeDenyHook` is the remaining layer.
+something to work around. Where bubblewrap is unavailable, the remaining
+layer is the heuristic `BashEscapeDenyHook` — which in this product runs only
+on worktree-isolated teammate turns, where `EngineBackend` registers it
+against the worktree root; an ordinary session gets it only if the embedder
+registers it by hand.
 
 ## Inspecting the live policy
 

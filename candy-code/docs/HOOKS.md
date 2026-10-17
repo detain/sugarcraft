@@ -924,8 +924,12 @@ Eleven more exist and are **not** registered by default:
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
   the main loop at all.
-- `BashEscapeDenyHook` — opt-in, constructed with a jail root, and an embedder
-  has to register it explicitly.
+- `BashEscapeDenyHook` — constructed with a jail root, and NOT part of
+  `registerBuiltIns()`. In this product its only registrant is `EngineBackend`
+  on a worktree-isolated teammate's run, where the worktree root is the jail;
+  everywhere else it is embedder opt-in. Its matcher covers every shell-subject
+  tool (`^(?:Bash|PtyRun)$`, derived from `ShellSubjectTools::NAMES`), so a
+  typed `PtyRun` keystroke is judged like a command.
 - `RepeatCallGuardHook` and `RepeatCallCountHook` — the repeat-call loop guard,
   registered per turn by `EngineBackend::resolveHookManager()` around one
   shared `Backend\ToolCallLoopGuard` ledger, on a copy of the launch's chain
