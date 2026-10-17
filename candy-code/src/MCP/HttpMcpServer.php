@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\MCP;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\TransferException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
 use SugarCraft\McpClient\ArgumentShape;
@@ -66,6 +67,36 @@ final class HttpMcpServer implements McpServer
      */
     private const DELETE_TIMEOUT_SECONDS = 5.0;
 
+    /**
+     * ISS-042: the per-`tools/call` ceiling, in seconds, when the entry names
+     * no `toolTimeout` — deliberately {@see StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS}'s
+     * SAME 120, so the two bounded transports stop answering the same question
+     * with two different numbers. WHAT IT REPLACED: nothing — every HTTP
+     * request rode the shared Guzzle client's fixed 30 s TOTAL timeout, which
+     * was simultaneously too short (a slow real tool call died at 30 s while
+     * its stdio twin got 120 s) and un-configurable (the entry's `toolTimeout`
+     * was read for `stdio` entries only). Only a positive finite number
+     * overrides it, same policy as `startTimeout`: a hand-edited config must
+     * not be able to turn a bound off by accident.
+     */
+    public const DEFAULT_TOOL_TIMEOUT_SECONDS = StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS;
+
+    /**
+     * ISS-042: how long a TCP+TLS connection may take before the request is
+     * abandoned. Named separately from {@see DEFAULT_TOOL_TIMEOUT_SECONDS}
+     * because a dead host must cost seconds, not the whole call budget — the
+     * 120 s belongs to the server's WORK, not to finding the server.
+     */
+    private const CONNECT_TIMEOUT_SECONDS = 10.0;
+
+    /**
+     * Budget for delivering `notifications/cancelled` after a call was
+     * abandoned at the ceiling. The mirror of the stdio library's own
+     * 2-second cancel leg ({@see \SugarCraft\McpClient\StdioMcpServer});
+     * a server that never reads it must not add its own timeout to ours.
+     */
+    private const CANCEL_NOTICE_TIMEOUT_SECONDS = 2.0;
+
     /** @var array<McpTool> */
     private array $tools = [];
 
@@ -95,8 +126,20 @@ final class HttpMcpServer implements McpServer
         private Client $httpClient,
         private readonly ?McpAuthStore $authStore = null,
         ?\Closure $pidProvider = null,
+        // ISS-042: the per-`tools/call` ceiling. Resolved by
+        // {@see \SugarCraft\Code\MCP\McpClient::buildServer()} exactly like the
+        // stdio arm's, from the entry's `toolTimeout`; the base Guzzle client's
+        // own fixed 30 s is OVERRIDDEN per request, never mutated.
+        private readonly float $toolTimeoutSeconds = self::DEFAULT_TOOL_TIMEOUT_SECONDS,
     ) {
         $this->ids = new RequestIdSequence($pidProvider);
+    }
+
+    /** The endpoint this server was configured with (ISS-042: the auth
+     *  notice must print the URL `mcp auth login` keys the store on). */
+    public function endpoint(): string
+    {
+        return $this->url;
     }
 
     public function start(): void
@@ -137,6 +180,15 @@ final class HttpMcpServer implements McpServer
             }
 
             $this->tools = $this->parseTools($data);
+        } catch (HttpMcpAuthRequiredException $e) {
+            // ISS-042: the session leg that refused may already hold a
+            // session id (a bearer rejected AFTER initialize, at tools/list)
+            // — end it exactly as the generic path below does, then let the
+            // typed refusal OUT, where {@see McpClient::startServer()} routes
+            // it to the launch notice instead of the silent skip.
+            $this->endSession();
+
+            throw $e;
         } catch (\Exception $e) {
             // A failure AFTER the server issued a session id (the
             // notifications/initialized leg, the tools/list gate) leaves that
@@ -229,7 +281,7 @@ final class HttpMcpServer implements McpServer
                 // empty objects lost the same way are restored against the
                 // tool's inputSchema (audit MCP-9, {@see ArgumentShape}).
                 'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
-            ]);
+            ], $this->toolOptions());
 
             return $data !== null ? ($data['result'] ?? ['error' => 'Tool call failed']) : ['error' => 'Invalid response'];
         } catch (\Exception $e) {
@@ -305,12 +357,15 @@ final class HttpMcpServer implements McpServer
      * Resending is safe because a 404 means the server never processed it.
      *
      * @param array<string, mixed>|null $params
+     * @param array<string, mixed> $options per-request Guzzle options (ISS-042:
+     *        the `tools/call` ceiling rides this; every other leg keeps the
+     *        shared client's own bound)
      * @return array<mixed>|null
      */
-    private function request(string $method, ?array $params): ?array
+    private function request(string $method, ?array $params, array $options = []): ?array
     {
         $carriedSession = $this->sessionId !== null;
-        [$id, $response] = $this->dispatch($method, $params);
+        [$id, $response] = $this->dispatch($method, $params, $options);
 
         if ($carriedSession && $response->getStatusCode() === 404) {
             $this->closeBody($response);
@@ -319,7 +374,7 @@ final class HttpMcpServer implements McpServer
             } catch (\Exception $e) {
                 throw new \RuntimeException("MCP session expired and re-initialize failed: {$e->getMessage()}", 0, $e);
             }
-            [$id, $response] = $this->dispatch($method, $params);
+            [$id, $response] = $this->dispatch($method, $params, $options);
         }
 
         return $this->replyFor($response, $id);
@@ -342,10 +397,18 @@ final class HttpMcpServer implements McpServer
      * POST one JSON-RPC request. The `initialize` reply's `Mcp-Session-Id` is
      * captured here, before the body is read, so every later request echoes it.
      *
+     * ISS-042: when a bounded request's clock runs out, Guzzle raises from
+     * INSIDE `send()` and the id minted below is the only record of what was
+     * in flight — so the abandonment is caught HERE, where the id still is,
+     * and the spec's `notifications/cancelled` is delivered before the
+     * failure propagates. Without this leg the server keeps burning a model
+     * call or a build for a client that has already walked away.
+     *
      * @param array<string, mixed>|null $params
+     * @param array<string, mixed> $options
      * @return array{0: int|string, 1: ResponseInterface}
      */
-    private function dispatch(string $method, ?array $params): array
+    private function dispatch(string $method, ?array $params, array $options = []): array
     {
         $id = $this->nextRequestId();
         $payload = ['jsonrpc' => '2.0', 'id' => $id, 'method' => $method];
@@ -353,7 +416,32 @@ final class HttpMcpServer implements McpServer
             $payload['params'] = $params;
         }
 
-        $response = $this->send($payload);
+        try {
+            $response = $this->send($payload, $options);
+        } catch (TransferException $e) {
+            // Every transport failure is an abandonment: the request left this
+            // process and no answer came back. A connect refused or a read
+            // timeout both leave a server that MAY still be holding work (the
+            // timeout especially), which is exactly when the spec's cancel
+            // notification earns its keep; the notice is best-effort, so
+            // sending it at a dead host costs its 2 s and nothing more.
+            // ConnectException::getHandlerContext() exposes the curl handler
+            // context; its `timeout` member is set exactly when the easy
+            // handle reported a deadline (8.x semantics).
+            $timedOut = ($e->getHandlerContext()['timeout'] ?? false) !== false;
+            $this->sendCancelled($id, $timedOut
+                ? 'the client abandoned the request at its configured timeout'
+                : 'the client could not complete the request');
+
+            throw new \RuntimeException(sprintf(
+                'MCP call to %s was abandoned: %s (%s)',
+                $method,
+                $timedOut
+                    ? sprintf('no reply within %s seconds', rtrim(rtrim(number_format($this->toolTimeoutSeconds, 3, '.', ''), '0'), '.'))
+                    : 'the request never reached the server',
+                $e->getMessage(),
+            ), 0, $e);
+        }
 
         if ($method === 'initialize') {
             $sessionId = trim($response->getHeaderLine('Mcp-Session-Id'));
@@ -361,6 +449,32 @@ final class HttpMcpServer implements McpServer
         }
 
         return [$id, $response];
+    }
+
+    /**
+     * The spec's cancellation notification for request $id (ISS-042). A
+     * NOTIFICATION — no id, no reply awaited — and best-effort twice over:
+     * its own delivery gets a short bound, and a failure here is discarded,
+     * because the call already failed and this message must not replace its
+     * diagnosis. Mirrors the stdio library's 2-second cancel leg.
+     *
+     * @param \Throwable|string $reason
+     */
+    private function sendCancelled(int|string $id, \Throwable|string $reason): void
+    {
+        $message = $reason instanceof \Throwable ? $reason->getMessage() : $reason;
+
+        try {
+            $this->send(['jsonrpc' => '2.0', 'method' => 'notifications/cancelled', 'params' => [
+                'requestId' => $id,
+                'reason' => $message,
+            ]], [
+                'timeout' => self::CANCEL_NOTICE_TIMEOUT_SECONDS,
+                'connect_timeout' => self::CANCEL_NOTICE_TIMEOUT_SECONDS,
+            ]);
+        } catch (\Throwable) {
+            // Best-effort by contract — see the docblock.
+        }
     }
 
     /**
@@ -375,8 +489,12 @@ final class HttpMcpServer implements McpServer
 
     /**
      * @param array<string, mixed> $payload
+     * @param array<string, mixed> $options per-request Guzzle overrides, merged
+     *        OVER the shared client's defaults (ISS-042 — the base client keeps
+     *        its 30 s; the bounded call leg raises it to the entry's
+     *        `toolTimeout` and gives every leg the short connect bound)
      */
-    private function send(array $payload): ResponseInterface
+    private function send(array $payload, array $options = []): ResponseInterface
     {
         return $this->httpClient->post($this->url, $this->connectionOptions() + [
             'json' => $payload,
@@ -384,6 +502,11 @@ final class HttpMcpServer implements McpServer
             // Statuses are this class's to interpret: a 404 on a session-bearing
             // request is the expiry signal, not a generic failure.
             'http_errors' => false,
+            // ISS-042: the connection phase gets its own short bound so a dead
+            // host costs seconds, not the call budget. A per-request option
+            // overrides the client default in Guzzle, so the caller's
+            // `timeout` above still governs the whole request.
+            'connect_timeout' => self::CONNECT_TIMEOUT_SECONDS,
             // NOT 'stream' => true: Guzzle serves streamed bodies through PHP's
             // http wrapper, whose dechunking filter blocks a read until its
             // buffer fills or the socket closes — MEASURED against
@@ -391,7 +514,19 @@ final class HttpMcpServer implements McpServer
             // keep-alive. The buffered curl path returns when the reply ends,
             // and the spec has the server close an SSE reply stream once the
             // response is sent (both reference SDKs do).
-        ]);
+        ] + $options);
+    }
+
+    /**
+     * The `tools/call` leg's options (ISS-042): the entry's ceiling, resolved
+     * once in the constructor. Kept behind a method so the one bounded call
+     * site reads as the ONLY consumer.
+     *
+     * @return array<string, mixed>
+     */
+    private function toolOptions(): array
+    {
+        return ['timeout' => $this->toolTimeoutSeconds];
     }
 
     /**
@@ -633,6 +768,16 @@ final class HttpMcpServer implements McpServer
         $detail = is_array($decoded) && isset($decoded['error'])
             ? self::describeError($decoded['error'])
             : ($body === '' ? '' : ': ' . mb_strimwidth(trim($body), 0, 200, '…'));
+
+        // ISS-042: 401/403 are not an ordinary transport failure — they are
+        // the server ASKING FOR CREDENTIALS, and the remediation is a command
+        // the operator already has (`candy-code mcp auth login`). Throwing the
+        // typed refusal here, at the one place the status is known, lets
+        // start()'s catch rethrow it past the silent-skip guard while every
+        // other status keeps the old generic message byte-for-byte.
+        if ($status === 401 || $status === 403) {
+            throw new HttpMcpAuthRequiredException($this->name, $status);
+        }
 
         throw new \RuntimeException(trim("HTTP {$status} {$response->getReasonPhrase()}") . $detail);
     }

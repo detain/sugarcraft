@@ -127,7 +127,7 @@ Four types, and they are the four `McpClient::startServer()` constructs:
 | `type` | Class | Keys |
 |---|---|---|
 | `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout` |
-| `http` | `HttpMcpServer` | `url`, `headers` |
+| `http` | `HttpMcpServer` | `url`, `headers`, `toolTimeout` |
 | `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
@@ -227,8 +227,12 @@ connection stays usable and the late reply, if any, is discarded. Only a
 positive JSON number overrides the default: a string, `0` or a negative takes
 it rather than setting a zero bound. Like `startTimeout` it is left out of the
 trust
-fingerprint, so tuning it re-prompts nothing. It is read for `stdio` entries
-only; an `http` call is bounded by the client's fixed 30 s request timeout.
+fingerprint, so tuning it re-prompts nothing. Since ISS-042 it is read for
+`http` entries too: an http `tools/call` now carries the entry's `toolTimeout`
+(default `120.0`, the same number as stdio's) instead of the shared client's
+fixed 30 s, every http leg additionally gets a 10 s connect bound, and a call
+abandoned at its ceiling sends the server `notifications/cancelled` before
+reporting — the same courtesy the stdio transport already paid.
 Every answer is capped at 65,536 bytes before the model sees
 it, with a marker naming how much was cut. `startTimeout` is read for `stdio` entries only: a `claude-mcp`
 server's `initialize` and start-time `tools/list` each wait the same fixed
@@ -251,6 +255,16 @@ transport the rest of the way:
   case-insensitively) is dropped, not merged: an `Accept: application/json`
   from the config is exactly what a Streamable HTTP server refuses with 406.
   Every other configured header is sent as written.
+- **Credentials refused is its own event.** An http `start()` that answers
+  401 or 403 is not a host-down shrug: the server is asking for credentials,
+  and the fix is one command. The launch records it and the transcript says
+  `MCP servers refused this launch for credentials: <name> (HTTP 401): run
+  \`candy-code mcp auth login <url>\`, then restart`, naming the URL the
+  credential store keys on; in `/mcp` the server keeps its declared row with
+  an `auth-required 401` marker instead of vanishing (ISS-042). A static
+  `Authorization` header that earns the 401 reads the same way — the remedy
+  there is the header, and the notice's login command is simply the wrong
+  door, which is still louder than silence.
 - **Session.** A `Mcp-Session-Id` on the `initialize` reply is echoed on every
   later request, starting with `notifications/initialized` (an id-less POST the
   server answers 202). A 404 to a request that carried the id means the server

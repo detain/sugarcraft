@@ -224,6 +224,14 @@ final class McpPanel
             return ' · ' . Lang::t('tui.mcp.liveness.not_up');
         }
 
+        // ISS-042: the one non-registered row the snapshot carries — an http
+        // entry refused 401/403 at start. It is not "not up" (a mystery) and
+        // not "exited" (it never had a process): it is up-and-refusing for
+        // credentials, a state with a command that fixes it.
+        if (isset($row['auth-required'])) {
+            return ' · ' . Lang::t('tui.mcp.liveness.auth_required', ['status' => (int) $row['auth-required']]);
+        }
+
         $up = $row['up'];
         if ($up === null) {
             return ' · ' . Lang::t('tui.mcp.liveness.state_unknown');

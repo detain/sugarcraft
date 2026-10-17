@@ -468,6 +468,31 @@ final class McpPanelTest extends TestCase
     }
 
     /**
+     * ISS-042: an http entry refused 401/403 keeps its declared row with an
+     * `auth-required HTTP 401` marker — neither `not up` (a mystery) nor
+     * `exited` (it never had a process). The row arrives from
+     * {@see McpClient::startedSnapshot()}'s post-ISS-042 auth pass.
+     */
+    public function testAnAuthRefusingServerRendersItsOwnMarker(): void
+    {
+        $name = 'authref-' . bin2hex(random_bytes(3));
+        $root = $this->makeRoot();
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [$name => ['type' => 'http', 'url' => 'http://mock.invalid/rpc']],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $out = McpPanel::render($inventory, 160, [
+            $name => ['transport' => 'http', 'up' => false, 'tools' => 0, 'auth-required' => 401],
+        ]);
+
+        self::assertStringContainsString($name . ' [http] http://mock.invalid/rpc · auth-required HTTP 401', $out);
+        self::assertStringNotContainsString($name . ' [http] http://mock.invalid/rpc · not up', $out);
+        self::assertStringNotContainsString(' · exited', $out);
+    }
+
+    /**
      * A suffixed CJK row at width 60: the clip must still hold the pane in
      * DISPLAY cells and must keep the suffix end intact (middle-truncate
      * preserves both ends — the tools word is proof the tail survived).

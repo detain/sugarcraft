@@ -8850,10 +8850,12 @@ final class Bootstrap
             // every provider switch reaches, and a PHP fatal over a live TUI is
             // strictly worse than a session with fewer tools.
             //
-            // WHAT IS LOST, precisely: the throw happens on the offending entry,
-            // so servers EARLIER in the file are up and servers AFTER it were
-            // never reached. Ordering-dependent, and a defect in the client
-            // rather than here — recorded in this bundle's report for the backlog.
+            // WHAT IS LOST, precisely: nothing about WHICH servers exist —
+            // every entry is attempted and the up ones stay registered (the
+            // ordering-dependent abort this once described was fixed in
+            // startServer()/startServers(), whose two-catches contract this
+            // catch reads). What is lost is the tools of the entries the
+            // report names, and the session proceeds with a cut tool set.
             //
             // BOTH CHANNELS, AND AN ini-DIRECTED THIRD DESTINATION. This is the
             // one site in this class that writes `error_log()` AS WELL AS the
@@ -8997,6 +8999,14 @@ final class Bootstrap
         // why. Same seam call and the same one-row-per-path bound as above.
         if ($client->strippedSecretEnv() !== []) {
             $notices[] = $client->strippedSecretEnvNotice();
+        }
+
+        // ISS-042: an http server that refused 401/403 used to land in
+        // startServer()'s silent runtime skip — a vanished tool set whose fix
+        // (`candy-code mcp auth login <url>`) was knowable and unspoken. The
+        // notice rides the SAME seam call, same one-row-per-path bound.
+        if ($client->authRequired() !== []) {
+            $notices[] = $client->authRequiredNotice();
         }
 
         foreach ($notices as $notice) {

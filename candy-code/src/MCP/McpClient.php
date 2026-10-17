@@ -90,6 +90,19 @@ final class McpClient
     /** @var list<string> entries {@see startServers()} skipped for matching a deny pattern */
     private array $deniedServers = [];
 
+    /**
+     * ISS-042: http entries whose start() was refused for credentials
+     * (401/403), server name => [endpoint URL, HTTP status]. Recorded, never
+     * thrown: the runtime class keeps its silent-skip contract for everything
+     * that is not an auth refusal, and an auth refusal's silence was the
+     * defect. The URL rides because `mcp auth login` keys the credential
+     * store by server URL, not by `.mcp.json` name — the notice has to print
+     * the argument the operator actually types.
+     *
+     * @var array<string, array{url: string, status: int}>
+     */
+    private array $authRequired = [];
+
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
@@ -165,6 +178,7 @@ final class McpClient
         $this->disabledServers = [];
         $this->refusedServers = [];
         $this->deniedServers = [];
+        $this->authRequired = [];
         $this->strippedSecretEnv = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
@@ -282,6 +296,47 @@ final class McpClient
     }
 
     /**
+     * The http entries the last {@see startServers()} run refused for
+     * credentials, name => [endpoint URL, HTTP status] (ISS-042). Empty
+     * unless one answered 401/403 during its handshake.
+     *
+     * @return array<string, array{url: string, status: int}>
+     */
+    public function authRequired(): array
+    {
+        return $this->authRequired;
+    }
+
+    /**
+     * The one-sentence launch notice for {@see authRequired()}, or the empty
+     * string when nothing was refused. The row's whole product is the command
+     * that fixes it — {@code candy-code mcp auth login <server-url>} — spelled
+     * in the shell form docs/MCP.md documents (the in-chat `/mcp auth login`
+     * only prints guidance; the browser leg cannot run inside the TUI). The
+     * URL, not the `.mcp.json` name, is what the store keys on, so the URL is
+     * what the printed argument must be.
+     */
+    public function authRequiredNotice(): string
+    {
+        if ($this->authRequired === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($this->authRequired as $server => $row) {
+            $target = $row['url'] !== '' ? $row['url'] : $server;
+            $parts[] = sprintf(
+                '%s (HTTP %d): run `candy-code mcp auth login %s`, then restart',
+                $server,
+                $row['status'],
+                $target,
+            );
+        }
+
+        return sprintf('MCP servers refused this launch for credentials: %s.', implode('; ', $parts));
+    }
+
+    /**
      * The one-sentence account of entries skipped for `enabled: false`, or the
      * empty string when nothing was skipped. Deliberately NOT phrased as a
      * build failure — the entry built fine and its own config declined to
@@ -390,6 +445,24 @@ final class McpClient
             ];
         }
 
+        // ISS-042: a server that refused for credentials never registered, so
+        // the loop above cannot see it — yet it is exactly the live-but-down
+        // row the panel exists to show (declared, transport known, zero tools,
+        // not up). `auth-required` names WHY the human can fix it, riding the
+        // panel's undeclared-started sweep (McpPanel renders unknown keys' rows
+        // through the same `not up` path), while the notice carries the fix.
+        // Placed AFTER the started rows so the map's key order keeps
+        // "came up first", and the empty case leaves the map byte-identical
+        // to every pre-ISS-042 pin.
+        foreach ($this->authRequired as $name => $row) {
+            $rows[$name] = [
+                'transport' => 'http',
+                'up' => false,
+                'tools' => 0,
+                'auth-required' => $row['status'],
+            ];
+        }
+
         return $rows;
     }
 
@@ -494,6 +567,22 @@ final class McpClient
 
         try {
             $server->start();
+        } catch (HttpMcpAuthRequiredException $e) {
+            // ISS-042: the silent skip below is right for a host that is down
+            // and wrong for a server that is merely not logged in — the first
+            // is routine, the second has a one-command fix nobody could see
+            // while the failure was swallowed. Recorded; phrased by
+            // {@see authRequiredNotice()}; deliberately NOT also added to the
+            // build-failure aggregate (startServers() throws for config, and
+            // this is runtime — the two channels stay separate, per
+            // startServer()'s own two-catches law).
+            $this->authRequired[$name] = [
+                'url' => $server instanceof HttpMcpServer ? $server->endpoint() : '',
+                'status' => $e->status,
+            ];
+            $this->recordStrippedSecretEnv($name, $server);
+
+            return null;
         } catch (\Throwable) {
             $this->recordStrippedSecretEnv($name, $server);
 
@@ -561,6 +650,13 @@ final class McpClient
                 // touch ~/.local/share/candy-code/mcp-auth.json. Tests pass
                 // an explicit store backed by a temp path for hermeticity.
                 authStore: $this->authStore ?? McpAuthStore::new(),
+                // ISS-042: `toolTimeout` was stdio-only; an http entry naming
+                // 300 got the shared client's fixed 30 s and no way to say
+                // otherwise. Same resolver, same positive-finite policy —
+                // unset or nonsense takes HttpMcpServer's default, which now
+                // equals stdio's 120 rather than the old implicit 30.
+                toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null)
+                    ?? HttpMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS,
             ),
             // `timeout` (seconds per git invocation, hooks included) is
             // OPTIONAL — audit R18. GitCommandHandlers::configuredTimeout()
@@ -666,9 +762,9 @@ final class McpClient
 
         // The wait beat (item 0.4-b) reaches the stdio transport only: it is
         // the one whose call can legitimately outlast the other transports.
-        // `http` carries Guzzle's 30 s total
-        // timeout, under the turn's 120 s idle ceiling, and `claude-mcp`
-        // speaks through its own client.
+        // `http` carries its own per-call ceiling (ISS-042: the entry's
+        // `toolTimeout`, default 120 s like stdio — no longer the shared
+        // client's fixed 30 s), and `claude-mcp` speaks through its own client.
         return $server instanceof StdioMcpServer && $onWait !== null
             ? $server->callTool($toolName, $args, $onWait)
             : $server->callTool($toolName, $args);
@@ -778,11 +874,12 @@ final class McpClient
     }
 
     /**
-     * A stdio entry's `toolTimeout` as written, or null for "nothing usable":
-     * only a positive, finite JSON number is honoured, and null resolves to
-     * {@see StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS} in the server's
+     * A bounded entry's `toolTimeout` as written, or null for "nothing
+     * usable": only a positive, finite JSON number is honoured. Both bounded
+     * transports read it (stdio since cl-4, http since ISS-042), and null
+     * resolves to each server's own DEFAULT_TOOL_TIMEOUT_SECONDS in its
      * constructor (see buildServer()). The parser reports what the config
-     * SAYS; the ceiling policy lives on the server, one place.
+     * SAYS; the ceiling policy lives on the servers, one place each.
      */
     public static function toolTimeout(mixed $raw): ?float
     {
