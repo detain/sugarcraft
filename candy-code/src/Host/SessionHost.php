@@ -19,6 +19,7 @@ use SugarCraft\Code\Commands\BangShell;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
+use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
@@ -28,6 +29,7 @@ use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\HistoryCompactedMsg;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
@@ -116,6 +118,26 @@ final class SessionHost
 
     /** Thrash breaker's run of refilled compactions (roadmap 2.10 / §4.23). */
     private int $consecutiveRefills = 0;
+
+    /**
+     * When the last prompt was accepted (ISS-064): the anchor for the idle
+     * compaction advisory in {@see submit()}. Null until this process's first
+     * prompt, so a cold session never advises.
+     */
+    private ?\DateTimeImmutable $lastPromptAt = null;
+
+    /**
+     * The ahead-of-need summary of roadmap 2.10, host edition (ISS-064): the
+     * mirrors the TUI's `$backgroundSummary` — requested beside the turn at
+     * the 70% reminder tier so the 85% tier can splice model-written records
+     * instead of waiting on a round-trip. `summaries` is null while the call
+     * is out and `[]` when it came back unusable — held as a failure so one
+     * cycle does not re-ask a failing summarizer every turn, dropped as soon
+     * as the reminder tier stops firing or the fingerprint moves.
+     *
+     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>}
+     */
+    private ?array $aheadOfNeed = null;
 
     /** E17 calibration of the token estimate, and the raw proxy it pairs with. */
     private ?float $calibration = null;
@@ -460,6 +482,37 @@ final class SessionHost
             return TurnTicket::refused($this->turns()->emptyPromptNotice())->withIdempotencyKey($options->idempotencyKey);
         }
 
+        // ISS-064: the idle-compaction advisory. The policy existed and this
+        // host had no caller for it: a session idle past
+        // `compaction.idleOfferSeconds` whose estimate is over the WHOLE window
+        // hears it in the transcript, in the TUI's words, before the prompt
+        // runs. One deliberate deviation from the TUI: the prompt is NOT held.
+        // A server client has no `/compact` turn to answer the offer with
+        // without a second round trip, and the automatic tier this very submit
+        // runs IS the summarise-first-then-refuse the notice announces.
+        $idleConfig = $this->compactor->config();
+        if ($this->workspace->backend !== null && $this->lastPromptAt !== null
+            && $idleConfig->idleOfferSeconds > 0 && !$this->isBusy()
+        ) {
+            $idleTokens = $this->estimate($this->history);
+            $idleLimit = $this->meter()->limit($this->backend());
+            if ($this->meter()->shouldPromptIdleCompaction(
+                $idleTokens,
+                $this->lastPromptAt,
+                $idleLimit,
+                $idleConfig->idleOfferSeconds,
+            )) {
+                $advisory = Message::notice(Lang::t('chat.compact.idle_advisory', [
+                    'tokens' => $idleTokens,
+                    'limit' => $idleLimit,
+                ]));
+                $this->history[] = $advisory;
+                $this->save();
+                $this->announceTranscriptRow($advisory);
+            }
+        }
+        $this->lastPromptAt = new \DateTimeImmutable();
+
         $ticket = $this->isBusy()
             ? $this->admitWhileBusy($text, $options)
             : $this->admit($text, $options);
@@ -777,8 +830,9 @@ final class SessionHost
         // `compaction.mode` (roadmap N-P4b) as Chat::submit() reads it: `off`
         // skips the automatic tier, yet a prompt the window cannot take is
         // still refused with the blocking tier's refusal. `heuristic` and
-        // `llm` need no arm here — a server session's tier always writes the
-        // heuristic lines.
+        // `llm` need no arm here — the tier below always runs; an ahead-of-need
+        // summary that landed (ISS-064) only replaces the heuristic lines it
+        // would write, never the arm that fires them.
         $config = $this->compactor->config();
         // ISS-015: the tiers read the calibrated estimate plus tool-argument
         // bytes (the status bar's figure), not the content-only wire tally.
@@ -794,6 +848,21 @@ final class SessionHost
                 return TurnTicket::refused($compaction->thrashBreakerNotice($config->refillLimit));
             }
 
+            // ISS-064: a landed ahead-of-need summary whose fingerprint still
+            // matches this history is spliced in — the tier gets the model's
+            // records for the exchanges it is about to condense. Empty or
+            // stale passes nothing extra: the heuristic lines as before.
+            $spliced = null;
+            $held = $this->aheadOfNeed;
+            if ($held !== null && ($held['summaries'] ?? []) !== []
+                && $held['fingerprint']->matches($compaction->historyFingerprint($this->compactor, $this->history))
+            ) {
+                $spliced = CompactionService::splicedSummaries($held['summaries'], $this->history);
+                // Used up either way: the history it described is rewritten
+                // below, and the next 70% dispatch asks afresh.
+                $this->aheadOfNeed = null;
+            }
+
             $tier = $turns->inlineTier(
                 $compaction,
                 $this->compactor,
@@ -802,6 +871,7 @@ final class SessionHost
                 $tokenLimit,
                 $tokenCount,
                 $this->estimate(...),
+                $spliced ?? [],
             );
             if ($tier['outcome'] === 'blocked') {
                 // As the TUI's refusal does, the rewrite is kept: each further
@@ -1301,6 +1371,57 @@ final class SessionHost
         $baseHistory = CompactionService::withoutContextReminders($baseHistory);
         if ($dueForReminder) {
             $newTurnMessages[] = CompactionService::contextReminderMessage($this->estimate($preStrip));
+        }
+
+        // ISS-064: ahead-of-need summarisation (roadmap 2.10, the host mirror
+        // of the TUI's dispatchTurn block): at the same 70% tier that appends
+        // the reminder, ask for the summaries the 85% tier will need, so the
+        // turn goes out AND the compaction's model lines are already on their
+        // way. One request per cycle: an in-flight one is left alone, a landed
+        // one is kept while its fingerprint matches — failures included — and
+        // dropped once the tier stops firing because nothing will need it.
+        $dispatched = [...$baseHistory, ...$newTurnMessages];
+        if ($this->aheadOfNeed !== null && $this->aheadOfNeed['summaries'] !== null && (
+            !$dueForReminder
+            || !$this->aheadOfNeed['fingerprint']->matches(
+                $this->compaction()->historyFingerprint($this->compactor, $dispatched),
+            )
+        )) {
+            $this->aheadOfNeed = null;
+        }
+        if ($dueForReminder && $this->aheadOfNeed === null
+            && $this->workspace->backend !== null
+            && !$this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd)
+        ) {
+            $request = $this->compaction()->buildSummarizationRequest(
+                $this->backend(),
+                $this->compactor,
+                $dispatched,
+                null,
+                null,
+                '',
+                true,
+                $baseHistory,
+            );
+            if ($request !== null) {
+                $this->aheadOfNeed = [
+                    'id' => $request['id'],
+                    'fingerprint' => $request['fingerprint'],
+                    'summaries' => null,
+                ];
+                $request['promise']()->then(function (HistoryCompactedMsg $msg) use ($request): void {
+                    // Billed before the latch check, as the TUI bills it: a
+                    // paid-for provider call is never unbilled, even when the
+                    // summaries it carried are superseded on arrival.
+                    $this->ledger()->account($this->spend, $msg->usage);
+                    if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
+                        return;
+                    }
+                    $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null
+                        ? $msg->summaries
+                        : [];
+                });
+            }
         }
 
         if ($refilled !== null) {
