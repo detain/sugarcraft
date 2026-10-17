@@ -21,7 +21,7 @@
 ## Baseline test figures (per lib)
 
 Command per lib: `cd /home/sites/sugarcraft/<lib> && vendor/bin/phpunit --colors=never`.
-PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-scriptui, sugar-crush) run under the
+PTY libs (candy-pty, candy-core, candy-wish, candy-vcr, candy-scriptui, sugar-crush) run under the <!-- @rename-keep -->
 Part A rule-9 watchdog (1800 s). Pre-existing failures are RECORDED, not fixed.
 sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush — sharded, E671)".
 
@@ -60,7 +60,7 @@ sugar-crush uses the sharded runner mirroring ci.yml "Run tests (sugar-crush —
 | candy-top | 2110 | 107777 | 0 | 0 | 0 | 0 |  |
 | candy-vcr | 989 | 4209 | 0 | 0 | 14 | 0 |  |
 | candy-vt | 976 | 12873 | 0 | 0 | 0 | 0 |  |
-| candy-wish | 260 | 976 | 0 | 0 | 0 | 0 |  |
+| candy-wish | 260 | 976 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->
 | candy-mouse | 139 | 416 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | honey-bounce | 210 | 6088 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep historical provenance -->
 | honey-flap | 64 | 172 | 0 | 0 | 0 | 0 |  | <!-- @rename-keep -->

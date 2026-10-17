@@ -40,7 +40,7 @@ through P6.5.6 unless I tell you to stop.
 |---|---|---|
 | candy-pty | 264 | +3 from P6.1 (`PumpRecorderTapTest`) |
 | candy-core | 545 | unchanged |
-| candy-wish | 70 | unchanged |
+| candy-wish | 70 | unchanged | <!-- @rename-keep -->
 | candy-scriptui | 180 | unchanged |
 | candy-vcr | 324 | unchanged |
 

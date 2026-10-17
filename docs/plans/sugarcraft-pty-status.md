@@ -75,7 +75,7 @@ Suites + counts (current):
 |---|---|---|
 | candy-pty | 261 | 2 deprecations, 2 skipped — both expected |
 | candy-core | 545 | 24 skipped (FFI / Windows guards) |
-| candy-wish | 70 | All real PTY end-to-end |
+| candy-wish | 70 | All real PTY end-to-end | <!-- @rename-keep -->
 | candy-scriptui | 180 | Spin / RealProcess adapter |
 
 ## CI workflows
@@ -105,7 +105,7 @@ Failed mitigations (kept as historical record):
 
 **Pattern**: candy-core jobs fail on PR branches that ALSO touch candy-pty; they pass on master after merge. This is expected. **Don't try to "fix" the lock** by regenerating it on a PR branch — that just shifts the failure to the post-merge master push. The 7-cell failure pattern (Test/PHPStan/macOS/Windows × candy-core) on a PR is normal for any candy-pty change.
 
-The macOS candy-wish cell **is** the canary that proves the underlying fix works on Darwin.
+The macOS candy-wish cell **is** the canary that proves the underlying fix works on Darwin. <!-- @rename-keep -->
 
 ### PTY integration matrix flakes on macOS (`pty-matrix.yml`)
 
@@ -131,8 +131,8 @@ The macOS candy-wish cell **is** the canary that proves the underlying fix works
 #461  ai/candy-pty-spawn-bash-example  P4.6 — DI quickstart example
 #460  ai/candy-pty-deprecation-markers  P4.5 — path-repo audit + check-path-repos.php
 #459  ai/candy-core-program-termios-di  P4.4 — Program optional Termios DI
-#458  ai/candy-wish-spawn-pty-system  P4.3 — Spawn middleware DI integration test
-#457  ai/candy-wish-pty-system-di    P4.2 — InProcessTransport optional PtySystem DI
+#458  ai/candy-wish-spawn-pty-system  P4.3 — Spawn middleware DI integration test <!-- @rename-keep -->
+#457  ai/candy-wish-pty-system-di    P4.2 — InProcessTransport optional PtySystem DI <!-- @rename-keep -->
 #456  ai/candy-pty-system-factory    P4.1 — PtySystemFactory + UnsupportedPlatformException
 #455  ai/candy-scriptui-uses-posix-process  P3.3 — candy-scriptui RealProcess adapter
 #454  ai/candy-pty-posix-process     P3.2 — PosixProcess (non-PTY spawn)
@@ -224,7 +224,7 @@ These are real things this rollout learned and embedded in your auto-memory:
 - **PR size — bundle related items**: don't do one PR per audit item; bundle 2–4.
 - **Ship-as-you-go**: each cohesive change-set = one PR (commit→push→PR→merge→pull) before starting the next.
 - **PHPUnit kill pattern**: `timeout` doesn't work on PTY/FFI hangs; spawn a backgrounded pkill watchdog.
-- **candy-wish PTY dual-mode**: in-process SSH is default; HostSshd stays as opt-in.
+- **candy-wish PTY dual-mode**: in-process SSH is default; HostSshd stays as opt-in. <!-- @rename-keep -->
 - **Audit — skip credit + upgrade-guide items**.
 - **Monorepo distribution**: all commits land in `detain/sugarcraft`; per-lib repos auto-distributed.
 

@@ -23,7 +23,7 @@ Only the sections an open item still cites are kept: the attach design (§4.9), 
   - the TUI and browser see the same live session;
   - turns survive closing the terminal;
   - the TUI gains approvals parity automatically.
-- **Optional cheap remote-TUI channel:** because candy-core `Program` accepts `input`/`output` streams and `windowSize` (`ProgramOptions.php`), a `/pty` WS endpoint could stream the real TUI into xterm.js (ttyd-style). candy-wish already does "TUI over SSH via sshd". This is low-effort but **not** multi-session-friendly. Keep it as a footnote, not the plan.
+- **Optional cheap remote-TUI channel:** because candy-core `Program` accepts `input`/`output` streams and `windowSize` (`ProgramOptions.php`), a `/pty` WS endpoint could stream the real TUI into xterm.js (ttyd-style). candy-wish already does "TUI over SSH via sshd". This is low-effort but **not** multi-session-friendly. Keep it as a footnote, not the plan. <!-- @rename-keep -->
 
 ## 6. Wire protocol (`sugarcrush.v1`)
 
