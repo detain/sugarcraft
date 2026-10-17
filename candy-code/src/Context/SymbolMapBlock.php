@@ -19,7 +19,7 @@ use SugarCraft\Code\RepoMap\TagCache;
  * (no focus files, no mentioned identifiers — those would change it every
  * turn), and memoised through {@see SessionPromptMemo} like every other
  * PerSession layer: it is read at the session's first turn and frozen until a
- * refresh point (`/clear`, a compaction, a session switch). A focused or
+ * refresh point (`/clear` or a rewritten history). A focused or
  * fresh map is the `RepoMap` tool's job, on demand.
  *
  * WHO CAPTURES IT. Only EngineBackend, in the parent before a turn's child

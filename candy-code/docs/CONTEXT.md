@@ -294,7 +294,10 @@ past the spend cap or a `PreCompact` refusal, and nothing about it reaches the
 transcript but the notes it saved. The host-side compactions (`/compact`, the
 automatic tier) flush the same way before their summary, on the same
 once-per-cycle count kept on the session's context ledger; the overflow retry
-below does not flush. See
+below does not flush. `MemoryFlush::run()` now hands its caller the list of
+saved-row result strings (the old return was a count; `count()` of the rows is
+the same figure), so a host can announce what was saved — display wiring for it
+is still pending, so on screen the flush stays silent. See
 [`MEMORY.md`](MEMORY.md#memory-flush-before-compaction).
 
 ## Recovery

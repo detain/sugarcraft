@@ -1504,7 +1504,7 @@ final class InstructionFileLoader
     /**
      * Forget everything this loader read and emitted, so the next load reads
      * the files from disk again — the CLAUDE.md half of a prompt refresh
-     * point (`/clear`, a compaction, a session switch; step 1.A-2).
+     * point (`/clear` or a rewritten history — compaction, rewind; step 1.A-2).
      *
      * WHY IN PLACE AND NOT A NEW INSTANCE. The loader is shared on purpose:
      * Read/Edit/Glob/Grep/Write hold this same object for loadForPath()'s

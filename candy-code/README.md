@@ -578,7 +578,10 @@ Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
 (`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each
 command's **argument hint** (`/rename [<name>|--auto]`) — fitting the whole row to the
 terminal rather than letting it run off the edge: the description gives up
-columns first, then the hint, and the name (the row's identity) last.
+columns first, then the hint, and the name (the row's identity) last. The popup
+is capped to the rows free below the input and windowed around the selection:
+hidden matches collapse into faint `↑ N more` / `↓ N more` rows instead of
+pushing the box off the screen.
 
 `/help` lists every command the registry advertises, with its argument hint —
 that is the list above without the five aliases: `/agents`, `/bg`, `/context`,
@@ -763,15 +766,31 @@ Follow the conventions in @CONVENTIONS.md when you answer.
 Tool calls stream into the transcript **as they happen** — the forked child
 emits lifecycle events rather than buffering until the turn ends — each with a
 human-readable description and the command it actually ran, then a
-running→done transition. `Edit`/`Write` results render a real unified diff. A
+running→done transition. `Edit`/`Write` results render a real unified diff; its
+headers print root-relative paths for files inside the session root
+(`--- a/src/x.php`) and bare paths for files outside any root. A
 no-op edit reports as a no-op instead of success. Denied and interrupted calls
-get their own visual state. Tool results that carry images are labelled and
-rendered inline via sugar-image. Successful tool bodies are hidden by default
+get their own visual state. Rows the UI painted for itself carry a `local`
+label instead of posing as an assistant reply, and a row flagged as an error
+paints under an `error` label with a `retry: ↑ then Enter` hint. Tool results
+that carry images are labelled and rendered inline via sugar-image. Successful tool bodies are hidden by default
 (`Ctrl+O` or a click opens them); an expanded call shows the invocation above
-its output — `$ <command>` for shell calls, `key: value` for other tools. The
+its output — `$ <command>` for shell calls, `key: value` for other tools — array and object arguments escape once, not
+twice (`Compress(refs: ["r3","r5"])`), and `Todo`/`Prune` rows summarise
+(`Todo(3 items, 1 in progress)`, `Prune(pruned r3, r5)`) instead of dumping
+their payload. The
 model's thinking streams in full while it thinks, then folds into a collapsed
 `💭 Thought` row once the reply (or a tool call) starts; click the row to open
-or close it (`Ctrl+O` toggles the newest one).
+or close it (`Ctrl+O` toggles the newest one). While it thinks, the row
+animates the registry spinner and counts turn-elapsed `M:SS`; sixty seconds
+without token growth append a `no tokens for M:SS · Esc Esc to cancel` stall
+hint (`CANDY_CODE_REDUCED_MOTION` parks the glyph but keeps the clock).
+Any keystroke that edits the draft pulls a scrolled-up transcript frame back
+to the visible bottom; the wheel alone keeps your offset. A paste longer than
+ten lines or 2 KB collapses in the draft to a `[Pasted text #N +L lines]` chip
+and expands back verbatim when sent, and the compose box itself is capped at
+about a third of the frame — its window follows the caret, with `↑/↓ N lines`
+markers for what is off-screen.
 
 **Context.** The status bar shows the history against the **live model's own
 context window** as its provider reports it (a backend with no model behind
@@ -951,7 +970,8 @@ opens writable, as before.
 
 Launches that were quit without typing leave empty sessions behind; the next
 launch deletes the ones older than an hour (unnamed, with no transcript and no
-checkpoint — nothing that could be wanted back).
+checkpoint — a transcript whose every row is a UI-only `local` notice counts as
+no transcript here; nothing that could be wanted back).
 
 ### Checkpoints: undo, redo, rewind and diff
 
@@ -1377,8 +1397,14 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
 ### Memory, instructions, skills and MCP
 
 - **Instruction files** — `CLAUDE.md`/`AGENTS.md` at the project root (or
-  another agent's alias), nested ones when a tool touches their directory, and
-  your personal `~/.candy-code/AGENTS.md`, all with `@import`. `/init` writes
+  another agent's alias), and nested ones when a tool touches their directory —
+  a touch returns every governing file not yet emitted, outermost first, in one
+  framed result budgeted at one document's worth of bytes (what the budget
+  skips arrives on a later touch; an over-ceiling file ships a pointer line),
+  and your personal `~/.candy-code/AGENTS.md`, all with `@import` expansion
+  that skips inline-code spans and `name@host.md`-shaped email addresses; an
+  absolute `@/abs/x.md` resolves as given and is judged by the checkout-boundary
+  gate (outside the checkout ships an `<import-blocked>` note). `/init` writes
   a starting `AGENTS.md` for the project; `/rules` toggles rule packs for the
   session, and `/newrule [focus]` has the agent draft a new project rule under
   `.candy-code/rules/` from the conversation — the write is always put to you,
@@ -1781,8 +1807,10 @@ comes from. `installation` is hand-rolled by `bin/candy-code`'s autoload guard
 through `Subcommands::emitDocument()`: `session delete <id>` on an id the store
 does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
 read or decoded. Both exit `1` — the store and the file were opened, so
-something was attempted; an absent, out-of-tree or untrusted `.mcp.json` is an
-answer rather than a failure and exits `0` with a `status` field saying so.
+something was attempted; an absent, disabled, out-of-tree or untrusted
+`.mcp.json` is an answer rather than a failure and exits `0` with a `status`
+field saying so (a disabled project config owns its own status, and so does
+trust).
 
 Two shapes of that contract are easy to over-read, so both are stated
 plainly. **`result` is not always a string.** It is one on the one-shot path
@@ -2165,7 +2193,14 @@ A permission setting that is **present but unusable stops the launch** (exit 2 �
   - `Session\EnhancedSessionStore` adds the per-turn `/rewind` checkpoints on top; message bodies are content-addressed and stored once each, so the conversation itself costs storage proportional to its length rather than to its length squared (the per-checkpoint list of message references is still proportional to the length).
 - **Tokens & export** — `Util\TokenTracker` (token + cost accumulation, fed one entry per settled turn from the provider-counted figures on `Usage`, and read by `/budget` and the status bar's spend readout) and `Util\Exporter` (Markdown / JSON / text transcripts).
 - **Messages** — typed `Messages\{System,User,Assistant,ToolResult}Message`; `UserMessage` carries file/image attachments; `AssistantMessage` carries tool calls + reasoning.
-- **Context files** — `CLAUDE.md`/`AGENTS.md` at the project root (or another agent's `GEMINI.md`/`.cursorrules`/`.clinerules`) are loaded into the system prompt, after your personal `~/.candy-code/AGENTS.md`, with `@import` expansion (cycle- and traversal-guarded, and de-duplicated so an imported doc is not injected twice). `Forced` instructions come from user config. An `EnvironmentBlock` (cwd, platform, model, date) closes the system prompt so the model is not guessing at its surroundings; the live git state (branch, status, recent log, diffs after a write) and the files the agent touched ride a `<turn-context>` row at the end of each request instead, so the prompt itself stays byte-stable for the provider's prefix cache.
+- **Context files** — `CLAUDE.md`/`AGENTS.md` at the project root (or another agent's `GEMINI.md`/`.cursorrules`/`.clinerules`) are loaded into the system prompt, after your personal `~/.candy-code/AGENTS.md`, with `@import` expansion (cycle- and traversal-guarded, and de-duplicated so an imported doc is not injected twice). `Forced` instruction patterns come from user config; each match expands its own
+`@path` imports like a root document, and a pattern that cannot match (absolute,
+`~/`-rooted, or a wildcard-free file that is missing) is refused loudly at
+launch through the notice drain rather than retiring in silence. Project rules
+under `.candy-code/rules/` honour their `models:` frontmatter — case-insensitive
+`fnmatch` globs against the full and provider-stripped model name, no session
+model includes all — while `keywords:` stays inert and is named by the launch
+frontmatter audit. An `EnvironmentBlock` (cwd, platform, model, date) closes the system prompt so the model is not guessing at its surroundings; the live git state (branch, status, recent log, diffs after a write) and the files the agent touched ride a `<turn-context>` row at the end of each request instead, so the prompt itself stays byte-stable for the provider's prefix cache.
 - **Permission prompts** — the blocking request/reply flow is wired end to end: `Chat` runs the whole batch of a turn's tool calls through the `PreToolUse` chain *before* forking any of them, and a `HookResult::ask()` suspends the turn on a `PermissionRequestMsg` rendered as a Veil modal over the transcript. `y`/`n`/`a` settles the paused call rather than being advisory, and `a` records a session-scoped grant for calls like this one (the same scope on both paths, below), saved with the session so `--resume` keeps it; `e` edits that scope before it is remembered, and `/permissions revoke` takes a grant back. The modal shows a `Bash` call's command itself, with the model's caption beneath it, and names what `a` would remember. The grant answers only the permission gate's own question: when one of your hooks asks, or `auto` flags a security finding, the modal offers no `a`, says why, and the question is put again on the next call. The prompt is *armed* when it goes up and any non-answer keystroke disarms it (`Enter` re-arms), so an ordinary slash command typed at a live prompt is swallowed instead of answering it. The TUI's default mode, `default`, asks for every write, shell command and network call; `accept-edits` and `auto` ask for less, and `bypass-permissions` and `dont-ask` never prompt (a hook that returns `ask()` still does). The **engine** path asks through the same modal: an engine turn runs in a forked child, and each ASK it raises crosses the turn's two-way frame channel as an `ask` frame, goes up as the same y/n/a prompt, and the answer goes back down as `ask_reply` while the child waits (its idle ceiling is paused for as long as the question is open). There, `n`/`Esc` hands the model a `Permission denied:` result and the turn carries on, and `a` remembers a **pattern** for the rest of the session rather than one exact call — `git status` grants `Bash(git status)` and `Bash(git status *)`, an `Edit` grants that path, a `WebFetch` that host, an MCP tool that tool; a pipeline or chain is generalised per segment with its operators kept (`sed -n 1,5p f | sort | uniq` → `Bash(sed * | sort * | uniq *)`), with launchers (`bash -c`, `sudo`, `xargs`), destructive commands (`rm`, `mv`, `chmod`, …), a writing redirection's target and a `curl` piped on kept literal. A leading `cd <dir inside the project> &&` is a no-op for grants on every path: `a` on `cd /repo && git status --short` remembers `Bash(git status *)`, which then covers `git status` and `cd /repo/sub && git status` too (a `cd` out of the project, or through an expansion, stays part of the command). A remembered pattern only ever answers a question: it never lifts a configured `Deny`, Plan mode's refusals or the `rm -rf /` breaker, and it is never written to a settings file. A question the turn ends underneath (the child gone, the stream corrupt) reaches the model as `Permission required:` — nobody answered it — not as a refusal. The one-shot `-p` path is different: it attaches a console approver, prompts on stderr at a terminal, and refuses with a reason when there is no terminal.
 
 ## Architecture

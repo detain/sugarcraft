@@ -4229,8 +4229,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * The session's prompt memo is primed, never OBSERVED: observing would
      * record this request as a turn of its own and make the next real turn
-     * look like a session switch, which forgets the very layers whose bytes
-     * the cache depends on.
+     * look like a rewritten baseline, which forgets the very layers whose
+     * bytes the cache depends on (ISS-054: a session switch alone is no
+     * longer such a point).
      *
      * @param list<Message> $history
      *

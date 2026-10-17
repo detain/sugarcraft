@@ -651,7 +651,10 @@ would be arbitrary code execution on clone-and-launch, on a timer, with no tool
 call and no permission gate in the path. It is the strongest case of the
 argument `provider` and `instructions` already rest on.
 
-What it costs, stated because the command runs on the TUI's own thread:
+What it costs — stated for a command that runs off the TUI thread, in a
+forked child of its own (ISS-095), so a slow configured command can never stall
+the frame or the Ctrl+C read; the result lands as a `StatusLineResultMsg` when
+the child exits:
 `StatusLineCommand::REFRESH_SECONDS` (2.0) between runs, and a hard
 `StatusLineCommand::TIMEOUT_SECONDS` budget per run — derived as half the
 refresh period, so two runs can never overlap — after which the child is

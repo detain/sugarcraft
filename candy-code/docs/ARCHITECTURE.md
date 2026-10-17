@@ -738,7 +738,7 @@ works travels outside it.
 - **Per-session memo** — the PerSession layers (static `<env>`, repo map,
   memory, the standing instruction slab) are memoised per session through
   `Context\SessionPromptMemo`, frozen until the session is forgotten
-  (`/clear`, compaction, another session). `EngineBackend` holds it, primes it
+  (`/clear`, a rewritten history). `EngineBackend` holds it, primes it
   in the parent before each turn's fork, and detects those refresh points from
   the history it is handed.
 

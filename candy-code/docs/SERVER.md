@@ -554,9 +554,13 @@ decides what a new prompt does:
 
 Idle, a prompt starts a turn (`admitted: "started"`, with its `turnId`), or is
 parked behind a hook or command file that runs in a child
-(`admitted: "pending"`). A prompt the session refuses — the spend cap, a
-built-in slash command, an empty command expansion — is `-32009` `refused`
-with the reason. `server.maxConcurrentTurns` (4) caps the turns running at
+(`admitted: "pending"`). A prompt that resolves to a handled command — a
+slash command or a `!bang` run — answers `admitted: "handled"`: the command
+never becomes a model turn, so the answer is an admission, not `-32009`
+(ISS-056); every row it saves arrives as `message.created`, and a `!bang`
+additionally brackets its run with `session.status` busy → idle. A prompt the
+session refuses — the spend cap, an empty command expansion — is `-32009`
+`refused` with the reason. `server.maxConcurrentTurns` (4) caps the turns running at
 once across sessions: one more is refused `busy` (`too_many_turns`), which is
 retryable.
 

@@ -435,16 +435,19 @@ OpenClaw's hybrid-search defaults:
 to a model the active provider serves on its embeddings endpoint. Without it the
 recall is keyword-only, silently — the default, since many local servers serve no
 embedding model. With it, a configured model that fails (endpoint down, model not
-served, a malformed response) degrades that turn to keyword-only and says so once
-per process in a runtime notice, rather than going quiet. Vectors are cached by
+served, a malformed response) degrades that turn to keyword-only and says so in a
+runtime notice — on the fork path once per turn rather than once per process,
+since the fresh child re-arms the latch and the notice rides the result socket
+back to the parent — rather than going quiet. Vectors are cached by
 model and exact text in `~/.candy-code/cache/embeddings.sqlite`
 (`EmbeddingCache`, owner-only, at most 50,000 vectors, least recently used out),
 so a turn embeds its message and only the notes that are new or edited.
 
-**When it runs:** once per turn, in the parent process before the turn's child
-is forked (`EngineBackend::completeAsync()` → `Runtime::primeMemoryRecall()`);
-the child reads the ranking from the session prompt memo
-(`Runtime::memoryRecall()`). A path that runs a turn without that step — a
+**When it runs:** once per turn, in the turn's forked child — or on the
+no-fork blocking fallback — never on the parent event loop
+(`EngineBackend::completeAsync()` primes the ranking in the child,
+`primeMemoryRecallForTurn()`). Sessionless background backends — the dream
+pass, delegated work — prime nothing; their recall is keyword-only. A path that runs a turn without that step — a
 mid-turn message that changed the latest user row, `-p`, a sub-agent — ranks
 keyword-only on first use instead. The row is re-sent only when its bytes change,
 so a turn whose recall matches the previous one adds nothing.
@@ -654,7 +657,10 @@ completed pass. One pass reads at most 20 entries and 24,000 bytes of them,
 oldest first, each cut to 2,000 characters and redacted again; what is left
 over waits for the next pass. It needs an engine backend (it never runs on a
 tool-less one), a memory store and a journal, and never runs once
-`CANDY_CODE_MAX_COST` is reached; its cost counts towards the spend total.
+`CANDY_CODE_MAX_COST` is reached; its cost counts towards the spend total. The
+pass runs its engine on a fresh prompt memo of its own
+(`EngineBackend::withSessionPromptMemo()`), so its background turns can neither
+bust nor inherit the session's instruction layers.
 `CANDY_CODE_DISABLE_AUTO_MEMORY=1` or `"memory.autoConsolidate": false` turns it
 off together with auto-memory ([ENVIRONMENT](ENVIRONMENT.md)).
 
@@ -678,7 +684,11 @@ tagged both `auto-memory` and `dream`.
 changed outside `/memory` since the last commit is committed first under its
 usual subject, then the pass's changes as one commit, `memory: dream pass —
 saved N, updated N, removed N from N journal entries`, counted from what was
-applied rather than from the model's account of it. The journal cursor moves
+applied rather than from the model's account of it. The cursor is a byte offset into the
+journal, and every completed fold trims the consumed prefix (the unread tail is
+preserved), so the journal's size on disk stays bounded by what is not yet
+dreamed; legacy count+identity state converts once, by the identity of the last
+entry read, and conversion never skips work forward. The journal cursor moves
 past the entries only when the turn completed: a turn that failed, hit the
 step, output or loop limit, or answered no JSON leaves them to be shown again.
 A pass that changed a note says so in one display-only transcript line; one

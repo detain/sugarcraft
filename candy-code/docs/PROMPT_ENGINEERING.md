@@ -289,10 +289,12 @@ The PerSession layers — the static `<env>`, the repo map, project memory and t
 instruction slab (user rules, `CLAUDE.md`/`AGENTS.md` with their `@import`s, forced globs, project
 rules) — are memoised per **session** through `Context\SessionPromptMemo`, not per `Runtime`
 (which is per turn). They are read once, at the session's first build, and stay frozen until the
-session's entries are dropped with `SessionPromptMemo::forget()`: on `/clear`, after a compaction
-or rewind, or when another session id arrives. `EngineBackend` reads those points off the history
-each turn runs on (`SessionPromptMemo::observeTurn()`): a history that no longer starts with the
-previous turn's rows, or a turn from a different session than the last. An edit to `CLAUDE.md` mid-session therefore takes effect at
+session's entries are dropped with `SessionPromptMemo::forget()`: on `/clear` or after a
+compaction or rewind. A different session id arriving is no longer such a point (ISS-054): the
+memo is bucketed per session id anyway, and a serve-mode hub that multiplexes sessions on one
+backend now keeps every session's warm prefix instead of rebuilding a full repo and symbol map on
+each hop. `EngineBackend` reads that point off the history each turn runs on
+(`SessionPromptMemo::observeTurn()`): a history that no longer starts with the previous turn's rows. An edit to `CLAUDE.md` mid-session therefore takes effect at
 the next of those points — the trade Claude Code and Aider make, immediacy for a prefix that does
 not move. Inputs that legitimately change a layer inside a session are part of its memo slot
 instead of being frozen: the project root, the model name, the `/rules` toggle set and the
