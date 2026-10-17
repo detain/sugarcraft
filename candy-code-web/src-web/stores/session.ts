@@ -1,9 +1,10 @@
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import { SeqCursor } from '../protocol/cursor'
 import type { EventEnvelope, MethodResult, PermissionMode, Subscription } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
 import { useConnectionStore } from './connection'
+import { useLayoutStore } from './layout'
 import { applyEvent, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
 
 export type Delivery = 'queue' | 'steer' | 'interrupt'
@@ -112,7 +113,15 @@ function setup(sessionId: string) {
     if (holders > 0) return
     releaseTimer = setTimeout(() => {
       releaseTimer = null
-      if (holders === 0) void unsubscribe()
+      if (holders !== 0) return
+      void unsubscribe()
+      // ISS-112: nobody is looking and no tab holds the session — the store
+      // was a full transcript cache per visited session, growing forever in
+      // a long-lived tab. Unsubscribe was already released at the socket;
+      // release the memory too. A later visit re-follows from the cursor the
+      // server still keeps (overflow/resubscribe, ISS-052, is the precedent
+      // that a fresh subscribe is cheap).
+      if (!useLayoutStore().tabs.includes(sessionId)) disposeSessionStore(sessionId)
     }, RELEASE_GRACE_MS)
   }
 
@@ -241,6 +250,7 @@ function define(sessionId: string) {
 }
 
 const definitions = new Map<string, ReturnType<typeof define>>()
+const liveStores = new Map<string, SessionStore>()
 
 /** The store of one session (created on first use, one per session id). */
 export function useSessionStore(sessionId: string) {
@@ -249,7 +259,30 @@ export function useSessionStore(sessionId: string) {
     definition = define(sessionId)
     definitions.set(sessionId, definition)
   }
-  return definition()
+  const store = definition()
+  liveStores.set(sessionId, store)
+  return store
+}
+
+/** Drop a released session entirely: instance, pinia state, and definition. */
+function disposeSessionStore(sessionId: string): void {
+  const store = liveStores.get(sessionId)
+  liveStores.delete(sessionId)
+  definitions.delete(sessionId)
+  const pinia = getActivePinia()
+  if (pinia !== undefined) {
+    // $dispose stops the store's effects; the two maps are Pinia's own
+    // instance and state registries — deleting keeps `pinia.state.value`
+    // from caching the transcript after the store itself is gone.
+    delete pinia.state.value[`session/${sessionId}`]
+    ;(pinia as unknown as { _s: Map<string, { $dispose(): void }> })._s.delete(`session/${sessionId}`)
+  }
+  store?.$dispose()
+}
+
+/** Test seam: how many session stores are alive. */
+export function liveSessionStoreCount(): number {
+  return liveStores.size
 }
 
 export type SessionStore = ReturnType<typeof useSessionStore>
