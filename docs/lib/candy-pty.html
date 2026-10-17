@@ -113,7 +113,7 @@ SignalForwarder::attachSigwinchToFd(
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>In-process SSH session hosting</strong> — drives <a href="candy-wish.html">CandyWish</a> away from depending on host sshd; spawn the user's shell directly inside the SSH server process with full PTY control.</li>
+      <li><strong>In-process SSH session hosting</strong> — drives <a href="sugar-ssh-server.html">SugarSshServer</a> away from depending on host sshd; spawn the user's shell directly inside the SSH server process with full PTY control.</li>
       <li><strong>Recorded TUI sessions</strong> — pair with <a href="candy-vcr.html">CandyVcr</a> to capture both the input bytes (typed into the master) and the rendered output (read back from the master).</li>
       <li><strong>Test harnesses for ANSI-emitting CLIs</strong> — spawn the binary under test in a controlled PTY, pump fixture input, assert on the captured output via <a href="sugar-vterm.html">SugarVterm</a>'s cell-grid.</li>
       <li><strong>VHS-style demo recorders</strong> — run a script in a PTY, capture the byte stream + winsize, replay later.</li>

@@ -29,7 +29,7 @@ Files using ReactPHP (excluding vendor/):
 - `sugar-image/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface) <!-- @rename-keep historical provenance -->
 - `sugar-image/src/SyncAsyncRenderer.php`: Not read yet — likely PromiseInterface
 - `sugar-image/src/AdaptiveImage.php`: Not read yet — likely Loop/Promise
-- `candy-wish/src/Middleware/AsyncMiddleware.php`: `Loop`, `Promise` — **Would benefit from candy-async** (uses sync await with 30s timeout, could use AsyncOps::withTimeout) <!-- @rename-keep historical provenance -->
+- `candy-wish/src/Middleware/AsyncMiddleware.php`: `Loop`, `Promise` — **Would benefit from candy-async** (uses sync await with 30s timeout, could use AsyncOps::withTimeout) <!-- @rename-keep -->
 - `sugar-crush/src/Chat.php`: Not read yet
 - `sugar-crush/src/Backend/CommandBackend.php`: Not read yet
 - `sugar-crush/src/Backend/EchoBackend.php`: Not read yet
@@ -37,9 +37,9 @@ Files using ReactPHP (excluding vendor/):
 - `super-candy/src/AsyncOps.php`: Not read yet — may already have similar helpers
 
 Existing ReactPHP versions pinned:
-- `react/event-loop: ^1.6` (candy-core, candy-pty, candy-wish)
+- `react/event-loop: ^1.6` (candy-core, candy-pty, candy-wish) <!-- @rename-keep -->
 - `react/promise: ^3.3` (candy-core, sugar-image, sugar-crush, super-candy)
-- `react/promise-timer: ^1.9` (candy-wish)
+- `react/promise-timer: ^1.9` (candy-wish) <!-- @rename-keep -->
 
 Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async): <!-- @rename-keep historical provenance -->
 - Replace `Loop::addTimer` debounce with `AsyncOps::debounce()` in Input.php, Select.php
@@ -132,14 +132,14 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Tests: super-candy 187 pass (458 assertions), candy-sql 123 pass (233 assertions)
   - Path-repo closure: clean (55 libs scanned)
 
-- [2026-05-31 | step-29 | coder] candy-mdview + candy-wish: add sugar-colorprofile, wire TerminalProbe (defensive):
-  - **IMPORTANT FINDING**: Neither candy-mdview nor candy-wish actually has env-var/terminfo parsing code for terminal capability probing. The step file's premise (§387.9) that "both libs do their own probing" is inaccurate based on current source. candy-mdview only uses `TtyDetect::isAtty(STDIN)` for TTY presence detection (not capability), and candy-wish uses `getenv()` only for SSH session metadata (TERM, SSH_CONNECTION, etc.) — which is distinct from color/capability probing.
+- [2026-05-31 | step-29 | coder] candy-mdview + candy-wish: add sugar-colorprofile, wire TerminalProbe (defensive): <!-- @rename-keep -->
+  - **IMPORTANT FINDING**: Neither candy-mdview nor candy-wish actually has env-var/terminfo parsing code for terminal capability probing. The step file's premise (§387.9) that "both libs do their own probing" is inaccurate based on current source. candy-mdview only uses `TtyDetect::isAtty(STDIN)` for TTY presence detection (not capability), and candy-wish uses `getenv()` only for SSH session metadata (TERM, SSH_CONNECTION, etc.) — which is distinct from color/capability probing. <!-- @rename-keep -->
   - candy-mdview: already had `sugar-colorprofile` path-repo. Added defensive `TerminalProbe::run()` via new `terminalSupportsColor()` private method in RenderCommand — wraps the probe call with `\Throwable` catch and falls back to `true` (assume color available) per step's graceful-failure requirement. No env-var/terminfo code was removed because none existed for capability detection.
-  - candy-wish: added `sugarcraft/sugar-colorprofile` require + path-repo to composer.json (was missing). Added CALIBER_LEARNINGS entry clarifying that Session::fromEnvironment() reads SSH env vars for session metadata (TERM, SSH_CONNECTION, etc.) — this is NOT terminal capability probing and does not route through TerminalProbe.
-  - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of sugar-colorprofile). Clean (55 libs scanned). <!-- @rename-keep historical provenance -->
+  - candy-wish: added `sugarcraft/sugar-colorprofile` require + path-repo to composer.json (was missing). Added CALIBER_LEARNINGS entry clarifying that Session::fromEnvironment() reads SSH env vars for session metadata (TERM, SSH_CONNECTION, etc.) — this is NOT terminal capability probing and does not route through TerminalProbe. <!-- @rename-keep -->
+  - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of sugar-colorprofile). Clean (55 libs scanned). <!-- @rename-keep -->
   - Branch: ai/probe-consumers
-  - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
-  - TerminalProbe already in candy-mdview dependency tree (via sugar-markdown -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
+  - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions) <!-- @rename-keep -->
+  - TerminalProbe already in candy-mdview dependency tree (via sugar-markdown -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step <!-- @rename-keep -->
 
 - [2026-05-31 | step-33 | coder] candy-kv + candy-ssh-launcher + candy-git: adopt sugar-fuzzy:
   - Added `sugarcraft/sugar-fuzzy: dev-master` + path-repo to all three libs' composer.json

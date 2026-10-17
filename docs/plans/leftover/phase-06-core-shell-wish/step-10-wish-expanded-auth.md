@@ -1,6 +1,6 @@
-# Step 06.10 — candy-wish expanded auth middleware
+# Step 06.10 — sugar-ssh-server expanded auth middleware
 
-**Source:** `leftover_updates_later.md` candy-wish §4.3 P2
+**Source:** `leftover_updates_later.md` sugar-ssh-server §4.3 P2
 **Branch:** `ai/wish-expanded-auth`
 
 ## Deliverable
@@ -12,22 +12,22 @@ middleware so wish's auth surface is complete.
 
 **Create:**
 
-- `candy-wish/src/Middleware/Auth/PasswordAuth.php` — callback
+- `sugar-ssh-server/src/Middleware/Auth/PasswordAuth.php` — callback
   validates `(user, password)`.
-- `candy-wish/src/Middleware/Auth/CertificateAuth.php` — validates
+- `sugar-ssh-server/src/Middleware/Auth/CertificateAuth.php` — validates
   X.509 certs.
-- `candy-wish/src/Middleware/Auth/AuthMethods.php` — declares which
+- `sugar-ssh-server/src/Middleware/Auth/AuthMethods.php` — declares which
   methods the server accepts; emits server-side method list to client.
-- `candy-wish/src/Middleware/Auth/KeyboardInteractive.php` — challenge-
+- `sugar-ssh-server/src/Middleware/Auth/KeyboardInteractive.php` — challenge-
   response interactive prompt.
 
 **Tests:**
 
-- `candy-wish/tests/Middleware/Auth/<Each>Test.php`.
+- `sugar-ssh-server/tests/Middleware/Auth/<Each>Test.php`.
 
 ## Acceptance
 
-- `cd candy-wish && vendor/bin/phpunit --filter Auth` green.
+- `cd sugar-ssh-server && vendor/bin/phpunit --filter Auth` green.
 
 ## Notes
 

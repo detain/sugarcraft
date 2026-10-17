@@ -65,7 +65,7 @@ final class PtySystemFactory
     }
 
     /**
-     * Former name of {@see new()}, kept so existing callers (candy-wish's
+     * Former name of {@see new()}, kept so existing callers (sugar-ssh-server's
      * InProcessTransport among them) keep resolving. The project's root
      * factory is `::new()`; `::default()` is reserved against.
      *

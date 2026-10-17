@@ -37,7 +37,7 @@ candy-git-server/
 
 ### Multi-Protocol Git Server
 
-- **SSH**: Library-only (`SSHServer.php`), requires external sshd or `candy-wish` integration for actual serving
+- **SSH**: Library-only (`SSHServer.php`), requires external sshd or `sugar-ssh-server` integration for actual serving
 - **Git Daemon**: Complete socket-based implementation with concurrent connections, signal handling, PID file management (`docs/repo_map/sugarcraft_candy-git-server.md`)
 - **HTTP Smart Protocol**: Request handler only, no HTTP server integration (`docs/repo_map/sugarcraft_candy-git-server.md`)
 
@@ -141,7 +141,7 @@ candy-git-server/
 - Implement `RepoView` component for browsing files and commits
 - Add syntax highlighting via `sugar-markdown` (Glamour port)
 - Use `sugar-mouse` for mouse interactions in the TUI
-- Bridge TUI over SSH using `candy-wish` (if/when it supports serving TUIs)
+- Bridge TUI over SSH using `sugar-ssh-server` (if/when it supports serving TUIs)
 
 **Estimated complexity:** Very High (requires implementing a full Bubble Tea-equivalent TUI framework in PHP)
 
@@ -170,13 +170,13 @@ candy-git-server/
 
 **Description:** The `SSHServer` class is a library that needs to be called by an external SSH server. For a self-contained Git server, it needs its own SSH transport.
 
-**Why it matters:** Current implementation requires external sshd or manual integration with `candy-wish`. A self-contained solution is needed.
+**Why it matters:** Current implementation requires external sshd or manual integration with `sugar-ssh-server`. A self-contained solution is needed.
 
 **Source:** `docs/repo_map/charmbracelet_wish.md`, `docs/repo_map/sugarcraft_candy-git-server.md`
 
 **Implementation ideas:**
 
-- Integrate with `candy-wish` (SugarCraft's port of charmbracelet/wish) for SSH transport
+- Integrate with `sugar-ssh-server` (SugarCraft's port of charmbracelet/wish) for SSH transport
 - Use libssh2 PHP extension for native SSH server capability
 - Implement the same middleware composition pattern as wish
 
@@ -800,7 +800,7 @@ Implement webhook-driven notifications:
 ## Major Architectural Upgrades (6-12 months)
 
 7. **Embedded SSH Server**
-   - Integrate with `candy-wish` for SSH transport
+   - Integrate with `sugar-ssh-server` for SSH transport
    - Implement middleware composition
    - Add rate limiting per-IP
 
@@ -866,6 +866,6 @@ The immediate priority should be adding **SQLite persistence** and **HTTP server
 
 The **LFS implementation** is close to complete — only the upload/download endpoints are missing, which is a well-defined scope following the `git-lfs-transfer` spec.
 
-**Integration with `candy-wish`** (when available) would unlock the embedded SSH server capability, making candy-git-server a self-contained solution rather than a library requiring external SSH infrastructure.
+**Integration with `sugar-ssh-server`** (when available) would unlock the embedded SSH server capability, making candy-git-server a self-contained solution rather than a library requiring external SSH infrastructure.
 
 Overall, candy-git-server is a **foundation with significant upside**. The architectural decisions (immutable domain models, clean separation of concerns, i18n support) are sound. The gaps are well-understood and have clear remediation paths based on the external reference implementations analyzed in this report.

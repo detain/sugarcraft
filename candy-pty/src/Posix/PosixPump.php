@@ -14,7 +14,7 @@ use SugarCraft\Pty\PumpOptions;
  * EOF grace, and optional SIGWINCH / keepalive / child-exit callbacks.
  *
  * Mirrors charmbracelet/bubbletea/pty.Pump for Go parity.
- * Extracted from {@see \SugarCraft\Wish\Transport\InProcessTransport}.
+ * Extracted from {@see \SugarCraft\SshServer\Transport\InProcessTransport}.
  *
  * @see creack/pty.Pump
  * @see portable-pty.Pump
@@ -55,7 +55,7 @@ final class PosixPump implements PumpContract
      * Does NOT block on {@see Child::wait()} when the child is still
      * alive — the caller is responsible for cleanup (kill / PTY close)
      * and the final wait() call. This keeps the supervisor in
-     * candy-wish::InProcessTransport in control of the kill-on-stdin-
+     * sugar-ssh-server::InProcessTransport in control of the kill-on-stdin-
      * EOF policy: a long-running child (e.g. `/bin/sleep 5`) that
      * doesn't react to VEOF gets SIGHUP'd by the caller, not blocked
      * on inside the pump.

@@ -841,7 +841,7 @@ Fixed by pinning `StreamSelectLoop` in `tests/bootstrap.php`. 8/8 green after,
 at no time cost. Production is immune because `Program::run()` drives one
 continuous `uv_run()`.
 
-**Other libs are plausibly flaking for this reason** — candy-sql, candy-wish,
+**Other libs are plausibly flaking for this reason** — candy-sql, candy-wish, <!-- @rename-keep -->
 candy-pty, candy-mosaic. Signature: intermittent failure consuming no wall time. <!-- @rename-keep historical provenance -->
 
 ### New evidence for #54, the intermittent hang (2026-08-14)

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Wire CandyWish + SugarMetrics. Session telemetry is fanned out to
+ * Wire SugarSshServer + SugarMetrics. Session telemetry is fanned out to
  * a Prometheus textfile (for scraping) and an in-memory backend
  * (so the example can print the totals on shutdown).
  */
@@ -15,20 +15,20 @@ use SugarCraft\Metrics\Backend\MultiBackend;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 use SugarCraft\Metrics\Registry;
-use SugarCraft\Wish\Middleware\Logger;
-use SugarCraft\Wish\Server;
-use SugarCraft\Wish\Session;
+use SugarCraft\SshServer\Middleware\Logger;
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Session;
 
 $tally = new InMemoryBackend();
 $registry = new Registry(new MultiBackend(
     $tally,
-    new PrometheusFileBackend('/tmp/candy-wish-metrics.prom'),
+    new PrometheusFileBackend('/tmp/sugar-ssh-server-metrics.prom'),
 ));
 
 Server::new()
     ->use(new Logger())
     ->use(new SessionMetrics($registry))
-    ->use(new class implements \SugarCraft\Wish\Middleware {
+    ->use(new class implements \SugarCraft\SshServer\Middleware {
         public function handle(Session $s, callable $next): void
         {
             echo "Hello, {$s->user}!\n";

@@ -189,7 +189,7 @@ final class PumpOptions
      * SSH-session-tuned preset — matches values previously hardcoded
      * in InProcessTransport for SSH session behaviour.
      *
-     * @see \SugarCraft\Wish\Transport\InProcessTransport
+     * @see \SugarCraft\SshServer\Transport\InProcessTransport
      */
     public static function sshDefault(): self
     {

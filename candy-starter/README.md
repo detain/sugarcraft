@@ -64,7 +64,7 @@ The shape follows the MVC-style Model–Update–View architecture. State lives 
 | Tail a log into a scrollable pane    | `sugarcraft/sugar-widgets` — `Viewport`         |
 | Build a multi-page wizard            | `sugarcraft/sugar-forms` — `Group`          |
 | Plot a sparkline                     | `sugarcraft/sugar-charts` — `Sparkline`      |
-| Make it `ssh`-accessible             | `sugarcraft/candy-wish`                      |
+| Make it `ssh`-accessible             | `sugarcraft/sugar-ssh-server`                      |
 
 Add the dep, import its classes, return them from `view()`. They're all pure renderers on the same `Style`-based vocabulary.
 

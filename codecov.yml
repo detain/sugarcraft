@@ -80,8 +80,8 @@ flag_management:
     - name: candy-ansi-inspect
       paths: ["candy-ansi-inspect/src/**"]
       carryforward: true
-    - name: candy-wish
-      paths: ["candy-wish/src/**"]
+    - name: sugar-ssh-server
+      paths: ["sugar-ssh-server/src/**"]
       carryforward: true
     - name: candy-ssh-launcher
       paths: ["candy-ssh-launcher/src/**"]
@@ -313,12 +313,12 @@ component_management:
         - "candy-ansi-inspect/src/**"
       flag_regexes:
         - "^candy-ansi-inspect$"
-    - component_id: candy-wish
-      name: candy-wish
+    - component_id: sugar-ssh-server
+      name: sugar-ssh-server
       paths:
-        - "candy-wish/src/**"
+        - "sugar-ssh-server/src/**"
       flag_regexes:
-        - "^candy-wish$"
+        - "^sugar-ssh-server$"
     - component_id: candy-ssh-launcher
       name: candy-ssh-launcher
       paths:

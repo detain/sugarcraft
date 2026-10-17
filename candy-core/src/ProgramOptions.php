@@ -103,7 +103,7 @@ final class ProgramOptions
          * aware partial repaints that emit dramatically fewer bytes
          * for slow-changing lines (progress bars, ticking counters).
          *
-         * Worth turning on for SSH sessions (CandyWish) and any
+         * Worth turning on for SSH sessions (SugarSshServer) and any
          * remote / latency-sensitive deployment. Local terminals
          * notice no difference at typical frame sizes.
          */

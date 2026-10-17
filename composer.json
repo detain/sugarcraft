@@ -72,7 +72,7 @@
         "sugarcraft/candy-top": "dev-master",
         "sugarcraft/candy-vcr": "dev-master",
         "sugarcraft/sugar-vterm": "dev-master",
-        "sugarcraft/candy-wish": "dev-master",
+        "sugarcraft/sugar-ssh-server": "dev-master",
         "sugarcraft/sugar-spring": "dev-master",
         "sugarcraft/candy-flappy": "dev-master",
         "sugarcraft/sugar-widgets": "dev-master",
@@ -335,7 +335,7 @@
         },
         {
             "type": "path",
-            "url": "candy-wish",
+            "url": "sugar-ssh-server",
             "options": {
                 "symlink": true
             }

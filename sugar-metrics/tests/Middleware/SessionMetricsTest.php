@@ -7,8 +7,8 @@ namespace SugarCraft\Metrics\Tests\Middleware;
 use SugarCraft\Metrics\Backend\InMemoryBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 use SugarCraft\Metrics\Registry;
-use SugarCraft\Wish\Context;
-use SugarCraft\Wish\Session;
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Session;
 use PHPUnit\Framework\TestCase;
 
 final class SessionMetricsTest extends TestCase

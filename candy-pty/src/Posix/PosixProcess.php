@@ -18,7 +18,7 @@ use SugarCraft\Pty\PtyException;
  * will migrate to in plan step P3.3.
  *
  * stdin is deliberately bound to `/dev/null` — if it were inherited
- * from the parent, a candy-scriptui process running inside a candy-wish
+ * from the parent, a candy-scriptui process running inside a sugar-ssh-server
  * SSH session would steal the supervisor's stdin and starve the
  * outer event loop.
  *

@@ -8,7 +8,7 @@
 
 Current pool is generic. SSH servers have a specific churn profile
 (many short-lived sessions, fresh termios snapshot each). Profile
-against a `candy-wish` SSH server fixture with N concurrent connections;
+against a `sugar-ssh-server` SSH server fixture with N concurrent connections;
 tune defaults; expose a `PtyPool::sshProfile(int $maxConcurrent)`
 named-constructor.
 

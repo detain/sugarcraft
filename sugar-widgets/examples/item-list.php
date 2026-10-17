@@ -18,7 +18,7 @@ $items = array_map(
     ['SugarCraft', 'SugarStyle', 'SugarSpring', 'SugarMouse',
      'SugarWidgets', 'SugarCharts', 'SugarForms', 'CandyScriptui',
      'SugarMarkdown', 'SugarCli', 'CandyCodeshot', 'CandyMdview',
-     'CandyAnsiInspect', 'CandyWish', 'CandySshLauncher', 'SugarMetrics'],
+     'CandyAnsiInspect', 'SugarSshServer', 'CandySshLauncher', 'SugarMetrics'],
 );
 
 $list = ItemList::new($items, width: 40, height: 8)

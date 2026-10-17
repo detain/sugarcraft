@@ -43,7 +43,7 @@
 | [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-widgets |
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, sugar-markdown |
 | charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
-| [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | candy-wish |
+| [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | sugar-ssh-server |
 | [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-scriptui, candy-pty, candy-core |
 | [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-widgets, sugar-markdown |
 | [Evertras/bubble-table](#evertrasbubble-table) | Go | ~800 | sugar-table |
@@ -733,9 +733,9 @@
 **Features:** Auto-generated ED25519 host keys, middleware pipeline (recovery/logging/auth/ratelimit/scp/activeterm/git), LRU rate limiting, PTY fallback.
 
 **SugarCraft Mapping:**
-- `candy-wish` → Primary port
+- `sugar-ssh-server` → Primary port
 
-**Note:** Port exists as `candy-wish` (🟢 in MATCHUPS.md).
+**Note:** Port exists as `sugar-ssh-server` (🟢 in MATCHUPS.md).
 
 ---
 

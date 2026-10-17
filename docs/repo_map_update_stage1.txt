@@ -138,7 +138,7 @@ The `SubStyleParser` for per-element styles already exists in candy-scriptui —
 
 ## Stage 2 Findings (packages 11-19)
 
-Sources: sugar-mouse, sugar-charts, sugar-table, candy-wish, sugar-image, candy-mdview, sugar-log, sugar-vterm, candy-vcr
+Sources: sugar-mouse, sugar-charts, sugar-table, candy-wish, sugar-image, candy-mdview, candy-log, candy-vt, candy-vcr <!-- @rename-keep -->
 
 ### 1. Top 3 Most Critical Feature Gaps
 
@@ -157,7 +157,7 @@ Upstream issue #10: drag operations produce duplicate `MouseDown` events as curs
 sugar-charts, sugar-table, candy-mdview, sugar-vterm, and candy-vcr all explicitly cite the absence of byte-level SGR output assertions. Only Sixel in sugar-charts has comprehensive snapshot tests. Without golden files, any regression in color codes, cursor positioning, or layout is invisible until runtime. Upstream repos (bubbletea, huh, ratatui, pterm with 28,952 tests) all use golden files. This is the single highest-confidence improvement available across Stage 2 packages.
 
 #### B. Terminal Capability Detection Failures Cause Panics, Not Graceful Fallback
-sugar-image, candy-mdview, and candy-wish all struggle with terminal probing failures (Windows, SSH, old terminals, stdout locked). ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No Stage 2 package has implemented a robust `auto()` fallback pattern that always returns a usable renderer with sensible defaults. This is a consistent pattern across the entire image/terminal rendering layer.
+sugar-image, candy-mdview, and candy-wish all struggle with terminal probing failures (Windows, SSH, old terminals, stdout locked). ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No Stage 2 package has implemented a robust `auto()` fallback pattern that always returns a usable renderer with sensible defaults. This is a consistent pattern across the entire image/terminal rendering layer. <!-- @rename-keep -->
 
 ### 3. Top 3 Most Commonly Cited External Repos
 

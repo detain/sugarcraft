@@ -68,7 +68,7 @@ authoritative and more current.
 - `project_candy_query_react_db` — "candy-query uses React-native async DB clients (react/mysql, voryx/pgasync), not amphp" <!-- @rename-keep -->
 - `project_candy_query_reinvents_tui` — "RESOLVED: candy-query used to hand-roll TUI primitives with raw ANSI and lacked candy-forms; the upstream-extraction adopted the foundation widgets (now on master)" <!-- @rename-keep -->
 - `project_candy_vcr_is_the_tape_renderer` — "Local .tape renders use candy-vcr (user's instruction); CI renders almost every lib with upstream vhs — candy-vcr is a candy-core-only soak"
-- `candy-wish PTY upgrade — dual-mode (in-process default, host sshd opt-in)` — candy-wish must keep supporting host-sshd execution via a parameter even after the in-process SSH session upgrade lands; in-process becomes the default but the legacy path stays
+- `candy-wish PTY upgrade — dual-mode (in-process default, host sshd opt-in)` — candy-wish must keep supporting host-sshd execution via a parameter even after the in-process SSH session upgrade lands; in-process becomes the default but the legacy path stays <!-- @rename-keep -->
 - `project-ci-matrix-and-pr-path-repo-gotchas` — "Two non-obvious SugarCraft CI behaviors — empty-matrix run failure shape, and why force-all PRs go all-red while master is green"
 - `project_crush_feat_plan_reachability_contradiction` — "crush_feat_plan.md's category-11 reachability rule contradicts its own Wave-1 file lists; crush_feat.md is the authority when they conflict"
 - `crush-feat-research` — "crush_feat.md is a 12-agent research dossier comparing sugar-crush to opencode/Claude Code/other AI coding CLIs, with prioritized recommendations"
@@ -313,7 +313,7 @@ Related: [[reference_monorepo]], [[project_splitsh_not_equal_git_subtree]],
 
 <sub>originally `feedback_phpunit_kill_pattern.md`, type `feedback`</sub>
 
-When running PHPUnit suites that touch PTYs / FFI / proc_open (e.g. candy-pty, candy-wish), `timeout 30 vendor/bin/phpunit ...` is NOT reliable — the process can wedge in a state where SIGTERM doesn't tear it down and the harness blocks indefinitely.
+When running PHPUnit suites that touch PTYs / FFI / proc_open (e.g. candy-pty, sugar-ssh-server), `timeout 30 vendor/bin/phpunit ...` is NOT reliable — the process can wedge in a state where SIGTERM doesn't tear it down and the harness blocks indefinitely.
 
 **Why:** PTY master/slave fds + FFI handles + zombie child procs leave PHP unable to honor a top-level SIGTERM cleanly. The `timeout` wrapper itself may also hang.
 
@@ -328,7 +328,7 @@ kill $WATCHDOG 2>/dev/null
 
 Or even simpler: spawn the run with `run_in_background: true`, then a second `Bash` call that does `sleep 30 && pkill -9 -f phpunit` also `run_in_background`. Read the captured output file after.
 
-Related: [[project_candy_wish_pty_dual_mode]].
+Related: [[project_candy_wish_pty_dual_mode]]. <!-- @rename-keep -->
 
 
 ## `feedback-plan-docs-are-opencode-flavored`
@@ -684,25 +684,25 @@ directives (e.g. `Down  Sleep 200ms`) — fixed to tokenize multiple directives 
 line in `candy-vcr/src/Tape/Lexer.php`. See [[project_vhs_tape_multi_directive_lines]].
 
 
-## `candy-wish PTY upgrade — dual-mode (in-process default, host sshd opt-in)`
+## `candy-wish PTY upgrade — dual-mode (in-process default, host sshd opt-in)` <!-- @rename-keep -->
 
-*candy-wish must keep supporting host-sshd execution via a parameter even after the in-process SSH session upgrade lands; in-process becomes the default but the legacy path stays*
+*candy-wish must keep supporting host-sshd execution via a parameter even after the in-process SSH session upgrade lands; in-process becomes the default but the legacy path stays* <!-- @rename-keep -->
 
-<sub>originally `project_candy_wish_pty_dual_mode.md`, type `project`</sub>
+<sub>originally `project_candy_wish_pty_dual_mode.md`, type `project`</sub> <!-- @rename-keep -->
 
-When `candy-pty` (Linux/macOS PTY primitive, port of charmbracelet/x/xpty) lands its consumer integration, `candy-wish` must support BOTH execution modes:
+When `candy-pty` (Linux/macOS PTY primitive, port of charmbracelet/x/xpty) lands its consumer integration, `candy-wish` must support BOTH execution modes: <!-- @rename-keep -->
 
 - **In-process SSH session** (new default) — uses `candy-pty` to spawn the child shell inside our own process, so we control the PTY directly. Replaces the `ForceCommand`-style hand-off.
-- **Host sshd** (legacy, opt-in via param) — keeps today's behaviour where candy-wish leans on the host's running sshd to do the PTY allocation and we just attach a Program. Still wanted as a deployment option (corp Macs that block `posix_openpt` with EPERM, hardened distros that restrict `/dev/ptmx`, ops setups already wired around sshd).
+- **Host sshd** (legacy, opt-in via param) — keeps today's behaviour where candy-wish leans on the host's running sshd to do the PTY allocation and we just attach a Program. Still wanted as a deployment option (corp Macs that block `posix_openpt` with EPERM, hardened distros that restrict `/dev/ptmx`, ops setups already wired around sshd). <!-- @rename-keep -->
 
-**Why:** user explicit instruction (2026-05-09 conversation): "we want candy-wish to still support host sshd via some param, just maybe the new in process ssh session by default."
+**Why:** user explicit instruction (2026-05-09 conversation): "we want candy-wish to still support host sshd via some param, just maybe the new in process ssh session by default." <!-- @rename-keep -->
 
 **How to apply:**
-- When writing `plans/plan-candy-wish-pty.md` (the follow-up plan referenced from `plans/x-xpty.md`), make dual-mode a first-class design requirement, not an after-thought. Surface it in scope + public API sketch.
-- Public API on candy-wish should expose the choice — likely a factory or `Server::withTransport(Transport::IN_PROCESS | Transport::HOST_SSHD)` style switch with `IN_PROCESS` as the default.
+- When writing `plans/plan-candy-wish-pty.md` (the follow-up plan referenced from `plans/x-xpty.md`), make dual-mode a first-class design requirement, not an after-thought. Surface it in scope + public API sketch. <!-- @rename-keep -->
+- Public API on candy-wish should expose the choice — likely a factory or `Server::withTransport(Transport::IN_PROCESS | Transport::HOST_SSHD)` style switch with `IN_PROCESS` as the default. <!-- @rename-keep -->
 - Don't gut the existing host-sshd path while adding the in-process path. Treat it as adding a sibling, not a replacement.
-- candy-pty itself stays a pure primitive — the dual-mode lives in candy-wish, not in candy-pty.
-- candy-pty PR5/PR6 don't need to change because of this — but when scoping the candy-wish upgrade, budget for keeping integration tests on both paths.
+- candy-pty itself stays a pure primitive — the dual-mode lives in candy-wish, not in candy-pty. <!-- @rename-keep -->
+- candy-pty PR5/PR6 don't need to change because of this — but when scoping the candy-wish upgrade, budget for keeping integration tests on both paths. <!-- @rename-keep -->
 
 
 ## `project-ci-matrix-and-pr-path-repo-gotchas`

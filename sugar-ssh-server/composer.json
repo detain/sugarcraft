@@ -1,0 +1,56 @@
+{
+    "name": "sugarcraft/sugar-ssh-server",
+    "description": "SSH server middleware framework \u2014 port of charmbracelet/wish. Build TUIs that anyone can `ssh user@host` to run, with composable middleware (auth, logging, rate-limiting, ext-ssh2 client wrappers, mount a SugarCraft Program).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "wish",
+        "ssh",
+        "server",
+        "middleware",
+        "tui",
+        "charm",
+        "remote",
+        "openssh"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-ssh-server",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-ssh-server/issues",
+        "source": "https://github.com/sugarcraft/sugar-ssh-server",
+        "docs": "https://sugarcraft.github.io/lib/sugar-ssh-server.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "react/event-loop": "^1.6",
+        "react/promise-timer": "^1.9",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-pty": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/sugar-testing": "dev-master"
+    },
+    "suggest": {
+        "ext-ssh2": "Enables the Ssh2 client middleware (forwarding, sftp helpers)."
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\SshServer\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\SshServer\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

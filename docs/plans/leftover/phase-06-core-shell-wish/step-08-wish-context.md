@@ -1,6 +1,6 @@
-# Step 06.08 — candy-wish Context propagation
+# Step 06.08 — sugar-ssh-server Context propagation
 
-**Source:** `leftover_updates_later.md` candy-wish §4.1 P1
+**Source:** `leftover_updates_later.md` sugar-ssh-server §4.1 P1
 **Branch:** `ai/wish-context`
 
 ## Deliverable
@@ -14,26 +14,26 @@ can chain timeouts and metadata.
 
 **Create:**
 
-- `candy-wish/src/Context.php` — immutable; `withValue($k, $v)`,
+- `sugar-ssh-server/src/Context.php` — immutable; `withValue($k, $v)`,
   `withDeadline(\DateTimeImmutable)`, `withCancelable()`, `cancel()`,
   `done(): bool`, `err(): ?\Throwable`.
 
 **Modify:**
 
-- `candy-wish/src/Middleware/Middleware.php` interface —
+- `sugar-ssh-server/src/Middleware/Middleware.php` interface —
   `handle(Context $ctx, Session $sess, callable $next): void`.
 - Every existing middleware adjusted (signature change).
-- `candy-wish/src/Server.php` — constructs root Context.
+- `sugar-ssh-server/src/Server.php` — constructs root Context.
 
 **Tests:**
 
-- `candy-wish/tests/ContextTest.php`.
-- `candy-wish/tests/MiddlewareContextTest.php` — middleware that
+- `sugar-ssh-server/tests/ContextTest.php`.
+- `sugar-ssh-server/tests/MiddlewareContextTest.php` — middleware that
   cancels the context aborts downstream handlers.
 
 ## Acceptance
 
-- `cd candy-wish && vendor/bin/phpunit --filter "Context|Middleware"` green.
+- `cd sugar-ssh-server && vendor/bin/phpunit --filter "Context|Middleware"` green.
 
 ## Notes
 

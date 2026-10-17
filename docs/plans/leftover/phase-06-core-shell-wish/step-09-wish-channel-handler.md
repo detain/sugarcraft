@@ -1,6 +1,6 @@
-# Step 06.09 — candy-wish ChannelHandler
+# Step 06.09 — sugar-ssh-server ChannelHandler
 
-**Source:** `leftover_updates_later.md` candy-wish §4.2 P1
+**Source:** `leftover_updates_later.md` sugar-ssh-server §4.2 P1
 **Branch:** `ai/wish-channel-handler`
 
 ## Deliverable
@@ -13,24 +13,24 @@ are scattered through transport code.
 
 **Create:**
 
-- `candy-wish/src/Channel/ChannelHandler.php` — interface.
-- `candy-wish/src/Channel/DefaultChannelHandler.php` — wires the
+- `sugar-ssh-server/src/Channel/ChannelHandler.php` — interface.
+- `sugar-ssh-server/src/Channel/DefaultChannelHandler.php` — wires the
   common case (pty + shell).
-- `candy-wish/src/Channel/Msg/{PtyReq,WindowChange,Shell,Exec,Signal,Env,Break}Msg.php`.
+- `sugar-ssh-server/src/Channel/Msg/{PtyReq,WindowChange,Shell,Exec,Signal,Env,Break}Msg.php`.
 
 **Modify:**
 
-- `candy-wish/src/Transport/InProcessTransport.php` — dispatches
+- `sugar-ssh-server/src/Transport/InProcessTransport.php` — dispatches
   channel messages to the handler instead of inline logic.
 
 **Tests:**
 
-- `candy-wish/tests/Channel/DefaultChannelHandlerTest.php` — feed each
+- `sugar-ssh-server/tests/Channel/DefaultChannelHandlerTest.php` — feed each
   Msg type, assert correct downstream effect.
 
 ## Acceptance
 
-- `cd candy-wish && vendor/bin/phpunit --filter Channel` green.
+- `cd sugar-ssh-server && vendor/bin/phpunit --filter Channel` green.
 
 ---
 

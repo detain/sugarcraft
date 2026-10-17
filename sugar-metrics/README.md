@@ -13,7 +13,7 @@
 <!-- BADGES:END -->
 
 
-Lightweight telemetry primitives for SugarCraft / CandyWish servers. Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics.
+Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics.
 ```sh
 composer require sugarcraft/sugar-metrics
 ```
@@ -161,12 +161,12 @@ $reg = new Registry(new MultiBackend(
 ));
 ```
 
-## CandyWish session middleware
+## SugarSshServer session middleware
 
-Wires session telemetry into a CandyWish stack:
+Wires session telemetry into a SugarSshServer stack:
 
 ```php
-use SugarCraft\Wish\Server;
+use SugarCraft\SshServer\Server;
 use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;

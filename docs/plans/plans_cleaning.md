@@ -30,7 +30,7 @@
 
 ### ❌ NOT DONE
 
-- W10: candy-git-server lacks candy-wish dep
+- W10: candy-git-server lacks candy-wish dep <!-- @rename-keep -->
 - W13: immutability violations not comprehensively verified
 
 ### ❓ UNCLEAR / NOT VERIFIED

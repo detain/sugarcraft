@@ -150,7 +150,7 @@ jobs:
             candy-git candy-sql candy-codetime
             candy-minesweeper sugar-image sugar-animation candy-gifview sugar-video candy-flappy
             sugar-quickpick sugar-treelist sugar-log sugar-metrics
-            sugar-colorprofile candy-git-server candy-wish sugar-mouse
+            sugar-colorprofile candy-git-server sugar-ssh-server sugar-mouse
             sugar-panels sugar-datepicker sugar-navstack sugar-dashboard candy-mail
             sugar-readline candy-kv sugar-flexbox sugar-table
             sugar-toast sugar-overlay candy-top
@@ -222,7 +222,7 @@ jobs:
         # sugar-dashboard is excluded here and rendered by the dedicated
         # render-sugar-dashboard job below; it has 153 tapes (~10× the next
         # biggest lib) and gets parallelized into 4 batches.
-        lib: [candy-core, sugar-style, sugar-forms, sugar-focus, candy-pty, candy-vcr, sugar-spring, sugar-widgets, sugar-charts, sugar-gallery, candy-scriptui, sugar-markdown, sugar-cli, candy-codeshot, candy-mdview, candy-ansi-inspect, candy-ssh-launcher, candy-starter, candy-tetris, candy-files, sugar-crush, sugar-vterm, candy-git, candy-sql, candy-codetime, candy-minesweeper, sugar-image, sugar-animation, candy-gifview, sugar-video, candy-flappy, sugar-quickpick, sugar-treelist, sugar-log, sugar-metrics, sugar-colorprofile, candy-git-server, candy-wish, sugar-mouse, sugar-panels, sugar-datepicker, sugar-navstack, candy-mail, sugar-readline, candy-kv, sugar-flexbox, sugar-table, sugar-toast, sugar-overlay, candy-top]
+        lib: [candy-core, sugar-style, sugar-forms, sugar-focus, candy-pty, candy-vcr, sugar-spring, sugar-widgets, sugar-charts, sugar-gallery, candy-scriptui, sugar-markdown, sugar-cli, candy-codeshot, candy-mdview, candy-ansi-inspect, candy-ssh-launcher, candy-starter, candy-tetris, candy-files, sugar-crush, sugar-vterm, candy-git, candy-sql, candy-codetime, candy-minesweeper, sugar-image, sugar-animation, candy-gifview, sugar-video, candy-flappy, sugar-quickpick, sugar-treelist, sugar-log, sugar-metrics, sugar-colorprofile, candy-git-server, sugar-ssh-server, sugar-mouse, sugar-panels, sugar-datepicker, sugar-navstack, candy-mail, sugar-readline, candy-kv, sugar-flexbox, sugar-table, sugar-toast, sugar-overlay, candy-top]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 

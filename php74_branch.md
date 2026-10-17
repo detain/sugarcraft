@@ -391,7 +391,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 - **3.9** `candy-vcr`(81,med, buffer+core+pty; symfony console/process/yaml→^5.4) → **3.9a**
   `Tape/Ast` (19→ split a/b), **3.9b** `Cli` (10), **3.9c** `Format/Raster/Assert` (17), **3.9d**
   `Tape/Msg/Migration/Matcher/Hook/Encode/Render` (≈24 → split), **3.9e** root files.
-- **3.10** `candy-wish`(35,med, core+pty) → **3.10a** `Middleware/*` (14), **3.10b** `Channel/*`
+- **3.10** `candy-wish`(35,med, core+pty) → **3.10a** `Middleware/*` (14), **3.10b** `Channel/*` <!-- @rename-keep -->
   (11), **3.10c** `Transport/*`+root (≈10).
 - **3.11** `candy-minesweeper`(9,high, buffer+core+mouse+sprinkles), `candy-flip`(9,med, <!-- @rename-keep -->
   core+pty+sprinkles; **WeakMap→SplObjectStorage**).
@@ -512,7 +512,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | candy-testing | medium | 8 | **fiber**, attribute, ctor-promotion, enum-in-const-expr, first-class-callable, intersection | <!-- @rename-keep -->
 | candy-tetris | medium | 14 | attribute, backed-enum, ctor-promotion, enum-with-methods, first-class-callable |
 | candy-vcr | medium | 81 | attribute, backed-enum, ctor-promotion, match, named-args, new-in-init; symfony |
-| candy-wish | medium | 35 | ctor-promotion, match, mixed, named-args, non-capturing-catch |
+| candy-wish | medium | 35 | ctor-promotion, match, mixed, named-args, non-capturing-catch | <!-- @rename-keep -->
 | sugar-charts | medium | 28 | ctor-promotion, enum-with-methods, match, named-args, php8-strfn |
 | candy-mdview | medium | 10 | attribute, ctor-promotion, match, mixed, named-args, readonly |
 | sugar-readline | medium | 17 | ctor-promotion, match, new-in-init, php8-strfn |

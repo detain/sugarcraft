@@ -209,7 +209,7 @@ Termination semantics:
   whether to send SIGHUP or close the master.
 
 The pump deliberately does **not** call `Child::wait()` when the
-child is still alive. The caller (e.g. `candy-wish`'s
+child is still alive. The caller (e.g. `sugar-ssh-server`'s
 `InProcessTransport`) needs to enforce its own kill-on-stdin-EOF
 policy without the pump holding it hostage.
 
@@ -264,7 +264,7 @@ src/Contract/                src/Posix/
 
 Two reasons:
 
-1. **Testability.** Tests in `candy-wish`, `candy-scriptui`, etc. can
+1. **Testability.** Tests in `sugar-ssh-server`, `candy-scriptui`, etc. can
    inject a stub `PtySystem` that returns scripted in-memory streams
    without touching libc. Production code resolves the real one via
    `PtySystemFactory::new()`.

@@ -135,7 +135,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 4. **Greedy constraint solvers / no shared layout engine** — Every layout-sensitive package independently implements manual sizing logic. No shared layout engine exists at the foundation layer.
 
-5. **Terminal capability detection failures cause panics, not graceful fallback** — sugar-image, candy-mdview, candy-wish (Stage 2) all struggle with probing failures on Windows, SSH, old terminals. ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No package has an `auto()` fallback that always returns a usable renderer.
+5. **Terminal capability detection failures cause panics, not graceful fallback** — sugar-image, candy-mdview, candy-wish (Stage 2) all struggle with probing failures on Windows, SSH, old terminals. ratatui-image issues #69, #68, #72, #64 all stem from probing failures producing unhelpful errors. No package has an `auto()` fallback that always returns a usable renderer. <!-- @rename-keep -->
 
 6. **Manual byte-loop parsing vs. state machine architecture** — candy-ansi-inspect (551-line Inspector.php), sugar-quickpick use `strlen()`/`strpos()` at byte level. The canonical state machine from `charmbracelet/x/ansi` is already available in sugar-vterm but not shared.
 
@@ -512,7 +512,7 @@ The ecosystem is functionally mature — many packages already surpass their Go 
 
 8. **Snapshot test pattern** — Every package independently "should add" them; no shared infrastructure emerged despite universal acknowledgment of need.
 
-9. **Terminal capability probing** — sugar-image, candy-mdview, candy-wish each struggle with the same probing failure patterns independently.
+9. **Terminal capability probing** — sugar-image, candy-mdview, candy-wish each struggle with the same probing failure patterns independently. <!-- @rename-keep -->
 
 10. **God class construction** — super-candy Manager (915 lines), candy-sql App (12 args) represent the same architectural failure in different stages.
 

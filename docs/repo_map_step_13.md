@@ -2,7 +2,7 @@
 
 **Branch:** `ai/probe-consolidation`
 **Depends on:** step-00 ✅ (no new shared package; lifts the probe into existing sugar-colorprofile)
-**Blocks:** step-29 (candy-mdview + candy-wish consume TerminalProbe)
+**Blocks:** step-29 (candy-mdview + candy-wish consume TerminalProbe) <!-- @rename-keep -->
 
 ## Goal
 
@@ -71,7 +71,7 @@ Reference: `docs/repo_map_update.md` §345.6 (TerminalProbe / Mosaic::auto()), �
   - sugar-colorprofile adds TerminalProbe / ProbeReport / Capability extracting its 12-step detection into a public API.
   - sugar-image gains Mosaic::auto() (graceful fallback to BasicAscii on any probe failure) and Mosaic::diagnose() (structured ProbeReport).
   - Addresses ratatui-image issues #69, #68, #72, #64 pattern: no more unhelpful errors on Windows/SSH/old terminals.
-  - candy-mdview + candy-wish migrate to TerminalProbe in step-29.
+  - candy-mdview + candy-wish migrate to TerminalProbe in step-29. <!-- @rename-keep -->
 
   ## Test plan
   - [x] vendor/bin/phpunit in sugar-colorprofile + sugar-image (≥95% coverage on probe code)

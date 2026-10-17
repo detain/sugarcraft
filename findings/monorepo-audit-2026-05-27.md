@@ -115,7 +115,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 | candy-pty | 50+ ✓ | APPROVE | 0 | 1 | 3 | 0 |
 | candy-vt | 58 ✓ | APPROVE | 0 | 1 | 2 | 0 | <!-- @rename-keep historical provenance -->
 | candy-vcr | 90 ✓ | REQUEST_CHANGES | 1 | 1 | 4 | 0 |
-| candy-wish | 80 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 |
+| candy-wish | 80 ✓ | REQUEST_CHANGES | 0 | 2 | 3 | 0 | <!-- @rename-keep -->
 | candy-mouse | 70 ✓ | APPROVE | 0 | 1 | 4 | 0 | <!-- @rename-keep historical provenance -->
 
 **candy-pty** — PTY/Fork wrapper. Clean. Issue: `@proc_open()` error suppression hides legitimate errors.
@@ -124,7 +124,7 @@ However, this audit reveals **systemic architectural drift**, **incomplete imple
 
 **candy-vcr** — Recording/playback. **Critical**: `PhpGifEncoder` is stub throwing `"Pure-PHP GIF encoder not yet implemented; use FfmpegGifEncoder"`. Major: `Recorder::withHook()` returns `$this` but mutates internal `HookRegistry` by reference.
 
-**candy-wish** — SSH middleware. Issues: `InProcessTransport::runChild()` is 108 lines doing too much; `Auth::fingerprint()` reads `$_SERVER` directly instead of using normalized environment.
+**candy-wish** — SSH middleware. Issues: `InProcessTransport::runChild()` is 108 lines doing too much; `Auth::fingerprint()` reads `$_SERVER` directly instead of using normalized environment. <!-- @rename-keep -->
 
 **candy-mouse** — Mouse zone tracker. Issues: Static singleton in `Zones` facade makes testing harder; `Manager::scan()` uses byte inspection on what may be multibyte sequences; DCS sequences not handled. <!-- @rename-keep historical provenance -->
 

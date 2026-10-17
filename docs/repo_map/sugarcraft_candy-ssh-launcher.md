@@ -188,11 +188,11 @@ If these are added, they would live in a future `sugar-discovery` leaf library.
 
 ## SSH Integration
 
-### How it uses candy-wish
+### How it uses sugar-ssh-server
 
-candy-ssh-launcher is a **consumer** of `candy-wish` (the SugarCraft port of `charmbracelet/wish`). However, v1 of candy-ssh-launcher does NOT run an SSH server — it runs as a local CLI tool that launches `ssh` as a subprocess via `pcntl_exec`.
+candy-ssh-launcher is a **consumer** of `sugar-ssh-server` (the SugarCraft port of `charmbracelet/wish`). However, v1 of candy-ssh-launcher does NOT run an SSH server — it runs as a local CLI tool that launches `ssh` as a subprocess via `pcntl_exec`.
 
-The `candy-wish` dependency exists for potential future SSH-server TUI mode (`ssh user@host` to connect and see the wishlist picker over SSH). In v1, the `candy-pty` dependency is used only for `RawMode` support in the picker.
+The `sugar-ssh-server` dependency exists for potential future SSH-server TUI mode (`ssh user@host` to connect and see the wishlist picker over SSH). In v1, the `candy-pty` dependency is used only for `RawMode` support in the picker.
 
 ### Process replacement vs proxying
 
@@ -249,7 +249,7 @@ This is architecturally cleaner than a PHP-based SSH proxy, but means candy-ssh-
 
 | Upstream Feature | Reason for deferral |
 |----------------|---------------------|
-| **SSH-server mode** (serve TUI over SSH) | Requires full `candy-wish` SSH server integration; v1 scope is local CLI |
+| **SSH-server mode** (serve TUI over SSH) | Requires full `sugar-ssh-server` SSH server integration; v1 scope is local CLI |
 | **Zeroconf discovery** | Would need a `sugar-discovery` leaf lib; not in v1 scope |
 | **DNS SRV discovery** | Same as above |
 | **Tailscale discovery** | Same as above; also requires OAuth2 client credentials handling |
@@ -322,13 +322,13 @@ Full-featured Go SSH directory with local CLI mode + SSH server mode. candy-ssh-
 
 ### `charmbracelet/wish` (SSH middleware framework — 5,233 stars)
 
-The SSH server framework that upstream wishlist builds on. candy-ssh-launcher does not use `candy-wish` in v1 (local CLI mode doesn't need an SSH server). The `candy-wish` port exists independently. See full analysis at `repo_map/charmbracelet_wish.md`.
+The SSH server framework that upstream wishlist builds on. candy-ssh-launcher does not use `sugar-ssh-server` in v1 (local CLI mode doesn't need an SSH server). The `sugar-ssh-server` port exists independently. See full analysis at `repo_map/charmbracelet_wish.md`.
 
 ### `charmbracelet/charm` (cloud infrastructure — 2.4k stars)
 
 Provides SSH-based authentication, encrypted KV store, and cloud filesystem. Not directly related to wishlist's endpoint management use case. See full analysis at `repo_map/charmbracelet_charm.md`.
 
-### `candy-wish` (SugarCraft port of charmbracelet/wish)
+### `sugar-ssh-server` (SugarCraft port of charmbracelet/wish)
 
 SSH server middleware framework. candy-ssh-launcher declares it as a dependency (via `candy-core`, `candy-pty`) but does not invoke its SSH server capabilities in v1. The dependency exists for future SSH-server TUI mode.
 
@@ -342,7 +342,7 @@ The SSH config parser (`SshConfigParser`) is the most substantial piece of infra
 
 The picker is deliberately minimal — a single `while(true) { draw(); readKey(); switch() }` loop with hand-rolled ANSI rendering rather than a full SugarWidgets `List` component. This is the right trade-off: the picker is a fire-and-forget widget that immediately exits via `pcntl_exec`; wiring in the full SugarWidgets event loop would be unnecessary complexity.
 
-The main gap vs upstream is the lack of SSH-server mode and dynamic service discovery. The architecture is cleanly structured so these could be added later using `candy-wish` (for SSH serving) and a future `sugar-discovery` leaf library (for Zeroconf/SRV/Tailscale). The deferred features are clearly marked in this analysis.
+The main gap vs upstream is the lack of SSH-server mode and dynamic service discovery. The architecture is cleanly structured so these could be added later using `sugar-ssh-server` (for SSH serving) and a future `sugar-discovery` leaf library (for Zeroconf/SRV/Tailscale). The deferred features are clearly marked in this analysis.
 
 The 69-test / 176-assertion suite provides strong coverage of all public APIs, with particular attention to edge cases in config parsing (empty files, missing fields, type coercion, comment stripping) and SSH argv construction (port 22 default, identity file precedence, ProxyJump ordering).
 

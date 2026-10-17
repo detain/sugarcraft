@@ -363,7 +363,7 @@ The README's "common next steps" table maps developer intents to SugarCraft libr
 | Tail a log into scrollable pane | `sugar-widgets` | `use SugarCraft\Widgets\Viewport;` |
 | Build a multi-page wizard | `sugar-forms` | `use SugarCraft\Forms\Group;` |
 | Plot a sparkline | `sugar-charts` | `use SugarCraft\Charts\Sparkline;` |
-| Make it `ssh`-accessible | `candy-wish` | `use SugarCraft\Wish\Wish;` |
+| Make it `ssh`-accessible | `sugar-ssh-server` | `use SugarCraft\SshServer\Wish;` |
 
 This table is the actual "upgrade path" documentation — it tells a developer who has the counter running what to do next.
 

@@ -162,7 +162,7 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * #79", citing `Chat.php:6212` dispatched at `:5480`. Every part of that was
  * stale: the call sites had drifted to `:6478`/`:6390`, and detain/sugarcraft
  * #79 is a MERGED pull request titled "Phase 9+: CandyMetrics — telemetry // @rename-keep historical PR-title citation
- * primitives + CandyWish middleware" that has nothing to do with any of this.
+ * primitives + SugarSshServer middleware" that has nothing to do with any of this.
  * No open issue ever tracked it. Cited here so the next reader does not go
  * looking for #79 again.
  *

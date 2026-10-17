@@ -503,7 +503,7 @@ soft-serve repo info <name> [dataPath]
 
 - Doesn't embed its own SSH transport (contrast with upstream Go soft-serve which uses charmbracelet/ssh)
 
-- The `candy-wish` library provides SSH server middleware, but candy-git-server would need integration
+- The `sugar-ssh-server` library provides SSH server middleware, but candy-git-server would need integration
 
 ### 2. Git Operations Shell Out to git Binary
 
@@ -547,7 +547,7 @@ soft-serve repo info <name> [dataPath]
 
 - This PHP port has no TUI — only CLI commands via bin/candy-git-server
 
-- The `candy-wish` SSH middleware could theoretically serve TUI, but candy-git-server doesn't use it
+- The `sugar-ssh-server` SSH middleware could theoretically serve TUI, but candy-git-server doesn't use it
 
 ### 7. Anonymous Access Has No Auth Layer
 
@@ -571,7 +571,7 @@ soft-serve repo info <name> [dataPath]
 
 | Feature | Upstream (Go) | CandyGitServer (PHP) |
 |---------|--------------|-----------------|
-| **SSH Git access** | ✅ Full SSH server via charmbracelet/ssh | ⚠️ Library only, needs external sshd or candy-wish |
+| **SSH Git access** | ✅ Full SSH server via charmbracelet/ssh | ⚠️ Library only, needs external sshd or sugar-ssh-server |
 | **HTTP Git access** | ✅ Full HTTP server with gorilla/mux | ⚠️ Request handler only, no HTTP server |
 | **Git daemon** | ✅ Full implementation | ✅ Complete implementation |
 | **TUI** | ✅ Full Bubble Tea TUI | ❌ None |
@@ -591,7 +591,7 @@ soft-serve repo info <name> [dataPath]
 
 3. **Full-stack vs Library** — Upstream is a complete application; candy-git-server is a set of components
 
-4. **SSH Transport** — Upstream embeds its own SSH server; candy-git-server would need integration with candy-wish
+4. **SSH Transport** — Upstream embeds its own SSH server; candy-git-server would need integration with sugar-ssh-server
 
 ---
 
@@ -601,7 +601,7 @@ soft-serve repo info <name> [dataPath]
 
 - **wish** provides SSH server middleware (auth, logging, rate-limiting, git server, bubble tea over SSH)
 
-- **candy-wish** is SugarCraft's port of wish
+- **sugar-ssh-server** is SugarCraft's port of wish
 
 - **candy-git-server** is a git SERVER implementation, not middleware
 
@@ -637,7 +637,7 @@ soft-serve repo info <name> [dataPath]
 
 - **candy-core** — Base runtime (implied by `SugarCraft\Core\I18n\Lang`)
 
-- **candy-wish** — Could provide SSH transport layer for candy-git-server
+- **sugar-ssh-server** — Could provide SSH transport layer for candy-git-server
 
 - No other SugarCraft libs required (standalone git server)
 
@@ -714,7 +714,7 @@ candy-git-server/
 
 ## Audit Notes
 
-- **SSH transport** — Current implementation is a library meant to be called by external SSH server; actual SSH server integration with candy-wish is TODO
+- **SSH transport** — Current implementation is a library meant to be called by external SSH server; actual SSH server integration with sugar-ssh-server is TODO
 
 - **HTTP server** — `HttpSmartProtocol\Server` is a request handler, not an actual HTTP server; needs integration with ReactPHP or Swoole for real use
 

@@ -102,7 +102,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-mouse | P1 | 3 | Mouse event coordinate validation; wheel event handling |
 | sugar-treelist | P1 | 4 | Paginator state machine; filter input handling |
 | sugar-input | P1 | 2 | InputReader buffer boundary conditions |
-| candy-wish | P1 | 3 | AsyncMiddleware blocks event loop; PromiseAwait race |
+| sugar-ssh-server | P1 | 3 | AsyncMiddleware blocks event loop; PromiseAwait race |
 | sugar-overlay | P1 | 2 | Animation frame timing |
 
 **Concurrency:** 6 libs — spawn 6 subagents in parallel.
@@ -174,7 +174,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-mouse.md` — Phase 1 (mouse coordinate validation, wheel events)
 - `findings/plan_sugar-treelist.md` — Phase 1 (Paginator state machine, filter input)
 - `findings/plan_sugar-input.md` — Phase 1 (buffer boundary conditions)
-- `findings/plan_candy-wish.md` — Phase 1 (AsyncMiddleware blocks loop, PromiseAwait race)
+- `findings/plan_sugar-ssh-server.md` — Phase 1 (AsyncMiddleware blocks loop, PromiseAwait race)
 - `findings/plan_sugar-overlay.md` — Phase 1 (animation frame timing)
 
 ### Group E Source Plans

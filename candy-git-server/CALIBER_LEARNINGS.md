@@ -30,7 +30,7 @@ Pattern: Use CancellationToken for best-effort I/O cancellation; true preemption
 Source: step-35 ai/async-adopters
 
 ### 2026-07-04 — Dual-mode transports: sync default, React opt-in
-Pattern: `GitDaemon::serve()` keeps the blocking `socket_select()` loop as the default; `serveAsync(?LoopInterface)` is the opt-in React path (mirrors candy-pty ReactPump / candy-wish dual-mode). Sync clients are ext-sockets `\Socket` objects, async clients are stream resources from `stream_socket_server()`/`stream_socket_accept()` — protocol code stays single-copy by writing through a transport-agnostic `writeRaw()`. Async read callbacks must capture the client STREAM (not the array index): `closeClient()` splices + reindexes `$clients`.
+Pattern: `GitDaemon::serve()` keeps the blocking `socket_select()` loop as the default; `serveAsync(?LoopInterface)` is the opt-in React path (mirrors candy-pty ReactPump / sugar-ssh-server dual-mode). Sync clients are ext-sockets `\Socket` objects, async clients are stream resources from `stream_socket_server()`/`stream_socket_accept()` — protocol code stays single-copy by writing through a transport-agnostic `writeRaw()`. Async read callbacks must capture the client STREAM (not the array index): `closeClient()` splices + reindexes `$clients`.
 Anti-pattern: don't `socket_export_stream()` a `\Socket` just to register it with the loop — mixing socket_* reads with a stream wrapper over the same fd risks buffered-data loss; bind a separate stream server for async mode instead.
 
 ### 2026-07-04 — Bounded-concurrency LFS batches (honesty note)
@@ -43,10 +43,10 @@ Anti-pattern: don't assume old-parser quirks were features — verify each fixtu
 ### 2026-07-04 — Schedule format for jobs (7.5)
 Pattern: `jobs.mirror_pull` accepts the robfig/cron subset soft-serve actually uses: `@every <go-duration>` (`30s`/`10m`/`8h`/`1h30m`) + `@hourly`/`@daily`/`@midnight`/`@weekly`/`@monthly`/`@yearly` aliases, modelled as a plain interval (`Jobs\Schedule`). Full 5-field cron throws `InvalidArgumentException` — better than silently never firing.
 
-### 2026-07-10 — candy-git-server ↔ candy-wish SSH overlap: cross-link, defer unification (W10)
-Decision: DOCUMENT the overlap, do not re-architect (deferred). candy-git-server's `SSH\SSHServer` (a `ForceCommand`-style git-shell gate) and candy-wish's middleware framework both serve commands over the host's OpenSSH daemon, but neither implements the SSH wire protocol and they keep DISTINCT auth models — candy-git-server does its own SSH public-key auth (`SSH\Auth` + `User`); candy-wish trusts sshd and allowlists by username + key fingerprint.
+### 2026-07-10 — candy-git-server ↔ sugar-ssh-server SSH overlap: cross-link, defer unification (W10)
+Decision: DOCUMENT the overlap, do not re-architect (deferred). candy-git-server's `SSH\SSHServer` (a `ForceCommand`-style git-shell gate) and sugar-ssh-server's middleware framework both serve commands over the host's OpenSSH daemon, but neither implements the SSH wire protocol and they keep DISTINCT auth models — candy-git-server does its own SSH public-key auth (`SSH\Auth` + `User`); sugar-ssh-server trusts sshd and allowlists by username + key fingerprint.
 Rationale for deferring a rewrite: (a) the null/empty/whitespace-key auth-bypass was already fixed in `SSHServer::authenticate()` with regression coverage; (b) neither lib has a real SSH transport — both need host sshd; (c) `SSHServer` is not wired into the shipped daemon path (`bin/candy-git-server` runs `GitDaemon`, not SSH), so rewriting it would be churn on unused code. Cross-linked both READMEs instead.
-Future consideration: unify onto a single candy-wish-middleware SSH convention IF the monorepo commits to it.
+Future consideration: unify onto a single sugar-ssh-server-middleware SSH convention IF the monorepo commits to it.
 
 ## Implemented (was deferred pre-1.0)
 

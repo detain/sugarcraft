@@ -265,19 +265,19 @@
 - **Effort**: 1 day
 - **Research**: `libraries/candy-pty-research.md`
 
-### candy-wish
+### sugar-ssh-server
 
 ### [ ] Context propagation (Context class + update Middleware)
 
 - **Priority**: P1 - High
 - **Effort**: Medium
-- **Research**: `libraries/candy-wish-research.md`
+- **Research**: `libraries/sugar-ssh-server-research.md`
 
 ### [ ] Channel event middleware (ChannelHandler interface)
 
 - **Priority**: P1 - High
 - **Effort**: Medium-High
-- **Research**: `libraries/candy-wish-research.md`
+- **Research**: `libraries/sugar-ssh-server-research.md`
 
 ---
 
@@ -451,7 +451,7 @@ All 45 research documents available at:
 | candy-tetris | 18KB |
 | candy-vcr | 23KB |
 | sugar-vterm | 26KB |
-| candy-wish | 24KB |
+| sugar-ssh-server | 24KB |
 | sugar-mouse | 14KB |
 | sugar-spring | 25KB |
 | candy-flappy | 11KB |

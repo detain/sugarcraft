@@ -46,7 +46,7 @@ paths:
 4. **Add the slug to `.github/workflows/vhs.yml`** in the `all=(...)` bash array. The array is alphabetical within prefix groups (Candy first, then Honey, then Sugar, then super-candy). Read the file, locate `all=(`, insert `<slug>` in the correct group. Verify the slug is present before proceeding.
 
 5. **Register non-default PHP extensions** if the example requires any. Open `.github/workflows/vhs.yml`, find the step that calls `shivammathur/setup-php` (or the matrix's `extensions:` key). The default set typically includes `mbstring`, `intl`, `tokenizer`. Add any of these the lib needs:
-   - `ssh2` — `ext-ssh2` (used by `candy-wish`, `candy-kv`)
+   - `ssh2` — `ext-ssh2` (used by `sugar-ssh-server`, `candy-kv`)
    - `gd` — `ext-gd` (image rendering)
    - `ffi` — `ext-ffi` (FFI bindings — but recall non-visual FFI libs are exempt)
    - `shmop` — `ext-shmop` (shared memory; gate with `os: ubuntu-latest` if Windows-incompatible)
@@ -96,12 +96,12 @@ paths:
 
 ---
 
-**User says:** "Record a tape for candy-wish showing an interactive SSH session."
+**User says:** "Record a tape for sugar-ssh-server showing an interactive SSH session."
 
 **Actions taken:**
-1. Confirm `candy-wish` is visual — yes, TUI SSH wish-server demo.
-2. Create `candy-wish/examples/ssh-session.php` (or reuse an existing example). The demo must self-terminate (e.g. `exit` after 2 seconds in-script).
-3. Create `candy-wish/.vhs/ssh-session.tape` with scripted keystrokes:
+1. Confirm `sugar-ssh-server` is visual — yes, TUI SSH wish-server demo.
+2. Create `sugar-ssh-server/examples/ssh-session.php` (or reuse an existing example). The demo must self-terminate (e.g. `exit` after 2 seconds in-script).
+3. Create `sugar-ssh-server/.vhs/ssh-session.tape` with scripted keystrokes:
    ```
    Output ssh-session.gif
 
@@ -120,12 +120,12 @@ paths:
    Sleep 2s
    ```
 4. Edit `.github/workflows/vhs.yml`:
-   - Confirm `candy-wish` is in `all=(...)` — add it if missing.
-   - Add `ssh2` to the `extensions:` list since `candy-wish` requires `ext-ssh2`.
-5. Add the GIF reference to `candy-wish/README.md`.
+   - Confirm `sugar-ssh-server` is in `all=(...)` — add it if missing.
+   - Add `ssh2` to the `extensions:` list since `sugar-ssh-server` requires `ext-ssh2`.
+5. Add the GIF reference to `sugar-ssh-server/README.md`.
 6. Commit + push.
 
-**Result:** Workflow renders `candy-wish/.vhs/ssh-session.gif` with the keystrokes baked in.
+**Result:** Workflow renders `sugar-ssh-server/.vhs/ssh-session.gif` with the keystrokes baked in.
 
 ## Common Issues
 

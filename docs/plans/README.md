@@ -66,7 +66,7 @@ x-mosaic ──────────────┤   (consumes x-ansi sixel/
                        │
 x-vt   ─────┬─────►  x-vcr   (vcr asserts on vt grid)
             │
-x-xpty ─────┴─────►  candy-wish upgrade (separate PR, not in this wave)
+x-xpty ─────┴─────►  sugar-ssh-server upgrade (separate PR, not in this wave)
 ```
 
 ## Recommended sequencing
@@ -87,7 +87,7 @@ For a continuous ship-as-you-go cadence per `AGENTS.md`:
 5. **Wave 5 — recording (3-5 days)**
    - PR set: `x-vcr` lib, blocked on `x-vt` PR3 (basic SGR support)
 6. **Wave 6 — PTY (4-6 days, conditional)**
-   - PR set: `x-xpty` lib. Only if we want to upgrade candy-wish away from host-sshd.
+   - PR set: `x-xpty` lib. Only if we want to upgrade sugar-ssh-server away from host-sshd.
 
 ## Cross-cutting touch-ups
 

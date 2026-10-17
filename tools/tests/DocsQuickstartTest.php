@@ -58,7 +58,7 @@ declare(strict_types=1);
  * sample does not fix.
  *
  * Imports carry across a page's PHP blocks in document order, because the
- * pages read as one tutorial (candy-wish's second sample reuses the first
+ * pages read as one tutorial (sugar-ssh-server's second sample reuses the first
  * sample's `Server`/`Logger` imports).
  *
  * The checker is pinned against a fixture tree by the `testTheChecker*` cases.
