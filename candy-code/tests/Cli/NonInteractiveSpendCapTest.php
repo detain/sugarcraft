@@ -12,6 +12,7 @@ use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * ISS-006: `$CANDY_CODE_MAX_COST` / the user-tier `maxCostUsd` setting must
@@ -28,25 +29,25 @@ use SugarCraft\Code\Backend\EngineBackend;
  */
 final class NonInteractiveSpendCapTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $home = '';
-    private string $originalHome = '';
     private string|false $originalCap = false;
 
     protected function setUp(): void
     {
         $this->home = sys_get_temp_dir() . '/iss006_home_' . uniqid('', true);
+        $this->useHomeSandbox($this->home);
         mkdir($this->home . '/.candy-code', 0700, true);
 
-        $this->originalHome = getenv('HOME') ?: '';
         $this->originalCap = getenv('CANDY_CODE_MAX_COST');
-        putenv('HOME=' . $this->home);
         putenv('CANDY_CODE_MAX_COST');
     }
 
     protected function tearDown(): void
     {
-        putenv('HOME=' . $this->originalHome);
         putenv($this->originalCap === false ? 'CANDY_CODE_MAX_COST' : 'CANDY_CODE_MAX_COST=' . $this->originalCap);
+        $this->restoreHomeSandbox();
         self::rrmdir($this->home);
     }
 

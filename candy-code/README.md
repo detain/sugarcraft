@@ -1673,7 +1673,7 @@ The same three exit codes govern every subcommand below.
 | exit | meaning |
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
-| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, a trusted `.mcp.json` could not be parsed, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found`, `hook` |
 | `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
@@ -1710,7 +1710,7 @@ outside is the only retry it gets.
 With `--output-format json`, stdout is always exactly one JSON object: either
 `{"result": <the answer>}` or `{"result": null, "error": {"type": "usage" |
 "provider_configuration" | "installation" | "backend" | "encoding" |
-"not-found" | "mcp-config", "message":
+"not-found" | "mcp-config" | "hook", "message":
 "...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
 a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
 and `--root` usage errors too, which `bin/candy-code` catches before the one-shot
@@ -1718,9 +1718,9 @@ path is entered, and for a reply or an error message carrying bytes that are
 not valid UTF-8 (they are substituted, not dropped along with the whole
 document). `error.type` is not the exit code renamed — `usage`,
 `provider_configuration` and `installation` are all `2`, `backend`,
-`encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
+`encoding`, `not-found`, `mcp-config` and `hook` are all `1` — it is how a consumer
 that kept the code tells apart the kinds of each. The set's spellings are
-mixed by history, not by mistake: five names are single words or
+mixed by history, not by mistake: six names are single words or
 `snake_case`, while `not-found` and `mcp-config` are the two `kebab-case`
 names `src/Cli/Subcommands.php` added when its subcommand errors joined the
 contract. Renaming them to `snake_case` was weighed and declined;

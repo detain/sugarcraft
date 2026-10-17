@@ -2183,7 +2183,7 @@ final class Bootstrap
      * SIXTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * THIRTY-SIX distinct ones on this tree, sixteen of them classified
+     * THIRTY-SEVEN distinct ones on this tree, sixteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}, which
