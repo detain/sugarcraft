@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b9e482c3f27a363b245448df439dfe0e",
+    "content-hash": "385e9e3ca679941ad8a37865e93f3477",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3376,74 +3376,17 @@
             "time": "2025-10-27T20:55:39+00:00"
         },
         {
-            "name": "sugarcraft/candy-ansi",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-ansi",
-                "reference": "a6279580eb9abdfecfe3c64c629ee37ec16a3f98"
-            },
-            "require": {
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Ansi\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Ansi\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
-            "homepage": "https://github.com/sugarcraft/candy-ansi",
-            "keywords": [
-                "ansi",
-                "charmbracelet",
-                "ecma-48",
-                "parser",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "vt500"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-ansi/issues",
-                "source": "https://github.com/sugarcraft/candy-ansi",
-                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-ansi-inspect",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-ansi-inspect",
-                "reference": "e311d971c13fbdaa9fcef4b341513a5436fd5f08"
+                "reference": "b11b6f4a95c45a7715cde93572082c8df1ccfad4"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3495,131 +3438,17 @@
             }
         },
         {
-            "name": "sugarcraft/candy-async",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-async",
-                "reference": "951c0afb9d378f9c14fe97a533a3f7aeaa6b0a2a"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Async\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Async\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
-            "homepage": "https://github.com/sugarcraft/candy-async",
-            "keywords": [
-                "async",
-                "cancellation",
-                "event-loop",
-                "promise",
-                "reactphp",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-async/issues",
-                "source": "https://github.com/sugarcraft/candy-async",
-                "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-buffer",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-buffer",
-                "reference": "3fe64e37849414adf51fb13350adfa2e679fca23"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Buffer\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Buffer\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.",
-            "homepage": "https://github.com/sugarcraft/candy-buffer",
-            "keywords": [
-                "buffer",
-                "cell",
-                "sugarcraft",
-                "terminal",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-buffer/issues",
-                "source": "https://github.com/sugarcraft/candy-buffer/tree/master",
-                "docs": "https://sugarcraft.github.io/lib/candy-buffer.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-codeshot",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-codeshot",
-                "reference": "c8ac257ecc88b7af2dcee9821a85ee3428971848"
+                "reference": "a3c6dbebd6951dc9048d0848ef8d516bb2676b0d"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3678,15 +3507,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-codetime",
-                "reference": "087fb50599c560c6797a493578fca5d5860843ee"
+                "reference": "dc0af38f82fa880b747264eedea46e16e5f01d51"
             },
             "require": {
                 "ext-sqlite3": "*",
                 "php": ">=8.3",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-charts": "dev-master"
+                "sugarcraft/sugar-async": "dev-master",
+                "sugarcraft/sugar-charts": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0"
@@ -3742,14 +3571,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-core",
-                "reference": "b4e47399c2a5e8bc61d217d64cab677b34a3698c"
+                "reference": "5d0ba0f81667d99b46ca9620afb863d068e7e08a"
             },
             "require": {
                 "ext-intl": "*",
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.1",
@@ -3813,15 +3642,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-files",
-                "reference": "0fa28081df23af0b4bf1184fa11e1ed9b04abe3d"
+                "reference": "61905b3694a55d1db8a73d1680683e9a36eefb95"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-fuzzy": "dev-master"
+                "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3878,17 +3707,17 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flappy",
-                "reference": "f3bc9a06357ecc4c882dfe2088889eedc24f3ccd"
+                "reference": "f856ae58eb66d1ee52bc378a94b92e1cfb7adc89"
             },
             "require": {
                 "php": ">=8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-spring": "dev-master"
+                "sugarcraft/sugar-spring": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "bin": [
                 "bin/candy-flappy"
@@ -3941,17 +3770,17 @@
             "dist": {
                 "type": "path",
                 "url": "candy-gifview",
-                "reference": "6316b671587a9fc0c0c940fb53df7c3c579714d4"
+                "reference": "c393a49503938529baedf368bd17ba35cd3bd80a"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/sugar-animation": "dev-master"
+                "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "suggest": {
                 "ext-gd": "Required to decode GIF animations (via sugarcraft/sugar-animation); ANSI art playback needs neither."
@@ -4008,13 +3837,13 @@
             "dist": {
                 "type": "path",
                 "url": "candy-git",
-                "reference": "1f939c7f3b3e3e4d50adbc536ceb4a8bfa8fc31a"
+                "reference": "d1daaf039e0e11c84291275756569581a804b135"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-fuzzy": "dev-master"
+                "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0"
@@ -4068,7 +3897,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-git-server",
-                "reference": "6197c6b244fea2fdd6efd36309dc4bc26addccbf"
+                "reference": "99f9f709221058af11516eb2308157ed96e7c7b6"
             },
             "require": {
                 "ext-json": "*",
@@ -4077,8 +3906,8 @@
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-async": "dev-master",
                 "symfony/yaml": "^6.4 || ^7.0"
             },
             "require-dev": {
@@ -4197,131 +4026,17 @@
             }
         },
         {
-            "name": "sugarcraft/candy-layout",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-layout",
-                "reference": "6bb06cb08328a655672bdf569a829a1c664cba02"
-            },
-            "require": {
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Layout\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Layout\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Constraint-based layout solver (Cassowary simplex + greedy fallback)",
-            "homepage": "https://github.com/sugarcraft/candy-layout",
-            "keywords": [
-                "cassowary",
-                "constraint-solver",
-                "layout",
-                "ratatui",
-                "sugarcraft",
-                "terminal"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-layout/issues",
-                "source": "https://github.com/sugarcraft/candy-layout/tree/master",
-                "docs": "https://github.com/sugarcraft/candy-layout/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-log",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-log",
-                "reference": "88f2935e018b6fd9ed338fc8f556da9ab2b935d5"
-            },
-            "require": {
-                "php": "^8.3",
-                "psr/log": "^3.0",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-colorprofile": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Log\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Log\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/log — minimal, colorful leveled logging with structured human-readable output, text/JSON/logfmt formatters, and stdlog adapter.",
-            "homepage": "https://github.com/sugarcraft/candy-log",
-            "keywords": [
-                "cli",
-                "colorful",
-                "console",
-                "log",
-                "logging",
-                "structured",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-log/issues",
-                "source": "https://github.com/sugarcraft/candy-log"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-mail",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-mail",
-                "reference": "ca489b080ae57ac9939b647777c12d68b964eea4"
+                "reference": "f77dd0895759582f6f1b2644355aae86f350e0e2"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-async": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.2",
@@ -4377,7 +4092,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mdview",
-                "reference": "114c9f4eea91a688db691a7ca4ea7e27c82dee41"
+                "reference": "709f8a6e1cbc860d65b75f4721131ab7f6c2ee08"
             },
             "require": {
                 "php": "^8.3",
@@ -4388,7 +4103,7 @@
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "bin": [
                 "bin/candy-mdview"
@@ -4437,84 +4152,23 @@
             }
         },
         {
-            "name": "sugarcraft/candy-metrics",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-metrics",
-                "reference": "c695e2ebc7d1639db1a0c93bc6aa6f2ae8f563b8"
-            },
-            "require": {
-                "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-wish": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Metrics\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Metrics\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Telemetry primitives for SugarCraft / CandyWish — counters, gauges, histograms with pluggable backends (in-memory, StatsD UDP, Prometheus textfile, JSON stream). Drop-in middleware for SSH session metrics.",
-            "homepage": "https://github.com/sugarcraft/candy-metrics",
-            "keywords": [
-                "counter",
-                "histogram",
-                "metrics",
-                "observability",
-                "prometheus",
-                "ssh",
-                "statsd",
-                "sugarcraft",
-                "telemetry",
-                "wish"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-metrics/issues",
-                "source": "https://github.com/sugarcraft/candy-metrics",
-                "docs": "https://sugarcraft.github.io/lib/candy-metrics.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-minesweeper",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-minesweeper",
-                "reference": "c8204f29ecb83c91060c4ad3fcbe9a03a8979e67"
+                "reference": "274f37d82404d74ffb1eba9e3bfa6f8adeba1fe0"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-mouse": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-mouse": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "bin": [
                 "bin/candy-minesweeper"
@@ -4560,93 +4214,22 @@
             }
         },
         {
-            "name": "sugarcraft/candy-pty",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-pty",
-                "reference": "c27a4bac7b0435c6c0146df12d12e73fbb5de323"
-            },
-            "require": {
-                "ext-ffi": "*",
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/sugar-input": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master",
-                "sugarcraft/candy-vcr": "dev-master",
-                "sugarcraft/candy-vt": "dev-master"
-            },
-            "suggest": {
-                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Pty\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Pty\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
-            "homepage": "https://github.com/sugarcraft/candy-pty",
-            "keywords": [
-                "cli",
-                "ffi",
-                "libc",
-                "posix",
-                "pseudo-terminal",
-                "pty",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "xpty"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-pty/issues",
-                "source": "https://github.com/sugarcraft/candy-pty",
-                "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-scriptui",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-scriptui",
-                "reference": "89e4d75c3b14bfb318eefeffb4bf0d8f772e6f30"
+                "reference": "95e0683b99737d4261646f081f52c9d37056eb38"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master",
                 "sugarcraft/sugar-markdown": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
+                "sugarcraft/sugar-style": "dev-master",
                 "symfony/console": "^6.4 || ^7.0"
             },
             "require-dev": {
@@ -4703,76 +4286,12 @@
             }
         },
         {
-            "name": "sugarcraft/candy-sprinkles",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-sprinkles",
-                "reference": "adb4ce01cbfa29c5b4c314a313cfb6d47f6904e3"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-layout": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Sprinkles\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Sprinkles\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/lipgloss — declarative terminal styling and layout.",
-            "homepage": "https://github.com/sugarcraft/candy-sprinkles",
-            "keywords": [
-                "ansi",
-                "borders",
-                "cli",
-                "layout",
-                "lipgloss",
-                "list",
-                "styling",
-                "sugarcraft",
-                "tables",
-                "terminal",
-                "tree",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-sprinkles/issues",
-                "source": "https://github.com/sugarcraft/candy-sprinkles",
-                "docs": "https://sugarcraft.github.io/lib/candy-sprinkles.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-sql",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-sql",
-                "reference": "3a87957dafedd215fdc1fafe83412302348c1124"
+                "reference": "549b8d17bb542d346cae20e517e527534c8e30b8"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -4781,14 +4300,14 @@
                 "php": ">=8.3",
                 "react/mysql": "0.7.x-dev",
                 "react/promise-timer": "^1.9",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-async": "dev-master",
                 "sugarcraft/sugar-charts": "dev-master",
                 "sugarcraft/sugar-cli": "dev-master",
+                "sugarcraft/sugar-constraints": "dev-master",
                 "sugarcraft/sugar-dashboard": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
+                "sugarcraft/sugar-style": "dev-master",
                 "sugarcraft/sugar-table": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master",
                 "sugarcraft/sugar-widgets": "dev-master",
@@ -4912,12 +4431,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-starter",
-                "reference": "116be8cd550ed90090d33a2996a5d12d2650e4e7"
+                "reference": "d4e74212932e5b1713eb90e7539a2435293994c9"
             },
             "require": {
                 "php": ">=8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0"
@@ -4968,81 +4487,22 @@
             }
         },
         {
-            "name": "sugarcraft/candy-testing",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-testing",
-                "reference": "8732026df806700c8052fd064786f4917089d504"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "sugarcraft/candy-buffer": "@dev",
-                "sugarcraft/candy-core": "@dev"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Testing\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Testing\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
-            "homepage": "https://github.com/sugarcraft/candy-testing",
-            "keywords": [
-                "bubbletea",
-                "elm-architecture",
-                "sugarcraft",
-                "tea",
-                "terminal",
-                "testing",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-testing/issues",
-                "source": "https://github.com/sugarcraft/candy-testing",
-                "docs": "https://sugarcraft.github.io/lib/candy-testing.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-tetris",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "candy-tetris",
-                "reference": "d75eb30152c0b5c201303aaaf92dd3d8444547b8"
+                "reference": "2267f62254ee0c70bffca41d57f765ef3b80c5cb"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "bin": [
                 "bin/candy-tetris"
@@ -5068,7 +4528,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Tetris clone built on the SugarCraft stack — SugarCraft runtime, CandySprinkles styling. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
+            "description": "Tetris clone built on the SugarCraft stack — SugarCraft runtime, SugarStyle styling. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
             "homepage": "https://github.com/sugarcraft/candy-tetris",
             "keywords": [
                 "demo",
@@ -5094,21 +4554,21 @@
             "dist": {
                 "type": "path",
                 "url": "candy-top",
-                "reference": "522d9cc5bacd14f2522f6b351520c96010a975dc"
+                "reference": "31fb965ef75088964ed31628f9dc6e5393550acd"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "@dev",
-                "sugarcraft/candy-sprinkles": "@dev",
                 "sugarcraft/sugar-animation": "@dev",
                 "sugarcraft/sugar-dashboard": "@dev",
+                "sugarcraft/sugar-style": "@dev",
                 "sugarcraft/sugar-widgets": "@dev"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "@dev"
+                "sugarcraft/sugar-testing": "@dev"
             },
             "bin": [
                 "bin/candy-top"
@@ -5168,14 +4628,14 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "61dde2f1e7efbc8d0225dabe605243f4a2612f91"
+                "reference": "1473c512ecf2e5563be1df5da75770d872633795"
             },
             "require": {
                 "ext-mbstring": "*",
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
                 "symfony/console": "^6.4 || ^7.0",
                 "symfony/process": "^6.4 || ^7.0"
             },
@@ -5184,12 +4644,12 @@
                 "phpstan/phpstan": "^2.1",
                 "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master",
-                "sugarcraft/candy-vt": "dev-master",
+                "sugarcraft/sugar-testing": "dev-master",
+                "sugarcraft/sugar-vterm": "dev-master",
                 "symfony/yaml": "^6.4 || ^7.0"
             },
             "suggest": {
-                "sugarcraft/candy-vt": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
+                "sugarcraft/sugar-vterm": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
                 "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
             },
             "bin": [
@@ -5239,151 +4699,21 @@
             }
         },
         {
-            "name": "sugarcraft/candy-vt",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-vt",
-                "reference": "5b02e3c64008ef7903f97d69e656ff5ebb9b9378"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/promise": "^3.3",
-                "react/stream": "^1.2",
-                "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "friendsofphp/php-cs-fixer": "^3.65",
-                "phpstan/phpstan": "^2.1",
-                "phpstan/phpstan-phpunit": "^2.0",
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Vt\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Vt\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "In-memory virtual terminal emulator — parses ANSI byte stream into a cell grid.",
-            "homepage": "https://github.com/sugarcraft/candy-vt",
-            "keywords": [
-                "ansi",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "vt100",
-                "xterm"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-vt/issues",
-                "source": "https://github.com/sugarcraft/candy-vt",
-                "docs": "https://sugarcraft.github.io/lib/candy-vt.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-wish",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-wish",
-                "reference": "5acb32cfaabc1dbd1a79cb792a16bf81d675a613"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise-timer": "^1.9",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
-            },
-            "suggest": {
-                "ext-ssh2": "Enables the Ssh2 client middleware (forwarding, sftp helpers)."
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Wish\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Wish\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "SSH server middleware framework — port of charmbracelet/wish. Build TUIs that anyone can `ssh user@host` to run, with composable middleware (auth, logging, rate-limiting, ext-ssh2 client wrappers, mount a SugarCraft Program).",
-            "homepage": "https://github.com/sugarcraft/candy-wish",
-            "keywords": [
-                "charm",
-                "middleware",
-                "openssh",
-                "remote",
-                "server",
-                "ssh",
-                "sugarcraft",
-                "tui",
-                "wish"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-wish/issues",
-                "source": "https://github.com/sugarcraft/candy-wish",
-                "docs": "https://sugarcraft.github.io/lib/candy-wish.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/sugar-animation",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-animation",
-                "reference": "3c651c1e7758ed1ccb197fe4e1219213ade74a1a"
+                "reference": "e7aeecf674a5fefff284f06dddf91ec617295f5c"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/sugar-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "suggest": {
                 "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
@@ -5431,24 +4761,195 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-ansi-parser",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-ansi-parser",
+                "reference": "dc2cb6452fcb199d771446b3fa4bd9302cbfb12c"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\AnsiParser\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\AnsiParser\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from sugar-vterm.",
+            "homepage": "https://github.com/sugarcraft/sugar-ansi-parser",
+            "keywords": [
+                "ansi",
+                "charmbracelet",
+                "ecma-48",
+                "parser",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt500"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-ansi-parser/issues",
+                "source": "https://github.com/sugarcraft/sugar-ansi-parser",
+                "docs": "https://github.com/sugarcraft/sugar-ansi-parser/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-async",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-async",
+                "reference": "e1eb2f756834035a8abc60bd0cedc610f8a2e5f2"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/sugar-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Async\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Async\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
+            "homepage": "https://github.com/sugarcraft/sugar-async",
+            "keywords": [
+                "async",
+                "cancellation",
+                "event-loop",
+                "promise",
+                "reactphp",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-async/issues",
+                "source": "https://github.com/sugarcraft/sugar-async",
+                "docs": "https://github.com/sugarcraft/sugar-async/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-cellbuffer",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-cellbuffer",
+                "reference": "add0f59e29b4e43e4040aa0eca7e0e048de8a26c"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\CellBuffer\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\CellBuffer\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.",
+            "homepage": "https://github.com/sugarcraft/sugar-cellbuffer",
+            "keywords": [
+                "buffer",
+                "cell",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-cellbuffer/issues",
+                "source": "https://github.com/sugarcraft/sugar-cellbuffer/tree/master",
+                "docs": "https://sugarcraft.github.io/lib/sugar-cellbuffer.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-charts",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-charts",
-                "reference": "7c29fed29a75e585d9df81e9b9a2a8f797eb15cf"
+                "reference": "ec38b12e9217d0a8f2af61b4c8aa378537951ab3"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-dashboard": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-dashboard": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.2",
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -5505,16 +5006,16 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-cli",
-                "reference": "59682fa97b3e6070040434c7ca882e782eb684b7"
+                "reference": "bc224f1d5f74225708c50e291040b7cde44dccad"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -5622,12 +5123,67 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-constraints",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-constraints",
+                "reference": "263cb619ad61924c8f791fda8b1f6e0a28c763cb"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Constraints\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Constraints\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Constraint-based layout solver (Cassowary simplex + greedy fallback)",
+            "homepage": "https://github.com/sugarcraft/sugar-constraints",
+            "keywords": [
+                "cassowary",
+                "constraint-solver",
+                "layout",
+                "ratatui",
+                "sugarcraft",
+                "terminal"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-constraints/issues",
+                "source": "https://github.com/sugarcraft/sugar-constraints/tree/master",
+                "docs": "https://github.com/sugarcraft/sugar-constraints/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-crush",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "b79ef7a890f48111d5b2b6f3fe0cda5955b75707"
+                "reference": "94a69196d3c4b78e2c30f87a6604b4a53c1eb200"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5644,10 +5200,8 @@
                 "react/promise": "^3.3",
                 "react/socket": "^1.16",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-cli": "@dev",
+                "sugarcraft/sugar-constraints": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-focus": "@dev",
                 "sugarcraft/sugar-forms": "dev-master",
@@ -5657,6 +5211,8 @@
                 "sugarcraft/sugar-mcp-client": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
                 "sugarcraft/sugar-overlay": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
+                "sugarcraft/sugar-style": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master",
                 "sugarcraft/sugar-video": "@dev",
                 "symfony/yaml": "^7.4"
@@ -5808,14 +5364,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dashboard",
-                "reference": "02c288648208d4138fbc5f175a170e582c549046"
+                "reference": "ec9ed780e5709d496d68d09973c28523e142c184"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-focus": "dev-master",
+                "sugarcraft/sugar-style": "dev-master",
                 "sugarcraft/sugar-toast": "dev-master"
             },
             "require-dev": {
@@ -5879,16 +5435,16 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-datepicker",
-                "reference": "5c2f30bf0fed6759137796fbeae95a19310a5907"
+                "reference": "bbd7224809593a4ce5d0f88bf70a41364c2ff036"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6106,20 +5662,20 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-forms",
-                "reference": "ac9b6d3741eeb197949a2017918f5849a0c73eeb"
+                "reference": "47935f5cc15621bd3907d0b94660843f858e962c"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-fuzzy": "dev-master"
+                "sugarcraft/sugar-async": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6224,13 +5780,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-gallery",
-                "reference": "2f08f79449a64036f42a475bd9a573f7be79fc75"
+                "reference": "d72a7aa54f83c24186551a923ffa664eec0bacbb"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-mouse": "dev-master"
+                "sugarcraft/sugar-mouse": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -6285,7 +5841,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-image",
-                "reference": "f5bb89afebc9b92b6e9e1d9374bb183e253df28d"
+                "reference": "791345f30b3af6eb4a4b4ae159b8676178db09a2"
             },
             "require": {
                 "ext-gd": "*",
@@ -6299,7 +5855,7 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
                 "react/http": "^1.11",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "suggest": {
                 "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
@@ -6409,22 +5965,81 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-log",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-log",
+                "reference": "8897e4d70ab0bafefb6bdf0a91ee5b6e2a458bdb"
+            },
+            "require": {
+                "php": "^8.3",
+                "psr/log": "^3.0",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-colorprofile": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Log\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Log\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/log — minimal, colorful leveled logging with structured human-readable output, text/JSON/logfmt formatters, and stdlog adapter.",
+            "homepage": "https://github.com/sugarcraft/sugar-log",
+            "keywords": [
+                "cli",
+                "colorful",
+                "console",
+                "log",
+                "logging",
+                "structured",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-log/issues",
+                "source": "https://github.com/sugarcraft/sugar-log"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-markdown",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-markdown",
-                "reference": "acc7f7a6158919b0471a4b326bbbd4be39ca6655"
+                "reference": "9308b188daf5239b7f24da743c650955b509a10a"
             },
             "require": {
                 "league/commonmark": "^2.4",
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6521,6 +6136,67 @@
                 "issues": "https://github.com/sugarcraft/sugar-mcp-client/issues",
                 "source": "https://github.com/sugarcraft/sugar-mcp-client",
                 "docs": "https://github.com/sugarcraft/sugar-mcp-client/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-metrics",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-metrics",
+                "reference": "e75215da25d41bc0acc18802587fddad939dc46c"
+            },
+            "require": {
+                "php": ">=8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ssh-server": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Metrics\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Metrics\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Telemetry primitives for SugarCraft / SugarSshServer — counters, gauges, histograms with pluggable backends (in-memory, StatsD UDP, Prometheus textfile, JSON stream). Drop-in middleware for SSH session metrics.",
+            "homepage": "https://github.com/sugarcraft/sugar-metrics",
+            "keywords": [
+                "counter",
+                "histogram",
+                "metrics",
+                "observability",
+                "prometheus",
+                "ssh",
+                "statsd",
+                "sugarcraft",
+                "telemetry",
+                "wish"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-metrics/issues",
+                "source": "https://github.com/sugarcraft/sugar-metrics",
+                "docs": "https://sugarcraft.github.io/lib/sugar-metrics.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -6645,15 +6321,15 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-overlay",
-                "reference": "25f752be26128d926d470c81f63d9da055d61279"
+                "reference": "6e1a68f333bde08438c5c27507d6324cad461605"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
-                "sugarcraft/sugar-spring": "dev-master"
+                "sugarcraft/sugar-spring": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6705,14 +6381,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-panels",
-                "reference": "65edb5a59d460810f4b1b1db1d4bedba7e7bb9a5"
+                "reference": "cee97f719315559750dd3660d38e4d020d63c8e7"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-layout": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-constraints": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6759,20 +6435,91 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-pty",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-pty",
+                "reference": "3232a73b8ce37413af6417c35c5e6928bf3fa659"
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-input": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-vcr": "dev-master",
+                "sugarcraft/sugar-testing": "dev-master",
+                "sugarcraft/sugar-vterm": "dev-master"
+            },
+            "suggest": {
+                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+            "homepage": "https://github.com/sugarcraft/sugar-pty",
+            "keywords": [
+                "cli",
+                "ffi",
+                "libc",
+                "posix",
+                "pseudo-terminal",
+                "pty",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "xpty"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-pty/issues",
+                "source": "https://github.com/sugarcraft/sugar-pty",
+                "docs": "https://sugarcraft.github.io/lib/sugar-pty.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-quickpick",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-quickpick",
-                "reference": "b9c781eba1de015ab095d133d5f86ef20f65cf6a"
+                "reference": "7d25baf3b6faf6f63d6e811d0bc1df01c1f89330"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
-                "sugarcraft/sugar-fuzzy": "dev-master"
+                "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-fuzzy": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -6880,7 +6627,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-spring",
-                "reference": "06d9274c8240ab305f21bcbfb93b5f8761a88675"
+                "reference": "1d99fb9fd4c256f397605174f2a3498de858fab5"
             },
             "require": {
                 "php": "^8.3",
@@ -6889,7 +6636,7 @@
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6936,22 +6683,152 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-ssh-server",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-ssh-server",
+                "reference": "10106d70702ae40cf3f86443a92b7dc9d0027b77"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise-timer": "^1.9",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/sugar-testing": "dev-master"
+            },
+            "suggest": {
+                "ext-ssh2": "Enables the Ssh2 client middleware (forwarding, sftp helpers)."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\SshServer\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\SshServer\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "SSH server middleware framework — port of charmbracelet/wish. Build TUIs that anyone can `ssh user@host` to run, with composable middleware (auth, logging, rate-limiting, ext-ssh2 client wrappers, mount a SugarCraft Program).",
+            "homepage": "https://github.com/sugarcraft/sugar-ssh-server",
+            "keywords": [
+                "charm",
+                "middleware",
+                "openssh",
+                "remote",
+                "server",
+                "ssh",
+                "sugarcraft",
+                "tui",
+                "wish"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-ssh-server/issues",
+                "source": "https://github.com/sugarcraft/sugar-ssh-server",
+                "docs": "https://sugarcraft.github.io/lib/sugar-ssh-server.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-style",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-style",
+                "reference": "36252374a3ae32fc40414f9f9e8c1e279dc84032"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-constraints": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Style\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Style\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/lipgloss — declarative terminal styling and layout.",
+            "homepage": "https://github.com/sugarcraft/sugar-style",
+            "keywords": [
+                "ansi",
+                "borders",
+                "cli",
+                "layout",
+                "lipgloss",
+                "list",
+                "styling",
+                "sugarcraft",
+                "tables",
+                "terminal",
+                "tree",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-style/issues",
+                "source": "https://github.com/sugarcraft/sugar-style",
+                "docs": "https://sugarcraft.github.io/lib/sugar-style.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-table",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-table",
-                "reference": "9d0f3546c971d79cb15a8e71116781c7665bf46b"
+                "reference": "2cf2147d0e912e36e588be98409d30b813bb3e97"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/sugar-cellbuffer": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6996,21 +6873,80 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-testing",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-testing",
+                "reference": "37fcd5227c8af1b89526aa080cf988609d316171"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "sugarcraft/candy-core": "@dev",
+                "sugarcraft/sugar-cellbuffer": "@dev"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Testing\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Testing\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
+            "homepage": "https://github.com/sugarcraft/sugar-testing",
+            "keywords": [
+                "bubbletea",
+                "elm-architecture",
+                "sugarcraft",
+                "tea",
+                "terminal",
+                "testing",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-testing/issues",
+                "source": "https://github.com/sugarcraft/sugar-testing",
+                "docs": "https://sugarcraft.github.io/lib/sugar-testing.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-toast",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-toast",
-                "reference": "d88879110b47584d75f20783d82b20b0c4058ac3"
+                "reference": "972b1e442fe722d0ed02c0dbc0981eec4818bdd5"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -7059,13 +6995,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-treelist",
-                "reference": "d131a13233178eb346e6d8eac2c061a6158cc411"
+                "reference": "6d9a4b7d9cf370c0cfebf47b0b8f2ff5bc695f47"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-async": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-fuzzy": "dev-master"
             },
             "require-dev": {
@@ -7120,19 +7056,19 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-video",
-                "reference": "c5a70761c6d40248a29f3ecda5675a9b280676eb"
+                "reference": "a9349a5f7bfef4516c0b6f1d5317132c31e513ec"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/sugar-animation": "dev-master",
+                "sugarcraft/sugar-cellbuffer": "dev-master",
                 "sugarcraft/sugar-colorprofile": "dev-master",
                 "sugarcraft/sugar-image": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -7183,24 +7119,88 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-vterm",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-vterm",
+                "reference": "9989ee6f223127f5f8689684248022b90de948fd"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/promise": "^3.3",
+                "react/stream": "^1.2",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-ansi-parser": "dev-master",
+                "sugarcraft/sugar-async": "dev-master"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.65",
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/sugar-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Vterm\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Vterm\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "In-memory virtual terminal emulator — parses ANSI byte stream into a cell grid.",
+            "homepage": "https://github.com/sugarcraft/sugar-vterm",
+            "keywords": [
+                "ansi",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt100",
+                "xterm"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-vterm/issues",
+                "source": "https://github.com/sugarcraft/sugar-vterm",
+                "docs": "https://sugarcraft.github.io/lib/sugar-vterm.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-widgets",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "sugar-widgets",
-                "reference": "d85496106f9acb387ba3866e4537e96456d3e690"
+                "reference": "c08d19cc5e816af878066c07af46d97a34fccf55"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-forms": "dev-master",
                 "sugarcraft/sugar-mouse": "dev-master",
-                "sugarcraft/sugar-spring": "dev-master"
+                "sugarcraft/sugar-spring": "dev-master",
+                "sugarcraft/sugar-style": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "sugarcraft/candy-testing": "dev-master"
+                "sugarcraft/sugar-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -8586,10 +8586,7 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "sugarcraft/candy-ansi": 20,
         "sugarcraft/candy-ansi-inspect": 20,
-        "sugarcraft/candy-async": 20,
-        "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-codeshot": 20,
         "sugarcraft/candy-codetime": 20,
         "sugarcraft/candy-core": 20,
@@ -8599,24 +8596,20 @@
         "sugarcraft/candy-git": 20,
         "sugarcraft/candy-git-server": 20,
         "sugarcraft/candy-kv": 20,
-        "sugarcraft/candy-log": 20,
         "sugarcraft/candy-mail": 20,
         "sugarcraft/candy-mdview": 20,
-        "sugarcraft/candy-metrics": 20,
         "sugarcraft/candy-minesweeper": 20,
-        "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-scriptui": 20,
-        "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-sql": 20,
         "sugarcraft/candy-ssh-launcher": 20,
         "sugarcraft/candy-starter": 20,
-        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-top": 20,
         "sugarcraft/candy-vcr": 20,
-        "sugarcraft/candy-vt": 20,
-        "sugarcraft/candy-wish": 20,
         "sugarcraft/sugar-animation": 20,
+        "sugarcraft/sugar-ansi-parser": 20,
+        "sugarcraft/sugar-async": 20,
+        "sugarcraft/sugar-cellbuffer": 20,
         "sugarcraft/sugar-charts": 20,
         "sugarcraft/sugar-cli": 20,
         "sugarcraft/sugar-colorprofile": 20,
@@ -8631,19 +8624,26 @@
         "sugarcraft/sugar-fuzzy": 20,
         "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-image": 20,
+        "sugarcraft/sugar-log": 20,
         "sugarcraft/sugar-markdown": 20,
         "sugarcraft/sugar-mcp-client": 20,
+        "sugarcraft/sugar-metrics": 20,
         "sugarcraft/sugar-mouse": 20,
         "sugarcraft/sugar-navstack": 20,
         "sugarcraft/sugar-overlay": 20,
         "sugarcraft/sugar-panels": 20,
+        "sugarcraft/sugar-pty": 20,
         "sugarcraft/sugar-quickpick": 20,
         "sugarcraft/sugar-readline": 20,
         "sugarcraft/sugar-spring": 20,
+        "sugarcraft/sugar-ssh-server": 20,
+        "sugarcraft/sugar-style": 20,
         "sugarcraft/sugar-table": 20,
+        "sugarcraft/sugar-testing": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-treelist": 20,
         "sugarcraft/sugar-video": 20,
+        "sugarcraft/sugar-vterm": 20,
         "sugarcraft/sugar-widgets": 20
     },
     "prefer-stable": true,
