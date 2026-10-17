@@ -74,9 +74,16 @@ final class PaletteState
         return new self($this->mode, $this->query, $selectedIndex, $this->queryCursor, $this->provider);
     }
 
-    public function withMode(string $mode): self
+    /**
+     * Open a fresh list for $mode: query cleared, caret at zero. The optional
+     * $selectedIndex seeds which row is highlighted on arrival - the themes
+     * picker passes the index of the theme in use so it opens on that row
+     * rather than always on the first (ISS-104). Every other caller wants the
+     * old reset-to-first, which is why the default stays 0.
+     */
+    public function withMode(string $mode, int $selectedIndex = 0): self
     {
-        return new self($mode, '', 0, 0);
+        return new self($mode, '', $selectedIndex, 0);
     }
 
     /**

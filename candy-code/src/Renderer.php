@@ -6241,6 +6241,11 @@ final class Renderer
             // indistinguishable from the rest of the row.
             $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
             $lastCategory = null;
+            // ISS-104: the themes picker carries a ● on the row naming the
+            // theme in use, so the active choice stays visible even after the
+            // ▸ cursor moves away. Null outside themes mode keeps the provider
+            // and model lists — and the root command list — byte-identical.
+            $activePickerRow = $palette->mode === 'themes' ? $chat->activeThemeName() : null;
 
             foreach ($results as $index => $result) {
                 if ($grouped) {
@@ -6260,7 +6265,12 @@ final class Renderer
                     static fn(string $run): string => $matchStyle->render($run) . $reopen,
                 );
 
-                $row = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $body);
+                $marker = match (true) {
+                    $index === $selected => '▸ ',
+                    $result->haystack === $activePickerRow => '● ',
+                    default => '  ',
+                };
+                $row = $rowStyle->render($marker . $body);
                 $lines[] = $row;
                 $rows[$index] = $row;
             }

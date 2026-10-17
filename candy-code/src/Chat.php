@@ -17795,7 +17795,11 @@ final class Chat implements Model
             return [$this->mutate(['palette' => $this->palette->withMode('providers')]), null];
         }
         if ($action === PaletteAction::SwitchTheme) {
-            return [$this->mutate(['palette' => $this->palette->withMode('themes')]), null];
+            // Seed the highlight on the theme in use, not on NAMES[0]. The
+            // picker's rows are Theme::names() in that fixed order, so the
+            // current theme's index is the row Enter would run — arriving
+            // there is the whole of ISS-104's second half.
+            return [$this->mutate(['palette' => $this->palette->withMode('themes', $this->currentThemeIndex())]), null];
         }
 
         $closed = $this->mutate(['palette' => null]);
@@ -18212,6 +18216,31 @@ final class Chat implements Model
             'agentPoolConfig' => $this->agentPoolConfig?->withWorkerProvider(self::poolWorkerSpecFor($name, $backend)),
             'history' => [...$this->history, Message::assistant($report)->withUiOnly()],
         ]), null];
+    }
+
+    /**
+     * The name of the theme in use, canonicalised to a member of {@see
+     * Theme::names()} ({@see theme()} resolves the stored spelling through
+     * {@see Theme::byName()}). The Ctrl+P themes picker reads it to mark the
+     * active row (ISS-104).
+     */
+    public function activeThemeName(): string
+    {
+        return $this->theme()->name;
+    }
+
+    /**
+     * The row index the themes picker should open on: the position of the
+     * active theme within {@see Theme::names()} — the same fixed order {@see
+     * paletteItemLabels()} lists them in — or 0 when the stored name resolves
+     * to none (which {@see Theme::byName()} makes unreachable, but the picker
+     * must not index out of range if that ever changes).
+     */
+    private function currentThemeIndex(): int
+    {
+        $index = array_search($this->activeThemeName(), Theme::names(), true);
+
+        return $index === false ? 0 : $index;
     }
 
     private function selectPaletteTheme(string $name): array
