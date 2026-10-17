@@ -62,6 +62,15 @@ final class RemoteSessionHost
     /** How many sessions {@see open()} reads when it resolves a target. */
     public const RESOLVE_PAGE = 200;
 
+    /**
+     * Rows per snapshot page this client fetches (ISS-058): the whole
+     * transcript in one answer can outgrow a server frame, so attach pages.
+     */
+    public const SNAPSHOT_PAGE_ROWS = 200;
+
+    /** Most older pages {@see open()} stitches before giving up (10 000 rows). */
+    public const MAX_SNAPSHOT_PAGES = 50;
+
     private static ?self $launch = null;
 
     private readonly MessageBuffer $buffer;
@@ -346,27 +355,100 @@ final class RemoteSessionHost
      * not-found {@see RpcError} when nothing matches, and `ambiguous` when a
      * prefix matches more than one.
      *
+     * The snapshot is taken in pages (ISS-058): the newest $pageRows rows
+     * arrive with the subscription, older pages are fetched by `session.get`
+     * until the transcript is whole — one frame never carries a long session's
+     * full history.
+     *
      * @return PromiseInterface<self>
      */
-    public function open(?string $target = null): PromiseInterface
+    public function open(?string $target = null, int $pageRows = self::SNAPSHOT_PAGE_ROWS): PromiseInterface
     {
         $chosen = $target === null || \trim($target) === ''
             ? $this->call('session.create')
             : $this->call('session.list', ['query' => $target, 'limit' => self::RESOLVE_PAGE])
                 ->then(static fn (array $page): array => self::resolveTarget((array) ($page['items'] ?? []), $target));
 
-        return $chosen->then(function (array $summary): PromiseInterface {
+        return $chosen->then(function (array $summary) use ($pageRows): PromiseInterface {
             $id = (string) ($summary['id'] ?? '');
 
-            return $this->call('session.subscribe', ['sessionId' => $id])->then(function (array $subscribed) use ($id, $summary): self {
-                $this->sessionId = $id;
-                $this->sessionName = \is_string($summary['name'] ?? null) && $summary['name'] !== '' ? $summary['name'] : null;
-                $this->snapshot = \is_array($subscribed['snapshot'] ?? null) ? $subscribed['snapshot'] : [];
-                $this->lastSeq = (int) ($subscribed['throughSeq'] ?? 0);
+            return $this->call('session.subscribe', ['sessionId' => $id, 'snapshotLimit' => $pageRows])
+                ->then(function (array $subscribed) use ($id, $summary): self {
+                    $this->sessionId = $id;
+                    $this->sessionName = \is_string($summary['name'] ?? null) && $summary['name'] !== '' ? $summary['name'] : null;
+                    $this->adoptSnapshot((array) ($subscribed['snapshot'] ?? []), (int) ($subscribed['throughSeq'] ?? 0));
 
-                return $this;
-            });
+                    return $this;
+                })
+                ->then(fn (): PromiseInterface => $this->pageOlder($pageRows))
+                ->then(fn (): self => $this);
         });
+    }
+
+    /**
+     * Take $snapshot as the rows this client draws the session from, capped at
+     * $throughSeq as the newest durable event it covers. Empty and unpaged
+     * snapshots keep the wire shape byte-for-byte, so a {@see history()} read
+     * of a small session looks exactly as it did before paging.
+     *
+     * @param array<string, mixed> $snapshot
+     */
+    private function adoptSnapshot(array $snapshot, int $throughSeq): void
+    {
+        $this->snapshot = $snapshot;
+        $this->lastSeq = \max($this->lastSeq, $throughSeq);
+    }
+
+    /**
+     * Fetch the pages older than the snapshot's window (ISS-058) and prepend
+     * them, newest-older-first, until `hasMoreOlder` clears or the bound is
+     * spent. `oldestIndex` is counted from the first row, which a concurrent
+     * append never shifts, so the walk is stable while the session runs.
+     *
+     * @return PromiseInterface<array<string, mixed>> the whole snapshot
+     */
+    private function pageOlder(int $pageRows, int $pagesLeft = self::MAX_SNAPSHOT_PAGES): PromiseInterface
+    {
+        if ($pagesLeft <= 0 || ($this->snapshot['hasMoreOlder'] ?? false) !== true) {
+            return \React\Promise\resolve($this->completeSnapshot());
+        }
+
+        return $this->call('session.get', [
+            'sessionId' => $this->requireSession(),
+            'limit' => $pageRows,
+            'beforeIndex' => (int) ($this->snapshot['oldestIndex'] ?? 0),
+        ])->then(function (array $page) use ($pageRows, $pagesLeft): PromiseInterface {
+            $older = \array_values(\array_filter((array) ($page['messages'] ?? []), 'is_array'));
+            if ($older === []) {
+                // A server that pages nothing older: stop where we are.
+                $this->snapshot['hasMoreOlder'] = false;
+
+                return \React\Promise\resolve($this->completeSnapshot());
+            }
+            $this->snapshot['messages'] = \array_merge($older, (array) ($this->snapshot['messages'] ?? []));
+            $this->snapshot['totalMessages'] = (int) ($page['totalMessages'] ?? $this->snapshot['totalMessages'] ?? \count((array) $this->snapshot['messages']));
+            $this->snapshot['oldestIndex'] = (int) ($page['oldestIndex'] ?? 0);
+            $this->snapshot['hasMoreOlder'] = (bool) ($page['hasMoreOlder'] ?? false);
+
+            return $this->pageOlder($pageRows, $pagesLeft - 1);
+        });
+    }
+
+    /**
+     * Once the walk has reached the first row, the paging meta has served its
+     * purpose: drop it so a fully-stitched snapshot is the shape the client
+     * saw before paging existed. A walk stopped at {@see MAX_SNAPSHOT_PAGES}
+     * keeps `hasMoreOlder` — the window really is not the whole transcript.
+     *
+     * @return array<string, mixed>
+     */
+    private function completeSnapshot(): array
+    {
+        if (($this->snapshot['oldestIndex'] ?? 0) === 0 && ($this->snapshot['hasMoreOlder'] ?? false) === false) {
+            unset($this->snapshot['totalMessages'], $this->snapshot['oldestIndex'], $this->snapshot['hasMoreOlder']);
+        }
+
+        return $this->snapshot;
     }
 
     /**

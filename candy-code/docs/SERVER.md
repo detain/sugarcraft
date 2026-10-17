@@ -445,7 +445,7 @@ it and the two tables below are generated from the code
 | `permission.respond` | approve | yes | `sessionId`, `askId`, `reply` | Answer an open permission question; the first answer wins. |
 | `permission.rules` | read |  | — | The effective permission mode and rules, read-only. |
 | `server.health` | read |  | — | Liveness and load. |
-| `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions. |
+| `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
 | `server.shutdown` | admin | yes | — | Stop the server, draining running turns first. |
 | `session.cancel` | write | yes | `sessionId` | Cancel the running turn (hard, or soft at the next step boundary). |
@@ -455,13 +455,13 @@ it and the two tables below are generated from the code
 | `session.dequeue` | write | yes | `sessionId`, `queueId` | Remove a queued prompt. |
 | `session.export` | read |  | `sessionId` | A session's transcript as markdown, json or text. |
 | `session.fork` | write | yes | `sessionId` | Branch a session into a new one carrying its transcript. |
-| `session.get` | read |  | `sessionId` | A session's snapshot: rows, status, queue, open questions, usage. |
+| `session.get` | read |  | `sessionId` | A session's snapshot: rows, status, queue, open questions, usage; limit/beforeIndex page the rows. |
 | `session.list` | read |  | — | The workspace's sessions, newest activity first, paged. |
 | `session.queue` | read |  | `sessionId` | The prompts queued behind the running turn. |
 | `session.rename` | write | yes | `sessionId`, `name` | Rename a session. |
 | `session.send` | write | yes | `sessionId`, `text` | Send a prompt: start a turn, or queue / steer / interrupt the running one. |
 | `session.setMode` | write | yes | `sessionId`, `permissionMode` | The permission mode the session's next turns run in. |
-| `session.subscribe` | read |  | `sessionId` | Follow a session's events from a cursor (replay) or from a snapshot. |
+| `session.subscribe` | read |  | `sessionId` | Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. |
 | `session.unsubscribe` | read |  | `sessionId` | Stop following a session. |
 | `settings.get` | read |  | — | Effective values and where each came from, or one tier's file; secrets masked. |
 | `settings.preview` | admin |  | — | What a save would write — the target file's diff, when each change applies, and what blocks it — without writing. |

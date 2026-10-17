@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Host\SessionHost;
+use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Protocol\CallContext;
@@ -41,8 +42,8 @@ final class SessionMethods
     {
         $registry->add(MethodSpec::new('session.list', Scope::Read, 'The workspace\'s sessions, newest activity first, paged.', self::list(...)));
         $registry->add(MethodSpec::new('session.create', Scope::Write, 'Create a session and open it.', self::create(...), true));
-        $registry->add(MethodSpec::new('session.get', Scope::Read, 'A session\'s snapshot: rows, status, queue, open questions, usage.', self::get(...)));
-        $registry->add(MethodSpec::new('session.subscribe', Scope::Read, 'Follow a session\'s events from a cursor (replay) or from a snapshot.', self::subscribe(...)));
+        $registry->add(MethodSpec::new('session.get', Scope::Read, 'A session\'s snapshot: rows, status, queue, open questions, usage; limit/beforeIndex page the rows.', self::get(...)));
+        $registry->add(MethodSpec::new('session.subscribe', Scope::Read, 'Follow a session\'s events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot.', self::subscribe(...)));
         $registry->add(MethodSpec::new('session.unsubscribe', Scope::Read, 'Stop following a session.', self::unsubscribe(...)));
         $registry->add(MethodSpec::new('session.rename', Scope::Write, 'Rename a session.', self::rename(...), true));
         $registry->add(MethodSpec::new('session.fork', Scope::Write, 'Branch a session into a new one carrying its transcript.', self::fork(...), true));
@@ -132,7 +133,10 @@ final class SessionMethods
     {
         $host = $call->host(self::sessionId($params));
 
-        return $call->feed($host)->snapshot();
+        return $call->feed($host)->snapshot(
+            $params->optionalInt('limit', 1, SessionSnapshot::MAX_PAGE_ROWS),
+            $params->optionalInt('beforeIndex', 0),
+        );
     }
 
     /** @return array<string, mixed> */
@@ -141,8 +145,9 @@ final class SessionMethods
         $host = $call->host(self::sessionId($params));
         $afterSeq = $params->optionalInt('afterSeq', 0);
         $mode = $params->enum('mode', [SessionFeed::MODE_FULL, SessionFeed::MODE_NARRATION], SessionFeed::MODE_FULL);
+        $snapshotLimit = $params->optionalInt('snapshotLimit', 1, SessionSnapshot::MAX_PAGE_ROWS);
 
-        return $call->feed($host)->subscribe($call->client, $afterSeq, $mode);
+        return $call->feed($host)->subscribe($call->client, $afterSeq, $mode, $snapshotLimit);
     }
 
     /** @return array<string, mixed> */

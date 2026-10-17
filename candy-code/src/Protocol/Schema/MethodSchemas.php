@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Schema;
 
+use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
 
@@ -77,6 +78,7 @@ final class MethodSchemas
                     'client' => Schema::object(['name' => Schema::string(), 'version' => Schema::string(), 'instanceId' => Schema::string()]),
                     'caps' => Schema::arrayOf(Schema::string(), 64),
                     'resume' => Schema::map(Schema::integer(0))->describe('sessionId => the last seq the client holds'),
+                    'snapshotLimit' => Schema::integer(1, SessionSnapshot::MAX_PAGE_ROWS)->describe('Page a resumed session\'s reset snapshot to this many newest rows (ISS-058).'),
                 ]),
                 Schema::object([
                     'protocol' => Schema::integer(1),
@@ -158,9 +160,9 @@ final class MethodSchemas
                 Schema::object(['name' => Schema::string(256), 'permissionMode' => Schema::ref(D::PERMISSION_MODE), 'root' => $root]),
                 $summary,
             ],
-            'session.get' => [$sessionOnly, Schema::ref(D::SNAPSHOT)],
+            'session.get' => [Schema::object([...$sid, 'limit' => Schema::integer(1, SessionSnapshot::MAX_PAGE_ROWS), 'beforeIndex' => Schema::integer(0)], ['sessionId']), Schema::ref(D::SNAPSHOT)],
             'session.subscribe' => [
-                Schema::object([...$sid, 'afterSeq' => Schema::integer(0), 'mode' => Schema::enum(['full', 'narration'])], ['sessionId']),
+                Schema::object([...$sid, 'afterSeq' => Schema::integer(0), 'mode' => Schema::enum(['full', 'narration']), 'snapshotLimit' => Schema::integer(1, SessionSnapshot::MAX_PAGE_ROWS)], ['sessionId']),
                 Schema::ref(D::SUBSCRIPTION),
             ],
             'session.unsubscribe' => [$sessionOnly, Schema::object(['unsubscribed' => Schema::boolean()], ['unsubscribed'])],

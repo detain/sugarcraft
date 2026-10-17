@@ -212,12 +212,14 @@ final class SessionFeed
      * longer serve — from a snapshot (`{reset: true, snapshot, throughSeq}`).
      * Either way the questions still open ride along (`pendingAsks`), so a
      * client that reconnects mid-question can answer it whatever its cursor.
+     * $snapshotLimit pages the reset snapshot to its newest rows (ISS-058);
+     * the meta it adds says how the client fetches the rest.
      *
      * @return array<string, mixed>
      *
      * @throws RpcError busy, when the session already has its maximum of subscribers
      */
-    public function subscribe(Client $client, ?int $afterSeq, string $mode = self::MODE_FULL): array
+    public function subscribe(Client $client, ?int $afterSeq, string $mode = self::MODE_FULL, ?int $snapshotLimit = null): array
     {
         if (!isset($this->subscribers[$client->id()]) && \count($this->subscribers) >= self::MAX_SUBSCRIBERS) {
             throw RpcError::of(ErrorCode::Busy, \sprintf('session %s already has %d subscribers', $this->sessionId(), self::MAX_SUBSCRIBERS), 'too_many_subscribers');
@@ -235,7 +237,7 @@ final class SessionFeed
             $this->subscribers[$client->id()]['lastSent'] = $through;
             $this->loop->futureTick(fn () => $this->goLive($client->id()));
 
-            return ['reset' => true, 'snapshot' => $this->snapshot(), 'throughSeq' => $through, 'pendingAsks' => $pending];
+            return ['reset' => true, 'snapshot' => $this->snapshot($snapshotLimit), 'throughSeq' => $through, 'pendingAsks' => $pending];
         }
 
         $this->subscribers[$client->id()]['lastSent'] = $afterSeq;
@@ -257,12 +259,14 @@ final class SessionFeed
     /**
      * What a client needs to draw the session from nothing: the host's
      * snapshot plus the facts the protocol keeps (§6.8 "snapshot contents").
+     * $limit/$beforeIndex page the `messages` window (ISS-058,
+     * {@see SessionSnapshot::pagedArray()}); null answers the whole transcript.
      *
      * @return array<string, mixed>
      */
-    public function snapshot(): array
+    public function snapshot(?int $limit = null, ?int $beforeIndex = null): array
     {
-        $snapshot = $this->host->snapshot()->toArray();
+        $snapshot = $this->host->snapshot()->pagedArray($limit, $beforeIndex);
         $snapshot['status'] = $this->status;
         $snapshot['permissionMode'] = $this->host->permissionMode()?->value;
         $snapshot['pendingAsks'] = \array_map(self::askSummary(...), $this->host->pendingAsks());

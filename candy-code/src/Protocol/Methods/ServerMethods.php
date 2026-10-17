@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Media\Capability\MediaAffordance;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Cli\Bootstrap;
@@ -39,7 +40,7 @@ final class ServerMethods
 
     public static function register(MethodRegistry $registry): void
     {
-        $registry->add(MethodSpec::new(self::HELLO, Scope::Read, 'The handshake: protocol version, features, limits; optionally resume subscriptions.', self::hello(...)));
+        $registry->add(MethodSpec::new(self::HELLO, Scope::Read, 'The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots).', self::hello(...)));
         $registry->add(MethodSpec::new('server.health', Scope::Read, 'Liveness and load.', self::health(...)));
         $registry->add(MethodSpec::new('server.info', Scope::Read, 'What this server offers: providers, agents, commands, tools, permission modes.', self::info(...)));
         $registry->add(MethodSpec::new('server.shutdown', Scope::Admin, 'Stop the server, draining running turns first.', self::shutdown(...), true));
@@ -62,6 +63,10 @@ final class ServerMethods
         $info = $params->object('client');
         $caps = $params->strings('caps', 64);
         $resume = $params->object('resume');
+        // ISS-058: a resumed session whose cursor the log can no longer serve
+        // resets from a snapshot; page it so one huge transcript cannot make
+        // the whole hello answer outgrow a server frame.
+        $snapshotLimit = $params->optionalInt('snapshotLimit', 1, SessionSnapshot::MAX_PAGE_ROWS);
 
         $call->client->initialize($info, $caps);
 
@@ -75,7 +80,7 @@ final class ServerMethods
             }
             try {
                 $host = $call->host($sessionId);
-                $resumed[$sessionId] = $call->feed($host)->subscribe($call->client, $afterSeq);
+                $resumed[$sessionId] = $call->feed($host)->subscribe($call->client, $afterSeq, SessionFeed::MODE_FULL, $snapshotLimit);
             } catch (RpcError $e) {
                 $resumed[$sessionId] = ['error' => $e->kind];
             }

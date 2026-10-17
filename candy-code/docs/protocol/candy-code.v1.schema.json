@@ -422,7 +422,21 @@
                         "type": "object",
                         "additionalProperties": {}
                     },
-                    "description": "Transcript rows, as they are saved."
+                    "description": "Transcript rows, as they are saved; a paged snapshot carries only its window."
+                },
+                "totalMessages": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Paged snapshots (ISS-058): every row the session holds."
+                },
+                "oldestIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Paged snapshots: index of the first carried row in the full history; appending never shifts it."
+                },
+                "hasMoreOlder": {
+                    "type": "boolean",
+                    "description": "Paged snapshots: older rows exist; ask session.get with beforeIndex = oldestIndex."
                 },
                 "queued": {
                     "type": "array",
@@ -2253,7 +2267,7 @@
             }
         },
         "server.hello": {
-            "description": "The handshake: protocol version, features, limits; optionally resume subscriptions.",
+            "description": "The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots).",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -2295,6 +2309,12 @@
                             "minimum": 0
                         },
                         "description": "sessionId => the last seq the client holds"
+                    },
+                    "snapshotLimit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500,
+                        "description": "Page a resumed session's reset snapshot to this many newest rows (ISS-058)."
                     }
                 }
             },
@@ -2855,7 +2875,7 @@
             }
         },
         "session.get": {
-            "description": "A session's snapshot: rows, status, queue, open questions, usage.",
+            "description": "A session's snapshot: rows, status, queue, open questions, usage; limit/beforeIndex page the rows.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -2863,6 +2883,15 @@
                 "properties": {
                     "sessionId": {
                         "$ref": "#/$defs/SessionId"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    },
+                    "beforeIndex": {
+                        "type": "integer",
+                        "minimum": 0
                     }
                 },
                 "required": [
@@ -3053,7 +3082,7 @@
             }
         },
         "session.subscribe": {
-            "description": "Follow a session's events from a cursor (replay) or from a snapshot.",
+            "description": "Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -3071,6 +3100,11 @@
                             "full",
                             "narration"
                         ]
+                    },
+                    "snapshotLimit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
                     }
                 },
                 "required": [

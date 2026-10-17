@@ -21,9 +21,18 @@ use SugarCraft\Code\ToolResult;
  * the media refs {@see mediaBearingRow()} folds onto finished calls.
  *
  * Immutable: a snapshot is a moment, and the host's next change is a new one.
+ * {@see pagedArray()} is the same moment with the `messages` window capped, so
+ * a long session cannot outgrow one server frame (ISS-058).
  */
 final class SessionSnapshot
 {
+    /**
+     * Most rows one paged snapshot may carry (ISS-058): the whole transcript
+     * in one answer passed {@see \SugarCraft\Code\Protocol\Dispatcher::MAX_SERVER_FRAME_BYTES}
+     * for long sessions, and the answer came back `too_large`.
+     */
+    public const MAX_PAGE_ROWS = 500;
+
     /**
      * @param list<Message> $history
      * @param list<string> $queued
@@ -70,15 +79,54 @@ final class SessionSnapshot
      */
     public function toArray(): array
     {
-        return array_filter([
+        return $this->shape($this->history, null);
+    }
+
+    /**
+     * The wire shape with the `messages` window paged (ISS-058): the newest
+     * $limit rows not newer than $beforeIndex, still oldest-row-first inside
+     * the page. Null $limit answers exactly {@see toArray()}. A paged answer
+     * says where its window sits — `totalMessages`, the `oldestIndex` of its
+     * first row in the full history, and `hasMoreOlder` — so a client that
+     * wants the beginning pages older with `beforeIndex = oldestIndex`
+     * (indices are counted from the first row, which appending never shifts).
+     *
+     * @return array<string, mixed>
+     */
+    public function pagedArray(?int $limit, ?int $beforeIndex = null): array
+    {
+        if ($limit === null) {
+            return $this->toArray();
+        }
+
+        $total = count($this->history);
+        $upper = min($total, max(0, $beforeIndex ?? $total));
+        $lower = max(0, $upper - $limit);
+
+        return $this->shape(
+            array_slice($this->history, $lower, $upper - $lower),
+            ['totalMessages' => $total, 'oldestIndex' => $lower, 'hasMoreOlder' => $lower > 0],
+        );
+    }
+
+    /**
+     * @param list<Message> $rows
+     * @param array<string, mixed>|null $page the paging meta, null for the whole transcript
+     * @return array<string, mixed>
+     */
+    private function shape(array $rows, ?array $page): array
+    {
+        $shape = array_filter([
             'sessionId' => $this->sessionId,
             'status' => $this->status(),
             'turnId' => $this->turnId,
-            'messages' => array_map(self::mediaBearingRow(...), $this->history),
+            'messages' => array_map(self::mediaBearingRow(...), $rows),
             'queued' => $this->queued,
             'spentUsd' => $this->spentUsd,
             'lastSeq' => $this->lastSeq,
         ], static fn (mixed $value): bool => $value !== null);
+
+        return $page === null ? $shape : $shape + $page;
     }
 
     /**
