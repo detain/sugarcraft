@@ -1,6 +1,6 @@
-# Step 06.12 — candy-wish Session SSH-protocol metadata
+# Step 06.12 — sugar-ssh-server Session SSH-protocol metadata
 
-**Source:** `leftover_updates_later.md` candy-wish §4.5 P2
+**Source:** `leftover_updates_later.md` sugar-ssh-server §4.5 P2
 **Branch:** `ai/wish-session-metadata`
 
 ## Deliverable
@@ -13,18 +13,18 @@ has limited visibility into protocol-level details.
 
 **Modify:**
 
-- `candy-wish/src/Session.php` — add the new readonly properties.
-- `candy-wish/src/Transport/InProcessTransport.php` — populates them
+- `sugar-ssh-server/src/Session.php` — add the new readonly properties.
+- `sugar-ssh-server/src/Transport/InProcessTransport.php` — populates them
   from the protocol handshake.
 
 **Tests:**
 
-- `candy-wish/tests/SessionMetadataTest.php` — fixture session;
+- `sugar-ssh-server/tests/SessionMetadataTest.php` — fixture session;
   assert metadata is populated post-handshake.
 
 ## Acceptance
 
-- `cd candy-wish && vendor/bin/phpunit --filter SessionMetadata` green.
+- `cd sugar-ssh-server && vendor/bin/phpunit --filter SessionMetadata` green.
 
 ---
 

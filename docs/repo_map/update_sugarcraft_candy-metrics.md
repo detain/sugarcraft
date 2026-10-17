@@ -3,7 +3,7 @@
 **Package:** `sugarcraft/candy-metrics` (metrics)  
 **Status:** 🟢 v1 ready, 41 tests  
 **Type:** Telemetry primitives library (counters, gauges, histograms, async instruments)  
-**Ecosystem Position:** Leaf library in SugarCraft monorepo; bridges `candy-wish` SSH server with observability backends (Prometheus, StatsD, JSON, InMemory)
+**Ecosystem Position:** Leaf library in SugarCraft monorepo; bridges `sugar-ssh-server` SSH server with observability backends (Prometheus, StatsD, JSON, InMemory)
 
 candy-metrics is a well-architected telemetry library that significantly surpasses its primary upstream `charmbracelet/promwish` in capability breadth. It provides 6 metric instrument types with 5 pluggable backend implementations and robust cardinality management. The library is production-ready for basic use cases but lacks several high-value features for advanced observability scenarios.
 
@@ -78,7 +78,7 @@ public function asyncGauge(string $name, float $value, array $tags = []): void;
 
 ### Middleware
 
-**SessionMetrics** - CandyWish middleware emitting:
+**SessionMetrics** - SugarSshServer middleware emitting:
 - `wish.session.connect` (counter) with `user`, `term` tags
 
 - `wish.session.duration` (histogram) with `user`, `term` tags

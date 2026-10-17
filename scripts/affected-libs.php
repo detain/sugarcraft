@@ -44,11 +44,11 @@ const MACOS_LIBS = [
     // needs either a Darwin-specific shell-out to `stty` for resize
     // or a different FFI binding. Until then, candy-pty's macOS
     // coverage flows through its consumers (candy-core's PosixBackend
-    // and candy-wish's InProcessTransport — both exercise the same
-    // posix_openpt + grantpt + TIOCSWINSZ chain, and candy-wish's
+    // and sugar-ssh-server's InProcessTransport — both exercise the same
+    // posix_openpt + grantpt + TIOCSWINSZ chain, and sugar-ssh-server's
     // tests fail visibly enough to flag regressions).
     'candy-core',
-    'candy-wish',
+    'sugar-ssh-server',
 ];
 
 /** PHP versions every lib's PHPUnit suite runs against. */

@@ -1,6 +1,6 @@
-# Step 06.11 — candy-wish Subsystem middleware
+# Step 06.11 — sugar-ssh-server Subsystem middleware
 
-**Source:** `leftover_updates_later.md` candy-wish §4.4 P2
+**Source:** `leftover_updates_later.md` sugar-ssh-server §4.4 P2
 **Branch:** `ai/wish-subsystem`
 
 ## Deliverable
@@ -12,23 +12,23 @@ binary protocols, etc. against an SSH server.
 
 **Create:**
 
-- `candy-wish/src/Middleware/Subsystem.php` — middleware that, on
+- `sugar-ssh-server/src/Middleware/Subsystem.php` — middleware that, on
   `subsystem <name>` request from the client, dispatches to a
   registered `SubsystemHandler`.
-- `candy-wish/src/Middleware/Subsystem/SubsystemHandler.php` —
+- `sugar-ssh-server/src/Middleware/Subsystem/SubsystemHandler.php` —
   interface (`handle(Context, Session): void`).
-- `candy-wish/src/Middleware/Subsystem/SftpStub.php` — stub showing
+- `sugar-ssh-server/src/Middleware/Subsystem/SftpStub.php` — stub showing
   the integration pattern. Does NOT implement SFTP; just demonstrates
   the wiring.
 
 **Tests:**
 
-- `candy-wish/tests/Middleware/SubsystemTest.php` — request the stub,
+- `sugar-ssh-server/tests/Middleware/SubsystemTest.php` — request the stub,
   assert dispatch.
 
 ## Acceptance
 
-- `cd candy-wish && vendor/bin/phpunit --filter Subsystem` green.
+- `cd sugar-ssh-server && vendor/bin/phpunit --filter Subsystem` green.
 
 ---
 

@@ -67,7 +67,7 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 
 **Problem:** There is a well-known shell called "wish" from Tcl/Tk, causing confusion.
 **Reactions:** 👎 2, 😕 1
-**Direct Risk to SugarCraft:** SugarCraft's `candy-wish` port name won't conflict, but the naming decision in PROJECT_NAMES.md should be reviewed.
+**Direct Risk to SugarCraft:** SugarCraft's `sugar-ssh-server` port name won't conflict, but the naming decision in PROJECT_NAMES.md should be reviewed.
 
 ### Issue #455: Mosh Support (Apr 2025)
 
@@ -725,7 +725,7 @@ Rate limiting before auth (#325) reflects security-conscious users wanting prote
 
 ## 23. Strategic Opportunities
 
-### For SugarCraft's candy-wish Port
+### For SugarCraft's sugar-ssh-server Port
 
 1. **Design Auth as Middleware from Day One**
    - Avoid the #325 issue by making auth composable middleware

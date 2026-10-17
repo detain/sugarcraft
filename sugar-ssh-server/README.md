@@ -1,0 +1,471 @@
+<img src=".assets/icon.png" alt="sugar-ssh-server" width="160" align="right">
+
+# SugarSshServer
+
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-ssh-server)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-ssh-server)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-ssh-server?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-ssh-server)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+> Formerly published as `sugarcraft/candy-wish` (renamed 2026-10). <!-- @rename-keep -->
+>
+> Namespace moved from `SugarCraft\Wish\` to `SugarCraft\SshServer\`. <!-- @rename-keep -->
+
+
+sugar-ssh-server — an SSH server middleware framework for PHP 8.3+ that lets you
+build TUIs anyone can `ssh user@host` to run.
+```sh
+composer require sugarcraft/sugar-ssh-server
+```
+
+## Runtime requirements
+
+- **PHP 8.3+** — declared in `composer.json`.
+- A **POSIX host** (Linux or macOS) — sugar-ssh-server's default transport builds on
+  candy-pty's POSIX PTY layer.
+- **OpenSSH `sshd` fronts the wire.** sugar-ssh-server does not implement the SSH
+  transport protocol; each connection runs the middleware stack in a fresh PHP
+  process spawned by `sshd` via `ForceCommand` (or a `command="..."` line in
+  `authorized_keys`). Authentication at the SSH layer (including RFC 4256
+  keyboard-interactive over the network) is sshd's job; the bundled auth
+  middlewares prompt on the session's own stdio.
+- The **default `InProcessTransport`** (PTY supervisor) additionally requires:
+  - **`ext-ffi`** — candy-pty binds libc through FFI to allocate the PTY;
+    without it the transport cannot run (and Windows is not a target).
+  - **`ext-pcntl`** — forking and reaping the session child. `runChild()`
+    raises a `PtyException` when pcntl is missing; SIGWINCH size forwarding
+    alone degrades gracefully without it.
+  - a usable **`/dev/ptmx`** — PTY allocation fails in restricted containers
+    and on many shared hosts.
+- The **legacy `HostSshdTransport`** runs the middleware chain inline against
+  the PTY sshd already allocated — it needs none of the three above.
+- **`ext-ssh2` is optional** and only relevant for *outbound* SSH opened from
+  inside a session (see [ext-ssh2](#ext-ssh2) below).
+
+Tests that exercise the PTY stack gate themselves on these capabilities, so
+the suite also passes on hosts without them (the default transport is then
+simply not covered).
+
+## Shared foundations
+
+SugarSshServer builds on **candy-pty** (the PTY supervisor `InProcessTransport`
+spawns children through) and **candy-core** (`Lang` i18n wrapper,
+`AtomicJsonFile` persistence). It performs no terminal-capability probing of
+its own — `Session::fromEnvironment()` reads SSH environment variables
+(`TERM`, `SSH_CONNECTION`, …) purely as session *metadata*, never as a
+feature sniff. Should capability probing ever be added, route it through a
+terminal probe rather than raw `getenv()`/terminfo reads.
+
+## Architecture
+
+SugarSshServer leans on the host's OpenSSH daemon rather than implementing the SSH wire protocol from scratch. Each SSH connection forks a fresh PHP process under `sshd` (via `ForceCommand`). What that PHP process does internally depends on the active **transport**:
+
+### `InProcessTransport` (default)
+
+```
+[client] ─ssh─▶ [sshd] ─ForceCommand──▶ [php supervisor] ──▶ [middleware stack]
+                                              │                    │
+                                              └─pump bytes──┐      └─Spawn middleware
+                                                            │              │
+                                                            ▼              ▼
+                                           [candy-pty master ◀──── slave / inner cmd]
+                                                            (bash, vim, custom binary)
+```
+
+The supervisor allocates a `candy-pty` master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), and pumps bytes between the supervisor's STDIN/STDOUT (= sshd's PTY slave) and the candy-pty master. The terminal middleware is `Spawn`, which produces the cmd from the Session.
+
+### `HostSshdTransport` (legacy, opt-in)
+
+```
+[client] ─ssh─▶ [sshd] ─ForceCommand──▶ [php supervisor] ──▶ [middleware stack] ──▶ [SugarCraft Program reading STDIN, writing STDOUT]
+```
+
+The pre-PTY-upgrade architecture: middleware run inline in the supervisor, and the terminal middleware (`BubbleTea`) mounts a SugarCraft `Program` directly on the supervisor's STDIN/STDOUT. Pin via `Server::new()->withTransport(new HostSshdTransport())`. Use this if your existing entry script reads STDIN/echoes STDOUT directly without a subprocess.
+
+### Picking a transport
+
+- **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection (~50-200ms PHP cold start), but full PTY semantics.
+- **`HostSshdTransport`** when your TUI is a SugarCraft `Program` and you want zero subprocess overhead, or when you have an inline-STDIN-reading middleware (banner-style). No subprocess, but no controlling-terminal isolation.
+
+## See also — Git serving (candy-git-server)
+
+SugarSshServer is a general SSH middleware/session framework. For serving Git
+repositories specifically — a `git://` daemon, the HTTP smart protocol, and a
+`ForceCommand`-style SSH git-shell gate — see the sibling
+[`candy-git-server`](../candy-git-server). Both libraries run under the host's OpenSSH
+daemon; neither implements the SSH wire protocol itself.
+
+## Quickstart
+
+### 1. Configure sshd
+
+Add to `/etc/ssh/sshd_config.d/wish.conf`:
+
+```
+Match User wishuser
+    ForceCommand /usr/bin/php /opt/wish/server.php
+    AllowTcpForwarding no
+    PermitTTY yes
+    X11Forwarding no
+```
+
+Then `systemctl reload sshd`.
+
+### 2. Write the entry script
+
+**InProcessTransport (default) — spawn an interactive shell:**
+
+```php
+<?php // /opt/wish/server.php
+require '/opt/wish/vendor/autoload.php';
+
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Middleware\Logger;
+use SugarCraft\SshServer\Middleware\Auth;
+use SugarCraft\SshServer\Middleware\RateLimit;
+use SugarCraft\SshServer\Middleware\Spawn;
+use SugarCraft\SshServer\Session;
+
+exit(Server::new()
+    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
+    ->use(new Auth(users: ['alice', 'bob']))
+    ->use(new Spawn(fn (Session $s) => [
+        'cmd' => ['/bin/bash', '-l'],
+        'env' => [
+            'TERM' => $s->term, 'USER' => $s->user, 'HOME' => "/home/{$s->user}",
+            'PATH' => '/usr/local/bin:/usr/bin:/bin',
+        ],
+    ]))
+    ->serve());
+```
+
+**HostSshdTransport (legacy) — mount a SugarCraft Program inline:**
+
+```php
+<?php // /opt/wish/server.php
+require '/opt/wish/vendor/autoload.php';
+
+use SugarCraft\SshServer\Server;
+use SugarCraft\SshServer\Middleware\Logger;
+use SugarCraft\SshServer\Middleware\Auth;
+use SugarCraft\SshServer\Middleware\RateLimit;
+use SugarCraft\SshServer\Middleware\BubbleTea;
+use SugarCraft\SshServer\Transport\HostSshdTransport;
+
+exit(Server::new()
+    ->withTransport(new HostSshdTransport())
+    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
+    ->use(new Auth(users: ['alice', 'bob']))
+    ->use(new BubbleTea(fn ($session) => new MyApp($session)))
+    ->serve());
+```
+
+### 3. Connect
+
+```
+ssh wishuser@your-host
+```
+
+## Middleware
+
+| Middleware           | Transport       | Purpose                                                                                              |
+|----------------------|-----------------|------------------------------------------------------------------------------------------------------|
+| `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta.                  |
+| `Auth`               | both            | Username allowlist, public-key fingerprint allowlist (or both).                                       |
+| `PasswordAuth`       | both            | Validates user+password against a caller-supplied callback (`SSH_PASSWORD` env var).                 |
+| `CertificateAuth`    | both            | Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).                   |
+| `AuthMethods`        | both            | Declares accepted auth methods; writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context. |
+| `KeyboardInteractive`| both            | Challenge-response — writes prompts to STDOUT, reads responses from STDIN (RFC 4256).                |
+| `RateLimit`          | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.                            |
+| `Keepalive`          | InProcess only  | Writes an idle `\0` byte to the PTY master at a configurable interval (reaches the wire only where the tty echoes); under HostSshd it is a no-op — rely on sshd `ClientAliveInterval`. |
+| `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.                          |
+| `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
+| `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
+| `AsyncMiddleware`    | both            | Abstract base for middleware that needs async I/O (LDAP, OAuth, database auth) — return a `PromiseInterface` from `handleAsync()`. The transport waits for the promise to settle before continuing the chain. |
+
+All middleware receives a {@see Context} as the first argument, along with
+the {@see Session} and a `$next` continuation. Implement `SugarCraft\SshServer\Middleware`:
+
+```php
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Session;
+
+final class HelloBanner implements Middleware
+{
+    public function handle(Context $ctx, Session $s, callable $next): void
+    {
+        echo "Welcome, {$s->user}!\n";
+        $next($ctx, $s);
+    }
+}
+```
+
+## Async middleware
+
+Middleware `handle()` may return `void` (synchronous) or a
+`\React\Promise\PromiseInterface`. The transport waits for the promise
+to settle before continuing the chain, enabling async back-ends like
+LDAP, OAuth, or database authentication.
+
+Extend `SugarCraft\SshServer\Middleware\AsyncMiddleware` to implement async
+middleware. Override `handleAsync()` to perform async work and return
+a promise; resolve the promise (or let it reject) to control whether
+the chain continues.
+
+```php
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware\AsyncMiddleware;
+use SugarCraft\SshServer\Session;
+use React\Promise\PromiseInterface;
+
+final class LdapAuth extends AsyncMiddleware
+{
+    protected function handleAsync(Context $ctx, Session $session, callable $next): PromiseInterface
+    {
+        return $this->ldap->verify($session->user)->then(
+            fn () => $next($ctx, $session),
+            fn (\Throwable $e) => throw new \RuntimeException('auth failed: ' . $e->getMessage(), 0, $e),
+        );
+    }
+}
+```
+
+The promise returned by `handleAsync()` resolves when async work is
+done and the chain should proceed to `$next`; rejects to short-circuit
+the chain. The transport's single settle point
+(`Transport\DispatchesMiddlewareStack::dispatch()` →
+`PromiseAwait::settle()`) drives the promise with the pre-existing
+30-second timeout ceiling.
+
+## Session metadata
+
+`Session::fromEnvironment()` reads the standard sshd-supplied environment:
+
+```php
+$s->user;        // 'alice'
+$s->clientHost;  // '203.0.113.7'
+$s->clientPort;  // 54321
+$s->term;        // 'xterm-256color'
+$s->cols;        // 120
+$s->rows;        // 40
+$s->tty;         // '/dev/pts/3'   (null when non-interactive)
+$s->command;     // SSH_ORIGINAL_COMMAND if set
+$s->isInteractive();
+$s->toLogContext();
+```
+
+After the SSH handshake completes, transports call `withProtocolMetadata()`
+to populate protocol-level fields:
+
+```php
+$s->sessionId;        // SSH session ID (hex string)
+$s->authMethod;       // 'publickey' | 'password' | 'keyboard-interactive' | ...
+$s->keyFingerprint;   // reserved: always null today — no transport populates it (verification is opt-in via Auth.php's fingerprint validator)
+$s->clientVersion;    // SSH client version string (e.g. 'SSH-2.0-OpenSSH_9.0')
+$s->serverVersion;    // SSH server version string (e.g. 'SSH-2.0-OpenSSH_9.0')
+
+// Build a new Session with protocol metadata attached
+$s = $s->withProtocolMetadata(
+    sessionId:       $sessionId,
+    authMethod:      $authMethod,
+    keyFingerprint:  $keyFingerprint,
+    clientVersion:   $clientVersion,
+    serverVersion:   $serverVersion,
+);
+```
+
+## Context propagation
+
+Every request starts with a root {@see Context} created by `Context::background()`.
+The context is immutable — each `with*()` method returns a new derived
+context that forms a parent chain. Middleware can attach key-value metadata
+via `withValue()`, set a deadline via `withDeadline()`, or make the context
+cancellable via `withCancelable()`. The terminal middleware (Spawn /
+BubbleTea) never call `$next`, short-circuiting the chain.
+
+| Context method | What it does |
+|---------------|-------------|
+| `Context::background()` | Root context — never done, no values, not cancelable |
+| `->withValue(string $k, mixed $v)` | Return a new context with `$k → $v` attached |
+| `->withDeadline(\DateTimeImmutable)` | Return a new cancelable context that is done when the deadline passes |
+| `->withCancelable()` | Return a new cancelable context (no deadline; must call `->cancel()` explicitly) |
+| `->cancel(?\Throwable $reason)` | Mark the context (and all derived contexts) as cancelled |
+| `->done()` | Returns `true` when cancelled or deadline-exceeded |
+| `->err()` | Returns the cancellation error or `DeadlineExceededException` / `CancellationException` |
+| `->value(string $k)` | Walk the parent chain looking for `$k`; returns `null` if not found |
+
+```php
+use SugarCraft\SshServer\Context;
+
+// Derive a cancelable context with a 30-second deadline
+$ctx = Context::background()
+    ->withValue('requestId', $uuid)
+    ->withDeadline(new \DateTimeImmutable('+30 seconds'));
+
+if ($ctx->done()) {
+    throw $ctx->err(); // DeadlineExceededException or CancellationException
+}
+```
+
+## Exceptions
+
+| Exception | When it's thrown |
+|-----------|-----------------|
+| `CancellationException` | `Context->cancel()` was called, or `done()` returns true with no deadline |
+| `DeadlineExceededException` | The context deadline (`withDeadline()`) has passed |
+
+Both extend `\RuntimeException`.
+
+## ext-ssh2
+
+The PECL `ssh2` extension is optional and used only if you want a middleware that opens *outbound* SSH connections from inside the session (e.g. SFTP file pickers, remote-control agents). Standard server-side use does not require it.
+
+## Channel handler (InProcessTransport)
+
+The `InProcessTransport` dispatches SSH channel-level messages through a
+`ChannelHandler` rather than handling them inline. This lets you replace the
+default PTY/shell wiring with a custom implementation.
+
+| Class | Purpose |
+|-------|---------|
+| `ChannelHandler` | Interface — implement to handle pty-req, window-change, shell, exec, signal, env, break |
+| `ChannelMsg` | Abstract base for all channel messages (RFC 4254) |
+| `DefaultChannelHandler` | Default impl — tracks PTY state, env vars, cols/rows, drives `ChildSpawner` on shell/exec |
+| `PtyReqMsg` | `wantPty`, `term`, `cols`, `rows`, `widthPx`, `heightPx` |
+| `WindowChangeMsg` | `cols`, `rows`, `widthPx`, `heightPx` |
+| `ShellMsg` | `wantShell`, `subsystem` |
+| `ExecMsg` | `command` (raw string — parsed by `DefaultChannelHandler::parseCommandString()`) |
+| `SignalMsg` | `signalName` |
+| `EnvMsg` | `name`, `value` |
+| `BreakMsg` | Break request (no fields) |
+
+On a shell request, `DefaultChannelHandler` resolves the login shell in this
+order: the explicit `$shell` configured at construction time, then the
+server-side `SHELL` environment variable (under sshd that is the authenticated
+user's login shell), then `FALLBACK_SHELL` (`/bin/sh`). The spawn is always
+`<shell> -l`. A client-supplied `SHELL` env var can never select the
+interpreter — `SHELL` is stripped from the child environment as a
+dangerous variable, and resolution reads only the server's own configuration.
+
+```php
+use SugarCraft\SshServer\Channel\ChannelHandler;
+use SugarCraft\SshServer\Channel\ChannelMsg;
+use SugarCraft\SshServer\Channel\Msg\PtyReqMsg;
+use SugarCraft\SshServer\Channel\Msg\WindowChangeMsg;
+use SugarCraft\SshServer\Channel\Msg\ShellMsg;
+use SugarCraft\SshServer\Channel\Msg\ExecMsg;
+use SugarCraft\SshServer\Channel\Msg\SignalMsg;
+use SugarCraft\SshServer\Channel\Msg\EnvMsg;
+use SugarCraft\SshServer\Channel\Msg\BreakMsg;
+use SugarCraft\SshServer\Session;
+
+final class DebugChannelHandler implements ChannelHandler
+{
+    private int $cols = 80;
+    private int $rows = 24;
+
+    public function cols(): int
+    {
+        return $this->cols;
+    }
+
+    public function rows(): int
+    {
+        return $this->rows;
+    }
+
+    public function handlePtyReq(PtyReqMsg $msg, Session $session): void
+    {
+        $this->cols = $msg->cols;
+        $this->rows = $msg->rows;
+        fwrite(STDERR, "pty-req: wantPty={$msg->wantPty} cols={$msg->cols} rows={$msg->rows}\n");
+    }
+
+    public function handleWindowChange(WindowChangeMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "window-change: cols={$msg->cols} rows={$msg->rows}\n");
+    }
+
+    public function handleShell(ShellMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "shell: wantShell={$msg->wantShell}\n");
+    }
+
+    public function handleExec(ExecMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "exec: {$msg->command}\n");
+    }
+
+    public function handleSignal(SignalMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "signal: {$msg->signalName}\n");
+    }
+
+    public function handleEnv(EnvMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "env: {$msg->name}={$msg->value}\n");
+    }
+
+    public function handleBreak(BreakMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "break\n");
+    }
+}
+
+// Hand the handler to InProcessTransport (handler seam is a setter —
+// the constructor takes only the optional PtySystem).
+$transport = new InProcessTransport($ptySystem);
+$transport->setChannelHandler(new DebugChannelHandler());
+```
+
+## Subsystem middleware (InProcessTransport)
+
+SSH clients can request a named subsystem by sending `subsystem <name>` as
+the original command. The `Subsystem` middleware parses this prefix, looks up
+a registered handler, invokes it, and stops the chain — subsystem handlers
+are terminal by design.
+
+| Class | Purpose |
+|-------|---------|
+| `Subsystem` | Middleware — parses `subsystem <name>`, dispatches to registered handler |
+| `SubsystemHandler` | Interface — implement `handle(Context, Session): void` for a named subsystem |
+| `SftpStub` | Example impl — stub demonstrating wiring; not a real SFTP server |
+
+```php
+use SugarCraft\SshServer\Middleware\Subsystem;
+use SugarCraft\SshServer\Middleware\Subsystem\SftpStub;
+
+$subsystem = new Subsystem();
+$subsystem->register('sftp', new SftpStub());
+
+exit(Server::new()
+    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(new Auth(['alice', 'bob']))
+    ->use($subsystem)  // handles subsystem sftp; others pass through to Spawn
+    ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
+    ->serve());
+```
+
+A production SFTP implementation would implement `SubsystemHandler` to speak
+the SFTP protocol over the session's stdin/stdout after `Subsystem`
+extracts the name and dispatches.
+
+## Status
+
+🟢 Context propagation + ChannelHandler dispatch are complete, alongside the middleware suite (logging, auth suite, keepalive, rate limit, spawn, subsystem, async bridge, BubbleTea) and the ChannelHandler/ChannelMsg + 7 message classes.
+
+Runnable examples:
+- [`examples/hello-server.php`](examples/hello-server.php) — banner-only stack you can ForceCommand against.
+- [`examples/showcase.php`](examples/showcase.php) — middleware-stack tour.
+- [`examples/spawn-bash.php`](examples/spawn-bash.php) — interactive bash through `Spawn`.
+- [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

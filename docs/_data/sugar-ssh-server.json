@@ -1,0 +1,11 @@
+{
+    "title": "SugarSshServer — SugarCraft",
+    "description": "SugarSshServer: Run interactive terminal apps over SSH — composable middleware for serving your TUIs from OpenSSH.",
+    "ogTitle": "SugarSshServer — SugarCraft",
+    "ogDescription": "Run interactive terminal apps over SSH — composable middleware for serving your TUIs from OpenSSH.",
+    "emoji": "🔐",
+    "displayName": "SugarSshServer",
+    "tagline": "SSH server middleware framework",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/wish\" style=\"color: inherit;\">charmbracelet/wish</a></span>\n          <span class=\"tag-chip\">ssh</span>\n          <span class=\"tag-chip\">middleware</span>\n          <span class=\"tag-chip\">force-command</span>\n          <span class=\"tag-chip\">multi-tenant</span>"
+}

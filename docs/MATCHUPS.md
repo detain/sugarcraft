@@ -43,8 +43,8 @@ called out in the table below.
 | **SugarForms** (`sugar-forms/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color. |
 | **SugarMarkdown** (`sugar-markdown/`) | 🟡 in progress | Markdown → ANSI renderer (themes, syntax, OSC 8 hyperlinks). |
 | **SugarCli** (`sugar-cli/`) | 🟢 ready | CLI presentation helpers (StatusLine / Banner / Section / Stage / HelpText). |
-| **CandyWish** (`candy-wish/`) | 🟢 ready | SSH-server middleware framework (leans on host `sshd`); pluggable Transport: InProcessTransport (default — candy-pty supervisor + Spawn middleware) or HostSshdTransport (legacy, opt-in — inline middleware, including running SugarCraft apps in SSH sessions). |
-| **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + CandyWish session middleware. |
+| **SugarSshServer** (`sugar-ssh-server/`) | 🟢 ready | SSH-server middleware framework (leans on host `sshd`); pluggable Transport: InProcessTransport (default — candy-pty supervisor + Spawn middleware) or HostSshdTransport (legacy, opt-in — inline middleware, including running SugarCraft apps in SSH sessions). |
+| **CandyMetrics** (`candy-metrics/`) | 🟢 ready | Telemetry primitives + SugarSshServer session middleware. |
 | **CandyLog** (`candy-log/`) | 🟢 ready | Minimal, colorful logging library. |
 | **SugarColorprofile** (`sugar-colorprofile/`) | 🟢 ready | Terminal color detection + ICC profile handling. |
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd. |
@@ -182,7 +182,7 @@ reference projects supplied the ideas, not the code.
 | CandyTop (candy-top/) | [btop](https://github.com/aristocratos/btop) |
 | CandyVcr (candy-vcr/) | [x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) |
 | CandyVt (candy-vt/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
-| CandyWish (candy-wish/) | [wish](https://github.com/charmbracelet/wish) |
+| SugarSshServer (sugar-ssh-server/) | [wish](https://github.com/charmbracelet/wish) |
 | SugarSpring (sugar-spring/) | [harmonica](https://github.com/charmbracelet/harmonica) |
 | CandyFlappy (candy-flappy/) | [flapioca](https://github.com/kbrgl/flapioca) |
 | SugarWidgets (sugar-widgets/) | [bubbles](https://github.com/charmbracelet/bubbles) |

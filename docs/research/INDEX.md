@@ -58,7 +58,7 @@ To implement an item:
 |---------|--------------|-------------------|
 | **candy-scriptui** | [research/libraries/candy-scriptui-research.md](libraries/candy-scriptui-research.md) | 1. Auto-discovery, 2. ValueEnum options, 3. FlagSpec trait |
 | **candy-log** | [research/libraries/candy-log-research.md](libraries/candy-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values |
-| **candy-wish** | [research/libraries/candy-wish-research.md](libraries/candy-wish-research.md) | 1. Context propagation, 2. Channel events, 3. Session metadata |
+| **sugar-ssh-server** | [research/libraries/sugar-ssh-server-research.md](libraries/sugar-ssh-server-research.md) | 1. Context propagation, 2. Channel events, 3. Session metadata |
 | **candy-ssh-launcher** | [research/libraries/candy-ssh-launcher-research.md](libraries/candy-ssh-launcher-research.md) | 1. proxy_jump, 2. SSH config import, 3. Identity files |
 | **sugar-quickpick** | [research/libraries/sugar-quickpick-research.md](libraries/sugar-quickpick-research.md) | 1. Item interface, 2. Filter injection, 3. Persistent history |
 

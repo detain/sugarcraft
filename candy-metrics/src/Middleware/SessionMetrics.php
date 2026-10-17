@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Middleware;
 
 use SugarCraft\Metrics\Registry;
-use SugarCraft\Wish\Context;
-use SugarCraft\Wish\Middleware;
-use SugarCraft\Wish\Session;
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Session;
 
 /**
- * CandyWish middleware that emits session telemetry.
+ * SugarSshServer middleware that emits session telemetry.
  *
  * Per session:
  *

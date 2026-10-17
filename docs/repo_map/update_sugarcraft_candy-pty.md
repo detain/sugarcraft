@@ -1,6 +1,6 @@
 # Overview
 
-`candy-pty` is a mature, production-grade PHP port of `charmbracelet/x/xpty` providing pseudo-terminal (PTY) primitive operations for spawning and managing child processes with terminal I/O, window resize forwarding, and signal handling. It targets Linux and macOS via FFI into libc, demonstrating idiomatic PHP 8.3+ patterns (readonly properties, constructor promotion, fluent builders, RAII-style resource management). The library serves as a foundational primitive consumed by `candy-wish` (SSH transport), `candy-vcr` (session recording), and `candy-scriptui` (interactive shell sessions).
+`candy-pty` is a mature, production-grade PHP port of `charmbracelet/x/xpty` providing pseudo-terminal (PTY) primitive operations for spawning and managing child processes with terminal I/O, window resize forwarding, and signal handling. It targets Linux and macOS via FFI into libc, demonstrating idiomatic PHP 8.3+ patterns (readonly properties, constructor promotion, fluent builders, RAII-style resource management). The library serves as a foundational primitive consumed by `sugar-ssh-server` (SSH transport), `candy-vcr` (session recording), and `candy-scriptui` (interactive shell sessions).
 
 **Biggest opportunity areas:** Windows ConPTY backend (v2), pecl-sidecar backend for FFI-free deployments, pecl-uv async integration, comprehensive BSD/Solaris testing.
 
@@ -155,7 +155,7 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 
 **Title:** Windows ConPTY support for cross-platform PTY parity
 
-**Description:** The upstream `charmbracelet/x/xpty` has native ConPTY support on Windows 10 1809+. `candy-pty` throws `UnsupportedPlatformException` on non-POSIX platforms, blocking `candy-wish` SSH server and other PTY-consuming libraries from running on Windows.
+**Description:** The upstream `charmbracelet/x/xpty` has native ConPTY support on Windows 10 1809+. `candy-pty` throws `UnsupportedPlatformException` on non-POSIX platforms, blocking `sugar-ssh-server` SSH server and other PTY-consuming libraries from running on Windows.
 
 **Why it matters:** Without ConPTY, no interactive terminal application in the SugarCraft ecosystem can run on Windows. This is a significant gap for developer adoption.
 
@@ -770,11 +770,11 @@ if ($isCiContainer) {
 
 # Ecosystem / Integration Opportunities
 
-## 1. candy-wish Integration (SSH Server)
+## 1. sugar-ssh-server Integration (SSH Server)
 
-**Current:** `candy-wish` uses `InProcessTransport` which wraps `PosixPump`.
+**Current:** `sugar-ssh-server` uses `InProcessTransport` which wraps `PosixPump`.
 
-**Proposed:** First-class `candy-pty` integration in `candy-wish`:
+**Proposed:** First-class `candy-pty` integration in `sugar-ssh-server`:
 - `WishTransport` interface implemented by `PosixPumpTransport`
 
 - PTY session per SSH channel
@@ -963,7 +963,7 @@ if ($isCiContainer) {
 
 `candy-pty` is a **mature, well-engineered PHP library** that successfully ports the `charmbracelet/x/xpty` PTY primitive to PHP with idiomatic patterns. Its architecture is sound: clean contract interfaces, FFI singleton with fallback, comprehensive signal handling, and thorough edge case handling documented in CALIBER_LEARNINGS.md.
 
-**Strategic position:** `candy-pty` is a foundational primitive for the SugarCraft ecosystem — consumed by SSH transport (`candy-wish`), session recording (`candy-vcr`), and interactive shell (`candy-scriptui`). Its quality directly impacts the quality of these downstream libraries.
+**Strategic position:** `candy-pty` is a foundational primitive for the SugarCraft ecosystem — consumed by SSH transport (`sugar-ssh-server`), session recording (`candy-vcr`), and interactive shell (`candy-scriptui`). Its quality directly impacts the quality of these downstream libraries.
 
 **Critical gaps:**
 

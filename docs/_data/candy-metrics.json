@@ -1,11 +1,11 @@
 {
     "title": "CandyMetrics — SugarCraft",
-    "description": "CandyMetrics: Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for CandyWish.",
+    "description": "CandyMetrics: Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for SugarSshServer.",
     "ogTitle": "CandyMetrics — SugarCraft",
-    "ogDescription": "Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for CandyWish.",
+    "ogDescription": "Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for SugarSshServer.",
     "emoji": "📈",
     "displayName": "CandyMetrics",
-    "tagline": "Telemetry primitives + CandyWish session middleware",
+    "tagline": "Telemetry primitives + SugarSshServer session middleware",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/promwish\" style=\"color: inherit;\">charmbracelet/promwish</a></span>\n          <span class=\"tag-chip\">metrics</span>\n          <span class=\"tag-chip\">telemetry</span>\n          <span class=\"tag-chip\">statsd</span>\n          <span class=\"tag-chip\">prometheus</span>"
 }

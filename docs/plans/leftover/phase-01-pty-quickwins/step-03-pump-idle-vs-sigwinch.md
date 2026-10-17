@@ -28,7 +28,7 @@ explanation.
   driven by `SignalForwarder` from the consumer side. Strip the
   220-237 comment block; replace with a 3-line design note.
 - `candy-pty/src/Contract/Pump.php` — doc-comment mentions both hooks.
-- `candy-wish/src/Transport/InProcessTransport.php` — if it passes
+- `sugar-ssh-server/src/Transport/InProcessTransport.php` — if it passes
   `onSigwinch` for keepalive-ish duties, rewire to `onIdle`.
 - `candy-vcr/src/Cli/RecordCommand.php` — verify it already drives
   `onSigwinch` from a real `SignalForwarder` callback; no change
@@ -49,7 +49,7 @@ explanation.
 - `grep -n "onSigwinch.*(0, 0)" candy-pty/src` returns nothing.
 - `grep -n "TODO" candy-pty/src/Posix/PosixPump.php` returns nothing.
 - All four candy-pty pump test suites green.
-- candy-wish + candy-vcr regression suites green.
+- sugar-ssh-server + candy-vcr regression suites green.
 
 ## Notes
 
@@ -57,7 +57,7 @@ explanation.
   per CLAUDE.md. Use the same pattern.
 - Backwards compat: callers that previously relied on
   `onSigwinch(0, 0)` for idle-tick logic must migrate to `onIdle`.
-  Grep across the monorepo: this should only be `candy-wish` and
+  Grep across the monorepo: this should only be `sugar-ssh-server` and
   `candy-vcr`.
 
 ---

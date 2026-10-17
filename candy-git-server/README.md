@@ -129,7 +129,7 @@ ssh -p 23231 user@your-server repo tree repo-name
 ssh -p 23231 user@your-server repo blob repo-name path/to/file.php -c -l
 ```
 
-### See also — SSH middleware (candy-wish)
+### See also — SSH middleware (sugar-ssh-server)
 
 `SSH\SSHServer` is a `ForceCommand`-style git-shell gate: it parses a single
 `git-upload-pack`/`git-receive-pack <repo>` request, validates the repo name,
@@ -139,9 +139,9 @@ SSH wire protocol — it expects to run under the host's OpenSSH daemon via
 
 For a general SSH middleware/session framework (middleware chain, `ForceCommand`
 supervisor, `Session`, transports), see the sibling
-[`candy-wish`](../candy-wish). Both run under host sshd; neither implements the
+[`sugar-ssh-server`](../sugar-ssh-server). Both run under host sshd; neither implements the
 SSH wire protocol itself. Their auth models differ deliberately: candy-git-server
-does its own SSH public-key auth (`SSH\Auth` + `User`), while candy-wish trusts
+does its own SSH public-key auth (`SSH\Auth` + `User`), while sugar-ssh-server trusts
 sshd and allowlists by username + key fingerprint.
 
 ## HTTP Smart Protocol

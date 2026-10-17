@@ -109,7 +109,7 @@ SUBJECTS: dict[str, str] = {
     "sugar-treelist":    "a glossy candy clipboard with a checklist of three tiny gumdrop items each with a tick mark beside it",
     "sugar-quickpick":    "a tiny cute hermit crab peeking out of a glossy pink-and-white striped candy spiral shell",
     "candy-git-server":     "a stack of three glossy candy server-rack units shaped like horizontal chocolate bars with small blinking gumdrop status lights",
-    "candy-wish":      "a glossy candy shooting star with a long sparkle trail behind it",
+    "sugar-ssh-server":      "a glossy candy shooting star with a long sparkle trail behind it",
     "sugar-animation":      "a glossy red-and-white peppermint disc mid-flip in the air with a soft motion-arc trail behind it",
     "candy-minesweeper":     "a chubby round black cartoon bomb made of glossy candy with a lit fuse and a few golden sparkles on top",
     "candy-tetris":    "four glossy interlocking candy tetromino blocks stacked together",

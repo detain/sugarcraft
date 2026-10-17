@@ -1,6 +1,6 @@
-# Step 06.13 — candy-wish async middleware
+# Step 06.13 — sugar-ssh-server async middleware
 
-**Source:** `leftover_updates_later.md` candy-wish §4.7
+**Source:** `leftover_updates_later.md` sugar-ssh-server §4.7
 **Branch:** `ai/wish-async-middleware`
 
 ## Deliverable
@@ -13,23 +13,23 @@ stalling the chain.
 
 **Modify:**
 
-- `candy-wish/src/Middleware/Middleware.php` — handler can return
+- `sugar-ssh-server/src/Middleware/Middleware.php` — handler can return
   `void` (existing) OR `\React\Promise\PromiseInterface` (new).
-- `candy-wish/src/Server.php` — awaits promises before continuing
+- `sugar-ssh-server/src/Server.php` — awaits promises before continuing
   the chain.
 
 **Create:**
 
-- `candy-wish/src/Middleware/AsyncMiddleware.php` — abstract base for
+- `sugar-ssh-server/src/Middleware/AsyncMiddleware.php` — abstract base for
   promise-returning middleware.
 
 **Tests:**
 
-- `candy-wish/tests/Middleware/AsyncMiddlewareTest.php`.
+- `sugar-ssh-server/tests/Middleware/AsyncMiddlewareTest.php`.
 
 ## Acceptance
 
-- `cd candy-wish && vendor/bin/phpunit --filter Async` green.
+- `cd sugar-ssh-server && vendor/bin/phpunit --filter Async` green.
 
 ---
 

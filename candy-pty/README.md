@@ -298,7 +298,7 @@ behaviour:
 `PumpOptions` with the same defaults (`chunkBytes`, `selectTimeoutUs`,
 `flushDeadlineSec`, `stdinEofGraceSec`, `veof`) previously hardcoded in
 `InProcessTransport`. Use when you need SSH-session behaviour outside
-the `candy-wish` transport layer:
+the `sugar-ssh-server` transport layer:
 
 ```php
 $opts = PumpOptions::sshDefault()->withOnIdle(fn () => error_log('alive'));
@@ -462,7 +462,7 @@ The library is organised in two layers:
 | `Child` | `creack/pty.Cmd` / `portable-pty.Process` | `PosixChild` |
 | `Process` | `creack/pty.Cmd` (non-PTY spawn) | `PosixProcess` |
 | `Termios` | `portable-pty.Termios` | `PosixTermios` / `SttyTermios` |
-| `Pump` | `candy-wish.InProcessTransport` | `PosixPump` |
+| `Pump` | `sugar-ssh-server.InProcessTransport` | `PosixPump` |
 
 ### POSIX implementation (`src/Posix/`) — implementation layer
 

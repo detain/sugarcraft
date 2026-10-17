@@ -91,11 +91,11 @@ promised, full SSH end-to-end suite green.
 
 🟢 **P2-LO-01 — `PumpOptions::$flushDeadlineSec` and `$stdinEofGraceSec`
 constants are duplicated as Pump defaults AND in
-`candy-wish/src/Transport/InProcessTransport.php` comments.**
+`sugar-ssh-server/src/Transport/InProcessTransport.php` comments.**
 *Where:* `candy-pty/src/PumpOptions.php` defaults vs.
-`candy-wish/src/Transport/InProcessTransport.php` historical comments.
+`sugar-ssh-server/src/Transport/InProcessTransport.php` historical comments.
 *Why it matters:* If the SSH protocol assumptions ever shift, future
-maintainers will look at the candy-wish constants first. They have
+maintainers will look at the sugar-ssh-server constants first. They have
 already migrated.
 *Fix:* Replace any remaining numeric constants in `InProcessTransport`
 with a `PumpOptions::sshDefault(): self` named-constructor on
@@ -261,7 +261,7 @@ recorded sessions and cannot tee into a recorder.
 *Fix:* Add `Expect::recordedAgainst(Recorder)` factory or
 `->withRecorder(?Recorder)` wither so test fixtures can record once and
 replay forever — useful for the `candy-vcr` test helpers and for SSH
-fixtures in `candy-wish`.
+fixtures in `sugar-ssh-server`.
 
 🟢 **P6-LO-04 — `MultiPump` is profiled but not documented in `README.md`.**
 *Where:* `candy-pty/src/Posix/MultiPump.php` shipped with `MultiPumpTest.php`
@@ -464,7 +464,7 @@ Cleanly layered on top of `proc_get_status` polling.
 
 🪦 **`PtyPool` SSH-server profile** — current pool is generic. SSH
 servers have a specific churn profile (many short-lived sessions, each
-needs a fresh termios snapshot). Profile against a `candy-wish` SSH
+needs a fresh termios snapshot). Profile against a `sugar-ssh-server` SSH
 server fixture with N concurrent connections; tune defaults.
 
 ---

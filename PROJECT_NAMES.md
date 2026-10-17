@@ -149,7 +149,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | **SugarForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
 | **SugarFocus** | sugar + focus = the focus-management component. dependency-free ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here. || **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
 | **SugarFuzzy** | candy + fuzzy = fuzzy string matching with scored matched indices. extracted from sugar-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type). || **CandyBuffer** | candy + buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |
-| **CandyAsync** | candy + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across candy-core, sugar-forms, candy-wish. |
+| **CandyAsync** | candy + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across candy-core, sugar-forms, sugar-ssh-server. |
 | **CandyLayout** | candy + layout = constraint-based layout solver. Implements the Cassowary constraint system (Badros & Borning, 2001) behind a LayoutSolver interface: CassowarySolver (simplex) + GreedySolver (5-phase fallback from candy-sprinkles). |
 | **CandyTesting** | candy + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
 | **CandyInput** | candy + input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
@@ -172,7 +172,7 @@ stands; it is not a precedent that apps default to `Candy-`.
 | ~~**SugarBits**~~ → **SugarWidgets** | resolved by the 2026-10 rename — "Bits" was generic; the lib is a set of named widgets <!-- @rename-keep --> | `BiscuitWidgets`, `SprinkleParts`, `ChipParts` |
 | **SugarCli** | "Kit" is filler; the lib is CLI presentation primitives | `CupcakeKit`, `BentoCli`, `BiscuitCli` |
 | **SugarMarkdown** | "Shine" doesn't say markdown | `GlazeMarkdown`, `IcingMarkdown` |
-| **CandyWish** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
+| **SugarSshServer** | "Wish" is an inherited name; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
 | **CandySshLauncher** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
 | **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
 
@@ -204,7 +204,7 @@ matching package turns out to be.
 | **BentoBox** | layout (SugarPanels alternative) |
 | **BentoLauncher** | launcher / picker (CandySshLauncher alternative) |
 | **MarshmallowFilter** | fuzzy-finder (SugarQuickpick alternative) |
-| **HoneyTunnel** | SSH / tunnel (CandyWish alternative) |
+| **HoneyTunnel** | SSH / tunnel (SugarSshServer alternative) |
 | **CaramelStore** | KV / cache (CandyKv alternative) |
 | **TruffleFinder** | fuzzy / search overlay |
 | **GlazeMarkdown** | markdown renderer (SugarMarkdown alternative) |

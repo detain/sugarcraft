@@ -385,10 +385,10 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'its own `$dup < 0` check, and never a cast of a PHP stream.',
         ],
 
-        // candy-wish -- a library no scoping of this census had ever looked
+        // sugar-ssh-server -- a library no scoping of this census had ever looked
         // at, reached because presentLibraries() globs `*/src` instead of
         // listing what someone suspected.
-        'candy-wish/src/Transport/InProcessTransport.php::->ioctl(0)' => [
+        'sugar-ssh-server/src/Transport/InProcessTransport.php::->ioctl(0)' => [
             DescriptorSinkScanner::LITERAL_INT,
             'CORRECT. TIOCGWINSZ on descriptor 0, spelled as the literal it is. The arm refuses '
             . 'to run at all unless the stream it was handed IS the STDIN constant, checked by '

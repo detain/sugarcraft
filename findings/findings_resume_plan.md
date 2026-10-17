@@ -5,7 +5,7 @@
 All phases 0–6 are closed. Phase 0–5 items landed as the commit series
 through `b9c63b74`; the Phase 6 leftovers were re-verified against
 current source on 2026-07-04 and closed by: `a160cefd` (test
-skips/flake), `5f33c4b7` (sugar-mouse contains, candy-wish StreamHelper
+skips/flake), `5f33c4b7` (sugar-mouse contains, sugar-ssh-server StreamHelper
 + pid()), `1920988f`/`09546125` (candy-git-server auth verification,
 maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
 (candy-scriptui), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
@@ -193,20 +193,20 @@ For each phase:
 **Files:** `candy-vcr/src/Raster/ImagickRasterizer.php:58-66`
 **Agent:** Same coder agent as 0.12 (grouped — same lib)
 
-#### 0.14 🔴 candy-wish: AsyncMiddleware blocks event loop (Item 1.1)
+#### 0.14 🔴 sugar-ssh-server: AsyncMiddleware blocks event loop (Item 1.1)
 
-**Plan:** `findings/plan_candy-wish.md` — Item 1.1
+**Plan:** `findings/plan_sugar-ssh-server.md` — Item 1.1
 **Issue:** `AsyncMiddleware.php:49` — `PromiseAwait::settle($result)` blocks the event loop
 **Fix:** Use non-blocking async patterns; do not await synchronously
-**Files:** `candy-wish/src/AsyncMiddleware.php:49`
+**Files:** `sugar-ssh-server/src/AsyncMiddleware.php:49`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.15 🔴 candy-wish: PromiseAwait loses original rejection (Item 1.2)
+#### 0.15 🔴 sugar-ssh-server: PromiseAwait loses original rejection (Item 1.2)
 
-**Plan:** `findings/plan_candy-wish.md` — Item 1.2
+**Plan:** `findings/plan_sugar-ssh-server.md` — Item 1.2
 **Issue:** `PromiseAwait.php:60-67` — timeout overwrites `$ex` even if original already errored
 **Fix:** Preserve original rejection; only set `$ex` if not already set
-**Files:** `candy-wish/src/PromiseAwait.php:60-67`
+**Files:** `sugar-ssh-server/src/PromiseAwait.php:60-67`
 **Agent:** Same coder agent as 0.14 (grouped — same lib)
 
 ---
@@ -255,11 +255,11 @@ For each phase:
 **Files:** `sugar-toast/src/Toast.php:430, 531`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
-#### 0.21 🔴 candy-metrics: SessionMetrics hard-coupled to candy-wish (Item 1.1)
+#### 0.21 🔴 candy-metrics: SessionMetrics hard-coupled to sugar-ssh-server (Item 1.1)
 
 **Plan:** `findings/plan_candy-metrics.md` — Item 1.1
-**Issue:** `SessionMetrics.php:8-10` imports from `SugarCraft\Wish\*` directly — fatal without candy-wish
-**Fix:** Remove hard dependency; use interface or lazy resolution; or add candy-wish to `suggest` → `require`
+**Issue:** `SessionMetrics.php:8-10` imports from `SugarCraft\SshServer\*` directly — fatal without sugar-ssh-server
+**Fix:** Remove hard dependency; use interface or lazy resolution; or add sugar-ssh-server to `suggest` → `require`
 **Files:** `candy-metrics/src/Middleware/SessionMetrics.php:8-10`
 **Agent:** Spawn 1 coder agent — inject full Safety Contract above
 
@@ -1292,7 +1292,7 @@ Same verification as previous phases.
 | `plan_sugar-markdown.md` | 2.3, 3.3, 4.1, 5.1, 7.1-7.3 | Regex compilation caching, redundant is_file, Emoji shortcode regex, write() parity, emoji map expansion |
 | `plan_candy-sprinkles.md` | All items | References wrong files — needs reassessment of which issues actually exist |
 | `plan_candy-testing.md` | 3.1, 3.3-3.5, 4.1-4.2, 5.1-5.6, 6.1 | readonly docs, file_put_contents 0-byte, maxCycles docs, AsyncProgramSimulator, command assertions, mouse wheel, paste, streaming |
-| `plan_candy-wish.md` | 2.1-2.4, 3.1-3.3 | Double getenv, rate limit atomicity, setTransport consistency, middleware error handling |
+| `plan_sugar-ssh-server.md` | 2.1-2.4, 3.1-3.3 | Double getenv, rate limit atomicity, setTransport consistency, middleware error handling |
 | `plan_sugar-mouse-zones.md` | 2.1 | Zone::contains() implementation |
 | `plan_candy-vcr.md` | 2.3, 2.6-2.9, 3.1, 3.3-3.5 | preg_replace error handling, async defers, Glyphs O(1), formatHunk, V1ToV2Migrator |
 

@@ -65,7 +65,7 @@ For every touched lib:
 cd <lib> && composer install --quiet && vendor/bin/phpunit
 ```
 
-Use the PHPUnit watchdog (see brief) for candy-pty / candy-wish /
+Use the PHPUnit watchdog (see brief) for candy-pty / sugar-ssh-server /
 candy-vcr.
 
 ## Output

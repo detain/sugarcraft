@@ -16,7 +16,7 @@
 
 ## Description
 
-Lightweight telemetry primitives for SugarCraft / CandyWish servers. Provides counters, gauges, histograms, up-down counters, and async instruments with pluggable backends (in-memory, JSON stream, StatsD UDP, Prometheus textfile, multi-backend fanout). Includes a drop-in middleware for SSH session metrics that wires into the CandyWish server stack.
+Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Provides counters, gauges, histograms, up-down counters, and async instruments with pluggable backends (in-memory, JSON stream, StatsD UDP, Prometheus textfile, multi-backend fanout). Includes a drop-in middleware for SSH session metrics that wires into the SugarSshServer server stack.
 
 ---
 
@@ -64,7 +64,7 @@ Lightweight telemetry primitives for SugarCraft / CandyWish servers. Provides co
 
 ### Middleware
 
-- **SessionMetrics** — CandyWish middleware emitting session telemetry: `wish.session.connect` (counter), `wish.session.duration` (histogram), `wish.session.error` (counter with exception label). Tags: `user`, `term`, plus optional `extraTags` callable for custom labels (client subnet, geo, build version).
+- **SessionMetrics** — SugarSshServer middleware emitting session telemetry: `wish.session.connect` (counter), `wish.session.duration` (histogram), `wish.session.error` (counter with exception label). Tags: `user`, `term`, plus optional `extraTags` callable for custom labels (client subnet, geo, build version).
 
 ### Internationalization
 
@@ -85,7 +85,7 @@ candy-metrics/
 │   └── showcase.gif
 ├── examples/
 │   ├── showcase.php               — counter/gauge/histogram primitives, InMemoryBackend
-│   └── wish-with-metrics.php        — CandyWish + CandyMetrics integration
+│   └── wish-with-metrics.php        — SugarSshServer + CandyMetrics integration
 ├── lang/
 │   ├── en.php (source of truth)
 │   └── [17 other locales]
@@ -271,7 +271,7 @@ hits{method="GET",route="/api"} 42
 
 ### SessionMetrics (`src/Middleware/SessionMetrics.php`)
 
-Implements `SugarCraft\Wish\Middleware` (signature: `handle(Context, Session, callable): void`).
+Implements `SugarCraft\SshServer\Middleware` (signature: `handle(Context, Session, callable): void`).
 
 **Metrics emitted per session:**
 
@@ -317,13 +317,13 @@ public function handle(Context $ctx, Session $session, callable $next)
 }
 ```
 
-**CandyWish integration:**
+**SugarSshServer integration:**
 ```php
 // examples/wish-with-metrics.php
 Server::new()
     ->use(new Logger())
     ->use(new SessionMetrics($registry))
-    ->use(new class implements \SugarCraft\Wish\Middleware {
+    ->use(new class implements \SugarCraft\SshServer\Middleware {
         public function handle(Session $s, callable $next): void {
             echo "Hello, {$s->user}!\n";
             $next($s);
@@ -486,14 +486,14 @@ hits 42
 | **Session metadata** | `command` label extracted via `CommandFn` | `user`, `term`, `exception` labels |
 | **Async instruments** | None | AsyncCounter, AsyncGauge with callback |
 | **Export protocol** | Prometheus scrape via HTTP | Prometheus textfile, StatsD UDP, NDJSON, in-memory |
-| **Middleware interface** | `wish.Middleware` | `SugarCraft\Wish\Middleware` |
+| **Middleware interface** | `wish.Middleware` | `SugarCraft\SshServer\Middleware` |
 | **Atomic flush** | N/A (HTTP scrape) | File rename via flock |
 | **Descriptor/HELP pre-emit** | Via Prometheus registration | Via `Registry::register(Descriptor)` |
 | **Graceful shutdown** | Signal handling for HTTP server | Destructor calls `flush()` automatically |
 
 ### charmbracelet/wish (session middleware context)
 
-The `SessionMetrics` middleware bridges `candy-metrics` into the `candy-wish` SSH server. This mirrors how `promwish` bridges `charmbracelet/promwish` into `charmbracelet/wish`.
+The `SessionMetrics` middleware bridges `candy-metrics` into the `sugar-ssh-server` SSH server. This mirrors how `promwish` bridges `charmbracelet/promwish` into `charmbracelet/wish`.
 
 Key differences in session metadata:
 - **promwish:** only `command` label via `CommandFn`
@@ -527,7 +527,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 6. **Atomic Prometheus flush** — `flock(LOCK_EX)` + rename ensures concurrent writers don't corrupt the textfile and scrapers never see partial writes.
 
-7. **Rich session middleware** — `SessionMetrics` includes exception labels, extensible via `extraTags` callable, and composes naturally into the CandyWish middleware stack.
+7. **Rich session middleware** — `SessionMetrics` includes exception labels, extensible via `extraTags` callable, and composes naturally into the SugarSshServer middleware stack.
 
 8. **Comprehensive i18n** — 18 locale files, proper `Lang` facade extending `SugarCraft\Core\I18n\Lang`.
 
@@ -563,7 +563,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 - `candy-metrics` depends on `candy-core` (base TUI primitives)
 
-- `candy-metrics` is a peer of `candy-wish` (SSH server); `SessionMetrics` middleware bridges them
+- `candy-metrics` is a peer of `sugar-ssh-server` (SSH server); `SessionMetrics` middleware bridges them
 
 ### Related Libraries
 
@@ -571,7 +571,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 
 - `candy-core` — Provides `SugarCraft\Core\I18n\Lang` which `candy-metrics\Lang` extends
 
-- `candy-wish` — SSH server whose middleware stack `SessionMetrics` integrates into
+- `sugar-ssh-server` — SSH server whose middleware stack `SessionMetrics` integrates into
 
 ### Dependency Order in Monorepo
 

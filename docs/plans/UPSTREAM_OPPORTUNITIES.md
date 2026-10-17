@@ -190,11 +190,11 @@ No high-comment open issues.
 
 ---
 
-## charmbracelet/wish → candy-wish
+## charmbracelet/wish → sugar-ssh-server
 
 ### Recent merged PRs
 
-| Upstream | Title | Status in candy-wish | Notes |
+| Upstream | Title | Status in sugar-ssh-server | Notes |
 |---|---|:--:|---|
 | [#392](https://github.com/charmbracelet/wish/pull/392) (2026-03-09) | feat!: v2 | ⚪ | v2 work — deferred |
 | [#281](https://github.com/charmbracelet/wish/pull/281) (2025-10-02) | fix: respect $TERM and force colors | 🟡 | TERM handling — verify PHP respects FORCE_COLOR |

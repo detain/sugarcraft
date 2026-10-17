@@ -12,7 +12,7 @@ Address all findings from the candy-metrics code review, ranging from critical r
 
 | Decision | Rationale | Source |
 |----------|-----------|--------|
-| SessionMetrics must be decoupled from candy-wish | Hard-coupled optional dependency causes runtime fatal errors, not composer-time detection | `src/Middleware/SessionMetrics.php:8-10` |
+| SessionMetrics must be decoupled from sugar-ssh-server | Hard-coupled optional dependency causes runtime fatal errors, not composer-time detection | `src/Middleware/SessionMetrics.php:8-10` |
 | Backend interface needs flush() contract | MultiBackend cannot propagate flush to PrometheusFileBackend children | `src/Backend.php:20-70` |
 | PrometheusFileBackend needs dirty-flag optimization | Current implementation re-emits all metrics every flush(), causing unnecessary I/O | `src/Backend/PrometheusFileBackend.php:132-273` |
 | DRY extraction for TYPE/HELP emission blocks | 5 near-identical blocks (~80 lines) violate maintainability | `src/Backend/PrometheusFileBackend.php:143-246` |
@@ -22,18 +22,18 @@ Address all findings from the candy-metrics code review, ranging from critical r
 
 ## Phase 1: Critical Issues [PENDING]
 
-### 1.1 SessionMetrics hard-coupled to candy-wish [PENDING] ← CURRENT
+### 1.1 SessionMetrics hard-coupled to sugar-ssh-server [PENDING] ← CURRENT
 
-**What:** `src/Middleware/SessionMetrics.php:8-10` directly imports `SugarCraft\Wish\Context`, `SugarCraft\Wish\Middleware`, `SugarCraft\Wish\Session` from `candy-wish`, but `composer.json:39-41` only lists it as a `suggest`, not a `require`. Any code instantiating `SessionMetrics` without `candy-wish` installed gets a fatal "Class not found" at runtime.
+**What:** `src/Middleware/SessionMetrics.php:8-10` directly imports `SugarCraft\SshServer\Context`, `SugarCraft\SshServer\Middleware`, `SugarCraft\SshServer\Session` from `sugar-ssh-server`, but `composer.json:39-41` only lists it as a `suggest`, not a `require`. Any code instantiating `SessionMetrics` without `sugar-ssh-server` installed gets a fatal "Class not found" at runtime.
 
-**Why:** Silent failure at runtime if candy-wish is not installed; composer cannot catch this at `require` time.
+**Why:** Silent failure at runtime if sugar-ssh-server is not installed; composer cannot catch this at `require` time.
 
 **Severity:** Critical
 
 **Conditions for Success:**
 
-- SessionMetrics is moved to a bridge package OR `sugarcraft/candy-wish` is added as a hard `require` in composer.json
-- Running `composer install` without candy-wish does not produce a broken state
+- SessionMetrics is moved to a bridge package OR `sugarcraft/sugar-ssh-server` is added as a hard `require` in composer.json
+- Running `composer install` without sugar-ssh-server does not produce a broken state
 - `composer validate` passes
 
 **Related Code:**
@@ -43,7 +43,7 @@ Address all findings from the candy-metrics code review, ranging from critical r
 - `src/Middleware/SessionMetrics.php:27-59` — full middleware implementation
 
 **Investigation Notes:**
-The imports at lines 8-10 pull in three classes from candy-wish (`Context`, `Middleware`, `Session`). The `handle()` method at line 42 is the core entry point. The `Session` type is used at line 44 to access `$session->user` and `$session->term`. Since `candy-wish` is only in `suggest`, projects using candy-metrics without candy-wish will get a fatal error when trying to use SessionMetrics. The fix options are: (1) create a new `candy-metrics-wish` bridge package that depends on both, or (2) hard-require candy-wish. Given the middleware is specifically for "CandyWish session telemetry" (per the docblock), a bridge package is the cleaner architectural solution.
+The imports at lines 8-10 pull in three classes from sugar-ssh-server (`Context`, `Middleware`, `Session`). The `handle()` method at line 42 is the core entry point. The `Session` type is used at line 44 to access `$session->user` and `$session->term`. Since `sugar-ssh-server` is only in `suggest`, projects using candy-metrics without sugar-ssh-server will get a fatal error when trying to use SessionMetrics. The fix options are: (1) create a new `candy-metrics-wish` bridge package that depends on both, or (2) hard-require sugar-ssh-server. Given the middleware is specifically for "SugarSshServer session telemetry" (per the docblock), a bridge package is the cleaner architectural solution.
 
 ---
 
@@ -631,7 +631,7 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 
 | Priority | Issue | Recommendation |
 |----------|-------|----------------|
-| Critical | SessionMetrics hard-couples candy-wish | Move to bridge package or hard-require |
+| Critical | SessionMetrics hard-couples sugar-ssh-server | Move to bridge package or hard-require |
 | Critical | Backend interface missing flush() | Add `flush(): void` or document optionality |
 | Critical | flush() re-emits all metrics every call | Track dirty flag; skip if clean |
 | Major | 5 duplicate TYPE/HELP blocks in flush() | Extract helper method |

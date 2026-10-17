@@ -259,23 +259,23 @@ tests-ci for step 06.07 · PR#603 · add CompletionCommandTest (5 tests covering
 docs for step 06.07 · PR#604 · add step 06.07 completion types to candy-scriptui end-user page
 review for step 06.08 · clean · PR#605
 tests-ci for step 06.08 · clean
-docs for step 06.08 · PR#606 · document Context API in README + docs/lib/candy-wish.html + new docs/dev/candy-wish.md
-step 06.09 · PR#607 · candy-wish: ChannelHandler interface + DefaultChannelHandler (PtyReq/WindowChange/Shell/Exec/Signal/Env/Break Msg classes) + InProcessTransport dispatch wiring + 16 tests
+docs for step 06.08 · PR#606 · document Context API in README + docs/lib/sugar-ssh-server.html + new docs/dev/sugar-ssh-server.md
+step 06.09 · PR#607 · sugar-ssh-server: ChannelHandler interface + DefaultChannelHandler (PtyReq/WindowChange/Shell/Exec/Signal/Env/Break Msg classes) + InProcessTransport dispatch wiring + 16 tests
 tests-ci for step 06.09 · clean
 docs for step 06.09 · PR#608 · document ChannelHandler/ChannelMsg/Msg classes in README + end-user API table + dev extension point + new hub-admin guide + CALIBER pattern
-step 06.10 · PR#609 · candy-wish: add PasswordAuth/CertificateAuth/AuthMethods/KeyboardInteractive auth middleware (leftover-rollout step 06.10)
+step 06.10 · PR#609 · sugar-ssh-server: add PasswordAuth/CertificateAuth/AuthMethods/KeyboardInteractive auth middleware (leftover-rollout step 06.10)
 review for step 06.10 · clean · PR#609
 tests-ci for step 06.10 · clean
 docs for step 06.10 · PR#610 · document PasswordAuth/CertificateAuth/AuthMethods/KeyboardInteractive in README + end-user/admin/dev docs
-step 06.11 · PR#611 · candy-wish: Subsystem middleware (Subsystem/SubsystemHandler/SftpStub + 6 tests; leftover-rollout step 06.11)
+step 06.11 · PR#611 · sugar-ssh-server: Subsystem middleware (Subsystem/SubsystemHandler/SftpStub + 6 tests; leftover-rollout step 06.11)
 review for step 06.11 · clean · PR#611
 tests-ci for step 06.11 · clean
 docs for step 06.11 · PR#612 · document Subsystem/SubsystemHandler/SftpStub in README + end-user/admin/dev docs
-step 06.12 · PR#613 · candy-wish: add session metadata (sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata)
+step 06.12 · PR#613 · sugar-ssh-server: add session metadata (sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata)
 review for step 06.12 · clean · PR#613
 tests-ci for step 06.12 · clean
 docs for step 06.12 · PR#614 · document sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata() in README + end-user/admin/dev docs
-step 06.13 · PR#615 · candy-wish: async middleware — Middleware interface accepts void|PromiseInterface, transport dispatches await via event loop, AsyncMiddleware abstract base (leftover-rollout step 06.13)
+step 06.13 · PR#615 · sugar-ssh-server: async middleware — Middleware interface accepts void|PromiseInterface, transport dispatches await via event loop, AsyncMiddleware abstract base (leftover-rollout step 06.13)
 fix for step 06.13 · PR#616 · resolved 2 findings (AsyncMiddleware docs in README + promise-awaiting clarification note in Server.php)
 tests-ci for step 06.13 · clean
 docs for step 06.13 · PR#618 · add AsyncMiddleware to end-user API table + async middleware extension point in dev guide + operational notes in hub-admin guide

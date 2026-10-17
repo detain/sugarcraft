@@ -28,7 +28,7 @@ Add to each lib's `.gitignore` (if missing): `composer.lock`.
 - `find . -maxdepth 2 -name composer.lock -not -path './composer.lock'`
   returns nothing.
 - `cd <each-lib> && composer install --quiet && vendor/bin/phpunit`
-  green for: candy-pty, candy-core, candy-scriptui, candy-wish, candy-vcr,
+  green for: candy-pty, candy-core, candy-scriptui, sugar-ssh-server, candy-vcr,
   sugar-dashboard, sugar-widgets, sugar-charts, candy-sprinkles, candy-vt,
   sugar-image.
 - `php tools/check-path-repos.php` still green.

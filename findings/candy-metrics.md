@@ -20,16 +20,16 @@ candy-metrics is a well-architected telemetry library implementing counters, gau
 **File:** `src/Middleware/SessionMetrics.php:8-10`
 
 ```php
-use SugarCraft\Wish\Context;
-use SugarCraft\Wish\Middleware;
-use SugarCraft\Wish\Session;
+use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Session;
 ```
 
-`SessionMetrics` directly imports from `candy-wish`, but `composer.json` only lists it as a `suggest`, not a `require`. Any code that instantiates `SessionMetrics` without `candy-wish` installed will get a fatal "Class not found" error at runtime, not at composer install time.
+`SessionMetrics` directly imports from `sugar-ssh-server`, but `composer.json` only lists it as a `suggest`, not a `require`. Any code that instantiates `SessionMetrics` without `sugar-ssh-server` installed will get a fatal "Class not found" error at runtime, not at composer install time.
 
-**Impact:** Silent failure at runtime if candy-wish is not installed; composer cannot catch this at `require` time.
+**Impact:** Silent failure at runtime if sugar-ssh-server is not installed; composer cannot catch this at `require` time.
 
-**Recommendation:** Either move `SessionMetrics` to a separate `candy-metrics-wish` bridge package, or declare `sugarcraft/candy-wish` as a hard `require` in `composer.json`.
+**Recommendation:** Either move `SessionMetrics` to a separate `candy-metrics-wish` bridge package, or declare `sugarcraft/sugar-ssh-server` as a hard `require` in `composer.json`.
 
 ---
 
@@ -410,7 +410,7 @@ Readonly classes, constructor property promotion, named arguments, first-class c
 
 ## Compatibility Issues
 
-### ⚠️ candy-wish hard-coupling (covered above as Critical #1)
+### ⚠️ sugar-ssh-server hard-coupling (covered above as Critical #1)
 
 ### ⚠️ Histogram values unbounded in InMemoryBackend
 
@@ -458,7 +458,7 @@ final class Collector
 
 | Priority | Issue | Recommendation |
 |----------|-------|----------------|
-| Critical | SessionMetrics hard-couples candy-wish | Move to bridge package or hard-require |
+| Critical | SessionMetrics hard-couples sugar-ssh-server | Move to bridge package or hard-require |
 | Critical | Backend interface missing flush() | Add `flush(): void` or document optionality |
 | Critical | flush() re-emits all metrics every call | Track dirty flag; skip if clean |
 | Major | 5 duplicate TYPE/HELP blocks in flush() | Extract helper method |

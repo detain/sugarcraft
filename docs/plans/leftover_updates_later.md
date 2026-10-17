@@ -215,7 +215,7 @@ short bullet list; treat them as backlog items, not sequenced steps.
 - Enhanced help: examples, aliases, typo suggestions (§P4–P6).
 - Shell completions, version-from-composer.json, env-var fallbacks (§7–9).
 
-### candy-wish
+### sugar-ssh-server
 
 - **Context** propagation (§4.1 P1).
 - **ChannelHandler** layer: pty-req / window-change / shell / exec / signal / env / break (§4.2 P1).

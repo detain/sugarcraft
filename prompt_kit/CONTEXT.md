@@ -313,7 +313,7 @@ Related: [[reference_monorepo]], [[project_splitsh_not_equal_git_subtree]],
 
 <sub>originally `feedback_phpunit_kill_pattern.md`, type `feedback`</sub>
 
-When running PHPUnit suites that touch PTYs / FFI / proc_open (e.g. candy-pty, candy-wish), `timeout 30 vendor/bin/phpunit ...` is NOT reliable — the process can wedge in a state where SIGTERM doesn't tear it down and the harness blocks indefinitely.
+When running PHPUnit suites that touch PTYs / FFI / proc_open (e.g. candy-pty, sugar-ssh-server), `timeout 30 vendor/bin/phpunit ...` is NOT reliable — the process can wedge in a state where SIGTERM doesn't tear it down and the harness blocks indefinitely.
 
 **Why:** PTY master/slave fds + FFI handles + zombie child procs leave PHP unable to honor a top-level SIGTERM cleanly. The `timeout` wrapper itself may also hang.
 

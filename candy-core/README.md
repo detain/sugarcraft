@@ -235,7 +235,7 @@ builds on it. From the same monorepo:
 - **SugarSpring** — spring physics + Newtonian projectile sim.
 - **SugarCli** — opinionated CLI presentation helpers.
 - **CandyCodeshot** — code → SVG screenshot.
-- **CandyWish** — SSH server middleware framework.
+- **SugarSshServer** — SSH server middleware framework.
 - **CandyAnsiInspect** — ANSI escape-sequence inspector.
 
 See the matchup table in [../MATCHUPS.md](../MATCHUPS.md) for status,
