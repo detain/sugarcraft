@@ -46,7 +46,7 @@
     {"batch":"E","kind":"rename","old":"candy-ansi","new":"sugar-ansi-parser","ns_old":"Ansi","ns_new":"AnsiParser","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-vt","new":"sugar-vterm","ns_old":"Vt","ns_new":"Vterm","type":"lib","bins":{},"status":"pending"},
     {"batch":"E","kind":"rename","old":"candy-input","new":"sugar-input","ns_old":"Input","ns_new":"Input","type":"lib","bins":{},"status":"pending"},
-    {"batch":"E","kind":"rename","old":"candy-async","new":"sugar-async","ns_old":"Async","ns_new":"Async","type":"lib","bins":{},"status":"pending"},
+    {"batch":"E","kind":"rename","old":"candy-async","new":"sugar-async","ns_old":"Async","ns_new":"Async","type":"lib","bins":{},"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-testing","new":"sugar-testing","ns_old":"Testing","ns_new":"Testing","type":"lib","bins":{},"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-log","new":"sugar-log","ns_old":"Log","ns_new":"Log","type":"lib","bins":{},"status":"renamed"},
     {"batch":"E","kind":"rename","old":"candy-metrics","new":"sugar-metrics","ns_old":"Metrics","ns_new":"Metrics","type":"lib","bins":{},"status":"renamed"},

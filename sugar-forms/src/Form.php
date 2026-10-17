@@ -1060,7 +1060,7 @@ final class Form implements Model
      *
      * The library adds no timeout around the caller's promise (E646: a
      * hanging validator hangs only its own promise; bounding it is the
-     * consumer's product decision, e.g. via candy-async AsyncOps).
+     * consumer's product decision, e.g. via sugar-async AsyncOps).
      * A rejected field promise rejects the aggregate map: "could not
      * answer" never masquerades as "valid" or "invalid".
      *

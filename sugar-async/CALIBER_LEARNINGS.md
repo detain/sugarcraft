@@ -1,4 +1,4 @@
-# candy-async Caliber Learnings
+# sugar-async Caliber Learnings
 
 ## Session-learned patterns and gotchas
 

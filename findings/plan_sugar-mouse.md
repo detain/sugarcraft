@@ -370,13 +370,13 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 
 **What is expected:**
 
-- Remove `candy-async`, `candy-ansi`, and `candy-input` from the `repositories` array (only `candy-core` is actually required)
+- Remove `sugar-async`, `candy-ansi`, and `candy-input` from the `repositories` array (only `candy-core` is actually required)
 - OR add a comment explaining why they are present (e.g., "reserved for future async integration")
 
 **Why:**
 
 - Only `candy-core` is in the `require` section
-- The other three path repositories (`candy-async`, `candy-ansi`, `candy-input`) are listed but unused
+- The other three path repositories (`sugar-async`, `candy-ansi`, `candy-input`) are listed but unused
 - This is leftover from earlier design and creates confusion
 
 **Severity:** Low
@@ -393,7 +393,7 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 
 **Investigation notes:**
 
-- The findings file notes that candy-async is listed in repositories but not in require, which may be leftover from an earlier design where async support was planned
+- The findings file notes that sugar-async is listed in repositories but not in require, which may be leftover from an earlier design where async support was planned
 - These repositories don't cause functional issues but create confusion about actual dependencies
 
 ---

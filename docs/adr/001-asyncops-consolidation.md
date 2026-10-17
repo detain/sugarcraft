@@ -8,15 +8,15 @@
 
 ## Context
 
-During the repeated_logic audit (Finding #5), we identified that both `candy-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php` implement similar async utility patterns using `Deferred` + `futureTick` from ReactPHP. This raised the question of whether these should be consolidated into a single shared `AsyncOps` class.
+During the repeated_logic audit (Finding #5), we identified that both `candy-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php` implement similar async utility patterns using `Deferred` + `futureTick` from ReactPHP. This raised the question of whether these should be consolidated into a single shared `AsyncOps` class. <!-- @rename-keep historical provenance -->
 
 ## Decision
 
-**Keep `candy-async/AsyncOps` and `candy-files/AsyncOps` as separate classes at different abstraction levels.** Do not merge them.
+**Keep `candy-async/AsyncOps` and `candy-files/AsyncOps` as separate classes at different abstraction levels.** Do not merge them. <!-- @rename-keep historical provenance -->
 
 ## Rationale
 
-### candy-async/AsyncOps (212 lines) — Generic async patterns
+### candy-async/AsyncOps (212 lines) — Generic async patterns <!-- @rename-keep historical provenance -->
 - `withTimeout(LoopInterface, PromiseInterface, float)` — wraps promise with timeout
 - `retry(callable, int, float, ?CancellationToken)` — retry with exponential backoff
 - `debounce(callable, float, ?LoopInterface)` — returns debounced closure
@@ -37,7 +37,7 @@ These are **file-operation-specific** commands that happen to use async patterns
 
 While both use `Deferred` + `futureTick` as the underlying implementation technique, they operate at fundamentally different abstraction levels:
 
-1. **candy-async** provides **combinators** (timeout, retry, debounce, throttle) that transform any Promise
+1. **candy-async** provides **combinators** (timeout, retry, debounce, throttle) that transform any Promise <!-- @rename-keep historical provenance -->
 2. **candy-files** provides **operations** that produce Promises for specific domain actions
 
 Consolidating them would either:
@@ -48,7 +48,7 @@ Consolidating them would either:
 
 ### Positive
 - Clear separation of concerns between generic async utilities and domain-specific operations
-- Libraries can use candy-async without pulling in candy-files dependencies
+- Libraries can use candy-async without pulling in candy-files dependencies <!-- @rename-keep historical provenance -->
 - Each class can evolve independently based on its domain needs
 
 ### Negative
@@ -59,10 +59,10 @@ Consolidating them would either:
 ### 1. Extract shared `Deferred` pattern to `candy-core`
 - **Rejected:** The `Deferred` class from ReactPHP is already the shared primitive. Extracting a wrapper would add indirection without benefit.
 
-### 2. Have candy-files use candy-async utilities internally
-- **Rejected for v1:** While `candy-files/AsyncOps` could theoretically use `candy-async::retry()` for copy operations with automatic retry, this creates a hard dependency from candy-files to candy-async. At this stage, keeping them independent preserves flexibility.
+### 2. Have candy-files use candy-async utilities internally <!-- @rename-keep historical provenance -->
+- **Rejected for v1:** While `candy-files/AsyncOps` could theoretically use `candy-async::retry()` for copy operations with automatic retry, this creates a hard dependency from candy-files to candy-async. At this stage, keeping them independent preserves flexibility. <!-- @rename-keep historical provenance -->
 
 ## Notes
 
-- Future refactoring (post-v1.0) may revisit whether `candy-files` operations should use `candy-async::retry()` for automatic retry on I/O failures
+- Future refactoring (post-v1.0) may revisit whether `candy-files` operations should use `candy-async::retry()` for automatic retry on I/O failures <!-- @rename-keep historical provenance -->
 - Both classes should document their use of ReactPHP's `Deferred` + `futureTick` pattern for discoverability

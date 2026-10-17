@@ -9,7 +9,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Async\CancellationToken;
 
 /**
- * Bridges candy-async's {@see CancellationToken} onto a ReactPHP query promise.
+ * Bridges sugar-async's {@see CancellationToken} onto a ReactPHP query promise.
  *
  * Cancellation is cooperative and two-sided:
  *

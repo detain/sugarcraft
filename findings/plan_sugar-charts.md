@@ -15,7 +15,7 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Extract `ChartExtras` trait instead of forcing inheritance | BarChart, Scatter, OHLCChart have different constructor signatures making direct extension complex | `src/Chart/Chart.php:L1-354` vs `src/BarChart/BarChart.php:L32-641` |
-| Remove dead `candy-async` path-repo | Never imported in any source file, dead weight in composer install | `sugar-charts/composer.json:L80` |
+| Remove dead `sugar-async` path-repo | Never imported in any source file, dead weight in composer install | `sugar-charts/composer.json:L80` |
 | Use empty string `''` as unified empty-output convention | BarChart already returns `''` for empty; Scatter/OHLC/Heatmap return `"\n\n"` inconsistent | `src/BarChart/BarChart.php:L263-265` |
 | Use `mb_ord` as primary path in `firstCodepoint` | PHP 8.3+ always has `mb_ord` available, manual extraction unnecessary | `src/Buffer/BufferHelper.php:L110-132` |
 | Make `Legend::$colorMap` a class constant | Static local variable in method re-initialized every call | `src/Legend/Legend.php:L158-169` |
@@ -26,7 +26,7 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 
 - [ ] **1.1 Extract `ChartExtras` trait** — Create `src/Chart/ChartExtras.php` trait with `buildChartWithExtras`, `mergeLegend`, `mergeLegendLeftRight`, `addTitle`, `addYLabel` methods. Refactor BarChart, Scatter, OHLCChart to use trait instead of duplicating ~200 lines. BarChart:L261-385, Scatter:L164-321, OHLCChart:L195-370 are all copies of Chart:L80-185. Severity: **high**. Verify: All existing tests pass.
 
-- [ ] **1.2 Remove dead `candy-async` path-repo** — Delete `sugar-charts/composer.json:L78-84` path repository entry. Zero source files import from candy-async. Severity: **high**. Verify: `composer validate` passes, tests pass.
+- [ ] **1.2 Remove dead `sugar-async` path-repo** — Delete `sugar-charts/composer.json:L78-84` path repository entry. Zero source files import from sugar-async. Severity: **high**. Verify: `composer validate` passes, tests pass.
 
 - [ ] ❗ **1.3 premise-false at r86 verify (lane v4)** — BarChart is standalone (`src/BarChart/BarChart.php:33-34`: `final class BarChart` + `use ChartExtras`, no `extends Chart`); neither the class nor the trait exposes `withAnimation*`, so the flag-carry `copy()` at :560 drops no animation state. Animation lives only on `Chart` (:294-301) and `LineChart` (`lineChartCopy` carries `animationProgress` :769). (Historical prescription: add animation params to copy() because BarChart "inherits" the setters — the inheritance claim is what was false.) No fix needed.
 
@@ -82,7 +82,7 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 
 - [ ] ⏭️ **[r87-w3 RULED — report-and-skip]** **5.2 Add stacked bar, pie/donut, histogram chart types** — Implement common chart types absent from library. Finding 8.1. Severity: **low**. — Net-new public chart classes across four families is a feature build (multi-class public-API invention, needs MATCHUPS/upstream-parity ruling), not a verification-cheap remainder; escalated to orchestrator/product scope, zero touch.
 
-- [ ] ⏭️ **[r87-w3 RULED — host concern]** **5.3 Add ReactPHP animation driver** — Implement animation loop that drives `LineChart::withAnimationProgress()` frame-by-frame using candy-async. Finding 8.2: animation exists but no driver. Severity: **low**. — A driver class adds a new public surface AND a candy-async event-loop dependency into a render-only lib (new-dependency STOP line per campaign rules). Frame stepping is already the host app's tick loop (sugar-crush drives animation via withAnimationProgress; r86-v4 3.5 stamped the $allSeries animation path at LineChart.php:521-537). Library stays loop-free by design; zero touch.
+- [ ] ⏭️ **[r87-w3 RULED — host concern]** **5.3 Add ReactPHP animation driver** — Implement animation loop that drives `LineChart::withAnimationProgress()` frame-by-frame using sugar-async. Finding 8.2: animation exists but no driver. Severity: **low**. — A driver class adds a new public surface AND a sugar-async event-loop dependency into a render-only lib (new-dependency STOP line per campaign rules). Frame stepping is already the host app's tick loop (sugar-crush drives animation via withAnimationProgress; r86-v4 3.5 stamped the $allSeries animation path at LineChart.php:521-537). Library stays loop-free by design; zero touch.
 
 - [ ] ⏭️ **[r87-w3 RULED — API growth]** **5.4 Add export to plain text/CSV** — Add `toCsv()` or `toRawValues()` methods to chart classes. Finding 8.4: only ANSI string output exists. Severity: **low**. — `toCsv()` across the chart classes is public-API sprawl on ~10 renderers with no port-parity mandate; underlying series data is already fully reachable through existing public accessors (every test builds/reads it), so export is a one-liner in the consuming app. Report-and-skip; would need an orchestrator API-surface ruling to mint. Zero touch.
 

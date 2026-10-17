@@ -55,7 +55,7 @@ The Store is intentionally append-only at the file level, so editor plug-ins can
 
 ## Shared foundations
 
-candy-codetime uses [candy-async](https://github.com/detain/sugarcraft/tree/master/candy-async) for cancellation support in async write operations.
+candy-codetime uses [sugar-async](https://github.com/detain/sugarcraft/tree/master/sugar-async) for cancellation support in async write operations.
 
 ## Test
 

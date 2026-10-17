@@ -59,19 +59,19 @@ Both methods use an identical `match` on `UndoActionType` with the same case lis
 
 ---
 
-### 5. Duplicated AsyncOps with candy-async
+### 5. Duplicated AsyncOps with sugar-async
 
-**Files:** `src/AsyncOps.php` vs `candy-async/src/AsyncOps.php`
+**Files:** `src/AsyncOps.php` vs `sugar-async/src/AsyncOps.php`
 **Severity:** MODERATE
 
 | Library | Provides |
 |---------|----------|
 | `candy-files/AsyncOps` | `copyAsync`, `moveAsync`, `renameAsync`, `copyManyAsync`, `moveManyAsync` |
-| `candy-async/AsyncOps` | `withTimeout`, `retry`, `debounce`, `throttle` |
+| `sugar-async/AsyncOps` | `withTimeout`, `retry`, `debounce`, `throttle` |
 
-The file async operations in `candy-files` do not leverage `candy-async`'s `retry` mechanism for resilient copies.
+The file async operations in `candy-files` do not leverage `sugar-async`'s `retry` mechanism for resilient copies.
 
-**Recommendation:** Consider adding a `copyWithRetry()` that wraps `copyAsync()` with `AsyncOps::retry()` from `candy-async` to handle transient filesystem errors on network-mounted or busy disks.
+**Recommendation:** Consider adding a `copyWithRetry()` that wraps `copyAsync()` with `AsyncOps::retry()` from `sugar-async` to handle transient filesystem errors on network-mounted or busy disks.
 
 ---
 
@@ -219,22 +219,22 @@ If copying 5 files and file 3 fails, files 1–2 are already copied and the undo
 **File:** `src/AsyncOps.php`
 **Severity:** MODERATE
 
-Once `copyManyAsync()` is called, there is no mechanism to cancel it. The `candy-async` library provides `CancellationToken` support which is not used here.
+Once `copyManyAsync()` is called, there is no mechanism to cancel it. The `sugar-async` library provides `CancellationToken` support which is not used here.
 
-**Recommendation:** Add optional `CancellationToken` support to `copyManyAsync()`. The `candy-async` library already provides this pattern.
+**Recommendation:** Add optional `CancellationToken` support to `copyManyAsync()`. The `sugar-async` library already provides this pattern.
 
 ---
 
 ## Async Pattern Issues
 
-### 16. AsyncOps does not leverage candy-async's retry mechanism
+### 16. AsyncOps does not leverage sugar-async's retry mechanism
 
-**Files:** `src/AsyncOps.php` vs `candy-async/src/AsyncOps.php`
+**Files:** `src/AsyncOps.php` vs `sugar-async/src/AsyncOps.php`
 **Severity:** MODERATE
 
-`candy-async/AsyncOps::retry()` provides exponential backoff retry logic. The file copy operations in `candy-files` have no retry capability. Network-mounted filesystems or heavily-loaded disks could benefit from transparent retry.
+`sugar-async/AsyncOps::retry()` provides exponential backoff retry logic. The file copy operations in `candy-files` have no retry capability. Network-mounted filesystems or heavily-loaded disks could benefit from transparent retry.
 
-**Recommendation:** Add a `copyWithRetry(int $attempts = 3, float $delay = 0.5)` method that wraps `copyAsync()` using `candy-async`'s `retry()` utility.
+**Recommendation:** Add a `copyWithRetry(int $attempts = 3, float $delay = 0.5)` method that wraps `copyAsync()` using `sugar-async`'s `retry()` utility.
 
 ---
 
@@ -310,7 +310,7 @@ The `UNDO_LIMIT` constant is properly named. However, various string literals su
 
 ## Compatibility Issues
 
-### 21. candy-async dependency is path repo but not declared in requires
+### 21. sugar-async dependency is path repo but not declared in requires
 
 **File:** `candy-files/composer.json:61–66`
 **Severity:** MINOR
@@ -318,14 +318,14 @@ The `UNDO_LIMIT` constant is properly named. However, various string literals su
 ```json
 {
     "type": "path",
-    "url": "../candy-async",
+    "url": "../sugar-async",
     "options": {"symlink": true}
 }
 ```
 
-The `candy-async` path repository is listed in `repositories` but `sugarcraft/candy-async` is not listed in the `require` section of `composer.json`. The library uses `candy-async` concepts but the dependency is not explicit.
+The `sugar-async` path repository is listed in `repositories` but `sugarcraft/sugar-async` is not listed in the `require` section of `composer.json`. The library uses `sugar-async` concepts but the dependency is not explicit.
 
-**Recommendation:** Add `"sugarcraft/candy-async": "dev-master"` (or appropriate version) to the `require` section to make the dependency explicit and prevent silent breakage if the path repo is ever removed.
+**Recommendation:** Add `"sugarcraft/sugar-async": "dev-master"` (or appropriate version) to the `require` section to make the dependency explicit and prevent silent breakage if the path repo is ever removed.
 
 ---
 
@@ -395,7 +395,7 @@ No issues identified that would cause bugs or security issues in normal use.
 | 13 | Missing Feature | No progress reporting for async copy |
 | 14 | Missing Feature | No error recovery for partial copy failure |
 | 15 | Missing Feature | No cancellation support for async operations |
-| 16 | Async Pattern | AsyncOps does not leverage `candy-async` retry mechanism |
+| 16 | Async Pattern | AsyncOps does not leverage `sugar-async` retry mechanism |
 | 22 | Compatibility | Manager constructor is public with 16 parameters |
 
 ### LOW
@@ -416,10 +416,10 @@ No issues identified that would cause bugs or security issues in normal use.
 
 | # | Category | Issue |
 |---|----------|-------|
-| 5 | Architecture | Duplicated async concepts with `candy-async` |
+| 5 | Architecture | Duplicated async concepts with `sugar-async` |
 | 12 | Resource | Deferred creation per operation (acceptable for file ops) |
 | 17 | Code Quality | `Loop::futureTick` import missing |
-| 21 | Compatibility | `candy-async` path repo not in `require` |
+| 21 | Compatibility | `sugar-async` path repo not in `require` |
 
 ---
 

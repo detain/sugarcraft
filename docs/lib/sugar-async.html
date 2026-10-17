@@ -1,7 +1,59 @@
-<p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo. CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose() for atomic disposal, and AsyncOps static helpers for common async patterns.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — SugarAsync</title>
+<meta name="description" content="SugarAsync: Async building blocks for ReactPHP — cancellation tokens, subscriptions, and timeout / retry / debounce / throttle helpers.">
+<meta property="og:title" content="SugarCraft — SugarAsync">
+<meta property="og:description" content="Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Foundation for ReactPHP usage across the ecosystem.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-async.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-async.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-async.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-async.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 40 libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-async.png" alt="SugarAsync">
+      <div>
+        <h2>🍬 SugarAsync</h2>
+        <p class="detail-sub">Shared async vocabulary for ReactPHP</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">original — no 1:1 Go counterpart</span>
+          <span class="tag-chip">async</span>
+          <span class="tag-chip">cancellation</span>
+          <span class="tag-chip">reactphp</span>
+          <span class="tag-chip">foundation</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-async"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-async" alt="SugarAsync code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo. CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose() for atomic disposal, and AsyncOps static helpers for common async patterns.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-async</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-async</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Async\{AsyncOps, CancellationSource};
@@ -46,9 +98,9 @@ $promise = AsyncOps::retry(
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/candy-async">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-async/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-async/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-async">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-async/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-async/tree/master/examples">Runnable examples</a></li>
       <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
     </ul>
 
@@ -73,3 +125,37 @@ $promise = AsyncOps::retry(
 </table>
   </div>
 </section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-async">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-async/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

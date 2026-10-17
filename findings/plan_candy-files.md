@@ -23,11 +23,11 @@ Address all 25 code review findings in `candy-files` library, organized by prior
 | Extract shared `processUndoAction()` method | `reverseAction()` and `redoAction()` have identical `match` structure | Finding #4 code complexity analysis |
 | Add concurrency limiting to `copyManyAsync()` | Unlimited parallel promises can exhaust file descriptors on large copies | Finding #9 performance analysis |
 | Use `React\Promise\Queue` for concurrency limiting | Native ReactPHP primitive, no external dependencies | `candy-files/src/AsyncOps.php:98-122` |
-| Leverage `candy-async`'s `retry()` for resilient copies | Network-mounted and busy disks benefit from transparent retry | Finding #16 async pattern analysis |
-| Add `CancellationToken` support for cancellation | `candy-async` already provides this pattern | Finding #15 missing feature |
+| Leverage `sugar-async`'s `retry()` for resilient copies | Network-mounted and busy disks benefit from transparent retry | Finding #16 async pattern analysis |
+| Add `CancellationToken` support for cancellation | `sugar-async` already provides this pattern | Finding #15 missing feature |
 | Derive `isLink`/`isDir` from `lstat` mode bits | Avoids 2 extra syscalls per file entry | Finding #10 performance analysis |
 | Register shutdown function for trash cleanup | Temp directories accumulate indefinitely otherwise | Finding #11 resource leak |
-| Add `sugarcraft/candy-async` to `require` section | Path repo exists but dependency is not explicit | Finding #21 compatibility issue |
+| Add `sugarcraft/sugar-async` to `require` section | Path repo exists but dependency is not explicit | Finding #21 compatibility issue |
 | Use `Phar::canonicalize()` for path traversal validation | More robust than string-only checking | Finding #7 security analysis |
 
 ---
@@ -133,7 +133,7 @@ For 1000 files, firing 1000 concurrent promises causes severe performance degrad
 **Related code locations:**
 
 - `src/AsyncOps.php:98-122` - Current `copyManyAsync()` fires unlimited promises
-- `candy-async/src/AsyncOps.php` - Has retry mechanism but no concurrency queue
+- `sugar-async/src/AsyncOps.php` - Has retry mechanism but no concurrency queue
 - ReactPHP has `React\Promise\Queue` for this purpose
 
 **Implementation:**
@@ -445,14 +445,14 @@ private function processUndoAction(UndoAction $action, bool $isReverse): int
 
 ## Phase 4: Async Pattern Improvements
 
-### 4.1 Add copyWithRetry() using candy-async retry (Finding #16)
+### 4.1 Add copyWithRetry() using sugar-async retry (Finding #16)
 
 **File:** `src/AsyncOps.php`
 
 **Severity:** MODERATE (async pattern)
 
 **What is expected:**
-Add `copyWithRetry(int $attempts = 3, float $delay = 0.5)` method that wraps `copyAsync()` with `AsyncOps::retry()` from `candy-async`.
+Add `copyWithRetry(int $attempts = 3, float $delay = 0.5)` method that wraps `copyAsync()` with `AsyncOps::retry()` from `sugar-async`.
 
 **Why this change should be done:**
 Network-mounted filesystems or heavily-loaded disks benefit from transparent retry with exponential backoff.
@@ -467,8 +467,8 @@ Network-mounted filesystems or heavily-loaded disks benefit from transparent ret
 **Related code locations:**
 
 - `candy-files/src/AsyncOps.php:27-42` - `copyAsync()` method
-- `candy-async/src/AsyncOps.php:86-148` - `retry()` implementation
-- `candy-async/src/CancellationToken.php` - CancellationToken class
+- `sugar-async/src/AsyncOps.php:86-148` - `retry()` implementation
+- `sugar-async/src/CancellationToken.php` - CancellationToken class
 
 **Implementation:**
 ```php
@@ -503,10 +503,10 @@ public function copyWithRetry(
 **Severity:** MODERATE (missing feature)
 
 **What is expected:**
-Add optional `CancellationToken` support to `copyManyAsync()` using `candy-async`'s cancellation pattern.
+Add optional `CancellationToken` support to `copyManyAsync()` using `sugar-async`'s cancellation pattern.
 
 **Why this change should be done:**
-Once `copyManyAsync()` is called, there is no mechanism to cancel it. `candy-async` provides `CancellationToken` support.
+Once `copyManyAsync()` is called, there is no mechanism to cancel it. `sugar-async` provides `CancellationToken` support.
 
 **Conditions for success:**
 
@@ -517,7 +517,7 @@ Once `copyManyAsync()` is called, there is no mechanism to cancel it. `candy-asy
 **Related code locations:**
 
 - `src/AsyncOps.php:98-122` - Current implementation
-- `candy-async/src/AsyncOps.php:86-148` - CancellationToken usage in retry
+- `sugar-async/src/AsyncOps.php:86-148` - CancellationToken usage in retry
 
 **Implementation:**
 ```php
@@ -753,28 +753,28 @@ private const SELECT_TOGGLE_KEY = ' ';
 
 ## Phase 7: Compatibility Fixes
 
-### 7.1 Add candy-async to require section (Finding #21)
+### 7.1 Add sugar-async to require section (Finding #21)
 
 **File:** `candy-files/composer.json:61–66`
 
 **Severity:** MINOR (compatibility)
 
 **What is expected:**
-Add `"sugarcraft/candy-async": "dev-master"` to the `require` section since the path repository exists but the dependency is not explicit.
+Add `"sugarcraft/sugar-async": "dev-master"` to the `require` section since the path repository exists but the dependency is not explicit.
 
 **Why this change should be done:**
-The `candy-async` path repository is listed in `repositories` but `sugarcraft/candy-async` is not listed in `require`. The library uses `candy-async` concepts but the dependency is not explicit, risking silent breakage.
+The `sugar-async` path repository is listed in `repositories` but `sugarcraft/sugar-async` is not listed in `require`. The library uses `sugar-async` concepts but the dependency is not explicit, risking silent breakage.
 
 **Conditions for success:**
 
-- `sugarcraft/candy-async` added to `require` section
+- `sugarcraft/sugar-async` added to `require` section
 - `composer validate` passes
 - Tests pass with new dependency
 
 **Related code locations:**
 
 - `candy-files/composer.json:32-37` - Current `require` section
-- `candy-files/composer.json:60-66` - Path repo for candy-async exists
+- `candy-files/composer.json:60-66` - Path repo for sugar-async exists
 
 **Implementation:**
 ```json
@@ -783,7 +783,7 @@ The `candy-async` path repository is listed in `repositories` but `sugarcraft/ca
         "php": ">=8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-async": "dev-master",
+        "sugarcraft/sugar-async": "dev-master",
         "react/promise": "^3.3"
     }
 }
@@ -995,27 +995,27 @@ $stat = @lstat($full);
 
 ## Phase 9: Architecture Duplication
 
-### 9.1 Document duplication with candy-async (Finding #5)
+### 9.1 Document duplication with sugar-async (Finding #5)
 
-**Files:** `src/AsyncOps.php` vs `candy-async/src/AsyncOps.php`
+**Files:** `src/AsyncOps.php` vs `sugar-async/src/AsyncOps.php`
 
 **Severity:** MINOR (architecture)
 
 **What is expected:**
-Document that `candy-files/AsyncOps` and `candy-async/AsyncOps` serve different purposes and should not be merged at this time.
+Document that `candy-files/AsyncOps` and `sugar-async/AsyncOps` serve different purposes and should not be merged at this time.
 
 **Why this change should be done:**
-`candy-files/AsyncOps` provides file-specific operations (copy, move, rename). `candy-async/AsyncOps` provides generic async utilities (retry, debounce, throttle). Merging would add file-system concerns to the generic async library.
+`candy-files/AsyncOps` provides file-specific operations (copy, move, rename). `sugar-async/AsyncOps` provides generic async utilities (retry, debounce, throttle). Merging would add file-system concerns to the generic async library.
 
 **Conditions for success:**
 
 - Comment in `candy-files/src/AsyncOps.php` clarifying relationship
-- `candy-async` noted as providing `retry()` for use by `copyWithRetry()`
+- `sugar-async` noted as providing `retry()` for use by `copyWithRetry()`
 
 **Related code locations:**
 
 - `candy-files/src/AsyncOps.php` - File operations
-- `candy-async/src/AsyncOps.php` - Generic utilities
+- `sugar-async/src/AsyncOps.php` - Generic utilities
 
 **Implementation:**
 ```php
@@ -1068,7 +1068,7 @@ final class AsyncOps
 20. **4.3** Loop import (#17)
 21. **5.1** Progress reporting (#13)
 22. **5.2** Partial failure documentation (#14)
-23. **7.1** candy-async dependency (#21)
+23. **7.1** sugar-async dependency (#21)
 24. **9.1** Architecture documentation (#5)
 
 ---

@@ -290,7 +290,7 @@ sugar-forms is built on five shared packages:
 - **[sugar-fuzzy](/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scores.
   Select / MultiSelect filter delegates to it internally; the existing public
   `withFilter(callable)` injection point is preserved for custom filters.
-- **[candy-async](/sugarcraft/candy-async)** — `Async\Await` + `CancelledException`
+- **[sugar-async](/sugarcraft/sugar-async)** — `Async\Await` + `CancelledException`
   for async suggestion fetchers. `withAsyncSuggestions` stores a
   `CancellationSource` on the model and cancels the previous timer before
   scheduling the next, so rapid keystrokes only fire one network request.

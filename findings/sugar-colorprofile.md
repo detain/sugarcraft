@@ -246,7 +246,7 @@ For a terminal color detection library, having two internal dependencies (candy-
 
 ### 14. No Async/Terminal Probe Integration
 
-This is a ReactPHP-based ecosystem (`sugarcraft/candy-async` exists in the monorepo), but:
+This is a ReactPHP-based ecosystem (`sugarcraft/sugar-async` exists in the monorepo), but:
 - Terminal probing uses blocking `shell_exec()`
 - No async alternative for running infocmp
 - No Promise-based or streaming terminal capability detection

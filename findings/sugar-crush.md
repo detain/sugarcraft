@@ -7,7 +7,7 @@
 
 ## Overview
 
-`sugar-crush` ports `charmbracelet/bubbletea` input handling. It processes keyboard/mouse/EOF/paste events and routes them to the appropriate handler. Uses `candy-async` for debouncing and throttling.
+`sugar-crush` ports `charmbracelet/bubbletea` input handling. It processes keyboard/mouse/EOF/paste events and routes them to the appropriate handler. Uses `sugar-async` for debouncing and throttling.
 
 ---
 

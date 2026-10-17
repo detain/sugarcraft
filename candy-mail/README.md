@@ -109,7 +109,7 @@ export CANDY_MAIL_SIGNATURE="Sent with CandyMail"    # Appended to body
 
 ## Shared foundations
 
-candy-mail uses [candy-async](https://github.com/detain/sugarcraft/tree/master/candy-async) for best-effort cancellation on SMTP sends via `CancellationToken` (pre-write `isCancelled()` check + `onCancel` callback).
+candy-mail uses [sugar-async](https://github.com/detain/sugarcraft/tree/master/sugar-async) for best-effort cancellation on SMTP sends via `CancellationToken` (pre-write `isCancelled()` check + `onCancel` callback).
 
 ## License
 

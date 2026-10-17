@@ -12,7 +12,7 @@ https://sugarcraft.github.io/lib/sugar-toast.html
 https://sugarcraft.github.io/lib/sugar-readline.html
 https://sugarcraft.github.io/lib/sugar-table.html
 https://sugarcraft.github.io/lib/candy-sprinkles.html
-https://sugarcraft.github.io/lib/candy-async.html
+https://sugarcraft.github.io/lib/sugar-async.html
 https://sugarcraft.github.io/lib/sugar-mouse.html
 https://sugarcraft.github.io/lib/sugar-widgets.html
 https://sugarcraft.github.io/lib/sugar-charts.html

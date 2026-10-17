@@ -68,7 +68,7 @@ kind=rename, type=app, ns Post→Mail, bins {"bin/pop":"bin/candy-mail"}, extra_
 
 ## R2/R3 LANDED
 - R2 rename-remote.sh rc=0 (twice, idempotent), no 422. Split sugarcraft/candy-mail @ 04d75faaa; sugar-post URL redirects (GitHub rename). <!-- @rename-keep -->
-- R3 tool run rc=0: 103 files, 164 paths, R1=99 R2=42 R3=1090 R6=1 R7=26 — EXACT vs dry-run-2 plan after path-display normalization (diff of plan-vs-run content lines: only old->new path spelling; zero unexpected files. findings/candy-async.md R3:1 was in plan — live dependents line, correct).
+- R3 tool run rc=0: 103 files, 164 paths, R1=99 R2=42 R3=1090 R6=1 R7=26 — EXACT vs dry-run-2 plan after path-display normalization (diff of plan-vs-run content lines: only old->new path spelling; zero unexpected files. findings/candy-async.md R3:1 was in plan — live dependents line, correct). <!-- @rename-keep historical provenance -->
 - php -l 48 changed existing PHP files: 0 bad. Root+lib composer.json JSON valid.
 
 ## R4 LANDED (manual set)

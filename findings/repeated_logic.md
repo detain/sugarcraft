@@ -297,9 +297,9 @@ ReactPHP-based async operations using `Deferred`, `PromiseInterface`, and helper
 - **`Deferred` usage:** 28 occurrences
 - **`Cmd::promise()` / `Cmd::tick()`:** 78 occurrences
 
-### AsyncOps in candy-async
+### AsyncOps in sugar-async
 
-**`candy-async/src/AsyncOps.php:L22-L205`**
+**`sugar-async/src/AsyncOps.php:L22-L205`**
 
 ```php
 final class AsyncOps
@@ -376,7 +376,7 @@ final class Cmd
 
 ### Key Insight
 
-There are **two separate `AsyncOps` classes** (`candy-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php`) implementing similar patterns. The file operations in `candy-files` could potentially reuse `candy-async`'s utilities. Both use the same `Deferred` + `futureTick` pattern.
+There are **two separate `AsyncOps` classes** (`sugar-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php`) implementing similar patterns. The file operations in `candy-files` could potentially reuse `sugar-async`'s utilities. Both use the same `Deferred` + `futureTick` pattern.
 
 ---
 
@@ -609,7 +609,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 | Model interface | Yes | None (standardized) | Continue current approach |
 | i18n Lang::t() | Yes | None (standardized) | Continue current approach |
 | Error handling | Yes | Low (131 consistent patterns) | Consider extracting common validators |
-| Async/Promise | Partially | Medium (2 AsyncOps classes) | Consider merging file ops into candy-async |
+| Async/Promise | Partially | Medium (2 AsyncOps classes) | Consider merging file ops into sugar-async |
 | ::new() factory | Yes | None (convention) | Document as required pattern |
 | Width utility | Yes | None (well-centralized) | Continue current approach |
 | Validator interface | Yes | Low | Already well-structured |
@@ -626,7 +626,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
    - Document when local implementation is preferred
    - Create a migration script to adopt the trait
 
-2. **Merge AsyncOps utilities** - `candy-files/src/AsyncOps.php` duplicates much of `candy-async/src/AsyncOps.php`. Consider extracting common patterns into `candy-async`.
+2. **Merge AsyncOps utilities** - `candy-files/src/AsyncOps.php` duplicates much of `sugar-async/src/AsyncOps.php`. Consider extracting common patterns into `sugar-async`.
 
 ### Medium Priority
 
@@ -653,9 +653,9 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 - `candy-core/src/Util/Ansi.php` - ANSI utilities
 - `candy-core/src/AsyncCmd.php` - Async command wrapper
 
-### candy-async
+### sugar-async
 
-- `candy-async/src/AsyncOps.php` - Async utilities (timeout, retry, debounce, throttle)
+- `sugar-async/src/AsyncOps.php` - Async utilities (timeout, retry, debounce, throttle)
 
 ### candy-files
 

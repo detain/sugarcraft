@@ -2,7 +2,7 @@
 
 **Library:** `sugarcraft/sugar-cli`  
 **Review scope:** `src/` (8 classes) + `tests/` (9 test files)  
-**Dependencies:** `candy-core`, `candy-sprinkles`, `candy-async`, `candy-layout`, `candy-ansi`, `candy-input`, `candy-buffer`
+**Dependencies:** `candy-core`, `candy-sprinkles`, `sugar-async`, `candy-layout`, `candy-ansi`, `candy-input`, `candy-buffer`
 
 ---
 
@@ -215,7 +215,7 @@ The test exists and covers this. However, `testSugarcraftPresetIsMultiLine` at l
 
 The `repositories` array includes:
 - `../candy-layout` — no class in sugar-cli uses any `candy-layout` types
-- `../candy-async` — no async patterns exist in the library
+- `../sugar-async` — no async patterns exist in the library
 - `../candy-buffer` — no buffer usage
 - `../candy-input` — no input handling
 
@@ -281,7 +281,7 @@ Consider separating the logo structure from its color: `Logo::sugarcraft()` coul
 
 ### 16. No async/ReactPHP integration
 
-**Context:** This is a ReactPHP-based ecosystem (`candy-async` is in the monorepo). sugar-cli has no async rendering methods. Since all output is string-based (pure synchronous functions), this is not a bug, but for future compatibility with streaming/async TUI output (e.g., `Frame` rendered incrementally to a terminal via a stream), consider whether `render()` methods could return `\React\Async\Awaitable<string>` or whether a parallel `renderAsync()` method would make sense.
+**Context:** This is a ReactPHP-based ecosystem (`sugar-async` is in the monorepo). sugar-cli has no async rendering methods. Since all output is string-based (pure synchronous functions), this is not a bug, but for future compatibility with streaming/async TUI output (e.g., `Frame` rendered incrementally to a terminal via a stream), consider whether `render()` methods could return `\React\Async\Awaitable<string>` or whether a parallel `renderAsync()` method would make sense.
 
 This is **NOT** a recommendation to change — just an observation that the library is purely sync and that decision should be explicit in documentation.
 

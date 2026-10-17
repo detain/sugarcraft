@@ -904,9 +904,9 @@ Seven hand-rolled `pcntl_fork` sites in sugar-crush (`Chat`, `Runtime`,
 `BackgroundSupervisor`, plus `Support/ForkedChild`). Bugs found in three — the
 same class each time.
 
-candy-core, **not** candy-async: candy-async requires candy-core and sugar-crush
+candy-core, **not** candy-async: candy-async requires candy-core and sugar-crush <!-- @rename-keep historical provenance -->
 does not depend on it; candy-core already owns `WorkerPool`,
-`Util/Tty/PosixBackend` (forks) and `Program.php`; candy-async is
+`Util/Tty/PosixBackend` (forks) and `Program.php`; candy-async is <!-- @rename-keep historical provenance -->
 cooperative/promise/loop-resident and this primitive runs where there is **no
 loop**.
 
@@ -6313,8 +6313,8 @@ committed tree BY DESIGN. That is no longer drift.
 #### Two corrections I owe the record
 
 1. I told the user per-lib closures were "already partial and inconsistent
-   (`candy-async` has 1 path repo for 6 sibling deps)". **Inverted** — I misread
-   my own column order. `candy-async` has **6 path repos and 1 direct require**;
+   (`candy-async` has 1 path repo for 6 sibling deps)". **Inverted** — I misread <!-- @rename-keep historical provenance -->
+   my own column order. `candy-async` has **6 path repos and 1 direct require**; <!-- @rename-keep historical provenance -->
    the entries cover the full transitive closure. Per-lib coverage was
    *near-complete*, so the cost of dropping injection was a near-total loss of
    cross-lib PR coverage, not a partial one. The user was choosing between

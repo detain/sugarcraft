@@ -1,33 +1,33 @@
-# Step 08 — Create candy-async
+# Step 08 — Create candy-async <!-- @rename-keep historical provenance -->
 
-**Branch:** `ai/candy-async-new`
+**Branch:** `ai/candy-async-new` <!-- @rename-keep historical provenance -->
 **Depends on:** step-00 ✅
-**Blocks:** step-23 (sugar-forms / sugar-forms / candy-core migrate to candy-async)
+**Blocks:** step-23 (sugar-forms / sugar-forms / candy-core migrate to candy-async) <!-- @rename-keep historical provenance -->
 
 ## Goal
 
-Create the `candy-async` foundation package — unifies the fragmented ReactPHP usage across candy-core (`exec()` that blocks), sugar-forms / sugar-forms (async suggestions but no cancellation), and others. Provides a `Cancellable` token, `Subscription` lifecycle, and small `AsyncOps` helpers around ReactPHP's event loop. Consumers in step-23 swap their ad-hoc usage for these.
+Create the `candy-async` foundation package — unifies the fragmented ReactPHP usage across candy-core (`exec()` that blocks), sugar-forms / sugar-forms (async suggestions but no cancellation), and others. Provides a `Cancellable` token, `Subscription` lifecycle, and small `AsyncOps` helpers around ReactPHP's event loop. Consumers in step-23 swap their ad-hoc usage for these. <!-- @rename-keep historical provenance -->
 
 Reference: `docs/repo_map_update.md` §369.6 (consolidation of async patterns), §387.5 (ReactPHP reinvention).
 
 ## Files expected to be created
 
-- `candy-async/composer.json`
-- `candy-async/phpunit.xml`
-- `candy-async/README.md`
-- `candy-async/CALIBER_LEARNINGS.md`
-- `candy-async/src/Cancellable.php` — interface (`isCancelled(): bool`, `cancel(): void`, `onCancel(callable): void`).
-- `candy-async/src/CancellationToken.php` — concrete; immutable token + a Source that flips it.
-- `candy-async/src/CancellationSource.php` — owner side; `cancel()` flips the token.
-- `candy-async/src/Subscription.php` — interface (`unsubscribe(): void`, `isActive(): bool`).
-- `candy-async/src/Subscriptions.php` — Manager for multiple subscriptions (`compose()`, `disposeAll()`).
-- `candy-async/src/AsyncOps.php` — static helpers: `withTimeout(LoopInterface $loop, PromiseInterface $p, float $secs): PromiseInterface`, `retry(callable, int $attempts, float $backoff)`, `debounce`, `throttle`.
-- `candy-async/src/Suspended.php` — value-object wrapping a paused operation (for resumable Cmds in the TEA model).
-- `candy-async/tests/CancellationTokenTest.php`, `SubscriptionsTest.php`, `AsyncOpsTest.php`.
+- `candy-async/composer.json` <!-- @rename-keep historical provenance -->
+- `candy-async/phpunit.xml` <!-- @rename-keep historical provenance -->
+- `candy-async/README.md` <!-- @rename-keep historical provenance -->
+- `candy-async/CALIBER_LEARNINGS.md` <!-- @rename-keep historical provenance -->
+- `candy-async/src/Cancellable.php` — interface (`isCancelled(): bool`, `cancel(): void`, `onCancel(callable): void`). <!-- @rename-keep historical provenance -->
+- `candy-async/src/CancellationToken.php` — concrete; immutable token + a Source that flips it. <!-- @rename-keep historical provenance -->
+- `candy-async/src/CancellationSource.php` — owner side; `cancel()` flips the token. <!-- @rename-keep historical provenance -->
+- `candy-async/src/Subscription.php` — interface (`unsubscribe(): void`, `isActive(): bool`). <!-- @rename-keep historical provenance -->
+- `candy-async/src/Subscriptions.php` — Manager for multiple subscriptions (`compose()`, `disposeAll()`). <!-- @rename-keep historical provenance -->
+- `candy-async/src/AsyncOps.php` — static helpers: `withTimeout(LoopInterface $loop, PromiseInterface $p, float $secs): PromiseInterface`, `retry(callable, int $attempts, float $backoff)`, `debounce`, `throttle`. <!-- @rename-keep historical provenance -->
+- `candy-async/src/Suspended.php` — value-object wrapping a paused operation (for resumable Cmds in the TEA model). <!-- @rename-keep historical provenance -->
+- `candy-async/tests/CancellationTokenTest.php`, `SubscriptionsTest.php`, `AsyncOpsTest.php`. <!-- @rename-keep historical provenance -->
 
 ## Files expected to be modified
 
-- Root composer.json, MATCHUPS, PROJECT_NAMES, README, docs/index.html, docs/lib/candy-async.html, codecov.yml.
+- Root composer.json, MATCHUPS, PROJECT_NAMES, README, docs/index.html, docs/lib/candy-async.html, codecov.yml. <!-- @rename-keep historical provenance -->
 
 ## Acceptance criteria
 
@@ -45,9 +45,9 @@ Reference: `docs/repo_map_update.md` §369.6 (consolidation of async patterns), 
 ## Coder brief
 
 1. **Audit existing usage first** (delegate to an Explore subagent):
-   - "Find every `use React\` import across the SugarCraft monorepo. Group by what ReactPHP concept it uses (Loop, Promise, Stream, EventEmitter, ChildProcess). Report which files would benefit from candy-async helpers vs. which use ReactPHP directly in a way candy-async shouldn't interfere with."
+   - "Find every `use React\` import across the SugarCraft monorepo. Group by what ReactPHP concept it uses (Loop, Promise, Stream, EventEmitter, ChildProcess). Report which files would benefit from candy-async helpers vs. which use ReactPHP directly in a way candy-async shouldn't interfere with." <!-- @rename-keep historical provenance -->
    - Block on the report. Append findings to `docs/repo_map_updates.md` so step-23 has a roadmap.
-2. **Invoke `scaffold-library`** with slug `candy-async`, namespace `SugarCraft\Async\`, role "ReactPHP utilities: cancellation, subscriptions, retries (shared)".
+2. **Invoke `scaffold-library`** with slug `candy-async`, namespace `SugarCraft\Async\`, role "ReactPHP utilities: cancellation, subscriptions, retries (shared)". <!-- @rename-keep historical provenance -->
 3. **Require `react/event-loop`** + `react/promise` in composer.json (match versions already used elsewhere in the monorepo).
 4. **Implement Cancellation pair**: Source holds mutable flag, Token holds read-only reference. `onCancel` callbacks fire from `Source::cancel()` in registration order.
 5. **Implement Subscriptions**: a Subscription is the disposal handle returned by `subscribe()`-style APIs. `Subscriptions::compose(...)` lets multiple subs be disposed atomically (used in TEA's `subscriptions()` lifecycle).
@@ -70,23 +70,23 @@ Reference: `docs/repo_map_update.md` §369.6 (consolidation of async patterns), 
 - CALIBER_LEARNINGS: "ReactPHP event loop is shared across consumers — don't construct multiple loops. Pass `Loop::get()` or accept a `LoopInterface` parameter."
 - MATCHUPS: 🚀 (PHP-native pattern, no Charmbracelet upstream).
 - PROJECT_NAMES Candy table.
-- Docs/index.html + docs/lib/candy-async.html.
+- Docs/index.html + docs/lib/candy-async.html. <!-- @rename-keep historical provenance -->
 
 ## Ship brief
 
-- **PR title**: `candy-async: shared cancellation + subscription + AsyncOps utilities`
+- **PR title**: `candy-async: shared cancellation + subscription + AsyncOps utilities` <!-- @rename-keep historical provenance -->
 - **PR body**:
   ```
   ## Summary
-  - New foundation lib candy-async unifies ReactPHP usage across the monorepo.
+  - New foundation lib candy-async unifies ReactPHP usage across the monorepo. <!-- @rename-keep historical provenance -->
   - Provides Cancellable tokens, Subscriptions composition, AsyncOps (withTimeout, retry, debounce, throttle).
   - Consumers (candy-core, sugar-forms, sugar-forms) migrate in step-23.
 
   ## Test plan
-  - [x] vendor/bin/phpunit in candy-async (≥95% coverage)
+  - [x] vendor/bin/phpunit in candy-async (≥95% coverage) <!-- @rename-keep historical provenance -->
   - [x] All async tests bounded with fixture promises; no >100ms real waits
   - [x] php tools/check-path-repos.php
 
   Refs: docs/repo_map_step_08.md, docs/repo_map_update.md §369.6, §387.5
   ```
-- Commit subject: `candy-async: cancellation tokens + async helpers`.
+- Commit subject: `candy-async: cancellation tokens + async helpers`. <!-- @rename-keep historical provenance -->

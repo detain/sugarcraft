@@ -1123,31 +1123,31 @@ Then in `Theme.php` and `Cell.php`, remove the duplicate definitions and referen
 
 ## Phase 10: Compatibility Issues [PENDING]
 
-> **r86v5 re-derivation tally:** ✅1 — upstream added the candy-async require; phase closed.
+> **r86v5 re-derivation tally:** ✅1 — upstream added the sugar-async require; phase closed.
 
-### 10.1 Add `candy-async` dependency to `candy-vt` ✅ r86v5: landed — `candy-vt/composer.json:32` requires `"sugarcraft/candy-async": "dev-master"` (added upstream; rides r86u merge `3514c2d59`). No per-lib repositories[] entry (path-repo policy).
+### 10.1 Add `sugar-async` dependency to `candy-vt` ✅ r86v5: landed — `candy-vt/composer.json:32` requires `"sugarcraft/sugar-async": "dev-master"` (added upstream; rides r86u merge `3514c2d59`). No per-lib repositories[] entry (path-repo policy).
 
 **File:** `candy-vt/composer.json`
 
-**What:** Add `sugarcraft/candy-async` as a `require` dependency (not just a path repository).
+**What:** Add `sugarcraft/sugar-async` as a `require` dependency (not just a path repository).
 
 ```json
 // In composer.json, add to "require":
-"sugarcraft/candy-async": "dev-master"
+"sugarcraft/sugar-async": "dev-master"
 
 // The path repository already exists at line 82-86:
 {
     "type": "path",
-    "url": "../candy-async",
+    "url": "../sugar-async",
     "options": {
         "symlink": true
     }
 }
 ```
 
-But it's not in `require`, so `candy-async` is only available for development/testing, not runtime use.
+But it's not in `require`, so `sugar-async` is only available for development/testing, not runtime use.
 
-**Why:** `candy-vt` is part of a ReactPHP-based async ecosystem but has no async dependencies. Adding `candy-async` signals the intent and enables async usage patterns.
+**Why:** `candy-vt` is part of a ReactPHP-based async ecosystem but has no async dependencies. Adding `sugar-async` signals the intent and enables async usage patterns.
 
 **Severity:** Compatibility
 
@@ -1159,8 +1159,8 @@ But it's not in `require`, so `candy-async` is only available for development/te
 
 **Investigation Notes:**
 
-- `composer.json` shows `candy-async` is already in the path repositories (lines 82-86) but NOT in `require` (lines 27-31)
-- `candy-async` IS in `require-dev` of `sugar-testing`
+- `composer.json` shows `sugar-async` is already in the path repositories (lines 82-86) but NOT in `require` (lines 27-31)
+- `sugar-async` IS in `require-dev` of `sugar-testing`
 
 ---
 

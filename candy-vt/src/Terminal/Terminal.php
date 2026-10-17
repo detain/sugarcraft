@@ -174,7 +174,7 @@ final class Terminal
      * intact for a later retry, a rejected promise is the caller's notice
      * and a resurrected answer on a dead stream would be a phantom.
      *
-     * Cancellation is cooperative and immediate: pass a candy-async
+     * Cancellation is cooperative and immediate: pass a sugar-async
      * {@see CancellationToken} (owned by the caller's
      * {@see \SugarCraft\Async\CancellationSource}) as `$cancellation` and the
      * caller can abort mid-stream — the moment `cancel()` is reached the pump
@@ -189,7 +189,7 @@ final class Terminal
      * — a `cancel()` that arrives after the pump already settled is a no-op.
      * The pump never closes or pauses `$input` (the stream belongs to the
      * caller), it only stops listening. Mirrors the token-cooperative bridge the
-     * candy-async consumers use (`CancellableQuery::wrap()`): `null` leaves
+     * sugar-async consumers use (`CancellableQuery::wrap()`): `null` leaves
      * today's behaviour byte-identical (the pre-existing `end`/`error`/`close`
      * settlement paths are untouched); a non-null token rejects promptly with an
      * {@see OperationCancelledException} (a `\RuntimeException` subclass, so
@@ -302,7 +302,7 @@ final class Terminal
         }
         if ($cancellation !== null) {
             // Cooperative abort: on `cancel()` the pump detaches exactly as the
-            // natural settle paths do, then rejects with the candy-async
+            // natural settle paths do, then rejects with the sugar-async
             // cancellation signal, so a caller holding a CancellationSource can
             // stop the pump mid-stream instead of only ending its consumer (n3).
             // Registered AFTER the listeners attach so an already-cancelled token

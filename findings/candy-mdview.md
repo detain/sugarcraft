@@ -104,7 +104,7 @@ public static function watch(string $path, int $intervalMs = 500): \Generator
 
 **Problem**: This is a synchronous infinite loop with `usleep()`. In a ReactPHP async context, this will block the event loop entirely. The CALIBER_LEARNINGS.md correctly notes this: "FileWatcher::watch() is a Generator that runs indefinitely. Always consume it inside a loop with a termination condition or stream context cancellation."
 
-**Recommendation**: Consider providing an async-compatible version using `candy-async`'s event loop integration. Alternatively, document the blocking nature prominently and suggest use in worker processes or separate threads.
+**Recommendation**: Consider providing an async-compatible version using `sugar-async`'s event loop integration. Alternatively, document the blocking nature prominently and suggest use in worker processes or separate threads.
 
 ---
 
@@ -300,7 +300,7 @@ The library is **synchronous** and blocking. The `FileWatcher::watch()` method i
 
 ### Opportunities for Async Improvement
 
-1. **FileWatcher** could use `candy-async`'s event loop with async file watching (e.g., inotify/Darwin FSEvents integration, or poll via async `setInterval()`)
+1. **FileWatcher** could use `sugar-async`'s event loop with async file watching (e.g., inotify/Darwin FSEvents integration, or poll via async `setInterval()`)
 2. **Pager** could be made async-aware for streaming large files in non-blocking fashion
 3. **RenderCommand in pager mode** uses `Program::run()` which is blocking. For true async, this would need to yield control back to an event loop
 

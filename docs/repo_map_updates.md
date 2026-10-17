@@ -20,16 +20,16 @@ Entry format:
 ## [2026-05-28 09:30 | step-08 | coder] ReactPHP Usage Audit — Step 08
 
 Files using ReactPHP (excluding vendor/):
-- `candy-core/src/AsyncCmd.php`: `PromiseInterface` — **Would benefit from candy-async** (simple promise wrapper, could use CancellationToken for timeout)
-- `candy-core/src/Program.php`: `Loop`, `LoopInterface` — **candy-async should NOT interfere** (core runtime, owns the shared loop)
-- `candy-core/src/WorkerPool.php`: `LoopInterface`, `TimerInterface`, `Deferred`, `PromiseInterface` — **Would benefit from candy-async** (could use CancellationToken for worker cancellation)
-- `candy-core/src/ProgramOptions.php`: `LoopInterface` — **candy-async should NOT interfere** (just a config object)
-- `sugar-forms/src/Field/Input.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (debounce via Loop::addTimer, could use AsyncOps::debounce)
-- `sugar-forms/src/Field/Select.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (same debounce pattern as Input)
-- `sugar-image/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface)
+- `candy-core/src/AsyncCmd.php`: `PromiseInterface` — **Would benefit from candy-async** (simple promise wrapper, could use CancellationToken for timeout) <!-- @rename-keep historical provenance -->
+- `candy-core/src/Program.php`: `Loop`, `LoopInterface` — **candy-async should NOT interfere** (core runtime, owns the shared loop) <!-- @rename-keep historical provenance -->
+- `candy-core/src/WorkerPool.php`: `LoopInterface`, `TimerInterface`, `Deferred`, `PromiseInterface` — **Would benefit from candy-async** (could use CancellationToken for worker cancellation) <!-- @rename-keep historical provenance -->
+- `candy-core/src/ProgramOptions.php`: `LoopInterface` — **candy-async should NOT interfere** (just a config object) <!-- @rename-keep historical provenance -->
+- `sugar-forms/src/Field/Input.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (debounce via Loop::addTimer, could use AsyncOps::debounce) <!-- @rename-keep historical provenance -->
+- `sugar-forms/src/Field/Select.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (same debounce pattern as Input) <!-- @rename-keep historical provenance -->
+- `sugar-image/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface) <!-- @rename-keep historical provenance -->
 - `sugar-image/src/SyncAsyncRenderer.php`: Not read yet — likely PromiseInterface
 - `sugar-image/src/AdaptiveImage.php`: Not read yet — likely Loop/Promise
-- `candy-wish/src/Middleware/AsyncMiddleware.php`: `Loop`, `Promise` — **Would benefit from candy-async** (uses sync await with 30s timeout, could use AsyncOps::withTimeout)
+- `candy-wish/src/Middleware/AsyncMiddleware.php`: `Loop`, `Promise` — **Would benefit from candy-async** (uses sync await with 30s timeout, could use AsyncOps::withTimeout) <!-- @rename-keep historical provenance -->
 - `sugar-crush/src/Chat.php`: Not read yet
 - `sugar-crush/src/Backend/CommandBackend.php`: Not read yet
 - `sugar-crush/src/Backend/EchoBackend.php`: Not read yet
@@ -41,7 +41,7 @@ Existing ReactPHP versions pinned:
 - `react/promise: ^3.3` (candy-core, sugar-image, sugar-crush, super-candy)
 - `react/promise-timer: ^1.9` (candy-wish)
 
-Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async):
+Roadmap for step-23 (sugar-forms/sugar-forms/candy-core migrate to candy-async): <!-- @rename-keep historical provenance -->
 - Replace `Loop::addTimer` debounce with `AsyncOps::debounce()` in Input.php, Select.php
 - Replace manual 30s timeout in AsyncMiddleware.php with `AsyncOps::withTimeout()`
 - WorkerPool.php cancellation via CancellationToken
@@ -54,7 +54,7 @@ _All items in this section have been resolved by the completion of steps 20–40
 
 - [RESOLVED | 2026-06-01 | step-41 | scribe] All Active Items drained — steps 20–40 complete (PRs #899–#920 merged). Step-15 (sugar-forms) confirmed complete — PRs #870, #895 wired sugar-forms onto shared foundations; step-37 verified no further actionable libs. 4 items deferred to followups (sugar-metrics, sugar-log, sugar-mouse, candy-starter).
 
-- [RESOLVED | 2026-06-01 | step-35 | coder] candy-codetime + candy-mail + candy-git-server: adopt candy-async — MERGED PR #915:
+- [RESOLVED | 2026-06-01 | step-35 | coder] candy-codetime + candy-mail + candy-git-server: adopt candy-async — MERGED PR #915: <!-- @rename-keep historical provenance -->
   - candy-codetime: added CancellationToken support to Store::append()
   - candy-mail: added CancellationToken support to SmtpTransport::send()
   - candy-git-server: added Subscriptions for graceful shutdown in GitDaemon
@@ -136,7 +136,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - **IMPORTANT FINDING**: Neither candy-mdview nor candy-wish actually has env-var/terminfo parsing code for terminal capability probing. The step file's premise (§387.9) that "both libs do their own probing" is inaccurate based on current source. candy-mdview only uses `TtyDetect::isAtty(STDIN)` for TTY presence detection (not capability), and candy-wish uses `getenv()` only for SSH session metadata (TERM, SSH_CONNECTION, etc.) — which is distinct from color/capability probing.
   - candy-mdview: already had `sugar-colorprofile` path-repo. Added defensive `TerminalProbe::run()` via new `terminalSupportsColor()` private method in RenderCommand — wraps the probe call with `\Throwable` catch and falls back to `true` (assume color available) per step's graceful-failure requirement. No env-var/terminfo code was removed because none existed for capability detection.
   - candy-wish: added `sugarcraft/sugar-colorprofile` require + path-repo to composer.json (was missing). Added CALIBER_LEARNINGS entry clarifying that Session::fromEnvironment() reads SSH env vars for session metadata (TERM, SSH_CONNECTION, etc.) — this is NOT terminal capability probing and does not route through TerminalProbe.
-  - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of sugar-colorprofile). Clean (55 libs scanned).
+  - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of sugar-colorprofile). Clean (55 libs scanned). <!-- @rename-keep historical provenance -->
   - Branch: ai/probe-consumers
   - Tests: candy-mdview 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
   - TerminalProbe already in candy-mdview dependency tree (via sugar-markdown -> candy-mdview path-repos); NOT in candy-wish dependency tree before this step
@@ -177,7 +177,7 @@ _All items in this section have been resolved by the completion of steps 20–40
   - Branch ai/docs-site merged to master
   - 17 files changed, 47 insertions(+)
   - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
-  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, sugar-testing)
+  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, sugar-fuzzy, candy-input, candy-layout, sugar-mouse, candy-testing) <!-- @rename-keep historical provenance -->
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
 

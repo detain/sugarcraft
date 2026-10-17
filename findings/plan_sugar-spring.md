@@ -516,9 +516,9 @@ These are feature requests that are out of scope for the current audit PR but ar
 
 ### 5.1 No async/ReactPHP integration — Future work
 
-**What would be needed**: `AsyncSpring` class yielding positions via Amp coroutine, or `Spring::stream()` returning a `Generator`. Integration with `candy-async`.
+**What would be needed**: `AsyncSpring` class yielding positions via Amp coroutine, or `Spring::stream()` returning a `Generator`. Integration with `sugar-async`.
 
-**Why deferred**: Requires `candy-async` dependency analysis and async architecture decision; not a bug or regression.
+**Why deferred**: Requires `sugar-async` dependency analysis and async architecture decision; not a bug or regression.
 
 ---
 

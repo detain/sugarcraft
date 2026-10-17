@@ -16,7 +16,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - ✅ sugar-mouse (step-05, PR #886)
 - ✅ candy-input (step-06, PR #887)
 - ✅ sugar-fuzzy (step-07, PR #888)
-- ✅ candy-async (step-08, PR #889)
+- ✅ candy-async (step-08, PR #889) <!-- @rename-keep historical provenance -->
 - ✅ candy-core enhancements (step-09, PR #890)
 
 ### §344 Shared Components/Abstractions — covered by:
@@ -37,7 +37,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - Consolidate layout solvers → candy-layout (PR #884 step-03)
 - Unify mouse hit-testing → sugar-mouse (PR #886 step-05)
 - Consolidate buffer rendering → candy-buffer (PR #883 step-02 + PR #905 step-26)
-- Consolidate async patterns → candy-async (PR #889 step-08)
+- Consolidate async patterns → candy-async (PR #889 step-08) <!-- @rename-keep historical provenance -->
 - Consolidate styling foundations → candy-sprinkles + sugar-markdown (PRs #891/#892)
 
 ### §386 Repeated Reinventions — covered by:
@@ -45,7 +45,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - Byte-loop ANSI parsing (candy-ansi-inspect, sugar-quickpick, candy-codeshot) → candy-ansi (PR #882 step-01, PR #899 step-20)
 - String-based layout → candy-layout (PR #884 step-03)
 - Manual mouse coordinate tracking → sugar-mouse (PR #886 step-05, PR #901 step-22)
-- ReactPHP async inconsistency → candy-async (PR #889 step-08, PR #902 step-23)
+- ReactPHP async inconsistency → candy-async (PR #889 step-08, PR #902 step-23) <!-- @rename-keep historical provenance -->
 - Golden file assertions (zero packages) → sugar-testing (PR #885 step-04, PR #907 step-28)
 - Vim mode (4 independent implementations) → unified in sugar-forms (PR #903 step-24)
 - Snapshot test pattern → sugar-testing (PR #907 step-28)
@@ -57,7 +57,7 @@ _The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#92
 - step-32 candy-tetris + candy-minesweeper: adopted candy-buffer + sugar-mouse + sugar-testing (PR #911)
 - step-33 candy-kv + candy-ssh-launcher + candy-git: adopted sugar-fuzzy (PR #912, hotfix PR #913)
 - step-34 sugar-datepicker + sugar-toast: adopted candy-buffer + sugar-testing (PR #914)
-- step-35 candy-codetime + candy-mail + candy-git-server: adopted candy-async (PR #915)
+- step-35 candy-codetime + candy-mail + candy-git-server: adopted candy-async (PR #915) <!-- @rename-keep historical provenance -->
 - step-36 sugar-animation + sugar-cli + sugar-spring + candy-flappy: adopted sugar-testing (PR #916)
 - step-37 catch-all: deferral sweep complete — no remaining actionable libs (PR #917, docs-only)
 

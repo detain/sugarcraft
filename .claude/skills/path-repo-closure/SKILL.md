@@ -71,7 +71,7 @@ So wiring a new `sugarcraft/<dep>` is **one edit**: the `require` line. Do not a
 **Actions taken:**
 1. Confirm `sugar-forms/composer.json` exists.
 2. Add `"sugarcraft/sugar-forms": "dev-master"` to `sugar-crush/composer.json` `require`. **No `repositories[]` edit.**
-3. `cd sugar-crush && composer update sugarcraft/sugar-forms` → resolves from Packagist, pulling `candy-async` with it.
+3. `cd sugar-crush && composer update sugarcraft/sugar-forms` → resolves from Packagist, pulling `sugar-async` with it.
 4. `vendor/bin/phpunit` → green.
 5. `php tools/check-path-repos.php --no-lib-path-repos` → clean.
 

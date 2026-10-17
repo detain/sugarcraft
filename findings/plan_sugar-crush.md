@@ -21,7 +21,7 @@ This plan maps each finding to actual code locations where the described functio
 | sugar-crush is crush port, not bubbletea | The actual sugar-crush ports charmbracelet/crush (chat-shell), not bubbletea input handling | `sugar-crush/README.md:L16` |
 | Input handling exists in candy-input | EscapeDecoder.php handles escape sequences including mouse/paste | `candy-input/src/EscapeDecoder.php` |
 | InputReader in candy-core parses bytes | InputReader.php parses byte streams into typed Msg objects | `candy-core/src/InputReader.php` |
-| Debounce/throttle in candy-async | AsyncOps.php provides debounce() and throttle() | `candy-async/src/AsyncOps.php:L159-204` |
+| Debounce/throttle in sugar-async | AsyncOps.php provides debounce() and throttle() | `sugar-async/src/AsyncOps.php:L159-204` |
 | WindowSizeMsg exists in candy-core | Resize events are handled via WindowSizeMsg | `candy-core/src/Msg/WindowSizeMsg.php` |
 | Findings describe expected but non-existent library | Files at specified paths do not exist in repository | Investigation 2026-06-30 |
 
@@ -192,7 +192,7 @@ Changing debounce settings mid-operation could cause stale timers to fire with o
 
 **Actual code location:**
 
-- `candy-async/src/AsyncOps.php:159-175` — `debounce()` creates timer closures
+- `sugar-async/src/AsyncOps.php:159-175` — `debounce()` creates timer closures
 - `sugar-forms/src/Field/Input.php:248-449` — async suggestions with debounce
 - `candy-core/src/Program.php` — uses `Loop::addTimer()`
 
@@ -223,7 +223,7 @@ Abandoned timer references could prevent garbage collection or fire after cleanu
 
 **Actual code location:**
 
-- `candy-async/src/AsyncOps.php` — debounce/throttle use timers
+- `sugar-async/src/AsyncOps.php` — debounce/throttle use timers
 - `candy-core/src/Program.php:310` — mentions block until loop stops
 
 **Investigation notes:**
@@ -338,7 +338,7 @@ For large numbers of handlers, this could become a bottleneck.
 |---------|----------|--------|-----------------|
 | 1. EOF detection | HIGH | NEEDS CLARIFICATION | `Tui/KeyboardHandler.php` (no Ctrl+D handler) |
 | 2. Mouse coords off-by-one | HIGH | VERIFY | `candy-input/src/EscapeDecoder.php` (1-based confirmed) |
-| 3. Debounce timer not reset | MEDIUM | APPEARS FIXED | `candy-async/src/AsyncOps.php:L168-170` cancels timer |
+| 3. Debounce timer not reset | MEDIUM | APPEARS FIXED | `sugar-async/src/AsyncOps.php:L168-170` cancels timer |
 | 4. Paste clipboard throws | MEDIUM | CANNOT VERIFY | No clipboard access in current files |
 | 5. Event lookup O(n) | LOW | NOT AN ISSUE | match statement is O(1) |
 | 6. N+1 issues | N/A | N/A | None detected |

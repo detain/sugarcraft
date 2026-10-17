@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Async / ReactPHP conventions
 
-- Runtime is the ReactPHP event loop (`candy-core` `Program`). `candy-async` provides `CancellationToken`, `Subscription`, `AsyncOps` (`withTimeout`/`retry`/`debounce`/`throttle`).
+- Runtime is the ReactPHP event loop (`candy-core` `Program`). `sugar-async` provides `CancellationToken`, `Subscription`, `AsyncOps` (`withTimeout`/`retry`/`debounce`/`throttle`).
 - `view()` MUST stay non-blocking — never run a sync DB query on the render/keystroke path. Route data through `candy-sql`'s `AdminQueryCache` + `AsyncCachedConnection` and refresh via `Cmd::promise`/poll ticks.
 - `candy-sql` DB is async on the loop: `react/mysql` + `voryx/pgasync` (NOT amphp). `Cmd::promise` takes no trailing `()`.
 - `Database::query()` returns `array|null` — `null` = reconnectable error (2002/2003/2013); guard before iterating.
