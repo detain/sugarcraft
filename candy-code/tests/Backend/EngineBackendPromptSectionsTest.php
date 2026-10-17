@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 
@@ -37,5 +39,33 @@ final class EngineBackendPromptSectionsTest extends TestCase
 
         self::assertNotContains('tool-guidance', $this->labels($bare), 'a turn with no tools ships no guidance, measured or otherwise');
         self::assertContains('base', $this->labels($bare));
+    }
+
+    /**
+     * F6 (ISS-063 review): the plan-mode slot is looked up off the resolved
+     * hook chain, so `/context` must see it under a Plan gate — measured, not
+     * just shipped — and the fence leg of the label derivation must name the
+     * row `system-reminder` at per-turn stability.
+     */
+    public function testThePlanModeLayerRidesTheMeasurementUnderAPlanGate(): void
+    {
+        $plan = EngineBackend::new(new ScriptedProvider([]), 'm')
+            ->withTools([new Read()])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Plan));
+
+        $rows = array_column($plan->promptSectionSizes(), null, 'label');
+
+        self::assertArrayHasKey('system-reminder', $rows, 'a Plan gate must surface its contract in the measurement');
+        self::assertSame('per-turn', $rows['system-reminder']['stability']);
+        self::assertGreaterThan(0, $rows['system-reminder']['bytes']);
+    }
+
+    public function testNoPlanModeRowIsMeasuredWhenTheGateIsNotInPlanMode(): void
+    {
+        $default = EngineBackend::new(new ScriptedProvider([]), 'm')
+            ->withTools([new Read()])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default));
+
+        self::assertNotContains('system-reminder', $this->labels($default));
     }
 }
