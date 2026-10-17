@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Composer from '../components/Composer.vue'
-import MessageMarkdown from '../components/MessageMarkdown.vue'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
 import QueueStrip from '../components/QueueStrip.vue'
 import ReasoningFold from '../components/ReasoningFold.vue'
@@ -29,6 +28,20 @@ const title = computed(() => summary.value?.name || summary.value?.preview?.slic
 const canAnswer = computed(() => connection.scopes.includes('approve'))
 const liveText = computed(() => state.value.live?.text ?? '')
 const liveReasoning = computed(() => state.value.reasoning?.text ?? '')
+/**
+ * ISS-108: the streaming tail is plain pre-wrap text, not markdown re-parsed
+ * per token, and nothing with `aria-live` watches it — a polite region fed
+ * every delta spams screen readers. The announcement fires once, when the
+ * reply has landed as a completed row.
+ */
+const finishedReply = computed(() => {
+  if (state.value.status !== 'idle' || liveText.value !== '') return ''
+  for (let index = state.value.items.length - 1; index >= 0; index = index - 1) {
+    const item = state.value.items[index]
+    if (item?.kind === 'assistant') return `Reply complete: ${item.content}`
+  }
+  return ''
+})
 const draft = computed({
   get: () => layout.draft(props.id),
   set: (value: string) => layout.setDraft(props.id, value),
@@ -122,9 +135,9 @@ async function rename(): Promise<void> {
     <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" :session-id="id" @load-full="loadFull">
       <template #after>
         <ReasoningFold v-if="liveReasoning" :text="liveReasoning" live />
-        <div v-if="liveText" class="live" data-testid="live-reply" aria-live="polite">
+        <div v-if="liveText" class="live" data-testid="live-reply">
           <p v-if="state.live?.gap" class="gap">…</p>
-          <MessageMarkdown :text="liveText" />
+          <pre class="live-text">{{ liveText }}</pre>
         </div>
         <PermissionCard
           v-for="ask in state.asks"
@@ -135,6 +148,7 @@ async function rename(): Promise<void> {
         />
       </template>
     </Transcript>
+    <p class="sr-only" role="status" aria-live="polite" data-testid="reply-announcement">{{ finishedReply }}</p>
     <div class="dock">
       <QueueStrip :queue="state.queue" @remove="dequeue" />
       <p v-if="error" class="error" role="alert" data-testid="session-error">{{ error }}</p>
@@ -176,6 +190,15 @@ h1 {
 }
 .live {
   padding: 0.35rem 0;
+}
+/* ISS-108: the streaming tail is verbatim text, wrapped like the finished
+   markdown will be — no per-token parse while it arrives. */
+.live-text {
+  margin: 0;
+  font: inherit;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .gap {
   margin: 0;
