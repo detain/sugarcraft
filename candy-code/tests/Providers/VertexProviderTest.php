@@ -156,7 +156,9 @@ final class VertexProviderTest extends TestCase
         $provider = VertexProvider::create(projectId: 'proj-lazy');
 
         $this->assertSame('vertex', $provider->name());
-        $this->assertSame('claude-3-sonnet@20240229', $provider->model());
+        // ISS-025: the default must be a current model, and it must resolve
+        // in the price table - see ProviderDefaultPriceTableTest.
+        $this->assertSame('claude-sonnet-4-6', $provider->model());
     }
 
     public function testCreateFactoryWithCustomModel(): void

@@ -195,7 +195,9 @@ final class ProviderFactoryTest extends TestCase
         $this->assertArrayHasKey('model', $config);
         $this->assertSame('vertex', $config['type']);
         $this->assertSame('us-central1', $config['location']);
-        $this->assertSame('claude-3-sonnet@20240229', $config['model']);
+        // ISS-025: retired claude-3-sonnet@20240229 default replaced by the
+        // current claude-sonnet-4-6.
+        $this->assertSame('claude-sonnet-4-6', $config['model']);
     }
 
     public function testDefaultConfigCustomHasRequiredKeys(): void

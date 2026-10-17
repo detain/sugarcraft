@@ -559,7 +559,13 @@ final readonly class ProviderFactory
                 'type' => 'vertex',
                 'projectId' => getenv('GCP_PROJECT_ID') ?: '',
                 'location' => 'us-central1',
-                'model' => 'claude-3-sonnet@20240229',
+                // ISS-025: the previous default, claude-3-sonnet@20240229,
+                // is a retired model - Anthropic retired Claude 3 Sonnet
+                // (2025-07-21) and Vertex has shut the endpoint down, so a
+                // fresh vertex config failed every request with "publisher
+                // model not found". The default must be a current model that
+                // also resolves in VertexProvider::PRICE_TABLE.
+                'model' => 'claude-sonnet-4-6',
             ],
             'custom' => [
                 'type' => 'custom',
@@ -1501,7 +1507,7 @@ final readonly class ProviderFactory
         return VertexProvider::create(
             projectId: $config['projectId'],
             location: $config['location'] ?? 'us-central1',
-            model: $config['model'] ?? 'claude-3-sonnet@20240229',
+            model: $config['model'] ?? 'claude-sonnet-4-6',
             modelPrices: self::modelPricesFor($config),
             // Audit A21 (b): how much of a Gemini reply's output budget
             // thinking may spend. User-tier only - raising it raises spend.

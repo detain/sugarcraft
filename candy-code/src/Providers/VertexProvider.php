@@ -288,9 +288,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
      * Anthropic families on Vertex that never offered prompt caching, so a
      * `cache_control` mark is not sent to them (an unsupported model's answer
      * to one is not something this repo can measure without credentials, and
-     * the safe reading of "unknown" is not to ask). Claude 3 Sonnet - which
-     * is still this provider's factory default id - is the one retired family
-     * Vertex served without it.
+     * the safe reading of "unknown" is not to ask). Claude 3 Sonnet is the one
+     * retired family Vertex served without it - retired enough that ISS-025
+     * removed it from being this provider's factory default id.
      *
      * @var list<string>
      */
@@ -365,7 +365,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     public static function create(
         string $projectId,
         string $location = 'us-central1',
-        string $model = 'claude-3-sonnet@20240229',
+        string $model = 'claude-sonnet-4-6',
         ?callable $predictor = null,
         ?callable $streamer = null,
         array $modelPrices = [],
