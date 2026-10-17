@@ -33,7 +33,7 @@ const WINDOWS_LIBS = [
 const MACOS_LIBS = [
     // candy-pty held out of the macOS pool. The split-job debug
     // workflow (see .github/workflows/macos-debug.yml + branch
-    // `debug/macos-candy-pty` PR #_) narrowed the failure mode to:
+    // `debug/macos-candy-pty` PR #_) narrowed the failure mode to: // @rename-keep historical branch name
     // TIOCSWINSZ ioctl returns -1 on macOS arm64 master fds via PHP
     // FFI, independent of slave-anchor / resize-ordering workarounds.
     // Hypothesised root cause is the variadic-vs-fixed-arg ABI
