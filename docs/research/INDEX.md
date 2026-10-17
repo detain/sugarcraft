@@ -23,9 +23,9 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **sugar-core** | [research/libraries/sugar-core-research.md](libraries/sugar-core-research.md) | 1. Elm-Style Subscriptions, 2. Screen Stack, 3. Component Composition |
-| **sugar-style** | [research/libraries/candy-sprinkles-research.md](libraries/candy-sprinkles-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing | <!-- @rename-keep -->
+| **sugar-style** | [research/libraries/sugar-style-research.md](libraries/sugar-style-research.md) | 1. Theme class, 2. String color parsing, 3. Layout spacing |
 | **sugar-pty** | [research/libraries/sugar-pty-research.md](libraries/sugar-pty-research.md) | 1. openpty() FFI, 2. waitpid() FFI, 3. Raw mode support |
-| **sugar-vterm** | [research/libraries/candy-vt-research.md](libraries/candy-vt-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing | <!-- @rename-keep -->
+| **sugar-vterm** | [research/libraries/sugar-vterm-research.md](libraries/sugar-vterm-research.md) | 1. DECSTBM margins, 2. Auto-wrap, 3. Subparam parsing |
 | **candy-vcr** | [research/libraries/candy-vcr-research.md](libraries/candy-vcr-research.md) | 1. stats CLI, 2. RegexAssertion, 3. Gzip compression |
 
 ### Dashboard & Components
@@ -34,7 +34,7 @@ To implement an item:
 |---------|--------------|-------------------|
 | **sugar-dashboard** | [research/libraries/sugar-dashboard-research.md](libraries/sugar-dashboard-research.md) | 1. Constraint layout, 2. StatefulWidget separation, 3. Reactive props |
 | **sugar-widgets** | [research/libraries/sugar-widgets-research.md](libraries/sugar-widgets-research.md) | 1. validate_on timing, 2. restrict regex, 3. Table sorting/filtering |
-| **sugar-forms** | [research/libraries/sugar-forms-research.md](libraries/sugar-forms-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
+| **sugar-forms** | [research/libraries/sugar-forms-huh-research.md](libraries/sugar-forms-huh-research.md) | 1. Vim keys, 2. Built-in validators, 3. Enhanced KeyMap |
 | **sugar-table** | [research/libraries/sugar-table-research.md](libraries/sugar-table-research.md) | 1. StyleFunc, 2. Flex columns, 3. Viewport virtualization |
 | **sugar-charts** | [research/libraries/sugar-charts-research.md](libraries/sugar-charts-research.md) | 1. Nice ticks, 2. Streaming, 3. Area fill |
 | **sugar-overlay** | [research/libraries/sugar-overlay-research.md](libraries/sugar-overlay-research.md) | 1. Backdrop, 2. Animation, 3. Border chrome |
@@ -57,7 +57,7 @@ To implement an item:
 | Library | Research Doc | Top Priority Items |
 |---------|--------------|-------------------|
 | **candy-scriptui** | [research/libraries/candy-scriptui-research.md](libraries/candy-scriptui-research.md) | 1. Auto-discovery, 2. ValueEnum options, 3. FlagSpec trait |
-| **sugar-log** | [research/libraries/candy-log-research.md](libraries/candy-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values | <!-- @rename-keep -->
+| **sugar-log** | [research/libraries/sugar-log-research.md](libraries/sugar-log-research.md) | 1. NO_COLOR env, 2. PadLevelText, 3. Level values |
 | **sugar-ssh-server** | [research/libraries/sugar-ssh-server-research.md](libraries/sugar-ssh-server-research.md) | 1. Context propagation, 2. Channel events, 3. Session metadata |
 | **candy-ssh-launcher** | [research/libraries/candy-ssh-launcher-research.md](libraries/candy-ssh-launcher-research.md) | 1. proxy_jump, 2. SSH config import, 3. Identity files |
 | **sugar-quickpick** | [research/libraries/sugar-quickpick-research.md](libraries/sugar-quickpick-research.md) | 1. Item interface, 2. Filter injection, 3. Persistent history |
@@ -69,7 +69,7 @@ To implement an item:
 | **candy-mdview** | [research/libraries/candy-mdview-research.md](libraries/candy-mdview-research.md) | 1. Pygments highlighting, 2. Enhanced themes, 3. File watching |
 | **candy-codeshot** | [research/libraries/candy-codeshot-research.md](libraries/candy-codeshot-research.md) | 1. Bg colors, 2. Lang detection, 3. VS Code themes |
 | **sugar-image** | [research/libraries/sugar-image-research.md](libraries/sugar-image-research.md) | 1. WezTerm fix, 2. Image deletion, 3. Quarter-block |
-| **sugar-mouse** | [research/libraries/sugar-mouse-research.md](libraries/sugar-mouse-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
+| **sugar-mouse** | [research/libraries/sugar-mouse-zones-research.md](libraries/sugar-mouse-zones-research.md) | 1. Hover tracking, 2. Drag detection, 3. Click count |
 | **sugar-colorprofile** | [research/libraries/sugar-colorprofile-research.md](libraries/sugar-colorprofile-research.md) | 1. CLICOLOR, 2. Terminfo Tc, 3. tmux handling |
 | **sugar-metrics** | [research/libraries/sugar-metrics-research.md](libraries/sugar-metrics-research.md) | 1. Histogram buckets, 2. Metric describe, 3. UpDownCounter |
 
