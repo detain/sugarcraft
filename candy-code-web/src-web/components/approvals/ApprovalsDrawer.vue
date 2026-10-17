@@ -7,7 +7,7 @@ import { useConnectionStore } from '../../stores/connection'
 import { useLayoutStore } from '../../stores/layout'
 import { describe } from '../../stores/session'
 import { useSessionsStore } from '../../stores/sessions'
-import { useSettingsStore } from '../../stores/settings'
+import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from '../../stores/settings'
 import { sessionLabel } from './attention'
 
 /**
@@ -84,12 +84,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         v-if="notificationsAvailable && !settings.notify"
         type="button"
         class="link"
-        title="Notify me when a question arrives or a turn finishes out of sight"
+        :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : 'Notify me when a question arrives or a turn finishes out of sight'"
         data-testid="approvals-notify"
         @click="settings.enableNotifications()"
       >
         notify me
       </button>
+      <p v-if="settings.notifyProblem" class="notify-problem" role="status" data-testid="approvals-notify-problem">{{ NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] }}</p>
       <button type="button" class="link" aria-label="Close the approvals drawer" data-testid="approvals-close" @click="close">&#10005;</button>
     </header>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -132,6 +133,14 @@ header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.notify-problem {
+  color: var(--warn);
+  font-size: 12px;
+  margin: 0;
+  flex-basis: 100%;
 }
 h2 {
   flex: 1;

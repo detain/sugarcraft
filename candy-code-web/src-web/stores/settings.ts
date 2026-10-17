@@ -4,6 +4,15 @@ import { readJson, writeJson } from './storage'
 
 export type ThemeChoice = 'auto' | 'dark' | 'light'
 
+/** Why the last notify attempt failed (ISS-111), so the UI can say so. */
+export type NotificationProblem = 'insecure' | 'denied' | 'unsupported'
+
+export const NOTIFICATION_PROBLEM_TEXT: Record<NotificationProblem, string> = {
+  insecure: 'notifications need HTTPS or localhost',
+  denied: 'notifications blocked by the browser',
+  unsupported: 'this browser has no desktop notifications',
+}
+
 /**
  * This viewer's UI preferences: the theme and opt-in desktop notifications
  * for questions that arrive while the tab is in the background. The
@@ -31,13 +40,27 @@ export const useSettingsStore = defineStore('settings', () => {
     theme.value = theme.value === 'auto' ? 'dark' : theme.value === 'dark' ? 'light' : 'auto'
   }
 
-  /** Turn notifications on, asking the browser first; false when it refuses. */
+  const notifyProblem = ref<NotificationProblem | null>(null)
+
+  /** Turn notifications on, asking the browser first; false when it refuses —
+   *  and `notifyProblem` says why (ISS-111), because a silent no was indistinguishable
+   *  from a click that did nothing on a plain-HTTP bind. */
   async function enableNotifications(): Promise<boolean> {
-    if (typeof Notification === 'undefined') return false
+    if (typeof Notification === 'undefined') {
+      notifyProblem.value = 'unsupported'
+      return false
+    }
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      notifyProblem.value = 'insecure'
+      return false
+    }
     const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
     notify.value = permission === 'granted'
+    // A dismissed prompt leaves `default`; in a secure context that is still
+    // the browser not saying yes — ISS-111's whole point is naming the reason.
+    notifyProblem.value = notify.value ? null : 'denied'
     return notify.value
   }
 
-  return { theme, notify, cycleTheme, enableNotifications }
+  return { theme, notify, notifyProblem, cycleTheme, enableNotifications }
 })

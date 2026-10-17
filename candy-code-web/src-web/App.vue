@@ -13,7 +13,7 @@ import { AuthError } from './protocol/auth'
 import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
 import { useSessionsStore } from './stores/sessions'
-import { useSettingsStore } from './stores/settings'
+import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from './stores/settings'
 import SessionTools from './components/panels/SessionTools.vue'
 
 const connection = useConnectionStore()
@@ -83,7 +83,8 @@ async function signOut(): Promise<void> {
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
       <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">settings</RouterLink>
       <button type="button" class="link opt" :title="`Theme: ${settings.theme}`" @click="settings.cycleTheme()">theme: {{ settings.theme }}</button>
-      <button v-if="!settings.notify" type="button" class="link opt" title="Desktop notifications for questions" @click="settings.enableNotifications()">notify</button>
+      <button v-if="!settings.notify" type="button" class="link opt" :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : 'Desktop notifications for questions'" @click="settings.enableNotifications()">notify</button>
+      <span v-if="settings.notifyProblem" class="notify-problem" role="status" data-testid="notify-problem">{{ NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] }}</span>
       <button v-if="connection.status !== 'signed-out'" type="button" class="link" @click="signOut">sign out</button>
     </header>
     <ConnectionBanner />
@@ -133,6 +134,15 @@ async function signOut(): Promise<void> {
 .spacer {
   flex: 1;
 }
+.notify-problem {
+  color: var(--warn);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status {
   font-size: 0.875rem;
   color: var(--muted);
