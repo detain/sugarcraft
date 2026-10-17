@@ -110,20 +110,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * whose drain discards a corrupt buffer whole, costing the turn. What DOES
      * tick through a stalled transfer is an HTTP progress callback, and its
      * seam lives in the providers. ISS-076 armed that seam on the streaming
-     * paths of the two providers riding the shared transport (CustomProvider,
-     * SglangProvider): the request's onHeartbeat now forwards onto that
-     * callback for the whole head-and-first-frame window, and one immediate
-     * beat lands the moment response headers arrive — so a server that thinks
-     * for minutes before its first byte is alive on the wire, not merely
-     * forgiven by a bigger number.
+     * paths of the providers riding the shared transport (CustomProvider,
+     * SglangProvider, and — the ISS-076 review fix — the native
+     * AnthropicProvider arm's completeStream; that arm was listed below as
+     * SDK-owned until this commit corrected the label: it has always built
+     * its Guzzle client through the same HttpClientDefaults, so the seam was
+     * reachable the whole time): the request's onHeartbeat now forwards onto
+     * that callback for the whole head-and-first-frame window, and one
+     * immediate beat lands the moment response headers arrive — so a server
+     * that thinks for minutes before its first byte is alive on the wire,
+     * not merely forgiven by a bigger number.
      *
      * STILL NOT COVERED, and stated so nobody reads the paragraphs above as
      * unconditional: a NON-streaming provider (`supportsStreaming() === false`)
      * makes one blocking call per agentic step, so between two steps there is
-     * genuinely nothing to announce, and providers whose SDK owns its transport
-     * (the openai-php client, Anthropic, Bedrock) expose no progress seam to
-     * forward onto. A slow step on either still dies here, as does anything on
-     * the blocking {@see completeAsyncBlocking()} twin, which does not consume
+     * genuinely nothing to announce — which includes the native Anthropic
+     * arm's batch `complete()` twin, whose seam the review fix deliberately
+     * left unarmed because the engine never drives it while streaming is
+     * advertised — and providers whose SDK owns its transport (the openai-php
+     * client, Bedrock) expose no progress seam to forward onto. A slow step
+     * on either still dies here, as does anything on the blocking
+     * {@see completeAsyncBlocking()} twin, which does not consume
      * heartbeats either.
       *
       * A DEFAULT SINCE N-P4a, not a fixed number: the `turnIdleTimeoutSeconds`

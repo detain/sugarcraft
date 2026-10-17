@@ -87,8 +87,11 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
      *        Unary seam: receives the absolute endpoint URL and the request
      *        document, returns the decoded response document. Injected by
      *        tests; null builds the request through the shared Guzzle client.
-     * @param (callable(string, array<string, mixed>): iterable<int, array<string, mixed>>)|null $httpStream
-     *        Streaming counterpart: same inputs, yields decoded SSE events.
+     * @param (callable(string, array<string, mixed>, ?\Closure): iterable<int, array<string, mixed>>)|null $httpStream
+     *        Streaming counterpart: same inputs plus the request's optional
+     *        heartbeat (ISS-076 review fix — a two-parameter seam stays
+     *        legal, the extra positional argument is simply ignored), yields
+     *        decoded SSE events.
      * @param array<string, array{0: float, 1: float}|array<string, mixed>> $modelPrices Operator rate overrides, raw-id or family keyed.
      */
     public function __construct(
@@ -126,11 +129,30 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         $this->httpStream = $httpStream !== null
             ? \Closure::fromCallable($httpStream)
             /** @param array<string, mixed> $body */
-            : function (string $endpoint, array $body): \Generator {
+            : function (string $endpoint, array $body, ?\Closure $onHeartbeat = null): \Generator {
                 $response = $this->httpClient->post($this->messagesEndpoint(), [
                     'json' => $body,
                     'stream' => true,
-                ]);
+                    // ISS-076 review fix: the native arm rides the SAME
+                    // shared transport as CustomProvider and was missing
+                    // exactly what those two carry - the forward of the
+                    // request's heartbeat onto the HTTP progress callback,
+                    // so a prefill that thinks for minutes before its first
+                    // frame stays alive on the wire instead of tripping the
+                    // EngineBackend idle ceiling.
+                ] + self::heartbeatOptions($onHeartbeat));
+
+                if ($onHeartbeat !== null) {
+                    // Headers landed: deliver one fail-soft beat, so the wait
+                    // for the first BODY frame starts from a freshly-reset
+                    // idle clock rather than from whenever dialing began.
+                    try {
+                        ($onHeartbeat)();
+                    } catch (\Throwable) {
+                        // Fail-soft by contract - see CompleteRequest::$onHeartbeat.
+                    }
+                }
+
                 $stream = $response->getBody();
                 $chunks = (static function () use ($stream): \Generator {
                     while (!$stream->eof()) {
@@ -271,7 +293,10 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             // verdict at the consumer.
             $sawTerminal = false;
 
-            foreach (($this->httpStream)($this->messagesEndpoint(), $body) as $event) {
+            // ISS-076 review fix: the request's heartbeat rides into the
+            // transport seam so the head-and-first-frame window beats. An
+            // injected two-parameter seam simply ignores the third argument.
+            foreach (($this->httpStream)($this->messagesEndpoint(), $body, $request->onHeartbeat) as $event) {
                 $event = is_array($event) ? $event : [];
                 $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer);
 

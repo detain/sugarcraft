@@ -8,9 +8,13 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Promise\FulfilledPromise;
+use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\RequestInterface;
 use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\SglangProvider;
@@ -43,13 +47,18 @@ use SugarCraft\Code\Providers\SglangProvider;
  * its first body frame still resets the EngineBackend idle timer from the
  * transport up. The streaming arms pin presence/absence on the request
  * options, and that exactly one header beat lands per stream without the
- * MockHandler ever ringing the callback.
+ * MockHandler ever ringing the callback. The review fix adds the third arm
+ * of that family: the native AnthropicProvider streaming path, which has
+ * always built its client through the same HttpClientDefaults despite being
+ * labelled SDK-owned until then.
  */
 final class ProviderHeartbeatProgressTest extends TestCase
 {
     private const BATCH_BODY = '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}';
 
     private const STREAM_BODY = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n";
+
+    private const ANTHROPIC_STREAM_BODY = "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\ndata: {\"type\":\"message_stop\"}\n\n";
 
     /** @var list<array<string, mixed>> */
     private array $history = [];
@@ -322,5 +331,83 @@ final class ProviderHeartbeatProgressTest extends TestCase
         }
 
         $this->assertNotEmpty($chunks, 'a detonating header beat must cost the stream nothing');
+    }
+
+    /**
+     * ISS-076 review fix: the native anthropic arm rides the same shared
+     * transport, so the streaming laws must hold there too. That arm builds
+     * its Guzzle client INSIDE the constructor (an injected seam replaces
+     * the transport wholesale, which would pin nothing about the default
+     * closure), so this helper reaches the real client by reflection and
+     * swaps only the bottom handler. The shared streamTransportBounds
+     * middleware still runs on top - and it connect-preflights the request
+     * URI before handing off - so the base URL points at a live local
+     * listener that is never accepted on: the kernel backlog completes the
+     * probe honestly, and no packet leaves the box.
+     */
+    private function anthropicStreamFirstChunk(?\Closure $onHeartbeat): void
+    {
+        $this->history = [];
+        $errno = 0;
+        $errstr = '';
+        $listener = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($listener, "the local preflight listener could not open: $errstr");
+        $name = (string) stream_socket_get_name($listener, false);
+
+        try {
+            $provider = new AnthropicProvider('sk-test', 'http://' . $name, 'claude-sonnet-4-6');
+            $client = (new \ReflectionProperty(AnthropicProvider::class, 'httpClient'))->getValue($provider);
+            $this->assertInstanceOf(Client::class, $client);
+            $stack = $client->getConfig('handler');
+            $this->assertInstanceOf(HandlerStack::class, $stack);
+
+            $stack->setHandler(function (RequestInterface $request, array $options) use (&$listener): PromiseInterface {
+                $this->history[] = ['options' => $options];
+                if (\is_resource($listener)) {
+                    \fclose($listener);
+                }
+
+                return new FulfilledPromise(new Response(200, [], self::ANTHROPIC_STREAM_BODY));
+            });
+
+            $chunks = [];
+            foreach ($provider->completeStream(new CompleteRequest(
+                model: 'claude-sonnet-4-6',
+                messages: [new UserMessage('hi')],
+                onHeartbeat: $onHeartbeat,
+            )) as $chunk) {
+                $chunks[] = $chunk;
+            }
+            $this->assertNotEmpty($chunks, 'the anthropic stream must parse through the swapped handler');
+        } finally {
+            if (\is_resource($listener)) {
+                \fclose($listener);
+            }
+        }
+    }
+
+    public function testTheAnthropicStreamingPathCarriesNoProgressOptionWhenNoHeartbeatIsAskedFor(): void
+    {
+        $this->anthropicStreamFirstChunk(null);
+        $this->assertArrayNotHasKey('progress', $this->sentOptions());
+    }
+
+    public function testTheAnthropicStreamingPathForwardsTheHeartbeatOntoTheProgressCallback(): void
+    {
+        $this->anthropicStreamFirstChunk(static function (): void {});
+        $this->assertIsCallable($this->sentOptions()['progress']);
+    }
+
+    public function testTheAnthropicHeaderBeatLandsExactlyOnceAndNeedsNoTransferTick(): void
+    {
+        $beats = 0;
+        $this->anthropicStreamFirstChunk(static function () use (&$beats): void {
+            ++$beats;
+        });
+        $this->assertSame(
+            1,
+            $beats,
+            'the native anthropic arm must deliver one beat when headers land - and only that one, since the swapped handler never rings the wrapper',
+        );
     }
 }
