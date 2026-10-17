@@ -172,3 +172,106 @@ describe('sessions and approvals stores', () => {
     expect(approvals.total).toBe(1)
   })
 })
+
+/**
+ * ISS-058, the client paging consumer. The server lane has not landed its
+ * schema yet, so every pin here is about the defensive shape: the client asks
+ * nothing of a server that never mentions paging, adopts the cursor when it
+ * does, dedupes a shifted boundary, refuses to loop, and turns a refusal into
+ * `olderError` instead of a broken follow.
+ */
+describe('session paging (ISS-058)', () => {
+  function pagedSnapshot(snapshotExtras: Record<string, unknown>, messages: unknown[] = [{ id: 'm1', role: 'user', content: 'one' }]): Record<string, unknown> {
+    return {
+      reset: true,
+      throughSeq: 3,
+      pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [], messages, ...snapshotExtras },
+    }
+  }
+
+  async function subscribePaged(snapshotExtras: Record<string, unknown> = {}, messages?: unknown[]) {
+    await connect()
+    const session = useSessionStore('s1')
+    const subscribed = session.subscribe()
+    answer('session.subscribe', pagedSnapshot(snapshotExtras, messages))
+    await subscribed
+    return session
+  }
+
+  it('asks nothing of a server that never mentions paging', async () => {
+    const session = await subscribePaged()
+    expect(session.state.hasMoreOlder).toBe(false)
+    expect(session.state.olderCursor).toBeNull()
+    await expect(session.loadOlder()).resolves.toBe(false)
+    expect(sent('session.history')).toHaveLength(0)
+  })
+
+  it('adopts the cursor a paged snapshot names', async () => {
+    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    expect(session.state.hasMoreOlder).toBe(true)
+    expect(session.state.olderCursor).toBe(40)
+  })
+
+  it('reads the olderCursor spelling the server fix names as beforeIndex', async () => {
+    const session = await subscribePaged({ hasMore: true, beforeIndex: 12 })
+    expect(session.state.hasMoreOlder).toBe(true)
+    expect(session.state.olderCursor).toBe(12)
+  })
+
+  it('sends the held cursor and prepends the page it answers', async () => {
+    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const loading = session.loadOlder()
+    expect(sent('session.history').pop()?.params).toEqual({ sessionId: 's1', beforeIndex: 40, limit: 200 })
+    answer('session.history', {
+      sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [],
+      messages: [{ id: 'm0', role: 'user', content: 'older' }],
+      hasMoreOlder: true, olderCursor: 20,
+    })
+    await expect(loading).resolves.toBe(true)
+    expect(session.state.items.map((item) => item.key)).toEqual(['m0', 'm1'])
+    expect(session.state.olderCursor).toBe(20)
+    expect(session.state.hasMoreOlder).toBe(true)
+    expect(session.olderError).toBeNull()
+  })
+
+  it('skips a row the boundary shift already showed the client', async () => {
+    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const loading = session.loadOlder()
+    answer('session.history', {
+      sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [],
+      messages: [{ id: 'm0', role: 'user', content: 'older' }, { id: 'm1', role: 'user', content: 'one' }],
+    })
+    await loading
+    expect(session.state.items.map((item) => item.key)).toEqual(['m0', 'm1'])
+    // A page that names no further cursor ends the walk.
+    expect(session.state.hasMoreOlder).toBe(false)
+    expect(session.state.olderCursor).toBeNull()
+  })
+
+  it('refuses to loop on a stuck page that adds nothing', async () => {
+    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const loading = session.loadOlder()
+    answer('session.history', {
+      sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [],
+      messages: [{ id: 'm1', role: 'user', content: 'one' }],
+      hasMoreOlder: true, olderCursor: 40,
+    })
+    await loading
+    expect(session.state.hasMoreOlder).toBe(false)
+    await expect(session.loadOlder()).resolves.toBe(false)
+    expect(sent('session.history')).toHaveLength(1)
+  })
+
+  it('lands a refusal in olderError and leaves the walk where it was', async () => {
+    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const loading = session.loadOlder()
+    const frame = sent('session.history').pop()
+    socket().fail(-32601, 'method_not_found', 'unknown method', frame?.id)
+    await expect(loading).resolves.toBe(false)
+    expect(session.olderError).toBe('unknown method')
+    expect(session.state.hasMoreOlder).toBe(true)
+    expect(session.state.olderCursor).toBe(40)
+    expect(session.state.items.map((item) => item.key)).toEqual(['m1'])
+  })
+})

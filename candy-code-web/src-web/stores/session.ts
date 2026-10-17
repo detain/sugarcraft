@@ -1,11 +1,11 @@
 import { defineStore, getActivePinia } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import { SeqCursor } from '../protocol/cursor'
-import type { EventEnvelope, MethodResult, PermissionMode, Subscription } from '../protocol/generated'
+import type { EventEnvelope, MethodResult, PermissionMode, SessionSnapshot, Subscription } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
 import { useConnectionStore } from './connection'
 import { useLayoutStore } from './layout'
-import { applyEvent, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
+import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
 
 export type Delivery = 'queue' | 'steer' | 'interrupt'
 export type Phase = 'idle' | 'subscribing' | 'live'
@@ -21,12 +21,20 @@ export interface CommandInfo {
 /** How long a session keeps following after its view closes (Appendix O §7.5). */
 export const RELEASE_GRACE_MS = 30_000
 
+/** ISS-058: how many rows one loadOlder() page asks for. */
+const OLDER_PAGE_LIMIT = 200
+
 function setup(sessionId: string) {
   const connection = useConnectionStore()
   const state = reactive(createState(sessionId))
   const phase = ref<Phase>('idle')
   const error = ref<string | null>(null)
   const commands = ref<CommandInfo[]>([])
+  /** ISS-058: paging state — busy flag, last page refusal, and the row offset
+   *  that keeps fallback keys unique across pages. */
+  const loadingOlder = ref(false)
+  const olderError = ref<string | null>(null)
+  let olderOrdinal = 0
   let cursor = new SeqCursor<EventEnvelope>(0)
   let early: EventEnvelope[] = []
   let unfollow: (() => void) | null = null
@@ -198,6 +206,43 @@ function setup(sessionId: string) {
     state.permissionMode = result.permissionMode
   }
 
+  /**
+   * ISS-058, client paging consumer. Pull the page of transcript rows just
+   * older than what this client holds and prepend it. Nothing is ever asked
+   * unless a snapshot (or an earlier page) named a cursor, so a server that
+   * does not page yet sees byte-identical traffic. `session.history` is the
+   * method the server lane is landing; until its schema generation reaches
+   * this file the call goes through this deliberate loose seam, and an
+   * unknown-method refusal simply lands in `olderError` (the walk stops —
+   * it never retries in a loop). A page that shifts its boundary (hidden or
+   * compacted rows) cannot duplicate a card: rows whose id is already shown
+   * are skipped.
+   */
+  async function loadOlder(): Promise<boolean> {
+    if (!state.hasMoreOlder || state.olderCursor === null || loadingOlder.value) return false
+    const cursor = state.olderCursor
+    loadingOlder.value = true
+    olderError.value = null
+    try {
+      const request = connection.request as unknown as (method: string, params: Record<string, unknown>) => Promise<unknown>
+      const raw = await request('session.history', { sessionId, beforeIndex: cursor, limit: OLDER_PAGE_LIMIT })
+      const page = ('snapshot' in (raw as object) ? (raw as { snapshot: unknown }).snapshot : raw) as SessionSnapshot
+      if (!Array.isArray(page?.messages)) throw new ProtocolError(-32603, 'the older page carried no rows', 'bad_page')
+      const fetched = applyOlderPage(state, page, olderOrdinal)
+      olderOrdinal += page.messages.length
+      // Stuck-page law: a page that added nothing and moved the cursor
+      // nowhere is the server saying more than its flag means — believe the
+      // data and end the walk, or the button would click into a loop.
+      if (fetched === 0 && state.olderCursor === cursor) state.hasMoreOlder = false
+      return true
+    } catch (failure) {
+      olderError.value = describe(failure)
+      return false
+    } finally {
+      loadingOlder.value = false
+    }
+  }
+
   /** Read a truncated tool output in full (`tool.output`), into its card. */
   async function loadFullOutput(item: ToolItem): Promise<void> {
     let content = ''
@@ -232,6 +277,9 @@ function setup(sessionId: string) {
     respond,
     dequeue,
     setMode,
+    loadOlder,
+    loadingOlder,
+    olderError,
     loadFullOutput,
     loadCommands,
     /** Test seam: feed one event as if the connection routed it. */

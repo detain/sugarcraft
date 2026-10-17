@@ -110,6 +110,10 @@ export interface SessionState {
   subagents: Record<string, SubAgent>
   /** The last turn's end when it was not a plain end_turn. */
   lastStop: { stopReason: string; error?: string } | null
+  /** ISS-058: true while the server says older rows exist beyond what this client holds. */
+  hasMoreOlder: boolean
+  /** Exclusive bound to ask the next older page with; null when the server never named one. */
+  olderCursor: number | null
 }
 
 export function createState(sessionId: string): SessionState {
@@ -131,6 +135,8 @@ export function createState(sessionId: string): SessionState {
     reasoning: null,
     subagents: {},
     lastStop: null,
+    hasMoreOlder: false,
+    olderCursor: null,
   }
 }
 
@@ -237,6 +243,9 @@ export function itemsFromRow(row: Row, index: number): TranscriptItem[] {
 /** Replace the state with a snapshot (a reset subscribe). */
 export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): void {
   state.items = snapshot.messages.flatMap((row, i) => itemsFromRow(row, i))
+  const paging = readPaging(snapshot)
+  state.hasMoreOlder = paging.hasMoreOlder
+  state.olderCursor = paging.cursor
   state.status = snapshot.status
   state.turnId = snapshot.turnId ?? null
   state.spentUsd = snapshot.spentUsd ?? 0
@@ -256,6 +265,55 @@ export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): v
 export function applyPendingAsks(state: SessionState, asks: PendingAsk[]): void {
   state.asks = [...asks]
   if (asks.length > 0 && state.status === 'idle') state.status = 'waiting_permission'
+}
+
+// ── paging (ISS-058, client consumer) ─────────────────────────────────
+
+/**
+ * The optional paging fields a snapshot may carry (ISS-058's fix shape: the
+ * server pages the snapshot by `beforeIndex`/`limit` and says what is left).
+ * A server that does not page yet carries NEITHER field — that is the normal
+ * shape and means "this snapshot is everything", so no paging request is
+ * ever sent at it. Recognised spellings are read defensively; an unknown
+ * future field simply stays invisible until this widens.
+ */
+export function readPaging(snapshot: SessionSnapshot): { hasMoreOlder: boolean; cursor: number | null } {
+  const raw = snapshot as SessionSnapshot & { hasMoreOlder?: unknown; hasMore?: unknown; olderCursor?: unknown; beforeIndex?: unknown }
+  const hasMoreOlder = raw.hasMoreOlder === true || raw.hasMore === true
+  const bound = raw.olderCursor ?? raw.beforeIndex
+  return {
+    hasMoreOlder,
+    cursor: typeof bound === 'number' && Number.isInteger(bound) ? bound : null,
+  }
+}
+
+/**
+ * Prepend one older page below what the client holds (ISS-058). Rows are
+ * taken in transcript order like any snapshot; a row whose id the client
+ * already shows is skipped, so a server whose page boundary shifts (hidden
+ * rows, compaction) cannot duplicate a card. Rows without an id get negative
+ * fallback keys, `startOrdinal` steps across pages, and the page's own
+ * paging fields replace the held ones — a page that names no further cursor
+ * ends the walk even if the flag still promises more, because there is
+ * nothing left to ask with.
+ */
+export function applyOlderPage(state: SessionState, page: SessionSnapshot, startOrdinal: number): number {
+  const present = new Set(state.items.map((item) => item.key.split(':')[0] ?? ''))
+  const older: TranscriptItem[] = []
+  let skipped = 0
+  page.messages.forEach((row, i) => {
+    const id = str(row.id)
+    if (id !== undefined && present.has(id)) {
+      skipped++
+      return
+    }
+    for (const item of itemsFromRow(row, -(startOrdinal + i) - 1)) older.push(item)
+  })
+  state.items = [...older, ...state.items]
+  const paging = readPaging(page)
+  state.hasMoreOlder = paging.hasMoreOlder
+  state.olderCursor = paging.cursor
+  return page.messages.length - skipped
 }
 
 // ── events ────────────────────────────────────────────────────────────
