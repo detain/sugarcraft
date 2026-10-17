@@ -143,19 +143,48 @@ final class LangLaunchLocaleTest extends TestCase
     /**
      * And it runs: a locale with no catalogue of its own prints the English
      * help, byte for byte.
+     *
+     * The child gets a PRIVATE 0700 home, not `/tmp` itself (ISS-125):
+     * `HomeDirectory::owned()` rightly refuses a world-writable home, and the
+     * route that then answers — the passwd fallback — points the child at the
+     * developer's real `~/.candy-code`, which the launch writes a policy
+     * snapshot into. A sandboxed HOME makes the refusal moot: the owned check
+     * passes on a directory only this UID just created.
      */
     public function testALocaleWithNoCatalogueStillPrintsTheEnglishHelp(): void
     {
         $bin = \dirname(__DIR__) . '/bin/candy-code';
-        $env = ['LC_ALL' => 'xx_YY.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => \sys_get_temp_dir()];
-        $process = \proc_open([\PHP_BINARY, $bin, '--help'], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
-        self::assertIsResource($process);
-        $stdout = (string) \stream_get_contents($pipes[1]);
-        \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
+        $childHome = \sys_get_temp_dir() . '/lang_launch_home_' . \uniqid('', true);
+        self::assertNotFalse(\mkdir($childHome, 0700, true));
+        try {
+            $env = ['LC_ALL' => 'xx_YY.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => $childHome];
+            $process = \proc_open([\PHP_BINARY, $bin, '--help'], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
+            self::assertIsResource($process);
+            $stdout = (string) \stream_get_contents($pipes[1]);
+            \stream_get_contents($pipes[2]);
+            \fclose($pipes[1]);
+            \fclose($pipes[2]);
 
-        self::assertSame(0, \proc_close($process));
-        self::assertSame(Lang::inLocale('en', static fn (): string => Lang::t('cli.help.screen')), $stdout);
+            self::assertSame(0, \proc_close($process));
+            self::assertSame(Lang::inLocale('en', static fn (): string => Lang::t('cli.help.screen')), $stdout);
+        } finally {
+            $this->sweepChildHome($childHome);
+        }
+    }
+
+    /** Remove the launch's sandboxed home however deep the child wrote. */
+    private function sweepChildHome(string $dir): void
+    {
+        if (!\is_dir($dir)) {
+            return;
+        }
+        $walker = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($walker as $node) {
+            $node->isDir() ? @\rmdir($node->getPathname()) : @\unlink($node->getPathname());
+        }
+        @\rmdir($dir);
     }
 }
