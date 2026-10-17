@@ -66,7 +66,9 @@ documents the protocol and the UI).
   workspace host of its own when it is not the server's root). Keyboard:
   ↑/↓, Enter/→ to open, Backspace/← for up, Esc to cancel. Without the flag,
   New session starts on the server's own root, as before.
-- **Tabs and a grid**: every session opened stays a tab (Alt+1…9 picks one;
+- **Tabs and a grid**: every session opened stays a tab (a configurable
+  chord plus the physical digit key picks one — Alt+1…9 by default, cycled
+  from the `tabs: Alt+1` button in the tab strip;
   each shows its status and open questions). The grid tiles the open tabs, up
   to 3×3, each live — status, step, spend, the last few events, its questions
   and a line to prompt or steer it. The focused tile streams in full; the

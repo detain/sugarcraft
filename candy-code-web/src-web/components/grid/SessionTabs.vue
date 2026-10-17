@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { sessionLabel } from '../approvals/attention'
+import { loadTabChord, matchesTabChord, nextTabChord, saveTabChord, tabChordLabel, tabDigit, type TabChord } from '../../lib/tabChord'
 import { useApprovalsStore } from '../../stores/approvals'
 import { useLayoutStore, type Showing } from '../../stores/layout'
 import { useSessionsStore } from '../../stores/sessions'
@@ -9,7 +10,8 @@ import { useSessionsStore } from '../../stores/sessions'
 /**
  * The open sessions as tabs, and the switch between one-at-a-time and the
  * grid (Appendix O §7.4). Opening a session opens its tab; a tab shows the
- * session's status and its open questions. Alt+1…9 picks a tab.
+ * session's status and its open questions. A configurable chord + a physical
+ * digit picks a tab (ISS-106; Alt+digit by default, cycled from the strip).
  *
  * It is also where the page tells the server what is on screen
  * (`client.viewing`): the open session in the tabs view; every tile in the
@@ -87,18 +89,38 @@ watch(() => [route.name, routeId.value, layout.tiles, layout.focused] as const, 
   layout.show(showing)
 }, { immediate: true })
 
+// ISS-106: match the physical digit under a configurable chord. A `storage`
+// event fires in the *other* tabs when one changes the setting, so the hint
+// in the tooltip stays truthful everywhere.
+const chord = ref<TabChord>(loadTabChord())
+
 function onKey(event: KeyboardEvent): void {
-  if (!event.altKey || event.ctrlKey || event.metaKey) return
-  const digit = Number.parseInt(event.key, 10)
-  if (!(digit >= 1 && digit <= 9)) return
+  if (!matchesTabChord(event, chord.value)) return
+  const digit = tabDigit(event)
+  if (digit === null) return
   const id = layout.tabs[digit - 1]
   if (id === undefined) return
   event.preventDefault()
   select(id)
 }
 
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+function cycleChord(): void {
+  chord.value = nextTabChord(chord.value)
+  saveTabChord(chord.value)
+}
+
+function onStorage(event: StorageEvent): void {
+  if (event.key === 'candy-code-web:tab-chord') chord.value = loadTabChord()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('storage', onStorage)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('storage', onStorage)
+})
 </script>
 
 <template>
@@ -114,7 +136,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         data-testid="session-tab"
         :data-session-id="id"
       >
-        <button type="button" class="pick" :title="index < 9 ? `${title(id)} (Alt+${index + 1})` : title(id)" @click="select(id)">
+        <button type="button" class="pick" :title="index < 9 ? `${title(id)} (${tabChordLabel(chord)} ${index + 1})` : title(id)" @click="select(id)">
           <span class="dot" :class="status(id)" aria-hidden="true" />
           <span class="name">{{ title(id) }}</span>
           <span v-if="approvals.countFor(id) > 0" class="badge" data-testid="tab-ask-badge">{{ approvals.countFor(id) }}</span>
@@ -123,6 +145,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
     </div>
     <div class="modes" role="group" aria-label="Layout">
+      <button type="button" class="chord" data-testid="tab-chord" title="Key chord that picks a tab — click to cycle (the digit is the physical key, so laptop Option and AZERTY glyphs do not get in the way)" @click="cycleChord()">tabs: {{ tabChordLabel(chord) }}+1</button>
       <button type="button" :aria-pressed="!inGrid" data-testid="layout-tabs" @click="toTabs">&#9635; tabs</button>
       <button type="button" :aria-pressed="inGrid" data-testid="layout-grid" @click="toGrid">&#9638; grid</button>
     </div>

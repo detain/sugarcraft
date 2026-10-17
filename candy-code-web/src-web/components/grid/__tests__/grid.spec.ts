@@ -80,13 +80,40 @@ describe('tabs', () => {
     expect(useLayoutStore().tabs).toEqual(['a'])
   })
 
-  it('Alt+digit picks a tab', async () => {
+  it('Alt+digit picks a tab by physical code, not by the typed glyph (ISS-106)', async () => {
     const { router } = await setUp()
     await router.push('/s/b')
     await flushPromises()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', altKey: true }))
+    // macOS Option+1 types ¡ — the glyph arrives in `key`, the tab still switches.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '¡', code: 'Digit1', altKey: true }))
     await flushPromises()
     expect(router.currentRoute.value.params.id).toBe('a')
+  })
+
+  it('a chord shift moves the shortcut off the browser-owned Alt', async () => {
+    const { router, wrapper } = await setUp()
+    await router.push('/s/b')
+    await flushPromises()
+    await wrapper.find('[data-testid="tab-chord"]').trigger('click')
+    expect(wrapper.find('[data-testid="tab-chord"]').text()).toContain('Alt+Shift')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', code: 'Digit1', altKey: true }))
+    await flushPromises()
+    expect(router.currentRoute.value.params.id).toBe('b') // plain Alt is inert now
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '!', code: 'Digit1', altKey: true, shiftKey: true }))
+    await flushPromises()
+    expect(router.currentRoute.value.params.id).toBe('a')
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBe('"alt+shift"')
+  })
+
+  it('Ctrl+digit, the browser own tab switch, never fires the chord', async () => {
+    const { router } = await setUp()
+    await router.push('/s/b')
+    await flushPromises()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', code: 'Digit1', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', code: 'Digit1', metaKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', code: 'Digit1', altKey: true, ctrlKey: true }))
+    await flushPromises()
+    expect(router.currentRoute.value.params.id).toBe('b')
   })
 })
 
