@@ -1963,4 +1963,165 @@ PHP);
         $this->assertFileDoesNotExist($marker, "the user's .php workflow must not have been require()d");
         $this->assertSame(['d'], $registry->list(), 'one name, whichever tier answers for it');
     }
+
+    // =========================================================================
+    // ISS-045: one process-wide compilation per .php workflow path
+    // =========================================================================
+
+    /**
+     * `require` RE-EXECUTES top-level code (it is not `require_once`), and
+     * {@see \SugarCraft\Code\Tools\BuiltIn\WorkflowTool} builds a fresh
+     * registry per call, so before the process-wide memo every second
+     * `/workflow run` of the same file re-ran it. A file that merely
+     * declares a function died the second time with a `Cannot redeclare`
+     * compile fatal no `catch (\Throwable)` survives; a file that only
+     * counts was quietly re-running its side effects. This pins the quiet
+     * shape (clean red under a cache regression, because redeclaration
+     * fatals at COMPILE time of the second require — before a counter line
+     * could bump again — so the next test carries the loud shape instead).
+     */
+    public function testTheSecondLoadOfAWorkflowFileDoesNotReExecuteIt(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        $counter = $this->tempDir . '/exec-count';
+
+        $this->createWorkflowFile($userDir, 'counts', <<<PHP
+        file_put_contents('{$counter}', (string) (((int) @file_get_contents('{$counter}')) + 1));
+
+        return (new WorkflowBuilder())->name('counts')->description('COUNTED')->build();
+        PHP);
+
+        $first = (new WorkflowRegistry($userDir))->load('counts');
+        $second = (new WorkflowRegistry($userDir))->load('counts');
+
+        $this->assertSame('1', (string) file_get_contents($counter), 'the workflow file was compiled more than once per process');
+        $this->assertSame($first, $second, 'the memo must hand back the same final-readonly Workflow');
+    }
+
+    /**
+     * The ISS-045 repro itself: a top-level `function` declaration in the
+     * workflow file. With the memo this passes by never re-compiling the
+     * file; with the memo removed the second load fatals the process —
+     * which is the failure the issue reported, and why this pair exists.
+     */
+    public function testAWorkflowThatDeclaresFunctionsAtFileScopeSurvivesASecondLoad(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+
+        $this->createWorkflowFile($userDir, 'declares-once', <<<'PHP'
+        function iss045_declares_once_probe(): int
+        {
+            return 1;
+        }
+
+        return (new WorkflowBuilder())->name('declares-once')->description('DECLARED')->build();
+        PHP);
+
+        $first = (new WorkflowRegistry($userDir))->load('declares-once');
+        $second = (new WorkflowRegistry($userDir))->load('declares-once');
+
+        $this->assertSame($first, $second);
+        $this->assertSame('DECLARED', $second->description);
+    }
+
+    /**
+     * The cached answer is stored whatever the file RETURNED, so a workflow
+     * file that hands back a non-Workflow value repeats its
+     * {@see WorkflowLoadException} from the cache instead of re-executing —
+     * and re-fataling, since this fixture declares too. The counter proves
+     * the second attempt never touched the file again. The honest cost,
+     * pinned here so it stays a decision and not a surprise: fixing such a
+     * file mid-session needs a restart.
+     */
+    public function testANonWorkflowReturnIsCachedSoTheSecondAttemptRepeatsTheErrorWithoutReRunning(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        $counter = $this->tempDir . '/broken-count';
+
+        $this->createWorkflowFile($userDir, 'broken-return', <<<PHP
+        function iss045_broken_return_probe(): int
+        {
+            return 1;
+        }
+
+        file_put_contents('{$counter}', (string) (((int) @file_get_contents('{$counter}')) + 1));
+
+        return 'not a workflow';
+        PHP);
+
+        $registry = new WorkflowRegistry($userDir);
+
+        foreach ([1, 2] as $attempt) {
+            try {
+                $registry->load('broken-return');
+                $this->fail("attempt {$attempt} must have refused the non-Workflow return");
+            } catch (WorkflowLoadException $e) {
+                $this->assertStringContainsString('must return a Workflow instance', $e->getMessage());
+            }
+        }
+
+        $this->assertSame('1', (string) file_get_contents($counter), 'the broken file was re-executed on the retry instead of answering from the cache');
+    }
+
+    /**
+     * The other polarity of the same decision: a file that does not PARSE
+     * caches nothing — the ParseError escapes before the write, so a typo
+     * heals on the next attempt. This is what keeps the memo from being a
+     * sticky failure: rewrite the same path with good syntax mid-session
+     * and load() compiles it then. (A catchable ParseError was always the
+     * truth for the first compile; the load() docblock and WORKFLOWS.md
+     * used to call it an uncatchable compile fatal — the measured shape
+     * that was uncatchable is the SECOND compile, pinned next door.)
+     */
+    public function testAFileThatDidNotParseIsNotCachedSoAHealedFileHealsMidSession(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        $path = $userDir . '/heals.php';
+        file_put_contents($path, "<?php\nreturn (new \\SugarCraft\\Code\\Workflows\\WorkflowBuilder())->name('heals'\n");
+
+        $registry = new WorkflowRegistry($userDir);
+
+        try {
+            $registry->load('heals');
+            $this->fail('a workflow file that does not parse must raise ParseError, not answer');
+        } catch (\ParseError $e) {
+            // The path lives in getFile(); getMessage() is the bare syntax
+            // complaint, which says nothing about WHICH file refused to parse.
+            $this->assertStringContainsString('heals.php', $e->getFile());
+        }
+
+        $this->createWorkflowFile($userDir, 'heals', <<<PHP
+        return (new WorkflowBuilder())->name('heals')->description('HEALED')->build();
+        PHP);
+
+        $this->assertSame('HEALED', $registry->load('heals')->description);
+    }
+
+    /**
+     * The memo keys on the RESOLVED path, not the name: `b.php -> a.php`
+     * is the same file to PHP's compiler, and a name-keyed (or spelled-
+     * path-keyed) cache would re-require it under the second name and
+     * fatal on its declaration. Listing both names stays true — discovery
+     * answers to the directory, compilation to the file.
+     */
+    public function testTheSameFileUnderTwoNamesCompilesOnce(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+
+        $this->createWorkflowFile($userDir, 'alias-a', <<<'PHP'
+        function iss045_alias_probe(): int
+        {
+            return 1;
+        }
+
+        return (new WorkflowBuilder())->name('alias-a')->description('ALIASED')->build();
+        PHP);
+        symlink($userDir . '/alias-a.php', $userDir . '/alias-b.php');
+
+        $first = (new WorkflowRegistry($userDir))->load('alias-a');
+        $second = (new WorkflowRegistry($userDir))->load('alias-b');
+
+        $this->assertSame($first, $second, 'the symlinked spelling must not compile a second copy of the file');
+        $this->assertSame(['alias-a', 'alias-b'], (new WorkflowRegistry($userDir))->list());
+    }
 }

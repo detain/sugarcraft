@@ -65,6 +65,30 @@ final class WorkflowRegistry
     private ?string $userDirRefusal = null;
 
     /**
+     * One compiled `.php` workflow per resolved path, for the whole process.
+     *
+     * The map MUST outlive any one registry: {@see \SugarCraft\Code\Tools\BuiltIn\WorkflowTool}
+     * builds a fresh registry per call, so an instance field would re-`require`
+     * the file on every `/workflow run` of the same name — and `require` (not
+     * `require_once`) RE-EXECUTES top-level code, so a workflow that declares a
+     * function or class at file scope died with a `Cannot redeclare` COMPILE
+     * fatal the second time it ran (ISS-045). {@see Workflow} is `final
+     * readonly`, so handing the same instance to several engines shares an
+     * immutable value, not mutable state.
+     *
+     * The entry is written whatever the file RETURNED, and that is deliberate:
+     * a workflow file that hands back a non-Workflow value is cached too, so
+     * the second attempt repeats the {@see WorkflowLoadException} instead of
+     * re-executing — and possibly fataling on redeclaration — the broken file.
+     * The cost: within one process, editing such a file does not take effect
+     * until restart. A file that does not PARSE caches nothing (the
+     * {@see \ParseError} escapes before the write), so a typo heals on retry.
+     *
+     * @var array<string, mixed>
+     */
+    private static array $phpWorkflows = [];
+
+    /**
      * @param string      $workflowsPath        The user's own workflow directory. Both
      *        forms load from here: a `.php` file is `require`d, which is running its
      *        code, and this is the directory whose contents the user is ASSUMED to
@@ -299,12 +323,15 @@ final class WorkflowRegistry
      * Tries .php first, then falls back to .yaml.
      *
      * VALIDATION BELOW COVERS YAML ONLY, and the gap is not fixable here: a
-     * user-tier `.php` workflow is reached by `require`, so a syntax error in it
-     * is a COMPILE fatal — uncatchable, which means {@see \SugarCraft\Code\Chat}'s
-     * `catch (\Throwable)` around `/workflow run` cannot keep the session alive
-     * through one. A PHP workflow that does not parse takes the TUI with it. The
-     * YAML path, by contrast, reports every malformed shape as a
-     * {@see WorkflowLoadException} the command turns into one transcript line.
+     * user-tier `.php` workflow is reached by `require`, whose own parse
+     * failure arrives as a catchable {@see \ParseError}, but whose second
+     * EXECUTION of a file that declares anything at top level is the
+     * uncatchable `Cannot redeclare` compile fatal no `catch (\Throwable)`
+     * around `/workflow run` survives. That second run is exactly what
+     * {@see self::$phpWorkflows} prevents: each path compiles at most once
+     * per process (ISS-045). The YAML path, by contrast, reports every
+     * malformed shape as a {@see WorkflowLoadException} the command turns
+     * into one transcript line.
      *
      * @throws WorkflowNotFoundException When the workflow file does not exist.
      * @throws WorkflowLoadException When the file does not return a Workflow instance.
@@ -372,7 +399,19 @@ final class WorkflowRegistry
         // predicate ({@see baseNames()}), which is what keeps "listed" and
         // "loadable" one set here too.
         if ($phpPath !== null && is_file($phpPath) && $this->containedIn($phpPath, \dirname($phpPath))) {
-            $workflow = require $phpPath;
+            // Keyed by the resolved path, not the name or the spelled path: two
+            // names, or a symlink spelling beside the direct one, are the SAME
+            // file to PHP's compiler, and the redeclaration this cache prevents
+            // (ISS-045) is a property of the file, not of the route taken to it.
+            $cacheKey = \realpath($phpPath) ?: $phpPath;
+            // array_key_exists, NOT `??`: a file returning null is a cached
+            // ANSWER (it fails the instanceof check below), and a null-coalesce
+            // would read it as a miss and re-execute the very file the cache
+            // exists to run once.
+            $workflow = \array_key_exists($cacheKey, self::$phpWorkflows)
+                ? self::$phpWorkflows[$cacheKey]
+                : require $phpPath;
+            self::$phpWorkflows[$cacheKey] = $workflow;
 
             if (!$workflow instanceof Workflow) {
                 throw new WorkflowLoadException(

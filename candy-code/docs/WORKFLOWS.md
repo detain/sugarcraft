@@ -40,14 +40,24 @@ notice. Otherwise the refusal is invisible in every direction you look: the
 not-found message stops naming the directory, `projectWorkflowsPath()` still
 reports it, and the listing simply has fewer names in it.
 
-### A `.php` workflow that does not parse takes the TUI with it
+### A `.php` workflow is compiled once per process
 
 `load()`'s validation covers YAML only, and the gap is not fixable there. A
-user-tier `.php` workflow is reached by `require`, so a syntax error in it is a
-**compile fatal** — uncatchable, which means `Chat`'s `catch (\Throwable)` around
-`/workflow run` cannot keep the session alive through one. The YAML path, by
-contrast, reports every malformed shape as a `WorkflowLoadException` that becomes
-one transcript line.
+user-tier `.php` workflow is reached by `require`, which re-executes the file's
+top-level code on every call. Before the process-wide memo landed (ISS-045),
+running the same workflow twice in one session re-declared its file-scope
+functions or classes and died with a `Cannot redeclare` **compile fatal** — the
+one failure mode `Chat`'s `catch (\Throwable)` around `/workflow run` cannot
+survive. `load()` now caches each resolved path's return value for the
+lifetime of the process, so a file compiles at most once and that door is
+closed. What remains is ordinary and catchable: a file that does not *parse*
+raises a `ParseError` the command turns into a transcript line (and caches
+nothing, so fixing a typo heals on the next attempt), while a file that
+returns something other than a `Workflow` reports the same
+`WorkflowLoadException` from its cached answer — so repairing that kind of
+file takes a restart, not a re-run. The YAML path, by contrast, re-reads its
+file on every run and reports every malformed shape as a
+`WorkflowLoadException` that becomes one transcript line.
 
 ---
 
