@@ -152,7 +152,7 @@ final class SlashDispatchTest extends TestCase
      */
     public function testADraftThatIsNotACommandDoesGoToTheModel(): void
     {
-        foreach (['hello there', '/definitely-not-a-command', '/new-picker', '/docs'] as $draft) {
+        foreach (['hello there'] as $draft) {
             $next = $this->submit($draft);
 
             $this->assertTrue($next->inFlight, "{$draft} must be sent to the model");
@@ -160,6 +160,28 @@ final class SlashDispatchTest extends TestCase
                 [$draft],
                 array_map(static fn(Message $m): string => $m->content, $this->added($next)),
                 "{$draft} must land in history as the prompt it is",
+            );
+        }
+    }
+
+    /**
+     * The other half of the same discrimination, split out by ISS-037: drafts
+     * that LOOK like commands but name nothing are refused locally, so the
+     * inventory's `inFlight` signal below stays a test of DISPATCH and not of
+     * whether typing a typo costs a turn. `/new-picker` and `/docs` sit here
+     * for the reason the prose list once held them: a palette twin and an
+     * unbuilt word are exactly the spellings a model turn should never buy.
+     */
+    public function testADraftThatOnlyLooksLikeACommandIsRefusedLocally(): void
+    {
+        foreach (['/definitely-not-a-command', '/new-picker', '/docs'] as $draft) {
+            $next = $this->submit($draft);
+
+            $this->assertFalse($next->inFlight, "{$draft} must not buy a model turn");
+            $this->assertStringContainsString(
+                'Nothing is named',
+                array_map(static fn(Message $m): string => (string) $m->content, $this->added($next))[0],
+                "{$draft} must meet the refusal notice",
             );
         }
     }

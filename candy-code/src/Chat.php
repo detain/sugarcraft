@@ -11209,6 +11209,22 @@ final class Chat implements Model
             if ($dispatched !== null) {
                 return $dispatched;
             }
+
+            // ISS-037: a draft whose first token LOOKS like a slash command was
+            // advertised as one and nothing claimed it. Sending it to the model
+            // spends a paid turn to answer a typo with an essay, so it is
+            // refused here instead, with the popup's own anchored matcher as the
+            // did-you-mean source. Everything else — `//text` as the declared
+            // escape, `/etc/hosts` and `/2fa` because their tokens cannot be
+            // command names, `/exit now` because `exit` is a claimed name whose
+            // `accepts()` gate declined the argument — still falls through to
+            // the prose path below, exactly as before.
+            $unknown = $this->unknownSlashNotice($text);
+            if ($unknown !== null) {
+                return [$this->mutate([
+                    'history' => [...$this->history, Message::notice($unknown)],
+                ]), null];
+            }
         }
 
         // Spend cap, evaluated AFTER dispatchCommand() on purpose: a capped
@@ -11784,8 +11800,8 @@ final class Chat implements Model
      * either rewrites `history`, writes `inFlight`, or swaps `backend` /
      * `currentSessionId`, i.e. every one of them touches state the running turn
      * is about to write. The rule therefore over-claims by exactly one class —
-     * `/notacommand`, which when idle is sent to the model as prose — and that
-     * cost is one refusal notice on a draft nothing advertises.
+     * `/notacommand`, which when idle is refused by {@see unknownSlashNotice()}
+     * (ISS-037) rather than sent as prose, and when in flight is refused here.
      *
      * THE TWO EXCEPTIONS ARE HANDLED BY THE CALLER, not here: bare `/exit` and
      * `/quit` still quit mid-turn ({@see submit()}), because they end the process
@@ -12758,9 +12774,11 @@ final class Chat implements Model
      *
      * What did change, deliberately, is that a name is no longer a PREFIX:
      * `/compactfoo` and `/rewind3` used to be swallowed by the `/compact` and
-     * `/rewind` handlers, and now go to the model like any other typo. Nothing
-     * advertised them and no test named them - the before/after table for
-     * every registry spelling is in the Phase 4 item 7 report.
+     * `/rewind` handlers. They now name nothing, and ISS-037 made "names
+     * nothing" a LOCAL refusal — {@see unknownSlashNotice()} at the tail of
+     * {@see submit()} — rather than a paid model turn about a typo. Claimed
+     * names that decline their argument (`/exit now`) are unaffected: they
+     * were prose before the prefix rule and remain prose now.
      *
      * @return array{0: self, 1: ?\Closure}|null
      *
@@ -12808,6 +12826,116 @@ final class Chat implements Model
             \SugarCraft\Code\Commands\Specs\CommandArguments::Text => $this->{$handler}($text),
             \SugarCraft\Code\Commands\Specs\CommandArguments::Parsed => $this->{$handler}($parsed->args),
         };
+    }
+
+    /**
+     * The ISS-037 refusal notice for a draft that LOOKS like an advertised
+     * slash command but is claimed by nothing, or null when the draft is not
+     * that thing.
+     *
+     * WHAT COUNTS AS unknown, as the mechanical rule it is: the first
+     * whitespace-delimited token matches `/[A-Za-z][\w:-]*` — the colon form
+     * included, with the NAME read before the colon exactly as `CommandParser`
+     * reads it — and that name is claimed by no built-in spelling, byte-exact
+     * OR case-folded. The case-folded leg is what keeps `/KEYS` prose, where
+     * {@see dispatchCommand()} deliberately refuses to dispatch
+     * case-insensitively and `SlashDispatchTest` pins that for every command.
+     * No custom-command leg is needed: `submit()` reached this point only
+     * because {@see expandCustomCommand()} found nothing to expand, which for
+     * the space AND the colon spelling means no file of this session owns the
+     * name.
+     *
+     * WHY THE SUGGESTION HALF IS USUALLY QUIET, and exactly when it is not:
+     * while the "/" popup shows ANY row for the draft, Enter completes that
+     * row instead of submitting ({@see slashMenuShouldIntercept()}), so every
+     * fuzzy near-miss dies as a completion, not a refusal. The suggestion
+     * therefore fires on one shape only: the draft whose TOKEN names a real
+     * command but whose BUFFER does not — the colon form `/key:status`, whose
+     * popup query `key:status` no name contains while `key` matches `keys`. An empty query
+     * would be an honest result more often than a helpful one; the matcher
+     * earns the sentence or it stays silent.
+     *
+     * WHAT THIS NEVER TOUCHES, and the class boundary the issue drew:
+     * `//text` — the second character is not a letter, and the leading double
+     * slash is the DECLARED escape for "send this literally"; `/etc/hosts` and
+     * every other path-shaped token — `/` is not in the character class;
+     * `/2fa` and `/3d` — a command never starts with a digit; `/exit now` and
+     * `/keys foo` — claimed names whose `accepts()` gate declined the extra
+     * argument stay prose, because their prose-ness is pinned behaviour, not
+     * a typo. Everything else that reaches the tail of `submit()` still goes
+     * to the model exactly as before.
+     *
+     * WHY A NOTICE INSTEAD OF A TURN: a typo'd command reaching a model is a
+     * PAID turn spent essaying about a word the user never meant to prompt
+     * with, in the one case where the application — which owns the command
+     * list — knows for certain it was not addressed to the model.
+     */
+    private function unknownSlashNotice(string $text): ?string
+    {
+        $token = \explode("\n", \explode(' ', $text, 2)[0])[0];
+        if (preg_match('#^/([A-Za-z][\w:-]*)$#', $token, $shape) !== 1) {
+            return null;
+        }
+
+        $name = \explode(':', $shape[1], 2)[0];
+        if (\SugarCraft\Code\Commands\Specs\BuiltInCommands::forSpelling($name) !== null
+            || \SugarCraft\Code\Commands\Specs\BuiltInCommands::forSpelling(strtolower($name)) !== null
+        ) {
+            return null;
+        }
+
+        $notice = Lang::t('cmd.unknown.refused', [
+            'draft' => \SugarCraft\Code\Host\TurnController::quoteDraft($token),
+            'bare' => $name,
+        ]);
+
+        $candidates = \SugarCraft\Code\Commands\CommandRegistry::filter(
+            strtolower($name),
+            $this->slashCommandRows(),
+        );
+        foreach ($candidates as $candidate) {
+            // A palette-only row is not a spelling the popup advertised, so
+            // "did you mean" may not recommend typing it.
+            if ($candidate->slashVisible) {
+                $notice .= ' ' . Lang::t('cmd.unknown.did_you_mean', ['name' => $candidate->name]);
+                break;
+            }
+        }
+
+        // A word that NAMES a skill is the other thing the user may have meant
+        // — and skills never dispatch from a typed `/name`, so this half of
+        // the notice only says where the skill lives. The walk is Stage-1
+        // manifests on a refused submit, never per keystroke.
+        $skillNames = $this->userInvocableSkillNames();
+        if ($skillNames !== [] && in_array(strtolower($name), $skillNames, true)) {
+            $notice .= ' ' . Lang::t('cmd.unknown.skill-namesake', ['name' => $name]);
+        }
+
+        return $notice;
+    }
+
+    /**
+     * The lowercased names of the skills a user may invoke, read fresh from
+     * disk (Stage-1 manifests only). Fail-open to an empty roster: a skill
+     * tree that cannot be walked must not turn a refusal notice into an
+     * error, and the notice's skill half is a courtesy, not a claim.
+     *
+     * @return list<string>
+     */
+    private function userInvocableSkillNames(): array
+    {
+        try {
+            $names = [];
+            foreach ((new \SugarCraft\Code\Skills\SkillLoader())->loadAllManifests($this->projectRoot()) as $manifest) {
+                if (($manifest['userInvocable'] ?? false) === true) {
+                    $names[] = strtolower((string) ($manifest['name'] ?? ''));
+                }
+            }
+
+            return $names;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

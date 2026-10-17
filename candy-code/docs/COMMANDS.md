@@ -459,16 +459,25 @@ record is re-stamped with the new owner under a lock, so two launches started
 together cannot both adopt one daemon. A record is deleted when its session
 settles, and the index directory goes with its last record.
 
-Two guards apply to every arm, and both fall through to the model rather than
-guess. A draft must begin with the canonical spelling verbatim, so `/KEYS` is
-prose and `/compactfoo` is a prompt about foo rather than a mistyped `/compact`.
-And five commands — `exit`, `quit`, `keys`, `help`, `clear` — fire only when the
+Two guards apply to every arm, and neither guesses. A draft must begin with the
+canonical spelling verbatim, so `/KEYS` is prose. And five commands — `exit`, `quit`, `keys`, `help`, `clear` — fire only when the
 draft is exactly `/name`, because `/help me name this variable` is a request and
 not a command list. `permissions` sits below that block deliberately despite
 looking like its neighbour, and `rules` too: mis-routing those two is worse than
 answering a question loosely, because `/permissions rules` would ask the model
 about a gate it cannot see and answer plausibly, and `/rules terse` would never
 reach the toggle.
+
+A prose fall-through still has a floor (ISS-037): a first token shaped like a
+command — `/[A-Za-z][\w:-]*` — that no built-in spelling and no session command
+file claims is REFUSED with a notice, not dispatched as a prompt, because the
+application owns the command list and knows the word was not addressed to the
+model. The popup's anchored matcher writes the "did you mean" sentence when it
+has a vote. The escape and the survivors are deliberate: `//text` sends the
+line literally, and `/etc/hosts`, `/2fa` and `/exit now` reach the model because
+their names are not command-shaped or are claimed and declined. A word that
+names a SKILL is still refused — skills are not typed as slash commands — and
+the notice says where to find it.
 
 A name ends at the first space or `:`, so `/rename:Release prep` is the same
 command as `/rename Release prep`. The arms that read their argument as raw text

@@ -134,10 +134,11 @@ final class CustomCommandDispatchTest extends TestCase
 
     /**
      * The negative control for every test above and below: WITHOUT a loader the
-     * same draft is ordinary prose. This is what the whole repo did before this
-     * step, so a green suite here with the wiring removed would prove nothing.
+     * same draft runs NOTHING. Before ISS-037 its prose travelled to the model
+     * unexpanded; either way a green suite here with the wiring removed would
+     * prove nothing, which is why this test exists.
      */
-    public function testWithoutALoaderTheSameDraftIsSentVerbatim(): void
+    public function testWithoutALoaderTheSameDraftRunsNothing(): void
     {
         $this->projectCommand('review', 'Review the diff and be blunt.');
 
@@ -148,7 +149,14 @@ final class CustomCommandDispatchTest extends TestCase
             projectRoot: $this->project,
         );
 
-        $this->assertSame('/review', $this->sent($this->submit('/review', $chat)));
+        // ISS-037 moved this draft out of "verbatim prose": an unclaimed
+        // `/word` is refused locally. What the control still proves is the
+        // ORIGINAL claim — without the loader the template DOES NOT RUN: no
+        // expansion of 'Review it.' reaches the model under either shape.
+        $next = $this->submit('/review', $chat);
+        $this->assertFalse($next->inFlight, 'nothing was dispatched');
+        $refused = array_slice($next->history, 2);
+        $this->assertStringContainsString('Nothing is named', $refused[0]->content);
     }
 
     public function testAUserTierCommandIsDispatchedToo(): void
@@ -172,11 +180,18 @@ final class CustomCommandDispatchTest extends TestCase
         $this->assertSame('Deploy to staging: eu-west', $this->sent($this->submit('/deploy/staging eu-west')));
     }
 
-    public function testAnUnknownSlashDraftStillFallsThroughToTheModel(): void
+    public function testAnUnknownSlashDraftIsRefusedRatherThanPrompted(): void
     {
         $this->projectCommand('review', 'Review the diff.');
 
-        $this->assertSame('/nosuchthing arg', $this->sent($this->submit('/nosuchthing arg')));
+        // ISS-037: the spaced unknown is refused locally, exactly like the
+        // colon form above; `UnknownSlashCommandTest` owns the boundary.
+        $next = $this->submit('/nosuchthing arg');
+        $this->assertFalse($next->inFlight);
+        $this->assertStringContainsString(
+            'Nothing is named',
+            array_slice($next->history, 2)[0]->content,
+        );
     }
 
     // ── substitution ─────────────────────────────────────────────────────
@@ -390,7 +405,13 @@ final class CustomCommandDispatchTest extends TestCase
         $chat = $this->chat('/pwn', $loader);
 
         $this->assertSame([], $chat->customCommands(), 'nothing under the link becomes a command');
-        $this->assertSame('/pwn', $this->sent($this->submit('/pwn', $chat)), 'and typing it is ordinary prose');
+        // ISS-037 turned this half of the story: with the directory refused the
+        // file is no command at all, and an unclaimed `/word` is refused
+        // locally rather than becoming a prompt nobody wrote.
+        $next = $this->submit('/pwn', $chat);
+        $this->assertFalse($next->inFlight, 'and typing it neither runs nor costs a turn');
+        $refused = array_slice($next->history, 2);
+        $this->assertStringContainsString('Nothing is named `/pwn`', $refused[0]->content);
 
         $refusals = $loader->refusedDirectories();
         $this->assertArrayHasKey($this->project . '/.candy-code/commands', $refusals);
@@ -506,12 +527,22 @@ final class CustomCommandDispatchTest extends TestCase
         );
     }
 
-    /** A colon form naming nothing on disk is still ordinary prose. */
-    public function testAnUnknownColonFormStillFallsThroughToTheModel(): void
+    /**
+     * A colon form naming nothing on disk is NO LONGER ordinary prose: ISS-037
+     * refuses it locally (`UnknownSlashCommandTest` carries the full boundary),
+     * so this file's negative control pins that the refusal replaced the
+     * wasted turn without the file commands around it changing at all.
+     */
+    public function testAnUnknownColonFormIsRefusedRatherThanPrompted(): void
     {
         $this->projectCommand('review', 'Review it.');
 
-        $this->assertSame('/nosuchthing:x', $this->sent($this->submit('/nosuchthing:x')));
+        $next = $this->submit('/nosuchthing:x');
+        $this->assertFalse($next->inFlight);
+
+        $added = array_slice($next->history, 2);
+        $this->assertStringContainsString('Nothing is named', $added[0]->content);
+        $this->assertSame('Review it.', $this->sent($this->submit('/review')));
     }
 
     // ── the control plane is not overridable ─────────────────────────────
