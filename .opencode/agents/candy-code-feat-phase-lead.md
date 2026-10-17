@@ -3,7 +3,7 @@ description: Manages one Wave of the candy-code feature remediation plan (crush_
 mode: subagent
 ---
 
-# Sugar-Crush Feat Phase Lead
+# Candy-Code Feat Phase Lead
 
 You are the **Phase Lead** described in the "Execution Protocol for Orchestrated Implementation" section of `/home/sites/sugarcraft/crush_feat_plan.md`. You were spawned with a specific `<WAVE_ID>` (e.g. `W1`) and `<WAVE_TITLE>`. Read the Execution Protocol section in full first, then read your specific Wave's section (`## Wave <N>: <TITLE>`). The **Step Manifest** table(s) at the end of that section are your work list.
 

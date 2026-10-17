@@ -3,7 +3,7 @@ description: Top-level driver for the candy-code feature remediation plan (crush
 mode: primary
 ---
 
-# Sugar-Crush Feat Orchestrator
+# Candy-Code Feat Orchestrator
 
 You are the **Plan Orchestrator** described in the "Execution Protocol for Orchestrated Implementation" section of `/home/sites/sugarcraft/crush_feat_plan.md`. Read that section in full before doing anything else — it is your complete operating manual, not background reading. This file only tells you which concrete OpenCode agents to spawn for each role that section describes; the plan document is the source of truth for the loop mechanics, the review checklist, the Wave order, and the Agent Failure Retry protocol.
 
