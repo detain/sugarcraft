@@ -211,3 +211,8 @@ redraws are NOT part of this plan. Each entry records what still shows the pre-r
   the web suite is intentionally red between 8A and 8B. <!-- @rename-keep -->
 - `sugar-core/src/Util/LegacyPaths.php` docblock line 13 self-garbled to <!-- @rename-keep -->
   `~/.candy-code -> ~/.candy-code` by an earlier batch's own sweep (cosmetic, one word). <!-- @rename-keep -->
+- `ansi/sugarcraft/3-sugarcraft-x-crush-splash.ansi` keeps `crush` in its <!-- @rename-keep -->
+  filename and JSON keys: the art paints the frozen SUGAR-CRUSH x SACRED-CRAFT <!-- @rename-keep -->
+  lockup (C.3 content-frozen, R4.9 class). Its sibling volcano piece already <!-- @rename-keep -->
+  moved to `4-candy-code-volcano.ansi`; rename the splash only together with <!-- @rename-keep -->
+  a redrawn lockup. <!-- @rename-keep -->
