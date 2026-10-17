@@ -43,10 +43,10 @@ final class ReadBinaryScanTest extends TestCase
         @rmdir($this->dir);
     }
 
-    private function file(string $name, string $contents): string
+    private function file(string $name, string $content): string
     {
         $path = $this->dir . '/' . $name;
-        file_put_contents($path, $contents);
+        file_put_contents($path, $content);
 
         return $path;
     }

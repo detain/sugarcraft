@@ -33,7 +33,7 @@ final class AuditHookRedactionRotationTest extends TestCase
      * 40 characters from the bearer pattern's alphabet, comfortably past
      * its `{16,}`. Deterministic: this fixture is diffed by eye.
      */
-    private const TOKEN = 'Zk9q7Tm2LpVx8Rn4Wc6Yh1Bd3Sg5Fj7Kl0Pi2Qt';
+    private const LEAK_PROBE_TOKEN = 'Zk9q7Tm2LpVx8Rn4Wc6Yh1Bd3Sg5Fj7Kl0Pi2Qt';
 
     protected function setUp(): void
     {
@@ -76,11 +76,11 @@ final class AuditHookRedactionRotationTest extends TestCase
         $log = $this->tempDir . '/audit.log';
         $hook = new AuditHook($log);
 
-        $hook->execute($this->context(output: 'Authorization: Bearer ' . self::TOKEN . ' trailing noise'));
+        $hook->execute($this->context(output: 'Authorization: Bearer ' . self::LEAK_PROBE_TOKEN . ' trailing noise'));
 
         $line = (string) file_get_contents($log);
         self::assertStringContainsString('Bearer ' . SecretRedactor::MARKER, $line);
-        self::assertStringNotContainsString(self::TOKEN, $line);
+        self::assertStringNotContainsString(self::LEAK_PROBE_TOKEN, $line);
     }
 
     /**
@@ -95,7 +95,7 @@ final class AuditHookRedactionRotationTest extends TestCase
         // boundary before `Bearer`, the `{16,}` pattern never matches, and
         // both legs of this pair "pass" on an unscrubbed string.
         $padding = str_repeat('a', 189) . ' ';
-        $text = $padding . 'Bearer ' . self::TOKEN;
+        $text = $padding . 'Bearer ' . self::LEAK_PROBE_TOKEN;
 
         $redactThenCut = mb_strcut(
             SecretRedactor::new()->redact($text),
@@ -107,9 +107,9 @@ final class AuditHookRedactionRotationTest extends TestCase
             mb_strcut($text, 0, AuditHook::OUTPUT_EXCERPT_BYTES, 'UTF-8'),
         );
 
-        self::assertStringNotContainsString(self::TOKEN, $redactThenCut);
-        self::assertStringNotContainsString(substr(self::TOKEN, 0, 8), $redactThenCut, 'no bearer characters at all may survive the scrubbed-and-cut excerpt');
-        self::assertStringContainsString('Bearer ' . substr(self::TOKEN, 0, 3), $cutThenRedact, 'the cut-first composition must be the one that leaks, or this pair pins nothing');
+        self::assertStringNotContainsString(self::LEAK_PROBE_TOKEN, $redactThenCut);
+        self::assertStringNotContainsString(substr(self::LEAK_PROBE_TOKEN, 0, 8), $redactThenCut, 'no bearer characters at all may survive the scrubbed-and-cut excerpt');
+        self::assertStringContainsString('Bearer ' . substr(self::LEAK_PROBE_TOKEN, 0, 3), $cutThenRedact, 'the cut-first composition must be the one that leaks, or this pair pins nothing');
     }
 
     /**
@@ -124,11 +124,11 @@ final class AuditHookRedactionRotationTest extends TestCase
         $log = $this->tempDir . '/audit.log';
         $hook = new AuditHook($log);
 
-        $hook->execute($this->context(output: str_repeat('a', 189) . ' Bearer ' . self::TOKEN));
+        $hook->execute($this->context(output: str_repeat('a', 189) . ' Bearer ' . self::LEAK_PROBE_TOKEN));
 
         $line = (string) file_get_contents($log);
         self::assertStringContainsString('Bearer [RE', $line, 'the marker must have been laid down before the blade fell');
-        self::assertStringNotContainsString('Bearer ' . substr(self::TOKEN, 0, 3), $line, 'no token characters may ride out of a straddling excerpt');
+        self::assertStringNotContainsString('Bearer ' . substr(self::LEAK_PROBE_TOKEN, 0, 3), $line, 'no token characters may ride out of a straddling excerpt');
     }
 
     public function testTheInputFieldIsScrubbed(): void
@@ -137,12 +137,12 @@ final class AuditHookRedactionRotationTest extends TestCase
         $hook = new AuditHook($log);
 
         $hook->execute($this->context(
-            input: '{"command":"curl -H \\"Authorization: Bearer ' . self::TOKEN . '\\" https://api.example/v1"}',
+            input: '{"command":"curl -H \\"Authorization: Bearer ' . self::LEAK_PROBE_TOKEN . '\\" https://api.example/v1"}',
         ));
 
         $line = (string) file_get_contents($log);
         self::assertStringContainsString('Bearer ' . SecretRedactor::MARKER, $line);
-        self::assertStringNotContainsString(self::TOKEN, $line);
+        self::assertStringNotContainsString(self::LEAK_PROBE_TOKEN, $line);
         // Ordinary content rides through untouched — the redactor is not a
         // deny-by-default mangler, and a test that only proves redaction
         // cannot tell that from over-redaction.
@@ -166,7 +166,7 @@ final class AuditHookRedactionRotationTest extends TestCase
     {
         $log = $this->tempDir . '/audit.log';
         $hook = new AuditHook($log);
-        $reason = 'classifier saw Authorization: Bearer ' . self::TOKEN . ' in the command line';
+        $reason = 'classifier saw Authorization: Bearer ' . self::LEAK_PROBE_TOKEN . ' in the command line';
 
         self::assertTrue($hook->recordDenial($this->context(), DenialKind::Refused, $reason));
         self::assertTrue($hook->recordWithheld($this->context(), $reason, 'secret-scan'));
@@ -175,7 +175,7 @@ final class AuditHookRedactionRotationTest extends TestCase
         self::assertCount(2, $lines);
         foreach ($lines as $line) {
             self::assertStringContainsString('Bearer ' . SecretRedactor::MARKER, $line);
-            self::assertStringNotContainsString(self::TOKEN, $line);
+            self::assertStringNotContainsString(self::LEAK_PROBE_TOKEN, $line);
         }
         self::assertStringContainsString('=! DENY refused:', (string) $lines[0]);
         self::assertStringContainsString('=! WITHHELD "secret-scan":', (string) $lines[1]);
