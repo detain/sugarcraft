@@ -362,9 +362,11 @@ final class Dispatcher implements MessageHandler
             if ($request->hasId) {
                 $client->send(JsonRpc::error($request->id, $e));
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // The message may carry a path, a prompt or a secret: the client
-            // gets the code and the kind, never the text.
+            // gets the code and the kind, never the text — but the cause goes
+            // to the server's log, which is where SERVER.md promised it (ISS-057).
+            $this->context->logError($e, \sprintf('%s failed', $spec->name ?? $request->method));
             if ($request->hasId) {
                 $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')));
             }

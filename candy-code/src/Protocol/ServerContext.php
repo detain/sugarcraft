@@ -11,6 +11,7 @@ use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 
@@ -55,13 +56,17 @@ final class ServerContext
 
     private readonly float $startedAt;
 
-    /** @param \Closure(): float $clock */
+    /**
+     * @param \Closure(): float          $clock
+     * @param (\Closure(string): void)|null $log the server's log sink; internal failures reach the client as codes only, the cause comes here (ISS-057)
+     */
     private function __construct(
         private readonly SessionHub $hub,
         private readonly ServerConfig $config,
         private readonly string $version,
         private readonly LoopInterface $loop,
         private readonly \Closure $clock,
+        private readonly ?\Closure $log = null,
     ) {
         $this->startedAt = ($this->clock)();
 
@@ -80,20 +85,38 @@ final class ServerContext
         $hub->workspace()->backgroundSupervisor?->setSpawnPermissionMode($admitted);
     }
 
-    /** @param (\Closure(): float)|null $clock */
+    /**
+     * @param (\Closure(): float)|null       $clock
+     * @param (\Closure(string): void)|null  $log
+     */
     public static function new(
         SessionHub $hub,
         ServerConfig $config,
         string $version = 'dev',
         ?LoopInterface $loop = null,
         ?\Closure $clock = null,
+        ?\Closure $log = null,
     ): self {
-        return new self($hub, $config, $version, $loop ?? Loop::get(), $clock ?? static fn (): float => \microtime(true));
+        return new self($hub, $config, $version, $loop ?? Loop::get(), $clock ?? static fn (): float => \microtime(true), $log);
     }
 
     public function hub(): SessionHub
     {
         return $this->hub;
+    }
+
+    /**
+     * One swallowed internal failure, rendered for the server log (ISS-057).
+     * Callers that hide the cause from the client — the `-32099` arm of the
+     * dispatcher — owe it a line here; without a sink the failure stays
+     * exactly as silent as it was before.
+     */
+    public function logError(\Throwable $e, string $prefix = 'internal error'): void
+    {
+        if ($this->log === null) {
+            return;
+        }
+        ($this->log)(ErrorLog::line($e, $prefix));
     }
 
     public function config(): ServerConfig

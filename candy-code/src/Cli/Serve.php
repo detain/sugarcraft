@@ -380,7 +380,7 @@ final class Serve
         // the session database and the forked turns' notice inbox, neither of
         // which may be shared with the process that returns to the shell.
         try {
-            $protocol = self::protocol($config, $loop);
+            $protocol = self::protocol($config, $loop, $log);
         } catch (\Throwable $e) {
             $state->releaseLock();
             $reason = Lang::t('cli.serve.workspace_unavailable', ['error' => $e->getMessage()]);
@@ -529,12 +529,14 @@ final class Serve
      * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
      * transport hands its messages to.
      */
-    private static function protocol(ServerConfig $config, LoopInterface $loop): Dispatcher
+    private static function protocol(ServerConfig $config, LoopInterface $loop, ?\Closure $log = null): Dispatcher
     {
         $workspace = Bootstrap::workspace($config->root);
         $hub = SessionHub::new($workspace, $config->maxOpenSessions, \SugarCraft\Code\Context\CompactorConfig::fromSettings(Bootstrap::readUserConfig()));
 
-        return Dispatcher::new(ServerContext::new($hub, $config, Help::versionString(), $loop));
+        // ISS-057: the dispatcher's -32099 arms hide their cause from the
+        // client; the context's log sink is where that cause lands instead.
+        return Dispatcher::new(ServerContext::new($hub, $config, Help::versionString(), $loop, null, $log));
     }
 
     /**
