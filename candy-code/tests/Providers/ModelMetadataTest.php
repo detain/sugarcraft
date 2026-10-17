@@ -336,7 +336,14 @@ final class ModelMetadataTest extends TestCase
         self::assertSame(0.004, (new OpenAIProvider($client, 'gpt-4o', ['gpt-4o' => ['input' => 4, 'output' => 8]], null, null, $db))->costPer1kTokens('gpt-4o', 'input'));
     }
 
-    public function testTheFactoryHandsItsDatabaseToCustomAnthropicAndOpenAi(): void
+    /**
+     * ISS-023 moved the `anthropic` type off the database: the native
+     * Messages provider ships its own family price and window tables, like
+     * Vertex and Bedrock, so the factory's database reaches `custom` and
+     * `openai` only. The anthropic arm below asserts the NEW source of
+     * truth (1M for the 4-6 family, not the litellm row's 200K).
+     */
+    public function testTheFactoryHandsItsDatabaseToCustomAndOpenAiButAnthropicSizesFromItsOwnTable(): void
     {
         $factory = new ProviderFactory(ModelMetadata::fromTable(self::litellm()));
 
@@ -347,7 +354,7 @@ final class ModelMetadataTest extends TestCase
         self::assertSame(64_000, $sized->contextWindow(), 'the provider block outranks the database');
 
         $anthropic = $factory->create(['type' => 'anthropic', 'apiKey' => 'k', 'model' => 'claude-sonnet-4-6']);
-        self::assertSame(200_000, $anthropic->contextWindow());
+        self::assertSame(1_000_000, $anthropic->contextWindow(), 'the shipped claude-sonnet-4-6 row answers, not the database 200K spelling');
         self::assertEqualsWithDelta(0.015, $anthropic->costPer1kTokens('claude-sonnet-4-6', 'output'), 1e-12, 'Anthropic bills; it is no longer a fake $0');
 
         $openai = $factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-5-made-up']);

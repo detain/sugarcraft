@@ -51,7 +51,7 @@ namespace SugarCraft\Code;
  * live TURN: providers parse the buckets, but `CompleteResponse` carries a
  * single `$tokensUsed` and nothing else, so what arrives across it is a total.
  *
- * SIX of the seven providers know the split — read the count with its
+ * SEVEN of the eight providers know the split — read the count with its
  * domain, because stale literals of it are what drifted before.
  * {@see Providers\BedrockProvider} reads `usage.inputTokens` /
  * `usage.outputTokens`, {@see Providers\VertexProvider} reads
@@ -65,7 +65,10 @@ namespace SugarCraft\Code;
  * {@see Providers\ClaudeCodeProvider} reads the CLI's Anthropic-shaped
  * `usage.input_tokens` / `usage.output_tokens` and both cache sides too, and
  * totals all four, because the measured CLI prints no `total_tokens` and a
- * total-only read reported every real turn as 0. All six now PARSE the split
+ * total-only read reported every real turn as 0, and — since ISS-023 armed
+ * the native Messages arm — {@see Providers\AnthropicProvider} parses the
+ * same Anthropic-shaped pair through the shared
+ * {@see Providers\Concerns\AnthropicMessagesWire}. All seven now PARSE the split
  * into the buckets above and hand it whole to
  * {@see Providers\CompleteResponse::$usage}, which `Runtime`'s fold prefers;
  * `tokensUsed` stays beside it as the one-number projection. The

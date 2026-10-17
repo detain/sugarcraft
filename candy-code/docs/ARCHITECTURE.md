@@ -937,7 +937,7 @@ them on this tree:
 | `type` | Class actually built |
 |---|---|
 | `openai` | `OpenAIProvider` |
-| `anthropic` | **`CustomProvider`**, named `anthropic` |
+| `anthropic` | **`AnthropicProvider`**, native Messages wire |
 | `claude-code` | `ClaudeCodeProvider` (over `ClaudeCodeInvocation`) |
 | `sglang` | `SglangProvider` |
 | `bedrock` | `BedrockProvider` |
@@ -945,10 +945,16 @@ them on this tree:
 | `custom` | `CustomProvider` |
 
 Two rows are easy to get wrong, so they are worth stating flatly.
-`anthropic` does **not** go through `ClaudeCodeProvider`:
-`ProviderFactory::createAnthropic()` builds a Guzzle client
-carrying `x-api-key` + `anthropic-version` — the Messages API authenticates with
-those, not with a bearer token — and hands it to a `CustomProvider`. And
+`anthropic` does **not** go through `ClaudeCodeProvider`, and since ISS-023 it
+no longer goes through `CustomProvider` either:
+`ProviderFactory::createAnthropic()` returns the dedicated `AnthropicProvider`,
+whose client carries `x-api-key` + `anthropic-version` — the Messages API
+authenticates with those, not with a bearer token — over the native
+`/v1/messages` wire shared with Vertex's `:rawPredict` arm via
+`AnthropicMessagesWire`. Because that class implements `MarksPromptCache`, the
+engine-side cache-health warnings are live for this type too, and the family
+price and window tables ship in the provider instead of being looked up in the
+model database. And
 `claude-code` is a **separate, seventh** provider, not an implementation detail
 of `anthropic`: `createClaudeCode()` returns the real
 `ClaudeCodeProvider`, and `php bin/candy-code models` prints

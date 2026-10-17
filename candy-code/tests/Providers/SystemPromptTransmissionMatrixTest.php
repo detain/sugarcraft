@@ -21,6 +21,7 @@ use OpenAI\Responses\Meta\MetaInformation;
 use OpenAI\Responses\StreamResponse;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
@@ -190,7 +191,11 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      *   — both through the one joiner, `systemInstruction()`;
      * - ClaudeCode turns it into a `--system-prompt` CLI argv pair
      *   (`ClaudeCodeProvider::complete()` / `ClaudeCodeProvider::completeStream()` ->
-     *   `ClaudeCodeInvocation::printModeArgs()`).
+     *   `ClaudeCodeInvocation::printModeArgs()`);
+     * - the native Anthropic arm hoists it into the `POST /v1/messages` body's
+     *   top-level `system` string (`AnthropicProvider` through the shared
+     *   `AnthropicMessagesWire::anthropicBody()`) — the same slot the Vertex
+     *   Anthropic arm uses, because it is the same wire.
      *
      * EchoProvider is deliberately absent: it is a test double with no wire —
      * it echoes a blockquote in PHP and never serializes a request payload
@@ -209,6 +214,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         OpenAIProvider::class . '#stream' => 'messages[0]',
         BedrockProvider::class . '#complete' => 'system[0].text',
         BedrockProvider::class . '#stream' => 'system[0].text',
+        AnthropicProvider::class => 'system',
         VertexProvider::class . '#anthropic' => 'system',
         VertexProvider::class . '#google' => 'instances[0].context',
         VertexProvider::class . '#gemini' => 'systemInstruction.parts[0].text',
@@ -419,6 +425,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             OpenAIProvider::class . '#stream' => ['role' => 'system', 'content' => self::SENTINEL],
             BedrockProvider::class . '#complete' => self::SENTINEL,
             BedrockProvider::class . '#stream' => self::SENTINEL,
+            AnthropicProvider::class => self::SENTINEL,
             VertexProvider::class . '#anthropic' => self::SENTINEL,
             VertexProvider::class . '#google' => self::SENTINEL,
             VertexProvider::class . '#gemini' => self::SENTINEL,
@@ -653,6 +660,13 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 $this->assertSame('ConverseStream', $streamMock->getLastCommand()->getName(), self::WRONG_BUILDER);
 
                 return $streamMock->getLastCommand()->toArray();
+
+            case AnthropicProvider::class:
+                $nativeCaptured = null;
+                $this->matrixAnthropicUnary($nativeCaptured)
+                    ->complete($this->request(model: 'claude-3-sonnet@20240229'));
+
+                return $nativeCaptured['body'];
 
             case VertexProvider::class . '#anthropic':
                 $vertexCaptured = null;
@@ -893,6 +907,77 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             [['text' => '']],
             $method->invoke($provider, $this->request('')),
         );
+    }
+
+    // =========================================================================
+    // Anthropic (native) — one body builder, `AnthropicMessagesWire::anthropicBody()`,
+    // shared by complete() and completeStream(); hoists into the top-level
+    // `system` string exactly like the Vertex Anthropic arm. ISS-023.
+    // =========================================================================
+
+    public function testAnthropicNativeTransmitsSystemPromptInTheTopLevelSystemFieldOnBothPaths(): void
+    {
+        // Driven on a Claude 3 Sonnet id so the map row pins the PLAIN string
+        // slot; prompt caching is orthogonal to transmission position, and a
+        // marked model would relocate the text into `system[0].text`. The
+        // marked modern shape is pinned by its own leg at the end.
+        $captured = null;
+        $provider = $this->matrixAnthropicUnary($captured);
+        $provider->complete($this->request(model: 'claude-3-sonnet@20240229'));
+
+        $this->assertSame(self::SENTINEL, $captured['body']['system']);
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $captured['body'],
+                $this->contractSlotFor(AnthropicProvider::class),
+            ),
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Hi']]]],
+            $captured['body']['messages'],
+            'a `system` role inside messages is a 400 on the Anthropic API',
+        );
+        $this->assertSame(1, substr_count((string) json_encode($captured['body']), self::SENTINEL));
+
+        $streamed = null;
+        $streamProvider = $this->matrixAnthropicStreamed($streamed);
+        iterator_to_array($streamProvider->completeStream($this->request(model: 'claude-3-sonnet@20240229')));
+
+        $this->assertSame(self::SENTINEL, $streamed['body']['system']);
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $streamed['body'],
+                $this->contractSlotFor(AnthropicProvider::class),
+            ),
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Hi']]]],
+            $streamed['body']['messages'],
+        );
+        $this->assertSame(1, substr_count((string) json_encode($streamed['body']), self::SENTINEL));
+
+        // The native arm's production default (a cache-capable modern model)
+        // lands the same sentinel one level deeper, inside the marked block
+        // array ISS-023 arms by default. Explicit spelling, NOT the map row:
+        // the slot depends on cache marking, and the map pins one truth per row.
+        $marked = null;
+        $this->matrixAnthropicUnary($marked)->complete($this->request(model: 'claude-sonnet-4-6'));
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot($marked['body'], 'system[0].text'),
+        );
+        $this->assertSame(1, substr_count((string) json_encode($marked['body']), self::SENTINEL));
+    }
+
+    public function testAnthropicNativeNullSystemPromptTransmitsNothing(): void
+    {
+        $captured = null;
+        $provider = $this->matrixAnthropicUnary($captured);
+        $provider->complete($this->request(systemPrompt: null, model: 'claude-sonnet-4-6'));
+
+        $this->assertArrayNotHasKey('system', $captured['body']);
     }
 
     // =========================================================================
@@ -1287,6 +1372,39 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * @param array<string, mixed> $return
      * @param-out array<string, mixed> $captured
      */
+    private function matrixAnthropicUnary(?array &$captured): AnthropicProvider
+    {
+        $captured = ['called' => false];
+
+        return new AnthropicProvider(
+            'sk-test',
+            'https://api.anthropic.com',
+            'claude-sonnet-4-6',
+            static function (string $endpoint, array $body) use (&$captured): array {
+                $captured = ['called' => true, 'endpoint' => $endpoint, 'body' => $body];
+
+                return ['content' => [['type' => 'text', 'text' => 'ok']]];
+            },
+        );
+    }
+
+    private function matrixAnthropicStreamed(?array &$captured): AnthropicProvider
+    {
+        $captured = ['called' => false];
+
+        return new AnthropicProvider(
+            'sk-test',
+            'https://api.anthropic.com',
+            'claude-sonnet-4-6',
+            null,
+            static function (string $endpoint, array $body) use (&$captured): iterable {
+                $captured = ['called' => true, 'endpoint' => $endpoint, 'body' => $body];
+
+                return [];
+            },
+        );
+    }
+
     private function vertexProvider(array $return = [], ?array &$captured = null): VertexProvider
     {
         $captured = ['called' => false];

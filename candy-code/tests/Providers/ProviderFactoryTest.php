@@ -6,9 +6,11 @@ namespace SugarCraft\Code\Tests\Providers;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
+use SugarCraft\Code\Providers\MarksPromptCache;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\ProviderFactory;
@@ -586,17 +588,19 @@ final class ProviderFactoryTest extends TestCase
         ]);
     }
 
-    public function testCreateAnthropicCreatesCustomProvider(): void
+    public function testCreateAnthropicCreatesTheNativeMessagesProvider(): void
     {
-        // Anthropic uses CustomProvider internally
+        // ISS-023: the type key answers with the dedicated Messages provider,
+        // not an OpenAI-compat CustomProvider, so MarksPromptCache (and with
+        // it the engine-side cache-health warnings) reaches this arm.
         $provider = $this->factory->create([
             'type' => 'anthropic',
             'apiKey' => 'test-anthropic-key',
             'model' => 'claude-sonnet-4-6',
         ]);
 
-        // Anthropic returns a CustomProvider (openAiCompatible)
-        $this->assertInstanceOf(CustomProvider::class, $provider);
+        $this->assertInstanceOf(AnthropicProvider::class, $provider);
+        $this->assertInstanceOf(MarksPromptCache::class, $provider);
         $this->assertInstanceOf(ProviderInterface::class, $provider);
         $this->assertSame('anthropic', $provider->name());
     }

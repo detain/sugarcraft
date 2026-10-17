@@ -18,6 +18,7 @@ use OpenAI\Responses\Chat\CreateStreamedResponse as ChatCreateStreamedResponse;
 use OpenAI\Responses\Meta\MetaInformation;
 use OpenAI\Responses\StreamResponse;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
@@ -91,6 +92,7 @@ final class ProviderRequestResponseTest extends TestCase
         OpenAIProvider::class => 30,
         BedrockProvider::class => 30,
         VertexProvider::class => 30,
+        AnthropicProvider::class => 30,
         ClaudeCodeProvider::class => 0,
     ];
 
@@ -742,6 +744,39 @@ final class ProviderRequestResponseTest extends TestCase
         $this->assertSame(self::STREAMED_USAGE_CONTRACT[VertexProvider::class], $sum);
     }
 
+    public function testAnthropicNativeStreamedUsageSplitsAcrossTwoEventsLikeVertex(): void
+    {
+        // ISS-023: the native Messages arm rides the SAME wire trait, so the
+        // usage contract must match Vertex's exactly — 20 input on
+        // message_start, 10 output on the terminal message_delta, summed to
+        // 30 across disjoint usage-bearing chunks.
+        $events = [
+            ['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 20]]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'Hel']],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'lo']],
+            ['type' => 'message_delta', 'usage' => ['output_tokens' => 10]],
+            ['type' => 'message_stop'],
+        ];
+
+        $provider = new AnthropicProvider(
+            'sk-test',
+            'https://api.anthropic.com',
+            'claude-sonnet-4-6',
+            null,
+            static function (string $endpoint, array $body) use ($events): iterable {
+                yield from $events;
+            },
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(
+            new CompleteRequest(model: 'claude-sonnet-4-6', messages: [new UserMessage('hi')])
+        ));
+
+        $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
+
+        $this->assertSame(self::STREAMED_USAGE_CONTRACT[AnthropicProvider::class], $sum);
+    }
+
     public function testClaudeCodeStreamedUsageIsPerDeltaNotCumulative(): void
     {
         // The stream-json wire format carries NO usage at all, and parseChunk
@@ -1072,17 +1107,21 @@ final class ProviderRequestResponseTest extends TestCase
     }
 
     // =========================================================================
-    // X-31b: the `anthropic` type key reaches /v1/chat/completions, with tools
+    // ISS-023: the `anthropic` type key reaches the native /v1/messages
+    // endpoint, with tools, on both the batch and the stream wire
     // =========================================================================
 
     /**
      * The factory-built `anthropic` provider with its own Guzzle client's
      * handler swapped for canned responses and a request recorder - the base
      * URI, headers and body under test are exactly what the factory built.
+     * X-31b opened this block when the type was an OpenAI-compat shim; the
+     * mock plumbing is unchanged, every wire expectation now names the
+     * Anthropic Messages protocol the native provider speaks.
      *
      * @param array<int, array<string, mixed>> $history filled by reference
      */
-    private function anthropicOverMock(string $baseUrl, array &$history, Response ...$responses): CustomProvider
+    private function anthropicOverMock(string $baseUrl, array &$history, Response ...$responses): AnthropicProvider
     {
         $provider = (new ProviderFactory())->create([
             'type' => 'anthropic',
@@ -1090,9 +1129,9 @@ final class ProviderRequestResponseTest extends TestCase
             'baseUrl' => $baseUrl,
             'model' => 'claude-sonnet-4-6',
         ]);
-        $this->assertInstanceOf(CustomProvider::class, $provider);
+        $this->assertInstanceOf(AnthropicProvider::class, $provider);
 
-        $client = (new \ReflectionProperty(CustomProvider::class, 'httpClient'))->getValue($provider);
+        $client = (new \ReflectionProperty(AnthropicProvider::class, 'httpClient'))->getValue($provider);
         $this->assertInstanceOf(Client::class, $client);
         $stack = $client->getConfig('handler');
         $this->assertInstanceOf(HandlerStack::class, $stack);
@@ -1102,19 +1141,18 @@ final class ProviderRequestResponseTest extends TestCase
         return $provider;
     }
 
-    public function testTheAnthropicTypeSendsToolsToTheV1ChatCompletionsEndpoint(): void
+    public function testTheAnthropicTypeSendsToolsToTheMessagesEndpoint(): void
     {
         $history = [];
         $provider = $this->anthropicOverMock('https://api.anthropic.com', $history, new Response(200, [], (string) json_encode([
-            'choices' => [[
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '',
-                    'tool_calls' => [['id' => 'toolu_1', 'type' => 'function', 'function' => ['name' => 'P10S1GuidanceDouble', 'arguments' => '{}']]],
-                ],
-                'finish_reason' => 'tool_calls',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'P10S1GuidanceDouble',
+                'input' => [],
             ]],
-            'usage' => ['prompt_tokens' => 3, 'completion_tokens' => 2, 'total_tokens' => 5],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 3, 'output_tokens' => 2],
         ])));
 
         $this->assertTrue($provider->supportsFunctionCalling(), 'the type key can call tools');
@@ -1126,19 +1164,24 @@ final class ProviderRequestResponseTest extends TestCase
 
         $this->assertCount(1, $history);
         $request = $history[0]['request'];
-        $this->assertSame('https://api.anthropic.com/v1/chat/completions', (string) $request->getUri(), 'the default base was /chat/completions, a 404');
+        $this->assertSame('https://api.anthropic.com/v1/messages', (string) $request->getUri(), 'the native Messages endpoint, not the compat shim path');
         $this->assertSame('sk-ant-test', $request->getHeaderLine('x-api-key'));
         $this->assertSame('2023-06-01', $request->getHeaderLine('anthropic-version'));
         $body = json_decode((string) $request->getBody(), true);
-        $this->assertSame('P10S1GuidanceDouble', $body['tools'][0]['function']['name'] ?? null, 'the request carries the tools');
+        $this->assertSame('claude-sonnet-4-6', $body['model'] ?? null, 'the Messages body names the model (the compat body did not)');
+        $this->assertArrayNotHasKey('anthropic_version', $body, 'the protocol date is a header here, never a body key');
+        $this->assertSame('P10S1GuidanceDouble', $body['tools'][0]['name'] ?? null, 'the request carries tools in the flat Messages shape');
+        $this->assertArrayHasKey('input_schema', $body['tools'][0] ?? []);
+        $this->assertStringContainsString('cache_control', (string) $request->getBody(), 'ISS-023: the caching arm is armed on this wire too');
         $this->assertSame(['P10S1GuidanceDouble'], array_map(static fn ($c): string => $c->name(), $response->toolCalls ?? []));
     }
 
     public function testTheAnthropicStreamCarriesToolsToo(): void
     {
         $history = [];
-        $sse = 'data: ' . json_encode(['choices' => [['index' => 0, 'delta' => ['content' => 'ok'], 'finish_reason' => 'stop']]]) . "\n\n"
-            . "data: [DONE]\n\n";
+        $sse = 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'ok']]) . "\n\n"
+            . 'data: ' . json_encode(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 1]]) . "\n\n"
+            . 'data: ' . json_encode(['type' => 'message_stop']) . "\n\n";
         $provider = $this->anthropicOverMock('https://api.anthropic.com', $history, new Response(200, [], $sse));
 
         iterator_to_array($provider->completeStream(new CompleteRequest(
@@ -1148,8 +1191,10 @@ final class ProviderRequestResponseTest extends TestCase
         )));
 
         $request = $history[0]['request'];
-        $this->assertSame('https://api.anthropic.com/v1/chat/completions', (string) $request->getUri());
-        $this->assertArrayHasKey('tools', json_decode((string) $request->getBody(), true));
+        $this->assertSame('https://api.anthropic.com/v1/messages', (string) $request->getUri());
+        $body = json_decode((string) $request->getBody(), true);
+        $this->assertArrayHasKey('tools', $body);
+        $this->assertTrue($body['stream'] ?? false, 'the Messages stream flag rides the body');
     }
 
     /**
@@ -1158,11 +1203,11 @@ final class ProviderRequestResponseTest extends TestCase
     public static function anthropicBases(): array
     {
         return [
-            'the API root, as the SDKs and claude-code spell it' => ['https://api.anthropic.com', 'https://api.anthropic.com/v1/chat/completions'],
-            'the root with a trailing slash' => ['https://api.anthropic.com/', 'https://api.anthropic.com/v1/chat/completions'],
-            'already /v1' => ['https://api.anthropic.com/v1', 'https://api.anthropic.com/v1/chat/completions'],
-            'already /v1/' => ['https://api.anthropic.com/v1/', 'https://api.anthropic.com/v1/chat/completions'],
-            'a proxy under a path' => ['https://gw.example/anthropic', 'https://gw.example/anthropic/v1/chat/completions'],
+            'the API root, as the SDKs and claude-code spell it' => ['https://api.anthropic.com', 'https://api.anthropic.com/v1/messages'],
+            'the root with a trailing slash' => ['https://api.anthropic.com/', 'https://api.anthropic.com/v1/messages'],
+            'already /v1' => ['https://api.anthropic.com/v1', 'https://api.anthropic.com/v1/messages'],
+            'already /v1/' => ['https://api.anthropic.com/v1/', 'https://api.anthropic.com/v1/messages'],
+            'a proxy under a path' => ['https://gw.example/anthropic', 'https://gw.example/anthropic/v1/messages'],
         ];
     }
 
@@ -1173,7 +1218,8 @@ final class ProviderRequestResponseTest extends TestCase
     {
         $history = [];
         $provider = $this->anthropicOverMock($baseUrl, $history, new Response(200, [], (string) json_encode([
-            'choices' => [['message' => ['role' => 'assistant', 'content' => 'hi'], 'finish_reason' => 'stop']],
+            'content' => [['type' => 'text', 'text' => 'hi']],
+            'stop_reason' => 'end_turn',
         ])));
 
         $provider->complete(new CompleteRequest(model: 'claude-sonnet-4-6', messages: [new UserMessage('go')]));

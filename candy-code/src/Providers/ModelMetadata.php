@@ -17,9 +17,11 @@ use SugarCraft\Code\Support\HomeDirectory;
  * prices every model from.
  *
  * WHAT IT REPLACES. {@see CustomProvider} answered a fixed 128,000-token
- * window and $0 for every model behind it — including the `anthropic` type,
- * which bills real money, and models whose real window is 200k or 1M, so the
- * context tiers fired at the wrong point. {@see OpenAIProvider} answered 0
+ * window and $0 for every model behind it — which until ISS-023 included
+ * the `anthropic` type, whose models bill real money — and models whose real
+ * window is 200k or 1M, so the context tiers fired at the wrong point. The
+ * native `AnthropicProvider` carries its own tables and does not consult this
+ * one; `openai` and `custom` are its only provider readers. {@see OpenAIProvider} answered 0
  * ("unknown") for a model its built-in table did not list. Both now consult
  * this database between the operator's own settings and their built-in
  * fallbacks: `contextWindow` / `modelPrices` setting > this database >

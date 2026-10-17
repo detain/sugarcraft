@@ -443,8 +443,10 @@ but they consume slots from the same cap: `CacheBreakpoints::BUDGET_WITH_AUTOMAT
 explicit budget minus one. Input already breaching the cap on foreign marks throws rather than
 returning a doomed request.
 
-**It is armed on one wire: Claude on `vertex`** (audit A15). `VertexProvider` hands every
-Anthropic-shaped request body to `apply()` just before it is sent, which is every step of a turn.
+**It is armed on two wires: Claude on `vertex` and the native `anthropic` arm** (audit A15,
+ISS-023). The shared `AnthropicMessagesWire` trait hands every Anthropic-shaped request body to
+`apply()` just before it is sent — on `VertexProvider`'s `:rawPredict` and on
+`AnthropicProvider`'s `POST /v1/messages` — which is every step of a turn.
 The system prompt rides in as a leading `role: system` turn **in block form** and is lifted back
 into the top-level `system` field afterwards, so the mark survives — the hazard this page used to
 record (the string arm discards in-messages system rows) is closed by never using the string arm
@@ -457,11 +459,11 @@ No other provider marks anything: `openai` and `sglang` cache server-side withou
   builds the provider. Off means `apply()` is not called at all, so the body is byte-identical to
   an unmarked one. `CacheBreakpoints::disabledFromEnvironment()` stays the only reader of the
   variable, static so `apply()` itself stays environment-free.
-- Models that never offered caching (Claude 3 Sonnet on Vertex) are not marked.
+- Models that never offered caching (Claude 3 Sonnet on the Anthropic wires) are not marked.
 - `CacheBreakpoints::observeCacheHealth()` is fed by the turn loop: `EngineBackend` hands it
   every provider response's `Usage` (each step, and a stopped turn's summary request) through a
   backend-owned `Backend\CacheHealthWatch`, but only while the provider says the model's requests
-  carry marks (`Providers\MarksPromptCache`, implemented by `vertex` and `bedrock`). The third
+  carry marks (`Providers\MarksPromptCache`, implemented by `vertex`, `bedrock` and `anthropic`). The third
   consecutive response reporting both cache buckets at zero raises one `RuntimeNoticeSink`
   notice for the session; `openai`, `sglang`, Gemini and a provider with the marks switched off
   are never warned. On the forked TUI path the streak and the "already said" bit ride home on the

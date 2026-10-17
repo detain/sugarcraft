@@ -357,16 +357,17 @@ fails every request.
 
 `modelPrices` is that argument mirrored on the price axis rather than the size
 axis. It declares rates — **USD per 1M tokens**, `{"<model>": {"input": 7.5,
-"output": 30}}` — for models the `openai`, `vertex` or `bedrock` provider has
-no built-in price for, overriding or extending its table. (Vertex and Bedrock
-only started receiving it in audit A15; before that the unpriced-model notice
-told you to set a key those two never read.) On Vertex and Bedrock a key may
-be the raw model id or its normalised family — `claude-sonnet-4-6` covers
+"output": 30}}` — for models the `openai`, `anthropic`, `vertex` or `bedrock`
+provider has no built-in price for, overriding or extending its table. (Vertex
+and Bedrock only started receiving it in audit A15; before that the
+unpriced-model notice told you to set a key those two never read.) On Vertex,
+Bedrock and the native Anthropic arm (ISS-023) a key may be the raw model id
+or its normalised family — `claude-sonnet-4-6` covers
 `us.anthropic.claude-sonnet-4-6-v1:0` too. An optional `"cached"` rate prices
 cache-hit prompt tokens (`prompt_tokens_details.cached_tokens`) on the OpenAI
 wire; an entry without one bills them at its own `input` rate, because a named
 model's entry replaces the built-in row and its cached discount together. On
-Vertex and Bedrock the same `"cached"` rate prices cache reads
+Vertex, Bedrock and the native Anthropic arm the same `"cached"` rate prices cache reads
 (`cache_read_input_tokens`, `cacheReadInputTokens`, Gemini's
 `cachedContentTokenCount`) and a `"cacheWrite"` rate prices cache writes
 (`cache_creation_input_tokens`, `cacheWriteInputTokens`); either one left out
@@ -487,14 +488,16 @@ same money reason as `maxOutputTokens`.
   could end at the ceiling with almost no answer. With no `maxOutputTokens` the
   model's own maximum applies (65,535 on Gemini 2.5). Neither change has been
   checked against a live Gemini endpoint yet.
-- **`promptCache`** turns prompt-cache breakpoints on the `vertex` and
-  `bedrock` providers on or off (audit A15). It is on unless set to `false`.
-  On Vertex's Claude models the request marks `cache_control` on the system
+- **`promptCache`** turns prompt-cache breakpoints on the `vertex`,
+  `bedrock` and native `anthropic` providers on or off (audit A15, with
+  `anthropic` joining from ISS-023). It is on unless set to `false`.
+  On the Anthropic Messages wire — Claude models on `vertex` and every
+  `anthropic` request — the request marks `cache_control` on the system
   prompt, the last tool and the end of the conversation, re-derived on every
   step of a turn and never more than the API's limit of four. On Bedrock,
   Converse `cachePoint` blocks close the system prompt and the conversation
   (no tools are sent there). Models that never offered caching (Claude 3
-  Sonnet on Vertex, the Claude 3 family and 3.5 Sonnet on Bedrock, and any
+  Sonnet on the Anthropic wires, the Claude 3 family and 3.5 Sonnet on Bedrock, and any
   Bedrock model outside the Claude and Amazon Nova text families) are sent no
   marks, because Bedrock fails the whole request on an unsupported one. Gemini
   needs none: Gemini 2.5 caches on its own, and its cached tokens are priced

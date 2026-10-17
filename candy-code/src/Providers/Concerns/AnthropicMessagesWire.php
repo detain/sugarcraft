@@ -1324,6 +1324,91 @@ trait AnthropicMessagesWire
         return $total / 1000;
     }
     // -------------------------------------------------------------------------
+    // Shared SSE framing: both hosts answer a stream request with `data:`
+    // lines carrying one Anthropic event document each
+    // -------------------------------------------------------------------------
+    /**
+     * Reassembles a sequence of raw SSE byte chunks into decoded events.
+     *
+     * A single event can straddle two chunks, so the partial line is carried
+     * across in `$buffer`; and the stream is DRAINED at the end, because
+     * {@see decodeSseEvents()} only emits on a newline - a server that closes
+     * straight after its last `data:` line would otherwise leave that event
+     * stranded in the buffer, silently discarded when this generator returns.
+     *
+     * @param iterable<int, string> $chunks
+     * @return \Generator<int, array<string, mixed>>
+     */
+    private static function decodeSseStream(iterable $chunks): \Generator
+    {
+        $buffer = '';
+
+        foreach ($chunks as $chunk) {
+            yield from self::decodeSseEvents($chunk, $buffer);
+        }
+
+        yield from self::flushSseBuffer($buffer);
+    }
+
+    /**
+     * Splits an Anthropic SSE byte chunk into decoded events, carrying any
+     * partial trailing line over in `$buffer` for the next chunk.
+     *
+     * The `event:` lines are ignored on purpose - the payload repeats the
+     * event name in its own `type` field, which is what
+     * {@see parseAnthropicChunk()} dispatches on.
+     *
+     * KNOWN LIMITATION: the SSE spec allows one event to carry several `data:`
+     * lines that the client concatenates with "\n". This decoder treats every
+     * `data:` line as a complete payload of its own, so such an event would be
+     * dropped as undecodable JSON. Anthropic never emits multi-line `data:` -
+     * each event is a single JSON document on one line - so nothing today hits
+     * it, and folding lines would need an event-boundary state machine
+     * (blank-line delimited) rather than the line loop below.
+     *
+     * @return \Generator<int, array<string, mixed>>
+     */
+    private static function decodeSseEvents(string $chunk, string &$buffer): \Generator
+    {
+        $buffer .= $chunk;
+
+        while (($newline = strpos($buffer, "\n")) !== false) {
+            $line = trim(substr($buffer, 0, $newline));
+            $buffer = substr($buffer, $newline + 1);
+
+            if (!str_starts_with($line, 'data:')) {
+                continue;
+            }
+
+            $payload = trim(substr($line, 5));
+            if ($payload === '' || $payload === '[DONE]') {
+                continue;
+            }
+
+            $decoded = json_decode($payload, true);
+            if (is_array($decoded)) {
+                yield $decoded;
+            }
+        }
+    }
+
+    /**
+     * End-of-stream drain for {@see decodeSseEvents()}.
+     *
+     * A well-behaved SSE server terminates its last event with "\n\n", but
+     * nothing guarantees it - a connection closed straight after the final
+     * `data:` line leaves that event sitting unread in `$buffer`. Terminating
+     * the residue and re-entering the same decoder is deliberate: the trailing
+     * event then goes through the identical `data:` / `[DONE]` / JSON handling
+     * as every other, rather than a second parallel parse.
+     *
+     * @return \Generator<int, array<string, mixed>>
+     */
+    private static function flushSseBuffer(string &$buffer): \Generator
+    {
+        yield from self::decodeSseEvents("\n", $buffer);
+    }
+    // -------------------------------------------------------------------------
     // Per-host hooks the shared wire delegates to (see trait docblock)
     // -------------------------------------------------------------------------
 

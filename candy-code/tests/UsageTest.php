@@ -760,14 +760,14 @@ final class UsageTest extends TestCase
         sort($totalOnly);
 
         $this->assertSame(
-            ['BedrockProvider', 'ClaudeCodeProvider', 'CustomProvider', 'OpenAIProvider', 'SglangProvider', 'VertexProvider'],
+            ['AnthropicProvider', 'BedrockProvider', 'ClaudeCodeProvider', 'CustomProvider', 'OpenAIProvider', 'SglangProvider', 'VertexProvider'],
             $split,
             'the set of providers that read a separate input/output usage key changed',
         );
         $this->assertCount(
-            7,
+            8,
             [...$split, ...$totalOnly],
-            'the provider count the docblock quotes ("six of the seven") changed',
+            'the provider count the docblock quotes ("seven of the eight") changed',
         );
 
         // The docblock's two sides, read out of it by their own markers rather
@@ -775,11 +775,11 @@ final class UsageTest extends TestCase
         // for either list.
         $docblock = (string) (new \ReflectionClass(Usage::class))->getDocComment();
         $this->assertMatchesRegularExpression(
-            '/SIX of the seven providers know the split(.*?)remaining one \(([^)]*)\)/s',
+            '/SEVEN of the eight providers know the split(.*?)remaining one \(([^)]*)\)/s',
             $docblock,
             'the docblock no longer states the two-sided enumeration this test pins',
         );
-        preg_match('/SIX of the seven providers know the split(.*?)remaining one \(([^)]*)\)/s', $docblock, $m);
+        preg_match('/SEVEN of the eight providers know the split(.*?)remaining one \(([^)]*)\)/s', $docblock, $m);
         [, $splitSide, $totalOnlySide] = $m;
 
         foreach ($split as $name) {

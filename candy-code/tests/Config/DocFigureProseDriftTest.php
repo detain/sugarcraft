@@ -5269,9 +5269,9 @@ final class DocFigureProseDriftTest extends TestCase
             );
         }
 
-        self::assertMatchesRegularExpression('/\| `anthropic` \| \*\*`CustomProvider`\*\*, named `anthropic` \|/', $window, 'the anthropic row no longer states its CustomProvider-named-anthropic surprise — the section exists to keep this row from being re-simplified');
+        self::assertMatchesRegularExpression('/\| `anthropic` \| \*\*`AnthropicProvider`\*\*, native Messages wire \|/', $window, 'the anthropic row no longer states the ISS-023 native arm — the section exists to keep this row from being re-simplified back to the compat-shim spelling');
         $anthropic = self::bodyExcerpt($factory, 'createAnthropic', 3000);
-        foreach (['x-api-key', 'anthropic-version', 'CustomProvider'] as $token) {
+        foreach (['x-api-key', 'anthropic-version', 'AnthropicProvider'] as $token) {
             self::assertStringContainsString($token, $anthropic, "createAnthropic() no longer touches {$token} — the paragraph flatly states this row builds that");
         }
 
@@ -5669,11 +5669,11 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame($max - 1, $withAutomatic, 'BUDGET_WITH_AUTOMATIC is no longer the explicit budget minus one, which the same paragraph states');
         self::assertStringContainsString('explicit budget minus one', $flat, 'the minus-one framing the constant pair is pinned to has been reworded away');
 
-        // Audit A15: the page now says WHERE the class is armed - Claude on
-        // vertex constructs it, and the provider factory consults its
-        // environment switch. The census divides the same source the old
-        // not-armed census did, so a new consumer (or a lost one) reds here
-        // until the paragraph names it.
+        // Audit A15: the page now says WHERE the class is armed - the shared
+        // Anthropic wire trait constructs it, and the provider factory
+        // consults its environment switch. The census divides the same source
+        // the old not-armed census did, so a new consumer (or a lost one)
+        // reds here until the paragraph names it.
         $consumers = [];
         foreach (self::srcTexts() as $relative => $text) {
             if ($relative === 'src/Providers/CacheBreakpoints.php') {
@@ -5689,12 +5689,12 @@ final class DocFigureProseDriftTest extends TestCase
         // it holds an instance for observeCacheHealth() alone, and the page's
         // observeCacheHealth bullet names it.
         // ISS-023a: the constructing caller is the shared Anthropic wire
-        // trait (Vertex assembled it inline until the lift); the file the
-        // census sees moved with the code, and one production call site
-        // still holds.
-        self::assertSame(['src/Backend/CacheHealthWatch.php', 'src/Providers/Concerns/AnthropicMessagesWire.php', 'src/Providers/ProviderFactory.php'], $consumers, 'the armed-on-one-wire paragraph has the wire trait (Vertex\'s Anthropic path, the one caller) building CacheBreakpoints, ProviderFactory reading the switch, and the observeCacheHealth bullet naming Backend\\CacheHealthWatch — the src/ census moved');
+        // trait (Vertex assembled it inline until the lift, and ISS-023's
+        // native arm rides the same single call site); the file the census
+        // sees moved with the code, and one production call site still holds.
+        self::assertSame(['src/Backend/CacheHealthWatch.php', 'src/Providers/Concerns/AnthropicMessagesWire.php', 'src/Providers/ProviderFactory.php'], $consumers, 'the armed-on-two-wires paragraph has the wire trait (both Anthropic arms, the one caller) building CacheBreakpoints, ProviderFactory reading the switch, and the observeCacheHealth bullet naming Backend\\CacheHealthWatch — the src/ census moved');
         self::assertStringContainsString('`Backend\\CacheHealthWatch`', $flat, 'the observeCacheHealth bullet no longer names the watch the census above counts');
-        self::assertStringContainsString('It is armed on one wire: Claude on `vertex`', $flat, 'the armed paragraph was reworded away from the census pinned above');
+        self::assertStringContainsString('It is armed on two wires: Claude on `vertex` and the native `anthropic` arm', $flat, 'the armed paragraph was reworded away from the census pinned above');
         $bin = (string) file_get_contents($root . '/bin/candy-code');
         self::assertStringNotContainsString('CacheBreakpoints', (string) preg_replace('~(/\*.*?\*/|//[^\n]*|^\s*\#[^\n]*)~s', '', $bin), 'bin/candy-code now consults CacheBreakpoints — the page names only the provider wiring');
 

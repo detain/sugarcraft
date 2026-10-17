@@ -23,8 +23,10 @@ final readonly class ProviderFactory
 
     /**
      * @param ModelMetadata|null $modelMetadata Roadmap 5.13a: the model
-     *        database the `openai`, `anthropic` and `custom` providers consult
-     *        between the operator's settings and their built-in fallbacks.
+     *        database the `openai` and `custom` providers consult between the
+     *        operator's settings and their built-in fallbacks. (ISS-023 took
+     *        `anthropic` off this list: the native Messages provider ships
+     *        its own family price and window tables, like Vertex and Bedrock.)
      *        Null (every production construction) is {@see ModelMetadata::new()},
      *        resolved per provider built — cheap, because it loads nothing
      *        until a provider first asks and the parsed table is shared
@@ -1015,77 +1017,29 @@ final readonly class ProviderFactory
      */
     private function createAnthropic(array $config): ProviderInterface
     {
-        // X-31b: CustomProvider posts the RELATIVE path `chat/completions`, so
-        // the base has to end in `/v1/` - the bare `https://api.anthropic.com`
-        // this used resolved to `/chat/completions`, a 404 on every default
-        // request. See anthropicCompatBase() for why the configured value
-        // stays the API root.
-        $baseUrl = self::anthropicCompatBase($config['baseUrl'] ?? 'https://api.anthropic.com');
-        $apiKey = $config['apiKey'];
+        // ISS-023: the `anthropic` type is a native Messages-API provider, no
+        // longer an OpenAI-compat CustomProvider. The wire document, family
+        // pricing, context-window table and prompt-cache marking all live in
+        // AnthropicMessagesWire, shared with Vertex's `:rawPredict` arm, so a
+        // direct-api key gets the SAME caching behaviour A15 armed on Vertex.
         $model = $config['model'] ?? 'claude-sonnet-4-6';
 
-        // Anthropic's Messages API authenticates with x-api-key + anthropic-version,
-        // NOT a bearer token. Build the client with those headers and inject it directly
-        // so the auth headers actually reach the wire (the previous code discarded this
-        // client and fell back to CustomProvider's bearer-auth client).
-        $headers = [
-            'Content-Type' => 'application/json',
-            'x-api-key' => $apiKey,
-            'anthropic-version' => '2023-06-01',
-        ];
-
-        // guzzleClient() (not `new Client`) so this provider inherits the
-        // shared connect-timeout policy - see HttpClientDefaults.
-        $client = self::guzzleClient([
-            'base_uri' => $baseUrl,
-            'headers' => $headers,
-        ]);
-
-        return new CustomProvider(
-            'anthropic',
-            $baseUrl,
+        // Authentication is x-api-key + anthropic-version headers - NOT a
+        // bearer token; {@see AnthropicProvider} sets both on its client so
+        // they reach the wire. The configured baseUrl is the API root:
+        // ANTHROPIC_BASE_URL is shared with the `claude` binary, whose SDK
+        // appends /v1/... itself, so the provider appends `/v1/messages` here.
+        return new AnthropicProvider(
+            $config['apiKey'],
+            $config['baseUrl'] ?? 'https://api.anthropic.com',
             $model,
-            $apiKey,
-            $client,
-            supportsStreaming: true,
-            // X-31b: this was a positional `false`, so no request ever carried
-            // `tools` and the type key could not call a single tool. Anthropic's
-            // OpenAI-compatibility endpoint accepts OpenAI `tools` and answers
-            // with `tool_calls`, streamed or not.
-            supportsFunctionCalling: true,
-            // Audit 15b-15: Anthropic's OpenAI-compatibility endpoint reads
-            // base64 `image_url` parts, and every current Claude model has
-            // vision, so an attached image goes out as an image.
-            supportsVision: true,
-            // Roadmap 5.13a: Anthropic bills, and Claude windows are not
-            // 128k, so this type is sized and priced like `custom`: the
-            // operator's settings, then the model database.
-            modelMetadata: $this->modelMetadata(),
             modelPrices: self::modelPricesFor($config),
+            promptCache: self::promptCacheEnabled($config),
             contextWindowOverride: self::configuredContextWindow(
                 $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
                 $model,
             ),
         );
-    }
-
-    /**
-     * The base the `anthropic` type's Guzzle client resolves `chat/completions`
-     * against: $baseUrl with `/v1/` appended, unless it already ends in `/v1`.
-     *
-     * The configured value stays the API ROOT (`https://api.anthropic.com`,
-     * no `/v1`) because `ANTHROPIC_BASE_URL` is shared: the `claude-code`
-     * type hands the same variable to the `claude` binary, and Anthropic's
-     * SDKs append `/v1/...` to it themselves. A base already spelled with
-     * `/v1` is accepted as well. The trailing slash is not cosmetic: under
-     * RFC 3986 resolution a base without one drops its last segment, so
-     * `…/v1` + `chat/completions` would lose the `v1` again.
-     */
-    private static function anthropicCompatBase(string $baseUrl): string
-    {
-        $root = rtrim($baseUrl, '/');
-
-        return (preg_match('#/v1$#i', $root) === 1 ? $root : $root . '/v1') . '/';
     }
 
     /**
