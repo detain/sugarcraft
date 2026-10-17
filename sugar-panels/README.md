@@ -171,7 +171,7 @@ behaviour is always correct.
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

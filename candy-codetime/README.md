@@ -15,7 +15,6 @@
 
 
 ![demo](.vhs/dashboard.gif)
-![push demo](.vhs/push.gif)
 
 candy-codetime — a privacy-first coding-time tracker for PHP 8.3+. Storage is JSONL on local disk (no cloud, no database server), the dashboard is a SugarCharts-driven TUI that reads it.
 

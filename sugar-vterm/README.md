@@ -1,5 +1,3 @@
-<img src=".assets/icon.png" alt="sugar-vterm" width="160" align="right">
-
 # SugarVterm
 
 > Formerly published as `sugarcraft/candy-vt` with namespace `SugarCraft\Vt` (renamed 2026-10). <!-- @rename-keep -->

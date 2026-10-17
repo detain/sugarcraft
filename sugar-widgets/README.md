@@ -479,10 +479,6 @@ cd sugar-widgets && composer install && vendor/bin/phpunit
 
 ![stopwatch](.vhs/stopwatch.gif)
 
-### Tabs
-
-![tabs](.vhs/tabs.gif)
-
 ### Table
 
 ![table](.vhs/table.gif)

@@ -278,19 +278,19 @@ propagate normally.
 
 sugar-forms is built on five shared packages:
 
-- **[sugar-cellbuffer](/sugarcraft/sugar-cellbuffer)** — Cell-grid model + `Buffer::toAnsi()` for
+- **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — Cell-grid model + `Buffer::toAnsi()` for
   rendering glyphs and styles to ANSI bytes. TextInput / TextArea use the buffer
   path internally; their snapshot tests pin byte-for-byte output.
-- **[sugar-constraints](/sugarcraft/sugar-constraints)** — `LayoutSolver` + constraint types
+- **[sugar-constraints](https://github.com/sugarcraft/sugar-constraints)** — `LayoutSolver` + constraint types
   (`Constraint::length`, `Constraint::fill`, etc.). `Form::withConstraints()` routes
   through the solver when an explicit constraint set is provided.
-- **[sugar-testing](/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
+- **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
   `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
   `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
-- **[sugar-fuzzy](/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scores.
+- **[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scores.
   Select / MultiSelect filter delegates to it internally; the existing public
   `withFilter(callable)` injection point is preserved for custom filters.
-- **[sugar-async](/sugarcraft/sugar-async)** — `Async\Await` + `CancelledException`
+- **[sugar-async](https://github.com/sugarcraft/sugar-async)** — `Async\Await` + `CancelledException`
   for async suggestion fetchers. `withAsyncSuggestions` stores a
   `CancellationSource` on the model and cancels the previous timer before
   scheduling the next, so rapid keystrokes only fire one network request.

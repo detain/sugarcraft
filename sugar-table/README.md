@@ -938,7 +938,7 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 
 
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

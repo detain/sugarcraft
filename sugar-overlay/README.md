@@ -283,7 +283,7 @@ Mouse hit-testing is self-contained via [sugar-mouse](https://github.com/detain/
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

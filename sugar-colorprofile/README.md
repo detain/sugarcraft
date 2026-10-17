@@ -204,7 +204,7 @@ SugarCraft\ColorProfile\
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

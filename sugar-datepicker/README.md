@@ -83,7 +83,7 @@ if ($key === 'esc')   $picker = $picker->ClearDate();
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

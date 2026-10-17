@@ -130,8 +130,6 @@ The containers box (btop #1873) lists the containers that have processes running
 
 ### vms
 
-![VM dashboard, pastel theme, 200x60](.assets/vms-200x60.png)
-
 The VM dashboard (candy-top's own; btop has none) shows every running libvirt/KVM guest as a card. `v` toggles it, as does the `vms` button on the cpu box's top border (shown on hosts running libvirt, right after `x ctr`, when the clock leaves room), and `vms` in `shown_boxes` or a preset turns it on.
 
 - **Layout.** While shown, the dashboard takes everything below the cpu box (and the gpu boxes) and hides mem, net, proc and ctr. Those boxes stay in `shown_boxes`, so toggling the dashboard off brings back exactly the boxes that were showing. Hidden boxes are not sampled, and their minimum sizes do not count toward the size notice; the cpu box's GPU rows do, so the dashboard always has room for a row of cards. The cpu box shrinks to the height its cores need (from btop's minimum of 8 rows), giving the cards the rest. Pressing `2`, `3`, `4` or `x` while the dashboard is shown leaves it and shows that box, and `v` works behind the size notice too.
@@ -148,8 +146,6 @@ The VM dashboard (candy-top's own; btop has none) shows every running libvirt/KV
 - **Empty.** A host without libvirt shows "No virtual machines found". FreeBSD always does: bhyve is not covered.
 
 ### ipmi
-
-![ipmi box, pastel theme, 120x40 terminal](.assets/ipmi-120x40.png)
 
 The ipmi box (candy-top's own; btop has none) shows the machine's BMC — the baseboard management controller every server board carries — as read by `ipmitool`: the whole-system power draw, each power supply, fans, temperatures, voltages, the chassis fault flags and the System Event Log. `I` (shift + i; `i` is mem's io_mode) toggles it, as does the `IPMI` button on the cpu box's top border (shown on hosts with a BMC device node, after `x ctr` / `vms`, when the clock leaves room), and `ipmi` in `shown_boxes` or a preset turns it on.
 
@@ -457,9 +453,7 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 
 The default theme is **`pastel`**, candy-top's own: bright candy-shop pastels (bubblegum pink, lavender, electric mint, glowing peach, sky blue and lemon) on a deep plum-ink background. Load and temperature run mint → lemon → pink, the cpu graph sky → lavender → pink, and each box outline flows from one pastel into the next.
 
-![candy-top with the pastel theme](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.assets/theme-pastel.png)
-
-This is a deliberate deviation from btop, whose default is its builtin `Default` theme. `Default` is still in the list, and a btop config that sets `color_theme` (for example btop's own `color_theme = "Default"`) keeps its theme. `pastel` paints its own background, so it looks the same on dark and light terminals. With `theme_background = false` it uses the terminal's background instead, which suits dark terminals only: on a light one the near-white text is unreadable, so choose a light theme there (`flexoki-light`, `paper`, `solarized_light`, ...). Without `truecolor` its colours are mapped to the nearest 256-colour entries and the outlines are drawn flat. A side-by-side of `Default`, `mellow` and `pastel` is in [`.assets/theme-compare.png`](.assets/theme-compare.png).
+This is a deliberate deviation from btop, whose default is its builtin `Default` theme. `Default` is still in the list, and a btop config that sets `color_theme` (for example btop's own `color_theme = "Default"`) keeps its theme. `pastel` paints its own background, so it looks the same on dark and light terminals. With `theme_background = false` it uses the terminal's background instead, which suits dark terminals only: on a light one the near-white text is unreadable, so choose a light theme there (`flexoki-light`, `paper`, `solarized_light`, ...). Without `truecolor` its colours are mapped to the nearest 256-colour entries and the outlines are drawn flat.
 
 `color_theme` names a btop/bpytop/bashtop `.theme` file, or one of the builtins `Default` and `TTY`. Themes are read from two directories:
 

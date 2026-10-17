@@ -4,7 +4,7 @@ PHP monorepo of 40 TUI libraries and 21 terminal apps (Charmbracelet ecosystem p
 
 ## Source-of-truth files
 
-- `MATCHUPS.md` — upstream → SugarCraft port mapping (🔴🟡🟢🚀)
+- `docs/MATCHUPS.md` — upstream → SugarCraft port mapping (🔴🟡🟢🚀)
 - `PROJECT_NAMES.md` — naming rulebook + prefix cheat sheet
 - `LOCALES.md` — i18n locale codes
 - `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
@@ -52,7 +52,7 @@ cd sugar-core && composer install && vendor/bin/phpunit
 
 ## Adding a lib — checklist
 
-`<slug>/composer.json`+`phpunit.xml`+`README.md`+`CALIBER_LEARNINGS.md`+`src/<Class>.php` · root `composer.json` (require + repositories) · `MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/_data/<slug>.json`+`docs/_data/<slug>.body.html` then `php tools/gen-docs.php` (regenerates `docs/lib/<slug>.html` — do NOT hand-edit the page) · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` · `codecov.yml`. `ci.yml` auto-discovers via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` for OS-specific runners.
+`<slug>/composer.json`+`phpunit.xml`+`README.md`+`CALIBER_LEARNINGS.md`+`src/<Class>.php` · root `composer.json` (require + repositories) · `docs/MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/_data/<slug>.json`+`docs/_data/<slug>.body.html` then `php tools/gen-docs.php` (regenerates `docs/lib/<slug>.html` — do NOT hand-edit the page) · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` · `codecov.yml`. `ci.yml` auto-discovers via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` for OS-specific runners.
 
 ## PR workflow
 
@@ -70,7 +70,7 @@ Mark `plans/AUDIT_*.md` items ✅ inline where they live; skip `credit upstream 
 - `vhs.yml` `all=(...)` array hand-maintained; `ci.yml` dynamic via `scripts/affected-libs.php`.
 - CI shards `candy-code` through `scripts/parallel-tests.sh`, fail-closed against the pinned `candy-code/tests/Config/Support/suite-figure.json` — adding tests means refreshing it, and a new test file must also land in `scripts/parallel-tests-durations.tsv` (unlisted files run in zero shards).
 - Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
-- Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide.
+- Run sub-agents ONE AT A TIME — concurrent writes to `docs/MATCHUPS.md`/`README.md` collide.
 - Pass ALL external-CLI flags every invocation via `escapeshellarg((string)($field ?? ''))`.
 - Bash CWD does NOT persist across calls — anchor with absolute paths or chain `&&`.
 

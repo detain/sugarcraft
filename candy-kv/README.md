@@ -130,7 +130,7 @@ candy-kv uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) fo
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

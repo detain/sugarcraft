@@ -241,7 +241,7 @@ Used internally by formatters when `$reportCaller` is enabled on the `Logger`.
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

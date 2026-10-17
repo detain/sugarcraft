@@ -356,7 +356,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 
 
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

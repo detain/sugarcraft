@@ -113,7 +113,7 @@ candy-mail uses [sugar-async](https://github.com/detain/sugarcraft/tree/master/s
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

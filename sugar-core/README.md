@@ -240,7 +240,7 @@ builds on it. From the same monorepo:
 - **SugarSshServer** — SSH server middleware framework.
 - **CandyAnsiInspect** — ANSI escape-sequence inspector.
 
-See the matchup table in [../MATCHUPS.md](../MATCHUPS.md) for status,
+See the matchup table in [docs/MATCHUPS.md](../docs/MATCHUPS.md) for status,
 package names, and namespace mappings.
 
 ## Localization (i18n)

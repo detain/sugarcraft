@@ -375,7 +375,7 @@ class MyModel implements Model {
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

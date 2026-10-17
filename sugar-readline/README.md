@@ -207,7 +207,7 @@ Each prompt is a state machine with three states: pending, submitted, aborted.
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 

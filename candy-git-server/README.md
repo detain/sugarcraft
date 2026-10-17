@@ -357,7 +357,7 @@ candy-git-server uses [sugar-async](https://github.com/detain/sugarcraft/tree/ma
 
 ## License
 
-[MIT](LICENSE)
+MIT
 
 ## Credits & inspiration
 
