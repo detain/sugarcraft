@@ -9,6 +9,7 @@ use SugarCraft\Code\Context\ContextBreakdown;
 use SugarCraft\Code\Context\Pruning\RefTag;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Util\TokenCount;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Implements `/context` (alias `/tokens`): where the context window goes,
@@ -74,7 +75,12 @@ final class ContextCommand
             ]);
             foreach ($b->sections as $row) {
                 $label = $row['label'] . ($row['sections'] > 1 ? ' ×' . $row['sections'] : '');
-                $lines[] = sprintf('  %-24s ~%-7s %s', Chat::reportField($label), TokenCount::compact($row['tokens']), $row['stability']);
+                // Cells, not bytes (ISS-101): '×' is 2 bytes and CJK labels
+                // are 3, so %-24s drifted the token/stability columns while
+                // ASCII rows stayed straight.
+                $lines[] = '  ' . Width::padRight(Chat::reportField($label), 24)
+                    . ' ' . Width::padRight('~' . TokenCount::compact($row['tokens']), 7)
+                    . ' ' . $row['stability'];
             }
         }
 

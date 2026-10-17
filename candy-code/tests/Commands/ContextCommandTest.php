@@ -132,6 +132,36 @@ final class ContextCommandTest extends TestCase
         self::assertMatchesRegularExpression('/^  #1\s+user\s+~\d+\s+look at/m', $report);
     }
 
+    /**
+     * ISS-101: the layer rows pad by display cells, not bytes — '×' is two
+     * bytes for one cell and a CJK label is three bytes for two, and both
+     * must still put the stability column at cell 35
+     * (2 indent + 24 label + 1 + 7 tokens + 1).
+     */
+    public function testSectionRowsAlignByDisplayCellsNotBytes(): void
+    {
+        $sections = [
+            ['label' => 'base', 'stability' => 'static', 'sections' => 1, 'bytes' => 100, 'tokens' => 10],
+            ['label' => 'project-instructions', 'stability' => 'per-session', 'sections' => 2, 'bytes' => 100, 'tokens' => 20],
+            ['label' => 'セッション', 'stability' => 'static', 'sections' => 1, 'bytes' => 100, 'tokens' => 30],
+        ];
+
+        $report = ContextCommand::compose(ContextBreakdown::measure([Message::user('hi')], $sections, [], 200_000, 20));
+
+        $rows = array_values(array_filter(
+            explode("\n", $report),
+            static fn (string $line): bool => (bool) preg_match('/^  (base |project-instructions|セッション)/', $line . ' '),
+        ));
+        self::assertCount(3, $rows, 'all three layer rows are painted');
+
+        foreach ($rows as $row) {
+            $field = str_contains($row, 'per-session') ? 'per-session' : 'static';
+            $offset = strpos($row, $field);
+            self::assertIsInt($offset);
+            self::assertSame(35, \SugarCraft\Core\Util\Width::string(substr($row, 0, $offset)), "column drift in: {$row}");
+        }
+    }
+
     public function testSlashContextAndItsTokensAliasAnswerLocally(): void
     {
         $backend = new class () implements Backend, ReportsPromptSections {
