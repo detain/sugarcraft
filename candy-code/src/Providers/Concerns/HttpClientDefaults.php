@@ -342,11 +342,27 @@ trait HttpClientDefaults
      * TCP pre-flight (the transport's `timeout` cannot isolate the connect
      * phase from the head-wait), and `timeout` itself carries the dedicated,
      * generous header bound.
+     *
+     * ISS-024 review fix: that whole translation was assuming Guzzle's
+     * `Proxy::wrapStreaming()` actually fronts this request. It does not when
+     * `allow_url_fopen` is Off and cURL is loaded - `Utils::chooseHandler()`
+     * then builds the PLAIN curl handler, the `stream` option is ignored, and
+     * a `timeout` written here would land as `CURLOPT_TIMEOUT_MS`, a TOTAL
+     * deadline - the exact shape this codebase's total-timeout census exists
+     * to forbid, wearing the stream arm's clothes. Those requests now take
+     * the curl arm instead: no total deadline, no pre-flight (cURL honours
+     * the client-level connect budget natively), and the head/idle bounds
+     * emulated per-operation by the progress watchdog in
+     * {@see curlStreamArm()}.
      */
     private static function streamTransportBounds(): callable
     {
         return static function (callable $handler): callable {
             return static function (RequestInterface $request, array $options) use ($handler): PromiseInterface {
+                if (self::curlServesStreamInstead($options)) {
+                    return self::curlStreamArm($handler, $request, $options);
+                }
+
                 if (!self::routedToStreamHandler($options)) {
                     return $handler($request, $options);
                 }
@@ -479,22 +495,200 @@ trait HttpClientDefaults
     }
 
     /**
-     * Mirrors `Proxy::wrapStreaming()`'s own routing test - `empty($options
-     * ['stream'])` - so this cannot drift out of step with the decision Guzzle
-     * actually makes.
+     * The head/idle bounds for a stream request the PLAIN curl handler will
+     * serve (ISS-024 review fix). cURL has no per-phase read deadline: its
+     * only timeout is total, so the bound rides the progress callback
+     * instead, which libcurl rings periodically THROUGHOUT a transfer - idle
+     * included. Before the first received byte the elapsed silence answers
+     * to the header bound; once bytes move the same clock re-arms against
+     * the read-idle bound, mirroring the two StreamHandler options the
+     * stream arm sets natively. The approximation is stated rather than
+     * hidden: progress counts bytes received, response headers included, so
+     * a server that flushes headers and then thinks hands the watchdog to
+     * the idle bound at the moment the headers landed - which is where
+     * StreamHandler's `read_timeout` would take over too, headers being
+     * parsed by then.
+     */
+    private static function curlStreamArm(callable $handler, RequestInterface $request, array $options): PromiseInterface
+    {
+        $stall = new \ArrayObject(['aborted' => false, 'bound' => 0.0, 'phase' => 'response headers']);
+        $options = self::curlStreamBounds($options, $stall);
+
+        return $handler($request, $options)->then(null, static function (\Throwable $failure) use ($request, $stall): \Throwable {
+            throw self::curlStallFailure($failure, $request, $stall);
+        });
+    }
+
+    /**
+     * libcurl reports a watchdog abort as errno 42 (CURLE_ABORTED_BY_CALLBACK);
+     * the stall state says which bound fired. Guzzle wraps that as
+     * `cURL error 42: <text>` and the text itself is libcurl-version
+     * dependent ("Operation was aborted by an application callback" on
+     * modern builds, "Abort was called on an request" on old ones), so the
+     * errno is the gate and the substring a fallback for hand-built
+     * failures. A transfer aborted at the callback may still carry its
+     * partial 2xx response (headers landed, body died mid-frame) - that
+     * response is deliberately DROPPED: a truncated stream is not a
+     * response to route on, and dropping it keeps the failure in the
+     * no-response transport family TransientFailure already retries. Same
+     * class and chain as every other transport cut. Split from the arm so
+     * the rewrite is pinnable without living through a real stall.
+     */
+    private static function curlStallFailure(\Throwable $failure, RequestInterface $request, \ArrayObject $stall): \Throwable
+    {
+        if ($stall['aborted'] && $failure instanceof \GuzzleHttp\Exception\RequestException
+            && (42 === ($failure->getHandlerContext()['errno'] ?? null) || \stripos($failure->getMessage(), 'abort') !== false)
+        ) {
+            return new \GuzzleHttp\Exception\RequestException(
+                \sprintf(self::CURL_STALL_MESSAGE_FORMAT, (int) \round((float) $stall['bound']), (string) $stall['phase']),
+                $request,
+                null,
+                $failure,
+            );
+        }
+
+        return $failure;
+    }
+
+    /**
+     * Sentence naming the bound a curl-served stream stalled against. The
+     * `%d` is the bound that fired, the `%s` the phase (response headers
+     * before the first byte, a further body frame after).
+     */
+    private const CURL_STALL_MESSAGE_FORMAT = 'Stream transfer stalled: no bytes for %ds while waiting for %s (cURL transport, per-operation bound - NOT a total deadline; see the streamHeaderTimeoutSeconds and streamReadIdleTimeoutSeconds settings, ISS-024).';
+
+    /**
+     * The watchdog itself, separated from {@see curlStreamArm()} so the
+     * arithmetic is pinnable with a synthetic clock - `allow_url_fopen` is
+     * an INI_SYSTEM flag no test may flip in-process, and this box (like
+     * CI) runs with it On, which keeps the arm itself out of the suite's
+     * reach. Chains, never clobbers, a caller-supplied progress callback
+     * (the heartbeat wrapper rides the same option), and swallows the
+     * chain's throw: fail-soft is the heartbeat contract, and a watchdog
+     * that dies taking its clock with it would stop bounding the transfer.
      *
-     * The second clause covers the other way `StreamHandler` ends up serving
-     * everything: `Utils::chooseHandler()` falls back to it wholesale when it
-     * cannot build a curl handler at all. `extension_loaded()` is the coarse
-     * form of that test - Guzzle additionally rejects a curl too old for its
-     * handler, which this will miss, leaving such a build with the plain
-     * `connect_timeout` and no worse off than before this seam existed.
+     * @param array<string, mixed>    $options
+     * @param \ArrayObject<string,mixed> $stall  out-parameter the reject
+     *        rewriter reads when the tick returns the abort answer
+     * @param (callable():float)|null $clock
+     *
+     * @return array<string, mixed>
+     */
+    private static function curlStreamBounds(array $options, \ArrayObject $stall, ?callable $clock = null): array
+    {
+        $headerBound = self::streamHeaderTimeoutSeconds();
+        $idleBound = self::streamReadIdleTimeoutSeconds();
+        $clock ??= static fn (): float => \microtime(true);
+        $existing = isset($options['progress']) && \is_callable($options['progress'])
+            ? $options['progress']
+            : null;
+
+        /** @var array{mark:float,bytes:int} $state */
+        $state = ['mark' => $clock(), 'bytes' => 0];
+
+        $options['progress'] = static function (int $downloadTotal, int $downloadedBytes, int $uploadTotal, int $uploadedBytes) use (&$state, $existing, $clock, $headerBound, $idleBound, $stall): int {
+            if ($downloadedBytes > $state['bytes']) {
+                $state['bytes'] = $downloadedBytes;
+                $state['mark'] = $clock();
+            }
+
+            $bound = $state['bytes'] > 0 ? $idleBound : $headerBound;
+
+            if ($clock() - $state['mark'] > $bound) {
+                $stall['aborted'] = true;
+                $stall['bound'] = $bound;
+                $stall['phase'] = $state['bytes'] > 0 ? 'a further body frame' : 'response headers';
+
+                // Non-zero is libcurl's abort answer; it surfaces as the
+                // canned Abort RequestException the arm rewrites honestly.
+                return 1;
+            }
+
+            if ($existing !== null) {
+                try {
+                    $existing($downloadTotal, $downloadedBytes, $uploadTotal, $uploadedBytes);
+                } catch (\Throwable) {
+                    // Fail-soft by contract - see CompleteRequest::$onHeartbeat.
+                }
+            }
+
+            return 0;
+        };
+
+        return $options;
+    }
+
+    /**
+     * Mirrors `Proxy::wrapStreaming()`'s own routing test - `empty($options
+     * ['stream'])` - AND `Utils::chooseHandler()`'s fopen gate: the wrapper
+     * (and with it the stream semantics of `timeout`/`read_timeout`) exists
+     * only when `allow_url_fopen` lets Guzzle build a stream handler at all.
+     * ISS-024 review fix: before the gate, `allow_url_fopen=Off` + cURL was
+     * mislabelled as stream-served and the header bound became a total
+     * deadline; that shape is now {@see curlServesStreamInstead()}'s.
+     *
+     * The `!extension_loaded('curl')` clause covers the other way
+     * `StreamHandler` ends up serving everything: `Utils::chooseHandler()`
+     * falls back to it wholesale when it cannot build a curl handler at all.
+     * `extension_loaded()` is the coarse form of that test - Guzzle
+     * additionally rejects a curl too old for its handler, which this will
+     * miss, leaving such a build with the plain `connect_timeout` and no
+     * worse off than before this seam existed.
      *
      * @param array<string, mixed> $options
      */
     private static function routedToStreamHandler(array $options): bool
     {
-        return !empty($options['stream']) || !\extension_loaded('curl');
+        return self::streamTransportFor($options, self::fopenWrappersAvailable(), \extension_loaded('curl')) === 'stream';
+    }
+
+    /**
+     * The third shape the routing table answers with (ISS-024 review fix):
+     * a stream-flagged request that the PLAIN curl handler will actually
+     * serve, because `allow_url_fopen` denied Guzzle its stream wrapper.
+     *
+     * @param array<string, mixed> $options
+     */
+    private static function curlServesStreamInstead(array $options): bool
+    {
+        return self::streamTransportFor($options, self::fopenWrappersAvailable(), \extension_loaded('curl')) === 'curl';
+    }
+
+    /**
+     * Whether `stream_context` fopen wrappers can carry a request at all -
+     * `Utils::chooseHandler()`'s first branch reads this same INI System
+     * value, which no running script may change. The indirection exists for
+     * that reason: the routing table below is pure, and the pin feeds it
+     * both polarities of this flag and of `curl` in-process while the
+     * production call sites read what the box actually has.
+     */
+    private static function fopenWrappersAvailable(): bool
+    {
+        return (bool) \ini_get('allow_url_fopen');
+    }
+
+    /**
+     * The routing table both predicates read (mirrors `chooseHandler` +
+     * `Proxy::wrapStreaming` in one place so the arms cannot drift apart):
+     * `stream` when StreamHandler serves the request (everything without
+     * curl; flagged requests with curl AND fopen wrappers), `curl` when the
+     * plain curl handler serves a flagged request without wrappers, `none`
+     * when curl takes an unflagged request and no emulation belongs anywhere
+     * (batch completions keep their native connect budget and no bounds).
+     *
+     * @param array<string, mixed> $options
+     */
+    private static function streamTransportFor(array $options, bool $fopen, bool $curl): string
+    {
+        if (!$curl) {
+            return 'stream';
+        }
+
+        if (empty($options['stream'])) {
+            return 'none';
+        }
+
+        return $fopen ? 'stream' : 'curl';
     }
 
     /**

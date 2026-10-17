@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Providers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Promise\FulfilledPromise;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
@@ -18,6 +21,7 @@ use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Providers\SglangProvider;
+use SugarCraft\Code\Providers\TransientFailure;
 
 /**
  * Pins crush_code.md Phase 0 item 4 in BOTH directions.
@@ -40,8 +44,11 @@ use SugarCraft\Code\Providers\SglangProvider;
  *
  * SCOPE OF THESE ASSERTIONS. Everything here reads configuration off a
  * constructed client, drives a client whose terminal handler has been
- * replaced, or reads source text. Nothing opens a socket, so nothing can
- * hang - and equally, nothing here proves what a real socket does. The
+ * replaced, reflects the seam's private static helpers, or reads source
+ * text. Nothing opens a socket, so nothing can hang - and equally, nothing
+ * here proves what a real socket does. The curl-arm helpers are reflected
+ * rather than lived-through because allow_url_fopen is PHP_INI_SYSTEM:
+ * the routing decision it feeds is pinned as a pure table here. The
  * on-the-wire behaviour these options produce was measured separately
  * against a SYN-dropping loopback host and a local fake SSE server; the
  * numbers and what they do and do not cover are recorded in
@@ -727,6 +734,213 @@ final class ProviderConnectTimeoutTest extends TestCase
         $this->assertLessThanOrEqual(30.0, $client->getConfig('connect_timeout'));
     }
 
+    /**
+     * The ISS-024 review fix. Guzzle picks its transport at request time
+     * (Utils::chooseHandler consults allow_url_fopen, not our option), so a
+     * `stream` flag is only a stream request when the stream wrapper can
+     * actually serve it. This table is the routing decision the middleware
+     * now makes; the misroute it kills - flagged transfer handed to cURL,
+     * where our header bound would land as CURLOPT_TIMEOUT_MS, a TOTAL
+     * deadline on an LLM stream - is exactly row 2.
+     *
+     * @param array<string, mixed> $options
+     *
+     * @dataProvider streamTransportRows
+     */
+    public function testTheRoutingTableFollowsTheTransportGuzzleWillActuallyBuild(array $options, bool $fopen, bool $curl, string $expected): void
+    {
+        $this->assertSame($expected, self::invokeSeamStatic('streamTransportFor', $options, $fopen, $curl));
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, bool, bool, string}>
+     */
+    public static function streamTransportRows(): array
+    {
+        return [
+            'flagged, both transports available -> the stream wrapper serves it' => [['stream' => true], true, true, 'stream'],
+            'flagged, fopen wrappers off -> cURL serves it, stream options must not ride' => [['stream' => true], false, true, 'curl'],
+            'unflagged with cURL available -> plain transport, untouched' => [[], true, true, 'none'],
+            'unflagged even with fopen off -> still untouched; the middleware is for streams' => [[], false, true, 'none'],
+            'no cURL, fopen on -> the stream wrapper is all there is' => [['stream' => true], true, false, 'stream'],
+            'no cURL, fopen off -> still stream semantics; Guzzle itself refuses at construction' => [['stream' => true], false, false, 'stream'],
+            'no cURL, unflagged, fopen on -> stream transport serves everything' => [[], true, false, 'stream'],
+            'no cURL, unflagged, fopen off -> same answer; the refusal is Guzzle\'s to make' => [[], false, false, 'stream'],
+        ];
+    }
+
+    public function testTheCurlWatchdogStallsAgainstTheHeaderBoundBeforeTheFirstByte(): void
+    {
+        $now = 0.0;
+        $clock = static function () use (&$now): float {
+            return $now;
+        };
+        $stall = new \ArrayObject(['aborted' => false, 'bound' => 0.0, 'phase' => 'response headers']);
+        $bounds = self::invokeSeamStatic('curlStreamBounds', [], $stall, $clock);
+        \assert(\is_callable($bounds['progress']));
+        $headerBound = (float) self::invokeSeamStatic('streamHeaderTimeoutSeconds');
+
+        $now = $headerBound - 1.0;
+        $this->assertSame(0, $bounds['progress'](0, 0, 0, 0), 'just under the header bound keeps the transfer - the bound is per-operation, not a total');
+        $this->assertFalse((bool) $stall['aborted']);
+
+        $now = $headerBound + 1.0;
+        $this->assertSame(1, $bounds['progress'](0, 0, 0, 0), 'silence past the header bound with nothing downloaded yet answers libcurl the abort');
+        $this->assertTrue((bool) $stall['aborted']);
+        $this->assertSame($headerBound, (float) $stall['bound']);
+        $this->assertSame('response headers', (string) $stall['phase']);
+    }
+
+    public function testTheCurlWatchdogReArmsOnActivityAndSwitchesToTheIdleBound(): void
+    {
+        $now = 0.0;
+        $clock = static function () use (&$now): float {
+            return $now;
+        };
+        $stall = new \ArrayObject(['aborted' => false, 'bound' => 0.0, 'phase' => 'response headers']);
+        $bounds = self::invokeSeamStatic('curlStreamBounds', [], $stall, $clock);
+        \assert(\is_callable($bounds['progress']));
+        $headerBound = (float) self::invokeSeamStatic('streamHeaderTimeoutSeconds');
+        $idleBound = (float) self::invokeSeamStatic('streamReadIdleTimeoutSeconds');
+        $this->assertGreaterThan($headerBound, $idleBound, 'the idle bound is the longer one - the legs below only discriminate because it is');
+
+        // Long past the header bound, but bytes are landing: the tick that
+        // sees growth re-arms the clock AND switches the phase, so a body
+        // still streaming is never accused of missing its header deadline.
+        $now = $headerBound + 1.0;
+        $this->assertSame(0, $bounds['progress'](0, 42, 0, 0));
+        $this->assertFalse((bool) $stall['aborted']);
+
+        $now = $headerBound + 1.0 + $idleBound - 1.0;
+        $this->assertSame(0, $bounds['progress'](0, 42, 0, 0), 'just under the idle bound keeps the transfer');
+        $this->assertFalse((bool) $stall['aborted']);
+
+        $now += 2.0;
+        $this->assertSame(1, $bounds['progress'](0, 42, 0, 0), 'silence past the re-armed idle bound aborts');
+        $this->assertTrue((bool) $stall['aborted']);
+        $this->assertSame($idleBound, (float) $stall['bound']);
+        $this->assertSame('a further body frame', (string) $stall['phase']);
+    }
+
+    public function testTheCurlWatchdogChainsTheHeartbeatProgressAndSurvivesItsThrow(): void
+    {
+        $ticks = 0;
+        $existing = static function (int $total, int $downloaded, int $uTotal, int $uploaded) use (&$ticks): void {
+            $ticks++;
+
+            throw new \RuntimeException('a heartbeat consumer must never break the transfer');
+        };
+        $now = 0.0;
+        $clock = static function () use (&$now): float {
+            return $now;
+        };
+        $stall = new \ArrayObject(['aborted' => false, 'bound' => 0.0, 'phase' => 'response headers']);
+        $bounds = self::invokeSeamStatic('curlStreamBounds', ['progress' => $existing], $stall, $clock);
+        \assert(\is_callable($bounds['progress']));
+
+        $this->assertSame(0, $bounds['progress'](0, 0, 0, 0), 'the chained heartbeat throw is swallowed and the watchdog keeps ticking');
+        $this->assertSame(1, $ticks);
+        $this->assertFalse((bool) $stall['aborted']);
+
+        $now = (float) self::invokeSeamStatic('streamHeaderTimeoutSeconds') + 1.0;
+        $this->assertSame(1, $bounds['progress'](0, 0, 0, 0));
+        $this->assertSame(1, $ticks, 'the aborting tick answers libcurl without consulting the chain');
+    }
+
+    public function testTheCurlArmAttachesTheWatchdogWithoutWritingAnyTimeoutOption(): void
+    {
+        $captured = [];
+        $handler = static function (RequestInterface $request, array $options) use (&$captured): PromiseInterface {
+            $captured = $options;
+
+            return new FulfilledPromise(new Response(200, [], 'ok'));
+        };
+        $promise = self::invokeSeamStatic(
+            'curlStreamArm',
+            $handler,
+            new Request('POST', 'https://seam.invalid/stream'),
+            ['stream' => true],
+        );
+        $this->assertInstanceOf(PromiseInterface::class, $promise);
+        \assert($promise instanceof PromiseInterface);
+        $this->assertSame('ok', (string) $promise->wait()->getBody());
+
+        // THE anti-total law, asserted at the arm itself: on this route the
+        // bounds live ONLY in the progress watchdog. `timeout` here would be
+        // CURLOPT_TIMEOUT_MS - a wall-clock deadline over the whole stream -
+        // which is the defect class ISS-024 exists to keep closed.
+        $this->assertIsCallable($captured['progress']);
+        $this->assertArrayNotHasKey('timeout', $captured);
+        $this->assertArrayNotHasKey('read_timeout', $captured);
+    }
+
+    public function testTheStallRewriterNamesTheBoundThatFiredAndKeepsTheFailureTransient(): void
+    {
+        $request = new Request('POST', 'https://seam.invalid/stream');
+        $stall = new \ArrayObject(['aborted' => true, 'bound' => 120.0, 'phase' => 'response headers']);
+
+        $modern = new RequestException(
+            'cURL error 42: Operation was aborted by an application callback (see https://curl.se/libcurl/c/libcurl-errors.html) for https://seam.invalid/stream',
+            $request,
+            null,
+            null,
+            ['errno' => 42],
+        );
+        $rewritten = self::invokeSeamStatic('curlStallFailure', $modern, $request, $stall);
+        $this->assertNotSame($modern, $rewritten);
+        $this->assertStringContainsString('no bytes for 120s while waiting for response headers', $rewritten->getMessage());
+        $this->assertStringContainsString('NOT a total deadline', $rewritten->getMessage());
+        $this->assertSame($modern, $rewritten->getPrevious());
+        $this->assertTrue(TransientFailure::isTransient($rewritten), 'a stall cut stays in the retryable transport family');
+
+        // Pre-7.69 libcurl spells the same abort with different words and
+        // older shapes may not carry the context at all - the errno gate has
+        // a text fallback for exactly that.
+        $legacy = new RequestException('Abort was called on an request', $request);
+        $this->assertNotSame($legacy, self::invokeSeamStatic('curlStallFailure', $legacy, $request, $stall));
+
+        // A transfer aborted after its 2xx headers carry a partial response
+        // in Guzzle's exception. It is dropped, deliberately: a truncated
+        // stream is not a response to route on, and keeping it would push
+        // the failure out of the no-response family TransientFailure retries.
+        $partial = new RequestException(
+            'cURL error 42: Operation was aborted by an application callback (see https://curl.se/libcurl/c/libcurl-errors.html) for https://seam.invalid/stream',
+            $request,
+            new Response(200),
+            null,
+            ['errno' => 42],
+        );
+        $dropped = self::invokeSeamStatic('curlStallFailure', $partial, $request, new \ArrayObject(['aborted' => true, 'bound' => 600.0, 'phase' => 'a further body frame']));
+        $this->assertInstanceOf(RequestException::class, $dropped);
+        \assert($dropped instanceof RequestException);
+        $this->assertFalse($dropped->hasResponse());
+        $this->assertSame($partial, $dropped->getPrevious());
+        $this->assertStringContainsString('no bytes for 600s while waiting for a further body frame', $dropped->getMessage());
+    }
+
+    public function testTheStallRewriterLeavesEveryOtherFailureExactlyAsItArrived(): void
+    {
+        $request = new Request('POST', 'https://seam.invalid/stream');
+        $aborted = new \ArrayObject(['aborted' => true, 'bound' => 120.0, 'phase' => 'response headers']);
+        $silent = new \ArrayObject(['aborted' => false, 'bound' => 0.0, 'phase' => 'response headers']);
+
+        $timeout = new RequestException('cURL error 28: Timeout was reached (see https://curl.se/libcurl/c/libcurl-errors.html) for https://seam.invalid/stream', $request, null, null, ['errno' => 28]);
+        $this->assertSame($timeout, self::invokeSeamStatic('curlStallFailure', $timeout, $request, $aborted), "curl's own timeout text is not the watchdog's sentence to overwrite");
+
+        $connect = new ConnectException('cURL error 7: Failed to connect to seam.invalid port 443 after 5 ms (see https://curl.se/libcurl/c/libcurl-errors.html) for https://seam.invalid/stream', $request);
+        $this->assertSame($connect, self::invokeSeamStatic('curlStallFailure', $connect, $request, $aborted));
+
+        $abortTextWithoutTheWatchdog = new RequestException('cURL error 42: Operation was aborted by an application callback', $request, null, null, ['errno' => 42]);
+        $this->assertSame(
+            $abortTextWithoutTheWatchdog,
+            self::invokeSeamStatic('curlStallFailure', $abortTextWithoutTheWatchdog, $request, $silent),
+            'when the watchdog never fired, the canned libcurl text survives - rewriting someone else\'s abort would be a lie',
+        );
+
+        $plain = new \RuntimeException('other');
+        $this->assertSame($plain, self::invokeSeamStatic('curlStallFailure', $plain, $request, $aborted));
+    }
+
     // -------------------------------------------------------------------------
 
     /**
@@ -768,6 +982,18 @@ final class ProviderConnectTimeoutTest extends TestCase
         \assert($client instanceof Client);
 
         return $client;
+    }
+
+    /**
+     * The seam's own private static helpers, reached through a class that
+     * uses the trait - the buildSeamClient idiom widened to any method.
+     */
+    private static function invokeSeamStatic(string $method, mixed ...$args): mixed
+    {
+        $reflection = new \ReflectionMethod(SglangProvider::class, $method);
+        $reflection->setAccessible(true);
+
+        return $reflection->invoke(null, ...$args);
     }
 
     private static function openAiTransportClient(): Client
