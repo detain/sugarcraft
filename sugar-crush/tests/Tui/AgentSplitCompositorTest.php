@@ -126,8 +126,11 @@ final class AgentSplitCompositorTest extends TestCase
             isActive: false,
         );
         $runs = [];
+        // Full task literals: the old 'Audit candy-' . $lib split-concat was
+        // rename-hostile (R3 flips the assert side but not the glued prefix).
+        $tasks = ['core' => 'Audit candy-core', 'ansi' => 'Audit sugar-ansi-parser'];
         foreach (['core' => 'core findings', 'ansi' => 'ansi findings'] as $lib => $output) {
-            $run = new SubAgent(id: 'run-' . $lib, agent: $reviewer, task: 'Audit candy-' . $lib);
+            $run = new SubAgent(id: 'run-' . $lib, agent: $reviewer, task: $tasks[$lib]);
             $run->status = SubAgent::STATUS_STREAMING;
             $run->output = $output;
             $runs[$run->id] = $run;
@@ -142,7 +145,7 @@ final class AgentSplitCompositorTest extends TestCase
         self::assertStringContainsString('core findings', $column);
         self::assertStringContainsString('ansi findings', $column);
         self::assertStringContainsString('Audit candy-core', $column);
-        self::assertStringContainsString('Audit candy-ansi', $column);
+        self::assertStringContainsString('Audit sugar-ansi-parser', $column);
     }
 
     /**

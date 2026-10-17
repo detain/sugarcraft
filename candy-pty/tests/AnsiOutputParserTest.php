@@ -8,7 +8,7 @@ use SugarCraft\Pty\Output\AnsiOutputParser;
 use SugarCraft\Pty\Output\SgrHandler;
 use SugarCraft\Pty\Output\SgrState;
 use SugarCraft\Pty\Contract\MasterPty;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use PHPUnit\Framework\TestCase;
 
 final class AnsiOutputParserTest extends TestCase

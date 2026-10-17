@@ -680,7 +680,7 @@ final class ByteFidelityTest extends TestCase
 
     public function testDcsParametersKeepTheirOwnSeparators(): void
     {
-        // `Action::Param` in candy-ansi feeds DCS sub-parameters through the
+        // `Action::Param` in sugar-ansi-parser feeds DCS sub-parameters through the
         // very same slot/flag arrays as a CSI, so a colon inside a DCS prelude
         // must survive exactly like one inside an SGR — and an omitted
         // parameter must stay an empty slot rather than the literal `-1` master
@@ -709,7 +709,7 @@ final class ByteFidelityTest extends TestCase
     public function testDcsPreludeRebuildHoistsTheIntermediateAheadOfTheParameters(): void
     {
         // The other half of the documented DCS lossiness, pinned rather than
-        // merely mentioned: candy-ansi collects `1` as a parameter and `$` as an
+        // merely mentioned: sugar-ansi-parser collects `1` as a parameter and `$` as an
         // intermediate, but `dcsDispatch()` rebuilds the prelude as
         // `intermediate . params`, so the hoist and the dropped prelude final
         // byte (`r`) always travel together. `ESC P 1 $ r ST` arrives as
@@ -724,7 +724,7 @@ final class ByteFidelityTest extends TestCase
         $this->assertNotSame($input, $segments[0]->raw());
     }
 
-    // --- documented limit: candy-ansi's 32-parameter cap --------------------
+    // --- documented limit: sugar-ansi-parser's 32-parameter cap --------------------
 
     public function testParameterCapIsReportedAsTheParserSawIt(): void
     {
@@ -796,7 +796,7 @@ final class ByteFidelityTest extends TestCase
         // UTF-8 rune in its own buffer and `Parser::flush()` never dispatches it,
         // because that is not an escape-sequence state - so a stream that ends
         // mid-rune loses those bytes, with or without a sequence in front of them.
-        // Byte-identical to `master`; the fix belongs in candy-ansi (README.md).
+        // Byte-identical to `master`; the fix belongs in sugar-ansi-parser (README.md).
         $cases = [
             "\x1b[31m\x1b[0m\xfe" => ["\x1b[31m", "\x1b[0m"],
             "\x1b[31m\x1b[0m\xfeZ" => ["\x1b[31m", "\x1b[0m", 'Z'],
@@ -819,11 +819,11 @@ final class ByteFidelityTest extends TestCase
     public function testMidStreamInvalidUtf8BytesAreDroppedExactlyAsTheParserDropsThem(): void
     {
         // Deviation #10: item 8's end-of-stream truncation has a mid-stream twin —
-        // candy-ansi's UTF-8 window rejects a stray lead (0xF5–0xFF and friends), a
+        // sugar-ansi-parser's UTF-8 window rejects a stray lead (0xF5–0xFF and friends), a
         // lead interrupted by a non-continuation byte, and a lone continuation byte,
         // dropping the offending byte(s) with no callback, so no segment can exist
         // for them. The interrupting/surrounding bytes survive normally. Surfacing
-        // these needs a new candy-ansi callback (deferred); pinned meanwhile.
+        // these needs a new sugar-ansi-parser callback (deferred); pinned meanwhile.
         $cases = [
             "a\xffb" => ['ab'],          // stray lead 0xFF dies, text merges
             "a\xf5b" => ['ab'],          // 0xF5: first invalid lead
@@ -842,7 +842,7 @@ final class ByteFidelityTest extends TestCase
             );
         }
 
-        // Polarity: the C1 controls candy-ansi EXECUTES are not lost — they
+        // Polarity: the C1 controls sugar-ansi-parser EXECUTES are not lost — they
         // arrive as their own sequence segments, which is why the deviation is
         // confined to what the UTF-8 window rejects.
         $this->assertSame(
@@ -854,7 +854,7 @@ final class ByteFidelityTest extends TestCase
     public function testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem(): void
     {
         // Three more ways the re-emitted bytes can differ from the input, all of
-        // them candy-ansi policies rather than this inspector's doing, pinned so a
+        // them sugar-ansi-parser policies rather than this inspector's doing, pinned so a
         // future change to the shared parser must pass through this contract:
         //  - a parameter accumulates only up to Parser::MAX_PARAM_VALUE (65535), so
         //    an oversized value arrives clamped instead of mid-digit truncated;
@@ -927,7 +927,7 @@ final class ByteFidelityTest extends TestCase
 
     public function testEightBitCsiIntroducerIsReplayedInSevenBitForm(): void
     {
-        // Deviation #9: candy-ansi opens the CSI family directly on 0x9B, but
+        // Deviation #9: sugar-ansi-parser opens the CSI family directly on 0x9B, but
         // the dispatch callback hands the handler only (final, params, …) and
         // the handler rebuilds the sequence from the `ESC [` template — so the
         // re-emitted stream carries bytes the sender did not use. The handler

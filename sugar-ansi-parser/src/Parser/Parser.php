@@ -1,0 +1,536 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\AnsiParser\Parser;
+
+/**
+ * VT500 ANSI parser state machine.
+ *
+ * Feeds raw bytes through the Paul-Williams state machine, dispatching
+ * actions to a {@see Handler}. Handles partial input naturally — a
+ * sequence split across two `feed()` calls resumes at the correct state
+ * on the second call.
+ *
+ * Mirrors charmbracelet/x/ansi/parser. Adds a Utf8 state so multi-byte
+ * runes arrive at the handler as a single `printChar(string $rune)` call.
+ *
+ * @see https://github.com/charmbracelet/x/tree/main/ansi/parser
+ * @see https://vt100.net/emu/dec_ansi_parser
+ */
+final class Parser
+{
+    private State $state = State::Ground;
+
+    /** @var list<int> Numeric CSI/DCS params; -1 marks a default/missing slot. */
+    private array $params = [];
+
+    /**
+     * ECMA-48 sub-parameter continuation flags parallel to {@see $params}:
+     * true at index i means `params[i]` was followed by a `:` separator, so
+     * `params[i + 1]` is a SUB-parameter of the same parameter group rather
+     * than an independent parameter. Without this, `CSI 4 : 3 m` (curly
+     * underline) and `CSI 4 ; 3 m` (single underline + italic) arrive at the
+     * handler as the identical flat list `[4, 3]` — the mis-split the VT500
+     * grammar forbids. The flattened list is still dispatched unchanged for
+     * handler compatibility; consumers that need the grouping read
+     * {@see subparams()}, reconstitute it with {@see groupSubparameters()}, or
+     * opt into {@see SubparamsAwareHandler} and have the parser push them in
+     * immediately before each parameterised dispatch.
+     *
+     * Mirrors charmbracelet/x/ansi `Param.HasMore` / `Params.HasMore(i)`.
+     *
+     * @var list<bool>
+     */
+    private array $subparams = [];
+
+    /** Packed command: intermediate << 16 | prefix << 8 | final. */
+    private int $cmd = 0;
+
+    /** OSC / DCS / SOS / PM / APC payload accumulator. */
+    private string $stringBuffer = '';
+
+    /** Default string-buffer cap (64 KiB) — prevents memory exhaustion from malicious sequences. */
+    private const MAX_STRING_BUFFER = 65536;
+
+    /** States accumulating a string payload; an abort out of one drops it (see advance()). */
+    private const STRING_STATES = [
+        State::DcsString,
+        State::OscString,
+        State::SosString,
+        State::PmString,
+        State::ApcString,
+    ];
+
+    /** Bytes of the current UTF-8 rune in flight. */
+    private string $utf8Buffer = '';
+
+    /** Total length of the rune we're currently collecting. */
+    private int $utf8Need = 0;
+
+    /**
+     * Number of Ground-state printable-ASCII runs dispatched via the
+     * {@see feed()} fast path (one per contiguous run, not per byte).
+     * Diagnostic only — lets tests assert the fast path is exercised.
+     */
+    private int $fastPathRuns = 0;
+
+    /**
+     * The handler viewed through the optional {@see SubparamsAwareHandler}
+     * capability, resolved once here rather than on every dispatch: the parser
+     * is fed byte-by-byte in a hot loop, and a handler's class cannot change
+     * under it. Null means the handler never opted in and receives no push.
+     */
+    private readonly ?SubparamsAwareHandler $subparamsSink;
+
+    /**
+     * @param int $maxStringBuffer Cap (in bytes) on the DCS/OSC/SOS/PM/APC
+     *                             payload accumulator. Defaults to 64 KiB;
+     *                             emulator front-ends (e.g. candy-vt) may raise
+     *                             it for large passthrough payloads.
+     */
+    public function __construct(
+        private readonly Handler $handler,
+        private readonly bool $replaceMalformed = false,
+        private readonly int $maxStringBuffer = self::MAX_STRING_BUFFER,
+    ) {
+        $this->subparamsSink = $handler instanceof SubparamsAwareHandler ? $handler : null;
+    }
+
+    /**
+     * Feed a chunk of bytes through the state machine. Safe to call
+     * repeatedly; in-flight sequences carry across calls.
+     */
+    public function feed(string $bytes): void
+    {
+        $len = strlen($bytes);
+        $i = 0;
+        while ($i < $len) {
+            $b = ord($bytes[$i]);
+
+            // Ground-state fast path: in Ground, every printable-ASCII byte
+            // (0x20-0x7E) maps to Action::Print and stays in Ground (see the
+            // transition table). Sweep the maximal run and emit its per-byte
+            // printChar() calls directly, skipping the transition-table
+            // round-trip (two enum ::from()s + a table lookup) for each byte.
+            //
+            // This is byte-for-byte identical to advancing one byte at a
+            // time: exactly one printChar() with a single-byte rune per byte,
+            // in order. 0x7F (DEL, Execute), C0 controls, ESC, C1 and UTF-8
+            // lead bytes (>=0x80) all fall outside the range and route through
+            // the normal state machine, preserving every boundary behaviour.
+            if ($this->state === State::Ground && $b >= 0x20 && $b <= 0x7E) {
+                $this->fastPathRuns++;
+                do {
+                    $this->handler->printChar($bytes[$i]);
+                    $i++;
+                } while ($i < $len && ($b = ord($bytes[$i])) >= 0x20 && $b <= 0x7E);
+                continue;
+            }
+
+            $this->advance($b);
+            $i++;
+        }
+    }
+
+    /**
+     * Feed a complete byte sequence and guarantee end-of-stream flush.
+     *
+     * This is the safe one-shot entry point: it calls feed() then flush()
+     * so a trailing unterminated OSC/DCS or in-flight rune is not silently
+     * lost. Use feed()+flush() separately for streaming (incremental) use.
+     */
+    public function parseComplete(string $bytes): void
+    {
+        $this->feed($bytes);
+        $this->flush();
+    }
+
+    /**
+     * Force any in-flight string sequence (OSC/DCS/SOS/PM/APC) to
+     * dispatch with whatever payload has been collected, and return
+     * to ground. Useful at end-of-stream.
+     */
+    public function flush(): void
+    {
+        $from = $this->state;
+        if ($from === State::OscString || $from === State::DcsString
+            || $from === State::SosString || $from === State::PmString
+            || $from === State::ApcString
+        ) {
+            $this->dispatch(0, $from);
+        }
+        if ($this->replaceMalformed && $this->utf8Buffer !== '') {
+            $this->handler->printChar("\xEF\xBF\xBD");
+        }
+        $this->state = State::Ground;
+        $this->utf8Buffer = '';
+        $this->utf8Need = 0;
+        $this->clear();
+    }
+
+    /**
+     * Reset the parser to ground state, clearing all accumulated state.
+     */
+    public function reset(): void
+    {
+        $this->flush();
+        $this->clear();
+    }
+
+    /**
+     * Returns true if the given byte sequence is a well-formed UTF-8 rune.
+     * Checks for: valid encoding, no overlong sequences, no surrogates,
+     * and code point <= U+10FFFF.
+     */
+    private function isValidUtf8Rune(string $rune): bool
+    {
+        $len = strlen($rune);
+        if ($len < 1 || $len > 4) {
+            return false;
+        }
+        $cp = match (true) {
+            $len === 1 => ord($rune[0]),
+            $len === 2 => ((ord($rune[0]) & 0x1F) << 6) | (ord($rune[1]) & 0x3F),
+            $len === 3 => ((ord($rune[0]) & 0x0F) << 12) | ((ord($rune[1]) & 0x3F) << 6) | (ord($rune[2]) & 0x3F),
+            default => ((ord($rune[0]) & 0x07) << 18) | ((ord($rune[1]) & 0x3F) << 12) | ((ord($rune[2]) & 0x3F) << 6) | (ord($rune[3]) & 0x3F),
+        };
+        // Overlong checks
+        if ($len === 2 && $cp < 0x80) {
+            return false; // overlong
+        }
+        if ($len === 3 && $cp < 0x800) {
+            return false; // overlong
+        }
+        if ($len === 4 && $cp < 0x10000) {
+            return false; // overlong
+        }
+        // Surrogate check (U+D800-U+DFFF)
+        if ($cp >= 0xD800 && $cp <= 0xDFFF) {
+            return false;
+        }
+        // Max code point
+        if ($cp > 0x10FFFF) {
+            return false;
+        }
+        // Also verify with mb_check_encoding as additional safety
+        return mb_check_encoding($rune, 'UTF-8');
+    }
+
+    /** @internal Exposed for tests asserting partial-input progress. */
+    public function currentState(): State
+    {
+        return $this->state;
+    }
+
+    /** @internal Exposed for tests asserting the Ground-state fast path is taken. */
+    public function fastPathRuns(): int
+    {
+        return $this->fastPathRuns;
+    }
+
+    /**
+     * ECMA-48 sub-parameter continuation flags for the current (in-flight) or
+     * most recently dispatched CSI/DCS parameter list: true at index i means
+     * params[i] was followed by `:`, i.e. params[i + 1] belongs to the same
+     * parameter group. Indices beyond the last flag default to false — an
+     * empty result means the list held no `:` separators.
+     *
+     * A handler that owns its Parser reads them back mid-dispatch this way —
+     * `candy-ansi-inspect`'s `AnsiHandler` does exactly that — and a driver reads them
+     * after `feed()` for the last completed sequence; they reset when the next
+     * sequence's params start accumulating. This is the PULL route.
+     *
+     * The alternative — the one the candy-vt and candy-codeshot sinks now use — is
+     * the PUSH: implement {@see SubparamsAwareHandler} and be handed the same
+     * flags in the dispatch call chain, so the handler needs no back-reference to
+     * the parser dispatching it. {@see SubparamsAwareHandler::setSubparams()}
+     * removes that back-reference where taken; it does not forbid pulling. Both
+     * routes stay live and byte-identical (see that interface).
+     *
+     * @return list<bool>
+     */
+    public function subparams(): array
+    {
+        return $this->subparams;
+    }
+
+    /**
+     * Reconstitute ECMA-48 parameter groups from a flattened params list plus
+     * the {@see subparams()} continuation flags: each group is one parameter
+     * followed by its `:`-separated sub-parameters. `CSI 4 : 3 m` yields
+     * `[[4, 3]]` (one underline-style parameter) while `CSI 4 ; 3 m` yields
+     * `[[4], [3]]` (underline, then a separate SGR 3) — the distinction the
+     * flat list alone cannot express.
+     *
+     * @param list<int>  $params  Params as dispatched by the parser.
+     * @param list<bool> $flags   Flags from {@see subparams()}.
+     * @return list<list<int>>
+     */
+    public static function groupSubparameters(array $params, array $flags): array
+    {
+        $groups = [];
+        foreach ($params as $i => $value) {
+            $open = count($groups) - 1;
+            if ($i === 0 || $open < 0 || ($flags[$i - 1] ?? false) !== true) {
+                $groups[] = [$value];
+                continue;
+            }
+            $groups[$open][] = $value;
+        }
+        return $groups;
+    }
+
+    private function advance(int $byte): void
+    {
+        if ($this->state === State::Utf8) {
+            if ($byte >= 0x80 && $byte <= 0xBF) {
+                $this->utf8Buffer .= chr($byte);
+                if (strlen($this->utf8Buffer) >= $this->utf8Need) {
+                    if ($this->replaceMalformed && !$this->isValidUtf8Rune($this->utf8Buffer)) {
+                        $this->handler->printChar("\xEF\xBF\xBD");
+                    } else {
+                        $this->handler->printChar($this->utf8Buffer);
+                    }
+                    $this->utf8Buffer = '';
+                    $this->utf8Need = 0;
+                    $this->state = State::Ground;
+                }
+                return;
+            }
+            // Non-continuation byte in Utf8 — drop the incomplete rune
+            // and fall through with the byte processed from Ground.
+            if ($this->replaceMalformed) {
+                $this->handler->printChar("\xEF\xBF\xBD");
+            }
+            $this->utf8Buffer = '';
+            $this->utf8Need = 0;
+            $this->state = State::Ground;
+        }
+
+        $entry = Transitions::get($this->state->value, $byte);
+        $action = Action::from(Transitions::action($entry));
+        $next = State::from(Transitions::nextState($entry));
+
+        // UTF-8 lead bytes start a rune; bypass the regular Collect.
+        if ($next === State::Utf8) {
+            $this->utf8Buffer = chr($byte);
+            $this->utf8Need = match (true) {
+                $byte <= 0xDF => 2,
+                $byte <= 0xEF => 3,
+                default => 4,
+            };
+            $this->state = State::Utf8;
+            return;
+        }
+
+        $from = $this->state;
+        $this->perform($action, $byte, $from);
+        // An ESC that aborts an in-flight string sequence lands in Escape with
+        // only the table's own action (Dispatch for OSC/SOS/PM/APC/DCS — the
+        // anywhere-loop Clear covers every other origin). Force the clear the
+        // table omits, mirroring charmbracelet/x/ansi Advance(), so a
+        // cancelled-but-dispatched sequence's params and intermediates cannot
+        // bleed into the escape sequence that interrupted it: without this,
+        // `ESC P 1 SP / q X ESC \` dispatches the final ESC \ with the stale
+        // intermediate '/' (47) where upstream reports 0.
+        if ($next === State::Escape && $action !== Action::Clear) {
+            $this->clear();
+        }
+        // A string sequence ABORTED to Ground — CAN/SUB or an Execute-class C1
+        // — exits on a table edge carrying neither Dispatch nor Clear, so its
+        // payload would otherwise sit in the buffer and bleed into whatever
+        // sequence starts next (`ESC ] a CAN` then `0x9D b 0x9C` must dispatch
+        // "b", matching charmbracelet/x/ansi; the start()-clears-buffer shape
+        // of this fix was rejected because a mid-string C1 re-introducer MUST
+        // keep the bytes collected before it — pinned downstream by candy-vt,
+        // CALIBER 2026-05-30 step-20, and here by
+        // ParserTest::testC1ReintroducerPreservesStringPayload).
+        if ($next === State::Ground
+            && \in_array($from, self::STRING_STATES, true)
+            && $action !== Action::Dispatch
+            && $action !== Action::Clear
+        ) {
+            $this->stringBuffer = '';
+        }
+        $this->state = $next;
+    }
+
+    private function perform(Action $action, int $byte, State $from): void
+    {
+        match ($action) {
+            Action::None => null,
+            Action::Print => $this->handler->printChar(chr($byte)),
+            Action::Execute => $this->handler->execute($byte),
+            Action::Clear => $this->clear(),
+            Action::Collect => $this->collect($byte),
+            Action::Prefix => $this->prefix($byte),
+            Action::Param => $this->param($byte),
+            Action::Start => $this->start($byte, $from),
+            Action::Put => $this->put($byte),
+            Action::Dispatch => $this->dispatch($byte, $from),
+        };
+    }
+
+    private function clear(): void
+    {
+        $this->params = [];
+        $this->subparams = [];
+        $this->cmd = 0;
+        $this->stringBuffer = '';
+    }
+
+    private function collect(int $byte): void
+    {
+        $this->cmd = ($this->cmd & ~(0xFF << 16)) | ($byte << 16);
+    }
+
+    private function prefix(int $byte): void
+    {
+        $this->cmd = ($this->cmd & ~(0xFF << 8)) | ($byte << 8);
+    }
+
+    private const MAX_PARAMS = 32;
+
+    private const MAX_PARAM_VALUE = 65535;
+
+    private function param(int $byte): void
+    {
+        // ';' (0x3B) and ':' (0x3A) both start a new param slot; ':' additionally
+        // marks the PRECEDING slot as a sub-parameter group continuation (the
+        // ECMA-48 `:` sub-parameter separator), recorded in $subparams and
+        // surfaced via subparams().
+        $n = count($this->params);
+        if ($byte === 0x3B || $byte === 0x3A) {
+            if ($n >= self::MAX_PARAMS) {
+                return; // At cap, ignore separator
+            }
+            if ($n === 0) {
+                $this->params[] = -1; // implicit default before the separator
+                $this->subparams[] = false;
+                $n = 1;
+            }
+            if ($byte === 0x3A) {
+                $this->subparams[$n - 1] = true;
+            }
+            $this->params[] = -1;
+            $this->subparams[] = false;
+            return;
+        }
+
+        $digit = $byte - 0x30;
+        if ($n === 0) {
+            $this->params[] = $digit;
+            $this->subparams[] = false;
+            return;
+        }
+        $last = $n - 1;
+        if ($this->params[$last] === -1) {
+            $this->params[$last] = $digit;
+            return;
+        }
+        // Even at cap, allow accumulation into the current (32nd) slot
+        $this->params[$last] = min($this->params[$last] * 10 + $digit, self::MAX_PARAM_VALUE);
+    }
+
+    private function start(int $byte, State $from): void
+    {
+        // C1 (lane A3a): a DIFFERENT-type string introducer mid-sequence is
+        // an implicit cancel of the pending one — its payload must not ride
+        // into the new sequence's dispatch (an APC fragment arriving as OSC
+        // title data is a title-injection vector from untrusted peers).
+        // Same-type re-introduction deliberately KEEPS the buffer
+        // (testC1ReintroducerPreservesStringPayload).
+        $target = $this->introducerTarget($byte);
+        if ($target !== null
+            && $target !== $from
+            && \in_array($from, self::STRING_STATES, true)
+        ) {
+            $this->stringBuffer = '';
+        }
+
+        // For DCS, the byte that triggers Start IS the final command.
+        if ($from === State::DcsEntry || $from === State::DcsParam || $from === State::DcsIntermediate) {
+            $this->cmd = ($this->cmd & ~0xFF) | $byte;
+        }
+    }
+
+    /**
+     * The string state a C1 introducer byte opens, or null for any other
+     * byte. Used by the cross-type discard in {@see start()}.
+     */
+    private function introducerTarget(int $byte): ?State
+    {
+        return match ($byte) {
+            0x98 => State::SosString,
+            0x9D => State::OscString,
+            0x9E => State::PmString,
+            0x9F => State::ApcString,
+            default => null,
+        };
+    }
+
+    private function put(int $byte): void
+    {
+        if (strlen($this->stringBuffer) >= $this->maxStringBuffer) {
+            return;
+        }
+        $this->stringBuffer .= chr($byte);
+    }
+
+    private function dispatch(int $byte, State $from): void
+    {
+        $prefix = ($this->cmd >> 8) & 0xFF;
+        $intermediate = ($this->cmd >> 16) & 0xFF;
+
+        switch ($from) {
+            case State::OscString:
+                $this->handler->oscDispatch($this->stringBuffer);
+                break;
+            case State::DcsString:
+                $this->pushSubparams();
+                $this->handler->dcsDispatch(
+                    $this->cmd & 0xFF,
+                    $this->params,
+                    $prefix,
+                    $intermediate,
+                    $this->stringBuffer,
+                );
+                break;
+            case State::SosString:
+                $this->handler->sosPmApcDispatch('sos', $this->stringBuffer);
+                break;
+            case State::PmString:
+                $this->handler->sosPmApcDispatch('pm', $this->stringBuffer);
+                break;
+            case State::ApcString:
+                $this->handler->sosPmApcDispatch('apc', $this->stringBuffer);
+                break;
+            case State::Escape:
+            case State::EscapeIntermediate:
+                $this->handler->escDispatch($byte, $intermediate);
+                break;
+            default:
+                $this->pushSubparams();
+                $this->handler->csiDispatch($byte, $this->params, $prefix, $intermediate);
+        }
+        $this->stringBuffer = '';
+    }
+
+    /**
+     * Push the in-flight continuation flags to the handler when — and only when
+     * — it opted into {@see SubparamsAwareHandler}.
+     *
+     * A handler that did not opt in is dispatched exactly as it was before this
+     * capability existed: no extra call, no changed argument. The in-tree sinks
+     * DO opt in and read the push — candy-vt's `ScreenHandler` (emulator) and
+     * `RendererHandler` (renderer, forwarding to `CsiHandlerImpl`), and
+     * candy-codeshot's `SgrStateHandler` — so none of them needs the late-bound
+     * back-reference any more. {@see subparams()} remains public for a program
+     * that owns a Parser directly; see {@see SubparamsAwareHandler}.
+     */
+    private function pushSubparams(): void
+    {
+        $this->subparamsSink?->setSubparams($this->subparams);
+    }
+}

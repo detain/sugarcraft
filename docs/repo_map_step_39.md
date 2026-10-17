@@ -39,7 +39,7 @@ This is doc-heavy; Scribe does most of the work. Coder ensures HTML validity + p
    - candy-layout ✅ step-03
    - candy-buffer ✅ step-02
    - sugar-testing ✅ step-04
-   - candy-ansi ✅ step-01
+   - sugar-ansi-parser ✅ step-01
    - sugar-mouse ✅ step-05
    - sugar-input ✅ step-06
 

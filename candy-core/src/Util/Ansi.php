@@ -347,7 +347,7 @@ final class Ansi
     // cites ECMA-48, VT510 and ansicode.txt directly, and this file's
     // `Mirrors charmbracelet/x/ansi.*` convention is honoured only where this repo
     // already records an upstream symbol to mirror (see scs()) rather than guessed
-    // at. candy-ansi holds the parse side of all three and no emitter of its own.
+    // at. sugar-ansi-parser holds the parse side of all three and no emitter of its own.
 
     /**
      * RIS — Reset to Initial State (`ESC c`).
@@ -381,7 +381,7 @@ final class Ansi
      * it consumes whatever the caller prints next as the final — eating output
      * instead of testing alignment. In xterm the CSI-`#` substate is the
      * palette stack (`csi_hash_table[]`, the `CSI # P/Q/R/S` XT*COLORS family),
-     * never DECALN; in candy-ansi's mirrored table the sequence drops in
+     * never DECALN; in sugar-ansi-parser's mirrored table the sequence drops in
      * CsiIntermediate without dispatching. The misquote stays deliberately inert.
      *
      * candy-vt executes this pattern from the wire: `ESC # 8` reaches

@@ -7,7 +7,7 @@ updated: 2026-06-30
 # Implementation Plan: candy-vt
 
 > **SUPERSEDED (2026-09-16, on master `aeb34bee4`) — the `CellGrid` tasks are moot; `src/CellGrid.php` was deleted.** **§2.1** (and its §12.1 / §12.6 follow-ons and the phase-summary table row) target `CellGrid::set()`/`resize()` in `src/CellGrid.php`. That class was collapsed into `src/Buffer/Buffer.php` by commit `40cfe4e3b`, landed via **PR #1447 (merge `f7fe7c33b`)**; `CsiHandlerImpl` now uses `Buffer` directly (`candy-vt/src/Parser/CsiHandlerImpl.php:92`). There is no `CellGrid` left to change. Original prose is preserved for history; see the matching note atop `findings/candy-vt.md`.
-> **RE-DERIVED (2026-09-17, on master `b26b9989f`) — lane r86v5 walked all 31 rows against the post-merge tree.** Parser-era rows (Phases 1.1/2.2/7.1/7.3/8.1/12.2/12.4) target files that now live only in candy-ansi (de-fork `9952e3f5c`; `candy-vt/src/Terminal.php:7-8` imports `SugarCraft\Ansi\Parser\{Parser,HandlerAdapter}`); upstream waves `61b28175c` (w4-vt) + `3514c2d59` (r86u) landed 8 more rows outright. SURVIVING actionable set = 9 rows: **2.3, 4.1, 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 12.3**. Per-row evidence: `/home/sites/crush-r61-artifacts/v5/verdicts.md`.
+> **RE-DERIVED (2026-09-17, on master `b26b9989f`) — lane r86v5 walked all 31 rows against the post-merge tree.** Parser-era rows (Phases 1.1/2.2/7.1/7.3/8.1/12.2/12.4) target files that now live only in sugar-ansi-parser (de-fork `9952e3f5c`; `candy-vt/src/Terminal.php:7-8` imports `SugarCraft\AnsiParser\Parser\{Parser,HandlerAdapter}`); upstream waves `61b28175c` (w4-vt) + `3514c2d59` (r86u) landed 8 more rows outright. SURVIVING actionable set = 9 rows: **2.3, 4.1, 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 12.3**. Per-row evidence: `/home/sites/crush-r61-artifacts/v5/verdicts.md`.
 
 ## Goal
 
@@ -29,7 +29,7 @@ Address all 31 findings from the candy-vt code review, organized into phases by 
 
 > **r86v5 re-derivation tally:** ⏭1 ✅1 — both thread-safety rows dead in candy-vt shape (de-fork / eager literals). No work.
 
-### 1.1 Fix `Transitions::$table` thread-safe lazy init ⏭ r86v5: superseded-by-upstream — `src/Parser/Transitions.php` no longer exists in candy-vt (parser de-fork `9952e3f5c`); lazy `??=` table now `candy-ansi/src/Parser/Transitions.php:37`, ruled ⏭️ obsolete there (no userland shared-memory threads, pure build()) — see findings/candy-vt.md #3/q18.
+### 1.1 Fix `Transitions::$table` thread-safe lazy init ⏭ r86v5: superseded-by-upstream — `src/Parser/Transitions.php` no longer exists in candy-vt (parser de-fork `9952e3f5c`); lazy `??=` table now `sugar-ansi-parser/src/Parser/Transitions.php:37`, ruled ⏭️ obsolete there (no userland shared-memory threads, pure build()) — see findings/candy-vt.md #3/q18.
 
 **File:** `src/Parser/Transitions.php:27-37`
 
@@ -184,7 +184,7 @@ public function set(int $row, int $col, Cell $cell): void
 
 ---
 
-### 2.2 Fix `Transitions::build()` unused `$g` variable ⏭ r86v5: superseded-by-upstream — Transitions de-forked to candy-ansi (see 1.1); there `$g` is used at its definition line — ruled ⏭️ obsolete, findings #9/q18.
+### 2.2 Fix `Transitions::build()` unused `$g` variable ⏭ r86v5: superseded-by-upstream — Transitions de-forked to sugar-ansi-parser (see 1.1); there `$g` is used at its definition line — ruled ⏭️ obsolete, findings #9/q18.
 
 **File:** `src/Parser/Transitions.php:52-53`
 
@@ -423,7 +423,7 @@ public function clear(): void
 
 ---
 
-### 4.3 Add `flush()` method to root `Terminal` ✅ r87w1: shipped — delegates candy-ansi Parser::flush() + syncState(); partial-OSC title capture pinned by tests/TerminalTest.php (3 pins). Original: ❗ r86v5: STILL LIVE — `src/Terminal.php` (114 lines, roster new/feed/snapshot/cursor/grid/windowTitle/theme/isWrapPending) has no `flush()`; full path keeps it at `src/Terminal/Terminal.php:328`; candy-ansi `Parser::flush()` exists to delegate to. If unbuildable: vcr consumers cannot force dispatch of a partial OSC before `snapshot()`.
+### 4.3 Add `flush()` method to root `Terminal` ✅ r87w1: shipped — delegates sugar-ansi-parser Parser::flush() + syncState(); partial-OSC title capture pinned by tests/TerminalTest.php (3 pins). Original: ❗ r86v5: STILL LIVE — `src/Terminal.php` (114 lines, roster new/feed/snapshot/cursor/grid/windowTitle/theme/isWrapPending) has no `flush()`; full path keeps it at `src/Terminal/Terminal.php:328`; sugar-ansi-parser `Parser::flush()` exists to delegate to. If unbuildable: vcr consumers cannot force dispatch of a partial OSC before `snapshot()`.
 
 **File:** `src/Terminal.php`
 
@@ -843,7 +843,7 @@ private function scrollUpOne(): void
 
 > **r86v5 re-derivation tally:** ⏭2 (7.1, 7.3 de-fork) ✅1 (7.4) — plus pre-stamped 7.2 ✅; phase closed.
 
-### 7.1 Clarify `HandlerAdapter::printChar()` comment ⏭ r86v5: superseded-by-upstream — `HandlerAdapter.php` lives only in candy-ansi now (de-fork); pass-through rationale documented there — findings #16/q18 ✅.
+### 7.1 Clarify `HandlerAdapter::printChar()` comment ⏭ r86v5: superseded-by-upstream — `HandlerAdapter.php` lives only in sugar-ansi-parser now (de-fork); pass-through rationale documented there — findings #16/q18 ✅.
 
 **File:** `src/Parser/HandlerAdapter.php:23-30`
 
@@ -917,7 +917,7 @@ public function __clone(): void
 
 ---
 
-### 7.3 Document `HandlerAdapter::oscDispatch()` scope limitation ⏭ r86v5: superseded-by-upstream — candy-ansi `HandlerAdapter::oscDispatch()` (`candy-ansi/src/Parser/HandlerAdapter.php:132`) now dispatches OSC 8 with id parsing; recorded-scope fixed there — findings #12/q18 ✅.
+### 7.3 Document `HandlerAdapter::oscDispatch()` scope limitation ⏭ r86v5: superseded-by-upstream — sugar-ansi-parser `HandlerAdapter::oscDispatch()` (`sugar-ansi-parser/src/Parser/HandlerAdapter.php:132`) now dispatches OSC 8 with id parsing; recorded-scope fixed there — findings #12/q18 ✅.
 
 **File:** `src/Parser/HandlerAdapter.php:79-84`
 
@@ -987,7 +987,7 @@ Both classes now have consistent `new()` factory — the only factory method.
 
 > **r86v5 re-derivation tally:** ⏭2 (DCS implemented; async premise dead) — phase closed upstream.
 
-### 8.1 Document DCS dispatch as deferred to v2 ⏭ r86v5: superseded-by-upstream — DCS dispatch is IMPLEMENTED in candy-ansi (`HandlerAdapter::dcsDispatch` at `candy-ansi/src/Parser/HandlerAdapter.php:168`; findings #23 ✅ de-fork). Nothing left to document as deferred.
+### 8.1 Document DCS dispatch as deferred to v2 ⏭ r86v5: superseded-by-upstream — DCS dispatch is IMPLEMENTED in sugar-ansi-parser (`HandlerAdapter::dcsDispatch` at `sugar-ansi-parser/src/Parser/HandlerAdapter.php:168`; findings #23 ✅ de-fork). Nothing left to document as deferred.
 
 **File:** `src/Parser/HandlerAdapter.php:86-88`, `src/Parser/OscHandlerImpl.php:21-23`
 
@@ -1222,7 +1222,7 @@ default => [
 
 ---
 
-### 12.2 Document `Parser::reset()` OSC discard behavior ⏭ r86v5: superseded-by-upstream — `Parser` lives in candy-ansi; `reset()=flush()+clear()` dispatches in-flight payloads there — findings #7/q18 ✅.
+### 12.2 Document `Parser::reset()` OSC discard behavior ⏭ r86v5: superseded-by-upstream — `Parser` lives in sugar-ansi-parser; `reset()=flush()+clear()` dispatches in-flight payloads there — findings #7/q18 ✅.
 
 **File:** `src/Parser/Parser.php:82-86`
 
@@ -1298,7 +1298,7 @@ if ($this->mode->reportFocusEvents) {
 
 ---
 
-### 12.4 Pre-compute `Transitions` table at autoload time ⏭ r86v5: superseded-by-upstream — parser de-forked (see 1.1); the row's own won't-fix decision stands (findings #31 q18: feature-idea, lazy build retained in candy-ansi).
+### 12.4 Pre-compute `Transitions` table at autoload time ⏭ r86v5: superseded-by-upstream — parser de-forked (see 1.1); the row's own won't-fix decision stands (findings #31 q18: feature-idea, lazy build retained in sugar-ansi-parser).
 
 **File:** `src/Parser/Transitions.php`
 

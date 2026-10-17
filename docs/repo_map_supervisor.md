@@ -71,7 +71,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 00 — Bootstrap & smoke-check](repo_map_step_00.md) — branch: `ai/plan-bootstrap`
 
 ### Phase 1 — New shared foundation packages (8)
-- [x] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
+- [x] [Step 01 — Create sugar-ansi-parser](repo_map_step_01.md) — branch: `ai/sugar-ansi-parser-new`
 - [x] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
 - [x] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
 - [x] [Step 04 — Create sugar-testing](repo_map_step_04.md) — branch: `ai/sugar-testing-new`
@@ -84,7 +84,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
 - [x] [Step 10 — candy-sprinkles uses candy-layout](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
 - [x] [Step 11 — sugar-markdown StyleSheet + BlockStack](repo_map_step_11.md) — branch: `ai/sugar-markdown-blockstack`
-- [x] [Step 12 — candy-vt delegates to candy-ansi](repo_map_step_12.md) — branch: `ai/candy-vt-uses-ansi`
+- [x] [Step 12 — candy-vt delegates to sugar-ansi-parser](repo_map_step_12.md) — branch: `ai/candy-vt-uses-ansi`
 - [x] [Step 13 — sugar-image + sugar-colorprofile TerminalProbe](repo_map_step_13.md) — branch: `ai/probe-consolidation`
 
 ### Phase 3 — Migrate UI components onto shared foundations (6)
@@ -111,7 +111,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 6 — Ecosystem-wide adoption sweep (8)
 - [x] [Step 30 — Ecosystem audit (no code, produces roadmap)](repo_map_step_30.md) — branch: `ai/ecosystem-audit`, PR #909
-- [x] [Step 31 — candy-pty adopts sugar-input + candy-ansi](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
+- [x] [Step 31 — candy-pty adopts sugar-input + sugar-ansi-parser](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
 - [x] [Step 32 — candy-tetris + candy-minesweeper adopt candy-buffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
 - [x] [Step 33 — candy-kv + candy-ssh-launcher + candy-git adopt sugar-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
 - [x] [Step 34 — sugar-datepicker + sugar-toast adopt candy-buffer + sugar-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914

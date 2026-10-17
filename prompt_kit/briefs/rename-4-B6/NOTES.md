@@ -13,8 +13,8 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
   `SugarSpark`, R4 is glued `sugarspark`; `Sparkline`/`sparkline` matches none. VERIFIED at R3: zero <!-- @rename-keep -->
   sparkline paths in the staged diff, zero sparkline lines in the (re-)dry-run.
 - PROTECT auto-derivation inert (renames.json has exactly 1 spark entry). Reverse-direction law RE-LOGGED:
-  batch-E `candy-ansi` → sugar-ansi-parser must PROTECT `candy-ansi-inspect` (R3 suffix + R5 CANDY_ANSI_
-  prefix would mangle CANDY_ANSI_INSPECT_BIN / paths). Also: the sibling lib `candy-ansi` (untouched slug)
+  batch-E `candy-ansi` → sugar-ansi-parser must PROTECT `candy-ansi-inspect` (R3 suffix + R5 CANDY_ANSI_ <!-- @rename-keep historical provenance -->
+  prefix would mangle CANDY_ANSI_INSPECT_BIN / paths). Also: the sibling lib `candy-ansi` (untouched slug) <!-- @rename-keep historical provenance -->
   shares the word 'ansi' — zero rule fires on it from this entry (verified: only its 4 CONTENT files got
   docblock prose rewrites, no path renames).
 - Tracked paths outside lib moved by C.2: docs/_data pair, docs/lib page, repo_map pair, research doc,
@@ -22,9 +22,9 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
   162 art files (→ ansi/candy-ansi-inspect/candy-ansi-inspect-*.ansi). <!-- @rename-keep -->
 - Composer REQUIRE consumers: root composer.json only (require + repositories). NO sibling lib requires it.
   Docblock/example mentions auto-rewrote: candy-core/README.md, sugar-bits/examples/item-list.php, root <!-- @rename-keep historical provenance -->
-  README.md:85, MATCHUPS :85/:206, candy-ansi/{README,CALIBER_LEARNINGS,src/Parser/Parser,src/Parser/SubparamsAwareHandler}.
+  README.md:85, MATCHUPS :85/:206, candy-ansi/{README,CALIBER_LEARNINGS,src/Parser/Parser,src/Parser/SubparamsAwareHandler}. <!-- @rename-keep historical provenance -->
 - Env: ZERO getenv/$_ENV/putenv reads in src+bin. `SUGARSPARK_BIN` existed ONLY in examples/inspect.sh <!-- @rename-keep -->
-  (bash example, not PHP) → tool R5 rewrote it to CANDY_ANSI_INSPECT_BIN (6 R5 sites incl comment); NO LegacyEnv shim.
+  (bash example, not PHP) → tool R5 rewrote it to CANDY_ANSI_INSPECT_BIN (6 R5 sites incl comment); NO LegacyEnv shim. <!-- @rename-keep historical provenance -->
 - User data paths: grep XDG/.config/.local/.cache over src+bin → EMPTY. LegacyPaths: honest none.
 - BRAND CLASS: none — all src classes domain-named (Inspector/StreamingInspector/AnsiHandler/Segment/
   SequenceSegment/TextSegment/C0C1/Lang). No Spark* compounds anywhere.
@@ -67,7 +67,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 - rc=0: 98 files, **173** paths (172 + the lib dir itself — B5 shape), replacement counts byte-identical to re-dry-run.
 - `sugar-spark/` gone → `candy-ansi-inspect/`; `bin/candy-ansi-inspect` present. <!-- @rename-keep -->
 - php -l: all changed existing PHP clean + bin lints (file_exists filter per B5 gotcha). JSON valid (root/lib).
-- Collision gates: zero sparkline PATHS in diff; candy-ansi sibling = 4 content-only docblock prose rewrites, zero paths.
+- Collision gates: zero sparkline PATHS in diff; candy-ansi sibling = 4 content-only docblock prose rewrites, zero paths. <!-- @rename-keep historical provenance -->
 
 ## R4 manual followups (all landed pre-R7)
 - examples/inspect.sh: R4 minted INVALID bash fn name `candy-ansi-inspect()` (+export -f +6 `| candy-ansi-inspect`
@@ -77,7 +77,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
   caught :134, post-R3 sweep caught :102 too — grep bare `'spark` in tests before claiming done).
 - Glued `_sugar-spark` path refs swept (A1 blindspot law): docs/repo_map/update_sugarcraft_candy-ansi-inspect.md :149, <!-- @rename-keep -->
   findings/plan.md :197. Zero `_sugar-spark` remain outside tagged history + .ansi art. <!-- @rename-keep -->
-- README Formerly + Namespace-changed blockquotes under `# CandyAnsiInspect` H1 (B2 format, tagged).
+- README Formerly + Namespace-changed blockquotes under `# CandyAnsiInspect` H1 (B2 format, tagged). <!-- @rename-keep historical provenance -->
 - composer.json description de-framed 'PHP port of charmbracelet/sequin' → '…modeled on the charmbracelet/sequin Go tool'
   (B3/B5 pattern); keywords keep sequin + sugarcraft + ansi/inspector; raw em-dash matches dominant house style (1-line diff).
 - rename-1.1-zone-merge.md:63 historical line tagged (true history: zone-merge lane's sugar-spark revert record). <!-- @rename-keep -->
@@ -96,7 +96,7 @@ Base: master 4f8427290 == origin; foreign untracked oc.7z → /tmp/oc.7z.b6-hold
 - Residue `--old=sugar-spark`: initial 12 findings ALL = own NOTES.md history lines → tagged them all → **0 rc=0** ✓. <!-- @rename-keep -->
 - Suite EXACT-shape: **278T/1412A OK (0.745s)** = baseline ✓. Watchdog + plain pipe + env -u LINES/COLUMNS.
 - Sparkline untouched proof: `git diff --cached --name-only -M | grep -ci sparkline` = **0** ✓; `ls -d *spark*` → no match.
-- Consumer sanity: candy-ansi suite **360T/901A OK** (its 4 changed files are docblock-comment-only; lint clean ×3 incl
+- Consumer sanity: candy-ansi suite **360T/901A OK** (its 4 changed files are docblock-comment-only; lint clean ×3 incl <!-- @rename-keep historical provenance -->
   candy-freeze/SgrStateHandler.php auto-rewrite). No composer REQUIRE consumers exist. <!-- @rename-keep -->
 - tools/tests **426T/1484A OK (36s)** — floor EXACT ✓. path-repos --no-lib-path-repos rc=0 ✓.
 - Diffstat: 284 files; rename-detection `{sugar-spark => candy-ansi-inspect}` through lib tree + docs pair + repo_map pair <!-- @rename-keep -->

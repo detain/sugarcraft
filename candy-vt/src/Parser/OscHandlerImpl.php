@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
-use SugarCraft\Ansi\Parser\OscHandler;
+use SugarCraft\AnsiParser\Parser\OscHandler;
 use SugarCraft\Vt\Hyperlink\Hyperlink;
 
 /**
  * OSC handler for the vcr renderer path.
  *
- * Implements candy-ansi's {@see \SugarCraft\Ansi\Parser\OscHandler}.
+ * Implements sugar-ansi-parser's {@see \SugarCraft\AnsiParser\Parser\OscHandler}.
  * Stores the window title and — since ESC-2 — the active OSC 8 hyperlink,
  * forwarding it to the {@see CsiHandlerImpl} pen so cells printed while a
  * link is open carry it (the emulator's `Handler\OscHandler` +
@@ -41,7 +41,7 @@ final class OscHandlerImpl implements OscHandler
     }
 
     /**
-     * OSC 8 open/close. The candy-ansi parser contract is that an empty
+     * OSC 8 open/close. The sugar-ansi-parser parser contract is that an empty
      * `$uri` CLOSES the current link (xterm ctlseqs: `OSC 8 ; params ; URI`,
      * "an empty URI ... terminates the current hyperlink"), so the pen (and
      * every cell printed afterwards) returns to unlinked.

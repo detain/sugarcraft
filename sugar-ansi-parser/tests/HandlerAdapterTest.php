@@ -1,0 +1,583 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\AnsiParser\Tests;
+
+use SugarCraft\AnsiParser\Parser\CsiHandler;
+use SugarCraft\AnsiParser\Parser\HandlerAdapter;
+use SugarCraft\AnsiParser\Parser\OscHandler;
+use SugarCraft\AnsiParser\Parser\Parser;
+use PHPUnit\Framework\TestCase;
+
+final class HandlerAdapterTest extends TestCase
+{
+    private CsiHandler $csi;
+    private OscHandler $osc;
+    private HandlerAdapter $adapter;
+    private Parser $parser;
+
+    protected function setUp(): void
+    {
+        $this->csi = $this->createMock(CsiHandler::class);
+        $this->osc = $this->createMock(OscHandler::class);
+        $this->adapter = new HandlerAdapter($this->csi, $this->osc);
+        $this->parser = new Parser($this->adapter);
+    }
+
+    public function testCsiDispatchCUU(): void
+    {
+        $this->csi->expects($this->once())->method('cuu')->with(3);
+
+        $this->parser->feed("\x1b[3A");
+    }
+
+    public function testCsiDispatchCUD(): void
+    {
+        $this->csi->expects($this->once())->method('cud')->with(5);
+
+        $this->parser->feed("\x1b[5B");
+    }
+
+    public function testCsiDispatchCUF(): void
+    {
+        $this->csi->expects($this->once())->method('cuf')->with(2);
+
+        $this->parser->feed("\x1b[2C");
+    }
+
+    public function testCsiDispatchCUB(): void
+    {
+        $this->csi->expects($this->once())->method('cub')->with(4);
+
+        $this->parser->feed("\x1b[4D");
+    }
+
+    public function testCsiDispatchCUP(): void
+    {
+        $this->csi->expects($this->once())->method('cup')->with(10, 20);
+
+        $this->parser->feed("\x1b[10;20H");
+    }
+
+    public function testCsiDispatchCUPWithDefaultParams(): void
+    {
+        $this->csi->expects($this->once())->method('cup')->with(1, 1);
+
+        $this->parser->feed("\x1b[H");
+    }
+
+    public function testCsiDispatchSGR(): void
+    {
+        $this->csi->expects($this->once())->method('sgr')->with([31]);
+
+        $this->parser->feed("\x1b[31m");
+    }
+
+    public function testCsiDispatchSGRMultipleParams(): void
+    {
+        $this->csi->expects($this->once())->method('sgr')->with([1, 31, 40]);
+
+        $this->parser->feed("\x1b[1;31;40m");
+    }
+
+    public function testCsiDispatchED(): void
+    {
+        $this->csi->expects($this->once())->method('ed')->with(2);
+
+        $this->parser->feed("\x1b[2J");
+    }
+
+    public function testCsiDispatchEDDefaultMode(): void
+    {
+        $this->csi->expects($this->once())->method('ed')->with(0);
+
+        $this->parser->feed("\x1b[J");
+    }
+
+    public function testCsiDispatchEL(): void
+    {
+        $this->csi->expects($this->once())->method('el')->with(1);
+
+        $this->parser->feed("\x1b[1K");
+    }
+
+    public function testCsiDispatchELDefaultMode(): void
+    {
+        $this->csi->expects($this->once())->method('el')->with(0);
+
+        $this->parser->feed("\x1b[K");
+    }
+
+    public function testCsiDispatchDECSET(): void
+    {
+        $this->csi->expects($this->once())->method('decset')->with(25, 0);
+
+        $this->parser->feed("\x1b[25h");
+    }
+
+    public function testCsiDispatchDECSETWithPrivateMarker(): void
+    {
+        $this->csi->expects($this->once())->method('decset')->with(25, ord('?'));
+
+        $this->parser->feed("\x1b[?25h");
+    }
+
+    public function testCsiDispatchDECRST(): void
+    {
+        $this->csi->expects($this->once())->method('decrst')->with(25, 0);
+
+        $this->parser->feed("\x1b[25l");
+    }
+
+    public function testCsiDispatchDECRSTWithPrivateMarker(): void
+    {
+        $this->csi->expects($this->once())->method('decrst')->with(25, ord('?'));
+
+        $this->parser->feed("\x1b[?25l");
+    }
+
+    public function testCsiDispatchDECSTBM(): void
+    {
+        $this->csi->expects($this->once())->method('decstbm')->with(5, 20);
+
+        $this->parser->feed("\x1b[5;20r");
+    }
+
+    public function testCsiDispatchTBC(): void
+    {
+        $this->csi->expects($this->once())->method('tbc')->with(0);
+
+        $this->parser->feed("\x1b[g");
+    }
+
+    public function testCsiDispatchCBT(): void
+    {
+        $this->csi->expects($this->once())->method('cbt')->with(3);
+
+        $this->parser->feed("\x1b[3Z");
+    }
+
+    public function testCsiDispatchCHT(): void
+    {
+        $this->csi->expects($this->once())->method('cht')->with(2);
+
+        $this->parser->feed("\x1b[2I");
+    }
+
+    // -------------------------------------------------------------------------
+    // Emulator CSI finals grown onto CsiHandler for the candy-vt de-fork.
+    // -------------------------------------------------------------------------
+
+    public function testCsiDispatchHVP(): void
+    {
+        // CSI `f` (HVP) routes to hvp(), distinct from CSI `H` (CUP).
+        $this->csi->expects($this->once())->method('hvp')->with(3, 4);
+        $this->csi->expects($this->never())->method('cup');
+
+        $this->parser->feed("\x1b[3;4f");
+    }
+
+    public function testCsiDispatchHVPDefaultParams(): void
+    {
+        $this->csi->expects($this->once())->method('hvp')->with(1, 1);
+
+        $this->parser->feed("\x1b[f");
+    }
+
+    public function testCsiDispatchSU(): void
+    {
+        $this->csi->expects($this->once())->method('su')->with(2);
+
+        $this->parser->feed("\x1b[2S");
+    }
+
+    public function testCsiDispatchSUDefaultCount(): void
+    {
+        $this->csi->expects($this->once())->method('su')->with(1);
+
+        $this->parser->feed("\x1b[S");
+    }
+
+    public function testCsiDispatchSD(): void
+    {
+        $this->csi->expects($this->once())->method('sd')->with(3);
+
+        $this->parser->feed("\x1b[3T");
+    }
+
+    public function testCsiDispatchIL(): void
+    {
+        $this->csi->expects($this->once())->method('il')->with(4);
+
+        $this->parser->feed("\x1b[4L");
+    }
+
+    public function testCsiDispatchDL(): void
+    {
+        $this->csi->expects($this->once())->method('dl')->with(5);
+
+        $this->parser->feed("\x1b[5M");
+    }
+
+    public function testCsiDispatchICH(): void
+    {
+        $this->csi->expects($this->once())->method('ich')->with(2);
+
+        $this->parser->feed("\x1b[2@");
+    }
+
+    public function testCsiDispatchICHDefaultCount(): void
+    {
+        $this->csi->expects($this->once())->method('ich')->with(1);
+
+        $this->parser->feed("\x1b[@");
+    }
+
+    public function testCsiDispatchDCH(): void
+    {
+        $this->csi->expects($this->once())->method('dch')->with(6);
+
+        $this->parser->feed("\x1b[6P");
+    }
+
+    public function testCsiDispatchREP(): void
+    {
+        $this->csi->expects($this->once())->method('rep')->with(7);
+
+        $this->parser->feed("\x1b[7b");
+    }
+
+    public function testCsiDispatchSCOSC(): void
+    {
+        $this->csi->expects($this->once())->method('scosc');
+        $this->csi->expects($this->never())->method('scorc');
+
+        $this->parser->feed("\x1b[s");
+    }
+
+    public function testCsiDispatchSCORC(): void
+    {
+        $this->csi->expects($this->once())->method('scorc');
+        $this->csi->expects($this->never())->method('scosc');
+
+        $this->parser->feed("\x1b[u");
+    }
+
+    /**
+     * Marked `CSI ? s` / `CSI ? u` / `CSI > u` are NOT SCO save/restore:
+     * xterm switches to dec_table on `?` (VTPrsTbl.c:558 → charproc.c:3898-
+     * 3900) where 'u' is ignored (VTPrsTbl.c:4198) and 's' saves the DEC
+     * private MODE settings (CASE_XTERM_SAVE → savemodes(), VTPrsTbl.c:4195,
+     * charproc.c:6209-6210); tmux's table rows
+     * carry an empty interm marker for ('s',"")/('u',"") only (input.c:345,
+     * 347) so a marked query misses dispatch (input.c:1483-1487). Running
+     * `CSI ? u` (the kitty keyboard-capability QUERY) as SCORC teleports the
+     * render cursor — the emulator gates the same hole in candy-vt
+     * ScreenHandler::csiDispatch().
+     */
+    public function testCsiDispatchPrivateMarkerNeverReachesScopeCursor(): void
+    {
+        $this->csi->expects($this->never())->method('scosc');
+        $this->csi->expects($this->never())->method('scorc');
+
+        $this->parser->feed("\x1b[?s");
+        $this->parser->feed("\x1b[?u");
+        $this->parser->feed("\x1b[>u");
+    }
+
+    // -------------------------------------------------------------------------
+    // OSC 8 hyperlink dispatch (previously silently dropped).
+    // -------------------------------------------------------------------------
+
+    public function testOscDispatchHyperlink(): void
+    {
+        $this->osc->expects($this->once())
+            ->method('hyperlink')
+            ->with('https://example.com', '');
+
+        $this->parser->feed("\x1b]8;;https://example.com\x07");
+    }
+
+    public function testOscDispatchHyperlinkWithId(): void
+    {
+        $this->osc->expects($this->once())
+            ->method('hyperlink')
+            ->with('https://example.com', 'anchor-1');
+
+        $this->parser->feed("\x1b]8;id=anchor-1;https://example.com\x1b\\");
+    }
+
+    public function testOscDispatchHyperlinkCloseEmptyUri(): void
+    {
+        // OSC 8 with an empty URI closes the currently-open hyperlink.
+        $this->osc->expects($this->once())->method('hyperlink')->with('', '');
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]8;;\x07");
+    }
+
+    public function testOscDispatchHyperlinkIgnoresNonIdParams(): void
+    {
+        // Only `id=` is extracted; other key=value pairs are ignored.
+        $this->osc->expects($this->once())
+            ->method('hyperlink')
+            ->with('https://example.com', 'x');
+
+        $this->parser->feed("\x1b]8;foo=bar:id=x;https://example.com\x07");
+    }
+
+    public function testOscDispatchTitle(): void
+    {
+        $this->osc->expects($this->once())->method('title')->with('Hello World');
+
+        $this->parser->feed("\x1b]2;Hello World\x07");
+    }
+
+    public function testOscDispatchTitleWithStTerminator(): void
+    {
+        $this->osc->expects($this->once())->method('title')->with('Test Title');
+
+        $this->parser->feed("\x1b]2;Test Title\x1b\\");
+    }
+
+    public function testPrintableAsciiTriggersPrintable(): void
+    {
+        $this->csi->expects($this->once())->method('printable')->with('A');
+
+        $this->parser->feed("A");
+    }
+
+    public function testNonPrintableAsciiInGroundTriggersNothing(): void
+    {
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x00");
+    }
+
+    public function testBackspaceTriggersCub(): void
+    {
+        $this->csi->expects($this->once())->method('cub')->with(1);
+
+        $this->parser->feed("\x08");
+    }
+
+    public function testTabTriggersCht(): void
+    {
+        $this->csi->expects($this->once())->method('cht')->with(1);
+
+        $this->parser->feed("\x09");
+    }
+
+    public function testCarriageReturnTriggersCr(): void
+    {
+        // C0 CR (0x0D) now routes to the handler's cr().
+        $this->csi->expects($this->once())->method('cr');
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x0d");
+    }
+
+    public function testEscDispatchDoesNothing(): void
+    {
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x1bD");
+    }
+
+    public function testDcsDispatchDoesNothing(): void
+    {
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x1bP1;2mystring\x1b\\");
+    }
+
+    public function testSosPmApcDispatchDoNothing(): void
+    {
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x1bXtest\x1b\\");
+    }
+
+    public function testUnknownCsiFinalByteDoesNothing(): void
+    {
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x1b[99Z");
+    }
+
+    public function testOscDispatchUnknownCommandDoesNothing(): void
+    {
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]99;something\x07");
+    }
+
+    public function testUnknownCsiFinalByteInAdapterDoesNothing(): void
+    {
+        $this->csi->expects($this->never())->method('cuu');
+        $this->csi->expects($this->never())->method('cud');
+        $this->csi->expects($this->never())->method('cuf');
+        $this->csi->expects($this->never())->method('cub');
+        $this->csi->expects($this->never())->method('cup');
+        $this->csi->expects($this->never())->method('sgr');
+        $this->csi->expects($this->never())->method('ed');
+        $this->csi->expects($this->never())->method('el');
+        $this->csi->expects($this->never())->method('decset');
+        $this->csi->expects($this->never())->method('decrst');
+        $this->csi->expects($this->never())->method('decstbm');
+        $this->csi->expects($this->never())->method('tbc');
+        $this->csi->expects($this->never())->method('cbt');
+        $this->csi->expects($this->never())->method('cht');
+
+        $this->parser->feed("\x1b[99X");
+    }
+
+    public function testCsiDispatchDefaultCaseDoesNothing(): void
+    {
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x1b[1;2q");
+    }
+
+    public function testPrintCharForwardsMultiByteRune(): void
+    {
+        $this->csi->expects($this->once())
+            ->method('printable')
+            ->with('é'); // Full UTF-8 rune, not just the lead byte
+
+        $this->parser->feed("\xc3\xa9"); // UTF-8 encoding of 'é'
+    }
+
+    public function testOscClearTitle(): void
+    {
+        // "2;" is the legitimate OSC 2 clear-title sequence
+        $this->osc->expects($this->once())->method('title')->with('');
+
+        $this->parser->feed("\x1b]2;\x07"); // OSC 2 + BEL terminator
+    }
+
+    public function testLineFeedTriggersLf(): void
+    {
+        // C0 LF (0x0A) now routes to the handler's lf(); no other CsiHandler
+        // method is invoked.
+        $this->csi->expects($this->once())->method('lf');
+        $this->csi->expects($this->never())->method('cht');
+        $this->csi->expects($this->never())->method('cub');
+        $this->csi->expects($this->never())->method('cud');
+        $this->csi->expects($this->never())->method('cuf');
+        $this->csi->expects($this->never())->method('cuu');
+        $this->csi->expects($this->never())->method('cup');
+        $this->csi->expects($this->never())->method('cr');
+        $this->csi->expects($this->never())->method('sgr');
+        $this->csi->expects($this->never())->method('ed');
+        $this->csi->expects($this->never())->method('el');
+        $this->csi->expects($this->never())->method('decset');
+        $this->csi->expects($this->never())->method('decrst');
+        $this->csi->expects($this->never())->method('decstbm');
+        $this->csi->expects($this->never())->method('tbc');
+        $this->csi->expects($this->never())->method('cbt');
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x0A"); // LF
+    }
+
+    public function testExecuteUnhandledControlByteTriggersNoCsiHandlerMethod(): void
+    {
+        // BEL (0x07) is not routed by HandlerAdapter::execute() (default => null).
+        $this->csi->expects($this->never())->method('cr');
+        $this->csi->expects($this->never())->method('lf');
+        $this->csi->expects($this->never())->method('cht');
+        $this->csi->expects($this->never())->method('cub');
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x07"); // BEL
+    }
+
+    // -------------------------------------------------------------------------
+    // Item 4.1: HandlerAdapter edge cases
+    // -------------------------------------------------------------------------
+
+    public function testOscMalformedNoCommandNumberDoesNothing(): void
+    {
+        // OSC without a valid command number before semicolon
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b];Hello World\x07");
+    }
+
+    public function testOscMalformedNoSemicolonDoesNothing(): void
+    {
+        // OSC with command but no semicolon separator - the regex won't match
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]2Hello World\x07");
+    }
+
+    public function testOscVeryLongPayloadHandled(): void
+    {
+        // Very long OSC payload should not cause issues
+        $longTitle = str_repeat('x', 10000);
+        $this->osc->expects($this->once())->method('title')->with($longTitle);
+
+        $this->parser->feed("\x1b]2;" . $longTitle . "\x07");
+    }
+
+    public function testOscCommand3DoesNothing(): void
+    {
+        // OSC 3 (X11 window name) is not in [0-2] pattern, should be ignored
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]3;Some Window Name\x07");
+    }
+
+    public function testOscCommand4AndAboveDoNothing(): void
+    {
+        // OSC commands 4+ are not in [0-2] pattern, should be ignored
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]4;Some Data\x07");
+    }
+
+    public function testOscEmptyPayloadDispatched(): void
+    {
+        // OSC with empty payload after semicolon should dispatch empty string
+        $this->osc->expects($this->once())->method('title')->with('');
+
+        $this->parser->feed("\x1b]2;\x07");
+    }
+
+    // -------------------------------------------------------------------------
+    // Item 4.2: DCS passthrough completeness
+    // -------------------------------------------------------------------------
+
+    public function testDcsPassthroughToHandlerInterface(): void
+    {
+        // Verify the parser correctly dispatches DCS sequences to the Handler interface
+        $debugHandler = new \SugarCraft\AnsiParser\Parser\DebugHandler();
+        $parser = new \SugarCraft\AnsiParser\Parser\Parser($debugHandler);
+
+        // Feed a DCS sequence: ESC P (0x50) starts DCS
+        // Format: DCS p s ... F (ST)
+        // Feed DCS with params 1;2;3, final 'm', data 'test'
+        $parser->feed("\x1bP1;2;3m\x1b\\");
+
+        $dcsEvents = $debugHandler->filter('dcs');
+        $this->assertNotEmpty($dcsEvents, 'DCS should be dispatched');
+        $this->assertSame(ord('m'), $dcsEvents[0]['detail']['final']);
+        $this->assertSame([1, 2, 3], $dcsEvents[0]['detail']['params']);
+    }
+
+    public function testDcsWithSubparams(): void
+    {
+        $debugHandler = new \SugarCraft\AnsiParser\Parser\DebugHandler();
+        $parser = new \SugarCraft\AnsiParser\Parser\Parser($debugHandler);
+
+        // DCS with sub-parameter separator ':'
+        $parser->feed("\x1bP1:2:3m\x1b\\");
+
+        $dcsEvents = $debugHandler->filter('dcs');
+        $this->assertNotEmpty($dcsEvents);
+        $this->assertSame([1, 2, 3], $dcsEvents[0]['detail']['params']);
+    }
+}

@@ -6,9 +6,9 @@ namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SplObjectStorage;
-use SugarCraft\Ansi\Parser\HandlerAdapter;
-use SugarCraft\Ansi\Parser\Parser;
-use SugarCraft\Ansi\Parser\State;
+use SugarCraft\AnsiParser\Parser\HandlerAdapter;
+use SugarCraft\AnsiParser\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\State;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell as RendererCell;
 use SugarCraft\Vt\Cell;
@@ -46,7 +46,7 @@ use SugarCraft\Vt\Theme;
  * source audit do not exist in this lib; the real allocation surfaces are
  * {@see Buffer} — the one grid, shared by the emulator (ScreenHandler) and
  *   the vcr renderer path, `Cell\Cell` singleton-filled —
- * {@see Screen}/{@see Scrollback} (snapshot + ring), and the candy-ansi
+ * {@see Screen}/{@see Scrollback} (snapshot + ring), and the sugar-ansi-parser
  * {@see Parser} driving {@see ScreenHandler} via {@see Terminal}. The Parser
  * itself has no resize — resize lives on Buffer and is exercised
  * through Terminal::resize(); parser churn is therefore feed()+reset().

@@ -1076,7 +1076,7 @@ public function testAnsiBackgroundColorsDoNotRenderInPng(): void
 
 **Files:** `candy-codeshot/composer.json`
 
-**What:** Finding #10 notes that if other libraries depend on `candy-codeshot`, they need their own path-repo entry for `candy-ansi`. The `tools/check-path-repos.php` script validates this.
+**What:** Finding #10 notes that if other libraries depend on `candy-codeshot`, they need their own path-repo entry for `sugar-ansi-parser`. The `tools/check-path-repos.php` script validates this.
 
 **Implementation:** After any change to `candy-codeshot/composer.json`'s dependencies:
 ```bash
@@ -1091,12 +1091,12 @@ php tools/check-path-repos.php --fix
 **Conditions for Success:**
 
 - `php tools/check-path-repos.php` exits 0 for the current state
-- Root `composer.json` already has path-repo for `candy-ansi` at line 103-108
+- Root `composer.json` already has path-repo for `sugar-ansi-parser` at line 103-108
 
 **Related Code Locations:**
 
 - `tools/check-path-repos.php` — closure checker script
-- `candy-codeshot/composer.json:54-68` — local path repos for candy-ansi and candy-core
+- `candy-codeshot/composer.json:54-68` — local path repos for sugar-ansi-parser and candy-core
 
 ---
 

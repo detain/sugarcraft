@@ -532,7 +532,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsDecrpssReply(): void
     {
-        // Note: candy-ansi parses DCS per VT100 spec - 'r' and 'p' are final bytes,
+        // Note: sugar-ansi-parser parses DCS per VT100 spec - 'r' and 'p' are final bytes,
         // '1' and '0' are params, '$' is intermediate. The sequence 1$r0$p is two
         // DECRPSS commands but the parser only captures the last final byte.
         // New semantic output reflects this structural interpretation.
@@ -857,7 +857,7 @@ final class InspectorTest extends TestCase
 
     public function testStandAloneC1InMatchedOscLabelIsTokenised(): void
     {
-        // candy-ansi collects 8-bit bytes verbatim into OSC payloads; a captured
+        // sugar-ansi-parser collects 8-bit bytes verbatim into OSC payloads; a captured
         // 0x9B replayed raw inside the label would re-arm a CSI parser on any
         // 8-bit-capable downstream terminal.
         $desc = Inspector::describeOsc("0;a\x9b31m b");

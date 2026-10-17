@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
-use SugarCraft\Ansi\Parser\CsiHandler;
+use SugarCraft\AnsiParser\Parser\CsiHandler;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Buffer\Buffer;
@@ -17,7 +17,7 @@ use SugarCraft\Vt\Theme;
  * CSI handler for the vcr renderer path.
  *
  * Mutates Buffer + Cursor directly in response to CSI dispatches.
- * Implements candy-ansi's {@see \SugarCraft\Ansi\Parser\CsiHandler} — the
+ * Implements sugar-ansi-parser's {@see \SugarCraft\AnsiParser\Parser\CsiHandler} — the
  * shared parser dispatches completed sequences here via HandlerAdapter.
  *
  * Mirrors charmbracelet/x/vt CSI dispatcher (simplified for renderer use).
@@ -91,10 +91,10 @@ final class CsiHandlerImpl implements CsiHandler
      * Colon-continuation flags PUSHED by the parser chain for the CSI sequence
      * currently being dispatched. {@see \SugarCraft\Vt\Parser\RendererHandler}
      * is the parser's sink in the supported wiring and forwards
-     * {@see \SugarCraft\Ansi\Parser\SubparamsAwareHandler::setSubparams()} here,
+     * {@see \SugarCraft\AnsiParser\Parser\SubparamsAwareHandler::setSubparams()} here,
      * so SGR can tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m`
      * (underline + italic). Null — nothing ever pushed, e.g. direct
-     * construction or the raw candy-ansi HandlerAdapter — keeps SGR `4`
+     * construction or the raw sugar-ansi-parser HandlerAdapter — keeps SGR `4`
      * treating every parameter as an independent SGR, the renderer's
      * long-standing flat-list behaviour.
      *
@@ -146,10 +146,10 @@ final class CsiHandlerImpl implements CsiHandler
     /**
      * Receive the ECMA-48 sub-parameter continuation flags for the parameter
      * list about to be dispatched. {@see RendererHandler} — the renderer path's
-     * push-reachable {@see \SugarCraft\Ansi\Parser\SubparamsAwareHandler} sink —
+     * push-reachable {@see \SugarCraft\AnsiParser\Parser\SubparamsAwareHandler} sink —
      * forwards the parser's push here so SGR can tell `CSI 4 : 3 m` (curly
      * underline) from `CSI 4 ; 3 m` (underline + italic). Never pushed (direct
-     * construction, or the raw candy-ansi HandlerAdapter) leaves {@see $subparams}
+     * construction, or the raw sugar-ansi-parser HandlerAdapter) leaves {@see $subparams}
      * null and SGR keeps the flat-list behaviour.
      *
      * @param list<bool> $subparams
@@ -357,7 +357,7 @@ final class CsiHandlerImpl implements CsiHandler
                 $p = 0;
             }
 
-            // The parser's contract is `list<int>` (candy-ansi `Parser::$params`,
+            // The parser's contract is `list<int>` (sugar-ansi-parser `Parser::$params`,
             // -1 default slots included), so the former per-iteration
             // intval-normalisation ran on provably-integer input — dead
             // allocation (E736 6.1).
@@ -427,7 +427,7 @@ final class CsiHandlerImpl implements CsiHandler
             $p === 1 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_BOLD, $i + 1],
             $p === 3 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_ITALIC, $i + 1],
             // `CSI 4 : 3 m` is ONE parameter (curly underline); `CSI 4 ; 3 m`
-            // is TWO independent SGRs (underline + italic). The candy-ansi
+            // is TWO independent SGRs (underline + italic). The sugar-ansi-parser
             // parser flattens both to [4, 3]; only the continuation flags
             // distinguish them. Without a wired parser the renderer keeps its
             // historical flat reading. Styles beyond single have no bit in
@@ -608,7 +608,7 @@ final class CsiHandlerImpl implements CsiHandler
 
     /**
      * Last flat slot index of the colon group starting at $i — identical
-     * reading of {@see \SugarCraft\Ansi\Parser\Parser::subparams()} as the
+     * reading of {@see \SugarCraft\AnsiParser\Parser\Parser::subparams()} as the
      * emulator's {@see \SugarCraft\Vt\Handler\SgrHandler}.
      *
      * @param list<int> $params
@@ -1025,7 +1025,7 @@ final class CsiHandlerImpl implements CsiHandler
     // ---------------------------------------------------------------------
     // ESC dispatch (renderer path) — reached through
     // {@see \SugarCraft\Vt\Parser\RendererHandler}, which closes the gap that
-    // candy-ansi's HandlerAdapter left open: its escDispatch() was an empty
+    // sugar-ansi-parser's HandlerAdapter left open: its escDispatch() was an empty
     // no-op, so none of these two-byte sequences ever touched the renderer.
     // Each mirrors the emulator's {@see \SugarCraft\Vt\Handler\ScreenHandler}
     // equivalent within the renderer's expressive range (position + pen +

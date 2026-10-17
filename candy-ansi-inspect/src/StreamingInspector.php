@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\AnsiInspect;
 
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * Streaming incremental parser for ANSI escape sequences.
@@ -14,7 +14,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * segments as they are finished, and buffers incomplete sequences
  * and plain text between calls to {@see feed()}.
  *
- * Uses candy-ansi's incremental {@see Parser} — sequences split across
+ * Uses sugar-ansi-parser's incremental {@see Parser} — sequences split across
  * chunks are automatically continued from the correct state.  C0 control
  * codes are isolated as their own segments (matching one-shot behavior),
  * and the 4:N underline sub-parameter form is preserved through the
@@ -55,7 +55,7 @@ final class StreamingInspector
      * a buffered SS3 intermediate (ESC O with no final byte) and the exact
      * bytes of any sequence the stream never completed are emitted as their own
      * SequenceSegments, so no *dangling tail* the caller sent goes unreported.
-     * (Bytes candy-ansi drops before dispatch — the losses `README.md` lists —
+     * (Bytes sugar-ansi-parser drops before dispatch — the losses `README.md` lists —
      * never reach this method and are not reported by it.)
      *
      * @return list<Segment>

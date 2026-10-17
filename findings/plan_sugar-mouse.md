@@ -370,13 +370,13 @@ Add documentation explaining when `grapheme_extract` returns an empty string:
 
 **What is expected:**
 
-- Remove `sugar-async`, `candy-ansi`, and `sugar-input` from the `repositories` array (only `candy-core` is actually required)
+- Remove `sugar-async`, `sugar-ansi-parser`, and `sugar-input` from the `repositories` array (only `candy-core` is actually required)
 - OR add a comment explaining why they are present (e.g., "reserved for future async integration")
 
 **Why:**
 
 - Only `candy-core` is in the `require` section
-- The other three path repositories (`sugar-async`, `candy-ansi`, `sugar-input`) are listed but unused
+- The other three path repositories (`sugar-async`, `sugar-ansi-parser`, `sugar-input`) are listed but unused
 - This is leftover from earlier design and creates confusion
 
 **Severity:** Low

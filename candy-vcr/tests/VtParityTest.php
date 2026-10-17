@@ -14,19 +14,19 @@ use SugarCraft\Vt\Terminal as RendererTerminal;
 use SugarCraft\Vt\Terminal\Terminal as EmulatorTerminal;
 
 /**
- * Differential guard between the two cell-grid consumers of candy-ansi's
+ * Differential guard between the two cell-grid consumers of sugar-ansi-parser's
  * parser that candy-vcr depends on:
  *
  *  - {@see RendererTerminal} (`SugarCraft\Vt\Terminal`) — the vcr renderer
- *    path: candy-ansi Parser + HandlerAdapter + Parser\CsiHandlerImpl.
+ *    path: sugar-ansi-parser Parser + HandlerAdapter + Parser\CsiHandlerImpl.
  *    Frame rendering (Render\Renderer, Encode\TapeToGif) feeds recorded
  *    bytes HERE.
  *  - {@see EmulatorTerminal} (`SugarCraft\Vt\Terminal\Terminal`) — the full
- *    emulator: candy-ansi Parser + Handler\ScreenHandler stack.
+ *    emulator: sugar-ansi-parser Parser + Handler\ScreenHandler stack.
  *    ScreenAssertion and `vt`-style emulation HERE.
  *
  * Both paths consume the SAME recorded cassette bytes through the SAME
- * candy-ansi state machine, but through two independently written handler
+ * sugar-ansi-parser state machine, but through two independently written handler
  * implementations — the duplication the audit calls out. Until the unified
  * VT engine refactor lands (out of scope), these tests are the guard that
  * the two engines agree on the cell grid.
@@ -43,7 +43,7 @@ use SugarCraft\Vt\Terminal\Terminal as EmulatorTerminal;
  * per-feature parity pins below. What remains in the catalogue are genuine
  * REPRESENTATION limits (truecolor value, blink/dim/hidden, 58 colour
  * storage, tab stops, combining marks, BCE erases) and one ADAPTER limit
- * (the explicit `CSI 0 L/M` count no-op, clamped to 1 by candy-ansi's
+ * (the explicit `CSI 0 L/M` count no-op, clamped to 1 by sugar-ansi-parser's
  * HandlerAdapter before the renderer can see it).
  */
 final class VtParityTest extends TestCase
@@ -72,7 +72,7 @@ final class VtParityTest extends TestCase
      *    DECDWL) — both engines stamp the cursor line's cells with the same
      *    Rendition and apply the DECDWL extra-column rule identically.
      *  - ESC 7/8 (DECSC/DECRC), ESC D/E/M (IND/NEL/RI), ESC c (RIS) — once
-     *    dropped by candy-ansi's empty escDispatch, now routed to the renderer.
+     *    dropped by sugar-ansi-parser's empty escDispatch, now routed to the renderer.
      *    W8-F closed the surviving RIS tail: the renderer reset now restores
      *    DECTCEM visibility (fresh power-on Cursor, like the emulator's
      *    hardReset) and drops the REP memory, so post-RIS observables agree on
@@ -82,7 +82,7 @@ final class VtParityTest extends TestCase
      *    renderer's memory — then both print nothing; also pinned there).
      *  - BCE erases — the emulator fills ED/EL/ECH with the pen BACKGROUND
      *    (xterm BCE, w4-vt); the renderer blanks with default cells (pinned below).
-     *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
+     *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; sugar-ansi-parser's
      *    HandlerAdapter clamps the count to 1 before the renderer sees it
      *    (pinned below).
      *  - `CSI ? N L` / `CSI ? N M` — the emulator rejects prefixed IL/DL
@@ -216,7 +216,7 @@ final class VtParityTest extends TestCase
 
     public function testEscRosterParityOnRendererAndEmulator(): void
     {
-        // The two-byte ESC roster candy-ansi's HandlerAdapter used to swallow
+        // The two-byte ESC roster sugar-ansi-parser's HandlerAdapter used to swallow
         // on the renderer. IND/NEL/RI move the cursor; DECSC/DECRC park and
         // restore it; RIS clears the grid. All now reach the renderer, so a
         // printed marker lands identically on both engines.
@@ -294,7 +294,7 @@ final class VtParityTest extends TestCase
 
     public function testByteSplitFeedIsSelfConsistentOnBothEngines(): void
     {
-        // The candy-ansi parser is shared, so whole-feed vs byte-split must be
+        // The sugar-ansi-parser parser is shared, so whole-feed vs byte-split must be
         // identical on EACH engine; a state-carry regression in the parser
         // would break exactly one side and skew the parity baseline.
         $bytes = "\x1b[38;5;21mSplit\x1b[0m \x1b[1;31;42mstreaming\x1b[m test \x1b[?1000;1006h\x1b[4;3mends\x1b[24m.";
@@ -354,7 +354,7 @@ final class VtParityTest extends TestCase
     {
         // `CSI 4 ; 3 m` is underline + italic (two independent SGRs);
         // `CSI 4 : 3 m` is one parameter with a curly sub-parameter.
-        // candy-ansi flattens both to [4, 3]; both engines now consult
+        // sugar-ansi-parser flattens both to [4, 3]; both engines now consult
         // Parser::subparams() for the colon flags instead of peeking, so
         // the forms keep their distinct meanings on either path.
         $bytes = "\x1b[4;3mX\x1b[0m";
@@ -500,10 +500,10 @@ final class VtParityTest extends TestCase
     {
         // `CSI 0 L` / `CSI 0 M` are no-ops on the emulator (ECMA-48 default
         // parameter, pinned by #1417's charm parity guard). The renderer can
-        // never see the zero: candy-ansi's Parser\HandlerAdapter clamps
+        // never see the zero: sugar-ansi-parser's Parser\HandlerAdapter clamps
         // every count with `max(1, p0)` before calling CsiHandlerImpl::il().
         // Fixing it means changing the adapter contract for ALL CsiHandler
-        // implementors — deferred to a candy-ansi follow-up; no real-world
+        // implementors — deferred to a sugar-ansi-parser follow-up; no real-world
         // emitter sends `0 L`.
         $bytes = "AAAA\r\nBBBB\x1b[2;1H\x1b[0L";
 
@@ -567,7 +567,7 @@ final class VtParityTest extends TestCase
     {
         // `CSI ? 1 L` is not a standard IL and the emulator rejects it via
         // its `prefix === 0` guard. The renderer cannot make that call:
-        // candy-ansi's HandlerAdapter dispatches 'L'/'M' without forwarding
+        // sugar-ansi-parser's HandlerAdapter dispatches 'L'/'M' without forwarding
         // the private prefix. Same adapter follow-up as the explicit-zero
         // pin above; no known real-world emitter sends it.
         $bytes = "AAAA\r\nBBBB\x1b[2;1H\x1b[?1L";

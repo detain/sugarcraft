@@ -46,7 +46,7 @@ the language level.
 
 **Effort shape:** ~80% of the work is mechanical and parallelizable per file; the irreducible
 design work is (a) the **enum polyfill** (35 libs touch enums), (b) **`match`→`switch`** done
-without changing comparison semantics, and (c) **fibers** in `candy-ansi`/`candy-testing`. <!-- @rename-keep -->
+without changing comparison semantics, and (c) **fibers** in `candy-ansi`/`candy-testing`. <!-- @rename-keep historical provenance -->
 
 ---
 
@@ -184,7 +184,7 @@ must support everything the codebase uses: `->value`, `->name`, `::cases()`, `::
 `::tryFrom()`, instance identity (singletons so `===` works), and use as a parameter type.
 
 ```php
-// FROM  (candy-vt/src/Sgr/…, candy-ansi/src/Parser/Action.php, etc.)
+// FROM  (candy-vt/src/Sgr/…, candy-ansi/src/Parser/Action.php, etc.) <!-- @rename-keep historical provenance -->
 enum Action: int {
     case Print = 0;
     case Execute = 1;
@@ -283,7 +283,7 @@ libs depending on core) plus to any leaf lib that uses them without a core dep. 
 7.4 has no Fibers. The Coder agent must first *read the actual usage*:
 - If fibers back a cooperative scheduler/coroutine in `candy-testing`'s program simulator, replace <!-- @rename-keep -->
   with a generator‑based driver or a synchronous step‑pump (ReactPHP loop already available).
-- If `candy-ansi`'s fiber use is a feature‑detected fast path with an existing fallback, gate it
+- If `candy-ansi`'s fiber use is a feature‑detected fast path with an existing fallback, gate it <!-- @rename-keep historical provenance -->
   behind `if (\PHP_VERSION_ID >= 80100 && class_exists(\Fiber::class))` and ship the fallback for
   7.4.
 - These two steps get **mandatory extra review rounds** and their own risk note in the PR body.
@@ -350,7 +350,7 @@ dependency cycle and is backported as one fused phase.
 Each is one step unless noted. `candy-ansi`, `candy-async`, `candy-buffer` are deps of the <!-- @rename-keep historical provenance -->
 keystone, so they come first within the phase.
 - **1.1** `candy-async` (8 src, medium) — react deps; `readonly class Suspended`, union types. <!-- @rename-keep historical provenance -->
-- **1.2** `candy-ansi` (11 src, low) — 2 backed enums (→ polyfill), `match`, `??=`. *(First enum
+- **1.2** `candy-ansi` (11 src, low) — 2 backed enums (→ polyfill), `match`, `??=`. *(First enum <!-- @rename-keep historical provenance -->
   conversions — establishes the §4.3 pattern; extra review.)*
 - **1.3** `candy-buffer` (17 src, medium) — split into **1.3a** root+`Diff/` and **1.3b**
   `Cell/Style/Position/Hyperlink/...`; heavy `readonly`+promotion, 8 nullsafe.
@@ -521,7 +521,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-flexbox | medium | 7 | enum, first-class-callable, match, php8-strfn, readonly-class |
 | candy-ssh-launcher | medium | 6 | ctor-promotion, first-class-callable, match, mixed, named-args; pcntl |
 | candy-files | medium | 14 | backed-enum, ctor-promotion, enum-with-methods, match, named-args |
-| candy-ansi | low | 11 | attribute, backed-enum, ctor-promotion, enum-with-methods, fiber*, first-class-callable |
+| candy-ansi | low | 11 | attribute, backed-enum, ctor-promotion, enum-with-methods, fiber*, first-class-callable | <!-- @rename-keep historical provenance -->
 | candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly | <!-- @rename-keep historical provenance -->
 | candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |
 | candy-metrics | low | 13 | ctor-promotion, non-capturing-catch, readonly, callable-type, void | <!-- @rename-keep historical provenance -->
@@ -533,7 +533,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-navstack | low | 8 | ctor-promotion, match, mixed, nullsafe, readonly |
 | sugar-forms | low | 23 | enum, first-class-callable, mixed, nullsafe, php8-strfn |
 
-*`candy-ansi` fiber appears in audit; confirm at step time — may be a feature‑detected path.*
+*`candy-ansi` fiber appears in audit; confirm at step time — may be a feature‑detected path.* <!-- @rename-keep historical provenance -->
 
 ## 9. Appendix B — Dependency tiers (topological)
 

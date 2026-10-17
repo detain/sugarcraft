@@ -31,7 +31,7 @@
     ],
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-ansi": "dev-master",
+        "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {

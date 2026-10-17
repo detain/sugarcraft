@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot;
 
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * Splits a single line of ANSI-styled text into typed {@see Segment}s
@@ -23,7 +23,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * Other ANSI sequences (CSI cursor moves, OSC, etc.) pass through
  * silently — they have no visible effect in a static SVG.
  *
- * Internally delegates to candy-ansi's {@see Parser} state machine.
+ * Internally delegates to sugar-ansi-parser's {@see Parser} state machine.
  */
 final class AnsiParser
 {

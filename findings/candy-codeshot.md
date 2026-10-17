@@ -2,7 +2,7 @@
 
 ## Overview
 
-candy-codeshot is a PHP port of charmbracelet/freeze that renders code or terminal output to SVG (and optional PNG via ext-gd) screenshots. It features macOS-style window chrome ("traffic lights"), drop shadows, line numbers, inline ANSI SGR color parsing, theme loaders for VS Code and Chroma JSON formats, and a CLI tool. The library is built for PHP 8.3+, uses immutable fluent builders, and delegates ANSI parsing to the sugarcraft/candy-ansi dependency.
+candy-codeshot is a PHP port of charmbracelet/freeze that renders code or terminal output to SVG (and optional PNG via ext-gd) screenshots. It features macOS-style window chrome ("traffic lights"), drop shadows, line numbers, inline ANSI SGR color parsing, theme loaders for VS Code and Chroma JSON formats, and a CLI tool. The library is built for PHP 8.3+, uses immutable fluent builders, and delegates ANSI parsing to the sugarcraft/sugar-ansi-parser dependency.
 
 ## Files Reviewed
 
@@ -103,7 +103,7 @@ Same issue in `PngRenderer::buildWindowsTerminalWindow()` at line 299 — `$butt
 
 xterm carries a direct-colour SGR in two spellings: the flat `38;2;R;G;B` and
 the ECMA-48 §14.1.1 grouped `38:2:CS:R:G:B`, where `CS` is a colour-space id that
-emitters habitually leave empty. candy-ansi flattens both into one
+emitters habitually leave empty. sugar-ansi-parser flattens both into one
 `list<int>` (an empty slot becomes the `-1` default marker), and `applySgr()`
 read that flattened list positionally — so `38:2::80:160:240` was decoded as
 `R=-1, G=80, B=160`, and `sprintf('%02x', -1)` produced sixteen hex digits:
@@ -239,21 +239,21 @@ Or at minimum group the range-based codes into lookup arrays and use a small `ma
 
 ### Compatibility Issues
 
-#### 10. Missing `composer.json` path-repo for `candy-ansi` in root `composer.json` of the monorepo
+#### 10. Missing `composer.json` path-repo for `sugar-ansi-parser` in root `composer.json` of the monorepo
 
 **File:** `candy-codeshot/composer.json:54-68`
 
-The library declares `sugarcraft/candy-ansi: dev-master` as a dependency and has a local path repo:
+The library declares `sugarcraft/sugar-ansi-parser: dev-master` as a dependency and has a local path repo:
 
 ```json
 {
     "type": "path",
-    "url": "../candy-ansi",
+    "url": "../sugar-ansi-parser",
     "options": { "symlink": true }
 }
 ```
 
-However, if other libraries in the monorepo depend on `candy-codeshot`, they need their own path-repo entry for `candy-ansi`. This is a monorepo path-repo closure issue that `tools/check-path-repos.php` should catch, but it's worth documenting.
+However, if other libraries in the monorepo depend on `candy-codeshot`, they need their own path-repo entry for `sugar-ansi-parser`. This is a monorepo path-repo closure issue that `tools/check-path-repos.php` should catch, but it's worth documenting.
 
 **Recommendation:** After any change to `candy-codeshot/composer.json`'s dependencies, run `php tools/check-path-repos.php` to verify the full transitive closure is wired.
 

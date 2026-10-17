@@ -893,7 +893,7 @@ Mouse reporting is not one protocol: the bytes a terminal sends for the same
 click depend on which DEC private modes the program had enabled at record
 time, and only the SGR form is self-identifying. The `Player` therefore feeds
 every recorded **output** chunk through `Input\MouseModeTracker` (a
-candy-ansi `Parser` handler that records `CSI ? h/l` for the mouse modes), and
+sugar-ansi-parser `Parser` handler that records `CSI ? h/l` for the mouse modes), and
 the raw-input path runs `Input\MouseReplayDecoder` before falling back to
 `InputReader`, so a byte sequence is decoded in the mode that produced it
 instead of being assumed to be SGR:
@@ -935,7 +935,7 @@ consumption) and #1417's emulator fixes graduated the former divergences
 into parity assertions. What remains catalogued are representation/adapter
 limits — truecolor VALUES (the renderer `Cell` has no RGB slot), the stored
 underline colour, emulator ED/EL erasing with the active background (BCE),
-renderer-only REP, and the explicit `CSI 0 L/M` count no-op that candy-ansi's
+renderer-only REP, and the explicit `CSI 0 L/M` count no-op that sugar-ansi-parser's
 `HandlerAdapter` clamps to 1 before the renderer sees it — each pinned as an
 explicit tripwire case with a fix pointer rather than left to surface as a
 mystery assertion failure.

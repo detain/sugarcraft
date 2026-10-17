@@ -2,7 +2,7 @@
 
 **Library:** `sugarcraft/sugar-cli`  
 **Review scope:** `src/` (8 classes) + `tests/` (9 test files)  
-**Dependencies:** `candy-core`, `candy-sprinkles`, `sugar-async`, `candy-layout`, `candy-ansi`, `sugar-input`, `candy-buffer`
+**Dependencies:** `candy-core`, `candy-sprinkles`, `sugar-async`, `candy-layout`, `sugar-ansi-parser`, `sugar-input`, `candy-buffer`
 
 ---
 

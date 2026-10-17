@@ -7,7 +7,7 @@ namespace SugarCraft\Vt\Tests\Mode;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Vt\Sgr\UnderlineStyle;
 use SugarCraft\Vt\Terminal\Terminal;
 

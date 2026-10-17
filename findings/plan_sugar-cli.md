@@ -387,7 +387,7 @@ Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (
 **Related code:** `sugar-cli/composer.json:50-107`
 
 **Investigation notes:**
-The `require` section only lists `candy-core` and `candy-sprinkles` as actual dependencies. The other path repos (`candy-layout`, `sugar-async`, `candy-ansi`, `sugar-input`, `candy-buffer`) are listed in `repositories[]` but not in `require[]`. These could be: (a) transitive deps of `candy-sprinkles` that need path repos for the closure, OR (b) scaffolding artifacts. The finding says "Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed." — need to verify whether any of these are transitive deps.
+The `require` section only lists `candy-core` and `candy-sprinkles` as actual dependencies. The other path repos (`candy-layout`, `sugar-async`, `sugar-ansi-parser`, `sugar-input`, `candy-buffer`) are listed in `repositories[]` but not in `require[]`. These could be: (a) transitive deps of `candy-sprinkles` that need path repos for the closure, OR (b) scaffolding artifacts. The finding says "Unless they are transitive dependencies of `candy-sprinkles` or `candy-core`, they should be removed." — need to verify whether any of these are transitive deps.
 
 ---
 

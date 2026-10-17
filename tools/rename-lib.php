@@ -490,6 +490,7 @@ final class RenameLib
             'env_old_prefixes' => array_values(array_unique([self::upperSnake($old) . '_', strtoupper(self::compact($old)) . '_'])),
             'env_new_prefix' => self::upperSnake($new) . '_',
             'protect' => $protect,
+            'brand_protect' => (bool) ($entry['brand_protect'] ?? false),
             'bins' => (array) ($entry['bins'] ?? []),
             'extra_literals' => (array) ($entry['extra_literals'] ?? []),
         ];
@@ -537,7 +538,10 @@ final class RenameLib
         // R2, the PascalCase brand. The trailing class deliberately folds
         // SugarCrushWeb -> CandyCodeWeb and SugarBoxerTest ->
         // SugarPanelsTest, while SugarCrushx (lowercase continuation) stays.
-        $rules[] = self::regexRule('R2', '#(?<![A-Za-z0-9_])' . preg_quote((string) $d['pascal_old'], '#') . '(?![a-z0-9])#', static fn(array $m): string => (string) $d['pascal_new']);
+        // When brand_protect is set, a sibling brand listed in `protect`
+        // (cross-entity prefixes such as candy-ansi vs candy-ansi-inspect)
+        // is exempted — see r2Pattern.
+        $rules[] = self::regexRule('R2', self::r2Pattern($d), static fn(array $m): string => (string) $d['pascal_new']);
 
         // R3, the slug at word boundaries (so ./-/_ all terminate it), with
         // one negative lookahead per PROTECT longer slug.
@@ -560,9 +564,11 @@ final class RenameLib
         ];
 
         // R5, environment prefixes. SUGARCRAFT_* is left alone because it is
-        // a different literal (C.4 holds by construction, see header).
+        // a different literal (C.4 holds by construction, see header). With
+        // brand_protect the sibling's env prefix (CANDY_ANSI_INSPECT_*) is
+        // exempted — see r5Pattern.
         foreach ($d['env_old_prefixes'] as $envPrefix) {
-            $rules[] = self::regexRule('R5', '#(?<![A-Za-z0-9_])' . preg_quote((string) $envPrefix, '#') . '(?=[A-Z0-9])#', static fn(array $m): string => (string) $d['env_new_prefix']);
+            $rules[] = self::regexRule('R5', self::r5Pattern($d, (string) $envPrefix), static fn(array $m): string => (string) $d['env_new_prefix']);
         }
 
         // R6, the i18n domain literal, only in the lib's own src/Lang.php.
@@ -609,6 +615,70 @@ final class RenameLib
         }
 
         return $rules;
+    }
+
+    /**
+     * R2, the PascalCase brand at a word boundary. Uppercase continuation
+     * folds deliberately (SugarCrushWeb -> CandyCodeWeb is the SAME entity —
+     * Part C.1). When the map entry sets brand_protect, a protected sibling
+     * slug that merely SHARES the prefix (an OTHER entity, e.g.
+     * candy-ansi-inspect vs candy-ansi) is exempted: its Pascal suffix is
+     * excluded by a lookahead. Default off keeps every earlier entry's
+     * byte-identical behavior; batch F's SugarCrushWeb fold relies on it.
+     *
+     * @param array<string, mixed> $d
+     */
+    public static function r2Pattern(array $d, bool $pathContext = false): string
+    {
+        return '#(?<!' . ($pathContext ? '[A-Za-z0-9]' : '[A-Za-z0-9_]') . ')'
+            . preg_quote((string) $d['pascal_old'], '#')
+            . self::brandSkip($d, static fn(string $suffix): string => self::pascalCase($suffix))
+            . '(?![a-z0-9])#';
+    }
+
+    /**
+     * R5, an env prefix. The uppercase continuation the entry shares with a
+     * protected sibling (CANDY_ANSI_ inside CANDY_ANSI_INSPECT_BIN) is
+     * exempted exactly as in r2Pattern; entries without brand_protect keep
+     * the bare prefix pattern. The compact prefix (CANDYANSI_) structurally
+     * cannot be a prefix of the sibling's underscore-spelling, so its skip
+     * chain is empty — harmless either way.
+     *
+     * @param array<string, mixed> $d
+     */
+    public static function r5Pattern(array $d, string $envPrefix): string
+    {
+        return '#(?<![A-Za-z0-9_])'
+            . preg_quote($envPrefix, '#')
+            . self::brandSkip($d, static fn(string $suffix): string => $suffix === '' ? '' : self::upperSnake($suffix) . '_')
+            . '(?=[A-Z0-9])#';
+    }
+
+    /**
+     * Shared lookahead chain for r2Pattern/r5Pattern: one skip per protect
+     * entry whose slug starts `old-`, transformed into this rule's spelling
+     * of the sibling's continuation. Empty string when brand_protect is off
+     * or no protect entry qualifies.
+     *
+     * @param array<string, mixed>    $d
+     * @param \Closure(string):string $toForm receives the suffix after `old-`
+     */
+    private static function brandSkip(array $d, \Closure $toForm): string
+    {
+        if (empty($d['brand_protect'])) {
+            return '';
+        }
+        $skip = '';
+        foreach ($d['protect'] as $p) {
+            if (is_string($p) && str_starts_with($p, (string) $d['old'] . '-')) {
+                $form = $toForm(substr($p, strlen((string) $d['old']) + 1));
+                if ($form !== '') {
+                    $skip .= '(?!' . preg_quote($form, '#') . ')';
+                }
+            }
+        }
+
+        return $skip;
     }
 
     /**
@@ -685,10 +755,22 @@ final class RenameLib
     {
         $out = $segment;
         if ($ansiPrefixContext && $out !== (string) $d['new'] && str_starts_with($out, (string) $d['old'])) {
-            $out = (string) $d['new'] . substr($out, strlen((string) $d['old']));
+            // The prefix rule must not eat a PROTECTED sibling: a segment
+            // starting `old-` is only OURS when no protect slug extends it
+            // (batch-E law — candy-ansi vs candy-ansi-inspect art files).
+            $sibling = false;
+            foreach ($d['protect'] as $p) {
+                if (is_string($p) && str_starts_with($out, $p)) {
+                    $sibling = true;
+                    break;
+                }
+            }
+            if (!$sibling) {
+                $out = (string) $d['new'] . substr($out, strlen((string) $d['old']));
+            }
         }
         $out = (string) preg_replace_callback(
-            '#(?<!' . ($pathContext ? '[A-Za-z0-9]' : '[A-Za-z0-9_]') . ')' . preg_quote((string) $d['pascal_old'], '#') . '(?![a-z0-9])#',
+            self::r2Pattern($d, $pathContext),
             static fn(array $m): string => (string) $d['pascal_new'],
             $out,
         );

@@ -641,7 +641,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertSame(23, $this->csi->cursor()->row);
     }
 
-    // ─── Emulator CSI finals (dispatched by candy-ansi's HandlerAdapter) ─────
+    // ─── Emulator CSI finals (dispatched by sugar-ansi-parser's HandlerAdapter) ─────
 
     public function testSuScrollsRegionUp(): void
     {
@@ -989,7 +989,7 @@ final class CsiHandlerImplTest extends TestCase
     public function testSgrBodyCarriesNoParamRewriteAndIndexedChainStillReadsInPlace(): void
     {
         // Guard 1 (E736 6.1 regression lock): the sgr() source slice must not
-        // reintroduce a per-iteration rebuild — the candy-ansi parser already
+        // reintroduce a per-iteration rebuild — the sugar-ansi-parser parser already
         // guarantees `list<int>` params, so any array_map/array_values there
         // is the dead allocation this row removed.
         $ref = new \ReflectionMethod(CsiHandlerImpl::class, 'sgr');

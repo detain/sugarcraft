@@ -36,8 +36,8 @@ flag_management:
     - name: candy-core
       paths: ["candy-core/src/**"]
       carryforward: true
-    - name: candy-ansi
-      paths: ["candy-ansi/src/**"]
+    - name: sugar-ansi-parser
+      paths: ["sugar-ansi-parser/src/**"]
       carryforward: true
     - name: candy-buffer
       paths: ["candy-buffer/src/**"]
@@ -229,12 +229,12 @@ component_management:
         - "candy-core/src/**"
       flag_regexes:
         - "^candy-core$"
-    - component_id: candy-ansi
-      name: candy-ansi
+    - component_id: sugar-ansi-parser
+      name: sugar-ansi-parser
       paths:
-        - "candy-ansi/src/**"
+        - "sugar-ansi-parser/src/**"
       flag_regexes:
-        - "^candy-ansi$"
+        - "^sugar-ansi-parser$"
     - component_id: candy-buffer
       name: candy-buffer
       paths:

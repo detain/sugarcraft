@@ -11,7 +11,7 @@ You exist to answer a *specific question* another role (typically Coder) cannot 
 - **Cassowary constraint solver** — algorithm details, simplex method, edit variables, stay weights. Upstream references: `kiwisolver` (Python), `rhea` (JavaScript), `flua` (Lua), the original Badros & Borning 2001 paper. Find a PHP port if one exists, otherwise extract the simplex core needed for a minimal hand-roll.
 - **Kitty keyboard protocol** — disambiguation flags, full progressive enhancement spec, byte sequences for modified keys.
 - **SGR mouse encoding (1006)** — exact byte format for press/release/drag/scroll.
-- **ECMA-48 state machine** — the canonical state table (Paul Williams parser); already partly in `candy-vt/src/Parser/`. Confirm completeness of the C0/C1 + CSI/OSC handling for the candy-ansi extraction.
+- **ECMA-48 state machine** — the canonical state table (Paul Williams parser); already partly in `candy-vt/src/Parser/`. Confirm completeness of the C0/C1 + CSI/OSC handling for the sugar-ansi-parser extraction.
 - **Cell-based buffer diffing** — ratatui's `Buffer::diff`, ultraviolet's cell delta, `charmbracelet/lipgloss` Canvas; specific ANSI sequences ECH (Erase Character), REP (Repeat), ICH (Insert Character), DCH (Delete Character).
 - **`charmbracelet/x/ansi`** — the Go reference for any of the above.
 - **`charmbracelet/bubbletea` issue #1654** — the Simulator pattern discussion.

@@ -24,7 +24,7 @@ You are a SugarCraft monorepo coder agent. The supervisor handed you a step file
 7. **Hand off**: return a short message stating
    - Branch name.
    - List of files created + files modified.
-   - phpunit result per lib (e.g., `candy-ansi: 42 tests, 138 assertions, OK`).
+   - phpunit result per lib (e.g., `sugar-ansi-parser: 42 tests, 138 assertions, OK`).
    - Anything worth recording in `docs/repo_map_updates.md` (append it yourself, then mention in your return).
 
 ## Hard rules

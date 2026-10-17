@@ -35,7 +35,7 @@ final class SgrHandler
      *
      * @param list<int> $params Parser params; -1 sentinels mean default.
      * @param list<bool>|null $subparams Continuation flags from
-     *   {@see \SugarCraft\Ansi\Parser\Parser::subparams()} for this dispatch:
+     *   {@see \SugarCraft\AnsiParser\Parser\Parser::subparams()} for this dispatch:
      *   true at index i means params[i+1] is a COLON sub-parameter of
      *   params[i], not an independent SGR (`4:3` curly vs `4;3` underline +
      *   italic). Null — no parser wired — keeps the historical peek: any
@@ -242,7 +242,7 @@ final class SgrHandler
     /**
      * Last flat slot index of the colon group that starts at $i: while
      * subparams[j] is true, params[j + 1] continues params[j]'s parameter
-     * ({@see \SugarCraft\Ansi\Parser\Parser::subparams()}).
+     * ({@see \SugarCraft\AnsiParser\Parser\Parser::subparams()}).
      *
      * @param list<int> $params
      * @param list<bool> $subparams

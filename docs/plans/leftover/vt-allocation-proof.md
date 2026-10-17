@@ -108,7 +108,7 @@ tests measure the parser's own buffers, not a growing log) lives at
   (`maxSize` default 1000), overwrites in place past saturation — the only
   input-volume-proportional storage in the render path, and it is capped
   at construction.
-- **`Parser`** (`sugarcraft/candy-ansi` `Parser`): internal `params` list
+- **`Parser`** (`sugarcraft/sugar-ansi-parser` `Parser`): internal `params` list
   capped at 32, string buffer capped at 65536 B
   (`maxStringBuffer: 65536` — wired in both `Terminal` facades, the W1.2
   reduction from the 1 MiB upstream default), `reset()` = `flush()` +
@@ -132,7 +132,7 @@ tests measure the parser's own buffers, not a growing log) lives at
 
 ## Known non-blocking diagnostics
 
-- `candy-vt/vendor/.../candy-ansi` tests report "Class cannot be found in
+- `candy-vt/vendor/.../sugar-ansi-parser` tests report "Class cannot be found in
   the configured test source" when `--filter` runs across symlinks —
   pre-existing, unrelated to this change.
 - phpstan baseline: 108 raw diagnostics on stdout for `src/`+`tests/` on HEAD

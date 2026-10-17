@@ -256,7 +256,7 @@ final class IgnoreRules
      * SIBLING libraries — `sugar-crush/vendor/sugarcraft/candy-core` →
      * `../../../candy-core`. Following those from the monorepo root means
      * `candy-core` is walked once per lib that depends on it, and
-     * `candy-core/vendor/sugarcraft/candy-ansi/vendor/…` is a cycle with no
+     * `candy-core/vendor/sugarcraft/sugar-ansi-parser/vendor/…` is a cycle with no
      * termination condition at all.
      *
      * There is no `follow_symlinks` tool argument to turn this off, on

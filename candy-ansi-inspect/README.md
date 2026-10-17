@@ -118,7 +118,7 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    clamped rather than truncated mid-digit: `ESC[99999m` is `ESC[65535m`.
 5. A string payload stops at 64 KiB, so a longer OSC arrives cut at exactly that
    length with its terminator still attached.
-6. Inside an **OSC** payload only, the C0 bytes candy-ansi maps to `None`
+6. Inside an **OSC** payload only, the C0 bytes sugar-ansi-parser maps to `None`
    (`0x00`–`0x06`, `0x08`–`0x17`, `0x19`, `0x1C`–`0x1F`) never reach the buffer:
    `ESC]0;a<EOT>b BEL` re-emits as `ESC]0;ab BEL`. The same byte does survive in a
    DCS, SOS, PM or APC payload. (4–6:
@@ -137,7 +137,7 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    (`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`)
 9. A sequence opened by an **8-bit C1 introducer** (`0x90` DCS, `0x98` SOS,
    `0x9B` CSI, `0x9D` OSC, `0x9E` PM, `0x9F` APC) is re-emitted in its 7-bit
-   `ESC` spelling: candy-ansi folds the introducer choice away before the
+   `ESC` spelling: sugar-ansi-parser folds the introducer choice away before the
    dispatch callback, leaving this inspector only the parsed pieces and a
    7-bit template to rebuild from — so `\x9b31m` arrives as `ESC [ 31 m`.
    An *unterminated* tail is the exception: it replays the bytes in flight
@@ -148,20 +148,20 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
     a stray lead (`a\xffb` → text `ab`), a lead interrupted by a non-continuation
     byte (the rune dies, the interrupting byte survives: `a\xc3(b` → `a(b`), and a
     second lead arriving before the first rune completes (`a\xe2\xe2Ab` → `aAb`)
-    all vanish with no segment. The C1 controls candy-ansi executes (`0x80`–`0x8F`,
+    all vanish with no segment. The C1 controls sugar-ansi-parser executes (`0x80`–`0x8F`,
     `0x99`, `0x9A`) do survive, as `C1 …` sequence segments — the loss is confined
     to bytes the UTF-8 window rejects. Item 8 is only its end-of-stream shadow;
-    surfacing these as reported elements needs a candy-ansi callback (the parser's
+    surfacing these as reported elements needs a sugar-ansi-parser callback (the parser's
     `replaceMalformed` flag is not enough — it never re-checks a ground-state byte
     it ignores, and a synthesised U+FFFD would be indistinguishable from a
     legitimately sent one).
     (`testMidStreamInvalidUtf8BytesAreDroppedExactlyAsTheParserDropsThem`)
 
 The first two are this inspector's own re-emission choices. Items 3–8 and 10 are
-candy-ansi rewriting or dropping the bytes before this lib ever sees a dispatch — recorded in
+sugar-ansi-parser rewriting or dropping the bytes before this lib ever sees a dispatch — recorded in
 `CALIBER_LEARNINGS.md`, and each transformation is byte-identical to the behaviour
-before this contract was written, so they are fidelity items for candy-ansi, not
-for this inspector. Item 9 is the same fold in the other direction: candy-ansi
+before this contract was written, so they are fidelity items for sugar-ansi-parser, not
+for this inspector. Item 9 is the same fold in the other direction: sugar-ansi-parser
 loses which spelling opened the sequence, so the inspector's re-emission can only
 pick one. What *is* new here is what the inspector reports afterwards:
 before this branch a truncated tail simply vanished, which is why item 7's

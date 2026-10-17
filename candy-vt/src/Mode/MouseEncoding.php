@@ -18,7 +18,7 @@ namespace SugarCraft\Vt\Mode;
  * orthogonal to "how to encode".
  *
  *  - {@see MouseEncoding::Default} — X10 vector encoding: button + 32,
- *    row/col + 32, one byte per component (candy-ansi's historical path)
+ *    row/col + 32, one byte per component (sugar-ansi-parser's historical path)
  *  - {@see MouseEncoding::Utf8}    — DEC 1005: UTF-8 codepoints above 160
  *  - {@see MouseEncoding::Sgr}     — DEC 1006: printable `CSI <b;x;yM/m`
  *  - {@see MouseEncoding::Urxvt}   — DEC 1015: numeric `CSI b;x;y M`

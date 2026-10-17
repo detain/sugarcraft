@@ -12,10 +12,10 @@ namespace SugarCraft\AnsiInspect;
  * doesn't recognise still gets a Segment with a generic `"CSI"` /
  * `"OSC"` / `"SS3"` label, so no sequence that reaches the segmenter is
  * dropped without a report. Bytes can still vanish further upstream, inside
- * candy-ansi, before this code ever sees a dispatch — `README.md` keeps the
+ * sugar-ansi-parser, before this code ever sees a dispatch — `README.md` keeps the
  * closed list of every known case and `ByteFidelityTest` pins each one.
  *
- * Sequence *recognition* lives entirely in candy-ansi's {@see Parser} state
+ * Sequence *recognition* lives entirely in sugar-ansi-parser's {@see Parser} state
  * machine; this class only labels the sequences it dispatches, plus the
  * truncated tails {@see AnsiHandler} recovers at end of stream. There is no
  * scanning of the input stream of its own, so OSC/DCS/APC strings go through
@@ -420,7 +420,7 @@ final class Inspector
     public static function describeDcs(string $payload, int $final = 0): string
     {
         // XTVERSION reply: DCS P >| version ST
-        // candy-ansi parser interprets: '>' as intermediate, '|' as final, 'version' as data
+        // sugar-ansi-parser parser interprets: '>' as intermediate, '|' as final, 'version' as data
         // So payload = '>version' and final = '|'
         // Payload bytes are attacker-controlled: sanitize like OSC/APC labels so a
         // captured reply can't inject control bytes into the inspector's own output.
@@ -441,7 +441,7 @@ final class Inspector
         if ($final === ord('q')) {
             return 'sixel image (' . strlen($payload) . ' bytes)';
         }
-        // DECRPSS reply: candy-ansi parses '1$r0$p' as:
+        // DECRPSS reply: sugar-ansi-parser parses '1$r0$p' as:
         // - final='r' (first final byte in 0x40-0x7E range), data='0$p'
         // - payload='$$1;0' from intermediate+prefix+params
         // Produce semantic: 'DECRPSS reply 1$r0$p'
@@ -568,7 +568,7 @@ final class Inspector
      * Prevents an embedded ESC in a captured OSC/APC/DCS payload from re-arming
      * a sequence when the report is rendered to a live terminal. The C1 range
      * (0x80–0x9F) carries the 8-bit spellings of the very controls a report is
-     * about — CSI (0x9B), OSC (0x9D), ST (0x9C) — and candy-ansi collects them
+     * about — CSI (0x9B), OSC (0x9D), ST (0x9C) — and sugar-ansi-parser collects them
      * verbatim into string payloads, so a captured 0x9B replayed raw inside a
      * label would re-arm a CSI parser on any 8-bit-capable downstream terminal.
      *

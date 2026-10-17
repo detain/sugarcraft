@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\CodeShot\AnsiParser;
 use SugarCraft\CodeShot\Segment;
 use SugarCraft\CodeShot\SgrState;

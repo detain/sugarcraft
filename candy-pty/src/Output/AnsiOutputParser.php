@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Output;
 
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Pty\Contract\MasterPty;
 
 /**
  * High-level PTY output reader that parses ANSI sequences via the VT500 parser.
  *
- * Wraps a {@see MasterPty} with a {@see \SugarCraft\Ansi\Parser\Parser} and an
+ * Wraps a {@see MasterPty} with a {@see \SugarCraft\AnsiParser\Parser\Parser} and an
  * {@see SgrHandler} so callers can track SGR state transitions in the PTY
  * output stream (e.g. to assert that `"\x1b[31mred\x1b[0m"` produced the
  * expected color changes).
@@ -19,7 +19,7 @@ use SugarCraft\Pty\Contract\MasterPty;
  * ANSI rendering state (colors, bold, underline) emitted by the child
  * process.
  *
- * @see \SugarCraft\Ansi\Parser\Parser
+ * @see \SugarCraft\AnsiParser\Parser\Parser
  * @see \SugarCraft\Pty\Output\SgrHandler
  * @see Mirrors charmbracelet/x/ansi (output parsing).
  */

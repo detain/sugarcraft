@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests\Handler;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
@@ -360,7 +360,7 @@ final class DecalnWireTest extends TestCase
         // `ESC [ # 8` is a circulating transcription error (see class
         // docblock): xterm's CSI '#' substate treats the 8 as a collected
         // digit waiting for a `P/Q/R/S` colour-stack final, and the
-        // candy-ansi transition table we mirror drops it to Ground without
+        // sugar-ansi-parser transition table we mirror drops it to Ground without
         // dispatch. Deliberately NOT accepted; must stay a screen no-op so
         // a future "fix" that makes it dispatch is caught here.
         $h = $this->handler("\x1b[#8X", cols: 6, rows: 3);

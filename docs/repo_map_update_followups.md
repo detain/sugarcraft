@@ -20,7 +20,7 @@ _4 items total. All other 19 audited libs from step-30 were successfully migrate
 This document audits every SugarCraft lib **not** migrated in steps 9-29 (those are the "already-done" libs). It maps each remaining lib to the 8 shared packages it could adopt, with rationale and effort estimates.
 
 The 8 shared packages:
-- **candy-ansi** — byte-loop ANSI parsing (Parser, OscHandler, CsiHandler, SgrState)
+- **sugar-ansi-parser** — byte-loop ANSI parsing (Parser, OscHandler, CsiHandler, SgrState)
 - **candy-buffer** — cell-grid rendering & string composition (Buffer, Cell, DiffOp, Style, Hyperlink)
 - **candy-layout** — constraint-based sizing (LayoutSolver, Region, Direction, Constraint*)
 - **sugar-mouse** — mouse hit-testing & decode (MouseMsg, Zone, Manager)

@@ -351,7 +351,7 @@ Use the existing mutable trait pattern from `candy-core` (`SugarCraft\Core\Conce
 ### Minor Concerns
 
 - `FuzzyMatcher` interface contract: if `matchAll()` returns inconsistent results with `match()`, the fallback at lines 669-680 kicks in. This is defensive but adds complexity.
-- The library relies on `candy-ansi` Parser which may have different parsing behavior than expected for complex ANSI sequences.
+- The library relies on `sugar-ansi-parser` Parser which may have different parsing behavior than expected for complex ANSI sequences.
 
 ---
 
