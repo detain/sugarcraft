@@ -571,10 +571,12 @@ For more information, see the README:
   https://github.com/detain/sugarcraft/tree/master/candy-code
 
 TXT,
-    'cli.launch.agent_preset_skip' => 'skipped %d agent preset file%s: %s',
     'cli.launch.agent_preset_shadow' => '%d native agent preset file%s displaced by a higher-precedence file: %s',
+    'cli.launch.agent_preset_skip' => 'skipped %d agent preset file%s: %s',
     'cli.launch.clip_suffix' => '… (clipped; full text on stderr)',
     'cli.launch.command_skip' => '%d command file%s could not be read and %s skipped; set %s=1 to list %s',
+    'cli.launch.foreign_preset_change' => 'imported %d foreign agent file%s with changes: %s',
+    'cli.launch.foreign_preset_skip' => 'skipped %d foreign agent file%s: %s',
     'cli.launch.instruction_deferral' => '%d instruction file%s %s left out of the system prompt — %s',
     'cli.launch.mcp_partial_start' => 'MCP tools from %s are incomplete: the server list could not be fully started (%s); this session has only the tools that did load',
     'cli.launch.mcp_partial_start_log' => 'candy-code: MCP config %s could not be fully started (%s: %s); continuing without it.',

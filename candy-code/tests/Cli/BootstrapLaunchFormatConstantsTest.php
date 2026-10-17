@@ -223,6 +223,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // ISS-031's displaced-preset row, read back by
         // AgentPresetShadowNoticeTest. Quoted on no page, so no PAGE_QUOTES row.
         'AGENT_PRESET_SHADOW_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
+        'FOREIGN_PRESET_SKIP_NOTICE_FORMAT' => ['method' => 'foreignAgentPresets', 'conversions' => 3],
+        'FOREIGN_PRESET_CHANGE_NOTICE_FORMAT' => ['method' => 'foreignAgentPresets', 'conversions' => 3],
         'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'launchNotices', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
@@ -534,6 +536,20 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             // from AGENT_PRESET_SHADOW_NOTICE_FORMAT's conversions.
             "' — kept '", "' '",
         ],
+        // ISS-088: the foreign importer's own verdicts. Body order: the
+        // walk-failure sentence's catalogue key and its one parameter, then
+        // the skip-row plumbing (reason-prefix strip, the `path (reason)`
+        // pieces, the plural pair, the row joiner) and the joiner between the
+        // skip and change sentences. Both sentences are named constants.
+        'foreignAgentPresets' => [
+            "'cli.warn.foreign_presets_unavailable'", "'error'",
+            "': '",
+            // ISS-088: the drain strips the parser's trailing " in: {file}"
+            // from a skip row so the path is named once, not twice — the
+            // clip bound has to seat both the skip and the change sentence.
+            "' in: '", "''", "' :'", "' '",
+            ' (', ')', "'s'", "'; '",
+        ],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -814,7 +830,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            27,
+            29,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

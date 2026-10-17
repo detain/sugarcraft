@@ -545,6 +545,33 @@ final class Bootstrap
     public const AGENT_PRESET_SHADOW_NOTICE_FORMAT = '%d native agent preset file%s displaced by a higher-precedence file: %s';
 
     /**
+     * The one row {@see foreignAgentPresets()} raises for foreign agent files
+     * the importer skipped (ISS-088): `%d` the count, `%s` the noun plural,
+     * `%s` the `path (reason)` rows joined by `; `.
+     *
+     * The per-file catch that keeps one broken import from costing the whole
+     * directory used to cost it its visibility too — a vanished agent is
+     * indistinguishable from an unwritten one from inside the roster.
+     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
+     * {@see \SugarCraft\Code\Tests\Agents\ForeignAgentPresetNoticeTest} pins
+     * the rendered row through this constant.
+     */
+    public const FOREIGN_PRESET_SKIP_NOTICE_FORMAT = 'skipped %d foreign agent file%s: %s';
+
+    /**
+     * The one row {@see foreignAgentPresets()} raises when foreign imports
+     * survived only with losses (ISS-088, the "imported with changes"
+     * envelope): `%d` the count, `%s` the noun plural, `%s` the
+     * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry::warnings()}
+     * rows joined by `; `.
+     *
+     * The warnings already existed and named their agent; what did not exist
+     * was a reader. Same promotion reason as
+     * {@see FOREIGN_PRESET_SKIP_NOTICE_FORMAT}.
+     */
+    public const FOREIGN_PRESET_CHANGE_NOTICE_FORMAT = 'imported %d foreign agent file%s with changes: %s';
+
+    /**
      * The tail row {@see launchNotices()} synthesises when this launch raised
      * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
      *
@@ -807,6 +834,8 @@ final class Bootstrap
         self::COMMAND_SKIP_NOTICE_FORMAT => 'cli.launch.command_skip',
         self::AGENT_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.agent_preset_skip',
         self::AGENT_PRESET_SHADOW_NOTICE_FORMAT => 'cli.launch.agent_preset_shadow',
+        self::FOREIGN_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.foreign_preset_skip',
+        self::FOREIGN_PRESET_CHANGE_NOTICE_FORMAT => 'cli.launch.foreign_preset_change',
         self::LAUNCH_NOTICE_OVERFLOW_FORMAT => 'cli.launch.overflow',
         self::NARROWED_GRANT_NOTICE_FORMAT => 'cli.launch.narrowed_grant',
         self::NARROWED_GRANT_OVERFLOW_FORMAT => 'cli.launch.narrowed_grant_overflow',
@@ -855,7 +884,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 27;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 28;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -1681,7 +1710,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-SEVEN call sites now routed onto the transcript seam. This said
+        // TWENTY-EIGHT call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -2798,13 +2827,17 @@ final class Bootstrap
      * Phase 2 item 6 both exist to end. See {@see $projectTierRefusals} for the
      * other four seams and {@see reportProjectTierRefusals()} for the notice.
      *
-     * WHAT IS NOT DRAINED, stated rather than left as an absence:
+     * WHAT THE COLLECTOR LINE COULD NOT CARRY GETS ITS OWN (ISS-088):
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry::warnings()} —
-     * opencode's per-command `permission:` rules collapsing to one allow/ask/deny.
-     * That is a lossy MAPPING, not a refused directory, and the collector's notice
-     * is worded `ignoring <path> — <reason>`, which would misdescribe it. Those
-     * notices reach `error_log` from inside the registry and nothing else; giving
-     * them a surface of their own is a separate change.
+     * lossy MAPPINGS like opencode's per-command `permission:` rules collapsing
+     * to one allow/ask/deny, an inline server definition reduced to its name,
+     * a quoted word read as a boolean — and the per-file parse failures
+     * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry::skippedFiles()}
+     * records. Neither fits the collector's `ignoring <path> — <reason>`
+     * wording, so both are raised through the transcript seam as one row each,
+     * "imported with changes" and "skipped", before the launch reads the
+     * roster. Before this, a CC agent with bad YAML disappeared silently and
+     * the lossy ISS-086 casts were invisible even in the log.
      *
      * THE USER TIER'S OWN REFUSAL HAS NO ENTRY HERE, and cannot: when
      * {@see \SugarCraft\Code\Support\HomeDirectory::owned()} returns null the
@@ -2837,6 +2870,55 @@ final class Bootstrap
                 Lang::t('cli.warn.foreign_presets_unavailable', ['error' => $e->getMessage()]),
             );
             $presets = [];
+        }
+
+        // ISS-088, the visible half: the import's own verdicts on what it read.
+        // Skips and warnings are DIFFERENT OUTCOMES and keep different
+        // envelopes — "skipped N files (why)" is a shorter roster, "imported N
+        // files with changes" is the same roster carrying less than its author
+        // wrote — but they rise as ONE seam call, the way agentPresets seats
+        // its skip and shadow rows (the seam census counts call sites, and a
+        // bad directory is rare enough that one line per outcome cannot
+        // crowd it). Collected on the throwing path too: the registry records
+        // per-file failures while walking, before whatever tripped the
+        // outer catch.
+        $notice = null;
+        $skipped = $registry->skippedFiles();
+        if ($skipped !== []) {
+            $rows = [];
+            foreach ($skipped as $path => $why) {
+                $why = str_starts_with($why, $path . ': ')
+                    ? substr($why, \strlen($path) + 2)
+                    // ISS-088: the foreign parser's messages END with the path
+                    // ("No YAML frontmatter found in: {file}"), and the row
+                    // already names the file — a doubled 100-character path
+                    // pushed the second sentence of a merged skip+change row
+                    // past the clip bound. De-duplicate whichever side it rides.
+                    : trim(rtrim(str_replace([' in: ' . $path, ': ' . $path], ['', ''], $why), ' :'), ' ');
+                $rows[] = "{$path} ({$why})";
+            }
+
+            $notice = sprintf(
+                self::translated(self::FOREIGN_PRESET_SKIP_NOTICE_FORMAT),
+                \count($skipped),
+                \count($skipped) === 1 ? '' : 's',
+                implode('; ', $rows),
+            );
+        }
+
+        $warned = $registry->warnings();
+        if ($warned !== []) {
+            $changeNotice = sprintf(
+                self::translated(self::FOREIGN_PRESET_CHANGE_NOTICE_FORMAT),
+                \count($warned),
+                \count($warned) === 1 ? '' : 's',
+                implode('; ', $warned),
+            );
+            $notice = $notice === null ? $changeNotice : $notice . ' ' . $changeNotice;
+        }
+
+        if ($notice !== null) {
+            self::warnPermissionConfigInTranscript($notice);
         }
 
         // Collected whether the walk finished or not: refusedDirectories() is
@@ -5385,7 +5467,7 @@ final class Bootstrap
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // twenty-six other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // twenty-seven other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -8719,7 +8801,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // twenty-six call sites: {@see chat()} holds no `self::tools(` call of
+            // twenty-seven call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

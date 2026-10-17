@@ -218,7 +218,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — THIRTY-SIX call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — THIRTY-SEVEN call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of six for that
@@ -533,7 +533,9 @@ final class StderrEmitterCensusTest extends TestCase
         // non-boolean value; on with no provider to review with). Stderr
         // only: the user's config is off, the session is intact and auto
         // mode keeps its old deny-and-strike answer.
-        'src/Cli/Bootstrap.php' => 36,
+        // +1 in ISS-088: foreignAgentPresets() gained its own seam call for
+        // the skip/change envelope beside the one the outer catch already raised.
+        'src/Cli/Bootstrap.php' => 37,
     ];
 
     /**
@@ -749,7 +751,7 @@ final class StderrEmitterCensusTest extends TestCase
      * own known-positive fixture cover `self::`, `static::`, `$this->`, an
      * aliased import and a variable class name — so the difference between
      * what it counts and what channel 6 counts is exactly the set of `warn`
-     * calls channel 6 cannot see. Today that difference is one file's three
+     * calls channel 6 cannot see. Today that difference is one file's eight
      * `$this->warn(` calls, which are a private method of
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry} and have no
      * relation to this seam. A fourth would be a decision, which is the point.
@@ -790,8 +792,9 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const NON_SEAM_WARN_SITES = [
-        // Three `$this->warn(` calls on the registry's own private helper.
-        'src/Agents/ForeignAgentPresetRegistry.php' => 3,
+        // Eight `$this->warn(` calls on the registry's own private helper
+        // (ISS-086 grew the importer's name/flag coercion paths).
+        'src/Agents/ForeignAgentPresetRegistry.php' => 8,
     ];
 
     /**

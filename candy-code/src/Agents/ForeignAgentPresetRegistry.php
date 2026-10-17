@@ -163,6 +163,14 @@ final class ForeignAgentPresetRegistry
     private array $warnings = [];
 
     /**
+     * Foreign agent files the most recent discover* call skipped as
+     * unparsable, path => why — see {@see skippedFiles()}.
+     *
+     * @var array<string, string>
+     */
+    private array $skippedFiles = [];
+
+    /**
      * Directories the most recent discover* call declined to read, path as
      * spelled => why — see {@see refusedDirectories()}.
      *
@@ -282,11 +290,34 @@ final class ForeignAgentPresetRegistry
         return $this->refusedDirectories;
     }
 
+    /**
+     * Which foreign agent files this walk parsed badly enough to skip, and
+     * why (ISS-088).
+     *
+     * The per-file catch keeps one broken file from costing the directory —
+     * the correct trade — but a dropped agent was otherwise indistinguishable
+     * from one that was never written. The native sibling's
+     * {@see AgentPresetRegistry::skippedFiles()} rows are drained into a
+     * launch notice by {@see \SugarCraft\Code\Cli\Bootstrap::agentPresets()};
+     * these warnings and skips are drained by
+     * {@see \SugarCraft\Code\Cli\Bootstrap::foreignAgentPresets()} into its
+     * own row pair, so a lost import says so at the launch that lost it.
+     *
+     * Recomputed by every discover* call rather than accumulated.
+     *
+     * @return array<string, string> file path => parse failure
+     */
+    public function skippedFiles(): array
+    {
+        return $this->skippedFiles;
+    }
+
     /** One launch's notices, not one object's — see {@see refusedDirectories()}. */
     private function reset(): void
     {
         $this->warnings = [];
         $this->refusedDirectories = [];
+        $this->skippedFiles = [];
     }
 
     /**
@@ -449,7 +480,11 @@ final class ForeignAgentPresetRegistry
                     };
                 } catch (\Throwable $e) {
                     // One malformed foreign file must not abort the import of
-                    // every other agent in the directory.
+                    // every other agent in the directory. ISS-088: the price of
+                    // not aborting was invisibility — the file vanished from the
+                    // roster silently. Record it beside the error_log so the
+                    // launch can say so; see {@see skippedFiles()}.
+                    $this->skippedFiles[$file] = $e->getMessage();
                     error_log("candy-code: ForeignAgentPresetRegistry: skipping {$file}: {$e->getMessage()}");
                 }
             }

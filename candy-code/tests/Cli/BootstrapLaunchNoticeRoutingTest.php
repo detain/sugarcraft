@@ -15,14 +15,14 @@ use SugarCraft\Code\Skills\SkillLoader;
 
 /**
  * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
- * migrated ONE caller onto it. This file is the guard for the other twenty-six.
+ * migrated ONE caller onto it. This file is the guard for the other twenty-seven.
  *
  * HOW THAT NUMBER IS OBTAINED — not by `grep`, which overstates it by roughly
  * double because the identifier is mostly prose in `Bootstrap.php`'s
- * doc-blocks. `Bootstrap.php` holds TWENTY-SEVEN calls to the seam by a token scan
+ * doc-blocks. `Bootstrap.php` holds TWENTY-EIGHT calls to the seam by a token scan
  * (`token_get_all()`, whitespace and comments stripped, T_STRING of that name
  * both preceded by `::` and followed by `(`); one of them is round 39's, so
- * this file guards the other twenty-six. Re-derive it in one command:
+ * this file guards the other twenty-seven. Re-derive it in one command:
  * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest`,
  * which also fails on this sentence by name if the count moves.
  *
@@ -225,7 +225,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      *
      * ONE ROW WHATEVER THE COUNT — this message is an aggregate, and that is
      * what makes it safe to seat in a transcript that also carries
-     * twenty-six other sources (twenty-seven seam call sites by the token scan in
+     * twenty-seven other sources (twenty-eight seam call sites by the token scan in
      * {@see BootstrapTranscriptSeamCallSiteCensusTest}, of which this is one;
      * `grep` gives about double and is the wrong tool). Two unreadable files,
      * one notice, and the notice says two.
