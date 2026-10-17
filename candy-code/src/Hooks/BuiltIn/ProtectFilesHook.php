@@ -133,6 +133,13 @@ final readonly class ProtectFilesHook implements HookInterface
      *    rides the denial (a backup of the secret is the secret).
      *  - `~/.docker/config.json` — registry `auths` bearer tokens; and
      *    `~/.git-credentials` — plaintext `user:token@host` lines.
+     *  - The tool keychains measured open under the read-only auto-allow
+     *    (ISS-010): `~/.config/gh/hosts.yml` (GitHub CLI tokens),
+     *    `~/.kube/config` (cluster tokens/certs), `~/.pgpass` and
+     *    `~/.pypirc` (plaintext passwords), `composer/auth.json` under any
+     *    `COMPOSER_HOME` (repo http-basic credentials),
+     *    `~/.claude/.credentials.json` and `~/.local/share/opencode/auth.json`
+     *    (agent OAuth refresh tokens).
      *
      * All carry `i` for case-insensitive filesystems (macOS, Windows), the
      * `.git/hooks` argument above: there `~/.SSH/` IS the ssh directory.
@@ -150,6 +157,13 @@ final readonly class ProtectFilesHook implements HookInterface
         '/(?<![\w.-])\.npmrc\b/i',
         '/(?<![\w.-])\.docker\/config\.json\b/i',
         '/(?<![\w.-])\.git-credentials\b/i',
+        '/(?<![\w.-])\.config\/gh\/hosts\.yml\b/i',
+        '/(?<![\w.-])\.kube\/config\b/i',
+        '/(?<![\w.-])\.pgpass\b/i',
+        '/(?<![\w.-])\.pypirc\b/i',
+        '/(^|[\s\/.])composer\/auth\.json\b/i',
+        '/(?<![\w.-])\.claude\/\.credentials\.json\b/i',
+        '/(?<![\w.-])\.local\/share\/opencode\/auth\.json\b/i',
         ...self::WRITE_ONLY_PATTERNS,
     ];
 

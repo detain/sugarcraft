@@ -52,6 +52,7 @@ final class ReadOnlyAutoAllowTest extends TestCase
     {
         $base = sys_get_temp_dir() . '/roa-' . bin2hex(random_bytes(4));
         mkdir($base . '/project/sub', 0o700, true);
+        mkdir($base . '/elsewhere', 0o700, true);
         $this->base = (string) realpath($base);
         $this->root = $this->base . '/project';
         SessionSettings::reset();
@@ -69,6 +70,8 @@ final class ReadOnlyAutoAllowTest extends TestCase
 
     private function decide(PermissionGate $gate, string $command): PermissionDecision
     {
+        $command = str_replace('{root2}', $this->base . '/elsewhere', $command);
+
         return $gate->evaluate(new ToolCall('Bash', ['command' => str_replace('{root}', $this->root, $command)]), $this->root);
     }
 
@@ -86,7 +89,6 @@ final class ReadOnlyAutoAllowTest extends TestCase
             'find without an action' => ['find . -name "*.php" -type f | head'],
             'a listing git branch / tag / remote' => ['git branch -a && git tag && git remote -v'],
             'git config read' => ['git config --get user.name'],
-            'env and printenv bare' => ['env | sort && printenv'],
             'php lint' => ['php -l src/A.php'],
             'composer show / validate' => ['composer show && composer validate'],
             'npm ls / view' => ['npm ls && npm view react version'],
@@ -151,6 +153,16 @@ final class ReadOnlyAutoAllowTest extends TestCase
             'a classifier finding' => ['env | grep SECRET'],
             'a background job' => ['ls &'],
             'a glob command name' => ['l? -la'],
+            // ISS-010: the environment dump and every machine-anchored read.
+            'env and printenv bare' => ['env | sort && printenv'],
+            'an absolute read outside the project' => ['cat /etc/hostname'],
+            'a home credential store' => ['cat ~/.config/gh/hosts.yml'],
+            'a read of the whole home tree' => ['grep -r password ~/'],
+            'a dollar-HOME spelling' => ['cat $HOME/.pypirc'],
+            'a parent traversal operand' => ['cat ../../etc/passwd'],
+            'an absolute path under a different project' => ['head -5 {root2}/README.md'],
+            'a machine path as a data file' => ["awk -F: '\$3 > 1000 {print \$1}' /etc/passwd"],
+            'a home path as a data file' => ["awk '{print \$1}' ~/.ssh/known_hosts"],
             'an absolute command path' => ['/bin/ls'],
             'an assignment in front' => ['FOO=1 ls'],
             'a here-doc' => ["cat <<EOF\nx\nEOF"],
@@ -210,10 +222,32 @@ final class ReadOnlyAutoAllowTest extends TestCase
         self::assertTrue(ReadOnlyCommands::autoAllowEnabled(), 'on by default');
     }
 
+    public function testTheAutoAllowReadsOnlyInsideTheProject(): void
+    {
+        // ISS-010: direct helper pins. In-project paths ride the auto-run;
+        // anything anchored at $HOME, off the root, or escaping with `..`
+        // asks. An unjudgeable root fails closed the same way.
+        self::assertTrue(ReadOnlyCommands::autoAllows('cat ' . $this->root . '/sub/a.txt', $this->root));
+        self::assertTrue(ReadOnlyCommands::autoAllows('head -3 ./sub/../notes.md', $this->root), 'a ./ walk that lands inside stays');
+        self::assertTrue(ReadOnlyCommands::autoAllows('wc -l sub/notes.md', $this->root));
+        self::assertTrue(ReadOnlyCommands::autoAllows('ls -d ' . $this->root . '/*', $this->root), 'a glob under the root is not an anchored literal read of elsewhere');
+        self::assertFalse(ReadOnlyCommands::autoAllows('cat /etc/hostname', $this->root));
+        self::assertFalse(ReadOnlyCommands::autoAllows('cat ' . $this->base . '/elsewhere/README.md', $this->root));
+        self::assertFalse(ReadOnlyCommands::autoAllows('cat ~/.pgpass', $this->root));
+        self::assertFalse(ReadOnlyCommands::autoAllows('cat ~/x.txt', $this->root), 'home is home, dot-file or not');
+        self::assertFalse(ReadOnlyCommands::autoAllows('cat sub/../../etc/passwd', $this->root));
+        self::assertFalse(ReadOnlyCommands::autoAllows('cat /etc/hostname', null), 'no root: anchored operands fail closed');
+        self::assertFalse(ReadOnlyCommands::autoAllows('cd ' . $this->root . '/sub && cat ../notes.md', $this->root), 'mid-chain .. is unjudgeable against an untracked cwd');
+        self::assertFalse(ReadOnlyCommands::autoAllows('env', $this->root), 'the environment is a credential dump');
+        self::assertFalse(ReadOnlyCommands::autoAllows('printenv', $this->root));
+    }
+
     public function testPlanKeepsItsOwnReadOnlyJudgement(): void
     {
         $plan = new PermissionGate(PermissionMode::Plan);
         self::assertSame(PermissionDecision::Allow, $this->decide($plan, 'cd /etc && ls'), 'plan withholds writes, not visibility');
+        self::assertSame(PermissionDecision::Allow, $this->decide($plan, 'cat /etc/hostname'), 'ISS-010: the operand scope is the auto-allow\u{2019}s, not plan\u{2019}s');
+        self::assertSame(PermissionDecision::Allow, $this->decide($plan, 'env | sort && printenv'), 'plan still lets the env dump through');
         self::assertSame(PermissionDecision::Allow, $this->decide($plan, 'git log -3 | head'));
         self::assertSame(PermissionDecision::Deny, $this->decide($plan, 'ls | sh'));
         self::assertSame(PermissionDecision::Deny, $this->decide($plan, 'echo x > f'));

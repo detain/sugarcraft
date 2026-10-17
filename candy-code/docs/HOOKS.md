@@ -697,9 +697,12 @@ Your launch environment reaches the hook — `PATH`, `HOME`, `LANG`,
 `VIRTUAL_ENV`, the `CANDY_CODE_*` variables that configured the launch — with
 three changes, made by `ProcessContainment::scrubbedEnv()`:
 
-1. **Credentials are removed** (audit F-E1). A variable whose name matches
-   `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `AWS_*` — case-insensitive — is
-   dropped, and so is every provider key CandyCode itself reads
+1. **Credentials are removed** (audit F-E1, extended by ISS-010). A variable
+   whose name matches `*_API_KEY`, `*_TOKEN`, `*_SECRET`, `AWS_*`,
+   `*_PASSWORD`, `*_PASS`, `*_PWD`, `*_DSN` or `*_CREDENTIALS` —
+   case-insensitive — is dropped, as are the exact names `DATABASE_URL` and
+   `PGPASSWORD` (no underscore for a `*_`-glob to bite on), and so is every
+   provider key CandyCode itself reads
    (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`,
    `SGLANG_API_KEY`, `CUSTOM_PROVIDER_API_KEY`). A hook's stdout can become
    `additionalContext` the model reads, so a key in its environment was one

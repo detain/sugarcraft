@@ -144,6 +144,16 @@ final class SecretEnvScrubTest extends TestCase
         yield 'token mid-name' => ['TOKENIZER_PARALLELISM', false];
         yield 'git prompt switch' => ['GIT_TERMINAL_PROMPT', false];
         yield 'ssh agent socket' => ['SSH_AUTH_SOCK', false];
+        // ISS-010: the database-shaped names measured through the scrub.
+        yield 'password suffix' => ['DB_PASSWORD', true];
+        yield 'pass suffix' => ['ACME_DB_PASS', true];
+        yield 'pwd suffix' => ['MYSQL_PWD', true];
+        yield 'dsn suffix' => ['MY_DSN', true];
+        yield 'credentials suffix' => ['ACME_CREDENTIALS', true];
+        yield 'database url exact' => ['DATABASE_URL', true];
+        yield 'pgpassword no underscore' => ['PGPASSWORD', true];
+        yield 'password prefix is not a suffix' => ['PASSWORD_HINT', false];
+        yield 'database pool url is not the url' => ['DATABASE_POOL_URL', false];
     }
 
     /**

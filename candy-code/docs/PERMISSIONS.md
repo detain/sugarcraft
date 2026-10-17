@@ -280,17 +280,25 @@ is a question, exactly as before): a command off the list (`xargs`, `tee`, `sh`,
 `&> f` — `2>/dev/null`, `>/dev/null` and `2>&1` are fine); a command or
 process substitution (`$(…)`, backticks, `<(…)`) or a `${…}` expansion other
 than a plain `${name}` (`${x:=y}`, `${a[i]}`, `${x@P}` evaluate code); a
-background `&`; a line that does not parse (an open quote, a here-doc); a
-file `protect-files` guards (`grep x .env`, `cat deploy.pem`, the policy
-files); and anything the `auto` classifier flags (`env | grep SECRET`).
+background `&`; a line that does not parse (an open quote, a here-doc);
+`env` or `printenv` (the live environment is a credential dump the scrub only
+half protects — ISS-010); an operand anchored outside the project — an
+absolute path not under the root, anything under `$HOME`, a `..` escape (the
+auto-allow grants in-project visibility; machine-wide reads are a question); a
+file `protect-files` guards (`grep x .env`, `cat deploy.pem`, the credential
+stores — `gh`'s `hosts.yml`, `.kube/config`, `.pgpass`, `.pypirc`,
+`composer/auth.json`, the agent keychains — and the policy files); and
+anything the `auto` classifier flags (`env | grep SECRET`).
 
 **What still wins.** It is a mode decision, so a configured `deny` or `ask`
 rule (`{"pattern": "Bash(git log *)", "action": "deny"}`) comes first — it
 sees the commands a loop body runs (`do git log …` is read as `git log …`) —
 and the
 hooks run before the gate at all — `protect-files` still refuses
-`grep API_KEY .env`. Paths are not restricted: reading outside the project is
-still reading, as it is with `Read`. `plan` keeps its own judgement (there a
+`grep API_KEY .env`. The path scope above is the auto-allow's only: a bare
+relative read inside the project is still one question fewer, `Read` keeps its
+own judgement, and reading outside the project simply goes back to being
+asked. `plan` keeps its own judgement (there a
 `cd` may go anywhere); `auto` classifies as before; `dont-ask` still refuses
 `Bash`.
 

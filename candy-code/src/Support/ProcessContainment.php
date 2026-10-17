@@ -111,8 +111,20 @@ final class ProcessContainment
      * credentials for services this package has never heard of; `AWS_*`
      * whole because the AWS chain spreads one credential over several names
      * (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`).
+     *
+     * ISS-010 added the database-shaped suffixes on the same reasoning — a
+     * `DB_PASSWORD` or `*_DSN` in the operator's shell reaches `env`, a hook's
+     * stdout and the transcript exactly the way an API key did. `PGPASSWORD`
+     * and `DATABASE_URL` are spelled out because they carry NO underscore for
+     * a `*_`-shaped glob to bite on: `fnmatch('*_PASSWORD', 'PGPASSWORD')` is
+     * false. `SSH_AUTH_SOCK` stays: it is a socket path, not a secret, and
+     * dropping it breaks every legitimate ssh-agent flow the operator runs.
      */
-    public const SECRET_ENV_PATTERNS = ['*_API_KEY', '*_TOKEN', '*_SECRET', 'AWS_*'];
+    public const SECRET_ENV_PATTERNS = [
+        '*_API_KEY', '*_TOKEN', '*_SECRET', 'AWS_*',
+        '*_PASSWORD', '*_PASS', '*_PWD', '*_DSN', '*_CREDENTIALS',
+        'DATABASE_URL', 'PGPASSWORD',
+    ];
 
     /**
      * The credentials this package itself reads (docs/ENVIRONMENT.md,

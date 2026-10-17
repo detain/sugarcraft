@@ -56,7 +56,7 @@ final class ReadOnlyAwkTest extends TestCase
     {
         return [
             'print a field, counted' => ["awk '{print \$1}' f | sort | uniq -c"],
-            'a comparison in a pattern' => ["awk -F: '\$3 > 1000 {print \$1}' /etc/passwd"],
+            'a comparison in a pattern' => ["awk -F: '\$3 > 1000 {print \$1}' pw.txt"],
             'a comparison in parentheses' => ["awk '{ if (\$2 > 5) print \$1 }' f"],
             'a sum' => ["awk '{s+=\$2} END{print s+0}' f"],
             'a regex pattern' => ["awk '/foo/ {print}' f"],

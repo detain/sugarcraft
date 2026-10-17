@@ -26,9 +26,13 @@ use SugarCraft\Code\ToolCall;
  * withholds writes, not visibility), while the auto-allow lets `cd` go only
  * into an existing directory inside the project ({@see LeadingCd::landsInside()};
  * no root, no `cd`; after one `cd`, only an absolute one); the auto-allow
- * refuses a background `&` (a job that outlives the call); and it refuses a
- * line that names a protected file ({@see ProtectFilesHook}: `.env*`, keys,
- * policy files) or that {@see SafetyClassifier} flags (`env | grep SECRET`) — those go back to
+ * refuses a background `&` (a job that outlives the call); it refuses
+ * `env`/`printenv` (the live environment is a credential dump the scrub only
+ * half protects); it refuses any anchored operand outside the project or
+ * anywhere under `$HOME` (ISS-010 — machine-wide paths are a question); and
+ * it refuses a line that names a protected file ({@see ProtectFilesHook}:
+ * `.env*`, keys, credential stores, policy files) or that
+ * {@see SafetyClassifier} flags (`env | grep SECRET`) — those go back to
  * the mode's question, and the hook still refuses what it refuses.
  *
  * THIS IS AN ALLOW-LIST ON A GRANT PATH, both on purpose. Until audit F-P2
@@ -323,7 +327,132 @@ final class ReadOnlyCommands
             return true;
         }
 
-        return self::argumentsAreReadOnly($name, $args, $argFlags);
+        // ISS-010 (auto-allow only — `plan` withholds writes, not visibility):
+        // the environment carries live credentials the scrub only half
+        // protects (SSH_AUTH_SOCK, agent pipes, any *_PASS the patterns miss),
+        // so dumping it is a question, never a silent auto-run.
+        if (!$cdAnywhere && ($name === 'env' || $name === 'printenv')) {
+            return false;
+        }
+
+        if (!self::argumentsAreReadOnly($name, $args, $argFlags)) {
+            return false;
+        }
+
+        // ISS-010: a read-only command is still a READ of whatever it names.
+        // The auto-allow grants in-project visibility only; machine-wide paths
+        // and everything under $HOME go back to the mode's question. `plan`
+        // keeps its broader judgement untouched.
+        return $cdAnywhere || self::operandsStayInsideProject($name, $args, $projectRoot, $changedDirectory);
+    }
+
+    /**
+     * Does every operand that ANCHORS to a location (absolute `/…`, `~…`,
+     * `$HOME/…`, or a leading/interior `..`) name something inside the project
+     * root? Anything anchored elsewhere — `/etc/passwd`, `~/`, the whole home
+     * tree under `~` — is `false`, and so is every anchored operand when no
+     * root is known (fail closed: nothing can be shown to be inside an unknown
+     * project). Bare names, in-project relatives (`sub/x`, `.`, `./f`) and
+     * option words stay as the allow-list judged them — and relatives stay
+     * inside the project wherever the chain's `cd`s landed, since each one was
+     * shown to stay inside. Only `..` operands can leave: they are refused
+     * unless they provably land back inside the root from the starting
+     * directory (the exact cwd after a `cd` is not tracked, so a trailing-`..`
+     * path is unjudgeable mid-chain even though the `cd` itself was in-root).
+     *
+     * @param list<string> $args
+     */
+    private static function operandsStayInsideProject(string $name, array $args, ?string $projectRoot, bool $changedDirectory): bool
+    {
+        $root = $projectRoot === null || $projectRoot === '' ? null : rtrim($projectRoot, '/');
+        $home = \getenv('HOME');
+        $home = \is_string($home) && $home !== '' ? rtrim($home, '/') : null;
+
+        // The first bare operand of a pattern-language tool is its PROGRAM,
+        // not a file: `/foo/ {print}` anchors at a slash for entirely the
+        // wrong reason. Files after the program stay scanned. (A `-e`-bound
+        // pattern then shifts the skip onto a real file — asking about a
+        // readable file is the safe direction of that slop.)
+        $programTools = ['sed', 'awk', 'gawk', 'mawk', 'grep', 'egrep', 'fgrep', 'rg'];
+        $skipProgram = \in_array($name, $programTools, true);
+
+        foreach ($args as $arg) {
+            if ($arg === '' || $arg[0] === '-') {
+                continue;
+            }
+            if ($skipProgram) {
+                $skipProgram = false;
+
+                continue;
+            }
+            $tilde = $arg === '~' || str_starts_with($arg, '~/')
+                || $arg === '$HOME' || str_starts_with($arg, '$HOME/')
+                || $arg === '${HOME}' || str_starts_with($arg, '${HOME}/');
+            $absolute = $arg[0] === '/';
+            $escaping = $arg === '..' || str_starts_with($arg, '../')
+                || \preg_match('#(^|/)\.\.(/|$)#', $arg) === 1;
+
+            if ($tilde) {
+                // The home directory is where every CLI parks its credentials;
+                // the auto-allow never reads it unasked, dot-file or not.
+                return false;
+            }
+            if ($escaping) {
+                // Lexically leaves (or passes through) a parent: judgeable
+                // only from a known cwd, which a mid-chain `cd` invalidates.
+                if ($root === null || $changedDirectory || !str_starts_with($arg, './')) {
+                    return false;
+                }
+                $normalised = self::normaliseInsideRoot($arg, $root);
+
+                return $normalised !== null;
+            }
+            if (!$absolute) {
+                // Relative operands resolve under the shell's directory — and
+                // every `cd` this line passed already landed inside the
+                // project, so a relative path without `..` cannot leave it.
+                continue;
+            }
+            if ($root === null) {
+                return false;
+            }
+            if ($home !== null && ($arg === $home || str_starts_with($arg, $home . '/'))) {
+                return false;
+            }
+            if ($arg !== $root && !str_starts_with($arg, $root . '/')) {
+                return false;
+            }
+            if (self::normaliseInsideRoot($arg, $root) === null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * $path with `.` and `..` segments collapsed lexically, kept only while it
+     * stays inside $root — `./sub/../f` lands in the project, `../f` does not.
+     */
+    private static function normaliseInsideRoot(string $path, string $root): ?string
+    {
+        $absolute = $path[0] === '/';
+        $stack = [];
+        foreach (explode('/', $absolute ? substr($path, strlen($root)) : $path) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                if ($stack === []) {
+                    return null;
+                }
+                array_pop($stack);
+                continue;
+            }
+            $stack[] = $segment;
+        }
+
+        return $absolute && $stack !== [] ? $root . '/' . implode('/', $stack) : ($absolute ? $root : implode('/', $stack));
     }
 
     private static function judge(string $command, ?string $projectRoot, bool $cdAnywhere): bool
