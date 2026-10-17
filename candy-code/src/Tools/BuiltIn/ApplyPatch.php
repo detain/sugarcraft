@@ -658,4 +658,67 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFrom
             isError: true,
         );
     }
+    /**
+     * A read-only dry-run of a patch, shown before the human approves it
+     * (ISS-003). Parses the patch, replays every section against the current
+     * bytes in memory and renders the concrete per-file diff. Anything short
+     * of a clean, complete plan (a patch that does not parse, a missing file,
+     * a hunk that will not land) yields null; the modal then shows the raw
+     * patch text instead. This never writes, never gates, never throws.
+     *
+     * @param array<string,mixed> $args
+     */
+    public static function previewDiff(?string $root, array $args): ?string
+    {
+        $patch = $args['patch'] ?? null;
+        if (!\is_string($patch) || trim($patch) === '' || str_contains($patch, "\0")) {
+            return null;
+        }
+
+        try {
+            $operations = PatchParser::new()->parse($patch);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        $previews = [];
+        foreach ($operations as $operation) {
+            $path = $operation->path;
+            $resolved = $path[0] === '/' || $root === null || $root === ''
+                ? $path
+                : rtrim($root, '/') . '/' . $path;
+            if (str_contains($resolved, "\0")) {
+                return null;
+            }
+
+            if ($operation->action === PatchAction::Add) {
+                $before = '';
+                $after = $operation->content;
+            } else {
+                $original = @\file_get_contents($resolved);
+                if ($original === false) {
+                    return null;
+                }
+                $before = $original;
+                if ($operation->action === PatchAction::Delete) {
+                    $after = '';
+                } else {
+                    $applied = self::applyHunks($original, $operation->hunks, $resolved, '');
+                    if (\is_string($applied)) {
+                        return null;
+                    }
+                    $after = $applied[0];
+                }
+            }
+
+            if ($before === $after) {
+                return null;
+            }
+
+            $preview = self::diffPreview($resolved, $before, $after);
+            $previews[] = $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
+        }
+
+        return $previews === [] ? null : implode("\n", $previews);
+    }
 }

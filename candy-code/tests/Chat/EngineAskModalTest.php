@@ -450,4 +450,30 @@ final class EngineAskModalTest extends TestCase
 
         return $chat;
     }
+
+    // =====================================================================
+    // ISS-003: the `v` view key
+    // =====================================================================
+
+    public function testVExpandsThePendingCallWithoutAnsweringOrDisarmingIt(): void
+    {
+        $ask = $this->ask('Edit', ['file_path' => 'notes.md', 'old_string' => 'a', 'new_string' => 'b'], 'Edit needs approval');
+        [$chat, $inbox] = $this->inFlightChat();
+        $inbox[] = [self::GENERATION, new PermissionAsked($ask)];
+        [$asking] = $chat->update(new ToolEventPumpMsg());
+        $call = $asking->pendingPermission()?->toolCall;
+        self::assertNotNull($call);
+        self::assertFalse($asking->isToolOutputExpanded($call->id), 'starts collapsed');
+
+        [$expanded, $cmd] = $asking->update(new KeyMsg(KeyType::Char, 'v'));
+        self::assertNull($cmd, 'viewing schedules nothing');
+        self::assertTrue($expanded->isToolOutputExpanded($call->id));
+        self::assertNotNull($expanded->pendingPermission(), 'v views, it answers nothing');
+        self::assertSame(\SugarCraft\Code\Permissions\PermissionPromptStage::Armed, $expanded->permissionStage(), 'a view key is not a typed non-answer: no disarm');
+
+        [$collapsed] = $expanded->update(new KeyMsg(KeyType::Char, 'v'));
+        self::assertFalse($collapsed->isToolOutputExpanded($call->id), 'v toggles back');
+        self::assertNotNull($collapsed->pendingPermission());
+    }
+
 }

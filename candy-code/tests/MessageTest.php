@@ -298,4 +298,26 @@ final class MessageTest extends TestCase
         $this->assertSame('bytes', $m->imageBytes);
         $this->assertSame('sixel', $m->imageProtocol);
     }
+
+    public function testTheDetailedDescriptionKeepsBothEndsOfALongValue(): void
+    {
+        // ISS-003: the approval modal must never head-cut what it asks you to
+        // approve. Bounded (transcript) stays byte-identical at 80.
+        $value = str_repeat('x', 1900) . 'TAILMARKER';
+        $call = new \SugarCraft\Code\ToolCall('WebFetch', ['url' => 'https://example.test/' . $value], 'c1');
+
+        $bounded = Message::describeToolCall($call);
+        self::assertStringContainsString('…', $bounded, 'the transcript view still clips at 80');
+        self::assertStringNotContainsString('TAILMARKER', $bounded);
+        self::assertLessThanOrEqual(120, mb_strlen($bounded), 'the bounded clip budget is unchanged by the detailed variant');
+
+        $detailed = Message::describeToolCall($call, false);
+        self::assertStringContainsString('TAILMARKER', $detailed, 'the tail of the payload survives the detailed view');
+        self::assertStringNotContainsString('more characters', $detailed, 'under the detailed budget nothing is elided at all');
+
+        $huge = Message::describeToolCall(new \SugarCraft\Code\ToolCall('Write', ['content' => str_repeat('a', 5000) . 'END'], 'c2'), false);
+        self::assertStringContainsString('END', $huge);
+        self::assertStringContainsString('more characters', $huge, 'an absurd value is middle-elided, never head-cut');
+    }
+
 }

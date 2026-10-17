@@ -503,4 +503,114 @@ final class PtyRunBashPermissionParityTest extends TestCase
         $bashOnly = implode("\n", $lines->invoke(null, new ToolCall('Bash', ['command' => 'ls']), 60, Theme::default()));
         $this->assertStringNotContainsString(Lang::t('tui.permission.type_steps'), $bashOnly);
     }
+
+    // =====================================================================
+    // ISS-003: read-only diff previews in the approval modal
+    // =====================================================================
+
+    public function testTheEditPreviewIsTheConcreteDiffAndRefusalsYieldNull(): void
+    {
+        $dir = sys_get_temp_dir() . '/sec03-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0o700, true);
+        file_put_contents($dir . '/f.txt', "alpha\nbeta\ngamma\n");
+
+        $diff = \SugarCraft\Code\Tools\BuiltIn\Edit::previewDiff($dir, [
+            'file_path' => 'f.txt', 'old_string' => 'beta', 'new_string' => 'BETA',
+        ]);
+        self::assertIsString($diff);
+        self::assertStringContainsString('-beta', $diff);
+        self::assertStringContainsString('+BETA', $diff);
+
+        self::assertNull(\SugarCraft\Code\Tools\BuiltIn\Edit::previewDiff($dir, [
+            'file_path' => 'f.txt', 'old_string' => 'nowhere', 'new_string' => 'x',
+        ]), 'a match the tool would refuse previews nothing');
+        self::assertNull(\SugarCraft\Code\Tools\BuiltIn\Edit::previewDiff($dir, [
+            'file_path' => 'missing.txt', 'old_string' => 'a', 'new_string' => 'b',
+        ]), 'an unreadable file previews nothing');
+        self::assertNull(\SugarCraft\Code\Tools\BuiltIn\Edit::previewDiff($dir, [
+            'file_path' => 'f.txt', 'old_string' => 'beta', 'new_string' => 'beta',
+        ]), 'a byte-identical edit previews nothing');
+        self::assertSame(
+            "alpha\nbeta\ngamma\n",
+            file_get_contents($dir . '/f.txt'),
+            'the preview wrote nothing — that is the whole contract',
+        );
+
+        $write = \SugarCraft\Code\Tools\BuiltIn\Write::previewDiff($dir, [
+            'file_path' => 'brand-new.txt', 'content' => "first\n",
+        ]);
+        self::assertIsString($write);
+        self::assertStringContainsString('+first', $write, 'a creation diffs against empty');
+        @unlink($dir . '/f.txt');
+        @rmdir($dir);
+    }
+
+    public function testTheModalPaintsThePreviewCollapsedAndExpandsItOnV(): void
+    {
+        $dir = sys_get_temp_dir() . '/sec03b-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0o700, true);
+        $body = '';
+        for ($i = 1; $i <= 40; $i++) {
+            $body .= "line {$i}\n";
+        }
+        file_put_contents($dir . '/big.txt', $body);
+        $new = '';
+        for ($i = 1; $i <= 30; $i++) {
+            $new .= "NEW {$i}\n";
+        }
+        $args = [
+            'file_path' => 'big.txt',
+            'old_string' => "line 5\nline 6\nline 7\nline 8\n",
+            'new_string' => $new,
+        ];
+
+        $invoke = new ReflectionMethod(Renderer::class, 'permissionSubjectLines');
+        $collapsed = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::default(), $dir, false));
+        self::assertStringContainsString(Lang::t('tui.permission.proposed_changes'), $collapsed);
+        self::assertStringContainsString('-line 5', $collapsed);
+        self::assertStringContainsString('press v', $collapsed, 'the elision row names the key that lifts the cap');
+
+        $expanded = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::default(), $dir, true));
+        self::assertStringNotContainsString('press v', $expanded);
+
+        // ApplyPatch rides its own patch text through the same section.
+        $patched = implode("\n", $invoke->invoke(null, new ToolCall('ApplyPatch', [
+            'patch' => "*** Begin Patch\n*** Update File: big.txt\n@@\n-line 5\n+FIVE\n*** End Patch",
+        ], 'c10'), 60, Theme::default(), $dir, true));
+        self::assertStringContainsString('-line 5', $patched);
+        @unlink($dir . '/big.txt');
+        @rmdir($dir);
+    }
+
+    public function testThePatchPreviewReplaysInMemoryAndRefusesDirtyHunks(): void
+    {
+        // ISS-003: ApplyPatch gets the same read-only dry-run as Edit/Write;
+        // a hunk that will not land on the current bytes yields null (the
+        // modal falls back to the raw patch) rather than a wrong preview.
+        $dir = sys_get_temp_dir() . '/sec03c-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0o700, true);
+        file_put_contents($dir . '/p.txt', "one\ntwo\nthree\n");
+
+        $clean = \SugarCraft\Code\Tools\BuiltIn\ApplyPatch::previewDiff($dir, [
+            'patch' => "*** Begin Patch\n*** Update File: p.txt\n@@\n-two\n+TWO\n*** End Patch",
+        ]);
+        self::assertIsString($clean);
+        self::assertStringContainsString('-two', $clean);
+        self::assertStringContainsString('+TWO', $clean);
+
+        $dirty = \SugarCraft\Code\Tools\BuiltIn\ApplyPatch::previewDiff($dir, [
+            'patch' => "*** Begin Patch\n*** Update File: p.txt\n@@\n-nope\n+X\n*** End Patch",
+        ]);
+        self::assertNull($dirty, 'a hunk that will not land previews nothing');
+
+        $added = \SugarCraft\Code\Tools\BuiltIn\ApplyPatch::previewDiff($dir, [
+            'patch' => "*** Begin Patch\n*** Add File: q.txt\n+hello\n*** End Patch",
+        ]);
+        self::assertIsString($added);
+        self::assertStringContainsString('+hello', $added);
+        self::assertNull(@\file_get_contents($dir . '/q.txt') === false ? null : 'wrote!', 'the preview wrote nothing');
+
+        @unlink($dir . '/p.txt');
+        @rmdir($dir);
+    }
 }

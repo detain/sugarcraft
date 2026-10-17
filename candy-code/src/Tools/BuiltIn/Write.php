@@ -382,4 +382,33 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
             isError: true,
         );
     }
+
+    /**
+     * Read-only preview (ISS-003): the unified diff between the file's current
+     * bytes and the content this call would write — a creation diffs against
+     * empty. Null means unreadable arguments or a byte-identical write; the
+     * approval modal degrades to the argument view. Writes nothing.
+     *
+     * @param array<string, mixed> $args
+     */
+    public static function previewDiff(?string $root, array $args): ?string
+    {
+        $path = $args['file_path'] ?? null;
+        $content = $args['content'] ?? null;
+        if (!\is_string($path) || $path === '' || str_contains($path, "\0") || !\is_string($content)) {
+            return null;
+        }
+
+        $resolved = $path[0] === '/' || $root === null || $root === ''
+            ? $path
+            : rtrim($root, '/') . '/' . $path;
+        $original = @\file_get_contents($resolved);
+        if ($original === $content) {
+            return null;
+        }
+
+        $preview = self::diffPreview($resolved, $original === false ? '' : $original, $content);
+
+        return $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
+    }
 }

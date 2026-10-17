@@ -586,6 +586,9 @@ final class Renderer
     private const PERMISSION_COMMAND_MAX_ROWS = 12;
 
     private const PERMISSION_COMMAND_TAIL_ROWS = 3;
+    /** ISS-003: the collapsed approval-modal diff shows the opening rows, the
+     * elision line, then this many closing rows (head+tail = MAX-1 total). */
+    private const PERMISSION_DIFF_TAIL_ROWS = 3;
 
     /** Lead of the permission modal's title row, before the tool name. */
     private const PERMISSION_TITLE_ICON = '🔒 ';
@@ -6408,7 +6411,7 @@ final class Renderer
                     $call->name,
                     $inner - Width::of(self::PERMISSION_TITLE_ICON),
                 )),
-            ...self::permissionSubjectLines($call, $inner, $theme),
+            ...self::permissionSubjectLines($call, $inner, $theme, $chat->projectRoot(), $chat->isToolOutputExpanded($call->id)),
         ];
 
         $prompt = self::wrapPermissionText($request->prompt, $inner);
@@ -6479,6 +6482,18 @@ final class Renderer
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
                 . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
                     ->render(self::wrapPermissionText(Lang::t($label, $option[2] ?? []), max(1, $inner - Width::string($keys) - 1)));
+        }
+
+        // ISS-003: the view-only key, offered on every armed prompt. `v`
+        // toggles the preview's full diff / the argument view — it rides the
+        // transcript's existing expansion map, so no second expansion
+        // mechanism was minted, and it answers nothing: no grant, no refusal,
+        // no disarm.
+        if ($stage === PermissionPromptStage::Armed) {
+            $keys = 'v';
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
+                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
+                    ->render(self::wrapPermissionText(Lang::t('tui.permission.expand_view'), max(1, $inner - Width::string($keys) - 1)));
         }
 
         // Which mode asked, and how to change it, for a question about a call
@@ -6614,7 +6629,14 @@ final class Renderer
      *
      * @return list<string>
      */
-    private static function permissionSubjectLines(\SugarCraft\Code\ToolCall $call, int $inner, Theme $theme): array
+    /**
+     * The modal's subject block: the exact shell text (or full, never
+     * head-cut argument line — ISS-003), decoded keystrokes, and for the
+     * three file-changing tools the read-only preview diff the call would
+     * produce. $expanded (the `v` key, riding the transcript's own expansion
+     * map) lifts the preview's row cap; null previews degrade to arguments.
+     */
+    private static function permissionSubjectLines(\SugarCraft\Code\ToolCall $call, int $inner, Theme $theme, string $root = '', bool $expanded = false): array
     {
         $arguments = $call->arguments;
         $caption = $arguments['description'] ?? null;
@@ -6633,8 +6655,10 @@ final class Renderer
             $lines[] = Style::new()->foreground($theme->assistantLabel)
                 ->render(self::permissionCommandBlock($command, $inner));
         } else {
+            // Detailed (ISS-003): the approval view never head-cuts the thing
+            // it asks you to approve; absurd values keep both ends.
             $lines[] = Style::new()->foreground($theme->assistantLabel)->render(self::wrapPermissionText(
-                Message::describeToolCall(new \SugarCraft\Code\ToolCall($call->name, $arguments, $call->id)),
+                Message::describeToolCall(new \SugarCraft\Code\ToolCall($call->name, $arguments, $call->id), false),
                 $inner,
             ));
         }
@@ -6649,6 +6673,35 @@ final class Renderer
             }
             $lines[] = Style::new()->foreground($theme->assistantLabel)
                 ->render(self::permissionCommandBlock($step, $inner, '> '));
+        }
+
+        // ISS-003: the three file-changing tools show the concrete diff the
+        // call would produce, read-only, before the human approves it. A null
+        // preview (unreadable file, refused match, no change) degrades to the
+        // argument view above rather than showing an empty or wrong diff.
+        $preview = match ($call->name) {
+            'Edit' => \SugarCraft\Code\Tools\BuiltIn\Edit::previewDiff($root, $arguments),
+            'Write' => \SugarCraft\Code\Tools\BuiltIn\Write::previewDiff($root, $arguments),
+            'ApplyPatch' => \SugarCraft\Code\Tools\BuiltIn\ApplyPatch::previewDiff($root, $arguments)
+                ?? (\is_string($arguments['patch'] ?? null) ? (string) $arguments['patch'] : null),
+            default => null,
+        };
+        if ($preview !== null && trim($preview) !== '') {
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()
+                ->render(self::wrapPermissionText(Lang::t('tui.permission.proposed_changes'), $inner));
+            $diff = self::permissionVisible($preview);
+            $rows = explode("\n", $diff);
+            if (!$expanded && \count($rows) > self::PERMISSION_COMMAND_MAX_ROWS) {
+                $tail = self::PERMISSION_DIFF_TAIL_ROWS;
+                $head = self::PERMISSION_COMMAND_MAX_ROWS - $tail;
+                $hidden = \count($rows) - $head - $tail;
+                $rows = [
+                    ...array_slice($rows, 0, $head),
+                    Width::truncate('… ' . Lang::t('tui.permission.more_diff_lines', ['count' => $hidden]), $inner),
+                    ...array_slice($rows, -$tail),
+                ];
+            }
+            $lines[] = Style::new()->foreground($theme->assistantLabel)->render(implode("\n", $rows));
         }
 
         $caption = \is_string($caption) ? trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($caption))) : '';

@@ -555,4 +555,54 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
 
         return sprintf(' (+%d -%d lines)', $added, $removed);
     }
+
+    /**
+     * Read-only preview (ISS-003): the unified diff this call WOULD produce,
+     * computed in memory from the file's current bytes exactly as
+     * {@see self::execute()} composes them before the single temp-and-rename.
+     * Null means "no previewable outcome" — unreadable file, malformed edit
+     * list, or an edit the staged matcher would refuse — and every caller
+     * (the approval modal) must degrade to showing the arguments instead.
+     * It writes nothing, opens nothing for writing, and touches no ledger.
+     *
+     * @param array<string, mixed> $args
+     */
+    public static function previewDiff(?string $root, array $args): ?string
+    {
+        $path = $args['file_path'] ?? null;
+        if (!\is_string($path) || $path === '' || str_contains($path, "\0")) {
+            return null;
+        }
+
+        $edits = self::editList($args['old_string'] ?? '', $args['new_string'] ?? '', $args['replace_all'] ?? false, $args['edits'] ?? null);
+        if (\is_string($edits) || $edits === []) {
+            return null;
+        }
+
+        $resolved = $path[0] === '/' || $root === null || $root === ''
+            ? $path
+            : rtrim($root, '/') . '/' . $path;
+        $original = @\file_get_contents($resolved);
+        if ($original === false) {
+            return null;
+        }
+
+        $content = $original;
+        $matcher = EditMatcher::new();
+        foreach ($edits as $edit) {
+            $match = $matcher->match($content, $edit['old'], $edit['new']);
+            if ($match === null || $match->isRefused() || ($match->count > 1 && ($edit['replaceAll'] ?? false) !== true)) {
+                return null;
+            }
+            $content = $match->applyTo($content);
+        }
+
+        if ($content === $original) {
+            return null;
+        }
+
+        $preview = self::diffPreview($resolved, $original, $content);
+
+        return $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
+    }
 }

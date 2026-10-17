@@ -380,7 +380,7 @@ final class Message implements \JsonSerializable
      * Used both for the running placeholder and (via Renderer) the finished
      * marker's label.
      */
-    public static function describeToolCall(ToolCall $call): string
+    public static function describeToolCall(ToolCall $call, bool $bounded = true): string
     {
         $described = $call->arguments['description'] ?? null;
         if (is_string($described)) {
@@ -405,12 +405,36 @@ final class Message implements \JsonSerializable
                 $rendered = $encoded === false ? get_debug_type($value) : $encoded;
             }
             if (mb_strlen($rendered) > self::DESCRIPTION_MAX) {
-                $rendered = mb_substr($rendered, 0, self::DESCRIPTION_MAX) . '…';
+                $rendered = $bounded
+                    ? mb_substr($rendered, 0, self::DESCRIPTION_MAX) . '…'
+                    // ISS-003: an approval view that head-cuts the payload it
+                    // asks you to approve is not an approval view. The detailed
+                    // shape keeps BOTH ends of an absurd value and elides the
+                    // middle — the transcript one-liner keeps its 80-char cap.
+                    : self::middleElide($rendered);
             }
             $parts[] = is_int($key) ? $rendered : "{$key}: " . self::encodeArgument($rendered);
         }
 
         return $call->name . '(' . implode(', ', $parts) . ')';
+    }
+
+    /** Detailed (approval-modal) per-value budget: both ends, never the head alone (ISS-003). */
+    private const DETAILED_VALUE_MAX = 2000;
+    private const DETAILED_VALUE_HEAD = 1400;
+    private const DETAILED_VALUE_TAIL = 400;
+
+    private static function middleElide(string $value): string
+    {
+        if (mb_strlen($value) <= self::DETAILED_VALUE_MAX) {
+            return $value;
+        }
+
+        $omitted = mb_strlen($value) - self::DETAILED_VALUE_HEAD - self::DETAILED_VALUE_TAIL;
+
+        return mb_substr($value, 0, self::DETAILED_VALUE_HEAD)
+            . sprintf(' …[%d more characters]… ', $omitted)
+            . mb_substr($value, -self::DETAILED_VALUE_TAIL);
     }
 
     /**

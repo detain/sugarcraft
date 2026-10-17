@@ -4780,6 +4780,19 @@ final class Chat implements Model
             return $this->answerPermission(PermissionReply::Reject, 'The user refused this call and stopped the turn.');
         }
 
+        // `v` expands or collapses what the pending call would actually do
+        // (ISS-003): the proposed diff for the file tools, the full argument
+        // text for everything else. View-only on purpose — it rides the
+        // transcript's own expansion map, and it is deliberately NOT an
+        // answer, so it must not fall through to the arm rule below where a
+        // non-answer key silently disarms the prompt.
+        if ($isChar && $rune === 'v') {
+            $pending = $this->pendingPermission;
+            if ($pending !== null) {
+                return [$this->toggleToolOutput($pending->toolCall->id), null];
+            }
+        }
+
         $reply = match (true) {
             $isChar && $rune === 'n' => PermissionReply::Reject,
             $isChar && $rune === 'y' => PermissionReply::Once,
