@@ -2701,14 +2701,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
     /**
      * The next request's system prompt per layer (roadmap 5.6, `/context`),
-     * built on the same session App and prompt memo a turn reads — so after
-     * the first turn's prime it reuses the session's layers rather than
-     * re-walking the repository map and instruction files.
+     * built the way a turn builds its request: the session App WITH the
+     * turn's tools (ISS-063 — without them the tool-guidance layer measured
+     * empty while it shipped full) and the resolved hook manager (the
+     * permission-gate hook the plan-mode layer's lookup needs, which the bare
+     * manager never carried). Like {@see summaryReply()}'s App, this reuses
+     * the session's memo after the first prime rather than re-walking the
+     * repository map and instruction files.
      */
     public function promptSectionSizes(): array
     {
-        return $this->newRuntime(new HookManager(new HookRegistry()))
-            ->promptSectionSizes($this->sessionApp());
+        $app = $this->sessionApp()->withTools($this->turnTools(null, null, null));
+
+        // Fresh guard per call: resolveHookManager keys its clone on the
+        // guard's identity, so the shared launch manager keeps serving turns.
+        return $this->newRuntime($this->resolveHookManager(new ToolCallLoopGuard()))
+            ->promptSectionSizes($app);
     }
 
     /**
