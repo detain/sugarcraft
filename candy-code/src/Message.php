@@ -408,8 +408,19 @@ final class Message implements \JsonSerializable
             return $call->name . '()';
         }
 
+        // ISS-100: tools whose arguments are a pure list structure (Todo,
+        // Prune) say more as a one-line tally than as any JSON dump, model-
+        // authored description or not. The shape guards below refuse anything
+        // that does not parse as the schema, so a malformed call still falls
+        // through to the mechanical argument dump.
+        $summary = self::summariseToolArguments($call->name, $call->arguments);
+        if ($summary !== null) {
+            return $summary;
+        }
+
         $parts = [];
         foreach ($call->arguments as $key => $value) {
+            $structural = false;
             if (is_string($value)) {
                 $rendered = $value;
             } else {
@@ -417,6 +428,12 @@ final class Message implements \JsonSerializable
                 // `?:` would have thrown away as falsy.
                 $encoded = json_encode($value, self::ARGUMENT_JSON_FLAGS | JSON_PARTIAL_OUTPUT_ON_ERROR);
                 $rendered = $encoded === false ? get_debug_type($value) : $encoded;
+                // ISS-100: a JSON object/array is already the text we want to
+                // show. Passing it through encodeArgument() re-encoded it and
+                // quoted every inner `\"` a second time — `todos: "\"[{\\\"content...`.
+                // Scalars keep the old quoted rendering; structural JSON only
+                // gets the invisible-character sweep below, no re-quoting.
+                $structural = $rendered !== '' && ($rendered[0] === '{' || $rendered[0] === '[');
             }
             if (mb_strlen($rendered) > self::DESCRIPTION_MAX) {
                 $rendered = $bounded
@@ -427,7 +444,9 @@ final class Message implements \JsonSerializable
                     // middle — the transcript one-liner keeps its 80-char cap.
                     : self::middleElide($rendered);
             }
-            $parts[] = is_int($key) ? $rendered : "{$key}: " . self::encodeArgument($rendered);
+            $parts[] = is_int($key)
+                ? $rendered
+                : "{$key}: " . ($structural ? self::escapeInvisible($rendered) : self::encodeArgument($rendered));
         }
 
         return $call->name . '(' . implode(', ', $parts) . ')';
@@ -486,11 +505,100 @@ final class Message implements \JsonSerializable
             return '"' . \SugarCraft\Core\Util\Sanitize::visibleControls($value, false) . '"';
         }
 
+        return self::escapeInvisible($json);
+    }
+
+    /**
+     * Re-escape the C1/bidi/zero-width characters inside an already-rendered
+     * argument text, leaving every other byte (including the JSON punctuation
+     * of a structural value) exactly as it came.
+     *
+     * Split out of {@see self::encodeArgument()} for ISS-100 so a structural
+     * argument value gets the same invisibility sweep without a second JSON
+     * encode pass re-quoting the brackets.
+     */
+    private static function escapeInvisible(string $text): string
+    {
         return preg_replace_callback(
             '/\xC2[\x80-\x9F]|\xD8\x9C|\xE2\x80[\x8B-\x8F\xAA-\xAE]|\xE2\x81[\xA0\xA6-\xA9]|\xEF\xBB\xBF/',
             static fn (array $m): string => sprintf('\\u%04x', mb_ord($m[0], 'UTF-8')),
-            $json,
-        ) ?? $json;
+            $text,
+        ) ?? $text;
+    }
+
+    /**
+     * ISS-100: one-line tallies for tools whose arguments are pure structure.
+     * Null means "not a summarisable shape" and the caller falls through to
+     * the mechanical dump.
+     */
+    private static function summariseToolArguments(string $name, array $arguments): ?string
+    {
+        return match (strtolower($name)) {
+            'todo' => self::summariseTodo($name, $arguments),
+            'prune' => self::summarisePrune($name, $arguments),
+            default => null,
+        };
+    }
+
+    /**
+     * `Todo(todos: [{content, status}, …])` → "Todo(3 items, 1 in progress)".
+     * The status vocabulary is {@see \SugarCraft\Code\Todo\TodoStatus}; only
+     * in_progress earns a clause because at most one item may hold it.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    private static function summariseTodo(string $name, array $arguments): ?string
+    {
+        $todos = $arguments['todos'] ?? null;
+        if (!is_array($todos) || $todos === [] || !array_is_list($todos)) {
+            return null;
+        }
+
+        $inProgress = 0;
+        foreach ($todos as $todo) {
+            if (!is_array($todo) || !isset($todo['content']) || !is_string($todo['content'])
+                || !isset($todo['status']) || !is_string($todo['status'])) {
+                return null;
+            }
+            if ($todo['status'] === 'in_progress') {
+                ++$inProgress;
+            }
+        }
+
+        $items = count($todos) === 1 ? '1 item' : count($todos) . ' items';
+        $label = $inProgress === 1 ? "{$items}, 1 in progress" : $items;
+
+        return "{$name}({$label})";
+    }
+
+    /**
+     * `Prune(targets: [{ref}, …])` → "Prune(pruned r3, r5)" — the refs are
+     * what the user can point at; the distillation payloads are not label
+     * material. At most six refs, then the count closes the list.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    private static function summarisePrune(string $name, array $arguments): ?string
+    {
+        $targets = $arguments['targets'] ?? null;
+        if (!is_array($targets) || $targets === [] || !array_is_list($targets)) {
+            return null;
+        }
+
+        $refs = [];
+        foreach ($targets as $target) {
+            if (!is_array($target) || !isset($target['ref']) || !is_string($target['ref']) || $target['ref'] === '') {
+                return null;
+            }
+            $refs[] = $target['ref'];
+        }
+
+        if (count($refs) > 6) {
+            $shown = implode(', ', array_slice($refs, 0, 6));
+            return "{$name}(pruned {$shown}, +" . (count($refs) - 6) . " more)";
+        }
+
+        return "{$name}(pruned " . implode(', ', $refs) . ")";
     }
 
     /**

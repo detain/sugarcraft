@@ -109,8 +109,10 @@ final class WriteTest extends TestCase
 
         $diff = (string) $result->diff();
         $this->assertTrue($result->hasDiff());
-        $this->assertStringContainsString('--- a/' . $this->root . '/new.txt', $diff);
-        $this->assertStringContainsString('+++ b/' . $this->root . '/new.txt', $diff);
+        // ISS-100: the resolved path is inside the tool's root, so the header
+        // goes root-relative and the a//b/ pair finally reads sanely.
+        $this->assertStringContainsString('--- a/new.txt', $diff);
+        $this->assertStringContainsString('+++ b/new.txt', $diff);
         // `diff -u` anchors an empty old side at line 0.
         $this->assertStringContainsString("@@ -0,0 +1,2 @@\n+alpha\n+beta\n", $diff);
         $this->assertStringNotContainsString('-alpha', $diff);

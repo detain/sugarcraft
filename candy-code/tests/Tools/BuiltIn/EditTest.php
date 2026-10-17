@@ -48,8 +48,9 @@ final class EditTest extends TestCase
         // These assertions fail against the pre-diff implementation, which
         // returned the bare string "File updated: $path" with none of this.
         $this->assertTrue($result->hasDiff());
-        $this->assertStringContainsString('--- a/', (string)$result->diff());
-        $this->assertStringContainsString('+++ b/', (string)$result->diff());
+        // ISS-100: unrooted tool + absolute temp path -> bare header, no a//.
+        $this->assertStringContainsString('--- ' . $path, (string) $result->diff());
+        $this->assertStringContainsString('+++ ' . $path, (string) $result->diff());
         $this->assertStringContainsString('@@', (string)$result->diff());
     }
 
@@ -88,8 +89,8 @@ final class EditTest extends TestCase
 
         // Byte-exact and prefix-free: this is what DiffViewer::fromRawDiff()
         // consumes, so a stray "File updated:" header would break it.
-        $expected = "--- a/$path\n"
-            . "+++ b/$path\n"
+        $expected = "--- $path\n"
+            . "+++ $path\n"
             . "@@ -1 +1 @@\n"
             . "-Hello World\n"
             . "+Hello PHP\n";

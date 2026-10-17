@@ -572,7 +572,7 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFrom
         $touched = [];
         foreach ($plans as $plan) {
             $shown = $plan['target'] ?? $plan['path'];
-            $preview = self::diffPreview($shown, (string) $plan['before'], (string) $plan['after']);
+            $preview = self::diffPreview($shown, (string) $plan['before'], (string) $plan['after'], $this->root);
             if ($preview['diff'] !== '') {
                 $diffs[] = $preview['diff'];
             }
@@ -720,7 +720,7 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFrom
                 return null;
             }
 
-            $preview = self::diffPreview($resolved, $before, $after);
+            $preview = self::diffPreview($resolved, $before, $after, $this->root);
             $previews[] = $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
         }
 

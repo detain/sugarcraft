@@ -79,9 +79,9 @@ trait BuildsUnifiedDiff
      * as too large; a caller that must tell the two apart uses
      * {@see diffPreview()}.
      */
-    private static function unifiedDiff(string $path, string $oldContent, string $newContent): string
+    private static function unifiedDiff(string $path, string $oldContent, string $newContent, ?string $root = null): string
     {
-        return self::diffPreview($path, $oldContent, $newContent)['diff'];
+        return self::diffPreview($path, $oldContent, $newContent, $root)['diff'];
     }
 
     /**
@@ -93,7 +93,7 @@ trait BuildsUnifiedDiff
      *
      * @return array{diff: string, added: int, removed: int, omitted: bool}
      */
-    private static function diffPreview(string $path, string $old, string $new): array
+    private static function diffPreview(string $path, string $old, string $new, ?string $root = null): array
     {
         $oldLen = strlen($old);
         $newLen = strlen($new);
@@ -147,12 +147,43 @@ trait BuildsUnifiedDiff
             return ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
         }
 
+        [$from, $to] = self::headerPaths($path, $root);
+
         return [
-            'diff' => "--- a/{$path}\n+++ b/{$path}\n" . $hunks,
+            'diff' => "--- {$from}\n+++ {$to}\n" . $hunks,
             'added' => $diff->addedLines(),
             'removed' => $diff->removedLines(),
             'omitted' => false,
         ];
+    }
+
+    /**
+     * The two file labels for the `--- ` / `+++ ` header lines (ISS-100).
+     *
+     * Callers hand this either the model-given path or the root-jailed
+     * resolved path. An absolute path inside the working directory is made
+     * relative so the header stays stable across checkouts and keeps its
+     * `a/`/`b/` pair; an absolute path OUTSIDE it (and every absolute path
+     * when no root was configured) must not be dressed up with those prefixes
+     * (`--- a//tmp/…` read as a doubled slash) — it is shown bare. Relative
+     * paths keep the historical `a/`/`b/` rendering. The root arrives from the
+     * calling tool's jail, never from `getcwd()`: `--root` must not be
+     * silently second-guessed here (BinCandyCodeWiringTest census).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function headerPaths(string $path, ?string $root): array
+    {
+        if (preg_match('#^(/|[A-Za-z]:[\\\\/])#', $path) === 1) {
+            $base = is_string($root) && $root !== '' ? rtrim($root, '/\\\\') : '';
+            if ($base !== '' && str_starts_with($path, $base . '/')) {
+                $path = substr($path, strlen($base) + 1);
+            } else {
+                return [$path, $path];
+            }
+        }
+
+        return ["a/{$path}", "b/{$path}"];
     }
 
     /**

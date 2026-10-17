@@ -74,6 +74,31 @@ final class UnifiedDiffEquivalenceTest extends TestCase
     }
 
     /** Equal-after-line-splitting inputs (incl. a pure trailing-newline flip) render no diff. */
+    /**
+     * ISS-100: absolute paths inside the working directory become root-
+     * relative and keep the a//b/ pair; absolute paths outside it are shown
+     * bare, never dressed as `a//abs/path`.
+     */
+    public function testAbsolutePathsAreRootRelativeInsideAndBareOutside(): void
+    {
+        $inside = self::diff(Edit::class, '/project/src/x.php', "a\n", "b\n", '/project');
+        $this->assertStringStartsWith("--- a/src/x.php\n+++ b/src/x.php\n", $inside);
+
+        $outside = self::diff(Edit::class, '/somewhere/else/x.php', "a\n", "b\n", '/project');
+        $this->assertStringStartsWith("--- /somewhere/else/x.php\n+++ /somewhere/else/x.php\n", $outside);
+        $this->assertStringNotContainsString('a//', $outside);
+
+        // No configured root: every absolute path is bare, never `a//abs`.
+        $unrooted = self::diff(Edit::class, '/anywhere/x.php', "a\n", "b\n");
+        $this->assertStringStartsWith("--- /anywhere/x.php\n+++ /anywhere/x.php\n", $unrooted);
+
+        // Relative spellings keep the historical rendering byte-for-byte.
+        $this->assertStringStartsWith(
+            "--- a/f.txt\n+++ b/f.txt\n",
+            self::diff(Edit::class, 'f.txt', "a\n", "b\n"),
+        );
+    }
+
     public function testNoChangeYieldsEmptyDiff(): void
     {
         $this->assertSame('', self::diff(Edit::class, 'f.txt', "a\nb", "a\nb\n"));
@@ -170,11 +195,11 @@ final class UnifiedDiffEquivalenceTest extends TestCase
         return $lines;
     }
 
-    private static function diff(string $class, string $path, string $old, string $new): string
+    private static function diff(string $class, string $path, string $old, string $new, ?string $root = null): string
     {
         $method = new \ReflectionMethod($class, 'unifiedDiff');
 
-        return $method->invoke(null, $path, $old, $new);
+        return $method->invoke(null, $path, $old, $new, $root);
     }
 
     private static function lines(int $from, int $to): string

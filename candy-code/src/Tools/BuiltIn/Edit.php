@@ -372,7 +372,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
         // It rides its own ToolResult field rather than being concatenated into
         // the summary, so a renderer can hand it straight to DiffViewer.
         $preview = $newContent !== $originalContent
-            ? self::diffPreview($path, $originalContent, $newContent)
+            ? self::diffPreview($path, $originalContent, $newContent, $this->root)
             : ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
         $diff = $preview['diff'];
 
@@ -601,7 +601,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
             return null;
         }
 
-        $preview = self::diffPreview($resolved, $original, $content);
+        $preview = self::diffPreview($resolved, $original, $content, $this->root);
 
         return $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
     }

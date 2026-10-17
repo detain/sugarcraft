@@ -319,7 +319,7 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
         // an N-line file — with the GNU elision, N == 1 headers as the short
         // `@@ -0,0 +1 @@` (the `,1` count is dropped when it equals 1).
         $preview = $previousTooLarge === null && $content !== $previous
-            ? self::diffPreview($path, $previous, $content)
+            ? self::diffPreview($path, $previous, $content, $this->root)
             : ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
         $diff = $preview['diff'];
 
@@ -416,7 +416,7 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
             return null;
         }
 
-        $preview = self::diffPreview($resolved, $original === false ? '' : $original, $content);
+        $preview = self::diffPreview($resolved, $original === false ? '' : $original, $content, $this->root);
 
         return $preview['omitted'] ? self::omittedDiffNote($preview) : $preview['diff'];
     }
