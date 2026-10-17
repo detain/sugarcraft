@@ -209,6 +209,12 @@ final class RendererTest extends TestCase
     {
         $out = Renderer::render($this->chat());
         $this->assertStringContainsString('empty conversation', $out);
+        // ISS-096: the hint is styled faint, and the literal Markdown
+        // delimiters that used to fake italics are gone — the placeholder
+        // never passed a Markdown renderer, so they only ever painted noise.
+        $this->assertStringContainsString("\e[2m" . 'empty conversation', $out);
+        $this->assertStringNotContainsString('_(empty', $out);
+        $this->assertStringNotContainsString(')_', $out);
     }
 
     public function testRendersUserAndAssistantTurns(): void

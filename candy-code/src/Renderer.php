@@ -4086,7 +4086,12 @@ final class Renderer
         $sections = $ledger === null ? [] : self::compressedSectionStarts($history, $ledger);
         $history = array_filter($history, static fn(Message $msg): bool => $msg->userVisible);
         if ($history === []) {
-            return '_(' . Lang::t('tui.chat.empty_conversation') . ')_';
+            // ISS-096: this used to be `'_(' . … . ')_'` — Markdown italic
+            // delimiters on a row that never reaches a Markdown pass (the
+            // placeholder is returned pre-render), so every fresh launch
+            // painted the literal underscores. The faint Style IS the
+            // italic mood the delimiters were trying to spell.
+            return Style::new()->faint()->render(Lang::t('tui.chat.empty_conversation'));
         }
         // The one argument this call used to omit, and the whole reason a
         // 200-column reply rendered as a 200-column ROW in a 100-column
