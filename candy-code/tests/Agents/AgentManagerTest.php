@@ -2256,6 +2256,98 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
+     * ISS-030: the allowlist never needed the `tools:` declaration to be
+     * present to mean something. Before the fix, silence about `tools` took
+     * the early null and the bridge filter below never ran, so a preset with
+     * `mcpServers: [alpha]` and no `tools:` got EVERY bridge from the engine.
+     * Now the silent-tools path still narrows MCP by the declared servers.
+     */
+    public function testMcpServersWithoutToolsStillNarrowsTheBridges(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            [],
+            array_merge(
+                $this->fakeRegistry('Bash'),
+                [$this->mcpBridge('alpha'), $this->mcpBridge('beta')],
+            ),
+            mcpServers: ['alpha'],
+        );
+
+        $this->assertSame(
+            ['Bash', 'mcp__alpha__ping'],
+            self::toolNames($request->tools),
+            'a tools-silent preset with a server allowlist must not hand the run the unnamed server',
+        );
+    }
+
+    /**
+     * ZERO BLAST RADIUS on the silent-tools side too: no `tools:` AND no
+     * `mcpServers:` is still silence — null, "the agent says nothing about
+     * tools", the run keeps the engine's set.
+     */
+    public function testSilenceAboutBothListsIsStillSilence(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            [],
+            array_merge($this->fakeRegistry('Bash'), [$this->mcpBridge('alpha')]),
+            mcpServers: [],
+        );
+
+        $this->assertNull($request->tools);
+    }
+
+    /**
+     * A registry whose only bridges the allowlist refuses resolves to the
+     * EMPTY roster, not to null: null would re-admit every bridge through
+     * TaskTool's `$granted ?? $engine->tools()` fallback, which is the exact
+     * leak this item is about.
+     */
+    public function testAnAllowlistRefusingEveryOfferedBridgeEmptiesTheRosterRatherThanNullingIt(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            [],
+            [$this->mcpBridge('beta')],
+            mcpServers: ['alpha'],
+        );
+
+        $this->assertSame([], self::toolNames($request->tools));
+    }
+
+    /**
+     * ISS-030, the per-call half: {@see AgentManager::grantRefusalFor()}
+     * consults the server allowlist for bridge calls even when the agent
+     * declared no `tools:` — the verdict the SubAgentGrantHook asks is not
+     * gated on the grant list being non-empty any more than the roster is.
+     */
+    public function testThePerCallVerdictRefusesABridgeOutsideTheServerAllowlist(): void
+    {
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: [$this->mcpBridge('alpha'), $this->mcpBridge('beta')],
+        );
+        $manager->register(new Agent(
+            name: 'docsonly',
+            description: 'docsonly',
+            prompt: 'p',
+            model: 'm',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: false,
+            mcpServers: ['alpha'],
+        ));
+        $sub = $manager->createSubAgent('docsonly', 'x');
+
+        $this->assertNull($manager->grantRefusalFor(new \SugarCraft\Code\ToolCall('mcp__alpha__ping', []), $sub));
+
+        $refused = $manager->grantRefusalFor(new \SugarCraft\Code\ToolCall('mcp__beta__ping', []), $sub);
+        $this->assertNotNull($refused, 'a tools-silent preset still bounds its named servers per call');
+        $this->assertStringContainsString('MCP server allowlist', (string) $refused);
+    }
+
+    /**
      * FAIL LOUD, AND ONLY WHERE IT BITES: a non-string allowlist entry that a
      * bridge actually meets raises instead of quietly matching nothing — the
      * same argument `namePatterns()` gives for malformed grant declarations.
@@ -2312,14 +2404,13 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
-     * THE CALL-TIME LAYER, unchanged and re-pinned for MCP names: a preset
-     * that declares its allowed servers in BOTH lists (tools and mcpServers)
-     * gets list-time narrowing AND a grant refusal on a hallucinated call to
-     * the dropped server. The refusal here is declaration-driven — that is
-     * the whole of `refuseCallOutsideGrant()` and this lane does not touch
-     * it; for a wildcard declaration the enforcement is that the narrowed
-     * roster never advertises the tool (no sub-agent path executes past its
-     * advertised roster — see the code comment at the gate).
+     * THE CALL-TIME LAYER, re-pinned for MCP names: a preset that declares its
+     * allowed servers in BOTH lists (tools and mcpServers) gets list-time
+     * narrowing AND a refusal on a hallucinated call to the dropped server.
+     * Since ISS-030 the refusal names the SERVER allowlist — the MCP check now
+     * runs ahead of the grant scan and states the tighter reason for a bridge
+     * call (the same call that used to fall to "outside the tool grant"); the
+     * verdict is identical, and the roster still never advertises the tool.
      */
     public function testACallToANarrowedAwayBridgeOutsideTheDeclarationIsRefusedByTheGrant(): void
     {
@@ -2360,8 +2451,8 @@ final class AgentManagerTest extends TestCase
             $caught = $e;
         }
 
-        $this->assertNotNull($caught, 'a call to the dropped server outside the declaration must hit the existing grant refusal');
-        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertNotNull($caught, 'a call to the dropped server outside the declaration must still be refused');
+        $this->assertStringContainsString('is refused by the MCP server allowlist', $caught->getMessage());
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
     }
 

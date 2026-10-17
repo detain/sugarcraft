@@ -1475,6 +1475,42 @@ final class AgentManager
         }
 
         $patterns = $this->namePatterns($agent, $agent->tools, 'tools');
+        if ($patterns === [] && $agent->mcpServers !== []) {
+            // ISS-030: silence about `tools` is still silence, but a declared
+            // `mcpServers` allowlist is NOT silence about MCP, and it used to
+            // be read that way. The bridge filter lives in the loop below,
+            // which a silent-tools preset never reached, so `mcpServers:
+            // [docs]` with no `tools:` handed the delegated run EVERY bridge
+            // in the registry — a documented narrowing that enforced nothing.
+            // With no declarations there is nothing to match, nothing to deny,
+            // and nothing to throw, so the answer is the full registry MINUS
+            // the bridges its server allowlist refuses, on the same
+            // resolved-then-removed footing the declared path enforces. An
+            // EMPTY registry falls through to the null below: there is nothing
+            // here to narrow, and a silent-tools run is still not an empty one.
+            $allowed = [];
+            foreach ($this->toolRegistry as $index => $tool) {
+                if (!$tool instanceof Tool) {
+                    throw new \RuntimeException(sprintf(
+                        'Tool registry entry %s is a %s, not a %s, so a sub-agent grant cannot be resolved against it.',
+                        var_export($index, true),
+                        get_debug_type($tool),
+                        Tool::class,
+                    ));
+                }
+
+                if ($tool instanceof McpToolBridge
+                    && !McpRouter::serverAllowed($tool->descriptor()->serverName, $agent->mcpServers)) {
+                    continue;
+                }
+
+                $allowed[] = $tool;
+            }
+
+            if ($this->toolRegistry !== []) {
+                return $allowed;
+            }
+        }
         if ($patterns === []) {
             // NO DECLARATION IS NOT AN EMPTY GRANT, and the difference is
             // visible to the model. `Agent::fromArray()` defaults `tools` to
@@ -1820,7 +1856,9 @@ final class AgentManager
      *
      * @throws \RuntimeException when either list holds a malformed or
      *         non-string entry — never read as "no rule matched", because a
-     *         malformed rule fails INERT ({@see namePatterns()})
+     *         malformed rule fails INERT ({@see namePatterns()}) — or when the
+     *         `mcpServers` allowlist holds a non-string entry and the call is
+     *         a bridge ({@see McpRouter::serverAllowed()})
      */
     public function grantRefusalFor(ToolCall $toolCall, SubAgent $subAgent, ?string $root = null): ?string
     {
@@ -1829,7 +1867,7 @@ final class AgentManager
         $denied = $agent->disallowedTools;
         $root ??= $this->projectRoot;
 
-        if ($declarations === [] && $denied === []) {
+        if ($declarations === [] && $denied === [] && $agent->mcpServers === []) {
             return null;
         }
 
@@ -1860,6 +1898,36 @@ final class AgentManager
                     $agent->name,
                     implode(', ', array_map(static fn($d): string => (string) $d, $denied)),
                 );
+            }
+        }
+
+        if ($agent->mcpServers !== []) {
+            // ISS-030, the per-call half: `resolveGrantedTools()` keeps a
+            // refused bridge off the roster, and the roster is the wall on
+            // every path that resolves one — but this method is the verdict
+            // the SubAgentGrantHook asks on a name the harness may hand a run
+            // from OUTSIDE its resolved roster (roadmap 4.5 member tools, and
+            // any future rehydration that carries a bridge by name), so the
+            // allowlist is consulted here too, on the same raw-serverName
+            // footing: the bridge is found in the registry BY ITS WIRE NAME,
+            // never parsed back out of it (E42's sanitised-vs-raw bug class).
+            // A non-string allowlist entry throws through
+            // {@see McpRouter::serverAllowed()} — fail-closed like the two
+            // lists above, never read as "no rule matched".
+            foreach ($this->toolRegistry ?? [] as $tool) {
+                if (!$tool instanceof McpToolBridge || $tool->name() !== $toolCall->name) {
+                    continue;
+                }
+
+                if (!McpRouter::serverAllowed($tool->descriptor()->serverName, $agent->mcpServers)) {
+                    return sprintf(
+                        'is refused by the MCP server allowlist agent "%s" declares [%s]',
+                        $agent->name,
+                        implode(', ', array_map(static fn($s): string => (string) $s, $agent->mcpServers)),
+                    );
+                }
+
+                break;
             }
         }
 
