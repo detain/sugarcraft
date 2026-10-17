@@ -17,7 +17,12 @@ function reload(): void {
 </script>
 
 <template>
-  <div v-if="connection.serverChanged" class="banner info" role="status" data-testid="banner-updated">
+  <div v-if="connection.shutdown !== null" class="banner error" role="alert" data-testid="banner-shutdown">
+    The server is stopping<template v-if="connection.shutdown.reason !== ''"> ({{ connection.shutdown.reason }})</template>.
+    <template v-if="connection.shutdown.graceSeconds > 0">It asks for {{ connection.shutdown.graceSeconds }} s to finish its work.</template>
+    The tabs reconnect on their own once a server is back.
+  </div>
+  <div v-else-if="connection.serverChanged" class="banner info" role="status" data-testid="banner-updated">
     The server was updated.
     <button type="button" @click="reload">Reload</button>
   </div>

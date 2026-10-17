@@ -17,12 +17,15 @@ const LABELS: Record<ClientStatus, string> = {
 
 /**
  * What a followed session hands the connection: its cursor for `resume`,
- * its events, and what the handshake said about it after a reconnect.
+ * its events, what the handshake said about it after a reconnect, and the
+ * way back when the server drops this client's queue (ISS-052): `resubscribe`
+ * re-follows from the cursor the session already holds.
  */
 export interface SessionFollower {
   cursor(): number | null
   event(envelope: EventEnvelope): void
   resumed(result: Subscription | { error: string } | undefined): void
+  resubscribe(): void
 }
 
 type Scheduler = (flush: () => void) => void
@@ -56,6 +59,11 @@ export const useConnectionStore = defineStore('connection', () => {
   const retryAt = ref<number | null>(null)
   const lastError = ref<string | null>(null)
   const serverChanged = ref(false)
+  /**
+   * The last `server.shutdown` seen (ISS-052): the banner names the reason
+   * and the grace the server asked for; a fresh handshake clears it.
+   */
+  const shutdown = shallowRef<{ reason: string; graceSeconds: number } | null>(null)
   const statusLabel = computed(() => LABELS[status.value])
   const connected = computed(() => status.value === 'connected')
   const scopes = computed(() => hello.value?.principal.scopes ?? [])
@@ -100,8 +108,34 @@ export const useConnectionStore = defineStore('connection', () => {
     const batch = queued
     queued = []
     for (const envelope of batch) {
+      handleServerEvent(envelope)
       if (envelope.sessionId !== null) followers.get(envelope.sessionId)?.event(envelope)
       for (const listener of listeners) listener(envelope)
+    }
+  }
+
+  /**
+   * The two server-scope events no session owns (ISS-052). An overflow means
+   * this client's queue was dropped for one session (`data.sessionId`) or for
+   * the whole socket: follow again from every held cursor before the silence
+   * reads as a dead pane. A shutdown is named and counted for the banner.
+   */
+  function handleServerEvent(envelope: EventEnvelope): void {
+    switch (envelope.type) {
+      case 'server.overflow': {
+        const sessionId = envelope.data.sessionId
+        if (typeof sessionId === 'string') followers.get(sessionId)?.resubscribe()
+        else for (const follower of followers.values()) follower.resubscribe()
+        return
+      }
+      case 'server.shutdown': {
+        const reason = typeof envelope.data.reason === 'string' ? envelope.data.reason : ''
+        const graceSeconds = typeof envelope.data.graceSeconds === 'number' ? envelope.data.graceSeconds : 0
+        shutdown.value = { reason, graceSeconds }
+        return
+      }
+      default:
+        return
     }
   }
 
@@ -134,6 +168,7 @@ export const useConnectionStore = defineStore('connection', () => {
       // Events that arrived before the handshake belong to the old socket's
       // stream; apply them first so a follower's cursor is current.
       flush()
+      shutdown.value = null
       const resumed = result.resumed as Record<string, Subscription | { error: string }>
       for (const [id, follower] of followers) follower.resumed(resumed[id])
       for (const listener of helloListeners) listener(result)
@@ -218,6 +253,7 @@ export const useConnectionStore = defineStore('connection', () => {
     retryAt,
     lastError,
     serverChanged,
+    shutdown,
     configure,
     start,
     stop,

@@ -77,6 +77,12 @@ function setup(sessionId: string) {
           void subscribe()
         }
       },
+      // ISS-052: the server dropped this client's queue for the session
+      // (dead host, overflow). Follow again from the held cursor; the
+      // answer is a replay or a fresh snapshot, never a silent freeze.
+      resubscribe: () => {
+        if (phase.value === 'live') void subscribe()
+      },
     })
     phase.value = 'subscribing'
     error.value = null
