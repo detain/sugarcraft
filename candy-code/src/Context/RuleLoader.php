@@ -367,8 +367,10 @@ final class RuleLoader
      * compare against, the alternative would be to silently retire standing
      * guidance, and silent retirement is the exact defect ISS-068 names. The
      * loader itself therefore does not require its caller to know the model;
-     * production threading of the real value is a one-line seam at the
-     * `Runtime::buildSystemPrompt()` construction, listed as owed.
+     * production threads the real value at the `Runtime::systemPromptSections()`
+     * construction (seam closed), and the end-to-end gate — model-scoped rule
+     * lands for the matching session model, absent for a non-matching one — is
+     * pinned in `RulebookPromptRenderTest`.
      *
      * Patterns are fnmatch globs, case-insensitively, matched against both the
      * full session model string and the part after its last `/` — so
