@@ -1457,22 +1457,18 @@ final class ContextCompactorTest extends TestCase
 
         $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
 
-        // The oversized message is still truncated (the method reports what it
-        // did honestly) — it is the CALLER's re-check that must refuse to send.
-        $this->assertNotSame($messages, $truncated, 'the one oversized message is still shortened');
-        $this->assertSame(
-            950_000,
-            $this->countTokens($truncated),
-            'and the history is still enormously over the tier afterwards',
-        );
+        // ISS-016: the ten preserved exchanges already fill the tier, so the
+        // one oversized message's share computes to 0 tokens - below the
+        // per-message budget floor. The truncator now REFUSES that rescue
+        // outright. Before the floor it mangled the giant to four characters
+        // and a clipped marker ('\n\n[.') and only then let the caller's
+        // re-check refuse the turn - destroying the user's text on a rescue
+        // that was never going to send anything. Honest refusal rewrites
+        // nothing: the wire echoes byte-identically.
+        $this->assertSame($messages, $truncated, 'a sub-floor share is refused, nothing rewritten');
         $this->assertTrue(
-            $compactor->shouldCompactForeground($truncated, 100_000),
-            'so the blocking tier must still fire on the truncated wire — this is what Chat re-tests',
-        );
-        $this->assertSame(
-            $messages[0],
-            $truncated[0],
-            'and the ten not-individually-oversized exchanges were still left alone',
+            $compactor->shouldCompactForeground($messages, 100_000),
+            'so the blocking tier still fires on the unchanged wire — this is what Chat re-tests, and the refusal now reports a history with nothing rewritten away',
         );
     }
 
@@ -1790,13 +1786,19 @@ final class ContextCompactorTest extends TestCase
         $this->assertNotNull($cmd, 'fixture: an over-tier newest message reaches the rescue on the sync route');
 
         // The giant itself MUST show the truncation — otherwise "everything else
-        // survived" would prove nothing about a rescue that never fired.
+        // survived" would prove nothing about a rescue that never fired. Since
+        // ISS-016 it shows it in a HIDE pair: the full original survives stored
+        // and byte-identical at its own index, marked UI-only, and the truncated
+        // model-only copy sits beside it.
+        $this->assertSame($giant->content, $next->history[2]->content, 'ISS-016: the giant\'s full text survives in the stored history');
+        $this->assertTrue($next->history[2]->uiOnly, 'the full original is hidden from the agent-visible wire, not rewritten away');
         $this->assertStringContainsString(
             'characters truncated to fit the context window',
-            $next->history[2]->content,
-            'positive control: the giant really was truncated in place',
+            $next->history[3]->content,
+            'positive control: the copy beside it really was truncated',
         );
-        $this->assertNotSame($giant, $next->history[2], 'the truncated entry is a copy — the only entry the splice may replace');
+        $this->assertFalse($next->history[3]->userVisible, 'the truncated copy rides the model slot, never the user panel');
+        $this->assertNotSame($giant, $next->history[2], 'the hidden original is a one-flag copy — the only entry the splice may replace');
 
         // And the exchanges the truncator NEVER touched: the very same objects,
         // every field, whatever their placement.
@@ -2195,16 +2197,91 @@ final class ContextCompactorTest extends TestCase
             $rescued['notice']->content,
             'the notice counts 1 message, never 0 — the figure the guard above exists to keep honest',
         );
+        // ISS-016 hide pair: the giant's full text survives (hidden from the
+        // model), the truncated copy is what the model slot carries.
+        $this->assertSame(str_repeat('x', 800_000), $rescued['history'][0]->content, 'the full original stays stored byte-identical');
+        $this->assertTrue($rescued['history'][0]->uiOnly, 'hidden from the agent-visible wire, not deleted from history');
         $this->assertStringContainsString(
             'characters truncated to fit the context window',
-            $rescued['history'][0]->content,
-            'the giant really was shortened inline in the rebuilt history',
+            $rescued['history'][1]->content,
+            'the model-only copy carries the truncation',
         );
+        $this->assertFalse($rescued['history'][1]->userVisible, 'and the copy is what the user panel must never show');
         $this->assertLessThan(
             95_000,
-            $this->countTokens(array_map(static fn (Message $m): array => $m->toWire(), $rescued['history'])),
-            'and the rescue hands back a wire under the blocking tier — the rescue is real, not nominal',
+            $this->countTokens(array_map(
+                static fn (Message $m): array => $m->toWire(),
+                Message::agentVisible($rescued['history']),
+            )),
+            'and the AGENT-VISIBLE wire the rescue hands back is under the blocking tier — the rescue is real, not nominal',
         );
+    }
+
+    /**
+     * ISS-016, both edges of the per-message budget floor. Below it the rescue
+     * is refused - through the truncator (byte-identical echo) and through the
+     * helper (null, so the caller's "this turn was NOT sent" refusal stands
+     * with nothing rewritten). At it, the arithmetic keeps its promise: the
+     * full head-and-marker survives, never a clipped marker or a four-character
+     * stub, and the model-only hide-copy carries no storage identity of its own.
+     */
+    public function testTheBudgetFloorRefusesThinRescuesAndKeepsWholeMarkersAtIt(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+
+        // Below: the ten-preserved-exchanges fixture that fills the tier, so
+        // the single oversized message's share computes to 0 tokens.
+        $thin = [];
+        for ($i = 0; $i < 10; $i++) {
+            $thin[] = $this->msg('user', str_repeat('p', 379_956));
+        }
+        $thin[] = $this->msg('user', str_repeat('x', 800_000));
+        $this->assertSame(
+            $thin,
+            $compactor->truncateOversizedExchange($thin, 100_000),
+            'a sub-floor share echoes the wire unchanged',
+        );
+
+        $chat = new Chat(history: [], backend: new IntraExchangeTurnBackend(100_000));
+        $truncation = new \ReflectionMethod(Chat::class, 'intraExchangeTruncation');
+        $history = array_map(static fn (array $m): Message => Message::user($m['content']), $thin);
+        $this->assertNull(
+            $truncation->invoke($chat, $thin, $history, 100_000),
+            'and the helper declines outright - no notice, no rewrite, the refusal path owns the turn',
+        );
+
+        // At the floor: one preserved row weighing threshold - 256 - 2000
+        // = 92,744 tokens leaves the giant a share of exactly 256 - a
+        // 984-character budget, 160 of it reserved for the marker.
+        $atFloor = [
+            $this->msg('user', str_repeat('p', 4 * (92_744 - 10))),
+            $this->msg('user', str_repeat('x', 800_000)),
+        ];
+        $kept = $compactor->truncateOversizedExchange($atFloor, 100_000)[1]['content'];
+        $this->assertSame(
+            str_repeat('x', 824) . "\n\n[... 799176 characters truncated to fit the context window ...]",
+            $kept,
+            'the whole marker survives with 824 characters of head - no clipped marker, no stub',
+        );
+
+        // Identity hygiene on the hide copy: the user-visible original keeps
+        // its storage row; the model-only copy must never double-claim it.
+        $base = [
+            Message::user(str_repeat('p', 4 * (92_744 - 10))),
+            Message::user(str_repeat('x', 800_000))->withIdentity('m-id', 7),
+        ];
+        $rescued = $truncation->invoke($chat, array_map(static fn (Message $m): array => $m->toWire(), $base), $base, 100_000);
+        $this->assertIsArray($rescued, 'the at-floor rescue DOES run');
+        $copy = Message::agentVisible($rescued['history'])[1];
+        $rescuedHistory = $rescued['history'];
+        $this->assertSame($rescuedHistory[0], Message::agentVisible($rescuedHistory)[0], 'the preserved row rides through as the object it was');
+        $this->assertFalse($rescuedHistory[0]->uiOnly);
+        $this->assertTrue($rescuedHistory[1]->uiOnly, 'the hidden original sits between the visible rows');
+        $this->assertSame(str_repeat('x', 800_000), $rescuedHistory[1]->content, 'hidden, not rewritten - full text survives');
+        $this->assertFalse($copy->userVisible, 'the copy is model-only');
+        $this->assertNull($copy->id, 'the copy never carries the original row\'s storage identity');
+        $this->assertNull($copy->ref);
+        $this->assertSame([], $copy->turnTranscript, 'and never a stale turn window either');
     }
 
     // ─── The E18 truncation NOTICE, pinned verbatim ───────────────
@@ -2287,8 +2364,9 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame(
             '1 message reached the 95% blocking tier on its own, so it was truncated to fit '
             . 'the context window rather than the turn being refused: ~92977 estimated tokens '
-            . 'now, against a 100000-token context window. The dropped text is marked inline '
-            . 'in that message.',
+            . 'now, against a 100000-token context window. The text the model is sent carries '
+            . 'a marker where it was cut; your full original stays in the transcript, hidden '
+            . 'from the model.',
             $notice->content,
             'the whole sentence verbatim: the 92,977 chars/4 ESTIMATE rides beside "estimated '
             . 'tokens" and the 100,000 advertised window beside "context window", never swapped',
@@ -2340,8 +2418,9 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame(
             '2 messages reached the 95% blocking tier on their own, so they were truncated to '
             . 'fit the context window rather than the turn being refused: ~92954 estimated '
-            . 'tokens now, against a 100000-token context window. The dropped text is marked '
-            . 'inline in those messages.',
+            . 'tokens now, against a 100000-token context window. The text the model is sent '
+            . 'carries a marker where each was cut; your full originals stay in the '
+            . 'transcript, hidden from the model.',
             $notice->content,
             'and 92,954 is the same two-giant figure testEveryOversizedExchangeSharesTheRemainingBudget '
             . 'pins at the truncator level - notice and wire agree',
@@ -2380,8 +2459,9 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame(
             '3 messages reached the 95% blocking tier on their own, so they were truncated to '
             . 'fit the context window rather than the turn being refused: ~92931 estimated '
-            . 'tokens now, against a 100000-token context window. The dropped text is marked '
-            . 'inline in those messages.',
+            . 'tokens now, against a 100000-token context window. The text the model is sent '
+            . 'carries a marker where each was cut; your full originals stay in the '
+            . 'transcript, hidden from the model.',
             $notice->content,
         );
         $this->assertSame(

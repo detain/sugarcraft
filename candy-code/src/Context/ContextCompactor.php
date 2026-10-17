@@ -309,6 +309,22 @@ final class ContextCompactor
     private const INTRA_EXCHANGE_MARKER_MAX_CHARS = 160;
 
     /**
+     * The smallest per-message share {@see truncateOversizedExchange()} will
+     * attempt (ISS-016). Below it the arithmetic cannot keep its promises: a
+     * share under 256 tokens leaves a character budget under ~1,024, and the
+     * marker alone reserves 160 of those, so several rescued messages would
+     * carry a head excerpt of only a few hundred characters - or, at shares
+     * near zero, four characters and a CLIPPED marker (the hard clamp can cut
+     * the marker text itself). A rescue whose excerpt is that thin is a
+     * silent-mangling rewrite dressed as a recovery. When the preserved
+     * exchanges and the headroom leave less than this floor per oversized
+     * message, the rescue is REFUSED - the wire echoes back unchanged, the
+     * caller's own guard sees no change, and the honest
+     * "this turn was NOT sent" refusal stands with nothing rewritten.
+     */
+    private const INTRA_EXCHANGE_MIN_BUDGET_TOKENS = 256;
+
+    /**
      * Truncate every individual MESSAGE that alone reaches the blocking tier, in
      * place, so a conversation carrying one stops being un-sendable
      * (prompt_plan.md P4.S4, backlog §12.2 E18). The unit is the message, not
@@ -361,8 +377,12 @@ final class ContextCompactor
      * @param int $tokenLimit The context window every tier is a percentage of.
      * @return array<array{role:string,content:string}> $messages unchanged when
      *         the limit is non-positive, the history is under the blocking tier,
-     *         or nothing individually reaches it; otherwise with every oversized
-     *         message truncated to an equal share of the space left under it.
+     *         nothing individually reaches it, or the share each oversized
+     *         message would get falls under {@see
+     *         INTRA_EXCHANGE_MIN_BUDGET_TOKENS} (ISS-016: a rescue too thin to
+     *         keep its head-and-marker promise is refused, not attempted);
+     *         otherwise with every oversized message truncated to an equal
+     *         share of the space left under it.
      */
     public function truncateOversizedExchange(array $messages, int $tokenLimit): array
     {
@@ -423,6 +443,14 @@ final class ContextCompactor
             max(0, $threshold - $preservedTokens - self::INTRA_EXCHANGE_HEADROOM_TOKENS),
             count($oversized),
         );
+
+        // ISS-016: a sub-floor share cannot honour the method's own promises -
+        // the marker eats the head, or the hard clamp eats the marker. Refuse
+        // the rescue honestly: echo the wire back so the caller's guard sees no
+        // change and the refusal path (with nothing rewritten) takes over.
+        if ($share < self::INTRA_EXCHANGE_MIN_BUDGET_TOKENS) {
+            return $messages;
+        }
         // The share is held in TOKENS - the unit countTokens() checks it in. The
         // character budget is its ASCII reading (four per token) and stays the
         // hard cap; truncateMessageHead() shortens further when the head's script
@@ -452,10 +480,13 @@ final class ContextCompactor
      * hard-clamped to exactly $charBudget at the end. So at a budget too small to
      * carry the whole marker the marker is itself truncated rather than allowed to
      * re-inflate the message — the count then reads clipped, but the message never
-     * exceeds its share and the caller's under-threshold guarantee holds. That
-     * regime only arises when the non-oversized exchanges already fill the tier
-     * (so this is between-exchanges-dominated), and E18's own case has a budget in
-     * the hundreds of thousands of characters, nowhere near it.
+     * exceeds its share and the caller's under-threshold guarantee holds. Since
+     * ISS-016 that regime is unreachable through this class's only caller: the
+     * rescue is refused below {@see INTRA_EXCHANGE_MIN_BUDGET_TOKENS} per oversized
+     * message, so a budget that reaches here is at least ~984 characters and the
+     * 160-character marker fits whole with ~824 characters of head to spare. The
+     * clamp and this bound stay as defence-in-depth (§1.10) for any future caller
+     * that reaches the method directly.
      *
      * @param array<string,mixed> $message
      * @return array<string,mixed>

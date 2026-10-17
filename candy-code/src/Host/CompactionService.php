@@ -2114,23 +2114,30 @@ final class CompactionService
      *
      * Null is returned whenever there is nothing to rescue, which is every case
      * except the oversized single exchange: still over the tier after truncation,
-     * or over it only IN AGGREGATE (every exchange individually fits — the
-     * between-exchanges case the other tiers own, left byte-for-byte alone). A
+     * over it only IN AGGREGATE (every exchange individually fits — the
+     * between-exchanges case the other tiers own, left byte-for-byte alone), or
+     * below the truncator's per-message budget floor (ISS-016 — a rescue too
+     * thin to keep its head-and-marker promise is refused rather than attempted,
+     * and the truncator echoes the wire back unchanged). A
      * null therefore means "refuse exactly as before", so this can only ever turn
      * a runaway into a dispatch, never a legitimate refusal into a wrong send.
      *
-     * The truncated history is rebuilt by splicing the truncated CONTENT onto
-     * the index-aligned $baseHistory entries — deliberately NOT through
-     * {@see messagesFromWire()}, whose longest-common-SUFFIX match preserves
-     * original objects only for a matching tail. A rescued giant usually sits AT
-     * the end of the history, so there the tail mismatched immediately, every
-     * earlier UNTOUCHED exchange came back as a bare
-     * `Message::user`/`Message::assistant($content)`, and its createdAt,
-     * toolCalls, toolResults, reasoning, images and usage were silently dropped
-     * (measured at 34748b312, review cycle 4, finding 2). What the splice now
-     * guarantees: an entry whose content the truncator did not change is handed
-     * back as THE SAME OBJECT it came in as, and a truncated entry comes back as
-     * a copy in which {@see messageWithContent()} changed nothing but content.
+     * The truncated history is rebuilt by splicing onto the index-aligned
+     * $baseHistory entries — deliberately NOT through {@see messagesFromWire()},
+     * whose longest-common-SUFFIX match preserves original objects only for a
+     * matching tail. A rescued giant usually sits AT the end of the history, so
+     * there the tail mismatched immediately, every earlier UNTOUCHED exchange
+     * came back as a bare `Message::user`/`Message::assistant($content)`, and
+     * its createdAt, toolCalls, toolResults, reasoning, images and usage were
+     * silently dropped (measured at 34748b312, review cycle 4, finding 2). What
+     * the splice now guarantees: an entry whose content the truncator did not
+     * change is handed back as THE SAME OBJECT it came in as, and a truncated
+     * entry comes back as a HIDE pair (ISS-016) — the original, untouched and
+     * full-text, marked UI-only so it stays in the stored history and painted
+     * for the user while leaving the agent-visible wire, followed by the
+     * truncated copy in its model slot: user-invisible, freshly identified
+     * ({@see Message::withIdentity()} nulled), and with no turn transcript of
+     * its own. Nothing the user typed is ever rewritten away.
      *
      * @param array<array{role:string,content:string}> $wire        The wire the
      *        blocking tier just rejected.
@@ -2195,7 +2202,8 @@ final class CompactionService
         // messagesFromWire() round-trip this call site used destroys exactly
         // the metadata it promised to preserve whenever the rescued giant sits
         // at or near the END of the history. Content unchanged ⇒ the very same
-        // object; content truncated ⇒ a copy changing nothing but content.
+        // object; content truncated ⇒ the ISS-016 hide pair - original kept in
+        // full and marked UI-only, truncated copy beside it for the model.
         //
         // The count's domain is wire ENTRIES whose content changed - MESSAGES, not
         // exchanges. ContextCompactor::truncateOversizedExchange() decides per
@@ -2208,7 +2216,7 @@ final class CompactionService
         // UI-only rows are put back in their own places below - a truncation
         // rewrites no row's position, so every one of them keeps its own.
         $visibleBase = Message::agentVisible($baseHistory);
-        $history = [];
+        $splices = [];
         $truncatedMessages = 0;
         foreach ($wire as $index => $entry) {
             $newContent = $truncated[$index]['content'] ?? null;
@@ -2223,29 +2231,61 @@ final class CompactionService
                 // A wire-only rebuild for a future misaligned caller is merely
                 // lossy — never off-by-one, never fatal.
                 $role = Role::from($truncated[$index]['role'] ?? 'assistant');
-                $history[] = match ($role) {
+                $splices[$index] = [match ($role) {
                     Role::User => Message::user((string) $newContent),
                     Role::Assistant => Message::assistant((string) $newContent),
                     default => new Message($role, (string) $newContent, time()),
-                };
+                }];
                 continue;
             }
 
-            $history[] = $changed
-                ? self::messageWithContent($original, (string) $newContent)
-                : $original;
+            if (!$changed) {
+                $splices[$index] = [$original];
+                continue;
+            }
+
+            // ISS-016, hide - do not delete. The full original text stays in
+            // the stored history and keeps painting for the user; its uiOnly
+            // mark is what removes it from the agent-visible wire, from
+            // ContextMeter::estimate(), and therefore from every provider
+            // request (they build from Message::agentVisible()). The truncated
+            // copy rides the model's slot carrying the head-and-marker, but
+            // never the user's panel (withUserVisible(false)), never a second
+            // storage identity (withIdentity(null, null)), and never a stale
+            // turn window of its own (withTurnTranscript([])). Rewriting the
+            // original's content in place - what this call site used to do -
+            // destroyed the user's own words over a wire-copy decision.
+            $splices[$index] = [
+                $original->withUiOnly(true),
+                self::messageWithContent($original, (string) $newContent)
+                    ->withUserVisible(false)
+                    ->withIdentity(null, null)
+                    ->withTurnTranscript([]),
+            ];
         }
 
         // Re-interleave the UI-only rows: walk $baseHistory and swap each
-        // agent-visible row for its spliced counterpart, in order. Any spliced
-        // row past the visible count (the misaligned-caller rebuild above) is
-        // appended rather than dropped.
-        $spliced = $history;
+        // agent-visible row for the rows its splice produced - a rescued row
+        // produces a PAIR. Any spliced row past the visible count (the
+        // misaligned-caller rebuild above) is appended rather than dropped.
         $history = [];
+        $visible = 0;
         foreach ($baseHistory as $message) {
-            $history[] = $message->uiOnly ? $message : (array_shift($spliced) ?? $message);
+            if ($message->uiOnly) {
+                $history[] = $message;
+                continue;
+            }
+
+            foreach ($splices[$visible++] ?? [$message] as $row) {
+                $history[] = $row;
+            }
         }
-        array_push($history, ...$spliced);
+
+        while (isset($splices[$visible])) {
+            foreach ($splices[$visible++] as $row) {
+                $history[] = $row;
+            }
+        }
 
         return [
             'history' => $history,
@@ -2275,10 +2315,16 @@ final class CompactionService
      * until 1.B-3; `CompactionHidesNotDeletesTest` now compares this list with
      * Message's constructor, so the next field cannot slip by.
      *
-     * The rescue still rewrites IN PLACE rather than hiding the original the way
-     * whole-exchange compaction does: the giant it trims is often the prompt of
-     * the turn about to go out, and {@see Message::settleTurnTranscript()} finds
-     * a turn's window by a prompt row that is both agent- and user-visible.
+     * Since ISS-016 the caller does NOT put this copy in the original's place:
+     * the rescue hides instead of rewriting in place, so the full original stays
+     * stored and painted (ui-only) and this copy is what reaches the model
+     * (user-invisible, identity and turn transcript cleared by the caller).
+     * That matters to {@see Message::settleTurnTranscript()}, which opens a
+     * turn's window after the newest prompt row that is both agent- and
+     * user-visible: when the rescued row WAS such a prompt the window anchor
+     * retreats to the previous one, which stays correct because the window's
+     * collection pass admits only unstepped, non-UI-only tool rows - every
+     * earlier turn's settled rows carry a stepId and ride through untouched.
      */
     public static function messageWithContent(Message $message, string $content): Message
     {
