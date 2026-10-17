@@ -204,29 +204,29 @@ describe('session paging (ISS-058)', () => {
     expect(session.state.hasMoreOlder).toBe(false)
     expect(session.state.olderCursor).toBeNull()
     await expect(session.loadOlder()).resolves.toBe(false)
-    expect(sent('session.history')).toHaveLength(0)
+    expect(sent('session.get')).toHaveLength(0)
   })
 
   it('adopts the cursor a paged snapshot names', async () => {
-    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const session = await subscribePaged({ hasMoreOlder: true, oldestIndex: 40 })
     expect(session.state.hasMoreOlder).toBe(true)
     expect(session.state.olderCursor).toBe(40)
   })
 
-  it('reads the olderCursor spelling the server fix names as beforeIndex', async () => {
+  it('still adopts the defensive alias spellings', async () => {
     const session = await subscribePaged({ hasMore: true, beforeIndex: 12 })
     expect(session.state.hasMoreOlder).toBe(true)
     expect(session.state.olderCursor).toBe(12)
   })
 
   it('sends the held cursor and prepends the page it answers', async () => {
-    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const session = await subscribePaged({ hasMoreOlder: true, oldestIndex: 40 })
     const loading = session.loadOlder()
-    expect(sent('session.history').pop()?.params).toEqual({ sessionId: 's1', beforeIndex: 40, limit: 200 })
-    answer('session.history', {
+    expect(sent('session.get').pop()?.params).toEqual({ sessionId: 's1', beforeIndex: 40, limit: 200 })
+    answer('session.get', {
       sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [],
       messages: [{ id: 'm0', role: 'user', content: 'older' }],
-      hasMoreOlder: true, olderCursor: 20,
+      hasMoreOlder: true, oldestIndex: 20,
     })
     await expect(loading).resolves.toBe(true)
     expect(session.state.items.map((item) => item.key)).toEqual(['m0', 'm1'])
@@ -236,9 +236,9 @@ describe('session paging (ISS-058)', () => {
   })
 
   it('skips a row the boundary shift already showed the client', async () => {
-    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const session = await subscribePaged({ hasMoreOlder: true, oldestIndex: 40 })
     const loading = session.loadOlder()
-    answer('session.history', {
+    answer('session.get', {
       sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [],
       messages: [{ id: 'm0', role: 'user', content: 'older' }, { id: 'm1', role: 'user', content: 'one' }],
     })
@@ -250,23 +250,23 @@ describe('session paging (ISS-058)', () => {
   })
 
   it('refuses to loop on a stuck page that adds nothing', async () => {
-    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const session = await subscribePaged({ hasMoreOlder: true, oldestIndex: 40 })
     const loading = session.loadOlder()
-    answer('session.history', {
+    answer('session.get', {
       sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [],
       messages: [{ id: 'm1', role: 'user', content: 'one' }],
-      hasMoreOlder: true, olderCursor: 40,
+      hasMoreOlder: true, oldestIndex: 40,
     })
     await loading
     expect(session.state.hasMoreOlder).toBe(false)
     await expect(session.loadOlder()).resolves.toBe(false)
-    expect(sent('session.history')).toHaveLength(1)
+    expect(sent('session.get')).toHaveLength(1)
   })
 
   it('lands a refusal in olderError and leaves the walk where it was', async () => {
-    const session = await subscribePaged({ hasMoreOlder: true, olderCursor: 40 })
+    const session = await subscribePaged({ hasMoreOlder: true, oldestIndex: 40 })
     const loading = session.loadOlder()
-    const frame = sent('session.history').pop()
+    const frame = sent('session.get').pop()
     socket().fail(-32601, 'method_not_found', 'unknown method', frame?.id)
     await expect(loading).resolves.toBe(false)
     expect(session.olderError).toBe('unknown method')

@@ -278,9 +278,9 @@ export function applyPendingAsks(state: SessionState, asks: PendingAsk[]): void 
  * future field simply stays invisible until this widens.
  */
 export function readPaging(snapshot: SessionSnapshot): { hasMoreOlder: boolean; cursor: number | null } {
-  const raw = snapshot as SessionSnapshot & { hasMoreOlder?: unknown; hasMore?: unknown; olderCursor?: unknown; beforeIndex?: unknown }
+  const raw = snapshot as SessionSnapshot & { hasMoreOlder?: unknown; hasMore?: unknown; oldestIndex?: unknown; olderCursor?: unknown; beforeIndex?: unknown }
   const hasMoreOlder = raw.hasMoreOlder === true || raw.hasMore === true
-  const bound = raw.olderCursor ?? raw.beforeIndex
+  const bound = raw.oldestIndex ?? raw.olderCursor ?? raw.beforeIndex
   return {
     hasMoreOlder,
     cursor: typeof bound === 'number' && Number.isInteger(bound) ? bound : null,

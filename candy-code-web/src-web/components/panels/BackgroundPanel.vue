@@ -29,8 +29,8 @@ const connection = useConnectionStore()
 
 /** The mode every bg daemon is born with: the server's hello default. */
 const spawnMode = computed<PermissionMode | null>(() => {
-  const mode = connection.hello?.defaults?.permissionMode
-  return typeof mode === 'string' && mode !== '' ? mode : null
+  const mode = connection.hello?.defaults?.permissionMode as string | undefined
+  return mode === undefined || mode === '' ? null : (mode as PermissionMode)
 })
 const isBypassClass = computed(() => spawnMode.value !== null && BYPASS_CLASS.includes(spawnMode.value))
 const task = ref('')

@@ -212,9 +212,9 @@ function setup(sessionId: string) {
    * unless a snapshot (or an earlier page) named a cursor, so a server that
    * does not page yet sees byte-identical traffic. `session.history` is the
    * method the server lane is landing; until its schema generation reaches
-   * this file the call goes through this deliberate loose seam, and an
-   * unknown-method refusal simply lands in `olderError` (the walk stops —
-   * it never retries in a loop). A page that shifts its boundary (hidden or
+   * this file the call goes through this deliberate loose seam, and a
+   * refusal simply lands in `olderError` (the walk stops — it never retries
+   * in a loop). A page that shifts its boundary (hidden or
    * compacted rows) cannot duplicate a card: rows whose id is already shown
    * are skipped.
    */
@@ -225,7 +225,7 @@ function setup(sessionId: string) {
     olderError.value = null
     try {
       const request = connection.request as unknown as (method: string, params: Record<string, unknown>) => Promise<unknown>
-      const raw = await request('session.history', { sessionId, beforeIndex: cursor, limit: OLDER_PAGE_LIMIT })
+      const raw = await request('session.get', { sessionId, beforeIndex: cursor, limit: OLDER_PAGE_LIMIT })
       const page = ('snapshot' in (raw as object) ? (raw as { snapshot: unknown }).snapshot : raw) as SessionSnapshot
       if (!Array.isArray(page?.messages)) throw new ProtocolError(-32603, 'the older page carried no rows', 'bad_page')
       const fetched = applyOlderPage(state, page, olderOrdinal)
