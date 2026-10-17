@@ -14,6 +14,7 @@ use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Palette\PaletteState;
 use SugarCraft\Code\Renderer;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Theme;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Sentinel;
@@ -34,13 +35,32 @@ use SugarCraft\Mouse\Zone;
  */
 final class PaletteClickTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private const VARS = ['CANDY_CODE_DISABLE_MOUSE', 'CANDY_CODE_DISABLE_MOUSE_CLICKS'];
+
+    /**
+     * ISS-125: this sweep drives the `Share session` row through the Enter and
+     * click arms of `Chat::selectPaletteItem()`, and that arm runs
+     * `new ShareCommand()` with no `$exportsDir` — a default export resolves
+     * through `HomeDirectory::owned()` and WRITES. Without a per-test HOME the
+     * residue landed in the developer's real `~/.candy-code/exports`: two
+     * zero-byte transcripts per idle run, 174 of them over twelve days when
+     * the defect was filed. `tests/bootstrap.php` now sandboxes HOME for the
+     * whole process, but the sweep owns the write, so it quarantines it
+     * itself: the trait's snapshot-and-restore keeps every other test's view
+     * of home untouched, and `removeTree()` means not even the suite sandbox
+     * accumulates this file's litter.
+     */
+    private string $sandbox = '';
 
     protected function setUp(): void
     {
         foreach (self::VARS as $var) {
             putenv($var);
         }
+        $this->sandbox = sys_get_temp_dir() . '/crush-paletteclick-' . bin2hex(random_bytes(6));
+        $this->useHomeSandbox($this->sandbox . '/home');
         Renderer::scanner()->clear();
         $this->resetClickTracker();
     }
@@ -50,6 +70,8 @@ final class PaletteClickTest extends TestCase
         foreach (self::VARS as $var) {
             putenv($var);
         }
+        $this->restoreHomeSandbox();
+        self::removeTree($this->sandbox);
         Renderer::scanner()->clear();
         $this->resetClickTracker();
     }
@@ -575,5 +597,21 @@ final class PaletteClickTest extends TestCase
     private function resetClickTracker(): void
     {
         (new \ReflectionProperty(Chat::class, 'clickTracker'))->setValue(null, null);
+    }
+
+    private static function removeTree(string $path): void
+    {
+        if (is_link($path) || is_file($path)) {
+            unlink($path);
+
+            return;
+        }
+        if (!is_dir($path)) {
+            return;
+        }
+        foreach (array_diff((array) scandir($path), ['.', '..']) as $entry) {
+            self::removeTree($path . '/' . $entry);
+        }
+        rmdir($path);
     }
 }

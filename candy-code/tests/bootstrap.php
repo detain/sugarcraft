@@ -12,6 +12,25 @@ use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 require __DIR__ . '/../vendor/autoload.php';
 
 /*
+ * ISS-125, captured FIRST: the HOME the suite was LAUNCHED with, in both
+ * spellings, before any block in this file moves the environment.
+ *
+ * The pin below redirects HOME at a sandbox; `tests/SuiteHomeSandboxContractTest.php`
+ * is what reads these two entries to prove the pin replaced a real location
+ * rather than dressing the same one up, and to name the directory no suite
+ * write may appear under. Snapshot-first is house discipline here for the same
+ * reason `HomeSandboxTrait` users must capture before any env-clearing loop
+ * (the lane-cf poisoning, and the ordering arm of `OneSidedHomeSandboxTest`):
+ * a snapshot taken after the clearing captures the corpse and restores it.
+ *
+ * Stored in `$GLOBALS` for the same reason as every other entry this file
+ * publishes: PHPUnit includes this bootstrap from inside a private method of
+ * `Application`, so a bare local does not outlive the include.
+ */
+$GLOBALS['__candyCodeLaunchHomeEnv'] = getenv('HOME');
+$GLOBALS['__candyCodeLaunchHomeServer'] = $_SERVER['HOME'] ?? null;
+
+/*
  * The suite's skip roster, armed before the first test event.
  *
  * "Exactly one test skipped" has been this plan's proof that a run was WHOLE --
@@ -293,6 +312,100 @@ $sandbox = $realTempDir . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ?
 ToolIpcFiles::sweepOnce($sandbox);
 
 putenv('TMPDIR=' . $sandbox);
+
+/*
+ * ISS-125: ...and HOME gets the same treatment the temp directory already had.
+ *
+ * THE DEFECT, measured before this line existed: `ShareCommand` constructed
+ * with no `$exportsDir` resolves its default through
+ * {@see \SugarCraft\Code\Support\HomeDirectory::owned()} — `$HOME/.candy-code/exports`,
+ * created 0700 on first write — and `PaletteClickTest`'s palette sweep drives
+ * the `Share session` row through exactly that constructor. One idle sweep
+ * writes two exports (the click and the Enter), each a transcript of the bare
+ * fixture's empty history. The developer's real `~/.candy-code/exports` held
+ * 174 of these zero-byte files, dated over twelve days of suite runs, when
+ * A3/V3 filed it.
+ *
+ * THE FIX IS THE PIN, not the one row. ShareCommand is the reporter, not the
+ * disease: anything under `src/` that roots at home — config, sessions, teams,
+ * memory, skills, the `/websearch` cache — resolves through the same
+ * environment variable, and every one of them is a latent 174-files. TMPDIR
+ * got its sandbox for exactly this reason (see the block above); HOME gets one
+ * here, PER-UID AND STABLE for all the reasons that block records, under the
+ * same `$sandbox` so the machine's real temp directory never grows a second
+ * residue tree.
+ *
+ * BOTH SPELLINGS MOVE — `putenv()` and `$_SERVER['HOME']` — because half a
+ * sandbox is not a sandbox ({@see HomeSandboxTrait}'s opening sentence, and
+ * `OneSidedHomeSandboxTest`'s whole reason to exist). `$_ENV` is deliberately
+ * NOT touched: nothing under `src/` reads it, and the census counts a write to
+ * only that spelling as the worst shape of all, so moving it here would buy
+ * noise. Children inherit the pin for free: they read `HOME` after inheriting
+ * this process's environment, which is the half the spawned `bin/candy-code`
+ * tests need and no in-process seam can reach — the same asymmetry TMPDIR
+ * documents two blocks up.
+ *
+ * THE SANDBOX SATISFIES THE POLICY IT IS PINNED THROUGH. `owned()` requires
+ * absolute, existing, directory, not world-writable, owned by this euid; the
+ * directory is created 0700 under a 0700 per-uid parent, so a launch that
+ * would have REFUSED a hostile `HOME` accepts this one for the same reason it
+ * accepts a real home — and every refusal arm in `src/` stays reachable by
+ * tests that point HOME at fixtures of their own, which is what
+ * `HomeSandboxTrait` users have always done and still do: their snapshot now
+ * captures the sandbox instead of the developer's home, so their restore
+ * re-arms the sandbox and the whole process never sees the real location
+ * again.
+ *
+ * GROWTH IS BOUNDED BY THE PRUNE BELOW, because "never torn down" was
+ * affordable for a latch and is not for a home: a suite run writes exports and
+ * session state here the way it wrote them to the real home before, and twelve
+ * days of runs is twelve days of files. Regular files older than a day are
+ * deleted at install; directories, symlinks and the tree's shape survive.
+ * One day is not a number pulled from the air: it clears the residue of a
+ * normal dev loop (yesterday's runs) while every in-flight run — the ~40-minute
+ * full serial is the longest thing this suite does — stays hours under the
+ * blade, and shards that run concurrently share this directory exactly the
+ * way they have always shared the real home, so the age window is also what
+ * keeps one lane's install from eating a live sibling's fixtures.
+ */
+$homeSandbox = $sandbox . '/home';
+if (!is_dir($homeSandbox)) {
+    @mkdir($homeSandbox, 0o700, true);
+}
+
+$pruneBoundary = time() - 86400;
+$pruneStack = [$homeSandbox];
+while ($pruneStack !== []) {
+    $pruneDir = array_pop($pruneStack);
+    foreach ((array) @scandir($pruneDir) as $pruneEntry) {
+        if ($pruneEntry === '.' || $pruneEntry === '..') {
+            continue;
+        }
+        $prunePath = $pruneDir . '/' . $pruneEntry;
+        if (is_link($prunePath)) {
+            continue;
+        }
+        if (is_dir($prunePath)) {
+            $pruneStack[] = $prunePath;
+
+            continue;
+        }
+        $pruneMtime = @filemtime($prunePath);
+        if ($pruneMtime !== false && $pruneMtime < $pruneBoundary) {
+            @unlink($prunePath);
+        }
+    }
+}
+
+putenv('HOME=' . $homeSandbox);
+$_SERVER['HOME'] = $homeSandbox;
+
+// Published for the contract test, which must be able to name what the pin
+// installed WITHOUT re-deriving it — an assertion that recomputes the path
+// the same way bootstrap does passes even when bootstrap has stopped pinning
+// at all, which is the vacuity rule 15 exists to kill.
+$GLOBALS['__candyCodeHomeSandbox'] = $homeSandbox;
+
 
 /*
  * ...and the built-in audit hook writes into the sandbox too (E351).
