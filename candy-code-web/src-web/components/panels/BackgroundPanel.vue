@@ -70,6 +70,8 @@ function toggle(session: BackgroundSession): void {
     <form v-if="canWrite" class="spawn" @submit.prevent="start">
       <input v-model="task" type="text" placeholder="Run a task in the background…" aria-label="Background task" data-testid="bg-task">
       <button type="submit" class="primary" :disabled="starting || task.trim() === ''">Start</button>
+      <!-- bg01 row 1: the mode is the server's, the refusal consequence is the user-facing half. -->
+      <p class="mode-note" data-testid="bg-mode-note">The daemon runs in this server's permission mode; actions it would need to ask about are refused — there is no terminal to answer them.</p>
     </form>
     <p v-if="error || background.error" class="error" role="alert">{{ error || background.error }}</p>
     <p v-if="background.items.length === 0" class="empty">No background sessions.</p>
@@ -78,7 +80,7 @@ function toggle(session: BackgroundSession): void {
         <button type="button" class="head" :aria-expanded="expanded === session.bgId" @click="toggle(session)">
           <span class="status" :class="session.status">{{ session.status.replace('_', ' ') }}</span>
           <span class="name">{{ session.name || session.task }}</span>
-          <span v-if="permissionMode(session)" class="mode" :class="{ bypass: isBypassClass(session) }" data-testid="bg-mode">{{ permissionMode(session) }}</span>
+          <span v-if="permissionMode(session)" class="mode" :class="{ bypass: isBypassClass(session) }" data-testid="bg-mode">mode: {{ permissionMode(session) }}</span>
           <span class="meta">{{ ago(session.createdAt) }}<template v-if="session.tokensUsed"> · {{ tokens(session.tokensUsed) }} tok</template><template v-if="session.costUsd"> · {{ money(session.costUsd) }}</template></span>
         </button>
         <p v-if="isBypassClass(session)" class="bypass-warning" role="alert" data-testid="bg-bypass-warning">
@@ -178,6 +180,12 @@ input {
   border-color: var(--warn);
   color: var(--warn);
 }
+.mode-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0.25rem 0 0;
+}
+
 .bypass-warning {
   margin: 0;
   padding: 0.2rem 0.5rem;

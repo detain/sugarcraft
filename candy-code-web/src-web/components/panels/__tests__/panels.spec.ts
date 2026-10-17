@@ -60,10 +60,11 @@ describe('BackgroundPanel', () => {
     // Newest first: b3 (no mode — say nothing), b2 (bypass — badge + warning), b1 (default — badge, no warning).
     const rows = wrapper.findAll('[data-testid="bg-item"]')
     expect(rows.map((row) => row.attributes('data-testid'))).toHaveLength(3)
-    expect(wrapper.findAll('[data-testid="bg-mode"]').map((m) => m.text())).toEqual(['bypass-permissions', 'default'])
+    expect(wrapper.findAll('[data-testid="bg-mode"]').map((m) => m.text())).toEqual(['mode: bypass-permissions', 'mode: default'])
     const warnings = wrapper.findAll('[data-testid="bg-bypass-warning"]')
     expect(warnings).toHaveLength(1)
     expect(warnings[0]?.text()).toContain('bypass-permissions')
+    expect(wrapper.find('[data-testid="bg-mode-note"]').text()).toContain('no terminal to answer them')
   })
 })
 
