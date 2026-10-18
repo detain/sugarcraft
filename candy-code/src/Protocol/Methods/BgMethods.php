@@ -101,8 +101,14 @@ final class BgMethods
                 permissionMode: $permissionMode,
                 permissionAskTimeout: $call->server->config()->askTimeoutSeconds,
             );
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // The cause can name a private path; it stays out of the answer.
+            // It does NOT stay silent (ISS-057): the refusal below leaves the
+            // dispatcher through its `RpcError` arm, which answers and never
+            // logs, so the caller that hid the cause is the one that owes it
+            // to the server's sink — the same line the `-32099` arm writes.
+            $call->server->logError($e, 'bg.spawn failed');
+
             throw RpcError::of(ErrorCode::Internal, 'the background session could not be started', 'bg_spawn_failed');
         }
         $events->track($session);

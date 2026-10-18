@@ -46,7 +46,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -72,7 +72,7 @@ final class ProtocolFixture
 
         $config ??= ServerConfig::new($this->dir);
         $this->hub = SessionHub::new($workspace, $config->maxOpenSessions);
-        $this->context = ServerContext::new($this->hub, $config->withRoot($this->root), 'test', Loop::get());
+        $this->context = ServerContext::new($this->hub, $config->withRoot($this->root), 'test', Loop::get(), log: $log);
         $this->dispatcher = Dispatcher::new($this->context);
     }
 
@@ -82,10 +82,13 @@ final class ProtocolFixture
      * @param WorkflowEngineInterface|null $workflows the workspace's `/workflow` engine; none by default
      * @param MemoryStore|null $memoryStore the workspace's HOME memory store; none by default,
      *        which makes `memory.*` answer `memory_unavailable` (ISS-020 lanes inject one)
+     * @param (\Closure(string): void)|null $log the server's log sink, exactly the one
+     *        `Cli\Serve` wires the real dispatcher to; null keeps every swallowed
+     *        failure silent (the shape every existing fixture runs, ISS-057)
      */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null): self
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null): self
     {
-        return new self($config, $retain, $supervisor, $workflows, $memoryStore);
+        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log);
     }
 
     /** A client that has said hello. */

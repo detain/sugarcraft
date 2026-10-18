@@ -11,6 +11,8 @@ use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
+use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 
 /**
  * ISS-057: what the swallowed failures owe the server.
@@ -20,9 +22,34 @@ use SugarCraft\Code\Server\Ws\MessageHandler;
  * promises the cause is in the log instead. These pins are that promise:
  * exactly one line, carrying class, message and throw site, written to the
  * sink and nowhere onto the wire.
+ *
+ * The third shape is a method that refuses with its OWN `RpcError` after
+ * catching a cause: the dispatcher's `RpcError` arm answers without logging
+ * (a refusal is not an internal failure), so the hiding caller is the one
+ * that owes the cause to the server's log sink.
  */
 final class InternalErrorLoggingTest extends TestCase
 {
+    /** @var list<ProtocolFixture> servers this test started, stopped before the scratch goes */
+    private array $servers = [];
+
+    /** @var list<string> scratch trees the `bg.spawn` rows block, removed after each test */
+    private array $scratchDirs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->servers as $server) {
+            $server->tearDown();
+        }
+        $this->servers = [];
+        foreach ($this->scratchDirs as $dir) {
+            ProtocolFixture::removeTree($dir);
+        }
+        $this->scratchDirs = [];
+
+        parent::tearDown();
+    }
+
     public function testASocketThatDiesOnAMessageLogsTheCauseAndCloses1011(): void
     {
         $lines = [];
@@ -86,6 +113,65 @@ final class InternalErrorLoggingTest extends TestCase
         $message = \explode(' at ', $line, 2)[0];
         self::assertLessThanOrEqual(\strlen('session.turn failed: RuntimeException: ') + ErrorLog::MAX_MESSAGE_BYTES, \strlen($message), 'the message is clipped to MAX_MESSAGE_BYTES');
         self::assertStringContainsString('InternalErrorLoggingTest.php:', $line);
+    }
+
+    /**
+     * `bg.spawn` is the method-shaped hole: it catches the supervisor's
+     * failure, answers a clean refusal so a private IPC path never reaches the
+     * client, and rethrows an `RpcError` — which leaves the dispatcher through
+     * the arm that logs nothing. The cause has to reach the sink at the
+     * method, or SERVER.md's blanket promise is a lie for every `bg.*` refusal.
+     */
+    public function testABackgroundSpawnRefusalLogsTheCauseItHidFromTheClient(): void
+    {
+        $lines = [];
+        $secret = 'home-only-' . \bin2hex(\random_bytes(4));
+        $fixture = $this->fixtureOverASpawnThatCannotStart($secret, static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        });
+        $answer = $fixture->client()->request('bg.spawn', ['task' => 'this daemon never starts']);
+
+        self::assertSame('bg_spawn_failed', $answer['error']['data']['kind'] ?? null, (string) \json_encode($answer));
+        self::assertSame(1, \count($lines), 'one line per swallowed cause');
+        self::assertStringStartsWith('bg.spawn failed: RuntimeException: ', $lines[0]);
+        self::assertStringContainsString($secret, $lines[0], 'the private path the client never sees is what the log is for');
+        self::assertStringContainsString('BackgroundSupervisor.php:', $lines[0], 'the throw site rides the line');
+        self::assertStringNotContainsString($secret, (string) \json_encode($answer), 'and stays off the wire');
+        self::assertStringNotContainsString("\n", $lines[0]);
+    }
+
+    /**
+     * The absence of a sink changes the answer not at all — the refusal is the
+     * contract, the log is a courtesy to the operator.
+     */
+    public function testABackgroundSpawnRefusalAnswersTheSameWithoutASink(): void
+    {
+        $fixture = $this->fixtureOverASpawnThatCannotStart('sinkless-' . \bin2hex(\random_bytes(4)), null);
+
+        self::assertSame(
+            ['kind' => 'bg_spawn_failed'],
+            $fixture->client()->request('bg.spawn', ['task' => 'this daemon never starts'])['error']['data'] ?? [],
+        );
+    }
+
+    /**
+     * A server whose `bg.spawn` cannot get as far as a daemon: the supervisor's
+     * temp root sits UNDER a regular file, so its private IPC directory can
+     * never be created — `mkdir(…, true)` refuses a non-directory ancestor —
+     * and the spawn throws long before a process exists. The blocking file has
+     * to outlive the call: an absent path is simply created on the way in.
+     */
+    private function fixtureOverASpawnThatCannotStart(string $leafName, ?\Closure $log): ProtocolFixture
+    {
+        $dir = \sys_get_temp_dir() . '/bgspawn-cause-' . \bin2hex(\random_bytes(4));
+        \mkdir($dir, 0o700);
+        $this->scratchDirs[] = $dir;
+        \file_put_contents($dir . '/' . $leafName, '');
+
+        return $this->servers[] = ProtocolFixture::new(
+            supervisor: new BackgroundSupervisor(tempRoot: $dir . '/' . $leafName . '/ipc'),
+            log: $log,
+        );
     }
 
     /** A handler whose onMessage always throws $boom. */
