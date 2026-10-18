@@ -94,7 +94,8 @@ final class BackgroundPermissionRelayTest extends TestCase
             explode("\n", (string) file_get_contents($this->askPath)),
             static fn (string $line): bool => trim($line) !== '',
         ));
-        self::assertCount(1, $lines, 'one line per ask');
+        // The expired window appends its settle line (F4) beside the ask.
+        self::assertCount(2, $lines, 'one ask, and its timeout closing it');
         $row = json_decode($lines[0], true);
         self::assertIsArray($row);
         self::assertSame('Bash', $row['tool']);
@@ -104,7 +105,125 @@ final class BackgroundPermissionRelayTest extends TestCase
         self::assertSame(['once', 'reject'], $row['options']);
         self::assertSame('call-1', $row['toolCallId']);
         self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $row['askId']);
+        // F2: the asking carries the token its answer must echo. 32 hex —
+        // a shape the 16-hex id can never collide with.
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $row['askToken']);
         self::assertArrayHasKey('requestedAt', $row);
+    }
+
+    public function testAStaleTokenlessRowForTheFreshAskIdDoesNotSettleIt(): void
+    {
+        // F2 (ISS-004 rv5): the askId is a content hash, and answer files
+        // are append-only — a replayed identical call WOULD settle off its
+        // own stale answer if the id were the whole match. The token is the
+        // other half: this pre-row names the exact askId with the exact
+        // grant word and no token, and the fresh asking ignores it.
+        $askId = \SugarCraft\Code\Backend\PendingAsk::askId('call-1', 'Edit', ['path' => 'a.txt']);
+        $this->answer($askId, 'once');
+        $legacyCalls = 0;
+        $relay = $this->relay(PermissionMode::Auto, timeout: 0.005, legacy: $this->counting($legacyCalls, grant: false));
+
+        self::assertFalse($relay->approver()($this->call(), HookResult::ask('Edit a file?')));
+        self::assertSame(1, $legacyCalls, 'the stale row must not stand in for an answer to THIS asking');
+    }
+
+    public function testAForgeAtAnUnmintedPathIsIgnoredWhileTheMintedPathIsHonoured(): void
+    {
+        // F1 (ISS-004 rv5, MAJOR): the server mints `<stem>.answer-<nonce>`
+        // and the daemon polls ONLY the path it was handed. A granted-shell
+        // sleeper on the daemon's side that pre-plants the OLD fixed name —
+        // token-perfect, id-perfect, in the same 0700 directory — writes to
+        // a file this relay never opens.
+        $minted = BackgroundPermissionRelay::mintAnswerPath($this->dir . '/sess_x.buffer');
+        self::assertIsString($minted);
+        $forgery = $this->answerOnceAt($this->answerPath);
+        $legacyCalls = 0;
+        $relay = $this->relay(PermissionMode::Auto, answerPath: $minted, timeout: 0.005, legacy: $this->counting($legacyCalls), sleeper: $forgery);
+
+        self::assertFalse($relay->approver()($this->call(), HookResult::ask('Edit a file?')));
+        self::assertSame(1, $legacyCalls, 'the unminted path is a file the answer never lands in');
+
+        // The flip side, same forged bytes at the minted name: the channel
+        // works and the pin is not vacuous. The ask file starts fresh — the
+        // first phase's stale line would otherwise re-ask nothing.
+        @unlink($this->askPath);
+        $mintedCalls = 0;
+        $working = $this->relay(PermissionMode::Auto, answerPath: $minted, timeout: 5.0, legacy: $this->counting($mintedCalls), sleeper: $this->answerOnceAt($minted));
+
+        self::assertTrue($working->approver()($this->call(), HookResult::ask('Edit a file?')));
+        self::assertSame(0, $mintedCalls);
+        @unlink($minted);
+    }
+
+    /** Answers the first ask at $path — the writer a hostile daemon-side process would be. */
+    private function answerOnceAt(string $path, string $reply = 'once'): Closure
+    {
+        $answered = false;
+
+        return function () use (&$answered, $path, $reply): void {
+            if ($answered) {
+                return;
+            }
+            $row = $this->firstAskRow();
+            if ($row === null) {
+                return;
+            }
+            $answered = true;
+            $this->answer((string) $row['askId'], $reply, (string) ($row['askToken'] ?? ''), $path);
+        };
+    }
+
+    public function testTheRelayNeverCreatesItsAnswerFile(): void
+    {
+        // F1: the old writeAsk pre-created the derived `.answer` through the
+        // narrowed write, which is the door a daemon-side pre-plant walked
+        // through. After the mint the daemon creates nothing on the answer
+        // side of the channel, and an unanswered ask leaves no answer file
+        // behind at all.
+        $ignored = 0;
+        $relay = $this->relay(PermissionMode::Auto, timeout: 0.005, legacy: $this->counting($ignored));
+
+        self::assertFalse($relay->approver()($this->call(), HookResult::ask('Edit a file?')));
+        self::assertFalse(file_exists($this->answerPath));
+    }
+
+    public function testATimedOutAskLeavesASettleLineOnTheAskFile(): void
+    {
+        // F4: expiry is a fact the SERVER can read, not only one it must
+        // have witnessed. The settle line closes the question in its own
+        // record, so permission.pending stops lying about it.
+        $ignored = 0;
+        $relay = $this->relay(PermissionMode::Auto, timeout: 0.005, legacy: $this->counting($ignored));
+
+        self::assertFalse($relay->approver()($this->call(), HookResult::ask('Edit a file?')));
+        $rows = array_values(array_filter(array_map(
+            static fn (string $line): mixed => trim($line) === '' ? null : json_decode($line, true),
+            explode("\n", (string) file_get_contents($this->askPath)),
+        ), static fn (mixed $row): bool => is_array($row)));
+        self::assertCount(2, $rows, 'the ask, then its closure');
+        self::assertSame('timeout', $rows[1]['settled'] ?? null);
+        $askId = \SugarCraft\Code\Backend\PendingAsk::askId('call-1', 'Edit', ['path' => 'a.txt']);
+        self::assertSame($askId, $rows[1]['askId'] ?? null);
+    }
+
+    public function testTheMintDoorShapesAndRefuses(): void
+    {
+        // F1's door, pinned directly: a mint belongs to its own buffer, in
+        // its own directory, with exactly its own nonce shape — everything
+        // else, including the pre-mint derived name, is refused.
+        $buffer = $this->dir . '/sess_x.buffer';
+        $mint = BackgroundPermissionRelay::mintAnswerPath($buffer);
+        self::assertIsString($mint);
+        self::assertTrue(BackgroundPermissionRelay::isMintedAnswerPath($buffer, $mint));
+        self::assertFalse(BackgroundPermissionRelay::isMintedAnswerPath($buffer, $this->dir . '/sess_x.answer'), 'the unminted legacy name is not a mint');
+        self::assertFalse(BackgroundPermissionRelay::isMintedAnswerPath($buffer, $this->dir . '/sess_y' . substr($mint, strlen($this->dir . '/sess_x.answer-'))), "another stem's nonce is not this buffer's door");
+        self::assertFalse(BackgroundPermissionRelay::isMintedAnswerPath($buffer, $mint . '0'), 'a 33-hex tail is not a mint');
+        self::assertFalse(BackgroundPermissionRelay::isMintedAnswerPath($buffer, substr($mint, 0, -1)), 'a 31-hex tail is not a mint');
+        self::assertFalse(BackgroundPermissionRelay::isMintedAnswerPath($buffer, $this->dir . '/deep/sess_x.answer-0123456789abcdef0123456789abcdef'), 'a foreign directory is not this buffer\'s channel');
+        self::assertFalse(BackgroundPermissionRelay::isMintedAnswerPath($this->dir . '/sess_x.sock', $mint));
+        self::assertNull(BackgroundPermissionRelay::mintAnswerPath($this->dir . '/sess_x.sock'));
+        // Two mints for one buffer differ — the nonce is drawn, not derived.
+        self::assertNotSame($mint, BackgroundPermissionRelay::mintAnswerPath($buffer));
     }
 
     public function testAnAnswerOfOnceGrantsWithoutReachingTheLegacyApprover(): void
@@ -228,7 +347,7 @@ final class BackgroundPermissionRelayTest extends TestCase
         };
     }
 
-    /** Answers the first ask seen on the channel exactly once, with $reply. */
+    /** Answers the first ask seen on the channel exactly once, with $reply, echoing its token (F2). */
     private function answerOnce(string $reply = 'once'): Closure
     {
         $answered = false;
@@ -237,12 +356,12 @@ final class BackgroundPermissionRelayTest extends TestCase
             if ($answered) {
                 return;
             }
-            $askId = $this->firstAskId();
-            if ($askId === null) {
+            $row = $this->firstAskRow();
+            if ($row === null) {
                 return;
             }
             $answered = true;
-            $this->answer($askId, $reply);
+            $this->answer((string) $row['askId'], $reply, (string) ($row['askToken'] ?? ''));
         };
     }
 
@@ -251,7 +370,8 @@ final class BackgroundPermissionRelayTest extends TestCase
         return new ToolCall('call-1', $name, $arguments);
     }
 
-    private function firstAskId(): ?string
+    /** @return array<string, mixed>|null */
+    private function firstAskRow(): ?array
     {
         if (!file_exists($this->askPath)) {
             return null;
@@ -259,17 +379,24 @@ final class BackgroundPermissionRelayTest extends TestCase
         foreach (explode("\n", (string) file_get_contents($this->askPath)) as $line) {
             $row = json_decode(trim($line), true);
             if (is_array($row) && isset($row['askId'])) {
-                return (string) $row['askId'];
+                return $row;
             }
         }
 
         return null;
     }
 
-    private function answer(string $askId, string $reply): void
+    /** @param resource|null $at answer file to append to; defaults to this fixture's channel */
+    private function answer(string $askId, string $reply, string $askToken = '', ?string $at = null): void
     {
-        file_put_contents($this->answerPath, json_encode(
-            ['askId' => $askId, 'reply' => $reply, 'note' => '', 'answeredAt' => date('c')],
+        file_put_contents($at ?? $this->answerPath, json_encode(
+            [
+                'askId' => $askId,
+                'reply' => $reply,
+                ...($askToken === '' ? [] : ['askToken' => $askToken]),
+                'note' => '',
+                'answeredAt' => date('c'),
+            ],
             JSON_UNESCAPED_SLASHES,
         ) . "\n", FILE_APPEND);
     }

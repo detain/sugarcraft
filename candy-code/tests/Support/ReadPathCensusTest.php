@@ -708,14 +708,19 @@ final class ReadPathCensusTest extends TestCase
                 . 'record a supervisor of this uid wrote into the 0700 index directory indexDir() '
                 . 'verified; only its name, agent tag and task are used, and only when it names '
                 . 'this process as owner',
-            'SELF_LOCATED — permissionAsks() (ISS-004) reads one session\'s `.ask` relay file '
+            'SELF_LOCATED — askRows() (ISS-004, F2/F4) reads one session\'s `.ask` relay file '
                 . 'inside the 0700 IPC directory this supervisor minted or vetted; a torn or '
                 . 'hostile line fails its shape check and is skipped, never trusted',
+            'SELF_LOCATED — permissionAnswers() (ISS-004, F3) reads the session\'s answer file — '
+                . 'the server-minted nonce name from the vetted record, or the derived legacy '
+                . 'pair — inside the same 0700 IPC directory; only rows whose askId is the '
+                . 'content-hash shape and whose reply is a known word are read at all',
         ],
         'Sessions/BackgroundPermissionRelay.php|file_get_contents' => [
-            'SELF_LOCATED — the `.answer` relay file beside the `.buffer` this daemon owns, in '
-                . 'the supervisor-minted 0700 IPC directory; only lines whose askId matches this '
-                . 'question and whose reply is a valid word are read (ISS-004)',
+            'SELF_LOCATED — the SERVER-MINTED answer file this relay was handed at spawn (F1): '
+                . 'a path this daemon could not derive, inside the supervisor-minted 0700 IPC '
+                . 'directory; only lines whose askId AND askToken both match the question being '
+                . 'awaited and whose reply is a valid word settle it (ISS-004, F2)',
         ],
         'Sessions/BackgroundSupervisor.php|glob' => [
             'NAMES_ONLY — the startup sweep (audit BG-2) lists `candy_code_bg_<uid>_*` names in the '

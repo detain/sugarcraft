@@ -237,6 +237,17 @@ final class BackgroundSessionRunner
          * `server.askTimeoutSeconds`.
          */
         public readonly float $permissionAskTimeout = -1.0,
+        /**
+         * The server-minted answer path this spawn was handed (F1, ISS-004
+         * residual). It is a location, not a secret — but it is still only
+         * trusted through the mint door: {@see withPermissionRelay()} opens
+         * the file it names only when the name matches THIS session's own
+         * buffer stem with a hex nonce, and a malformed or foreign value
+         * falls back to the pre-F1 derived channel, the same shape a daemon
+         * born before the mint polls. Empty for every host-side spawn, which
+         * carries no window and so arms no relay.
+         */
+        public readonly string $permissionAnswerPath = '',
     ) {}
 
     /**
@@ -269,6 +280,11 @@ final class BackgroundSessionRunner
             permissionAskTimeout: \is_numeric($config['permissionAskTimeout'] ?? null)
                 ? (float) $config['permissionAskTimeout']
                 : -1.0,
+            // String-shaped or absent, like permissionMode above: the mint
+            // door in withPermissionRelay() is the real gate, so a non-
+            // string here simply means "no mint", which is the legacy
+            // derived channel this class shipped with.
+            permissionAnswerPath: \is_string($config['permissionAnswerPath'] ?? null) ? $config['permissionAnswerPath'] : '',
         );
     }
 
@@ -1068,12 +1084,21 @@ final class BackgroundSessionRunner
             return $backend;
         }
         $mode = $backend->permissionGate()?->mode() ?? \SugarCraft\Code\Permissions\PermissionMode::Default;
+        // F1: the spawn-minted path wins when it passes the mint door for
+        // THIS buffer; a config that names anything else — the derived path
+        // glued by a hand-crafted argv, a sibling session's nonce — falls to
+        // the derived channel, so the fallback degrades to pre-F1 behaviour
+        // rather than to answering someone else's file.
+        $answerPath = $this->permissionAnswerPath !== ''
+            && BackgroundPermissionRelay::isMintedAnswerPath($this->bufferPath, $this->permissionAnswerPath)
+            ? $this->permissionAnswerPath
+            : $channel['answerPath'];
 
         return $backend->withPermissionApprover(
             (new BackgroundPermissionRelay(
                 mode: $mode,
                 askPath: $channel['askPath'],
-                answerPath: $channel['answerPath'],
+                answerPath: $answerPath,
                 timeoutSeconds: $this->permissionAskTimeout,
             ))->approver(),
         );

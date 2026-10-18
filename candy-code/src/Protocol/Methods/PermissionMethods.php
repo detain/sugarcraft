@@ -141,8 +141,14 @@ final class PermissionMethods
      * The narrow edges, stated rather than papered over: `cascade` is refused
      * (a daemon holds one question at a time and the server keeps no roster
      * of its siblings' opens to reject alongside), and `always` is accepted
-     * but lands once-strength — the daemon's approver is a bool, and the
-     * relayed event already names its options as `["once","reject"]`.
+     * and lands once-strength — the daemon's approver is a bool, and the
+     * relayed event already names its options as `["once","reject"]`. The
+     * echo tells the truth about that (F5): the row written, the settled
+     * event and this result all carry `once` for a relayed `always`, because
+     * `once` is the strength that was applied. That includes the shape where
+     * `remember: "session"` coerced the client's `once` up to `always`
+     * before routing — coercion is meaningless on a one-question record, so
+     * the answer comes back at the strength the daemon granted.
      *
      * @return array<string, mixed>
      */

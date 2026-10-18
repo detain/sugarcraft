@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
 use SugarCraft\Code\Sessions\BackgroundSession;
 use SugarCraft\Code\Sessions\BackgroundSessionRunner;
 use SugarCraft\Code\Sessions\BackgroundSessionStatus;
@@ -402,6 +403,85 @@ final class BackgroundSupervisorTest extends TestCase
                 // test suite was leaking one candy_code_bg_* dir per run.
                 @unlink($ipc['tokenPath'] ?? '');
                 @rmdir(dirname($ipc['bufferPath']));
+            }
+        }
+    }
+
+    public function testASpawnWithAPermissionWindowMintsItsAnswerFileBeforeTheDaemonStarts(): void
+    {
+        // F1 (ISS-004): the answer path is the servers, minted at spawn with
+        // a nonce the daemon can only learn from this spawns config, and the
+        // file is pre-created empty by the server itself. A granted-shell
+        // sleeper inside the daemon cannot plant its answer somewhere else
+        // and call it a channel — so the live spawn must prove the minted
+        // file is really there, empty, before any daemon byte is written.
+        foreach (['proc_open', 'pcntl_fork', 'posix_setsid', 'stream_socket_server'] as $fn) {
+            if (!function_exists($fn)) {
+                $this->markTestSkipped("{$fn}() unavailable");
+            }
+        }
+
+        $previousCmd = getenv('CANDY_CODE_BACKEND_CMD');
+        $previousProvider = getenv('CANDY_CODE_PROVIDER');
+        putenv('CANDY_CODE_PROVIDER=');
+        putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; printf BGMINT77');
+
+        $supervisor = new BackgroundSupervisor();
+
+        try {
+            $session = $supervisor->spawnSession(
+                name: 'minted ask',
+                agent: $this->makeAgent(),
+                task: 'prove the mint',
+                workingDirectory: sys_get_temp_dir(),
+                timeoutSeconds: 30,
+                permissionAskTimeout: 5.0,
+            );
+
+            $ipc = (new \ReflectionProperty(BackgroundSupervisor::class, 'sessionIpc'))
+                ->getValue($supervisor)[$session->id];
+            $minted = $ipc['answerPath'] ?? null;
+
+            $this->assertIsString($minted, 'a relay-armed spawn records its minted answer path');
+            $this->assertTrue(
+                BackgroundPermissionRelay::isMintedAnswerPath($ipc['bufferPath'], (string) $minted),
+                'the recorded path must pass its own mint door',
+            );
+            $this->assertFileExists($minted, 'the server pre-creates the answer file empty');
+            $this->assertSame('', (string) file_get_contents($minted));
+            $this->assertSame(
+                $minted,
+                $supervisor->permissionAskChannel($session->id)['answerPath'] ?? null,
+                'the channel the server answers into is the minted path, not the derived one',
+            );
+            $this->assertFileDoesNotExist(
+                dirname($ipc['bufferPath']) . '/' . $session->id . '.answer',
+                'the pre-F1 fixed name is not touched at all',
+            );
+
+            // Let the daemon finish so the fixture leaves no live child, then
+            // sweep every file the spawn created (ask/mint included).
+            $deadline = microtime(true) + 20.0;
+            while (microtime(true) < $deadline && posix_kill($ipc['pid'], 0)) {
+                usleep(100_000);
+            }
+            $buffer = (string) @file_get_contents($ipc['bufferPath']);
+            $this->assertStringContainsString('BGMINT77', $buffer, 'the minted spawn still ran its task');
+        } finally {
+            putenv($previousCmd === false ? 'CANDY_CODE_BACKEND_CMD' : 'CANDY_CODE_BACKEND_CMD=' . $previousCmd);
+            putenv($previousProvider === false ? 'CANDY_CODE_PROVIDER' : 'CANDY_CODE_PROVIDER=' . $previousProvider);
+            if (isset($ipc)) {
+                $dir = dirname($ipc['bufferPath']);
+                @unlink($ipc['socketPath']);
+                @unlink($ipc['bufferPath']);
+                @unlink($ipc['bufferPath'] . '.log');
+                @unlink($ipc['tokenPath'] ?? '');
+                foreach ([$dir . '/' . ($session->id ?? '') . '.ask', (string) ($ipc['answerPath'] ?? '')] as $channelFile) {
+                    if ($channelFile !== '') {
+                        @unlink($channelFile);
+                    }
+                }
+                @rmdir($dir);
             }
         }
     }

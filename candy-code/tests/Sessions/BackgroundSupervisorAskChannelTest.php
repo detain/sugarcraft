@@ -128,12 +128,132 @@ final class BackgroundSupervisorAskChannelTest extends TestCase
             new \SugarCraft\Code\Hooks\HookResult(\SugarCraft\Code\Hooks\HookResult::ASK, 'Edit a file?'),
         ), 'nobody answers within the budget');
 
-        $asks = $this->adopted->permissionAsks('sess_20261017000000_eeeeeeee');
-        self::assertCount(1, $asks);
-        self::assertSame('Edit', $asks[0]['tool']);
+        // F4: the budget expired, so the daemon closed the question with a
+        // settle line of its own — the supervisor's OPEN read no longer
+        // lists it, and the closure read does. The round trip below then
+        // proves the channel still answers while a question is live: the
+        // supervisor's write echoes the token the relay's reader requires.
+        self::assertSame([], $this->adopted->permissionAsks('sess_20261017000000_eeeeeeee'), 'a timed-out question is not an open question');
+        $settled = $this->adopted->permissionSettledAskIds('sess_20261017000000_eeeeeeee');
+        self::assertCount(1, $settled);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $settled[0]);
+        $askId = $settled[0];
 
-        self::assertTrue($this->adopted->answerPermissionAsk('sess_20261017000000_eeeeeeee', (string) $asks[0]['askId'], 'reject'));
-        self::assertSame('reject', $this->lastReplyTheRelayWouldSee($channel['answerPath'], (string) $asks[0]['askId']));
+        self::assertTrue($this->adopted->answerPermissionAsk('sess_20261017000000_eeeeeeee', $askId, 'reject'));
+        self::assertSame('reject', $this->lastReplyTheRelayWouldSee($channel['answerPath'], $askId));
+    }
+
+    public function testTheSupervisorAnswersWhatTheRelayIsPolling(): void
+    {
+        // The open-question round trip, both directions through the files:
+        // the relay writes its ask, a sleeper shaped like the server answers
+        // THROUGH THE SUPERVISOR, and the relay's token law accepts that
+        // row — which only happens if the supervisor's echo matches the
+        // daemon's asking (F2).
+        $files = $this->adopt('sess_20261017000000_ffffffff');
+        $channel = $this->adopted->permissionAskChannel('sess_20261017000000_ffffffff');
+        self::assertNotNull($channel);
+        $answered = false;
+        $relay = new BackgroundPermissionRelay(
+            mode: \SugarCraft\Code\Permissions\PermissionMode::Auto,
+            askPath: $channel['askPath'],
+            answerPath: $channel['answerPath'],
+            timeoutSeconds: 5.0,
+            legacyApprover: static fn (): bool => false,
+            sleeper: function () use (&$answered, $files): void {
+                if ($answered || !file_exists($files['dir'] . '/sess_20261017000000_ffffffff.ask')) {
+                    return;
+                }
+                foreach (explode("\n", (string) file_get_contents($files['dir'] . '/sess_20261017000000_ffffffff.ask')) as $line) {
+                    $row = json_decode(trim($line), true);
+                    if (is_array($row) && isset($row['askId'])) {
+                        $answered = true;
+                        self::assertTrue($this->adopted->answerPermissionAsk('sess_20261017000000_ffffffff', (string) $row['askId'], 'once'));
+
+                        return;
+                    }
+                }
+            },
+        );
+
+        self::assertTrue($relay->approver()(
+            new \SugarCraft\Code\Tools\ToolCall('call-1', 'Edit', ['path' => 'a.txt']),
+            new \SugarCraft\Code\Hooks\HookResult(\SugarCraft\Code\Hooks\HookResult::ASK, 'Edit a file?'),
+        ), 'the answered question grants');
+        $rows = $this->adopted->permissionAnswers('sess_20261017000000_ffffffff');
+        self::assertCount(1, $rows);
+        self::assertSame('once', $rows[0]['reply']);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', (string) $rows[0]['askToken'], 'the row echoes the asking token it matched (F2)');
+    }
+
+    public function testAMintedAnswerPathRidesTheRecordIntoTheChannel(): void
+    {
+        // F1 adoption: a restarted server reads the minted name off the
+        // index record and answers THERE — the derived legacy name stays
+        // empty, because a file nobody mints is a file nobody reads.
+        $id = 'sess_20261017000000_abababab';
+        $files = $this->plantRecord($id, (int) getmypid(), $this->deadOwner());
+        $minted = BackgroundPermissionRelay::mintAnswerPath($files['buffer']);
+        self::assertIsString($minted);
+        $this->addAnswerPathToRecord($files['record'], $minted);
+
+        $this->adopted = new BackgroundSupervisor(tempRoot: $this->root);
+        self::assertCount(1, $this->adopted->reconnect($this->project));
+        $channel = $this->adopted->permissionAskChannel($id);
+        self::assertSame($channel['askPath'], $files['dir'] . '/' . $id . '.ask');
+        self::assertSame($minted, $channel['answerPath']);
+
+        self::assertTrue($this->adopted->answerPermissionAsk($id, '1111111111111111', 'once'));
+        self::assertFileDoesNotExist($files['dir'] . '/' . $id . '.answer', 'the unminted name is not the answer file');
+        $rows = $this->adopted->permissionAnswers($id);
+        self::assertCount(1, $rows);
+        self::assertSame('1111111111111111', $rows[0]['askId']);
+    }
+
+    public function testARecordClaimingAnUnmintedAnswerPathIsRefused(): void
+    {
+        // F1's fail-closed door: an answerPath that is not THIS session's
+        // mint is not a legacy record — it is a claim to answer somewhere
+        // the mint never named, and the whole record is refused exactly as
+        // a misnamed socket path has always been refused.
+        $id = 'sess_20261017000000_cdcdcdcd';
+        foreach (['derived', 'foreign', 'traversal'] as $n => $shape) {
+            $files = $this->plantRecord($id, (int) getmypid(), $this->deadOwner());
+            $bad = match ($n) {
+                default => $files['dir'] . '/' . $id . '.answer',
+                1 => $this->root . '/elsewhere/' . $id . '.answer-0123456789abcdef0123456789abcdef',
+                2 => $files['dir'] . '/../' . $id . '.answer-0123456789abcdef0123456789abcdef',
+            };
+            $this->addAnswerPathToRecord($files['record'], $bad);
+            $supervisor = new BackgroundSupervisor(tempRoot: $this->root);
+
+            self::assertSame([], $supervisor->reconnect($this->project), "the {$shape} answerPath must refuse the record");
+        }
+    }
+
+    public function testPermissionAnswerRowsDedupByAskingAndRefuseJunk(): void
+    {
+        // F3's record read: the newest row per (askId, askToken) is the
+        // state; foreign ids, unknown words and malformed lines are not
+        // rows at all.
+        $files = $this->adopt('sess_20261017000000_9999aaaa');
+        $answer = $files['dir'] . '/sess_20261017000000_9999aaaa.answer';
+        file_put_contents($answer, implode("\n", [
+            (string) json_encode(['askId' => '1111111111111111', 'reply' => 'reject', 'askToken' => 't1']),
+            (string) json_encode(['askId' => '1111111111111111', 'reply' => 'once', 'askToken' => 't1']),
+            (string) json_encode(['askId' => '1111111111111111', 'reply' => 'once', 'askToken' => 't2']),
+            (string) json_encode(['askId' => 'not-an-id', 'reply' => 'once', 'askToken' => 't3']),
+            (string) json_encode(['askId' => '2222222222222222', 'reply' => 'approved', 'askToken' => 't4']),
+            '{junk',
+            '',
+        ]));
+
+        $rows = $this->adopted->permissionAnswers('sess_20261017000000_9999aaaa');
+        self::assertSame([['1111111111111111', 't1'], ['1111111111111111', 't2']], array_map(
+            static fn (array $row): array => [$row['askId'], $row['askToken']],
+            $rows,
+        ), 'newest per asking, one entry per asking, junk unread');
+        self::assertSame('once', $rows[0]['reply']);
     }
 
     // ── fixtures ───────────────────────────────────────────────────────
@@ -197,6 +317,16 @@ final class BackgroundSupervisorAskChannelTest extends TestCase
         \chmod($record, 0o600);
 
         return ['record' => $record] + $files + ['dir' => $dir];
+    }
+
+    /** Re-plant a record with the F1 answerPath key added, as a post-mint spawn would write it. */
+    private function addAnswerPathToRecord(string $recordPath, string $answerPath): void
+    {
+        $record = json_decode((string) file_get_contents($recordPath), true);
+        self::assertIsArray($record);
+        $record['answerPath'] = $answerPath;
+        file_put_contents($recordPath, (string) json_encode($record));
+        chmod($recordPath, 0o600);
     }
 
     /** @return array{pid: int, startTime: ?int} */

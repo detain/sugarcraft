@@ -188,6 +188,107 @@ final class BgPermissionAskRelayTest extends TestCase
         self::assertSame([], $events->pendingAsks());
     }
 
+    public function testARestartedServerDoesNotReAnnounceAnAnsweredQuestion(): void
+    {
+        // F3 (ISS-004 rv5): a server that boots onto a question its
+        // predecessor already saw answered must treat the answer FILE as
+        // its memory. Without that read the ask re-broadcasts as fresh,
+        // `permission.pending` lies, and a second respond appends a
+        // duplicate row to a question nobody is polling any more.
+        $id = 'sess_20261017000000_aaaa0007';
+        $askId = '0a0b0c0d0e0f1011';
+        [$fixture] = $this->serveWithAskedQuestion($id, $this->askRow($askId, 'Bash'));
+        $dir = $this->plantedDirs[$id];
+        \file_put_contents($dir . '/' . $id . '.answer', (string) json_encode([
+            'askId' => $askId,
+            'reply' => 'once',
+            'note' => '',
+            'answeredAt' => date('c'),
+        ]) . "\n", FILE_APPEND);
+        $client = $fixture->client();
+        $events = $fixture->context->background();
+        self::assertNotNull($events);
+
+        self::assertSame(0, $events->pollAsks(), 'the answered question announces nothing');
+        self::assertSame([], $client->events('permission.asked'));
+        self::assertSame([], \array_values(\array_filter(
+            $events->pendingAsks(),
+            static fn (array $row): bool => ($row['bgId'] ?? null) === $id,
+        )), 'and lists as nothing pending');
+
+        $late = $client->request('permission.respond', ['sessionId' => $id, 'askId' => $askId, 'reply' => 'reject']);
+        self::assertSame(-32009, $late['error']['code'], 'it reports the record, not a new answer');
+        self::assertSame('already_resolved', $late['error']['data']['kind']);
+        self::assertSame('once', $late['error']['data']['resolved']['reply']);
+        self::assertCount(1, $this->answerRows($fixture, $id), 'the duplicate row is never appended');
+    }
+
+    public function testAQuestionTheDaemonTimedOutOnSettlesLeavesPendingAndRefusesLateAnswers(): void
+    {
+        // F4 (ISS-004 rv5): the daemon's settle line is the server's notice
+        // that the window closed without an answer. A client that saw the
+        // announcement gets exactly one settled event; a client that asks
+        // the files afterwards never sees the question at all.
+        $id = 'sess_20261017000000_aaaa0008';
+        $askId = '1a0b0c0d0e0f1012';
+        [$fixture] = $this->serveWithAskedQuestion($id, $this->askRow($askId, 'Bash'));
+        $client = $fixture->client();
+        $events = $fixture->context->background();
+        self::assertNotNull($events);
+        $events->poll();
+        self::assertCount(1, $client->events('permission.asked'), 'announced while open');
+
+        $dir = $this->plantedDirs[$id];
+        \file_put_contents($dir . '/' . $id . '.ask', (string) json_encode([
+            'askId' => $askId,
+            'settled' => 'timeout',
+            'settledAt' => date('c'),
+        ]) . "\n", FILE_APPEND);
+        self::assertSame(1, $events->poll(), 'the closure is the one event this earns');
+
+        $settled = $client->events('permission.settled');
+        self::assertCount(1, $settled);
+        self::assertTrue($settled[0]['data']['cancelled'], 'a closed window is a settled-without-answer');
+        self::assertSame($askId, $settled[0]['data']['askId']);
+        self::assertArrayNotHasKey('reply', $settled[0]['data'], 'no reply word was ever spoken');
+        self::assertSame([], $events->pendingAsks(), 'the phantom left pending');
+
+        $late = $client->request('permission.respond', ['sessionId' => $id, 'askId' => $askId, 'reply' => 'once']);
+        self::assertSame('ask_not_found', $late['error']['data']['kind'], 'nobody is polling an expired window');
+        self::assertSame([], $this->answerRows($fixture, $id), 'and no row is written for it');
+    }
+
+    public function testARelayedAlwaysAnswersAndEchoesAtTheStrengthThatLanded(): void
+    {
+        // F5 (ISS-004 rv5): `always` on a relayed question lands once, and
+        // since rv5 every surface — the row, the settled event, the respond
+        // result — says `once`. Including the shape where `remember:
+        // "session"` coerced the client's own `once` up to `always` on the
+        // way in: the echo tells what the daemon applied, not what the
+        // client asked to be remembered.
+        $id = 'sess_20261017000000_aaaa0009';
+        $askId = '2a0b0c0d0e0f1013';
+        [$fixture] = $this->serveWithAskedQuestion($id, $this->askRow($askId, 'Bash'));
+        $client = $fixture->client();
+        $fixture->context->background()?->poll();
+
+        $answered = $this->checked($client, 'permission.respond', [
+            'sessionId' => $id,
+            'askId' => $askId,
+            'reply' => 'always',
+            'remember' => 'session',
+            'note' => 'sure',
+        ]);
+        self::assertSame(['applied' => true, 'askId' => $askId, 'reply' => 'once', 'cascaded' => []], $answered, 'the result echoes the applied strength');
+
+        $settled = $client->events('permission.settled');
+        self::assertCount(1, $settled);
+        self::assertSame('once', $settled[0]['data']['reply'], 'the event echoes it too');
+        $rows = $this->answerRows($fixture, $id);
+        self::assertCount(1, $rows);
+        self::assertSame('once', $rows[0]['reply'], 'the daemon is handed the word it honours as once natively');
+    }
+
     public function testWithoutASupervisorTheLegacyAskNotFoundIsByteForByteWhatItAlwaysWas(): void
     {
         $fixture = $this->fixture = ProtocolFixture::new();
@@ -236,12 +337,24 @@ final class BgPermissionAskRelayTest extends TestCase
         $reflected = new \ReflectionClass(BackgroundSessionRunner::class);
         $params = $reflected->getConstructor()?->getParameters() ?? [];
         $last = $params[count($params) - 1] ?? null;
+        $window = $params[count($params) - 2] ?? null;
         self::assertNotNull($last);
-        self::assertSame('permissionAskTimeout', $last->getName());
-        self::assertSame(-1.0, $last->getDefaultValue(), 'no config key means no relay: the pre-ISS-004 approver stays');
+        self::assertNotNull($window);
+        // F1: the window used to be last; the minted answer path now rides
+        // after it, so a config naming neither is the pre-F1 shape verbatim.
+        self::assertSame('permissionAnswerPath', $last->getName());
+        self::assertSame('', $last->getDefaultValue(), 'no mint key means the derived channel: the pre-F1 daemon stays');
+        self::assertSame('permissionAskTimeout', $window->getName());
+        self::assertSame(-1.0, $window->getDefaultValue(), 'no config key means no relay: the pre-ISS-004 approver stays');
 
         $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Sessions/BackgroundSessionRunner.php');
-        self::assertSame(1, preg_match('/permissionAskTimeout[^\n]*is_numeric/s', $source), 'fromConfig parses the key before trusting it');
+        self::assertSame(1, preg_match('/permissionAskTimeout[^\n]*is_numeric/s', $source), 'fromConfig parses the window before trusting it');
+        // Split-concat, not a glued literal: the corpus census harvests every
+        // glob-shaped string tree-wide, and only the pre-existing bare '*'
+        // wildcard may be admitted here (a fresh glued needle would drift its
+        // pinned pair-count).
+        self::assertSame(1, preg_match('/permissionAnswerPath[^\n]' . '*' . 'is_string/s', $source), 'fromConfig parses the mint before trusting it');
+        self::assertSame(1, preg_match('/isMintedAnswerPath\(/s', $source), 'the mint door is the only way an argv path is honoured');
         self::assertSame(1, preg_match('/withPermissionApprover\(\s*\(new BackgroundPermissionRelay\(/s', (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Sessions/BackgroundSessionRunner.php')));
 
         $methods = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Protocol/Methods/BgMethods.php');

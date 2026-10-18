@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Host;
 
 use SugarCraft\Code\Backend\ChildChannel;
 use SugarCraft\Code\Protocol\EventType;
+use SugarCraft\Code\Sessions\BackgroundPermissionRelay;
 use SugarCraft\Code\Sessions\BackgroundSession;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
 
@@ -67,11 +68,32 @@ final class BackgroundEvents
     /** @var array<string, string> relayed askId => the bgId that asked, while open (ISS-004) */
     private array $asks = [];
 
-    /** @var array<string, string> settled relayed askId => the reply word, or `cancelled` */
+    /** @var array<string, string> settled relayed askId => the reply word, `cancelled`, or `timed_out` */
     private array $answeredAsks = [];
+
+    /**
+     * @var array<string, string> relayed askId => the token of the asking the
+     * memos currently describe (F2). The askId is a content hash, so an
+     * identical replayed call re-uses it; when the file's newest line for an
+     * id carries a different token, that is a NEW question wearing a known
+     * id, and the memos are purged so it announces afresh — whose answer may
+     * then only be a row echoing the new token.
+     */
+    private array $askTokens = [];
 
     /** The `answeredAsks` marker for a question its session settled without answering. */
     private const CANCELLED_REPLY = 'cancelled';
+
+    /**
+     * The `answeredAsks` marker for a question its daemon closed by running
+     * out of its window (F4). Like `cancelled` it refuses late answers as
+     * `unknown` — the poll is over — but it is not echoed on the wire: the
+     * settled event carries the same `cancelled: true` shape the schema
+     * knows, because a window that expired is exactly "settled without an
+     * answer". The marker exists so `permission.respond` cannot mistake it
+     * for an answerable question.
+     */
+    private const TIMED_OUT_REPLY = 'timed_out';
 
     private bool $booted = false;
 
@@ -255,7 +277,17 @@ final class BackgroundEvents
      * client that looks, and a client that was watching gets both events at
      * the next poll.
      *
-     * @return int how many `permission.asked` events were emitted
+     * The answer file is consulted BEFORE a question is announced (F3): a
+     * server that restarts finds its memos empty, and without that read it
+     * would re-broadcast a question a human already answered — whose answer
+     * a client could then post again, a duplicate row on a record already
+     * settled. The row that names the asking (id AND token) settles it in
+     * the memo silently, exactly as the answer did on the server that lived
+     * through it. And the ask file is read for closures (F4): a question its
+     * daemon timed out gets its one `permission.settled` here, so no client
+     * is left holding a question nobody is polling any more.
+     *
+     * @return int how many ask events (`permission.asked` / `permission.settled`) were emitted
      */
     public function pollAsks(): int
     {
@@ -266,15 +298,59 @@ final class BackgroundEvents
             }
             foreach ($this->supervisor->permissionAsks($session->id) as $ask) {
                 $askId = (string) $ask['askId'];
+                $token = (string) ($ask['askToken'] ?? '');
+                if (($this->askTokens[$askId] ?? '') !== $token) {
+                    // F2: a re-issued asking is a new question, whatever the
+                    // memos think they already know about its id.
+                    unset($this->asks[$askId], $this->answeredAsks[$askId]);
+                    $this->askTokens[$askId] = $token;
+                }
                 if (isset($this->asks[$askId]) || isset($this->answeredAsks[$askId])) {
+                    continue;
+                }
+                $filed = $this->fileAnswer($session->id, $askId, $token);
+                if ($filed !== null) {
+                    $this->answeredAsks[$askId] = $filed;
                     continue;
                 }
                 $this->asks[$askId] = $session->id;
                 $emitted += $this->emitAsk($session->id, $ask);
             }
+            foreach ($this->supervisor->permissionSettledAskIds($session->id) as $askId) {
+                if (($this->asks[$askId] ?? null) !== $session->id || isset($this->answeredAsks[$askId])) {
+                    continue;
+                }
+                unset($this->asks[$askId]);
+                $this->answeredAsks[$askId] = self::TIMED_OUT_REPLY;
+                ($this->emit)(EventType::PERMISSION_SETTLED, [
+                    'sessionId' => $session->id,
+                    'bgId' => $session->id,
+                    'askId' => $askId,
+                    'cancelled' => true,
+                ]);
+                ++$emitted;
+            }
         }
 
         return $emitted;
+    }
+
+    /**
+     * The reply a recorded answer row gives to exactly this asking — the
+     * row's `askToken` echoing the open ask line's — or null when the file
+     * holds no answer to it. This is F3's memory and F2's stale-row door in
+     * one read; both sides of a mixed-version channel match on the same
+     * tokenless pairing the daemon itself polls on.
+     */
+    private function fileAnswer(string $sessionId, string $askId, string $askToken): ?string
+    {
+        foreach ($this->supervisor->permissionAnswers($sessionId) as $row) {
+            if (($row['askId'] ?? null) === $askId && (string) ($row['askToken'] ?? '') === $askToken) {
+                return (string) $row['reply'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -292,7 +368,16 @@ final class BackgroundEvents
                 continue;
             }
             foreach ($this->supervisor->permissionAsks($session->id) as $ask) {
-                if (isset($this->answeredAsks[$ask['askId']])) {
+                $askId = (string) $ask['askId'];
+                if (isset($this->answeredAsks[$askId])) {
+                    continue;
+                }
+                // F3: an answer on the record closes the question for this
+                // read too, before any poll has seeded the memo — a restart
+                // must not list an answered question as pending. (A settled
+                // question never reaches here: the open-row reader already
+                // dropped it on its settle line, F4.)
+                if ($this->fileAnswer($session->id, $askId, (string) ($ask['askToken'] ?? '')) !== null) {
                     continue;
                 }
                 $items[] = ['sessionId' => $session->id, 'bgId' => $session->id, ...$this->relayRow($ask)];
@@ -304,33 +389,75 @@ final class BackgroundEvents
 
     /**
      * Hand the daemon's server the human's answer to one relayed question
-     * (ISS-004). Answers the first valid one; the answer file is the record,
-     * so a second answer to the same question reports `already` with the
-     * first reply attached rather than overwriting anything.
+     * (ISS-004). Answers the first valid one for a given asking; the answer
+     * file is the record, so a second answer to the same asking reports
+     * `already` with the first reply attached rather than overwriting
+     * anything — and so does a RESTARTED server that never saw the question,
+     * reading the record instead of trusting empty memos (F3). A re-issued
+     * identical call is a NEW asking with a fresh token: its memos were
+     * purged by that token (F2), and a row answering its predecessor cannot
+     * settle it here either, because this method only ever answers what the
+     * ask file still holds open.
+     *
+     * The reply word travels as the human answered it, EXCEPT `always`: a
+     * relayed question lands once-strength in the daemon (there is no
+     * channel to grow a remembered grant inside it), and since F5 the row,
+     * the settled event and the result all echo `once` — including when the
+     * `always` arrived as the remember-coercion of a `once`. What the wire
+     * reports is what the gate applied.
      *
      * @return array{status: string, reply?: string} status is `answered`,
      *         `already` (with the winning `reply`), or `unknown`
      */
     public function answerAsk(string $bgId, string $askId, string $reply, string $note = ''): array
     {
-        $settled = $this->answeredAsks[$askId] ?? null;
-        if ($settled !== null && $settled !== self::CANCELLED_REPLY) {
-            return ['status' => 'already', 'reply' => $settled];
+        if ($reply === BackgroundPermissionRelay::REPLY_ALWAYS) {
+            $reply = BackgroundPermissionRelay::REPLY_ONCE;
         }
-        if ($settled === self::CANCELLED_REPLY) {
-            // The question died with its session; there is nothing to answer.
+        $settled = $this->answeredAsks[$askId] ?? null;
+        if ($settled === self::CANCELLED_REPLY || $settled === self::TIMED_OUT_REPLY) {
+            // Dead questions answer nothing: cancelled died with its session,
+            // timed-out with its window — nobody is polling an answer any more.
             return ['status' => 'unknown'];
         }
         $session = $this->supervisor->getSession($bgId);
-        if ($session === null || $session->isSettled() || !isset($this->asks[$askId]) || $this->asks[$askId] !== $bgId) {
-            // Not tracked from a poll yet: accept it straight off the file if
-            // an active session really did ask — a client that read
-            // `permission.pending` between two polls must be able to answer.
-            if ($session === null || $session->isSettled() || !in_array($askId, array_column($this->supervisor->permissionAsks($bgId), 'askId'), true)) {
-                return ['status' => 'unknown'];
-            }
-            $this->asks[$askId] = $bgId;
+        if ($session === null || $session->isSettled()) {
+            return ['status' => 'unknown'];
         }
+        $openToken = null;
+        foreach ($this->supervisor->permissionAsks($bgId) as $row) {
+            if (($row['askId'] ?? null) === $askId) {
+                $openToken = (string) ($row['askToken'] ?? '');
+                break;
+            }
+        }
+        if ($openToken === null) {
+            // The ask file no longer holds this question open — it was never
+            // asked, its session's channel is gone, or a settle line closed
+            // it (F4). An append now reaches no reader, whichever of the
+            // memos happens to still name it.
+            return ['status' => 'unknown'];
+        }
+        if (($this->askTokens[$askId] ?? '') !== $openToken) {
+            // F2: the memos speak for an earlier asking of this id. A fresh
+            // asking answers anew, whatever the old answer was.
+            unset($this->asks[$askId], $this->answeredAsks[$askId]);
+            $this->askTokens[$askId] = $openToken;
+            $settled = null;
+        }
+        if ($settled !== null) {
+            return ['status' => 'already', 'reply' => $settled];
+        }
+        $filed = $this->fileAnswer($bgId, $askId, $openToken);
+        if ($filed !== null) {
+            // F3: answered before this server looked — the record IS the
+            // memo, and re-answering would only append a duplicate row on a
+            // question its human has already settled.
+            $this->answeredAsks[$askId] = $filed;
+
+            return ['status' => 'already', 'reply' => $filed];
+        }
+        $this->asks[$askId] = $bgId;
         if (!$this->supervisor->answerPermissionAsk($bgId, $askId, $reply, $note)) {
             return ['status' => 'unknown'];
         }

@@ -317,41 +317,83 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
 
     /**
      * The permission-relay channel of a session (ISS-004): the `.ask` file a
-     * relayed daemon writes its questions to and the `.answer` file the
-     * server writes the human's answers back to, both derived from the
-     * session's buffer path. Null for a session this process does not hold
-     * IPC for, or one whose paths are not a session buffer's — a TUI `/bg`
-     * daemon never asked for a channel and has none.
+     * relayed daemon writes its questions to and the answer file the server
+     * writes the human's answers back to. The answer path is the SPAWN-MINTED
+     * nonce name (F1) when this process minted one or adopted a record that
+     * names one; the pre-mint derived `.answer` shape is the fallback, which
+     * is what a daemon born before the mint still polls. Null for a session
+     * this process does not hold IPC for, or one whose paths are not a
+     * session buffer's — a TUI `/bg` daemon never asked for a channel and
+     * has none.
      *
      * @return array{askPath: string, answerPath: string}|null
      */
     public function permissionAskChannel(string $sessionId): ?array
     {
         $bufferPath = $this->sessionIpc[$sessionId]['bufferPath'] ?? null;
+        $channel = is_string($bufferPath) ? BackgroundPermissionRelay::pathsFor($bufferPath) : null;
+        if ($channel !== null) {
+            $minted = $this->sessionIpc[$sessionId]['answerPath'] ?? null;
+            if (is_string($minted) && $minted !== '' && BackgroundPermissionRelay::isMintedAnswerPath($bufferPath, $minted)) {
+                $channel['answerPath'] = $minted;
+            }
+        }
 
-        return is_string($bufferPath) ? BackgroundPermissionRelay::pathsFor($bufferPath) : null;
+        return $channel;
     }
 
     /**
-     * The questions a session's daemon has relayed, oldest first, deduped by
-     * ask id with the newest line winning. Malformed lines are unread and
-     * untrusted — a torn write can only ever cost the one question it names,
-     * which the daemon's own timeout falls through to the legacy refusal.
+     * The questions a session's daemon has relayed and not settled, oldest
+     * first, deduped by ask id with the newest line winning. Malformed lines
+     * are unread and untrusted — a torn write can only ever cost the one
+     * question it names, which the daemon's own timeout falls through to the
+     * legacy refusal. A `{"askId":…,"settled":…}` line (F4) closes the
+     * question it names rather than opening one, and a later ask line for the
+     * same id — the identical replay with a fresh token — opens it again.
      *
      * @return list<array<string, mixed>>
      */
     public function permissionAsks(string $sessionId): array
     {
+        [$asks] = $this->askRows($sessionId);
+
+        return $asks;
+    }
+
+    /**
+     * The ask ids a session's daemon has settled on its own (F4: timed-out
+     * questions), in file order. A settle line is the daemon's notice that
+     * nobody answered inside its window; readers drop the question from the
+     * open set, `permission.pending` stops listing it, and the host emits
+     * its settled event.
+     *
+     * @return list<string>
+     */
+    public function permissionSettledAskIds(string $sessionId): array
+    {
+        [, $settled] = $this->askRows($sessionId);
+
+        return $settled;
+    }
+
+    /**
+     * Open ask rows and settled ids from one pass of the ask file.
+     *
+     * @return array{0: list<array<string, mixed>>, 1: list<string>}
+     */
+    private function askRows(string $sessionId): array
+    {
         $channel = $this->permissionAskChannel($sessionId);
         if ($channel === null) {
-            return [];
+            return [[], []];
         }
         $text = @file_get_contents($channel['askPath']);
         if (!is_string($text) || $text === '') {
-            return [];
+            return [[], []];
         }
 
         $asks = [];
+        $settled = [];
         foreach (explode("\n", $text) as $line) {
             $line = trim($line);
             if ($line === '') {
@@ -360,18 +402,80 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             $row = json_decode($line, true);
             if (
                 !is_array($row)
-                || !isset($row['askId'], $row['tool'])
+                || !isset($row['askId'])
                 || !is_string($row['askId'])
                 || preg_match('/\A[0-9a-f]{16}\z/', $row['askId']) !== 1
-                || !is_string($row['tool'])
-                || $row['tool'] === ''
             ) {
                 continue;
             }
+            if (isset($row['settled'])) {
+                if (!is_string($row['settled']) || $row['settled'] === '') {
+                    continue;
+                }
+                unset($asks[$row['askId']]);
+                $settled[] = $row['askId'];
+                continue;
+            }
+            if (!isset($row['tool']) || !is_string($row['tool']) || $row['tool'] === '') {
+                continue;
+            }
             $asks[$row['askId']] = $row;
+            // A re-issue after a settle clears the closure: the newest line
+            // for the id is the truth, whichever polarity it speaks.
+            $settled = array_values(array_filter($settled, static fn (string $id): bool => $id !== $row['askId']));
         }
 
-        return array_values($asks);
+        return [array_values($asks), $settled];
+    }
+
+    /**
+     * The human answers recorded for a session (ISS-004, F3): every valid
+     * row of the session's answer file, oldest first, deduped by
+     * `<askId>:<askToken>` with the newest line winning. This is the record
+     * a RESTARTED server consults before re-announcing anything — a question
+     * answered while an earlier server lived was answered for good, and the
+     * file is where that fact survived.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function permissionAnswers(string $sessionId): array
+    {
+        $channel = $this->permissionAskChannel($sessionId);
+        if ($channel === null) {
+            return [];
+        }
+        $text = @file_get_contents($channel['answerPath']);
+        if (!is_string($text) || $text === '') {
+            return [];
+        }
+
+        $replies = [];
+        foreach (explode("\n", $text) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $row = json_decode($line, true);
+            if (
+                !is_array($row)
+                || !isset($row['askId'])
+                || !is_string($row['askId'])
+                || preg_match('/\A[0-9a-f]{16}\z/', $row['askId']) !== 1
+            ) {
+                continue;
+            }
+            $reply = $row['reply'] ?? null;
+            if (!is_string($reply) || !in_array($reply, [BackgroundPermissionRelay::REPLY_ONCE, BackgroundPermissionRelay::REPLY_ALWAYS, BackgroundPermissionRelay::REPLY_REJECT], true)) {
+                continue;
+            }
+            $token = $row['askToken'] ?? '';
+            if (!is_string($token)) {
+                continue;
+            }
+            $replies[$row['askId'] . ':' . $token] = $row;
+        }
+
+        return array_values($replies);
     }
 
     /**
@@ -379,6 +483,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * polls this file inside its `server.askTimeoutSeconds` window; whoever
      * answers first is whoever's line the daemon finds, and the same answer
      * read twice changes nothing — the file is the record.
+     *
+     * The row ECHOES the asking's token (F2) when the open ask line carries
+     * one, which is the daemon's proof that this answer saw THIS asking and
+     * not an earlier identical one whose reply rides the same file. An ask
+     * line predating the token law has no token to echo and its answer row
+     * stays tokenless — exactly the pairing both sides of a mixed-version
+     * channel match on. The append is not refused when no open row names the
+     * ask id: this method answers, it does not adjudicate which questions
+     * are still live (that law lives in {@see BackgroundPermissionRelay}).
      *
      * Returns false when the session has no channel to answer into.
      */
@@ -388,9 +501,17 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         if ($channel === null || !is_dir(dirname($channel['answerPath']))) {
             return false;
         }
+        $askToken = '';
+        foreach ($this->permissionAsks($sessionId) as $row) {
+            if (($row['askId'] ?? null) === $askId && is_string($row['askToken'] ?? null)) {
+                $askToken = $row['askToken'];
+                break;
+            }
+        }
         $line = json_encode([
             'askId' => $askId,
             'reply' => $reply,
+            ...($askToken === '' ? [] : ['askToken' => $askToken]),
             // Same note ceiling an answer to an open session's question gets
             // ({@see \SugarCraft\Code\Backend\ChildChannel::clipNote()}), so
             // one answer cannot outgrow the record it rides in.
@@ -514,9 +635,27 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // argv. Created 0600 via the house umask-narrowed write so the secret
         // is owner-only from its first byte.
         $token = bin2hex(random_bytes(16));
+        // F1 (rv5, ISS-004 residual): a relay-armed spawn's ANSWER PATH IS
+        // MINTED HERE, by the server, under a 128-bit nonce the daemon can
+        // only learn from this spawn's config — never derive. The server
+        // pre-creates it empty through the same narrowed 0600 write as the
+        // token, so the daemon never creates, names, or redirects the file
+        // its answers land in: content appearing at any other path — the
+        // old fixed `<session>.answer` included — is a file the relay never
+        // opens, and an answer row is only honoured by the asking whose
+        // token it echoes (see BackgroundPermissionRelay). A non-relayed
+        // spawn (null window: every host-side `/bg` and `/fork`) mints
+        // nothing and its IPC directory holds no answer file at all.
+        $answerPath = $permissionAskTimeout === null
+            ? null
+            : BackgroundPermissionRelay::mintAnswerPath($bufferPath);
+        if ($permissionAskTimeout !== null && $answerPath === null) {
+            throw new \RuntimeException("Failed to mint a permission answer path for {$sessionId}");
+        }
         if (!ToolIpcFiles::write($tokenPath, $token)
             || !ToolIpcFiles::write($bufferPath, '')
             || !ToolIpcFiles::write($logPath, '')
+            || ($answerPath !== null && !ToolIpcFiles::write($answerPath, ''))
         ) {
             throw new \RuntimeException("Failed to create private IPC files under {$dir}");
         }
@@ -557,6 +696,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $delegation,
                 $permissionMode,
                 $permissionAskTimeout,
+                permissionAnswerPath: $answerPath,
             ),
         ];
 
@@ -567,7 +707,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         );
 
         if (!is_resource($proc)) {
-            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath);
+            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
             throw new \RuntimeException('Failed to spawn session process');
         }
 
@@ -590,7 +730,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         );
         if (!$serverSocket) {
             ProcessReaper::terminateAndClose($proc);
-            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath);
+            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
             throw new \RuntimeException("Failed to create IPC socket: {$errstr}");
         }
 
@@ -648,7 +788,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             // TUI thread that asked for a background session.
             ProcessReaper::terminateAndClose($proc);
             fclose($serverSocket);
-            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath);
+            $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
             throw new \RuntimeException('Session process failed to authenticate on the IPC channel within timeout');
         }
 
@@ -723,6 +863,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             'tokenPath' => $tokenPath,
             'pid' => $childPid,
             'startTime' => $startTime,
+            // F1: the minted answer path, remembered so both the read
+            // (permissionAsks) and the write (answerPermissionAsk) of this
+            // process use it, and so writeIndexRecord can hand it to the
+            // next server to adopt the same daemon.
+            'answerPath' => $answerPath,
         ];
 
         // Recorded so a LATER process can re-adopt this daemon (roadmap
@@ -771,6 +916,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         ?array $delegation = null,
         ?string $permissionMode = null,
         ?float $permissionAskTimeout = null,
+        ?string $permissionAnswerPath = null,
     ): string {
         $config = [
             'sessionId' => $sessionId,
@@ -804,6 +950,17 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             // the TUI `/bg`: no relay, the console approver's no-tty refusal,
             // byte-identical to before this key existed.
             $config['permissionAskTimeout'] = $permissionAskTimeout;
+        }
+        if ($permissionAskTimeout !== null && $permissionAnswerPath !== null && $permissionAnswerPath !== '') {
+            // F1: the PATH of the server-minted answer file — like the token
+            // PATH and unlike the token, this is a location, not a secret
+            // value; the bytes that make it unguessable to a foreign process
+            // are inert in argv because a reader who cannot write the 0700
+            // directory can learn nothing actionable from the name, and the
+            // daemon's own readership is the point. A config without this
+            // key keeps the pre-F1 derived channel shape, which is how a
+            // daemon born before the mint still reaches its answers.
+            $config['permissionAnswerPath'] = $permissionAnswerPath;
         }
 
         // The umask/fork/setsid/fork sequence is {@see Daemonize::code()}:
@@ -1011,7 +1168,14 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
         if ($ownPath($ipc['socketPath'])) {
             @unlink($ipc['socketPath']);
         }
-        foreach ([$ipc['bufferPath'], $ipc['bufferPath'] . '.log', $ipc['tokenPath'] ?? ''] as $path) {
+        // The relay channel rides the same graveyard: a settled session's
+        // questions and minted answer file are the last bytes its directory
+        // holds, and leaving them would block the rmdir below forever. The
+        // channel resolves to the minted name when one was minted (F1) and
+        // to the derived pair for a pre-mint adoption; either way $ownPath
+        // keeps this to files this directory actually owns.
+        $channel = $this->permissionAskChannel($id) ?? ['askPath' => '', 'answerPath' => ''];
+        foreach ([$ipc['bufferPath'], $ipc['bufferPath'] . '.log', $ipc['tokenPath'] ?? '', $channel['askPath'], $channel['answerPath']] as $path) {
             if ($ownPath($path)) {
                 // discard() also drops a `.partial` left by an interrupted write().
                 ToolIpcFiles::discard($path);
@@ -1806,6 +1970,11 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
             'socketPath' => $ipc['socketPath'],
             'bufferPath' => $ipc['bufferPath'],
             'tokenPath' => $ipc['tokenPath'] ?? '',
+            // F1: absent ('') means no relay was armed at spawn, which is
+            // also exactly how a record written before the mint looked. A
+            // later server re-adopts the minted path from here and vets it
+            // through recordIpc() before ever reading or answering off it.
+            'answerPath' => $ipc['answerPath'] ?? '',
             'pid' => $ipc['pid'],
             'startTime' => $ipc['startTime'] ?? null,
             // The HOST owns it, not whichever process ran the spawn: see
@@ -2131,6 +2300,23 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
             || (int) $name[1] !== $uid
             || !PrivateDir::isPrivate($dir, $uid)
         ) {
+            return null;
+        }
+
+        // F1: the minted answer path rides the record so a restarted server
+        // reads and answers at the path the spawn established. A record with
+        // no answerPath adopted a pre-mint daemon — the derived legacy shape
+        // is its channel. A record with a MALFORMED one is not a legacy
+        // record; it is a claim to answer somewhere the mint never named,
+        // and the whole record is refused exactly as a misnamed socket or
+        // token path has always been refused.
+        $answerPath = $record['answerPath'] ?? '';
+        if (is_string($answerPath) && $answerPath !== '') {
+            if (!BackgroundPermissionRelay::isMintedAnswerPath($ipc['bufferPath'], $answerPath)) {
+                return null;
+            }
+            $ipc['answerPath'] = $answerPath;
+        } elseif (!is_string($answerPath)) {
             return null;
         }
 
