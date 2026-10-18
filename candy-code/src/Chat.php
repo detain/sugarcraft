@@ -18359,11 +18359,14 @@ final class Chat implements Model
 
             return [$this->mutate([
                 'palette' => null,
+                // Flagged as a failure (ISS-097): this row is the app
+                // refusing an action, not the assistant talking, and the
+                // transcript paints flagged rows in the error colour.
                 'history' => [...$this->history, Message::assistant(Lang::t('chat.provider.switch_failed', [
                     'provider' => $name,
                     'error' => $e->getMessage(),
                     'note' => $note,
-                ]))->withUiOnly()],
+                ]))->withUiOnly()->withError()],
             ]), null];
         }
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
@@ -147,6 +149,29 @@ final class UiOnlyNoticeStyleTest extends TestCase
         $this->assertNotNull($unflagged);
         $block = implode("\n", array_map(self::withoutSgr(...), array_slice($rows, 0, (int) array_search($unflagged, $rows, true) + 1)));
         $this->assertStringContainsString("assistant\nan answer that merely mentions an error", $block, 'text alone never earns the error paint');
+    }
+
+    /**
+     * ISS-097's producer half for a refused provider switch: the sentence is
+     * built at {@see Chat}'s `/model` failure arm, so THAT is where the flag
+     * has to be set — a row that reaches the renderer unflagged paints as the
+     * assistant talking. Driven through the command, not hand-built, so the
+     * producer cannot regress without reddening this.
+     */
+    public function testARefusedProviderSwitchReachesTheRenderPathFlagged(): void
+    {
+        [$next] = (new Chat(inputBuf: '/model nosuchprovider'))
+            ->update(new KeyMsg(KeyType::Enter, ''));
+
+        $row = $next->history[count($next->history) - 1];
+        $this->assertTrue($row->error, 'the switch failure flags its own row');
+        $this->assertTrue($row->uiOnly, 'and stays out of the model view');
+
+        $rows = self::rows($next);
+        $plain = implode("\n", array_map(self::withoutSgr(...), $rows));
+        $this->assertStringContainsString("error\nCould not switch to provider", $plain);
+        $this->assertStringContainsString('retry: ↑ then Enter', $plain, 'the error row closes with the recall hint');
+        $this->assertStringNotContainsString("assistant\nCould not switch", $plain);
     }
 
     /**

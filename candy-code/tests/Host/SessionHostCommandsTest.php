@@ -305,6 +305,8 @@ final class SessionHostCommandsTest extends TestCase
             "Workflow 'deploy' completed",
         ));
 
+        self::assertSame([], self::flaggedRows($host), 'the success arm of an occupying command lands its report unflagged (ISS-097)');
+
         $contents = array_map(static fn (Message $m): string => $m->content, $host->history());
         self::assertSame('/workflow run deploy', $contents[0]);
         self::assertStringContainsString('status: **running**', $contents[2]);
@@ -357,6 +359,56 @@ final class SessionHostCommandsTest extends TestCase
     }
 
     // ── fixtures ───────────────────────────────────────────────────────
+
+    /**
+     * ISS-097: a refusal a command's later answer lands as must be FLAGGED at
+     * its producer — the renderer paints `Message::$error` rows in the error
+     * colour and never sniffs the text, and `appendCommandRow()`'s new parameter
+     * defaults to false, so a site that forgets it compiles, runs, and quietly
+     * paints a failure as an ordinary local reply.
+     *
+     * The behavioural half lives in the two rows this class already drives (a
+     * successful occupying report lands unflagged, above); this is the half no
+     * command fixture can reach without a daemon: every `host.command.error`
+     * sentence in the file carries the flag as it is written.
+     */
+    public function testEveryCommandErrorRowIsFlaggedAtItsProducer(): void
+    {
+        // The host's own file, read through the autoloader rather than by a path
+        // relative to this one. Naming the package root here would enrol this class
+        // in the tree-wide walker census for a reason that has nothing to do with the
+        // flag, and the reflection path also survives the source file being moved.
+        $path = (new \ReflectionClass(SessionHost::class))->getFileName();
+        self::assertIsString($path, 'the autoloader must resolve the host class to a readable file');
+
+        $lines = explode("\n", (string) file_get_contents($path));
+
+        $sites = [];
+        foreach ($lines as $line) {
+            if (str_contains($line, "Lang::t('host.command.error'")) {
+                $sites[] = $line;
+            }
+        }
+
+        self::assertCount(4, $sites, 'both arms of the async and the occupying failure paths, all flagged');
+        foreach ($sites as $line) {
+            self::assertStringContainsString(', true)', $line, trim($line) . ' lands a refusal without the error flag');
+        }
+
+        $text = implode("\n", $lines);
+        self::assertSame(1, substr_count($text, '->withUiOnly()->withError($error)'), 'the row builder is the flag single point');
+        self::assertStringContainsString('private function appendCommandRow(string $text, bool $error = false): void', $text, 'the flag stays opt-in for the success arms');
+        self::assertStringContainsString('$land = function (string $report, bool $error = false)', $text, 'and the occupying path forwards its verdict through the landing closure');
+    }
+
+    /** @return list<Message> the error-flagged rows of $host's transcript */
+    private static function flaggedRows(SessionHost $host): array
+    {
+        return array_values(array_filter(
+            $host->history(),
+            static fn (Message $m): bool => $m->error,
+        ));
+    }
 
     /**
      * @param list<Message> $history

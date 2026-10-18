@@ -1137,7 +1137,7 @@ final class SessionHost
         try {
             $promise = ($effect->run())();
         } catch (\Throwable $e) {
-            $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]));
+            $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]), true);
 
             return;
         }
@@ -1150,7 +1150,7 @@ final class SessionHost
                 }
             },
             function (\Throwable $e): void {
-                $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]));
+                $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]), true);
             },
         );
     }
@@ -1162,8 +1162,8 @@ final class SessionHost
         $this->workflowTurn = $effect->isWorkflow();
         $generation = ++$this->generation;
 
-        $land = function (string $report) use ($generation): void {
-            $this->appendCommandRow($report);
+        $land = function (string $report, bool $error = false) use ($generation): void {
+            $this->appendCommandRow($report, $error);
             if ($generation !== $this->generation) {
                 // Cancelled: the report is the record of what ran, and the
                 // session it held was released by the cancel.
@@ -1177,18 +1177,25 @@ final class SessionHost
         try {
             $promise = ($effect->run())();
         } catch (\Throwable $e) {
-            $land(Lang::t('host.command.error', ['error' => $e->getMessage()]));
+            $land(Lang::t('host.command.error', ['error' => $e->getMessage()]), true);
 
             return;
         }
 
-        $promise->then($land, static fn (\Throwable $e) => $land(Lang::t('host.command.error', ['error' => $e->getMessage()])));
+        $promise->then($land, static fn (\Throwable $e) => $land(Lang::t('host.command.error', ['error' => $e->getMessage()]), true));
     }
 
-    /** One UI-only reply row a command's later answer lands as, saved. */
-    private function appendCommandRow(string $text): void
+    /**
+     * One UI-only reply row a command's later answer lands as, saved.
+     *
+     * $error is the row's own verdict (ISS-097): the command's failure arms
+     * pass true so the transcript paints the sentence in the error colour,
+     * while a successful answer keeps the plain `local` label. The renderer
+     * never sniffs the text, so the flag has to arrive with the producer.
+     */
+    private function appendCommandRow(string $text, bool $error = false): void
     {
-        $row = Message::assistant($text)->withUiOnly();
+        $row = Message::assistant($text)->withUiOnly()->withError($error);
         $this->history[] = $row;
         $this->save();
         $this->announceTranscriptRow($row);
