@@ -888,7 +888,10 @@ TXT,
     'cmd.agents.detail.status' => 'Status:      {status}',
     'cmd.agents.detail.tools' => 'Tools:       {tools}',
     'cmd.agents.heading' => 'Agents:',
-    'cmd.agents.idle' => '{count} agent(s) registered and idle — use /agent <name> for details.',
+    // ISS-034 retired the idle COUNT line: `/agents` renders the whole roster
+    // as a table with a status column, and AgentsCommandTest pins that the
+    // counted sentence never comes back. The key sat unreferenced beside the
+    // live '…none-working' row it used to share a path with.
     'cmd.agents.label' => 'List agents',
     'cmd.agents.none-configured' => 'No active agents configured.',
     'cmd.agents.none-configured-hint' => 'Define agent files under ~/.candy-code/agents or .candy-code/agents in this project.',
