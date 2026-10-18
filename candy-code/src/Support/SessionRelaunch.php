@@ -29,7 +29,7 @@ use SugarCraft\Code\Lang;
 final class SessionRelaunch
 {
     /** Launch flags carried into the restart; each takes one value. */
-    public const KEPT_FLAGS = ['--config', '--model', '--permission-mode'];
+    public const KEPT_FLAGS = ['--config', '--model', '--permission-mode', '--max-cost'];
 
     private function __construct()
     {

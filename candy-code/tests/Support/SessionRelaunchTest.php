@@ -9,8 +9,8 @@ use SugarCraft\Code\Support\SessionRelaunch;
 
 /**
  * `/new` into another directory restarts candy-code there: the restart keeps
- * the launch's config, model and permission mode, and drops everything that
- * names the session or root to open.
+ * the launch's config, model, permission mode and spend cap, and drops
+ * everything that names the session or root to open.
  */
 final class SessionRelaunchTest extends TestCase
 {
@@ -45,6 +45,18 @@ final class SessionRelaunchTest extends TestCase
         self::assertSame([], SessionRelaunch::flags(['x'], '/w'));
         self::assertSame([], SessionRelaunch::flags(['x', 'fix the bug', '-p', 'hi'], '/w'), 'operands and one-shot prompts are not carried');
         self::assertSame([], SessionRelaunch::flags(['x', '--model'], '/w'), 'a flag without its value is dropped');
+    }
+
+    public function testTheSpendCapSurvivesTheRestart(): void
+    {
+        self::assertSame(
+            ['--max-cost', '5'],
+            SessionRelaunch::flags(['x', '--max-cost', '5'], '/w'),
+        );
+        self::assertSame(
+            ['--max-cost', '5'],
+            SessionRelaunch::flags(['x', '--max-cost=5'], '/w'),
+        );
     }
 
     public function testTheCommandAPersonCanPaste(): void
