@@ -753,14 +753,29 @@ runs normally. A server admitted for `bypass-permissions` with
 of its own, so no call escalates past the launch. An ask inside a spawned
 daemon is **relayed to the server's clients** as a server-scope
 `permission.asked` named by the session's background id: answer it with
-`permission.respond` exactly as an open session's question. The question
+`permission.respond` exactly as an open session's question. The answer
+travels on a minted channel: at spawn the server mints a nonce-named answer
+path (`session.answer-<128-bit hex>`), pre-creates it `0600`, and carries
+its name into the daemon's config and the index record — the relay only ever
+opens that one path, and a record whose answer path was never minted is
+refused, so content forged at any other name is ignored. Every asking
+carries a per-ask token, and an answer row settles only the asking whose
+`askId` and token it echoes; a stale line from a respawned call cannot
+resolve a fresh question. The question
 waits for an answer as long as `server.askTimeoutSeconds` says (0, the
-default, forever); with no client to answer in time the daemon falls back to
-the no-terminal refusal above, recorded in its output unchanged. Relayed
-asks are offered `once` or `reject` only — `always` is accepted but lands
-once-strength inside the daemon, and `cascade` on a reject is refused
-`cascade_unavailable` because a relayed session holds no siblings to stop.
-A local `/bg` from a terminal has no server to relay through and keeps the
+default, forever); with no client to answer in time the daemon settles its
+own ask and falls back to the no-terminal refusal above, recorded in its
+output unchanged — the server turns those settle lines into cancelled
+`permission.settled` events, so a timed-out ask leaves
+`permission.pending`, and an answer arriving after it reports unknown.
+Relayed asks are offered `once` or `reject` only — `always` is coerced to
+`once` before anything is written, so the row, the settled event and the
+respond result all carry `once` (`remember: "session"` included) — and
+`cascade` on a reject is refused `cascade_unavailable` because a relayed
+session holds no siblings to stop. A restarted server reads the answer
+record back on first sight of an ask: a question answered under the earlier
+server is neither re-announced nor double-answered. A local `/bg` from a
+terminal has no server to relay through and keeps the
 plain refusal.
 
 **A starting server re-adopts what an earlier one left.** A background daemon
