@@ -200,6 +200,10 @@ final readonly class ParsedArgs
          */
         public ?string $initialPrompt = null,
         public array $subcommandFlags = [],
+        /** The RAW string `--max-cost` named, or null. Validated by
+         *  {@see \SugarCraft\Code\Cli\Bootstrap::maxCostUsd()}, not here —
+         *  the same raw-store-and-later-judge shape as {@see $permissionMode}. */
+        public ?string $maxCost = null,
     ) {
     }
 
@@ -282,7 +286,8 @@ final readonly class ParsedArgs
         bool $resumeRequested = false,
         array $positionals = [],
         array $subcommandFlags = [],
+        ?string $maxCost = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost);
     }
 }

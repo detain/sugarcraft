@@ -1701,6 +1701,7 @@ final class Subcommands
         '--config' => ['short' => null, 'value' => 'file', 'desc' => 'cli.completion.option.config'],
         '--model' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.model'],
         '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'cli.completion.option.mode'],
+        '--max-cost' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_cost'],
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'cli.completion.option.help'],

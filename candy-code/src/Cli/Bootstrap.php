@@ -1051,6 +1051,12 @@ final class Bootstrap
     private static ?string $permissionModeOverride = null;
 
     /**
+     * The RAW, UNVALIDATED string `--max-cost` named, or null when the flag
+     * was absent — see {@see useMaxCost()} for why it is stored unvalidated.
+     */
+    private static ?string $maxCostOverride = null;
+
+    /**
      * The trusted project roots this process resolved, keyed by the
      * `config.json` they came out of — see {@see trustedRootsForThisProcess()}
      * for why the answer may not be recomputed mid-session.
@@ -4591,6 +4597,22 @@ final class Bootstrap
     public static function usePermissionMode(?string $mode): void
     {
         self::$permissionModeOverride = ($mode === null || $mode === '') ? null : $mode;
+    }
+
+    /**
+     * Register `--max-cost <usd>` for this process. See {@see useModel()} for
+     * why this is a static rather than a parameter, and
+     * {@see usePermissionMode()} for why it is stored RAW: the number is
+     * judged by {@see maxCostUsd()}, which throws
+     * {@see PermissionConfigException} inside `bin/candy-code`'s dispatch
+     * `try` — where it becomes the same exit-2 usage error (with the JSON
+     * error document under `--output-format json`) that an unusable
+     * `$CANDY_CODE_MAX_COST` or `maxCostUsd` setting already produces —
+     * rather than as an uncaught fatal at registration time.
+     */
+    public static function useMaxCost(?string $maxCost): void
+    {
+        self::$maxCostOverride = ($maxCost === null || $maxCost === '') ? null : $maxCost;
     }
 
     /**
@@ -10681,9 +10703,10 @@ final class Bootstrap
     }
 
     /**
-     * The spend ceiling `$CANDY_CODE_MAX_COST` sets, in US dollars — else the
-     * `maxCostUsd` setting ({@see persistedMaxCostUsd()}) — or null for no cap
-     * (crush_code.md Phase 5 item 7).
+     * The spend ceiling for this launch, in US dollars — from the
+     * `--max-cost` flag ({@see useMaxCost()}), else `$CANDY_CODE_MAX_COST`,
+     * else the `maxCostUsd` setting ({@see persistedMaxCostUsd()}) — or null
+     * for no cap (crush_code.md Phase 5 item 7, flag half of ISS-006).
      *
      * ABSENCE AND A BAD VALUE ARE DIFFERENT ANSWERS, exactly as they are for
      * `$CANDY_CODE_PERMISSION_MODE` (see {@see permissionGate()}), and for the
@@ -10691,15 +10714,16 @@ final class Bootstrap
      * MORE PERMISSIVE, so silently discarding a value the user set on purpose is
      * a fail-open.
      *
-     * - Unset, or empty/whitespace — absence. No cap, like every other variable
-     *   this class reads.
+     * - An ABSENT flag, an unset/empty/whitespace variable, and no settings key —
+     *   absence. No cap, like every other source this chain reads.
      * - A positive finite number, optionally with a leading `$` and surrounding
      *   whitespace — the cap. `$5` is what a human types and `/budget $5` already
      *   accepts it, so refusing it here would be an inconsistency, not a
-     *   safeguard.
-     * - Anything else present — {@see PermissionConfigException}, which
-     *   `bin/candy-code` turns into an exit-2 usage report. That covers `5USD`,
-     *   `five dollars`, `0`, `-5` and `1e309`.
+     *   safeguard. The flag and the variable are text and take that spelling;
+     *   the setting is JSON and carries a plain number.
+     * - Anything else PRESENT — {@see PermissionConfigException}, naming its own
+     *   source, which `bin/candy-code` turns into an exit-2 usage report. That
+     *   covers `5USD`, `five dollars`, `0`, `-5` and `1e309`.
      *
      * The previous behaviour — read a bad value as unset, "matching the refusal
      * `/budget 0` gives" — conflated two things that are not alike. `/budget 0`
@@ -10709,22 +10733,39 @@ final class Bootstrap
      * argument for tolerance applies to a theme or a persisted provider, where
      * guessing wrong costs nothing.
      *
-     * @throws PermissionConfigException when the variable is present and unusable
+     * @throws PermissionConfigException when the flag or the variable is present
+     *   and unusable (or, below, the setting)
      */
     public static function maxCostUsd(): ?float
     {
+        if (self::$maxCostOverride !== null) {
+            return self::parseSpendCap(self::$maxCostOverride, 'cli.refuse.max_cost_flag');
+        }
+
         $raw = getenv('CANDY_CODE_MAX_COST');
         if ($raw === false || trim($raw) === '') {
             return self::persistedMaxCostUsd();
         }
 
+        return self::parseSpendCap($raw, 'cli.refuse.max_cost_env');
+    }
+
+    /**
+     * The one numeric judgement the flag and the environment variable share —
+     * trim, tolerate a leading `$` and surrounding whitespace, require a
+     * positive finite dollar figure by {@see Chat::isUsableSpendCap()}.
+     * `$messageKey` names the SOURCE in the refusal, because "your env var is
+     * broken" is the wrong advice when the flag was typed on this command line.
+     */
+    private static function parseSpendCap(string $raw, string $messageKey): float
+    {
         $trimmed = trim($raw);
         $amount = ltrim($trimmed, '$');
         $value = is_numeric($amount) ? (float) $amount : null;
 
         if ($value === null || !Chat::isUsableSpendCap($value)) {
             throw new PermissionConfigException(
-                Lang::t('cli.refuse.max_cost_env', ['value' => $trimmed]),
+                Lang::t($messageKey, ['value' => $trimmed]),
             );
         }
 

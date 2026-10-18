@@ -14,8 +14,9 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 
 /**
- * The two launch flags `--model` and `--permission-mode` (P6.6), end to end:
- * parsed, registered, honoured, documented and completable.
+ * The launch flags `--model`, `--permission-mode` (P6.6) and `--max-cost`
+ * (ISS-006), end to end: parsed, registered, honoured, documented and
+ * completable.
  *
  * DOMAIN NOTE, because this is the trap the flags sit on: `--model` names a
  * MODEL — the same axis as `$CANDY_CODE_MODEL` — and NOT a provider, even
@@ -57,14 +58,16 @@ final class LaunchFlagsTest extends TestCase
 
         Bootstrap::useModel(null);
         Bootstrap::usePermissionMode(null);
+        Bootstrap::useMaxCost(null);
     }
 
     protected function tearDown(): void
     {
-        // Both are process-wide statics, like Bootstrap::useConfigPath() — a
+        // All three are process-wide statics, like Bootstrap::useConfigPath() — a
         // test that leaves one set decides the next test's launch.
         Bootstrap::useModel(null);
         Bootstrap::usePermissionMode(null);
+        Bootstrap::useMaxCost(null);
 
         if ($this->originalHome !== '') {
             putenv('HOME=' . $this->originalHome);
@@ -144,6 +147,38 @@ final class LaunchFlagsTest extends TestCase
     }
 
     /**
+     * `--max-cost` carries its value RAW, like `--permission-mode` above —
+     * `5USD` must arrive whole so Bootstrap::maxCostUsd() can refuse it
+     * naming the flag, rather than the parser pre-judging money grammar in a
+     * second place that could drift from the first.
+     *
+     * @return array<string, array{list<string>, ?string}>
+     */
+    public static function maxCostSpellings(): array
+    {
+        return [
+            'cost spaced'   => [['candy-code', '--max-cost', '5'], '5'],
+            'cost attached' => [['candy-code', '--max-cost=2.50'], '2.50'],
+            'dollar spelled' => [['candy-code', '--max-cost=$2.50'], '$2.50'],
+            'negative raw'  => [['candy-code', '--max-cost=-5'], '-5'],
+            'prose raw'     => [['candy-code', '--max-cost', 'five dollars'], 'five dollars'],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     * @dataProvider maxCostSpellings
+     */
+    public function testTheMaxCostFlagParsesRawAndIsNotAnUnknownFlag(array $argv, ?string $cost): void
+    {
+        $args = ArgvParser::parse($argv);
+
+        $this->assertSame($cost, $args->maxCost);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertNull($args->usageError);
+    }
+
+    /**
      * A bare flag that swallows the NEXT OPTION is a typo, not a value. Left
      * lenient, `--permission-mode -p "..."` would drop the one-shot prompt and
      * silently start the TUI under the config's mode.
@@ -181,6 +216,15 @@ final class LaunchFlagsTest extends TestCase
             'model, empty spaced'   => [['candy-code', '--model', ''], '--model expects a model name, but the value is empty'],
             'mode, empty attached'  => [['candy-code', '--permission-mode='], '--permission-mode expects a mode, but the value is empty'],
             'mode, empty spaced'    => [['candy-code', '--permission-mode', ''], '--permission-mode expects a mode, but the value is empty'],
+
+            // --max-cost joined the same strict family (ISS-006 follow): a
+            // ceiling whose value went missing must refuse the launch, not
+            // silently run uncapped — the fail-open this whole chain exists
+            // to close.
+            'cost, list ended'      => [['candy-code', '--max-cost'], '--max-cost expects a spend ceiling, but the argument list ended'],
+            'cost ate a flag'       => [['candy-code', '--max-cost', '-p', 'hi'], '--max-cost expects a spend ceiling, but the next argument is the option -p'],
+            'cost, empty attached'  => [['candy-code', '--max-cost='], '--max-cost expects a spend ceiling, but the value is empty'],
+            'cost, empty spaced'    => [['candy-code', '--max-cost', ''], '--max-cost expects a spend ceiling, but the value is empty'],
         ];
     }
 
@@ -196,6 +240,7 @@ final class LaunchFlagsTest extends TestCase
         $this->assertStringContainsString($needle, $args->usageError);
         $this->assertNull($args->model);
         $this->assertNull($args->permissionMode);
+        $this->assertNull($args->maxCost);
     }
 
     /**
@@ -212,6 +257,7 @@ final class LaunchFlagsTest extends TestCase
         foreach ([
             ['candy-code', '--permission-mode', ''],
             ['candy-code', '--model', ''],
+            ['candy-code', '--max-cost', ''],
         ] as $argv) {
             $args = ArgvParser::parse($argv);
 
@@ -489,12 +535,14 @@ final class LaunchFlagsTest extends TestCase
      * an option line; this pins that these two say what they DO, including the
      * provider-vs-model distinction the help text has to carry.
      */
-    public function testHelpDocumentsBothFlagsAndTheModelDistinction(): void
+    public function testHelpDocumentsAllFlagsAndTheModelDistinction(): void
     {
         $screen = Help::screen();
 
         $this->assertMatchesRegularExpression('/^ +--model(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--permission-mode(?:[ =,]|$)/m', $screen);
+        $this->assertMatchesRegularExpression('/^ +--max-cost(?:[ =,]|$)/m', $screen);
+        $this->assertStringContainsString('it beats $CANDY_CODE_MAX_COST', $screen);
         $this->assertStringContainsString('not a provider', $screen);
         foreach (PermissionMode::cases() as $mode) {
             $this->assertStringContainsString($mode->value, $screen, "help omits {$mode->value}");

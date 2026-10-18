@@ -133,6 +133,7 @@ final class ArgvParser
         $configPath = null;
         $model = null;
         $permissionMode = null;
+        $maxCost = null;
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
@@ -519,6 +520,59 @@ final class ArgvParser
                 continue;
             }
 
+            // --max-cost=<value>  (no space)
+            //
+            // AN EMPTY value is a usage error, not a value — the same rule
+            // --permission-mode above earned: `--max-cost="$CAP"` with $CAP
+            // unset meant a ceiling, got none, and was told nothing. WHAT the
+            // ceiling must look like is judged by Bootstrap::maxCostUsd(),
+            // which runs the flag through the same positive-finite-dollars
+            // check that decides $CANDY_CODE_MAX_COST and the maxCostUsd
+            // setting, so all three sources fail with one message shape and
+            // one exit path — see Bootstrap::useMaxCost(). What IS checked
+            // here is the shape: a missing value must not silently leave the
+            // launch uncapped.
+            if (\str_starts_with($arg, '--max-cost=')) {
+                $value = \substr($arg, 11); // length of "--max-cost="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyMaxCostError();
+                        $usageHint = self::maxCostValueHint();
+                    }
+                    ++$i;
+                    continue;
+                }
+                $maxCost = $value;
+                ++$i;
+                continue;
+            }
+
+            // --max-cost <value>
+            if ($arg === '--max-cost') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'candy-code: ' . Lang::t('cli.argv.max_cost.missing')
+                            : 'candy-code: ' . Lang::t('cli.argv.max_cost.flag', ['option' => $next]);
+                        $usageHint = self::maxCostValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyMaxCostError();
+                        $usageHint = self::maxCostValueHint();
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $maxCost = $next;
+                $i += 2;
+                continue;
+            }
+
             // -c / --continue: reopen the most recently used session, with
             // its transcript, instead of starting a new one.
             if ($arg === '--continue' || $arg === '-c') {
@@ -691,7 +745,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost);
     }
 
     /**
@@ -976,6 +1030,32 @@ final class ArgvParser
     private static function emptyPermissionModeError(): string
     {
         return 'candy-code: ' . Lang::t('cli.argv.mode_flag.empty');
+    }
+
+    /**
+     * The usage error for `--max-cost=` and `--max-cost ""`.
+     *
+     * See {@see emptyPermissionModeError()} for why an empty value is an error
+     * and why the check lives in the parser. The stake here is money in the
+     * other direction: an operator writing `candy-code --max-cost="$CAP"` with
+     * $CAP unset believed a ceiling was bolted to the run, got no ceiling, and
+     * the run could spend all night telling them nothing.
+     */
+    private static function emptyMaxCostError(): string
+    {
+        return 'candy-code: ' . Lang::t('cli.argv.max_cost.empty');
+    }
+
+    /**
+     * The remedy line under the `--max-cost` usage errors. Plain prose rather
+     * than a DERIVED enumeration (compare {@see permissionModeValueHint()}):
+     * the value's grammar is "a positive number of US dollars", which is not a
+     * closed set of spellings anything in the code can be re-read against —
+     * the numeric check itself lives in Bootstrap::maxCostUsd().
+     */
+    private static function maxCostValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.max_cost');
     }
 
     /**

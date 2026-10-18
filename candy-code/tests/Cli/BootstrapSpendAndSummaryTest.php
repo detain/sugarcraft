@@ -63,10 +63,16 @@ final class BootstrapSpendAndSummaryTest extends TestCase
             $this->originalEnv[$var] = getenv($var);
             putenv($var);
         }
+
+        // Process-wide static like the launch flags in LaunchFlagsTest — this
+        // file reads the whole flag/env/setting chain, so it owns clearing it.
+        Bootstrap::useMaxCost(null);
     }
 
     protected function tearDown(): void
     {
+        Bootstrap::useMaxCost(null);
+
         if ($this->originalHome !== '') {
             putenv('HOME=' . $this->originalHome);
         } else {
@@ -178,6 +184,100 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         // cap that rendered as `$inf` and, every comparison against infinity
         // being false, enforced nothing.
         yield 'too large to represent' => ['1e309'];
+    }
+
+    // =====================================================================
+    // --max-cost (ISS-006 follow): flag > env > setting, one judgement
+    // =====================================================================
+
+    /**
+     * The flag alone is the cap — and it shares the variable's TEXT grammar
+     * (leading `$`, surrounding whitespace) because both arrive as argv/env
+     * strings through the same {@see Bootstrap::parseSpendCap()}.
+     */
+    public function testTheMaxCostFlagIsTheCap(): void
+    {
+        Bootstrap::useMaxCost(' $2.50 ');
+        $this->assertSame(2.5, Bootstrap::maxCostUsd());
+    }
+
+    /**
+     * The assertion that makes the flag worth having: an inherited
+     * `$CANDY_CODE_MAX_COST` must not out-rank an explicit ceiling typed on
+     * THIS launch — the same precedence argument the --permission-mode flag
+     * above makes about its variable.
+     */
+    public function testTheMaxCostFlagBeatsTheEnvironmentVariable(): void
+    {
+        putenv('CANDY_CODE_MAX_COST=5');
+        Bootstrap::useMaxCost('2.50');
+
+        $this->assertSame(2.5, Bootstrap::maxCostUsd());
+    }
+
+    /**
+     * And the persisted setting, from the HOME-sandboxed config the class
+     * already reads. The no-flag assertion first proves the fixture is live,
+     * so the flag assertion after it is about precedence and not about an
+     * unreadable file.
+     */
+    public function testTheMaxCostFlagBeatsThePersistedSetting(): void
+    {
+        mkdir($this->home . '/.candy-code', 0700, true);
+        file_put_contents(
+            $this->home . '/.candy-code/config.json',
+            json_encode(['maxCostUsd' => 9.0]),
+        );
+
+        $this->assertSame(9.0, Bootstrap::maxCostUsd());
+
+        Bootstrap::useMaxCost('3');
+        $this->assertSame(3.0, Bootstrap::maxCostUsd());
+    }
+
+    /**
+     * Absence must stay absence: an unregistered flag leaves the env/config
+     * chain exactly as it was, rather than clearing a cap that was set.
+     */
+    public function testAnAbsentMaxCostFlagLeavesTheExistingChainAlone(): void
+    {
+        putenv('CANDY_CODE_MAX_COST=5');
+        Bootstrap::useMaxCost(null);
+
+        $this->assertSame(5.0, Bootstrap::maxCostUsd());
+    }
+
+    /**
+     * A present-but-unusable flag refuses the launch through the SAME
+     * exception as the variable, and the message names `--max-cost` — "unset
+     * the variable" would be wrong advice for a flag typed on this command
+     * line, and the parser's shape check deliberately does not pre-judge the
+     * money grammar (that judgement lives in exactly one place).
+     */
+    public function testAnUnusableMaxCostFlagStopsTheLaunchNamingTheFlag(): void
+    {
+        Bootstrap::useMaxCost('5USD');
+
+        $this->expectException(PermissionConfigException::class);
+        $this->expectExceptionMessageMatches('/--max-cost/');
+        $this->expectExceptionMessageMatches('/5USD/');
+        Bootstrap::maxCostUsd();
+    }
+
+    /**
+     * The zero/negative/infinity refusals ride the shared judgement, so the
+     * flag gets the variable's whole vocabulary test for free — one provider,
+     * both spellings pinned where the semantics are declared identical.
+     *
+     * @dataProvider unusableSpellings
+     */
+    public function testAnUnusableMaxCostFlagValueStopsTheLaunch(string $raw): void
+    {
+        Bootstrap::useMaxCost($raw);
+
+        $this->expectException(PermissionConfigException::class);
+        $this->expectExceptionMessageMatches('/--max-cost/');
+        Bootstrap::maxCostUsd();
     }
 
     // =====================================================================

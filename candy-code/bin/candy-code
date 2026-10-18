@@ -136,7 +136,7 @@ ini_set('display_errors', 'stderr');
     // json here would make the broken checkout MORE permissive than the working
     // one); and the value-taking flags consume their token, in the two flavours
     // ArgvParser gives them — `-p`, `--prompt`, `--root`, `--config`, `--model`,
-    // `--permission-mode` and `--resume` refuse a flag-shaped one and leave it
+    // `--permission-mode`, `--max-cost` and `--resume` refuse a flag-shaped one and leave it
     // for the loop, and since ISS-084 `--output-format` refuses one too, with
     // the same leave-it-for-the-loop reading plus the third case of a missing
     // value (nothing to consume at all).
@@ -160,7 +160,7 @@ ini_set('display_errors', 'stderr');
     // `--root` joined it in audit CLI-2; `--output-format` joined it in
     // ISS-084, which is why it is handled by its own branch below rather than
     // listed here — its consumed value is the one thing this scan reads.
-    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--resume'];
+    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--resume'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {
@@ -396,6 +396,14 @@ Bootstrap::useConfigPath($args->configPath);
 // which is why validation must happen inside the dispatch and not here.
 Bootstrap::useModel($args->model);
 Bootstrap::usePermissionMode($args->permissionMode);
+// --max-cost is registered RAW, like --permission-mode directly above:
+// Bootstrap::maxCostUsd() runs it through the same positive-finite-dollars
+// check that judges $CANDY_CODE_MAX_COST and the maxCostUsd setting, so a
+// ceiling that is present and unusable throws PermissionConfigException
+// inside the dispatch — caught by the try below — instead of silently
+// launching uncapped. Both the -p path (which never reaches chat()) and the
+// TUI path read the same one static.
+Bootstrap::useMaxCost($args->maxCost);
 Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
 
 // The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
