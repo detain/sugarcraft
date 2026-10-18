@@ -92,15 +92,15 @@ _A feature-by-feature comparison, compiled 2026-10-16; every issue cited here (`
 | SH — Shell execution | ✅4 🟡4 ❌2 | ✅1 🟡7 ❌2 | ✅7 🟡1 ❌2 | ✅3 🟡2 ❌5 | ✅4 🟡1 ❌5 | ✅9 ❌1 |
 | PER — Permissions & safety | ✅9 🟡5 ❌1 | ✅7 🟡5 🧪1 ❌2 | ✅13 🟡2 | ✅6 🟡6 ❌3 | ✅7 🟡5 ❌3 | ✅12 🟡2 ❌1 |
 | GIT — Git, checkpoints, review | ✅5 🟡4 ❌3 | 🟡5 🧪1 ❌4 ➖2 | ✅11 🟡1 | ✅7 🟡3 ❌2 | ✅5 🟡5 ❌2 | ✅4 🟡5 🔌1 ❌2 |
-| UI — TUI / GUI UX | ✅21 🟡11 ❌2 | ✅13 🟡10 ❌10 ➖1 | ✅30 🟡4 | ✅26 🟡6 ❌2 | ✅24 🟡8 ❌2 | ✅27 🟡5 ❌2 |
+| UI — TUI / GUI UX | ✅21 🟡11 ❌2 | ✅14 🟡9 ❌10 ➖1 | ✅30 🟡4 | ✅26 🟡6 ❌2 | ✅24 🟡8 ❌2 | ✅27 🟡5 ❌2 |
 | WEB — Web, remote, multi-surface | ✅6 🟡2 ❌6 | ✅6 🟡0 ❌5 ➖3 | ✅11 🟡3 | ✅8 🟡3 🔌1 ❌2 | ✅10 🟡3 ❌1 | ✅12 ❌2 |
 | AUT — Automation / headless | ✅4 🟡5 ❌3 | ✅1 🟡1 ❌4 ➖6 | ✅12 | ✅4 🟡5 🔌3 | ✅3 🟡7 ❌1 ❓1 | ✅7 🟡4 ❌1 |
 | CFG — Configuration | ✅6 🟡2 | ✅4 🟡2 ❌2 | ✅8 | ✅4 🟡4 | ✅7 🟡1 | ✅7 🟡1 |
-| OBS — Observability | ✅1 🟡3 ❌2 | 🟡3 ❌3 | ✅6 | ✅4 🟡2 | ✅4 🟡2 | ✅4 🟡1 🔌1 |
+| OBS — Observability | ✅1 🟡3 ❌2 | 🟡4 ❌2 | ✅6 | ✅4 🟡2 | ✅4 🟡2 | ✅4 🟡1 🔌1 |
 | PA — Personal-assistant / always-on features | 🟡2 ❌6 | 🟡2 ❌6 | 🟡4 🔌3 ❌1 | 🟡2 🔌1 ❌5 | 🟡3 🔌1 ❌4 | ✅8 |
-| **Total (356 taxonomy rows)** | **✅191 🟡98 🧪2 ❌63 ➖2** | **✅86 🟡158 🧪5 ❌80 ➖20 ❓7** | **✅276 🟡53 🔌6 ❌21** | **✅199 🟡82 🔌23 ❌51 ➖1** | **✅199 🟡80 🔌12 ❌59 ➖1 ❓5** | **✅267 🟡46 🔌5 ❌38** |
+| **Total (356 taxonomy rows)** | **✅191 🟡98 🧪2 ❌63 ➖2** | **✅87 🟡158 🧪5 ❌79 ➖20 ❓7** | **✅276 🟡53 🔌6 ❌21** | **✅199 🟡82 🔌23 ❌51 ➖1** | **✅199 🟡80 🔌12 ❌59 ➖1 ❓5** | **✅267 🟡46 🔌5 ❌38** |
 
-_2026-10-18: cells re-scored for fix-1017 remediation; candy-code/candy-code-web counts adjusted accordingly — competitor columns unchanged._
+_2026-10-18: cells re-scored for fix-1017 remediation; candy-code/candy-code-web counts adjusted accordingly — competitor columns unchanged. Category-row and total counts include only matrix rows whose ID matches the pure taxonomy form `<CAT>-<digits>` (e.g. UI-25); 🆕 rows (`<CAT>-N<digits>`) are excluded, as the 356-taxonomy-rows framing above already implies._
 
 
 ## 3. Full feature matrix
