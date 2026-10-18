@@ -7,18 +7,45 @@ namespace SugarCraft\Top\Tests\Overlay;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Overlay\HelpMenu;
 
-/** btop Menu::helpMenu: geometry, paging, closing. */
+/** btop Menu::helpMenu: adaptive geometry, grid paging, closing. */
 final class HelpMenuTest extends OverlayTestCase
 {
+    public function testWidthIsAdaptive(): void
+    {
+        $this->assertSame(78, HelpMenu::widthFor(80), 'btop 78 at the 80-column minimum');
+        $this->assertSame(78, HelpMenu::widthFor(79), 'never below 78');
+        $this->assertSame(98, HelpMenu::widthFor(100), 'mid-size: cols - 2');
+        $this->assertSame(117, HelpMenu::widthFor(120), 'the +50% box caps out at 117');
+        $this->assertSame(117, HelpMenu::widthFor(300));
+        $this->assertSame(2, HelpMenu::columnsFor(78));
+        $this->assertSame(2, HelpMenu::columnsFor(109));
+        $this->assertSame(3, HelpMenu::columnsFor(110));
+        $this->assertSame(3, HelpMenu::columnsFor(117));
+        $this->assertSame(37, HelpMenu::columnWidth(78, 2), '(78 - 2 - 2) / 2');
+        $this->assertSame(37, HelpMenu::columnWidth(117, 3), 'floor((117 - 2 - 4) / 3)');
+    }
+
     public function testGeometryIsBtops(): void
     {
         $n = count(KeyTable::rows());
         [$x, $y, $height, $pages] = HelpMenu::geometry(80, 24);
-        $this->assertSame(1, $x, '80 / 2 - 39');
+        $this->assertSame(1, $x, 'max(1, 80/2 - 78/2) — the 78 box centred in 80');
         $this->assertSame(max(1, 12 - 4 - intdiv($n, 2)), $y);
         $this->assertSame(min(18, $n + 3), $height);
-        $this->assertSame((int) ceil($n / ($height - 3)), $pages);
-        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], 'a tall terminal fits one page');
+        // The box is 78 wide here, so both columns are 37 cells and every
+        // description wraps word-aware under its 20-cell key column at
+        // descW = 17: 10 section headings + 167 row lines (8 single, 12
+        // doubled, 25 trebled, 15 four-lined) = 177 grid lines, over a
+        // 2 x (18 - 3) = 30-line page.
+        $this->assertSame(6, $pages, 'grid lines over the two-column page, not the flat 60-row roster');
+
+        [$wx, $wy, $wh, $wp] = HelpMenu::geometry(120, 40);
+        $this->assertSame(2, $wx, 'max(1, 120/2 - 117/2)');
+        $this->assertSame(max(1, 20 - 4 - intdiv($n, 2)), $wy);
+        $this->assertSame(min(34, $n + 3), $wh);
+        $this->assertSame(2, $wp, '177 grid lines over a 3 x (34 - 3) = 93-line page');
+
+        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], 'a tall terminal fits the whole 177-line grid on one 180-line page');
     }
 
     public function testPagingWrapsBothWays(): void

@@ -25,6 +25,30 @@ namespace SugarCraft\Top\Input;
  */
 final class KeyTable
 {
+    /**
+     * Help-overlay grouping: heading Lang key => 0-based indexes into
+     * {@see rows()}. Purely metadata on TOP of the flat roster — `rows()`
+     * itself stays in btop `help_text` order for the `--help` KEYS section
+     * and the README drift tests. Every index must appear exactly once;
+     * {@see sections()} fails loud on any gap or duplicate. The order of
+     * this map is the order the help grid streams its sections, and the
+     * order within a section is the roster order of its indexes.
+     *
+     * @var array<string, list<int>>
+     */
+    public const SECTIONS = [
+        'help.section.general' => [2, 18, 19, 20],
+        'help.section.panels' => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 37, 38, 39, 40, 41, 42, 43],
+        'help.section.navigation' => [21, 25, 26, 54, 55],
+        'help.section.process_list' => [22, 23, 24, 27],
+        'help.section.filter' => [33, 34, 35, 36],
+        'help.section.net' => [28, 29, 30, 31, 32],
+        'help.section.actions' => [44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 56],
+        'help.section.overlays' => [16, 17],
+        'help.section.mouse' => [0, 1],
+        'help.section.info' => [57, 58, 59],
+    ];
+
     private function __construct()
     {
     }
@@ -124,6 +148,46 @@ final class KeyTable
                     $out[] = $binding;
                 }
             }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The roster grouped into its {@see SECTIONS} headings: heading Lang
+     * key => rows, in stream order. Always derived from {@see rows()} so
+     * the grouping can never carry a roster of its own; fails loud if the
+     * section map stops covering the roster exactly once (a row added to
+     * `rows()` without a home, or indexed twice).
+     *
+     * @return array<string, list<KeyRow>>
+     */
+    public static function sections(): array
+    {
+        $rows = self::rows();
+        $used = [];
+        foreach (self::SECTIONS as $indexes) {
+            foreach ($indexes as $i) {
+                if (isset($used[$i])) {
+                    throw new \RuntimeException("KeyTable::SECTIONS indexes row {$i} twice.");
+                }
+                if (!isset($rows[$i])) {
+                    throw new \RuntimeException("KeyTable::SECTIONS names row {$i}, outside the " . count($rows) . '-row roster.');
+                }
+                $used[$i] = true;
+            }
+        }
+        $missing = array_diff(array_keys($rows), array_keys($used));
+        if ($missing !== []) {
+            throw new \RuntimeException('KeyTable::SECTIONS leaves rows ungrouped: ' . implode(', ', $missing) . '.');
+        }
+        $out = [];
+        foreach (self::SECTIONS as $heading => $indexes) {
+            $section = [];
+            foreach ($indexes as $i) {
+                $section[] = $rows[$i];
+            }
+            $out[$heading] = $section;
         }
 
         return $out;

@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│       Mouse 1      Clicks buttons and selects in process list.             │─╮
-│    Mouse scroll    Scrolls any scrollable list/text under cursor.          │%│
-│       Esc, m       Toggles main menu.                                      │8│
-│          p         Cycle view presets forwards.                            │0│
-│      shift + p     Cycle view presets backwards.                           │6│
-│          1         Toggle CPU box.                                         │5│
-│          2         Toggle MEM box.                                         │9│
-│          3         Toggle NET box.                                         │2│
-│          4         Toggle PROC box.                                        │6│
-│  5, 6, 7, 8, 9, 0  Toggle GPU box.                                         │6│
-│          x         Toggle CTR (containers) box.                            │ │
-│        [, ]        Select previous/next container in CTR box.              │ │
-│          v         Toggle the VM dashboard (hides mem, net, proc, ctr).    │ │
-│        s, S        Next/previous VM card order (VM dashboard).             │ │
-│      shift + i     Toggle the ipmi box (BMC power, fans, temps; root).     │ │
-╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯
+│General                                          1         Toggle CPU box.  │─╮
+│       Esc, m       Toggles main                 2         Toggle MEM box.  │%│
+│                    menu.                        3         Toggle NET box.  │8│
+│      ctrl + r      Reloads config               4         Toggle PROC box. │0│
+│                    file from disk.      5, 6, 7, 8, 9, 0  Toggle GPU box.  │6│
+│     q, ctrl + c    Quits program.               x         Toggle CTR       │5│
+│       +, -, =      Add/Subtract                           (containers) box.│9│
+│                    100ms to/from              [, ]        Select           │2│
+│                    update timer.                          previous/next    │6│
+│Panels & views                                             container in CTR │6│
+│          p         Cycle view                             box.             │ │
+│                    presets forwards.            v         Toggle the VM    │ │
+│      shift + p     Cycle view                             dashboard (hides │ │
+│                    presets                                mem, net, proc,  │ │
+│                    backwards.                             ctr).            │ │
+╰─┘↑ page 1/6 ↓└─────────────────────────────────────────────────────────────╯─╯
