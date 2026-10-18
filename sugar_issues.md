@@ -224,6 +224,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-001"></a>
 ### ISS-001 · [P0] PtyRun keystrokes (`steps`) bypass approval, rules, classifier, breaker and session grants
 - **Product / area:** candy-code · permissions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 6751382c5)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:**
   - `candy-code/src/Renderer.php:6613-6650` (`permissionSubjectLines`; the `$isShell` branch is at 6623-6631)
@@ -270,6 +271,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-002"></a>
 ### ISS-002 · [P1] PtyRun skips the PreToolUse shell hooks (including the protect-files "floor") and the bash sandbox
 - **Product / area:** candy-code · permissions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, bbe6d7ab7)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:**
   - `candy-code/src/Hooks/BuiltIn/ProtectFilesHook.php:398-401`
@@ -309,6 +311,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-003"></a>
 ### ISS-003 · [P1] TUI approval modal shows no diff and clips every non-shell argument to 80 chars, with no way to expand
 - **Product / area:** candy-code · permissions (TUI approval surface)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 60703e705)
 - **Verdict:** CONFIRMED (found by A4 and A5; verified by V4 and V5). Merged duplicate.
 - **Location:**
   - `candy-code/src/Renderer.php:6613-6650` (`permissionSubjectLines`; non-shell branch at 6632-6638)
@@ -341,6 +344,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-004"></a>
 ### ISS-004 · [P1] Background sessions run in bypass-permissions on servers that refuse bypass
 - **Product / area:** both · permissions (serve mode)
+- **Status:** ⏭ Fixed (partial — ask-routing follow-up documented) (fix-1017 2026-10-17, fed36221a)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:**
   - `candy-code/src/Protocol/Methods/BgMethods.php:72-99` (no mode passed to `spawnSession()`)
@@ -373,6 +377,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-005"></a>
 ### ISS-005 · [P1] `openai` provider sends `temperature`/`max_tokens` to every model, so reasoning models (gpt-5, o-series) fail
 - **Product / area:** candy-code · providers
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 848d6cbe1)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:**
   - `candy-code/src/Providers/OpenAIProvider.php:368-374` (`complete()`), `:429-439` (`completeStream()`)
@@ -392,6 +397,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-006"></a>
 ### ISS-006 · [P1] Spend cap (`CANDY_CODE_MAX_COST` / `maxCostUsd`) is neither enforced nor validated on `-p`
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, fd24951c6)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:**
   - `candy-code/src/Cli/NonInteractive.php:196-335` (`$backend->complete()` at :335; no cap)
@@ -417,6 +423,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-007"></a>
 ### ISS-007 · [P2] Session cookie is not port-scoped and is enough to mint owner tickets
 - **Product / area:** both · security
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, ed9c349b9)
 - **Verdict:** CONFIRMED (found by A6 as P1; verified and reproduced by V6, downgraded to P2 with a narrower threat model)
 - **Location:**
   - `candy-code/src/Server/Http/ApiController.php:96-100` (host-only cookie, same name on every port)
@@ -439,6 +446,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-008"></a>
 ### ISS-008 · [P2] Per-address sign-in lockout also locks out the valid owner token (local and cross-site DoS)
 - **Product / area:** both · security (availability)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 504988865)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6, which found a wider cross-site vector)
 - **Location:**
   - `candy-code/src/Server/Http/AuthMiddleware.php:59-62` (lockout checked before any credential), `:88-91,121-123` (an unknown ticket counts as a failure)
@@ -466,6 +474,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-009"></a>
 ### ISS-009 · [P2] Sign-out and cookie expiry leave already-open WebSockets authorised
 - **Product / area:** candy-code · security
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 14e2853d3)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:**
   - `candy-code/src/Server/Http/ApiController.php:86-94`
@@ -483,6 +492,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-010"></a>
 ### ISS-010 · [P2] Credentials can be read or inherited without a prompt
 - **Product / area:** candy-code · security
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d1bb387aa)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:**
   - `candy-code/src/Permissions/ReadOnlyCommands.php:258-268` (`autoAllows`: no operand path scope beyond `cd`)
@@ -506,6 +516,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-011"></a>
 ### ISS-011 · [P2] A quoted `{file}` in `lintCommands` lets a file name inject shell outside the gate and sandbox
 - **Product / area:** candy-code · security
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 149f6cee4)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:** `candy-code/src/Lint/LintRunner.php:189-191`; `candy-code/docs/HOOKS.md:1037-1039`
 - **Problem:**
@@ -525,6 +536,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-012"></a>
 ### ISS-012 · [P2] Claude Code-style `Tool(prefix:*)` rules are accepted but never match
 - **Product / area:** candy-code · permissions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, b7451df01)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:**
   - `candy-code/src/Permissions/PermissionRule.php:309-337` (`patternRejectionReason` accepts the form)
@@ -541,6 +553,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-013"></a>
 ### ISS-013 · [P2] auto mode's denylist misses common download-and-execute and exfiltration shapes; the mode description overstates it
 - **Product / area:** candy-code · permissions
+- **Status:** ⏭ Fixed (partial — ExecReviewer optional half) (fix-1017 2026-10-17, 7ca26fa18)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:** `candy-code/src/Permissions/SafetyClassifier.php:79-106`; `candy-code/src/Permissions/PermissionMode.php:182-187`
 - **Problem:**
@@ -560,6 +573,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-014"></a>
 ### ISS-014 · [P2] Bash timeout kill misses backgrounded children yet reports them killed; detached `&` jobs are orphaned
 - **Product / area:** candy-code · shell
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 9db0d7b2e)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:** `candy-code/src/Tools/Concerns/CapturesProcessOutput.php:271-275,350-365`; `candy-code/src/Support/ProcessContainment.php:444-457`; `candy-code/src/Tools/BuiltIn/Bash.php:488-494`
 - **Problem:**
@@ -579,6 +593,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-015"></a>
 ### ISS-015 · [P2] Compaction tiers measure only message `content`, so the documented 70/85/95% tiers fire late or never
 - **Product / area:** candy-code · context
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, eafbec958)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:**
   - `candy-code/src/Context/ContextCompactor.php:1398-1410` (`countTokens`), `:175-186`, `:232-243`, `:539-551`
@@ -605,6 +620,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-016"></a>
 ### ISS-016 · [P2] Oversized prompts are persisted as empty rows after intra-exchange truncation
 - **Product / area:** candy-code · context (observed through the web)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 9eceb24f8)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6, which corrected the location and found it can wipe the current prompt)
 - **Location:**
   - Root cause: `candy-code/src/Context/ContextCompactor.php:388-401` (per-message share `max(0, threshold − preserved − 2000) / n` starves towards 0), `:490-500` (`headWithMarker()` clamps head plus marker to `$charBudget`)
@@ -628,6 +644,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-017"></a>
 ### ISS-017 · [P2] Nested instruction files arrive unlabelled, unfenced and unescaped inside tool results
 - **Product / area:** candy-code · instructions (prompt injection)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, a0d27f4e0)
 - **Verdict:** CONFIRMED (found by A1; verified and reproduced by V1, with one mitigation noted)
 - **Location:**
   - `candy-code/src/Tools/BuiltIn/Read.php:458-465`
@@ -650,6 +667,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-018"></a>
 ### ISS-018 · [P2] Announce-once state is lost at every forked turn: nested instruction files and skill/rule nudges are re-injected each turn
 - **Product / area:** candy-code · instructions (context, prompt caching)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 41fceed33)
 - **Verdict:** CONFIRMED (new finding by V1 during verification; reproduced)
 - **Location:**
   - `candy-code/src/Backend/EngineBackend.php:4823-4836` (result frame carries only `servedModel`, `cacheHealth`, `readLedger`), `:4967-4990` (`settleFromResultFrame` merges only those)
@@ -674,6 +692,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-019"></a>
 ### ISS-019 · [P2] The user's own memory notes are labelled "not written by the user" by default
 - **Product / area:** candy-code · memory
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 53e33a873)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:**
   - `candy-code/src/Context/MemoryBlock.php:264-265` (label), `:683`, `:741`
@@ -696,6 +715,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-020"></a>
 ### ISS-020 · [P2] Web Memory panel reads and writes only the HOME store; repo notes never appear, and panel edits skip memory history
 - **Product / area:** both · memory
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 6515f9fa2)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md rows MEM-N1/MEM-N2 SCW)
 - **Location:**
   - `candy-code/src/Protocol/Methods/MemoryMethods.php:41-67`, `:58-91`, `:93-97`
@@ -717,6 +737,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-021"></a>
 ### ISS-021 · [P2] A dream pass refreshes the main session's prompt memo and instruction loader, busting the prefix cache
 - **Product / area:** candy-code · prompt (prompt caching)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, cae9b60fa)
 - **Verdict:** CONFIRMED (found by A1; verified and reproduced by V1, one consequence corrected)
 - **Location:**
   - `candy-code/src/Memory/DreamPass.php:181` (runner → `completeAsync`), `:376-391` (`restrict()` → `withSessionId(null)`)
@@ -738,6 +759,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-022"></a>
 ### ISS-022 · [P2] The skills listing has no aggregate budget
 - **Product / area:** candy-code · prompt
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3b11002e2)
 - **Verdict:** CONFIRMED (found by A1; verified and measured by V1)
 - **Location:** `candy-code/src/Skills/SkillMatcher.php:70-90`; `candy-code/src/Skills/SkillPromptLine.php:60`; `candy-code/src/Runtime.php:4706-4711`
 - **Problem:** `listForPrompt()` renders every auto-invocable skill. Each line is clipped to `LISTING_MAX_BYTES` (1,024), but there is no cap on lines or total bytes. Every other standing layer has a combined budget.
@@ -748,6 +770,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-023"></a>
 ### ISS-023 · [P2] The `anthropic` provider type gets no prompt caching
 - **Product / area:** candy-code · providers (caching, cost)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, f9bfd6b6b)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:**
   - `candy-code/src/Providers/ProviderFactory.php:982-1036`
@@ -765,6 +788,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-024"></a>
 ### ISS-024 · [P2] The 15 s "connect" bound also caps the response-header wait on streamed requests
 - **Product / area:** candy-code · providers (transport)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 0f45e68f5)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:** `candy-code/src/Providers/Concerns/HttpClientDefaults.php:284-300` (`$options['timeout'] ??= connect_timeout` for StreamHandler requests); docs `candy-code/docs/ENVIRONMENT.md:44`, `candy-code/lang/en.php:425-429`
 - **Problem:**
@@ -784,6 +808,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-025"></a>
 ### ISS-025 · [P2] Default Vertex model is the retired `claude-3-sonnet@20240229`
 - **Product / area:** candy-code · providers
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 04bc6ff80)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:** `candy-code/src/Providers/ProviderFactory.php:558-563`; `candy-code/src/Providers/VertexProvider.php:368` (constructor default)
 - **Problem:** Both defaults are Claude 3 Sonnet, which Anthropic retired (2025-07-21) and Vertex has shut down. `candy-code models` still advertises it.
@@ -794,6 +819,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-026"></a>
 ### ISS-026 · [P2] `--continue` (and resume generally) reopens a session from a different project in the current root
 - **Product / area:** candy-code · sessions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 6c1d60d8f)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:** `candy-code/src/Session/EnhancedSessionStore.php:2146-2160`; `candy-code/src/Cli/Bootstrap.php:4141-4164` (`openSession()` continue/resume arms)
 - **Problem:** `latestResumableSession()` orders sessions by `updated_at` and ignores `sessions.cwd`. `openSession()` returns no cwd and nothing compares it with the launch root. The README promises both "reopen the most recently used session" and "one process serves one project root".
@@ -807,6 +833,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-027"></a>
 ### ISS-027 · [P2] Session retention never prunes auto-titled sessions; the prune report counts a dead table
 - **Product / area:** candy-code · sessions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 371afecba)
 - **Verdict:** CONFIRMED (found by A3; verified by V3, suggested fix corrected)
 - **Location:** `candy-code/src/Session/SessionStore.php:1126-1131` (prune SQL), `:377-380` (`renameSessionIfUnnamed` writes `TitleSource::Auto`); `candy-code/src/Cli/Bootstrap.php:9809-9827`; `candy-code/lang/en.php:432-434`
 - **Problem:**
@@ -822,6 +849,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-028"></a>
 ### ISS-028 · [P2] `doctor` reports the selected provider "OK" even when it cannot be constructed
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 1328623ae)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3, suggested fix corrected)
 - **Location:** `candy-code/src/Cli/Subcommands.php:428-456`
 - **Problem:** The probe checks only `array_key_exists($name, Bootstrap::availableProviders())`. Its comment skips construction because `backendFor()` spawns MCP servers. But `ProviderFactory::create()` does no I/O (`candy-code/src/Cli/NonInteractive.php:150-158`), so missing `apiKey`/`projectId`/`region`/`claudePath` all pass.
@@ -832,6 +860,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-029"></a>
 ### ISS-029 · [P2] Unknown or misspelled config keys, safety keys included, are silently ignored; `doctor` says "No problems detected"
 - **Product / area:** candy-code · config
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d47fb9d72)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3, with corrections)
 - **Location:**
   - `candy-code/src/Config/LayeredSettings.php:1155-1200` (tolerant reader plus `only()` whitelist)
@@ -855,6 +884,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-030"></a>
 ### ISS-030 · [P2] Preset `mcpServers` allowlist is ignored unless the preset also declares `tools:`
 - **Product / area:** candy-code · agents (MCP, permissions)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 4e6b0c00b)
 - **Verdict:** CONFIRMED (found by A2 as P1; verified by V2, downgraded to P2)
 - **Location:**
   - `candy-code/src/Agents/AgentManager.php:1478-1489` (`$patterns === []` → `return null`), `:1603-1606` (the `McpRouter::serverAllowed()` filter, reached only inside the declared-tools loop), `:1825-1875` (`grantRefusalFor()`, no MCP check)
@@ -874,6 +904,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-031"></a>
 ### ISS-031 · [P2] A cloned repo's native agent preset silently replaces your own preset and the built-in of the same name
 - **Product / area:** candy-code · agents (trust)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c4b41ffb4)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/Cli/Bootstrap.php:3017-3049` (`agentPresetTiers()` returns `[$projectAgents, $userAgents]`), `:2578-2666` (`agentRoster()`, native layer written last)
@@ -889,6 +920,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-032"></a>
 ### ISS-032 · [P2] The model is never told what custom agents are for: Task guidance lists names only
 - **Product / area:** candy-code · agents (prompt)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, ec708c834)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:** `candy-code/src/Tools/BuiltIn/TaskTool.php:673-682` (`promptGuidance()`), `:2479-2488` (`rosterNames()`), `:704-709` (the `agent` schema hard-codes the six built-in names as examples)
 - **Problem:** The model sees only "Current agent roster: a, b, c." No preset `description` or grant reaches it: `->description` is read only by `/agent`, the dashboard and protocol methods.
@@ -899,6 +931,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-033"></a>
 ### ISS-033 · [P2] Built-in `coder` cannot create files and `tester` cannot write tests with file tools
 - **Product / area:** candy-code · agents
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, bec799adb)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:** `candy-code/src/Agents/AgentDefinition.php:38-52` (coder `['Read','Edit','Bash','Skill']`), `:175-190` (tester `['Read','Bash','Skill']`); `candy-code/src/Tools/BuiltIn/Edit.php:127` ("must already exist; use Write")
 - **Problem:**
@@ -912,6 +945,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-034"></a>
 ### ISS-034 · [P2] `/agents`, Ctrl+A and palette "Switch agent" never list the roster; the `/agent <unknown>` hint is circular
 - **Product / area:** candy-code · agents (TUI presentation)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, b1d5ea358)
 - **Verdict:** CONFIRMED (found by A2 and A5; verified by V2 as P3 and by V5 as P2, kept at P2). Merged duplicate.
 - **Location:**
   - `candy-code/src/Commands/AgentsCommand.php:107-131` (idle branch prints only a count)
@@ -936,6 +970,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-035"></a>
 ### ISS-035 · [P2] Ctrl+S skill picker reports "Enabled skill 'x'." but nothing reaches the model
 - **Product / area:** candy-code · skills (TUI)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, a0654ffb8)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/App/App.php:2594-2595` (`withoutEngineCmd`), `:4377-4422` (`handleSelectSkill()` mutates only the shell App's `enabledSkills`)
@@ -951,6 +986,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-036"></a>
 ### ISS-036 · [P2] Project command files can replace non-control-plane built-ins (/undo, /notices, /mcp, /rewind…) with no trust or notice
 - **Product / area:** candy-code · commands (trust)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, efcc90ac8)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/Commands/CommandLoader.php:502-536` (merge; only CONTROL_PLANE names taken back)
@@ -966,6 +1002,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-037"></a>
 ### ISS-037 · [P2] Unknown or mistyped `/word` is sent to the model as a prompt
 - **Product / area:** candy-code · commands
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3dc7fdd43)
 - **Verdict:** CONFIRMED (found by A2 and A5; verified by V2 as P3 and by V5 as P2, kept at P2). Merged duplicate.
 - **Location:** `candy-code/src/Chat.php:11192-11196` (`submit()` falls through when `dispatchCommand()` returns null), `:12747-12784` (`dispatchCommand()` returns null for an unknown spelling)
 - **Problem:**
@@ -982,6 +1019,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-038"></a>
 ### ISS-038 · [P2] Hooks written for Claude Code get an empty stdin and fail open
 - **Product / area:** candy-code · hooks
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 60cd4b137)
 - **Verdict:** CONFIRMED (found by A2 as P1; verified by V2, downgraded to P2 with a correction)
 - **Location:** `candy-code/src/Hooks/ScriptHook.php:681` (`fclose($pipes[0])`, nothing written), `:617-660` (payload only in `CRUSH_*` env); `candy-code/docs/HOOKS.md:531-533` ("a hook written for that tool carries over")
 - **Problem:** The payload goes only into `CRUSH_*` env vars, staged to `*_FILE` when large. stdin is closed empty, but Claude Code hooks read JSON on stdin. HOOKS.md never mentions stdin, and its "carries over" sentence is true only of the stdout envelope.
@@ -994,6 +1032,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-039"></a>
 ### ISS-039 · [P2] A relative command in the user's (always-trusted) hooks.yaml runs the opened repo's script
 - **Product / area:** candy-code · hooks (trust boundary)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 6f8547164)
 - **Verdict:** CONFIRMED (found by A2 as P1; verified by V2, downgraded to P2)
 - **Location:**
   - `candy-code/src/Hooks/ScriptHook.php:590` (`$cwd = projectRoot`)
@@ -1008,6 +1047,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-040"></a>
 ### ISS-040 · [P2] Hook "ask" (exit 3) is auto-approved in bypass mode (default for `-p`/background), contradicting HOOKS.md
 - **Product / area:** candy-code · hooks (headless)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 1f1382b63)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/Cli/HeadlessPermissionPrompt.php:386-397`; `candy-code/src/Runtime.php:3025-3036`
@@ -1024,6 +1064,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-041"></a>
 ### ISS-041 · [P2] UserPromptSubmit and SessionStart hooks never fire in `-p` or background sessions
 - **Product / area:** candy-code · hooks (headless)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 8b2605934)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/Cli/NonInteractive.php:335` and `candy-code/src/Sessions/BackgroundSessionRunner.php:496-503` (both call `$backend->complete()` directly)
@@ -1036,6 +1077,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-042"></a>
 ### ISS-042 · [P2] MCP HTTP transport: fixed 30 s total timeout per call, and 401s are swallowed
 - **Product / area:** candy-code · mcp
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 0d44de6b3)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/MCP/McpClient.php:109` (`new Client(['timeout' => 30])`; Bootstrap passes no client, `candy-code/src/Cli/Bootstrap.php:8458-8477`)
@@ -1053,6 +1095,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-043"></a>
 ### ISS-043 · [P2] `claude-mcp` default args (`--mcp`) do not match the Claude CLI
 - **Product / area:** candy-code · mcp
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 4cdb529b6)
 - **Verdict:** CONFIRMED (found by A2; verified and reproduced by V2)
 - **Location:** `candy-code/src/MCP/ClaudeCodeMcpServer.php:73,150-152`; `candy-code/docs/MCP.md:190`; `candy-code/docs/SETTINGS.md:616`
 - **Problem:** `DEFAULT_ARGS = ['--mcp']`, and both doc pages repeat it, but the Claude CLI serves MCP with `claude mcp serve`.
@@ -1063,6 +1106,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-044"></a>
 ### ISS-044 · [P2] Embedded MCP resources and images are dropped from tool results
 - **Product / area:** candy-code · mcp
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c3e4e9e64)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:** `candy-code/src/Tools/McpToolBridge.php:696-732` (`renderContent()`), called from `:526`
 - **Problem:** Only `type: text` parts are kept. Every other part becomes `[<type>]`, losing `resource.text` and image data. This is the only render path for bridge results.
@@ -1073,6 +1117,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-045"></a>
 ### ISS-045 · [P2] Re-running a user-tier PHP workflow that declares a function or class kills the TUI ("Cannot redeclare")
 - **Product / area:** candy-code · workflows
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c7a0acc2c)
 - **Verdict:** CONFIRMED (found by A2 within its docs item (f); split out and reproduced by V2)
 - **Location:** `candy-code/src/Workflows/WorkflowRegistry.php:375` (`require $phpPath`), `:300-306`; `candy-code/src/Host/Commands/WorkflowCommand.php:183-190` (`engine->run()` in a `\Fiber` inside the TUI process); `candy-code/docs/WORKFLOWS.md:43-50`
 - **Problem:**
@@ -1089,6 +1134,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-046"></a>
 ### ISS-046 · [P2] `/` popup has no height cap; a bare `/` clips the input line and the highlighted row off screen
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, f569be947)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5, with a correction)
 - **Location:** `candy-code/src/Renderer.php:5662-5728` (`renderSlashMenu` renders every match), `:1878-1880` (popup appended below the input), `:1953-1962` (tail clip); `candy-code/src/Chat.php:16598-16603`
 - **Problem:** `CommandRegistry::filter('')` returns all 48 slash commands, so the popup paints 50 rows under the input box. The frame keeps the last `rows-1` lines, cutting off the input box and the top of the list, where the selected row (index 0) is.
@@ -1099,6 +1145,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-047"></a>
 ### ISS-047 · [P2] Unbound Ctrl+letter chords type their letter into the draft; readline keys are unusable
 - **Product / area:** candy-code · tui (input)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, fac4df7c3)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Chat.php:3533-3545` (ctrl-flagged `Char` → `insertRune`); `sugar-core/src/InputReader.php:502` (C0 byte → `KeyMsg(Char, rune: chr(0x60+code), ctrl: true)`)
 - **Problem:**
@@ -1113,6 +1160,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-048"></a>
 ### ISS-048 · [P2] Startup terminal probe runs in cooked mode: reply garbage after every exit, failed detection, ~450 ms start-up delay
 - **Product / area:** candy-code · tui (start-up)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 5f6acc56a)
 - **Verdict:** CONFIRMED (found by A5; verified, reproduced and timed by V5)
 - **Location:**
   - `candy-code/bin/candy-code:551-556` (`Bootstrap::app()` evaluated before `Program::run()` enters raw mode)
@@ -1135,6 +1183,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-049"></a>
 ### ISS-049 · [P2] Pane auto-dock has no width guard, persists, and re-docks panes the user closed on the next launch
 - **Product / area:** candy-code · tui (layout)
+- **Status:** ⏭ Not fixed — no landed commit found (fix-1017 2026-10-17); never claimed by a lane
 - **Verdict:** CONFIRMED (found by A5; verified by V5, with a correction on the share)
 - **Location:**
   - `candy-code/src/App/App.php:2041` (`AUTO_ENABLE_PANES`), `:2061-2087` (`autoEnablePane`, no width check), `:1850-1866` (`seedSharesFromFrame`: a quarter, first mutation only)
@@ -1154,6 +1203,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-050"></a>
 ### ISS-050 · [P2] Typing while scrolled up edits an invisible draft
 - **Product / area:** candy-code · tui (input)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 31c4e9d8c)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Renderer.php:1878-1880` (input box is part of the scrolled `$content`), `:1953-1962` (scroll window); `candy-code/src/Chat.php:8910-8913` (`scrollOffset` reset only on session change or clear)
 - **Problem:** The scroll window slides over the transcript, input box and popup together, and draft-editing keys do not snap `scrollOffset` back to 0.
@@ -1164,6 +1214,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-051"></a>
 ### ISS-051 · [P2] No paste collapse and no input height cap: a long paste hides the transcript
 - **Product / area:** candy-code · tui (input)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 4b381154c)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Renderer.php:7178-7181` ("The height half needs nothing"); `candy-code/src/Chat.php:2786-2830` (`PasteMsg` inserts the payload verbatim)
 - **Problem:** A bracketed paste is inserted whole and the box grows without a cap. The tail clip then drops all transcript rows plus the box's own top lines and border. There is no clear-draft chord ([ISS-047](#iss-047)).
@@ -1174,6 +1225,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-052"></a>
 ### ISS-052 · [P2] The web ignores `server.overflow` (and `server.shutdown`), so a session in a dead or recycled workspace host freezes
 - **Product / area:** candy-code-web · web-ui (reconnect, multi-root)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 43310556a)
 - **Verdict:** CONFIRMED (found by A6, who reproduced it live; verified by code trace by V6)
 - **Location:**
   - `candy-code/src/Server/Workspace/Gateway.php:579-601` (`lost()` sends a server-scope envelope with `data.sessionId`, then drops the subscriber)
@@ -1195,6 +1247,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-053"></a>
 ### ISS-053 · [P2] Sidebar j/k shortcuts hijack typing in the session filter
 - **Product / area:** candy-code-web · web-ui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 40f799a68)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:** `candy-code-web/src-web/components/SessionSidebar.vue:59-67` (handler), `:71` (`@keydown` on the `<nav>` containing the filter `<input>`)
 - **Problem:** The handler ignores `event.target` and modifiers and does not `preventDefault`, so a `j` or `k` typed in the filter both lands in the box and navigates.
@@ -1205,6 +1258,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-054"></a>
 ### ISS-054 · [P2] `serve` mode shares one prompt memo and one instruction loader across all sessions
 - **Product / area:** candy-code · server (instructions, context)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 1b5a64e3f)
 - **Verdict:** CONFIRMED (found by A1; verified by V1, with one sub-claim unreachable)
 - **Location:**
   - `candy-code/src/Host/SessionHub.php:100`
@@ -1223,6 +1277,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-055"></a>
 ### ISS-055 · [P2] Slow request bodies stall the whole HTTP listener indefinitely, ahead of `--allowed-ips`
 - **Product / area:** candy-code · server (availability)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 73c6ba6f7)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:** `candy-code/src/Server/Server.php:129-148`: `LimitConcurrentRequestsMiddleware(32)` and `RequestBodyBufferMiddleware(64 KiB)` run before `ClientAddressGuard`, `HostAndOriginGuard` and `AuthMiddleware`. react/http v1.11.1 has no server-side read timeout.
 - **Problem:** Each of 32 requests that send headers and a partial body holds a concurrency slot forever, and later requests queue behind them. The IP allow-list runs only after the body is buffered.
@@ -1238,6 +1293,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-056"></a>
 ### ISS-056 · [P2] `session.send` of `!cmd` or a built-in `/command` runs it but answers `-32009 refused`, and its rows emit no events
 - **Product / area:** both · server (protocol, web UX)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 4be87c76d)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:**
   - `candy-code/src/Protocol/Methods/TurnMethods.php:89-103` (no `TurnTicket::HANDLED` arm → `default => refused`, null reason)
@@ -1260,6 +1316,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-057"></a>
 ### ISS-057 · [P2] Internal errors are swallowed without a log line, contrary to SERVER.md
 - **Product / area:** candy-code · server (observability)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 31c79d121)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
 - **Location:** `candy-code/src/Protocol/Dispatcher.php:365-371` (`catch (\Throwable)` with no logger; the constructor at `:108-112` takes none); `candy-code/src/Server/Ws/Connection.php:160-164` (1011 close, no log); `candy-code/src/Protocol/Methods/BgMethods.php:93-96`; claim at `candy-code/docs/SERVER.md:371`
 - **Problem:** SERVER.md says "-32099 internal — the cause is in the server's log", but neither Dispatcher nor Connection has a log sink. The server log gets only `ws closed <id>` (`candy-code/src/Server/Server.php:122-124`).
@@ -1270,6 +1327,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-058"></a>
 ### ISS-058 · [P2] Unpaged snapshots hit the 4 MiB answer cap, after which the web cannot open the session
 - **Product / area:** both · server (protocol, web scalability)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, ef954653f)
 - **Verdict:** CONFIRMED (found by A6; verified by V6. The mechanism is certain; reaching the cap depends on session size)
 - **Location:**
   - `candy-code/src/Host/SessionSnapshot.php:71-82` (`messages` = every history row)
@@ -1286,6 +1344,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-059"></a>
 ### ISS-059 · [P3] The audit log is unrotated, lives in tmp and stores unredacted inputs
 - **Product / area:** candy-code · security (observability)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 30bf4e928)
 - **Verdict:** CONFIRMED (found by A4; verified by V4)
 - **Location:** `candy-code/src/Hooks/BuiltIn/AuditHook.php:75,84` (200 B output excerpt, 4 KiB input cap), `:316-320` (`sys_get_temp_dir()/candy-code-audit-<euid>`), `:343` (record format)
 - **Problem:**
@@ -1299,6 +1358,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-060"></a>
 ### ISS-060 · [P3] Read has no binary/image detection and scans every file in full
 - **Product / area:** candy-code · tools
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 30bf4e928)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:** `candy-code/src/Tools/BuiltIn/Read.php:647-700` (`readPage` pass 1 counts newlines and hashes the whole file; no size refusal or binary sniff)
 - **Problem:** Binary files come back as line-numbered raw bytes, and every call streams and hashes the whole file before paging.
@@ -1313,6 +1373,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-061"></a>
 ### ISS-061 · [P3] A lone Grep has no wall-clock bound
 - **Product / area:** candy-code · tools
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 39ed53d9e)
 - **Verdict:** CONFIRMED for the timeout half (found by A4; verified by V4). The BRE-only half was rejected; see the appendix.
 - **Location:** `candy-code/src/Tools/BuiltIn/Grep.php:384` (`runCaptured(…, null /* timeout */, …)`); `candy-code/src/Runtime.php:2544` (the 90 s deadline applies only to parallel groups)
 - **Problem:** A sequential Grep runs with no timeout, and its heartbeat keeps feeding the turn's idle watchdog, so only Esc stops it.
@@ -1323,6 +1384,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-062"></a>
 ### ISS-062 · [P3] Exact-stage Edit creates mixed line endings in CRLF files
 - **Product / area:** candy-code · editing
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 4a2bd3197)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4, location corrected)
 - **Location:** `candy-code/src/Tools/Edit/EditMatcher.php:106-107` (the exact stage returns `new EditMatch(STAGE_EXACT, $old, $new, …)` unadapted); `candy-code/src/Tools/Edit/ExactMatcher.php:19-33`; `candy-code/src/Tools/Edit/IndentShift.php:50-53` (CRLF adaptation, reached only from `candy-code/src/Tools/Edit/LineWindows.php:47` and `candy-code/src/Tools/Edit/BlockAnchorMatcher.php:90`)
 - **Problem:** Only the fuzzy stages convert `new_string` to CRLF. An exact match inserts the model's LF text verbatim into a CRLF file.
@@ -1333,6 +1395,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-063"></a>
 ### ISS-063 · [P3] `/context` omits the tool-guidance and plan-mode prompt layers
 - **Product / area:** candy-code · context
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 1a296baaa)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:**
   - `candy-code/src/Backend/EngineBackend.php:2676-2680` (`promptSectionSizes`), `:2645-2668` (`sessionApp()`, no `withTools`)
@@ -1346,6 +1409,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-064"></a>
 ### ISS-064 · [P3] Served sessions: the idle-compaction check is never called and ahead-of-need summaries never prefetch
 - **Product / area:** candy-code · context (serve mode)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 458e6a2a2)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md rows CTX-N1/CTX-N2 SCW)
 - **Location:**
   - `candy-code/src/Host/ContextMeter.php:172-189` (`shouldPromptIdleCompaction()`; no production caller; exercised only by `candy-code/tests/RuntimeTest.php:2002-2003`)
@@ -1364,6 +1428,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-065"></a>
 ### ISS-065 · [P3] A sub-agent's file touches mark nested instruction files as delivered for the parent (rest of the turn)
 - **Product / area:** candy-code · instructions (sub-agents)
+- **Status:** ⏭ Fixed (partial — emitted-path loader-view seam (TaskTool granted-tool copies + InstructionFileLoader view)) (fix-1017 2026-10-17, f42ec5fc6)
 - **Verdict:** CONFIRMED (found by A1 as P2; verified by V1, narrowed to P3)
 - **Location:**
   - `candy-code/src/Tools/BuiltIn/TaskTool.php:1159` (`grantedToolsFor`), `:1207` (`$granted ?? $engine->tools()`)
@@ -1378,6 +1443,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-066"></a>
 ### ISS-066 · [P3] `@import` expands inside inline code and email-like text, contrary to the docs
 - **Product / area:** candy-code · instructions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 0648fe386)
 - **Verdict:** CONFIRMED (found by A1; verified and reproduced by V1)
 - **Location:** `candy-code/src/Context/ImportResolver.php:149`; `candy-code/docs/MEMORY.md:728-729`
 - **Problem:**
@@ -1394,6 +1460,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-067"></a>
 ### ISS-067 · [P3] Forced `instructions` patterns that are absolute or `~` are dropped silently; forced docs skip `@import`
 - **Product / area:** candy-code · instructions (config)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 879fb12e6)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Context/InstructionFileLoader.php:888-892` (absolute → `continue`, no `refusedPaths` entry), `:902-907`, `:942-945` (body = `$doc . $note`, no `expandImports`); `candy-code/src/Cli/Bootstrap.php:9632-9647`
 - **Problem:** An absolute pattern is skipped without recording a refusal, so no launch notice mentions it. `~/x.md` is globbed as `<repo>/~/x.md` and matches nothing. Forced bodies never pass through `expandImports()`.
@@ -1404,6 +1471,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-068"></a>
 ### ISS-068 · [P3] Rule frontmatter `models:` and `keywords:` are parsed but inert, with no notice
 - **Product / area:** candy-code · instructions (rules)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, bffb9830e)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Context/Rule.php:197`, `:229-231`; `candy-code/src/Support/FrontmatterKeyAudit.php:67`, `:106`; `candy-code/docs/PROMPT_ENGINEERING.md:536-545`; `candy-code/README.md:2106`
 - **Problem:** `Rule::$models` and `KeywordTrigger` have no consumer. `INERT[RULE]` is `[]`, so the launch audit never flags them, while the README claims every inert field is named at launch.
@@ -1414,6 +1482,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-069"></a>
 ### ISS-069 · [P3] On-touch delivery gives one instruction file per touch, innermost first
 - **Product / area:** candy-code · instructions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 77a5c8b83)
 - **Verdict:** CONFIRMED (found by A1; verified and reproduced by V1. Worse on the forked path)
 - **Location:** `candy-code/src/Context/InstructionFileLoader.php:1066-1112`
 - **Problem:** `loadForPath()` walks up from the touched directory and returns only the first not-yet-emitted file.
@@ -1424,6 +1493,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-070"></a>
 ### ISS-070 · [P3] The pre-compaction memory flush saves notes silently; CONTEXT.md implies otherwise
 - **Product / area:** candy-code · memory
+- **Status:** ⏭ Fixed (partial — memory-flush display wiring seam (rows returned, not surfaced in TUI)) (fix-1017 2026-10-17, 41c111df1)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Context/Compaction/MemoryFlush.php:115-134` (returns a count); `candy-code/src/Backend/EngineBackend.php:2018-2030`, `:4451-4466` (both callers discard it; no tool events); `candy-code/docs/CONTEXT.md:276-284`
 - **Problem:** Flush saves produce no notice, unlike auto-memory and dream writes. CONTEXT.md says "nothing about it reaches the transcript but the notes it saved", which reads as if they are shown.
@@ -1434,6 +1504,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-071"></a>
 ### ISS-071 · [P3] The compaction journal grows without bound and is read whole every dream pass
 - **Product / area:** candy-code · memory
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 68d0612a2)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Memory/CompactionJournal.php:82-118` (append), `:128-152` (`entries()` via `file()`); `candy-code/src/Memory/DreamPass.php:432-464`
 - **Problem:** The journal is append-only with no rotation. `pending()` decodes every line and then skips to the cursor. Folded entries are never trimmed.
@@ -1444,6 +1515,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-072"></a>
 ### ISS-072 · [P3] Embedding recall makes a synchronous HTTP call in the TUI/serve parent every turn
 - **Product / area:** candy-code · memory
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 68c0daf10)
 - **Verdict:** CONFIRMED (found by A1; verified by V1, one detail corrected)
 - **Location:** `candy-code/src/Backend/EngineBackend.php:3519-3558`; `candy-code/src/Runtime.php:5709-5721`; `candy-code/src/Providers/CustomProvider.php:709-724`
 - **Problem:** With `embeddingModel` set, `completeAsync()` calls `primeMemoryRecall()` in the parent before forking. That makes a blocking Guzzle `post('embeddings')` on the event loop, every turn (plus every uncached note on first use). The dream pass takes the same path.
@@ -1454,6 +1526,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-073"></a>
 ### ISS-073 · [P3] Vertex context window hard-coded to 200k; `contextWindow` ignored for vertex/bedrock/sglang/claude-code
 - **Product / area:** candy-code · providers (context)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 937e92aec)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Providers/VertexProvider.php:463-466`; `candy-code/src/Providers/ProviderFactory.php:88-122` (`TYPE_SCHEMAS`: only openai, anthropic and custom accept `contextWindow`); `candy-code/docs/CONTEXT.md:44-48`; `candy-code/docs/SETTINGS.md:223`
 - **Problem:** `VertexProvider::contextWindow()` returns 200,000 for every model, including 1M-class Gemini, and the vertex block has no `contextWindow` key. CONTEXT.md says the setting overrides in general; SETTINGS.md correctly limits it to three types.
@@ -1464,6 +1537,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-074"></a>
 ### ISS-074 · [P3] Rate-limit handling ignores Retry-After; the default retry ladder is ~1.5 s with no jitter
 - **Product / area:** candy-code · providers (retries)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 49b6cedaf)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:** `candy-code/src/Providers/TransientFailure.php:182-219` (constants), `:383-443` (`backoff()`/`backoffMicroseconds()`), `:700-703` (`statusIsTransient`)
 - **Problem:**
@@ -1478,6 +1552,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-075"></a>
 ### ISS-075 · [P3] Bedrock: SDK retries stack with engine retries; no connect bound on the streaming path; stale docblock
 - **Product / area:** candy-code · providers
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 810c3af9d)
 - **Verdict:** CONFIRMED (found by A3; verified by V3, attempt count corrected)
 - **Location:** `candy-code/src/Providers/BedrockProvider.php:319-323`; `candy-code/src/Providers/Concerns/HttpClientDefaults.php:98-103` (stale "never passes `stream => true`" paragraph); `candy-code/vendor/aws/aws-sdk-php/src/AwsClient.php:293,668-689` (SDK 3.401.2)
 - **Problem:**
@@ -1494,6 +1569,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-076"></a>
 ### ISS-076 · [P3] Nothing heartbeats the wait before the first streamed chunk, so the 120 s turn idle ceiling can kill a long prefill
 - **Product / area:** candy-code · providers (engine timeouts)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d9c66b81c)
 - **Verdict:** PLAUSIBLE (found by A3; V3 confirmed the code gap, but the impact is not demonstrated)
 - **Location:** `candy-code/src/Backend/EngineBackend.php:75-122` (idle-ceiling doc, "STILL NOT COVERED"), `:3781-3803` (timer armed up front, reset per frame); `candy-code/src/Providers/CustomProvider.php:389-394` and `candy-code/src/Providers/SglangProvider.php:1151-1156` (`heartbeatOptions()` wired on batch `complete()` only)
 - **Problem:** The parent arms the idle timer before the first frame. On the streaming path, frames arrive only per chunk, and StreamHandler cannot tick while blocked before headers or the first byte. SGLang and vLLM send headers immediately but nothing during prefill.
@@ -1504,6 +1580,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-077"></a>
 ### ISS-077 · [P3] Auxiliary calls use the provider block's default model, not a cheap one; prompt suggestions add a call per turn
 - **Product / area:** candy-code · providers (cost)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 894cf056e)
 - **Verdict:** CONFIRMED (found by A3; verified by V3, with a correction)
 - **Location:** `candy-code/src/Cli/Bootstrap.php:10187-10214` (`toollessBackend()`); `candy-code/src/Config/Settings/Definitions/InterfaceSettings.php:231-241` (`promptSuggestions` default true); `candy-code/README.md:823-826`; `candy-code/docs/ENVIRONMENT.md:36,50`
 - **Problem:**
@@ -1517,6 +1594,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-078"></a>
 ### ISS-078 · [P3] `claude-code` provider can never use a Claude subscription login (`--bare` always passed)
 - **Product / area:** candy-code · providers
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 35c6b4069)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:** `candy-code/src/Providers/ClaudeCodeProvider.php:112-127` (`'bare' => true`); `candy-code/src/Providers/ClaudeCodeInvocation.php:117`
 - **Problem:** Every invocation passes `--bare`. Claude Code 2.1.301's `--help` says bare mode never reads OAuth or keychain, so only an API key or `apiKeyHelper` works. The docs (`candy-code/docs/ENVIRONMENT.md:192-193`) don't mention this.
@@ -1527,6 +1605,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-079"></a>
 ### ISS-079 · [P3] `session delete` ignores the session lock; deleting a live session silently resurrects a stripped row
 - **Product / area:** candy-code · sessions
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3402d6be4)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:** `candy-code/src/Cli/Subcommands.php:809-833`; `candy-code/src/Session/EnhancedSessionStore.php:1761-1772` (`saveTranscript()` recreates a missing row as `'candy-code'/'unknown'`)
 - **Problem:** `sessionDelete()` deletes without probing `SessionLock`. Checkpoints, transcripts and events cascade away, and the open TUI's next save recreates the row with no name, cwd or kind.
@@ -1537,6 +1616,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-080"></a>
 ### ISS-080 · [P3] `-p` blocks indefinitely when stdin is an open but silent pipe
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 174fffe75)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:** `candy-code/src/Cli/NonInteractive.php:1054-1077` (called at :273)
 - **Problem:** Any non-TTY stdin is read to EOF with a blocking `stream_get_contents()`, with no readiness check.
@@ -1547,6 +1627,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-081"></a>
 ### ISS-081 · [P3] Stderr launch notices end with a double period
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 4edf42bc0)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:** `candy-code/src/Cli/Bootstrap.php:388` (`STDERR_LINE_FORMAT = "candy-code: %s.\n"`); `candy-code/lang/en.php:2606` (`appLaunch.notice.bypass_mode` ends in `.`)
 - **Problem:** The format adds a full stop, and the comments at `candy-code/src/Cli/Bootstrap.php:611,650,675` forbid messages routed through it from carrying their own. This string does.
@@ -1557,6 +1638,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-082"></a>
 ### ISS-082 · [P3] `--version` / `doctor` report the commit of the last `composer install`, not the checkout's HEAD
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d7bf0123e)
 - **Verdict:** CONFIRMED (found by A3; verified by V3)
 - **Location:** `candy-code/src/Cli/Help.php:92-139`
 - **Problem:** The reference comes from `candy-code/vendor/composer/installed.php` (`d2f2a58…`), which is 115 commits behind HEAD. This affects only source checkouts where candy-code is the root package.
@@ -1567,6 +1649,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-083"></a>
 ### ISS-083 · [P3] `doctor` calls ext-sqlite3 "unused" and reports OK whether or not it is loaded
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 7c4a50ff4)
 - **Verdict:** CONFIRMED (counter-finding by V3 while rejecting A3's claim that ext-sqlite3 is unused)
 - **Location:** `candy-code/lang/en.php:156` (`cli.doctor.pdo`: "ext-sqlite3 (declared in composer.json, unused by the code)"); `candy-code/src/Cli/Subcommands.php:264-285`; real consumer `candy-code/src/Agents/TaskList.php:772-797` (`new \SQLite3($dbPath)` at :794), reached via `candy-code/src/Agents/Team.php:47` and the `Team` tool
 - **Problem:** The doctor text calls the extension unused and the probe reports OK either way. In fact the Team task list needs it, and the Team tool ships on every launch.
@@ -1577,6 +1660,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-084"></a>
 ### ISS-084 · [P3] `--output-format` given as the last argument with no value is silently accepted as text
 - **Product / area:** candy-code · cli-headless
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 46287015b)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:** `candy-code/src/Cli/ArgvParser.php:302-307`; mirrored in `candy-code/bin/candy-code:174-175`
 - **Problem:** `$outputFormat = $argv[++$i] ?? $outputFormat;` keeps `text` when the value is missing. Sibling flags raise a usage error (e.g. `--model` "expects a model name").
@@ -1587,6 +1671,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-085"></a>
 ### ISS-085 · [P3] Absolute compaction token caps are not checked for ascending order
 - **Product / area:** candy-code · config (context)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 129915feb)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Context/CompactorConfig.php:343-350` (the percentages are checked together), `:365-375` (the token caps are not), `:679-684` (`tierThreshold`); `candy-code/src/Config/Settings/Definitions/ContextSettings.php:58-62` (`ThresholdOrderValidator` covers only the percent keys)
 - **Problem:** `reminderTokens`, `autoTokens`, `blockTokens` and `modelTokenCaps` are accepted in any order.
@@ -1597,6 +1682,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-086"></a>
 ### ISS-086 · [P3] The Claude Code agent importer mis-parses `skills:` comma strings, `mcpServers:` mappings and `background`
 - **Product / area:** candy-code · agents (import)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 94696f2f6)
 - **Verdict:** CONFIRMED (found by A2 as P2; verified and reproduced by V2, downgraded with corrections)
 - **Location:** `candy-code/src/Agents/ForeignAgentPresetRegistry.php:508-511` (`(array)` casts, `(bool)` background); compare `candy-code/src/Agents/AgentPresetRegistry.php:544,573-610` (`nameList()`)
 - **Problem:** The importer casts `skills` and `mcpServers` with `(array)` and `background` with `(bool)`, while the native parser splits comma strings.
@@ -1613,6 +1699,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-087"></a>
 ### ISS-087 · [P3] `/bg` and `/fork` run as roster index 0, which is the first foreign import when one exists
 - **Product / area:** candy-code · agents (background)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, fbd9cd7f8)
 - **Verdict:** CONFIRMED for the selection; the consequence is plausible (found by A2; verified by V2)
 - **Location:** `candy-code/src/Host/Commands/BackgroundCommand.php:131-133`; `candy-code/src/Cli/Bootstrap.php:2591-2594` (foreign entries inserted first; PHP keeps the first-insert position on overwrite), `:2435-2442`; `candy-code/src/Sessions/BackgroundSupervisor.php:399` and `candy-code/src/Sessions/BackgroundSessionRunner.php:880` (the agent's model becomes `CANDY_CODE_MODEL`)
 - **Problem:** Without a `default` preset, `all()[0]` is the first foreign preset, often from the user's own `~/.claude/agents/`. It decides the background session's model and isolation.
@@ -1623,6 +1710,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-088"></a>
 ### ISS-088 · [P3] Foreign agent parse failures and import warnings never reach the user
 - **Product / area:** candy-code · agents (diagnostics)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d53184a08)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:** `candy-code/src/Agents/ForeignAgentPresetRegistry.php:442,717-721`; `candy-code/src/Cli/Bootstrap.php:2780-2786` (explicitly not drained)
 - **Problem:** Per-file parse failures and `warnings()` go only to `error_log()`, while native presets get launch rows. The Bootstrap docblock acknowledges the gap.
@@ -1633,6 +1721,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-089"></a>
 ### ISS-089 · [P3] `/skills` lists only dream-pass drafts; no command lists installed skills
 - **Product / area:** candy-code · skills (TUI)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, bbdc3bcb0)
 - **Verdict:** CONFIRMED as a discoverability gap (found by A2 and A5; verified by V2 and V5). Merged duplicate.
 - **Location:** `candy-code/src/Host/Commands/SkillsHostCommand.php:38-59` (bare `/skills` defaults to `proposed`); `candy-code/builtin-commands/2410-skills.php`; `candy-code/lang/en.php:1096`; `candy-code/docs/COMMANDS.md:343,568-571`
 - **Problem:**
@@ -1645,6 +1734,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-090"></a>
 ### ISS-090 · [P3] Hooks: smaller correctness and diagnostics gaps
 - **Product / area:** candy-code · hooks
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 8af00e7b9)
 - **Verdict:** CONFIRMED (a–f) (found by A2; verified by V2)
 - **Location:**
   - (a) `candy-code/src/Cli/Bootstrap.php:4567-4615`
@@ -1679,6 +1769,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-091"></a>
 ### ISS-091 · [P3] One malformed `.mcp.json` entry stops every later server from starting
 - **Product / area:** candy-code · mcp
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, a07cf7ecf)
 - **Verdict:** CONFIRMED (found by A2 as P2; verified by V2, downgraded)
 - **Location:** `candy-code/src/MCP/McpClient.php:170-175` (calls `startServer(string, array)` outside the per-entry try), `:444`; `candy-code/src/Cli/Bootstrap.php:8530-8545` (catches and reports), `:8018-8020` (inventory skip)
 - **Problem:** An int key (`"1"` decodes to int 1) or a non-array value throws a TypeError under `strict_types` before `startServer()`'s own try runs. Servers after it never start, and the inventory silently skips the same entries, so `mcp list` and the launch disagree.
@@ -1689,6 +1780,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-092"></a>
 ### ISS-092 · [P3] `/mcp` inspects the process cwd, not `--root`
 - **Product / area:** candy-code · mcp (CLI)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3ed7528ac)
 - **Verdict:** CONFIRMED (found by A2 as P2; verified by V2, downgraded)
 - **Location:** `candy-code/src/Commands/McpAuthCommand.php:172-176` (`mcpServerInventory()`, `mcpLivenessSnapshot()` and `mcpConfigChangedSinceLaunch()` called with no root); `candy-code/src/Cli/Bootstrap.php:7845,9601-9608` (`requireRoot(null)` → `getcwd()`)
 - **Problem:** `--root` does not `chdir()`, so `/mcp` reads the cwd's `.mcp.json` and trust state and finds no liveness memo. Under `serve`, which hosts several roots, it always shows the server process's cwd.
@@ -1699,6 +1791,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-093"></a>
 ### ISS-093 · [P3] MCP: smaller gaps
 - **Product / area:** candy-code · mcp
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 899e03b87)
 - **Verdict:** CONFIRMED (a, b, d, e, f); (c) confirmed only for the dropped error text; (g) plausible (found by A2; verified by V2)
 - **Location:**
   - (a) `candy-code/src/Cli/Bootstrap.php:7869-7871` (disabled returns `MCP_ABSENT`), `candy-code/lang/en.php:620,2005`
@@ -1730,6 +1823,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-094"></a>
 ### ISS-094 · [P3] Session picker (Ctrl+R) lets transcript text bleed through its header and footer
 - **Product / area:** candy-code · tui (rendering)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 23434eb83)
 - **Verdict:** CONFIRMED (found by A5 as P2; verified and reproduced by V5, lowered to P3)
 - **Location:** `candy-code/src/Tui/SessionPicker.php:1153-1191` (`renderHeader`: title and hints clipped, rule `width-2`), `:1339-1382` (`renderFooter`); `sugar-overlay/src/Veil.php:515-519` (each overlay line covers only its own visible width)
 - **Problem:** Veil composites each overlay line over its visible width only. The picker's header and footer lines are clipped but not padded, so the backdrop shows to their right. `candy-code/src/Tui/DirectoryPicker/DirectoryPicker.php:361-363` pads with `fit(…, $width + 4)`.
@@ -1740,6 +1834,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-095"></a>
 ### ISS-095 · [P3] `statusLine` command blocks the TUI thread on every refresh
 - **Product / area:** candy-code · tui (performance)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c218410e5)
 - **Verdict:** CONFIRMED (found by A5 as P2; verified by V5, lowered to P3 as a documented trade-off)
 - **Location:** `candy-code/src/Chat.php:2628-2641` (`StatusLineTickMsg` → `StatusLineCommand::refresh()`); `candy-code/src/Config/StatusLineCommand.php:79-150` ("SYNCHRONOUS ON THE TUI THREAD", 1.0 s budget plus 0.5 s TERM grace); `candy-code/docs/SETTINGS.md:639-650`
 - **Problem:** `refresh()` runs `proc_open` synchronously inside `update()` on each tick, blocking up to ~1.5 s. This is intentional (it makes overlapping runs impossible), disclosed, and opt-in.
@@ -1750,6 +1845,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-096"></a>
 ### ISS-096 · [P3] Empty-transcript placeholder shows literal Markdown underscores
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3ff670871)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Renderer.php:4084-4086`
 - **Problem:** `'_(' . Lang::t('tui.chat.empty_conversation') . ')_'` is returned before any Markdown pass.
@@ -1760,6 +1856,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-097"></a>
 ### ISS-097 · [P3] Local command output and provider errors are labelled "assistant"; errors are not styled as errors
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 7f2105989)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Chat.php:17927,19821`; `candy-code/src/Host/TurnRunner.php:594` (`Message::assistant('_[error: …]_')->withUiOnly()`); `candy-code/src/Renderer.php:4159-4164` (the `Role::Assistant` arm ignores `uiOnly`)
 - **Problem:** UI-only assistant rows (local command replies, provider errors) carry the same bold `assistant` label as model output, and errors render as Markdown italics.
@@ -1770,6 +1867,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-098"></a>
 ### ISS-098 · [P3] Slash-popup row fitting cuts the argument hint before the description, contrary to the README
 - **Product / area:** candy-code · tui (docs)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 25165341b)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Renderer.php:5764-5777` (`fitSlashMenuHint`), `:5650-5653` (docblock); `candy-code/README.md:574-578`
 - **Problem:** The README says the description gives up columns first, then the hint, then the name. The code does the reverse and drops the hint below 4 columns.
@@ -1780,6 +1878,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-099"></a>
 ### ISS-099 · [P3] Silent hard truncation in narrow panes, and a broken 1-column side sliver
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 28c69006f)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5, sliver root cause corrected)
 - **Location:** `candy-code/src/Renderer.php:6280-6283` (key-help `Width::truncate`, no ellipsis); sliver: `candy-code/src/Tui/Renderer.php:1583-1592` (`sideWidth()` falls back to the legacy `max(20, cols/4)` when `resolve()` dropped the side), `:670` (`$paneCols = max(24, …)`), `:713` (final `clipWidth`)
 - **Problem:**
@@ -1794,6 +1893,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-100"></a>
 ### ISS-100 · [P3] Tool cards and the Tools pane show double-escaped JSON arguments; diff headers show `a//abs/path`
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, f2b6f00cd)
 - **Verdict:** CONFIRMED (found by A5; verified by V5)
 - **Location:** `candy-code/src/Message.php:397-411` (non-string value `json_encode`d, then JSON-encoded again by `encodeArgument()`); `candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php:151` (`"--- a/{$path}"` with an absolute path)
 - **Problem:** Tools with no `description` argument (Todo, Prune, Compress) are labelled `Name(key: "<escaped json>")`. Diff headers prepend `a/`/`b/` to the absolute path.
@@ -1804,6 +1904,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-101"></a>
 ### ISS-101 · [P3] `/context` columns misalign for multibyte labels
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 65b994fbf)
 - **Verdict:** CONFIRMED in part (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Commands/ContextCommand.php:75-77` (`sprintf('  %-24s ~%-7s %s')`)
 - **Problem:** `%-24s` pads by bytes, and `×` is 2 bytes but 1 cell.
@@ -1814,6 +1915,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-102"></a>
 ### ISS-102 · [P3] Each launch creates an empty session; the tab strip shows hex ids
 - **Product / area:** candy-code · tui (sessions presentation)
+- **Status:** ⏭ Fixed (partial — SessionTabs dormancy ruled; no further wiring owed) (fix-1017 2026-10-17, 743607389)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5, which noted a mitigation)
 - **Location:** `candy-code/src/Renderer.php:3260-3305` (strip = top 20 of `listSessions()`, name falls back to id); `candy-code/src/Cli/Bootstrap.php:4166-4180` (`createSession()` every launch, then `pruneEmptySessions($id)`); `candy-code/src/Session/EnhancedSessionStore.php:2177-2199` (prunes only rows untouched ≥3600 s); dormant `candy-code/src/Tui/SessionTabs.php`
 - **Problem:**
@@ -1827,6 +1929,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-103"></a>
 ### ISS-103 · [P3] Main-turn spinner never animates and shows no elapsed time
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 818bb61c9)
 - **Verdict:** CONFIRMED (found by A5; verified by V5)
 - **Location:** `candy-code/src/Renderer.php:1825` (`'⠴ ' . assistant_thinking`), `:2649-2678` (every in-flight form hard-codes `⠴`), `:5329`; `StallDetector` used only by `candy-code/src/Sessions/BackgroundSupervisor.php:190-232`
 - **Problem:** The glyph is constant and there is no elapsed readout, so a request stalled before its first token looks the same as one in progress. Sub-agent lines do animate.
@@ -1837,6 +1940,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-104"></a>
 ### ISS-104 · [P3] F10 menu labels are inconsistent; theme picker ignores the current theme
 - **Product / area:** candy-code · tui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 599c40a71)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5)
 - **Location:** `candy-code/src/Commands/CommandSpec.php:356-362` (`label()` falls back to the bare name); `candy-code/src/Tui/Components/MenuBar.php:78`; `candy-code/src/Chat.php:17500-17502` with `candy-code/src/Palette/PaletteState.php:77-80` (`withMode('themes')` resets the selection to 0); `candy-code/src/Chat.php:17171`
 - **Problem:** Specs without a `paletteLabel` appear as bare lowercase names beside Title-case labels. The theme picker always highlights `dark` and does not mark the active theme.
@@ -1847,6 +1951,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-105"></a>
 ### ISS-105 · [P3] Mobile: the top bar overflows at phone width
 - **Product / area:** candy-code-web · web-ui (layout)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 42db60237)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:** `candy-code-web/src-web/App.vue:76-88` (header), `:180-207` (the ≤760 px query hides only `.root`/`.opt`)
 - **Problem:** At narrow widths the header neither wraps nor collapses.
@@ -1857,6 +1962,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-106"></a>
 ### ISS-106 · [P3] Alt+1…9 tab switching never fires on macOS and collides with Linux browser shortcuts
 - **Product / area:** candy-code-web · web-ui (keyboard)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, a83a693aa)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
 - **Location:** `candy-code-web/src-web/components/grid/SessionTabs.vue:90-98`
 - **Problem:** The handler parses `event.key`. On macOS, Option+digit yields `¡`, `™`, …; on AZERTY it yields `&`, `é`, …. On Linux, browsers bind Alt+digit to tab switching.
@@ -1867,6 +1973,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-107"></a>
 ### ISS-107 · [P3] Theme tokens miss WCAG AA contrast
 - **Product / area:** candy-code-web · web-ui (accessibility)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 6d7de7cc6)
 - **Verdict:** CONFIRMED (found by A6; verified and recomputed by V6)
 - **Location:** `candy-code-web/src-web/styles/tokens.css:11-12` (dark), `:29-30` (light) and the duplicate `[data-theme='light']` block; button text `:96`
 - **Problem:** These pairs fail AA (4.5):
@@ -1882,6 +1989,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-108"></a>
 ### ISS-108 · [P3] Streaming reply re-renders the whole Markdown every frame (O(n²)), re-announced by aria-live
 - **Product / area:** candy-code-web · web-ui (performance, accessibility)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, a5eabd1cd)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
 - **Location:** `candy-code-web/src-web/views/SessionView.vue:30,125-128`; `candy-code-web/src-web/components/MessageMarkdown.vue:13,29-30`; `candy-code-web/src-web/stores/connection.ts:30-36` (rAF flush)
 - **Problem:** Each rAF flush that changes `live.text` re-runs markdown-it, DOMPurify and the highlighter over the full text and replaces the `v-html` subtree, all inside `aria-live="polite"`.
@@ -1892,6 +2000,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-109"></a>
 ### ISS-109 · [P3] Raw ANSI escapes appear in tool output
 - **Product / area:** candy-code-web · web-ui (rendering)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 47c231107)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6, frequency corrected)
 - **Location:** `candy-code-web/src-web/components/ToolCard.vue:66`
 - **Problem:** `tool.finished.content` carries SGR bytes verbatim, and nothing in `src-web` strips or converts them.
@@ -1902,6 +2011,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-110"></a>
 ### ISS-110 · [P3] A permission card stays disabled after a failed answer
 - **Product / area:** candy-code-web · web-ui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, ae118b79f)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
 - **Location:** `candy-code-web/src-web/components/PermissionCard.vue:28-34`; `candy-code-web/src-web/views/SessionView.vue:72-78`
 - **Problem:** `busy` is set before `emit('answer')` and never reset. Only `already_resolved` and `ask_not_found` remove the card (`candy-code-web/src-web/stores/session.ts:165-175`).
@@ -1912,6 +2022,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-111"></a>
 ### ISS-111 · [P3] Desktop notifications fail silently outside a secure context
 - **Product / area:** candy-code-web · web-ui
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 5c28a6346)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
 - **Location:** `candy-code-web/src-web/stores/settings.ts:35-40`; `candy-code-web/src-web/App.vue:86`
 - **Problem:** `enableNotifications()` returns `false` with no explanation when `Notification` is undefined or permission is not granted.
@@ -1922,6 +2033,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-112"></a>
 ### ISS-112 · [P3] Per-session stores are never disposed
 - **Product / area:** candy-code-web · web-ui (memory)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 6c9a99016)
 - **Verdict:** CONFIRMED (found by A6; verified by V6)
 - **Location:** `candy-code-web/src-web/stores/session.ts:233-247` (a `defineStore` per id, never `$dispose`d), `:100-123` (`release()`/`unsubscribe()` keep `state.items`)
 - **Problem:** Every opened session keeps its Pinia store and full transcript for the tab's lifetime.
@@ -1932,6 +2044,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-113"></a>
 ### ISS-113 · [P3] A turn ended by the loop guard shows no harness notice in the browser
 - **Product / area:** both · web-ui
+- **Status:** ⏭ Fixed (partial — ACP StopReasonMap loop_guard arm still absent (web reducer + projector done)) (fix-1017 2026-10-17, 9c1d2f9bb)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md rows CTX-N3/TL-N2 SCW)
 - **Location:** `candy-code/src/Host/TranscriptProjector.php:446-455` (`stopReason()`); `candy-code-web/src-web/stores/reducer.ts:507-513`, `:560-565`; TUI comparison `candy-code/src/Chat.php:2427-2429`, `:19721-19727`; `candy-code/src/Backend/EngineBackend.php:2495-2506`
 - **Problem:** `TranscriptProjector::stopReason()` maps `stepsTruncated` to `max_steps`, which the reducer shows as "Turn stopped: it reached its step limit.". A turn the repeat-call loop guard ended maps to `end_turn`, so the browser gets no harness notice; only the model's own wrap-up says it stopped. The TUI adds `chat.turn.loop_guard`.
@@ -1942,6 +2055,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-114"></a>
 ### ISS-114 · [P3] `candy-code attach` keeps a resume cursor nobody reads, so a dropped connection ends the attached session
 - **Product / area:** candy-code · server (attach client)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d32c08f66)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md row WEB-N3 SC)
 - **Location:** `candy-code/src/Host/RemoteSessionHost.php:99`, `:418-421`, `:583-606`; `candy-code/src/Backend/RemoteBackend.php:433`; server-side resume support `candy-code/docs/SERVER.md:375`, `:607-628`
 - **Problem:**
@@ -1955,6 +2069,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-115"></a>
 ### ISS-115 · [P3] `watchFiles` appears in the web Settings form, but served sessions never watch files
 - **Product / area:** both · server
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 0ed4daa55)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md row EDT-N2 SCW)
 - **Location:** `candy-code/src/Chat.php:18472-18477` (`AiCommentWatcher` wired only from `Chat::subscriptions()`); `candy-code/src/Config/Settings/Definitions/InterfaceSettings.php:100-107`
 - **Problem:** The `AI!`/`AI?` comment watcher runs only in the TUI. The `watchFiles` setting still shows in the web Settings form, but nothing in `SessionHost` or the server reads it.
@@ -1965,6 +2080,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-116"></a>
 ### ISS-116 · [P3] MEMORY.md misstates when new notes reach the prompt
 - **Product / area:** candy-code · docs (memory)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, f71d27dbe)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/docs/MEMORY.md:265-267`, `:315-316`, `:365-366`; `candy-code/src/Runtime.php:5650-5666`
 - **Problem:** MEMORY.md says three things: the block is captured once per `Runtime`; a `/memory add` note is seen "from the next turn on"; and a mid-turn note reaches the prompt on the next `Runtime`. In fact `memorySnapshot()` memoises per session until a refresh point, and no `/memory` mutation calls `forget()`. `candy-code/docs/PROMPT_ENGINEERING.md:283-299` states the policy correctly.
@@ -1975,6 +2091,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-117"></a>
 ### ISS-117 · [P3] Docs contradict code: agents, skills, commands, workflows
 - **Product / area:** candy-code · docs
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c4b41ffb4)
 - **Verdict:** CONFIRMED (all six sub-items) (found by A2; verified by V2)
 - **Location:**
   - (a) `candy-code/docs/AGENTS_AUTHORING.md:82-84`
@@ -1997,6 +2114,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-118"></a>
 ### ISS-118 · [P3] README and MCP.md overclaim an MCP server mode; other stale MCP doc details
 - **Product / area:** candy-code · docs (MCP)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 5f0c09d6d)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:** `candy-code/README.md:16` ("client/server"), `:76` ("serving your own"), `:2126`; `candy-code/docs/MCP.md:619-627`, `:152-153` (`McpClient::TYPE_ALIASES`, now `McpForeignTranslate::TYPE_ALIASES`), `:676` (`mcp list|import`), `:113` (`/sse` URL as a `type: http` example)
 - **Problem:**
@@ -2009,6 +2127,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-119"></a>
 ### ISS-119 · [P3] Engine docs and `--help` drift (share host, mid-session settings, Vertex table, claude-code auth)
 - **Product / area:** candy-code · docs
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c3ce63a20)
 - **Verdict:** CONFIRMED; item (e) PLAUSIBLE (found by A3; verified by V3)
 - **Location:** (a) `candy-code/lang/en.php:435-437`; (b) `candy-code/docs/SETTINGS.md:1330-1342`; (c) `candy-code/README.md:1428`; (e) `candy-code/docs/ENVIRONMENT.md:193`
 - **Problem:**
@@ -2035,6 +2154,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-121"></a>
 ### ISS-121 · [P3] Stale permission docs (pattern tool list, "opt-in" BashEscapeDenyHook)
 - **Product / area:** candy-code · docs
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 8de60de54)
 - **Verdict:** CONFIRMED (found by A4; verified by V4)
 - **Location:** `candy-code/docs/PERMISSIONS.md:724-728`, `:1210-1212`
 - **Problem:**
@@ -2047,6 +2167,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-122"></a>
 ### ISS-122 · [P3] README Keys table contradicts the code (Ctrl+L, cursor movement)
 - **Product / area:** candy-code · docs
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c98f38a15)
 - **Verdict:** CONFIRMED (found by A5; verified by V5)
 - **Location:** `candy-code/README.md:199` (`?` row: "`Ctrl`+`L` types the letter `l`"), `:200` (`??` row: "the box has no cursor movement")
 - **Problem:** Ctrl+L is `chat.repaint` (the README's own row ~232 says so). The composer has ←/→, Home/End and word motion (`candy-code/src/Chat.php:3511-3521`).
@@ -2057,6 +2178,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-123"></a>
 ### ISS-123 · [P3] README says `notify` is a live setting; it applies at restart
 - **Product / area:** candy-code · docs
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, fb94d8fbb)
 - **Verdict:** CONFIRMED (found by A5; verified by V5)
 - **Location:** `candy-code/README.md:1401-1406`; `candy-code/src/Config/Settings/Definitions/InterfaceSettings.php:88-97` (no `withApplyMode()`, so the default `ApplyMode::Restart` applies per `candy-code/src/Config/Settings/SettingDefinition.php:91`); `candy-code/src/Chat.php:3944-3952`; `candy-code/docs/SETTINGS.md:1115`
 - **Problem:** The README lists `notify` among live settings; the code and SETTINGS.md say restart.
@@ -2067,6 +2189,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-124"></a>
 ### ISS-124 · [P3] Docs drift on server/web behaviour
 - **Product / area:** both · docs
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3e7425594)
 - **Verdict:** CONFIRMED for (a) and (c); (d) folded into [ISS-056](#iss-056); (b) rejected (found by A6; verified by V6)
 - **Location:** `candy-code/docs/SERVER.md:1034-1036` (a); `:342` with `candy-code/src/Protocol/Methods/ServerMethods.php:112` and `candy-code/src/Protocol/Dispatcher.php:75` (c)
 - **Problem:**
@@ -2079,6 +2202,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-125"></a>
 ### ISS-125 · [P3] A test writes empty exports into the developer's real `~/.candy-code/exports`
 - **Product / area:** candy-code · tests
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3e6a8daba)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:** `candy-code/tests/PaletteClickTest.php:35-55,509-523` (the palette sweep includes "Share session"); `candy-code/tests/bootstrap.php` (sandboxes TMPDIR at ~:290 but never HOME); `candy-code/src/Commands/ShareCommand.php:46-52,164`
 - **Problem:** `ShareCommand` built without an `exportsDir` writes to `$HOME/.candy-code/exports`, and the suite does not sandbox HOME.
