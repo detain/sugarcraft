@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\Catalog\ToolCatalog;
 
 /**
  * Audit F-D1: `docs/PERMISSIONS.md`'s introduction against the matcher.
@@ -30,6 +31,48 @@ final class PermissionsIntroDriftTest extends TestCase
 
         $this->assertDoesNotMatchRegularExpression('/names?\s+only/i', $intro, 'the retracted name-only claim is back in the introduction');
         $this->assertStringNotContainsString('matches nothing', $intro);
+    }
+
+    /**
+     * ISS-121: the page's list of tool names a pattern may start with IS
+     * {@see ToolCatalog::names()}, and nothing guards the equality. A built-in
+     * that joins the catalog without joining the paragraph teaches a rule that
+     * matches no tool — the exact silent no-op the page itself warns about two
+     * sentences below its roster, where `Doctor` stood for `doctor`. Checked in
+     * both directions: a missing name and a retired one still quoted as live.
+     */
+    public function testThePatternToolRosterIsTheWholeCatalog(): void
+    {
+        $paragraph = self::patternRosterParagraph();
+
+        preg_match_all('/`([^`]+)`/', $paragraph, $hits);
+        $cited = array_values(array_unique(array_filter(
+            $hits[1],
+            static fn (string $token): bool => preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $token) === 1,
+        )));
+        sort($cited);
+
+        $names = ToolCatalog::names();
+        sort($names);
+
+        self::assertNotEmpty($names, 'the catalog answered with no tool at all');
+        self::assertSame($names, $cited, 'docs/PERMISSIONS.md roster paragraph and ToolCatalog::names() have drifted');
+    }
+
+    /**
+     * The roster paragraph, by its own opening sentence: the tool cites that
+     * live outside it (the grammar sentences further down the page, the
+     * `HOOKS.md` link) are deliberately not part of the set.
+     */
+    private static function patternRosterParagraph(): string
+    {
+        $doc = (string) file_get_contents(self::DOC);
+        $start = strpos($doc, 'The tool names a pattern can start with');
+        self::assertNotFalse($start, 'PERMISSIONS.md lost the sentence that introduces the pattern tool roster');
+        $end = strpos($doc, "\n\n", (int) $start);
+        self::assertNotFalse($end, 'the pattern tool roster paragraph has no end');
+
+        return substr($doc, (int) $start, (int) $end - (int) $start);
     }
 
     /**
