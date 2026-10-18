@@ -14,7 +14,9 @@ use SugarCraft\Code\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\Edit\EditFailureHints;
 use SugarCraft\Code\Tools\Edit\EditMatcher;
+use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
+use SugarCraft\Code\Tools\Concerns\RebindsInstructionLoader;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
@@ -26,12 +28,13 @@ use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 
 #[BuiltInTool(name: 'Edit', permission: ToolPermissionClass::Write, position: 3)]
-final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalog
+final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructionLoader, BuildsFromCatalog
 {
     // The unified-diff builder below used to live here; it moved out verbatim
     // so {@see Write} could produce the SAME diff for a new file (a write whose
     // "before" side is empty) instead of growing a second implementation.
     use BuildsUnifiedDiff;
+    use RebindsInstructionLoader;
     use RebindsWorktreeJail;
     use TruncatesOutput;
 

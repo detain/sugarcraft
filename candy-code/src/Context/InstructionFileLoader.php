@@ -1532,6 +1532,29 @@ final class InstructionFileLoader
     }
 
     /**
+     * A loader whose next steps belong to a delegation run, not to this
+     * session (ISS-065, the full fix).
+     *
+     * A sub-agent that runs in-process — the sequential `Task` path, one
+     * engine handed another engine's tool copies — used to execute against
+     * THIS instance, so every nested document its Read/Glob/Grep calls put in
+     * front of the run was marked emitted for the parent too: the rest of the
+     * parent's turn lost the on-touch delivery of a CLAUDE.md the sub-agent,
+     * not the parent, had looked at. The view carries this loader's knowledge
+     * at the moment of the split — emitted marks, refusals, warmed document
+     * caches all included, so the run sees exactly what a shared loader would
+     * have shown it — and writes to none of it back: every mutable field here
+     * is an array or a scalar, and PHP copies those on write, so the clone
+     * below isolates every later mark, refusal and deferral in the copy while
+     * the readonly {@see ImportResolver} and the root/path fields stay
+     * shared. A parent loader never grows a mark it did not earn.
+     */
+    public function forDelegationView(): self
+    {
+        return clone $this;
+    }
+
+    /**
      * Union $paths into the emitted set — see {@see emittedPaths()}.
      *
      * A union, never a replacement: several forked children can report

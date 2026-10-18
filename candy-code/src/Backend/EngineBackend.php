@@ -956,6 +956,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The session's shared {@see InstructionFileLoader}, or null when none was
+     * attached. The mirror of {@see withInstructionLoader()} — TaskTool's
+     * delegation path reads it to re-point the run's tools (ISS-065).
+     */
+    public function instructionLoader(): ?InstructionFileLoader
+    {
+        return $this->instructionLoader;
+    }
+
+    /**
      * Attach the session's shared {@see InstructionFileLoader} so it reaches
      * {@see App::$instructionLoader} on every {@see complete()} call — the
      * seam that makes a repo-root CLAUDE.md/AGENTS.md actually reach the
@@ -3138,13 +3148,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // the engine it was handed, its fabricated conversation would
             // become the session's baseline and the session's next turn a
             // false rewrite. The bound engine warms a memo of its own, so
-            // that day costs the session nothing. What the delegation DOES
-            // share today — the instruction loader behind the in-process
-            // Read/Glob/Grep marks — needs per-delegation tool copies, the
-            // seam ISS-065 records against the tool classes.
+            // that day costs the session nothing. And today's real half of
+            // the same leak is closed with it (ISS-065, the full fix): the
+            // bound engine — and every run's tool copies through
+            // {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool::repointedAtDelegationLoader()} — work from a
+            // DELEGATION VIEW of the session's instruction loader, not the
+            // loader itself. The run's on-touch marks land on the view; the
+            // parent's nested-document delivery survives the rest of the
+            // turn. The view is memoised per session below, so repeated
+            // dispatches share one growing view instead of rebuilding a cold
+            // loader each time.
+            $delegationLoader = $this->instructionDelegationView();
             $bound ??= $spentSoFarUsd === null
-                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null, 'sessionPromptMemo' => new SessionPromptMemo()])
-                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null, 'sessionPromptMemo' => new SessionPromptMemo()]);
+                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null, 'sessionPromptMemo' => new SessionPromptMemo(), 'instructionLoader' => $delegationLoader])
+                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null, 'sessionPromptMemo' => new SessionPromptMemo(), 'instructionLoader' => $delegationLoader]);
             // Roadmap 4.7-3: a nested `Task` (one a delegated run handed its
             // sub-agent) arrives already carrying the emitter that reaches
             // the parent — the delegating run's. It keeps it: this turn's
@@ -3170,6 +3187,32 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         return $tools;
+    }
+
+    /**
+     * The session's delegation loader view (ISS-065, the full fix): one
+     * {@see InstructionFileLoader::forDelegationView()} per (session, loader
+     * instance), memoised in the SESSION's prompt memo so every dispatch of
+     * one session hands its runs the same view — the view's marks grow as
+     * the session's do, but only for the runs. The slot names the loader's
+     * spl_object_id exactly like
+     * {@see \SugarCraft\Code\Runtime}'s prompt slots: a swapped-in loader
+     * gets its own view rather than a stale clone, and the rewrite points
+     * that forget the memo's slots (beginSessionTurn) drop the view with
+     * them, so the next dispatch re-clones the refreshed loader.
+     */
+    private function instructionDelegationView(): ?InstructionFileLoader
+    {
+        $loader = $this->instructionLoader;
+        if ($loader === null) {
+            return null;
+        }
+
+        return $this->sessionPromptMemo->remember(
+            $this->sessionId,
+            'instructionLoader.delegationView.' . \spl_object_id($loader),
+            static fn(): InstructionFileLoader => $loader->forDelegationView(),
+        );
     }
 
     /**

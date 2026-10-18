@@ -14,7 +14,9 @@ use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\IgnoreRules;
 use SugarCraft\Code\Tools\ParallelSafe;
+use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
+use SugarCraft\Code\Tools\Concerns\RebindsInstructionLoader;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolLimits;
@@ -27,9 +29,10 @@ use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 
 #[BuiltInTool(name: 'Grep', permission: ToolPermissionClass::Read, position: 5)]
-final readonly class Grep implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState, AcceptsHeartbeat, BuildsFromCatalog
+final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructionLoader, ParallelSafe, CarriesSessionState, AcceptsHeartbeat, BuildsFromCatalog
 {
     use CapturesProcessOutput;
+    use RebindsInstructionLoader;
     use RebindsWorktreeJail;
     use TruncatesOutput;
 

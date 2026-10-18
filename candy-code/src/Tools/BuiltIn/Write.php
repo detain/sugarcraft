@@ -9,12 +9,14 @@ use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Support\AtomicFileWriter;
+use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 use SugarCraft\Code\Tools\Concerns\BuildsUnifiedDiff;
+use SugarCraft\Code\Tools\Concerns\RebindsInstructionLoader;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\Edit\IndentShift;
@@ -48,9 +50,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * order, which is the correct and safe default.
  */
 #[BuiltInTool(name: 'Write', permission: ToolPermissionClass::Write, position: 6)]
-final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance, BuildsFromCatalog
+final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstructionLoader, PromptGuidance, BuildsFromCatalog
 {
     use BuildsUnifiedDiff;
+    use RebindsInstructionLoader;
     use RebindsWorktreeJail;
     use TruncatesOutput;
 

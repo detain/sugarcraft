@@ -27,6 +27,7 @@ use SugarCraft\Code\Support\ParentProcessGuard;
 use SugarCraft\Code\Support\SiblingSpendLedger;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Skills\SkillPromptLine;
+use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\DelegatesToEngine;
 use SugarCraft\Code\Tools\ActivitySink;
 use SugarCraft\Code\Tools\ExemptFromParallelDeadline;
@@ -1351,6 +1352,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     ->mutate(['slotRoot' => $this->slotRoot]);
             }
         }
+        // ISS-065 (full fix): the roster above — granted by the manager or
+        // inherited from this engine — is made of the session's tool
+        // instances, each still carrying the loader it was BUILT on. This
+        // engine carries the session's delegation view instead (bound by
+        // EngineBackend::turnTools()); re-point every instruction-delivering
+        // tool at it, so a nested document this run touches on the way marks
+        // emitted on the VIEW and the parent keeps its own on-touch delivery
+        // for the rest of the turn.
+        $tools = self::repointedAtDelegationLoader($tools, $engine);
         $maxTurns = max(1, $subAgent->agent->maxTurns ?? \SugarCraft\Code\Agents\EngineExecutor::defaultMaxTurns());
 
         // Roadmap 3.B-5 (DCP §13.2 I): the run manages its OWN context — an
@@ -2235,6 +2245,33 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             usage: $spent,
         );
         // @endregion finish
+    }
+
+    /**
+     * $tools with every {@see AcceptsInstructionLoader} copy re-pointed at
+     * $engine's loader (ISS-065, the full fix) — which
+     * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()} set to the
+     * session's {@see \SugarCraft\Code\Context\InstructionFileLoader::forDelegationView()
+     * delegation view}. An engine with no loader (a standalone tool set, an
+     * embedder) leaves the roster untouched: there is no parent set to spare.
+     *
+     * @param list<Tool> $tools
+     *
+     * @return list<Tool>
+     */
+    private static function repointedAtDelegationLoader(array $tools, EngineBackend $engine): array
+    {
+        $view = $engine->instructionLoader();
+        if ($view === null) {
+            return $tools;
+        }
+        foreach ($tools as $k => $tool) {
+            if ($tool instanceof AcceptsInstructionLoader) {
+                $tools[$k] = $tool->withInstructionLoader($view);
+            }
+        }
+
+        return $tools;
     }
 
     /**

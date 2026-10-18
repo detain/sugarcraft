@@ -11,7 +11,9 @@ use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\IgnoreRules;
 use SugarCraft\Code\Tools\ParallelSafe;
+use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
+use SugarCraft\Code\Tools\Concerns\RebindsInstructionLoader;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
@@ -23,8 +25,9 @@ use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 
 #[BuiltInTool(name: 'Glob', permission: ToolPermissionClass::Read, position: 4)]
-final readonly class Glob implements Tool, AcceptsWorktreeJail, ParallelSafe, CarriesSessionState, BuildsFromCatalog
+final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructionLoader, ParallelSafe, CarriesSessionState, BuildsFromCatalog
 {
+    use RebindsInstructionLoader;
     use RebindsWorktreeJail;
     use TruncatesOutput;
 

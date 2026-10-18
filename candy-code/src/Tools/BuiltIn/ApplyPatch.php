@@ -10,12 +10,14 @@ use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ToolOutputSpill;
+use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 use SugarCraft\Code\Tools\Concerns\BuildsUnifiedDiff;
+use SugarCraft\Code\Tools\Concerns\RebindsInstructionLoader;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\Edit\EditFailureHints;
@@ -58,9 +60,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * returns null for a patch that does not parse, and both fail closed on that.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::Write, position: 20, gloss: 'add, change, move and delete several files in one call from a `*** Begin Patch` patch, all or nothing')]
-final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFromCatalog
+final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsInstructionLoader, BuildsFromCatalog
 {
     use BuildsUnifiedDiff;
+    use RebindsInstructionLoader;
     use RebindsWorktreeJail;
     use TruncatesOutput;
 
