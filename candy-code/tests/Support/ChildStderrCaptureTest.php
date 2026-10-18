@@ -287,6 +287,16 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'this test could read would be one more descriptor with the same problem, and '
                 .             'nothing would ever read it.',
         ],
+        'Server/BgPermissionAskRelayTest.php' => [
+            'count' => 1,
+            'reason' =>
+                'deadOwner()\'s one-shot `php -r exit(0);` proc_open. The child exists only to '
+                . 'hand the fixture a real pid and start-time whose process is guaranteed reaped '
+                . 'the instant it is read back (proc_close on the next line), so the relay tests '
+                . 'can assert dead-owner detection against a pid no earlier test could reuse. It '
+                . 'writes nothing on any fd - there is no stderr to capture, and a pipe here '
+                . 'would need a drainer the fixture has no use for.',
+        ],
     ];
 
     /**
