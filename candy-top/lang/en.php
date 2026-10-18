@@ -231,6 +231,18 @@ return [
     'help.renice' => 'Select new nice value for selected process.',
     'help.footer' => 'For bug reporting and project updates, visit:',
 
+    // ---- help overlay: grid section headings ----------------------------------
+    'help.section.general' => 'General',
+    'help.section.panels' => 'Panels & views',
+    'help.section.navigation' => 'Navigation & scrolling',
+    'help.section.process_list' => 'Process list',
+    'help.section.filter' => 'Search & filter',
+    'help.section.net' => 'Net & io',
+    'help.section.actions' => 'Process actions',
+    'help.section.overlays' => 'Overlays',
+    'help.section.mouse' => 'Mouse',
+    'help.section.info' => 'Info',
+
     // ---- generic UI: panels ---------------------------------------------------
     'proc.filter' => 'filter',
     'proc.filter_prompt' => 'Filter: ',
