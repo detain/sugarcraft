@@ -423,7 +423,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-007"></a>
 ### ISS-007 · [P2] Session cookie is not port-scoped and is enough to mint owner tickets
 - **Product / area:** both · security
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, ed9c349b9)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d5bba3b0f server-half + ed9c349b9 web-half)
 - **Verdict:** CONFIRMED (found by A6 as P1; verified and reproduced by V6, downgraded to P2 with a narrower threat model)
 - **Location:**
   - `candy-code/src/Server/Http/ApiController.php:96-100` (host-only cookie, same name on every port)
@@ -492,7 +492,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-010"></a>
 ### ISS-010 · [P2] Credentials can be read or inherited without a prompt
 - **Product / area:** candy-code · security
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, d1bb387aa)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 2a4d56cc5 main fix + d1bb387aa corpus re-measure follow)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:**
   - `candy-code/src/Permissions/ReadOnlyCommands.php:258-268` (`autoAllows`: no operand path scope beyond `cd`)
@@ -553,7 +553,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-013"></a>
 ### ISS-013 · [P2] auto mode's denylist misses common download-and-execute and exfiltration shapes; the mode description overstates it
 - **Product / area:** candy-code · permissions
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, 485b93eed)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 485b93eed + 7ca26fa18)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:** `candy-code/src/Permissions/SafetyClassifier.php:79-106`; `candy-code/src/Permissions/PermissionMode.php:182-187`
 - **Problem:**
@@ -904,7 +904,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-031"></a>
 ### ISS-031 · [P2] A cloned repo's native agent preset silently replaces your own preset and the built-in of the same name
 - **Product / area:** candy-code · agents (trust)
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, c4b41ffb4)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3fb323d75)
 - **Verdict:** CONFIRMED (found by A2; verified by V2)
 - **Location:**
   - `candy-code/src/Cli/Bootstrap.php:3017-3049` (`agentPresetTiers()` returns `[$projectAgents, $userAgents]`), `:2578-2666` (`agentRoster()`, native layer written last)
@@ -2056,7 +2056,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-114"></a>
 ### ISS-114 · [P3] `candy-code attach` keeps a resume cursor nobody reads, so a dropped connection ends the attached session
 - **Product / area:** candy-code · server (attach client)
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, d32c08f66)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, d32c08f66 + 4a65f3fd1)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md row WEB-N3 SC)
 - **Location:** `candy-code/src/Host/RemoteSessionHost.php:99`, `:418-421`, `:583-606`; `candy-code/src/Backend/RemoteBackend.php:433`; server-side resume support `candy-code/docs/SERVER.md:375`, `:607-628`
 - **Problem:**
@@ -2128,7 +2128,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-119"></a>
 ### ISS-119 · [P3] Engine docs and `--help` drift (share host, mid-session settings, Vertex table, claude-code auth)
 - **Product / area:** candy-code · docs
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, c3ce63a20)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c3ce63a20 + b271e8f71)
 - **Verdict:** CONFIRMED; item (e) PLAUSIBLE (found by A3; verified by V3)
 - **Location:** (a) `candy-code/lang/en.php:435-437`; (b) `candy-code/docs/SETTINGS.md:1330-1342`; (c) `candy-code/README.md:1428`; (e) `candy-code/docs/ENVIRONMENT.md:193`
 - **Problem:**
@@ -2203,7 +2203,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-125"></a>
 ### ISS-125 · [P3] A test writes empty exports into the developer's real `~/.candy-code/exports`
 - **Product / area:** candy-code · tests
-- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3e6a8daba)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 3e6a8daba + 3f784d181)
 - **Verdict:** CONFIRMED (found by A3; verified and reproduced by V3)
 - **Location:** `candy-code/tests/PaletteClickTest.php:35-55,509-523` (the palette sweep includes "Share session"); `candy-code/tests/bootstrap.php` (sandboxes TMPDIR at ~:290 but never HOME); `candy-code/src/Commands/ShareCommand.php:46-52,164`
 - **Problem:** `ShareCommand` built without an `exportsDir` writes to `$HOME/.candy-code/exports`, and the suite does not sandbox HOME.
