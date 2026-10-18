@@ -254,7 +254,7 @@ final class CompactionSettingsTest extends TestCase
         $this->assertSame(4, $config->recentPreserveCount, 'the other keys still apply');
     }
 
-    public function testAZeroCapIsTheFarEndOfTheLadderNotAnOrderingViolation(): void
+    public function testAnEarlyZeroCapIsNotTheFarEndAndDragsTheTrioBack(): void
     {
         $config = CompactorConfig::fromSettings([
             'compaction.reminderTokens' => 0,
@@ -262,9 +262,19 @@ final class CompactionSettingsTest extends TestCase
             'compaction.blockTokens' => 400_000,
         ]);
 
-        $this->assertNull($config->reminderTokens, 'no cap is the far end: it never breaks the ladder');
-        $this->assertSame(300_000, $config->backgroundCompactionTokens);
-        $this->assertSame(400_000, $config->foregroundBlockingTokens);
+        $this->assertSame([100_000, 150_000, null], [$config->reminderTokens, $config->backgroundCompactionTokens, $config->foregroundBlockingTokens], '"no cap" is a suffix, never a prefix: the measured reminder=0 crossing would let the uncapped percentage ride past the capped tier (ISS-085 early-null leg)');
+        $this->assertTrue($config->reminderTokensSet, 'the fallback counts as configured');
+    }
+
+    public function testAClearAtTheFarEndIsTheLadderAsDesigned(): void
+    {
+        $config = CompactorConfig::fromSettings([
+            'compaction.reminderTokens' => 80_000,
+            'compaction.autoTokens' => 120_000,
+            'compaction.blockTokens' => 0,
+        ]);
+
+        $this->assertSame([80_000, 120_000, null], [$config->reminderTokens, $config->backgroundCompactionTokens, $config->foregroundBlockingTokens], 'null after finite caps is the intended far end');
     }
 
     public function testOnlyTheConfiguredCapsAreCommittedWhenTheLadderHolds(): void
@@ -282,7 +292,7 @@ final class CompactionSettingsTest extends TestCase
         $config = CompactorConfig::fromSettings([
             'compaction.modelTokenCaps' => [
                 'qwen3' => ['autoTokens' => 300_000],
-                'sglang/qwen3' => ['reminderTokens' => 0],
+                'sglang/qwen3' => ['reminderTokens' => 0, 'autoTokens' => 0],
                 'broken' => ['autoTokens' => 'lots'],
                 'unknown-key' => ['tierTokens' => 5],
             ],
@@ -296,7 +306,7 @@ final class CompactionSettingsTest extends TestCase
 
         $pinned = $config->forModel('qwen3', 'sglang');
         $this->assertNull($pinned->reminderTokens, '0 clears the cap for that deployment');
-        $this->assertSame(150_000, $pinned->backgroundCompactionTokens, 'only the more specific entry applies');
+        $this->assertNull($pinned->backgroundCompactionTokens, 'the more specific entry applies alone — and clears ride as a null SUFFIX: a single early clear under a finite neighbour is refused whole (ISS-085 early-null leg)');
     }
 
     // =====================================================================

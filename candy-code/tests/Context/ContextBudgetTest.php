@@ -70,8 +70,8 @@ final class ContextBudgetTest extends TestCase
         );
         $this->assertSame(
             50_000,
-            ContextBudget::forCompactor(1_000_000, null, CompactorConfig::new()->withModelTokenOverride('m', ['backgroundCompactionTokens' => 50_000, 'reminderTokens' => null])->forModel('m'))->threshold(),
-            'a per-model cap reaches it through forModel() (reminder cleared so the pair stays ascending — ISS-085)',
+            ContextBudget::forCompactor(1_000_000, null, CompactorConfig::new()->withModelTokenOverride('m', ['backgroundCompactionTokens' => 50_000, 'reminderTokens' => 40_000])->forModel('m'))->threshold(),
+            'a per-model cap reaches it through forModel() (an ascending pair — clearing the lower cap to null instead would ride an early ∞ before a finite figure and be refused whole, ISS-085 early-null leg)',
         );
     }
 

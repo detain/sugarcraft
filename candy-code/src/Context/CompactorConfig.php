@@ -384,20 +384,20 @@ final readonly class CompactorConfig
 
         // The three absolute caps form ONE ladder, not three independent figures
         // (ISS-085): every tier fires at min(percent, cap), so as long as the
-        // caps ascend — null meaning "no cap", the far end — the effective
-        // thresholds stay ordered whenever the caps that matter are finite.
-        // MEASURED HOLE (ISS-085 review, recorded not closed): a null at an
-        // EARLY leg makes the pairwise check skip it, so reminder=0 +
-        // auto=50000 validates; on a large-window model the uncapped reminder
-        // percentage can then exceed the capped auto threshold and the tiers
-        // cross. The runtime fallback covers a saved bad trio; extending
-        // ThresholdOrderValidator with the percentage-pair leg is the
-        // disclosed follow-up. A descending trio (a blockTokens under the
-        // default autoTokens refuses every prompt auto-compaction would have
-        // kept; an autoTokens under the reminderTokens kills summary
-        // prefetch) falls back whole, exactly as the percentage trio does. A
-        // field left out or malformed keeps its current figure and its
-        // not-configured sentinel.
+        // caps ascend — with "no cap" (null) confined to the far end — the
+        // effective thresholds stay ordered. The early-null leg closed with
+        // the follow-up: a null at an EARLY leg used to skip its pairwise
+        // check, so reminder=0 + auto=50000 validated and the uncapped
+        // reminder percentage could exceed the capped auto threshold on a
+        // large-window model; that ladder now falls back whole like any
+        // descending trio. The remaining disclosed follow-up is save-time:
+        // extending ThresholdOrderValidator with the percentage-pair leg (it
+        // checks the percent keys only against each other, never against the
+        // caps). A descending trio (a blockTokens under the default
+        // autoTokens refuses every prompt auto-compaction would have kept; an
+        // autoTokens under the reminderTokens kills summary prefetch) falls
+        // back whole, exactly as the percentage trio does. A field left out or
+        // malformed keeps its current figure and its not-configured sentinel.
         $caps = [];
         foreach ([
             'reminderTokens' => self::SETTING_REMINDER_TOKENS,
@@ -654,7 +654,10 @@ final readonly class CompactorConfig
      * the bare model id second, so `"sglang/qwen3"` pins one deployment and
      * `"qwen3"` every provider serving it. $caps is a partial map over
      * {@see ABSOLUTE_FIELDS}; a key present with null clears that cap for the
-     * model, a key left out inherits the base config's.
+     * model — as the far end only: an entry that clears an early cap while a
+     * later one stays finite breaks the ladder and {@see forModel()} refuses
+     * it whole (ISS-085 early-null leg) — and a key left out inherits the
+     * base config's.
      *
      * @param array<string, ?int> $caps
      * @throws \InvalidArgumentException on an empty model, an unknown key, or a cap below 1
@@ -667,8 +670,9 @@ final readonly class CompactorConfig
     /**
      * This config with the per-model caps for $model applied, or this same
      * instance when no override names it — or when the override would take
-     * the cap ladder out of ascending order (ISS-085), which reads exactly
-     * like an entry that names no caps at all.
+     * the cap ladder out of ascending order or sit a "no cap" before a
+     * finite one (ISS-085), which reads exactly like an entry that names no
+     * caps at all.
      *
      * The lookup is `"$provider/$model"` then `$model` — the more specific key
      * wins, and only one entry applies (they are not layered). Resolve from the
@@ -692,7 +696,9 @@ final readonly class CompactorConfig
         // Validate against the figures this override would produce, naming only
         // the fields it touched: the entry rides on top of the base (or an
         // already-resolved) ladder, and an override that would push one step
-        // below its neighbour is dropped whole rather than half-applied.
+        // below its neighbour — or open an early "no cap" in front of a
+        // finite one, ISS-085's early-null leg — is dropped whole rather
+        // than half-applied.
         $ladder = [];
         foreach (self::ABSOLUTE_FIELDS as $field) {
             $ladder[$field] = \array_key_exists($field, $caps) ? $caps[$field] : $this->{$field};
@@ -744,19 +750,22 @@ final readonly class CompactorConfig
     }
 
     /**
-     * Whether an absolute-cap ladder ascends: each step either side may be
-     * null — "no cap" is meant to be the far end of the ladder, but this door
-     * cannot enforce WHERE the nulls sit: a null leg simply skips its pair.
-     * The trio must arrive in {@see ABSOLUTE_FIELDS} order (tier order).
+     * Whether an absolute-cap ladder ascends. null means "no cap" — an ∞ that
+     * may only sit at the FAR end of the ladder, never before a finite figure;
+     * the trio must arrive in {@see ABSOLUTE_FIELDS} order (tier order).
      *
-     * Each tier fires at min(percent, cap); with the percentages ordered
-     * (the fallback above) and the caps ordered (this door), the effective
-     * thresholds are ordered too — PROVIDED the caps that skip are far-end
-     * nulls. An early null leaves that tier riding its percentage, so the
-     * two ladders CAN still cross there; that percentage-pair leg is the
-     * ThresholdOrderValidator extension ISS-085's review left as a
-     * disclosed follow-up (see the config-read comment for the measured
-     * reminder=0 + auto=50000 shape).
+     * Each tier fires at min(percent, cap). With the percentages ordered (the
+     * fallback above), the finite caps ascending, and nulls confined to a
+     * suffix, every effective threshold is ordered on every path: a capped
+     * tier fires no later than its finite cap, the next tier no earlier than
+     * the percentage that ordered them. The suffix rule is ISS-085's
+     * early-null leg, closed by the follow-up: the pairwise form this door
+     * first shipped let an early null skip its pair, so the measured
+     * reminder=0 + auto=50000 ladder validated and the uncapped reminder
+     * percentage could exceed the capped auto threshold on a large-window
+     * model. What remains disclosed is the SAVE-time leg — extending
+     * ThresholdOrderValidator to check the percent keys against the caps,
+     * not only against each other.
      *
      * @param array<string, ?int> $ladder
      */
@@ -764,8 +773,17 @@ final readonly class CompactorConfig
     {
         [$reminder, $auto, $block] = \array_values($ladder);
 
-        return ($reminder === null || $auto === null || $reminder <= $auto)
-            && ($auto === null || $block === null || $auto <= $block);
+        // An ∞ may not precede a finite figure: it would ride its percentage
+        // while a later tier rides a smaller cap, and the ladders cross.
+        if ($reminder === null) {
+            return $auto === null && $block === null;
+        }
+
+        if ($auto === null) {
+            return $block === null;
+        }
+
+        return $reminder <= $auto && ($block === null || $auto <= $block);
     }
 
     /**

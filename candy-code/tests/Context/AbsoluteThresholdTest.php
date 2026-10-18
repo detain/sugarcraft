@@ -245,16 +245,22 @@ final class AbsoluteThresholdTest extends TestCase
         $this->assertSame(90_000, $config->forModel('qwen3')->reminderTokens);
     }
 
-    public function testAnOverrideThatNamesNullClearsTheBaseCap(): void
+    public function testAnOverrideThatNamesNullClearsTheBaseCapAtTheFarEnd(): void
     {
-        $config = CompactorConfig::smartZone()->withModelTokenOverride('big-context', ['reminderTokens' => null]);
+        // ∞ only rides the suffix of the ladder (ISS-085 early-null leg):
+        // the base must not keep a finite cap above the cleared one. The
+        // refused shape — an early clear under a finite neighbour — has its
+        // own pin below.
+        $config = CompactorConfig::smartZone()
+            ->withBackgroundCompactionTokens(null)
+            ->withModelTokenOverride('big-context', ['reminderTokens' => null]);
 
         $resolved = $config->forModel('big-context');
 
         $this->assertNull($resolved->reminderTokens);
         $this->assertTrue($resolved->reminderTokensSet);
         $this->assertSame(700_000, $resolved->reminderTokenThreshold(self::WINDOW));
-        $this->assertSame(100_000, $resolved->backgroundCompactionTokens, 'the cap the override did not name is inherited');
+        $this->assertNull($resolved->backgroundCompactionTokens, 'the cap the override did not name is inherited');
     }
 
     public function testAModelOverrideThatBreaksTheLadderAppliesNothing(): void
@@ -267,7 +273,7 @@ final class AbsoluteThresholdTest extends TestCase
         $this->assertSame(100_000, $resolved->reminderTokens);
     }
 
-    public function testAnOverrideThatAlsoClearsTheLowerCapStaysOrderedAndApplies(): void
+    public function testAnOverrideClearingTheLowerCapUnderAFiniteNeighbourIsRefused(): void
     {
         $config = CompactorConfig::new()->withModelTokenOverride('qwen3', [
             'backgroundCompactionTokens' => 50_000,
@@ -276,8 +282,8 @@ final class AbsoluteThresholdTest extends TestCase
 
         $resolved = $config->forModel('qwen3');
 
-        $this->assertSame(50_000, $resolved->backgroundCompactionTokens, 'clearing the lower cap makes the pair ascending again — null is the far end');
-        $this->assertNull($resolved->reminderTokens);
+        $this->assertSame(150_000, $resolved->backgroundCompactionTokens, 'an early "no cap" in front of a finite cap would ride its percentage past the smaller cap — the entry is refused whole (ISS-085 early-null leg)');
+        $this->assertSame(100_000, $resolved->reminderTokens, 'clearing the lower cap no longer makes the pair ascending: null is the far end only');
     }
 
     public function testAnUnknownOrEmptyModelResolvesToTheSameInstance(): void
