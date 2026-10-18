@@ -12,6 +12,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\Schema;
+use SugarCraft\Top\Lang;
+use SugarCraft\Top\Overlay\MenuDraw;
 use SugarCraft\Top\Overlay\MsgBox;
 use SugarCraft\Top\Overlay\OptionsCatalog;
 use SugarCraft\Top\Overlay\OptionsMenu;
@@ -134,17 +136,17 @@ final class OptionsMenuTest extends OverlayTestCase
     {
         $c = self::context();
         $g = OptionsMenu::new()->geometry($c);
-        $this->assertSame(3, $g['pages']);
+        $this->assertSame(2, $g['pages']);
         $next = self::after(['page_down']);
         $this->assertSame(1, $next->geometry($c)['page']);
-        $this->assertSame(2, self::after(['page_up'])->geometry($c)['page'], 'page_up wraps to the last page');
-        $this->assertSame(0, self::after(['page_down', 'page_down', 'page_down'])->geometry($c)['page']);
+        $this->assertSame(1, self::after(['page_up'])->geometry($c)['page'], 'page_up wraps to the last page');
+        $this->assertSame(1, self::after(['page_down', 'page_down', 'page_down'])->geometry($c)['page']);
         // A page starting on a heading lands on the option after it.
         $first = $next->geometry($c);
         $this->assertFalse(OptionsCatalog::isHeading($first['entries'][$first['index']]));
-        // 80x24: btop height min(rows - 7, ...) even = 16 → 6 items a page.
+        // 80x24: one row per option, height min(rows - 7, ...) = 17 → 13 items a page.
         $small = self::context(cols: 80, rows: 24);
-        $this->assertSame(6, OptionsMenu::new()->geometry($small)['ih']);
+        $this->assertSame(13, OptionsMenu::new()->geometry($small)['ih']);
         $this->assertSame([80, 24], OptionsMenu::new()->minSize());
     }
 
@@ -278,9 +280,9 @@ final class OptionsMenuTest extends OverlayTestCase
         $c = self::context();
         $g = OptionsMenu::new()->geometry($c);
         [$x, $y] = [$g['x'], $g['y']];
-        // Row 2 (theme_background) starts at 1-based line y + 9 + 2*2.
+        // Row 2 (theme_background) sits at 1-based line y + 9 + 2.
         $click = static fn (int $col, int $line): MouseMsg => new MouseMsg($col, $line, MouseButton::Left, MouseAction::Press);
-        $r = OptionsMenu::new()->update($click($x + 5, $y + 13), $c);
+        $r = OptionsMenu::new()->update($click($x + 5, $y + 11), $c);
         $this->assertSame('theme_background', $r->overlay instanceof OptionsMenu ? $r->overlay->selectedOption($c) : null);
         // Clicking the heading row selects the option after it (#1791b).
         $r = OptionsMenu::new()->update($click($x + 5, $y + 9), $c);
@@ -288,7 +290,7 @@ final class OptionsMenuTest extends OverlayTestCase
         // A second click on a selected editable row edits it.
         $clock = self::on('clock_format', $c);
         $cg = $clock->geometry($c);
-        $line = $y + 9 + 2 * ($cg['index'] - $cg['page'] * $cg['ih']);
+        $line = $y + 9 + ($cg['index'] - $cg['page'] * $cg['ih']);
         $r = $clock->update($click($x + 5, $line), $c);
         $this->assertNotNull($r->overlay instanceof OptionsMenu ? $r->overlay->edit : null);
         // The arrows (btop mouse_mappings left/right) change the value.
@@ -296,7 +298,7 @@ final class OptionsMenuTest extends OverlayTestCase
         [$rx, $ry] = $map['right'];
         $this->assertSame(['update_ms' => 2100], self::on('update_ms', $c)->update(self::click($rx + 1, $ry), $c)->set);
         [$lx, $ly] = $map['left'];
-        $this->assertSame(['update_ms' => 1900], self::on('update_ms', $c)->update(self::click($lx + 1, $ly + 1), $c)->set);
+        $this->assertSame(['update_ms' => 1900], self::on('update_ms', $c)->update(self::click($lx + 1, $ly), $c)->set);
         // A tab click (btop select_cat_<n>, fixed 15-wide slots without a GPU).
         [$tx, $ty] = OptionsMenu::new()->buttons($c)['select_cat_2'];
         $this->assertSame('mem', OptionsMenu::new()->update(self::click($tx, $ty + 1), $c)->overlay?->category ?? null);
@@ -323,15 +325,71 @@ final class OptionsMenuTest extends OverlayTestCase
         $this->assertStringContainsString('Update ms', $text);
         $this->assertStringContainsString('Update time in milliseconds.', $text);
         $this->assertStringContainsString('Runtime and rendering', $text, '#1791b heading');
-        $this->assertStringContainsString('page 2/3', $text);
+        $this->assertStringContainsString('page 1/2', $text);
         $ink = $c->ink;
         $g = self::on('update_ms', $c)->geometry($c);
-        $line = $g['y'] + 9 + 2 * ($g['index'] - $g['page'] * $g['ih']);
+        $line = $g['y'] + 9 + ($g['index'] - $g['page'] * $g['ih']);
         $this->assertSame(
             Surface::canonical("\x1b[1m" . $ink->fg('selected_fg') . $ink->bg('selected_bg')),
             $surface->style($g['x'] + 1, $line - 1),
             'the selected name row is selected_bg / selected_fg, bold',
         );
+    }
+
+    /**
+     * The active category tab is a selected_bg/selected_fg block over its
+     * `[label]`; inactive tabs stay fg-only. Same paint path and derived
+     * canonical style as the row pin in
+     * {@see self::testPaintShowsTheSelectionValueAndDescription()}, asserted
+     * on the tab line for both polarities (the block moves with the open
+     * tab) so blanking it cannot pass.
+     */
+    public function testTheActiveTabIsABlockAndTheRestAreNot(): void
+    {
+        $assertTabs = static function (OptionsMenu $menu, OverlayContext $c): void {
+            $surface = Surface::new(120, 40);
+            $menu->paint($surface, $c);
+            $g = $menu->geometry($c);
+            $line = $g['y'] + 7 + $g['delta'];
+            $row = $surface->plainLines()[$line - 1];
+            $ink = $c->ink;
+            // Derived, never hardcoded: the one canonical escape the active
+            // block must show on every cell of its tab.
+            $active = Surface::canonical(MenuDraw::BOLD . $ink->bg('selected_bg') . $ink->fg('selected_fg'));
+            // What an inactive tab may legally carry: bold, the digit's
+            // hi_fg, the label's title colour, and the bare bold of a cell
+            // written straight after the active block's RESET.
+            $inactiveAllowed = [
+                Surface::canonical(MenuDraw::BOLD),
+                Surface::canonical(MenuDraw::BOLD . $ink->fg('hi_fg')),
+                Surface::canonical(MenuDraw::BOLD . $ink->fg('hi_fg') . $ink->fg('title')),
+            ];
+            $from = 0;
+            foreach ($g['categories'] as $i => $cat) {
+                $label = Lang::t('menu.options.category.' . $cat);
+                $needle = $cat === $g['category'] ? '[' . $label . ']' : $i . $label;
+                $at = strpos($row, $needle, $from);
+                self::assertNotFalse($at, 'tab ' . $cat . ' painted on the tab line');
+                $from = $at + strlen($needle);
+                // plainLines is one array cell per terminal cell, so the
+                // display width of the prefix is the tab's column directly.
+                $col = Width::string(substr($row, 0, $at));
+                $span = Width::string($needle);
+                $seen = [];
+                for ($cell = 0; $cell < $span; $cell++) {
+                    $seen[] = $surface->style($col + $cell, $line - 1);
+                }
+                if ($cat === $g['category']) {
+                    self::assertSame(array_fill(0, $span, $active), $seen, 'every cell of the active tab carries the selected_bg block');
+                } else {
+                    self::assertSame([], array_values(array_filter($seen, static fn (string $s): bool => !in_array($s, $inactiveAllowed, true))), 'inactive tab ' . $cat . ' stays fg-only');
+                }
+            }
+        };
+        $c = self::context();
+        $assertTabs(OptionsMenu::new(), $c);
+        $assertTabs(self::after(['1'], $c), $c);
+        $assertTabs(self::after(['4'], $c), $c);
     }
 
     public function testOnlyKeysAndMouseReachIt(): void
