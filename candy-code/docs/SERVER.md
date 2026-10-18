@@ -758,7 +758,14 @@ travels on a minted channel: at spawn the server mints a nonce-named answer
 path (`session.answer-<128-bit hex>`), pre-creates it `0600`, and carries
 its name into the daemon's config and the index record — the relay only ever
 opens that one path, and a record whose answer path was never minted is
-refused, so content forged at any other name is ignored. Every asking
+refused, so content forged at any other name is ignored. One compatibility
+path stays open by design: a spawn that predates the minted-answer protocol —
+an older daemon adopted across a server upgrade, whose index record carries no
+`answerPath` at all — falls back on both sides to the legacy fixed
+`<session>.answer` path (`BackgroundSessionRunner::withPermissionRelay` and
+`BackgroundSupervisor::channel`), whose name is derivable from the buffer path
+and so readable in same-uid process arguments; that is the exposure the minted
+nonce removes, and every spawn from a minting server carries the nonce. Every asking
 carries a per-ask token, and an answer row settles only the asking whose
 `askId` and token it echoes; a stale line from a respawned call cannot
 resolve a fresh question. The question
