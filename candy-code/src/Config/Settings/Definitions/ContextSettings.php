@@ -260,7 +260,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.contextWindow.label'))
                 ->withHelp('Token window override: a count for the provider\'s model, or {"<model>": tokens}.')
                 ->withReaderSymbol(ProviderFactory::class . '::createOpenAI')
-                ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createCustom()` → each provider\'s `contextWindow()`'),
+                ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createBedrock()`, `createSglang()`, `createVertex()`, `createCustom()` → each provider\'s `contextWindow()`'),
             // Roadmap 3.B-2: the default for every session that has not set
             // its own with `/pruning`. User config only — a cloned project
             // must not be able to turn a person's pruning on or off.

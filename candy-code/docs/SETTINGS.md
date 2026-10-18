@@ -220,7 +220,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `repoMap.maxBytes` | `Runtime::repoMapSnapshot()` → `RepoMapBlock::withSettings()`, per turn | **no** |
 | `env.gitDiffAfterWrites` | `Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn | yes |
 | `env.diffMaxBytes` | `Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn | **no** |
-| `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createCustom()` → each provider's `contextWindow()` | **no** |
+| `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createBedrock()`, `createSglang()`, `createVertex()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `autoReview` | `Bootstrap::permissionGate()` | **no** |
 | `permissions.autoStrikeLimit` | `PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()` | **no** |
 | `permissions.autoTotalLimit` | `PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()` | **no** |
@@ -463,7 +463,7 @@ because it is the narrower statement. All four are user-tier only, for the
 same money reason as `maxOutputTokens`.
 
 - **`contextWindow`** sizes the context window of the `openai`, `anthropic`,
-  `vertex` and `custom` providers, the number
+  `bedrock`, `sglang`, `vertex` and `custom` providers, the number
   every context tier (the 70% reminder, 85% auto-compaction and 95% refusal) is
   a percentage of (audit A13). Give a token count for whatever model the
   provider runs (`"contextWindow": 400000`), or an object to size models one
