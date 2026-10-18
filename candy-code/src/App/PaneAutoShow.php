@@ -18,9 +18,14 @@ use SugarCraft\Code\Tui\Pane;
  *   auto-show never overrides it.
  *
  * Immutable and fluent like the rest of the shell state; it rides the App
- * lineage through {@see App::mutate()}. Nothing here persists — the dock
- * itself persists through the normal layout channel, so an auto-shown pane
- * saved by that channel comes back docked, exactly like any user choice.
+ * lineage through {@see App::mutate()}. Since ISS-049 the userToggled list
+ * PERSISTS: {@see App::layoutBlob()} folds it into the `layout` blob the
+ * onLayoutChange channel writes, and Bootstrap re-seeds it at launch, so a
+ * pane the user closed stays closed across restarts instead of riding back
+ * in on the next activity. The autoShown list stays process-lifetime on
+ * purpose: the dock itself persists through the same channel, so an
+ * auto-shown pane saved by it comes back docked exactly like any user
+ * choice, and a later manual close arrives here as a userToggled row.
  */
 final class PaneAutoShow
 {
@@ -61,5 +66,17 @@ final class PaneAutoShow
         }
 
         return new self($this->autoShown, [...$this->userToggled, $pane->value]);
+    }
+
+    /**
+     * The pane values the user touched by hand, in the order first touched
+     * (stable enough for the persisted blob: the writer rewrites the whole
+     * list, never patches it).
+     *
+     * @return list<string>
+     */
+    public function userToggled(): array
+    {
+        return $this->userToggled;
     }
 }

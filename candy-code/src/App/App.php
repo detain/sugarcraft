@@ -1876,6 +1876,17 @@ final class App implements Model
         return $this->mutate(onLayoutChange: $v);
     }
 
+    /**
+     * Replace the auto-show memory. The launch path uses this to re-seed the
+     * panes the user toggled by hand in a previous session (ISS-049), so a
+     * pane that was closed stays closed across restarts instead of riding
+     * back in on the first content transition.
+     */
+    public function withPaneAutoShow(PaneAutoShow $v): self
+    {
+        return $this->mutate(paneAutoShow: $v);
+    }
+
     public function withCompactorConfig(?CompactorConfig $v): self
     {
         return $this->mutate(compactorConfig: $v);
@@ -2016,10 +2027,20 @@ final class App implements Model
 
     /**
      * Return the dock to the launch default ({@see defaultDock()}).
+     *
+     * The auto-show memory resets with it (ISS-049): the toggled list rides
+     * the same persisted `layout` blob ({@see layoutBlob()}), and a reset
+     * that left the list standing would resurrect yesterday's "never show
+     * this pane" verdicts into a layout the user just asked to have no
+     * verdicts — the next activity auto-docks again, which is what "reset"
+     * means for this feature.
      */
     public function layoutReset(): self
     {
-        return $this->persistDock($this->mutate(dock: self::defaultDock()));
+        return $this->persistDock($this->mutate(
+            dock: self::defaultDock(),
+            paneAutoShow: PaneAutoShow::new(),
+        ));
     }
 
     /**
@@ -2171,11 +2192,35 @@ final class App implements Model
     }
 
     /**
-     * Hand the new manifest to the persistence hook, when the launch wired
-     * one. Mirrors Chat's config-change call sites: a non-`update()` model
-     * method invoking an injected persistence closure is the established shape
-     * here, and the App holding the closure is the mutated COPY (readonly),
-     * whose hook is the same object the builder installed.
+     * The blob the `layout` setting stores: the dock manifest plus — only
+     * when non-empty, so a never-toggled session's blob stays byte-identical
+     * to the pure manifest — the panes the user touched by hand
+     * (ISS-049). {@see \SugarCraft\Code\Cli\Bootstrap::dockFromUserConfig()}
+     * reads the manifest through the key paths
+     * {@see \SugarCraft\Constraints\Dock\DockLayout::fromArray()} knows
+     * (unknown keys are ignored), and the sibling reader folds `userToggled`
+     * back onto the launch model.
+     *
+     * @return array<string,mixed>
+     */
+    public function layoutBlob(): array
+    {
+        $blob = $this->dock()->toArray();
+        $toggled = $this->paneAutoShow->userToggled();
+        if ($toggled !== []) {
+            $blob['userToggled'] = $toggled;
+        }
+
+        return $blob;
+    }
+
+    /**
+     * Hand the new layout blob to the persistence hook, when the launch
+     * wired one. Mirrors Chat's config-change call sites: a non-`update()`
+     * model method invoking an injected persistence closure is the
+     * established shape here, and the App holding the closure is the
+     * mutated COPY (readonly), whose hook is the same object the builder
+     * installed.
      */
     private function persistDock(self $next): self
     {
@@ -2184,7 +2229,7 @@ final class App implements Model
             // __invoke, not call(): Bootstrap wires a STATIC closure, and an
             // attempted rebind of a static closure is a silently-skipped
             // warning, not a call — the persistence would never fire.
-            $hook->__invoke($next->dock()->toArray());
+            $hook->__invoke($next->layoutBlob());
         }
 
         return $next;

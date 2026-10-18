@@ -706,6 +706,9 @@ final class DockLayout
      *
      * dividerCols is not part of the shape — it has no public mutator, so
      * every layout carries the default 1 and persistence stays lossless.
+     * Unknown top-level keys are IGNORED (forward compatibility: hosts may
+     * annotate the stored blob with sibling data this parser must not brick,
+     * pinned by DockLayoutTest).
      *
      * @param array<string,mixed> $data
      */

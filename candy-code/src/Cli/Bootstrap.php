@@ -11,6 +11,7 @@ use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Agents\AgentPresetRegistry;
 use SugarCraft\Code\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Code\App\App;
+use SugarCraft\Code\App\PaneAutoShow;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CommandBackend;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -75,6 +76,7 @@ use SugarCraft\Code\Tools\BuiltIn\Write;
 use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Constraints\Dock\DockLayout;
@@ -3424,8 +3426,12 @@ final class Bootstrap
             // `chat()` uses for `onConfigChange` above, its own key because
             // the value is the versioned DockLayout manifest, not a string.
             ->withDock(self::dockFromUserConfig())
+            // ISS-049: the same blob carries the panes the user toggled by
+            // hand, so yesterday's manual close outlives the process — the
+            // auto-show consults this roster and never re-docks its entries.
+            ->withPaneAutoShow(self::paneAutoShowFromUserConfig())
             ->withOnLayoutChange(
-                static fn(array $manifest) => self::writeUserConfig(['layout' => $manifest]),
+                static fn(array $blob) => self::writeUserConfig(['layout' => $blob]),
             )
             // N-P1: the settings view explains THIS launch's layers — its
             // project-trust answer, its environment and its flags — rather
@@ -3496,6 +3502,38 @@ final class Bootstrap
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * The auto-show memory the `layout` blob's `userToggled` list names
+     * (ISS-049) — pane values the previous session's user touched by hand,
+     * so a closed pane does not ride back in on the next activity. Same
+     * fail-soft as {@see dockFromUserConfig()}: the list is an annotation on
+     * the layout key, and a malformed row is dropped, never fatal — its
+     * worst outcome is re-enabling one auto-dock the user meant to silence.
+     * Rows naming a non-dockable pane are dropped too: they can never be
+     * consulted, and storing them would launder a hand-edited config into
+     * shell state.
+     */
+    private static function paneAutoShowFromUserConfig(): PaneAutoShow
+    {
+        $raw = self::readUserConfig()['layout'] ?? null;
+        $rows = is_array($raw) && is_array($raw['userToggled'] ?? null)
+            ? $raw['userToggled']
+            : [];
+
+        $toggled = [];
+        foreach ($rows as $row) {
+            if (!is_string($row)) {
+                continue;
+            }
+            $pane = Pane::tryFrom($row);
+            if ($pane !== null && $pane->dockable() && !in_array($row, $toggled, true)) {
+                $toggled[] = $row;
+            }
+        }
+
+        return new PaneAutoShow([], $toggled);
     }
 
     /**

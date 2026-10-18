@@ -873,6 +873,19 @@ final class DockLayoutTest extends TestCase
         $this->assertSame(1, $layout->dividerCols);
     }
 
+    public function testFromArrayIgnoresUnknownTopLevelKeysForForwardCompatibility(): void
+    {
+        // Hosts annotate the stored blob: candy-code's layout persistence
+        // (ISS-049) rides a sibling `userToggled` list alongside the
+        // manifest. The parser knows its own key paths and refuses bad ones,
+        // but a key it has never heard of must not brick the load — the
+        // geometry the host can read is worth more than the annotation it
+        // cannot.
+        $layout = DockLayout::fromArray(['userToggled' => ['files', 42]] + $this->validManifest());
+
+        $this->assertSame(DockLayout::fromArray($this->validManifest())->toArray(), $layout->toArray());
+    }
+
     // ── fromArray: every malformed shape throws naming its key ──────────────
 
     public function testFromRejectsMissingVersion(): void

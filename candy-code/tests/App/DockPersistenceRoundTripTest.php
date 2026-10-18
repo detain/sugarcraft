@@ -20,13 +20,17 @@ use SugarCraft\Constraints\Dock\Side;
 /**
  * The dock's persistence loop, closed at both ends.
  *
- * A mutation pushes its manifest out through the `onLayoutChange` closure
- * Bootstrap wires to `writeUserConfig(['layout' => $manifest])`; the next
- * launch pulls it back in through `dockFromUserConfig()`. This file pins the
- * three joints: the callback receives exactly the post-mutation manifest, the
- * bootstrap load path reconstructs a byte-equal dock from what was stored,
- * and anything malformed on disk degrades to the default fail-soft instead of
- * bricking startup (the layer is user-tier, so a hand-edit can break shape).
+ * A mutation pushes its layout blob out through the `onLayoutChange` closure
+ * Bootstrap wires to `writeUserConfig(['layout' => $blob])`; the next
+ * launch pulls it back in through `dockFromUserConfig()` and, since
+ * ISS-049, `paneAutoShowFromUserConfig()` — the blob carries the
+ * user-toggled pane list under `userToggled` so manual closes survive a
+ * restart. This file pins the joints: the callback receives exactly the
+ * post-mutation blob, the bootstrap load path reconstructs a byte-equal dock
+ * from what was stored and folds the toggled roster onto the auto-show
+ * memory, and anything malformed on disk degrades to the default fail-soft
+ * instead of bricking startup (the layer is user-tier, so a hand-edit can
+ * break shape).
  */
 final class DockPersistenceRoundTripTest extends TestCase
 {
@@ -57,7 +61,7 @@ final class DockPersistenceRoundTripTest extends TestCase
         parent::tearDown();
     }
 
-    public function testAMutationHandsTheCallbackExactlyThePostMutationManifest(): void
+    public function testAMutationHandsTheCallbackThePostMutationBlob(): void
     {
         $captured = [];
         $app = App::new($this->provider, 'test-model')
@@ -70,8 +74,13 @@ final class DockPersistenceRoundTripTest extends TestCase
         $after = $measured->setPaneSide(Pane::Tools, Side::Left);
 
         self::assertCount(1, $captured, 'one mutation, one persist');
-        self::assertSame($after->dock()->toArray(), end($captured));
+        self::assertSame($after->layoutBlob(), end($captured));
         self::assertSame([25, 100], end($captured)['columnShare']['left']);
+        // ISS-049: the blob is the manifest plus the hand-touched roster —
+        // the dock geometry keys carry through byte-identical, the list is
+        // purely additive, and the manifest itself never sees the key.
+        self::assertSame($after->dock()->toArray(), array_diff_key(end($captured), ['userToggled' => 1]));
+        self::assertSame(['tools'], end($captured)['userToggled']);
     }
 
     public function testTheSecondLaunchLoadsStoredManifestIntoAnEqualDock(): void
@@ -126,6 +135,37 @@ final class DockPersistenceRoundTripTest extends TestCase
     private function loadViaBootstrap(): ?DockLayout
     {
         return (new ReflectionMethod(Bootstrap::class, 'dockFromUserConfig'))->invoke(null);
+    }
+
+    public function testStoredUserToggledRowsLoadIntoTheLaunchAutoShowMemory(): void
+    {
+        [$measured] = App::new($this->provider, 'test-model')->update(new WindowSizeMsg(100, 40));
+        \assert($measured instanceof App);
+
+        Bootstrap::writeUserConfig(['layout' => $measured->togglePaneDocking(Pane::Files)->layoutBlob()]);
+        $autoShow = (new ReflectionMethod(Bootstrap::class, 'paneAutoShowFromUserConfig'))->invoke(null);
+
+        self::assertTrue($autoShow->settled(Pane::Files), 'the closed pane stays settled on the next launch');
+        self::assertFalse($autoShow->settled(Pane::Agents), 'and it never poisons untouched panes');
+    }
+
+    public function testJunkToggledRowsAreDroppedAndABlobWithoutTheListStartsClean(): void
+    {
+        $this->writeRawLayout(['version' => 1, 'center' => 'chat', 'sides' => ['left' => [], 'right' => []],
+            'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20],
+            'userToggled' => ['agents', 42, 'chat', 'not-a-pane', 'agents']]);
+        $autoShow = (new ReflectionMethod(Bootstrap::class, 'paneAutoShowFromUserConfig'))->invoke(null);
+
+        self::assertSame(['agents'], $autoShow->userToggled(), 'strings naming real dockable panes, deduped');
+
+        $this->writeRawLayout(['version' => 1, 'center' => 'chat', 'sides' => ['left' => [], 'right' => []],
+            'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]);
+        $clean = (new ReflectionMethod(Bootstrap::class, 'paneAutoShowFromUserConfig'))->invoke(null);
+        self::assertSame([], $clean->userToggled());
+
+        $this->writeRawLayout('not-an-array');
+        $junk = (new ReflectionMethod(Bootstrap::class, 'paneAutoShowFromUserConfig'))->invoke(null);
+        self::assertSame([], $junk->userToggled(), 'a malformed layout key must not brick the reader');
     }
 
     private function writeRawLayout(mixed $stored): void
