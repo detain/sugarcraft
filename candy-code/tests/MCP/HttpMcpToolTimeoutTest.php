@@ -58,7 +58,7 @@ final class HttpMcpToolTimeoutTest extends TestCase
     // Per-request timeout options
     // =========================================================================
 
-    public function testTheCallLegCarriesTheTwelveSecondDefaultNotTheThirtySecondClient(): void
+    public function testTheCallLegCarriesTheTwoMinuteDefaultNotTheThirtySecondClient(): void
     {
         $requests = [];
         $server = $this->serverWith([$this->ok('initialize'), $this->ack(), $this->ok('tools/list'), $this->ok('tools/call')], $requests);
