@@ -34,7 +34,11 @@ use SugarCraft\Code\Protocol\SessionFeed;
  *   session and soft-cancels the turn ("Reject & stop");
  * - `remember: "project"` is refused — permission rules are user-tier only
  *   — and `remember: "user"`, a write to the user's config, is not offered
- *   over the wire yet.
+ *   over the wire yet;
+ * - since ISS-004 a `sessionId` that names no open session is tried as a
+ *   RELAYED BACKGROUND QUESTION (`bg.*` sessions answer through the
+ *   supervisor's answer file); the same first-answer-wins law applies, and
+ *   `cascade` on one is refused `cascade_unavailable`.
  */
 final class PermissionMethods
 {
@@ -68,8 +72,14 @@ final class PermissionMethods
             $reply = PermissionReply::Always;
         }
 
-        $host = $call->server->hub()->get($sessionId)
-            ?? throw RpcError::notFound(\sprintf('session %s is not open, so no question of it is open', $sessionId), 'ask_not_found');
+        $host = $call->server->hub()->get($sessionId);
+        if ($host === null) {
+            // ISS-004: not a hosted session — it may be a background daemon
+            // whose question this server is relaying. Those live outside the
+            // hub, on the supervisor's ask/answer files; a sessionId that is
+            // neither stays the same `ask_not_found` it always was.
+            return self::respondRelayed($call, $sessionId, $askId, $reply, $note, $params);
+        }
         $call->feed($host);
 
         $asked = null;
@@ -125,6 +135,46 @@ final class PermissionMethods
         ];
     }
 
+    /**
+     * Answer to a question relayed by a background daemon (ISS-004).
+     *
+     * The narrow edges, stated rather than papered over: `cascade` is refused
+     * (a daemon holds one question at a time and the server keeps no roster
+     * of its siblings' opens to reject alongside), and `always` is accepted
+     * but lands once-strength — the daemon's approver is a bool, and the
+     * relayed event already names its options as `["once","reject"]`.
+     *
+     * @return array<string, mixed>
+     */
+    private static function respondRelayed(CallContext $call, string $sessionId, string $askId, PermissionReply $reply, ?string $note, Params $params): array
+    {
+        $events = $call->server->background();
+        if ($events === null) {
+            throw RpcError::notFound(\sprintf('session %s is not open, so no question of it is open', $sessionId), 'ask_not_found');
+        }
+        if ($reply === PermissionReply::Reject && $params->bool('cascade')) {
+            throw RpcError::of(ErrorCode::UnsupportedInServer, 'a relayed background question is answered one at a time; a background session holds no siblings to reject with it', 'cascade_unavailable');
+        }
+
+        $outcome = $events->answerAsk($sessionId, $askId, $reply->value, $note ?? '');
+        if ($outcome['status'] === 'unknown') {
+            throw RpcError::notFound(\sprintf('no open question %s', $askId), 'ask_not_found');
+        }
+        if ($outcome['status'] === 'already') {
+            throw RpcError::of(ErrorCode::Conflict, 'this question was already answered', 'already_resolved', ['resolved' => [
+                'askId' => $askId,
+                'reply' => $outcome['reply'] ?? null,
+            ]]);
+        }
+
+        return [
+            'applied' => true,
+            'askId' => $askId,
+            'reply' => $outcome['reply'] ?? $reply->value,
+            'cascaded' => [],
+        ];
+    }
+
     /** @return array<string, mixed> */
     private static function pending(CallContext $call, Params $params): array
     {
@@ -135,6 +185,18 @@ final class PermissionMethods
         foreach ($sessionIds as $sessionId) {
             foreach ($hub->get($sessionId)?->pendingAsks() ?? [] as $ask) {
                 $items[] = ['sessionId' => $sessionId, ...SessionFeed::askSummary($ask)];
+            }
+        }
+
+        // ISS-004: relayed background questions are open questions of this
+        // server too — a client polling `permission.pending` sees them beside
+        // the hosted sessions', each named by its background id.
+        $background = $call->server->background();
+        if ($background !== null) {
+            foreach ($background->pendingAsks() as $ask) {
+                if (!$params->has('sessionId') || $ask['sessionId'] === SessionMethods::sessionId($params)) {
+                    $items[] = $ask;
+                }
             }
         }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host;
 
+use SugarCraft\Code\Backend\ChildChannel;
+use SugarCraft\Code\Protocol\EventType;
 use SugarCraft\Code\Sessions\BackgroundSession;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
 
@@ -61,6 +63,15 @@ final class BackgroundEvents
 
     /** @var array<string, true> the sessions {@see boot()} re-adopted */
     private array $adopted = [];
+
+    /** @var array<string, string> relayed askId => the bgId that asked, while open (ISS-004) */
+    private array $asks = [];
+
+    /** @var array<string, string> settled relayed askId => the reply word, or `cancelled` */
+    private array $answeredAsks = [];
+
+    /** The `answeredAsks` marker for a question its session settled without answering. */
+    private const CANCELLED_REPLY = 'cancelled';
 
     private bool $booted = false;
 
@@ -150,6 +161,7 @@ final class BackgroundEvents
                 $emitted += $this->report($session, $this->reported[$session->id] ?? null);
             }
         }
+        $emitted += $this->pollAsks();
 
         return $emitted;
     }
@@ -228,7 +240,164 @@ final class BackgroundEvents
             return 1;
         }
         ($this->emit)(self::COMPLETED, $this->summary($session));
+        $emitted = 2 + $this->cancelAsksFor($session->id);
 
-        return 2;
+        return $emitted;
+    }
+
+    /**
+     * The relayed permission questions of the active sessions (ISS-004).
+     *
+     * A daemon with no relay never creates the file, so the scan costs one
+     * stat per session per poll for every deployment that does not use it.
+     * Discovery is content-based, not timer-based: a question written and
+     * answered between two polls still lands in `permission.pending` for a
+     * client that looks, and a client that was watching gets both events at
+     * the next poll.
+     *
+     * @return int how many `permission.asked` events were emitted
+     */
+    public function pollAsks(): int
+    {
+        $emitted = 0;
+        foreach ($this->sessions() as $session) {
+            if ($session->isSettled()) {
+                continue;
+            }
+            foreach ($this->supervisor->permissionAsks($session->id) as $ask) {
+                $askId = (string) $ask['askId'];
+                if (isset($this->asks[$askId]) || isset($this->answeredAsks[$askId])) {
+                    continue;
+                }
+                $this->asks[$askId] = $session->id;
+                $emitted += $this->emitAsk($session->id, $ask);
+            }
+        }
+
+        return $emitted;
+    }
+
+    /**
+     * Every relayed question still open across the active sessions, in the
+     * shape `permission.pending` lists them — read from the files, so it is
+     * correct between polls, not only at them.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function pendingAsks(): array
+    {
+        $items = [];
+        foreach ($this->sessions() as $session) {
+            if ($session->isSettled()) {
+                continue;
+            }
+            foreach ($this->supervisor->permissionAsks($session->id) as $ask) {
+                if (isset($this->answeredAsks[$ask['askId']])) {
+                    continue;
+                }
+                $items[] = ['sessionId' => $session->id, 'bgId' => $session->id, ...$this->relayRow($ask)];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Hand the daemon's server the human's answer to one relayed question
+     * (ISS-004). Answers the first valid one; the answer file is the record,
+     * so a second answer to the same question reports `already` with the
+     * first reply attached rather than overwriting anything.
+     *
+     * @return array{status: string, reply?: string} status is `answered`,
+     *         `already` (with the winning `reply`), or `unknown`
+     */
+    public function answerAsk(string $bgId, string $askId, string $reply, string $note = ''): array
+    {
+        $settled = $this->answeredAsks[$askId] ?? null;
+        if ($settled !== null && $settled !== self::CANCELLED_REPLY) {
+            return ['status' => 'already', 'reply' => $settled];
+        }
+        if ($settled === self::CANCELLED_REPLY) {
+            // The question died with its session; there is nothing to answer.
+            return ['status' => 'unknown'];
+        }
+        $session = $this->supervisor->getSession($bgId);
+        if ($session === null || $session->isSettled() || !isset($this->asks[$askId]) || $this->asks[$askId] !== $bgId) {
+            // Not tracked from a poll yet: accept it straight off the file if
+            // an active session really did ask — a client that read
+            // `permission.pending` between two polls must be able to answer.
+            if ($session === null || $session->isSettled() || !in_array($askId, array_column($this->supervisor->permissionAsks($bgId), 'askId'), true)) {
+                return ['status' => 'unknown'];
+            }
+            $this->asks[$askId] = $bgId;
+        }
+        if (!$this->supervisor->answerPermissionAsk($bgId, $askId, $reply, $note)) {
+            return ['status' => 'unknown'];
+        }
+
+        unset($this->asks[$askId]);
+        $this->answeredAsks[$askId] = $reply;
+        ($this->emit)(EventType::PERMISSION_SETTLED, [
+            'sessionId' => $bgId,
+            'bgId' => $bgId,
+            'askId' => $askId,
+            'reply' => $reply,
+            'note' => ChildChannel::clipNote($note),
+        ]);
+
+        return ['status' => 'answered', 'reply' => $reply];
+    }
+
+    /** @return int how many `permission.settled` (cancelled) events were emitted */
+    private function cancelAsksFor(string $bgId): int
+    {
+        $emitted = 0;
+        foreach ($this->asks as $askId => $ownerId) {
+            if ($ownerId !== $bgId) {
+                continue;
+            }
+            unset($this->asks[$askId]);
+            $this->answeredAsks[$askId] = self::CANCELLED_REPLY;
+            ($this->emit)(EventType::PERMISSION_SETTLED, [
+                'sessionId' => $bgId,
+                'bgId' => $bgId,
+                'askId' => $askId,
+                'cancelled' => true,
+            ]);
+            ++$emitted;
+        }
+
+        return $emitted;
+    }
+
+    /**
+     * A relayed ask row as the wire sees it: an empty argument map must ride
+     * as `{}`, not `[]` — the same object shape {@see SessionFeed::askSummary()}
+     * gives a hosted session's question, so one client renders both.
+     *
+     * @param array<string, mixed> $ask
+     * @return array<string, mixed>
+     */
+    private function relayRow(array $ask): array
+    {
+        $arguments = $ask['arguments'] ?? [];
+        $ask['arguments'] = $arguments === [] ? new \stdClass() : $arguments;
+
+        return $ask;
+    }
+
+    /**
+     * One relayed question as the broadcast that announces it: the session-scope
+     * ask data with the background id wearing the `sessionId` name, so every
+     * client can answer it with `permission.respond` exactly as it would an
+     * open session's question.
+     *
+     * @param array<string, mixed> $ask
+     */
+    private function emitAsk(string $bgId, array $ask): int
+    {
+        ($this->emit)(EventType::PERMISSION_ASKED, ['sessionId' => $bgId, 'bgId' => $bgId, ...$this->relayRow($ask)]);
+
+        return 1;
     }
 }

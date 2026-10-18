@@ -83,11 +83,13 @@ final class BgMethods
         $name = BackgroundCommand::sessionName($params->optionalString('name', 256) ?? $task);
         $root = $call->server->hub()->workspace()->root;
 
-        // ISS-004: the daemon runs in the server session's mode, refused at
-        // its no-terminal approver for anything it must ask about. A client
-        // names no mode on this call — the server's own admitted mode is the
-        // one and only source, so no request can escalate past what the
-        // operator launched.
+        // ISS-004: the daemon runs in the server session's mode, and its
+        // permission questions are relayed to this server's clients — asked
+        // as `permission.asked`, answerable with `permission.respond`, waiting
+        // exactly as long as this server lets an open question wait
+        // (`server.askTimeoutSeconds`, 0 forever). A client names no mode on
+        // this call — the server's own admitted mode is the one and only
+        // source, so no request can escalate past what the operator launched.
         $permissionMode = self::spawnPermissionMode($call->server->config());
 
         try {
@@ -97,6 +99,7 @@ final class BgMethods
                 task: $task,
                 workingDirectory: $root !== null && $root !== '' ? $root : '.',
                 permissionMode: $permissionMode,
+                permissionAskTimeout: $call->server->config()->askTimeoutSeconds,
             );
         } catch (\Throwable) {
             // The cause can name a private path; it stays out of the answer.

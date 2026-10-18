@@ -126,8 +126,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      */
     public const AGENT_TAG_PREFIX = 'agent:';
 
+    /** The session buffer's suffix; the relay channel derives from it (ISS-004). */
+    public const IPC_FILE_BUFFER_SUFFIX = '.buffer';
+
     /** A record names its session's three IPC files by these exact suffixes. */
-    private const IPC_FILE_SUFFIXES = ['socketPath' => '.sock', 'bufferPath' => '.buffer', 'tokenPath' => '.token'];
+    private const IPC_FILE_SUFFIXES = ['socketPath' => '.sock', 'bufferPath' => self::IPC_FILE_BUFFER_SUFFIX, 'tokenPath' => '.token'];
 
     /**
      * How long EVERY entry of a private IPC directory (and the directory
@@ -313,6 +316,95 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     }
 
     /**
+     * The permission-relay channel of a session (ISS-004): the `.ask` file a
+     * relayed daemon writes its questions to and the `.answer` file the
+     * server writes the human's answers back to, both derived from the
+     * session's buffer path. Null for a session this process does not hold
+     * IPC for, or one whose paths are not a session buffer's — a TUI `/bg`
+     * daemon never asked for a channel and has none.
+     *
+     * @return array{askPath: string, answerPath: string}|null
+     */
+    public function permissionAskChannel(string $sessionId): ?array
+    {
+        $bufferPath = $this->sessionIpc[$sessionId]['bufferPath'] ?? null;
+
+        return is_string($bufferPath) ? BackgroundPermissionRelay::pathsFor($bufferPath) : null;
+    }
+
+    /**
+     * The questions a session's daemon has relayed, oldest first, deduped by
+     * ask id with the newest line winning. Malformed lines are unread and
+     * untrusted — a torn write can only ever cost the one question it names,
+     * which the daemon's own timeout falls through to the legacy refusal.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function permissionAsks(string $sessionId): array
+    {
+        $channel = $this->permissionAskChannel($sessionId);
+        if ($channel === null) {
+            return [];
+        }
+        $text = @file_get_contents($channel['askPath']);
+        if (!is_string($text) || $text === '') {
+            return [];
+        }
+
+        $asks = [];
+        foreach (explode("\n", $text) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $row = json_decode($line, true);
+            if (
+                !is_array($row)
+                || !isset($row['askId'], $row['tool'])
+                || !is_string($row['askId'])
+                || preg_match('/\A[0-9a-f]{16}\z/', $row['askId']) !== 1
+                || !is_string($row['tool'])
+                || $row['tool'] === ''
+            ) {
+                continue;
+            }
+            $asks[$row['askId']] = $row;
+        }
+
+        return array_values($asks);
+    }
+
+    /**
+     * Append one human answer for a relayed question (ISS-004). The daemon
+     * polls this file inside its `server.askTimeoutSeconds` window; whoever
+     * answers first is whoever's line the daemon finds, and the same answer
+     * read twice changes nothing — the file is the record.
+     *
+     * Returns false when the session has no channel to answer into.
+     */
+    public function answerPermissionAsk(string $sessionId, string $askId, string $reply, string $note = ''): bool
+    {
+        $channel = $this->permissionAskChannel($sessionId);
+        if ($channel === null || !is_dir(dirname($channel['answerPath']))) {
+            return false;
+        }
+        $line = json_encode([
+            'askId' => $askId,
+            'reply' => $reply,
+            // Same note ceiling an answer to an open session's question gets
+            // ({@see \SugarCraft\Code\Backend\ChildChannel::clipNote()}), so
+            // one answer cannot outgrow the record it rides in.
+            'note' => \SugarCraft\Code\Backend\ChildChannel::clipNote($note),
+            'answeredAt' => date(DATE_ATOM),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($line === false) {
+            return false;
+        }
+
+        return @file_put_contents($channel['answerPath'], $line . "\n", FILE_APPEND) !== false;
+    }
+
+    /**
      * Return true when there is at least one active session.
      */
     public function hasActiveSessions(): bool
@@ -370,6 +462,13 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * the daemon would otherwise carry a poison pill its fail-closed gate
      * resolution turns into a task failure at the first heartbeat.
      *
+     * $permissionAskTimeout is the relay window (ISS-004): seconds a
+     * serve-spawned daemon waits for a human answer to a permission question
+     * it relayed through the server (0 = forever, the
+     * `server.askTimeoutSeconds` semantics). Null — every host-side `/bg` and
+     * `/fork` — names no relay: the daemon refuses at its console approver
+     * exactly as before.
+     *
      * @param array<string, string>|null $delegation
      * @return BackgroundSession The newly spawned session
      * @throws \RuntimeException If the private IPC directory or files cannot be
@@ -387,6 +486,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         ?string $forkedSessionId = null,
         ?array $delegation = null,
         ?string $permissionMode = null,
+        ?float $permissionAskTimeout = null,
     ): BackgroundSession {
         $permissionMode = $permissionMode ?? $this->spawnPermissionMode;
         if ($permissionMode !== null && \SugarCraft\Code\Permissions\PermissionMode::tryFrom($permissionMode) === null) {
@@ -456,6 +556,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $forkedSessionId,
                 $delegation,
                 $permissionMode,
+                $permissionAskTimeout,
             ),
         ];
 
@@ -669,6 +770,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         ?string $forkedSessionId = null,
         ?array $delegation = null,
         ?string $permissionMode = null,
+        ?float $permissionAskTimeout = null,
     ): string {
         $config = [
             'sessionId' => $sessionId,
@@ -693,6 +795,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             // BackgroundSessionRunner::backend(); the delegation block's own
             // permissionMode keeps its bypass-inheritance semantics.
             $config['permissionMode'] = $permissionMode;
+        }
+        if ($permissionAskTimeout !== null) {
+            // ISS-004: a serve-spawned daemon relays its permission questions
+            // to the server's clients (BackgroundPermissionRelay) and waits
+            // this many seconds for an answer — the server's own
+            // `server.askTimeoutSeconds`, 0 meaning forever. Absent (null) is
+            // the TUI `/bg`: no relay, the console approver's no-tty refusal,
+            // byte-identical to before this key existed.
+            $config['permissionAskTimeout'] = $permissionAskTimeout;
         }
 
         // The umask/fork/setsid/fork sequence is {@see Daemonize::code()}:

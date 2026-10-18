@@ -227,6 +227,16 @@ final class BackgroundSessionRunner
          * the server that admitted this spawn runs.
          */
         public readonly string $permissionMode = '',
+        /**
+         * Seconds to wait for a human answer to a relayed permission question
+         * (ISS-004), 0 waiting forever; negative — the value a TUI `/bg`
+         * carries, since no host-side spawn names a window — switches the
+         * relay off entirely, leaving the console approver's no-tty refusal
+         * byte-identical to every daemon born before this class existed.
+         * Set only by a `serve`'s `bg.spawn`, from its
+         * `server.askTimeoutSeconds`.
+         */
+        public readonly float $permissionAskTimeout = -1.0,
     ) {}
 
     /**
@@ -252,6 +262,13 @@ final class BackgroundSessionRunner
             // way delegationFrom() drops it, so the daemon falls back to the
             // documented headless default rather than trusting a non-string.
             permissionMode: \is_string($config['permissionMode'] ?? null) ? $config['permissionMode'] : '',
+            // Numeric or absent (ISS-004): a non-numeric value on argv is
+            // dropped the way the string-shaped permissionMode above is, so
+            // the daemon falls back to no-relay rather than to a nonsense
+            // window. Negative stays what it means — relay off.
+            permissionAskTimeout: \is_numeric($config['permissionAskTimeout'] ?? null)
+                ? (float) $config['permissionAskTimeout']
+                : -1.0,
         );
     }
 
@@ -999,7 +1016,9 @@ final class BackgroundSessionRunner
         // the console approver's `false` as "the user declined".
         if ($this->provider !== '') {
             try {
-                return \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backendFor($this->provider, $root, null, null, true));
+                return $this->withPermissionRelay(
+                    \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backendFor($this->provider, $root, null, null, true))
+                );
             } catch (PermissionConfigException $e) {
                 // Same arm {@see \SugarCraft\Code\Cli\NonInteractive::run()}
                 // and {@see Bootstrap::backend()} carry: an unusable permission
@@ -1019,7 +1038,45 @@ final class BackgroundSessionRunner
             }
         }
 
-        return \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backend($root, null, null, true));
+        return $this->withPermissionRelay(
+            \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backend($root, null, null, true))
+        );
+    }
+
+    /**
+     * Attach the server permission relay to a freshly built backend
+     * (ISS-004): a daemon spawned with a wait window answers its gate's
+     * questions through its server's clients instead of dying at the
+     * console approver's no-tty arm.
+     *
+     * Three doors keep every non-relaying shape byte-identical: relay off
+     * (negative window — the TUI `/bg`, `/fork`, and any spawn that named
+     * none), a backend that is not an {@see \SugarCraft\Code\Backend\EngineBackend}
+     * (there is no gate approver to replace), and a buffer path the channel
+     * cannot be derived from. The MODE is read off the gate the launch
+     * resolved — not off the config again — so the relay's bypass arm honors
+     * exactly the mode the gate answered with, including the unadmitted-
+     * bypass downgrade 6bad89ebe settled.
+     */
+    private function withPermissionRelay(Backend $backend): Backend
+    {
+        if ($this->permissionAskTimeout < 0.0 || !$backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+            return $backend;
+        }
+        $channel = BackgroundPermissionRelay::pathsFor($this->bufferPath);
+        if ($channel === null) {
+            return $backend;
+        }
+        $mode = $backend->permissionGate()?->mode() ?? \SugarCraft\Code\Permissions\PermissionMode::Default;
+
+        return $backend->withPermissionApprover(
+            (new BackgroundPermissionRelay(
+                mode: $mode,
+                askPath: $channel['askPath'],
+                answerPath: $channel['answerPath'],
+                timeoutSeconds: $this->permissionAskTimeout,
+            ))->approver(),
+        );
     }
 
     /**

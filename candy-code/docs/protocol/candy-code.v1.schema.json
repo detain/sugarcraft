@@ -4324,7 +4324,7 @@
             }
         },
         "permission.asked": {
-            "description": "A question was put in an open session: permission.requested with its sessionId, for every client, following the session or not.",
+            "description": "A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way.",
             "durable": false,
             "scope": "server",
             "data": {
@@ -4440,7 +4440,7 @@
             }
         },
         "permission.settled": {
-            "description": "A question of an open session was answered or cancelled (permission.resolved, for every client).",
+            "description": "A question was answered or cancelled (permission.resolved for every client) — a background session's relayed question included, cancelled when its session settled unanswered.",
             "durable": false,
             "scope": "server",
             "data": {

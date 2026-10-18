@@ -509,10 +509,10 @@ one re-reads what it describes (`session.list`, `permission.pending`).
 | `bg.status` | server | live | A background session's status changed (running, stalled, …). |
 | `compaction.completed` | session | durable | The history was compacted before a turn. |
 | `message.created` | session | durable | A transcript row was added: the prompt, a notice, a summary. |
-| `permission.asked` | server | live | A question was put in an open session: permission.requested with its sessionId, for every client, following the session or not. |
+| `permission.asked` | server | live | A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. |
 | `permission.requested` | session | durable | A tool call is waiting for an answer (permission.respond). |
 | `permission.resolved` | session | durable | A question was answered or cancelled. |
-| `permission.settled` | server | live | A question of an open session was answered or cancelled (permission.resolved, for every client). |
+| `permission.settled` | server | live | A question was answered or cancelled (permission.resolved for every client) — a background session's relayed question included, cancelled when its session settled unanswered. |
 | `reasoning.delta` | session | live | Streamed reasoning text. |
 | `server.overflow` | server | live | This client fell behind; ephemeral events were dropped — resubscribe. |
 | `server.shutdown` | server | live | The server is stopping. |
@@ -743,13 +743,23 @@ host-side `/bg` it mirrors — starts its daemon in this server's admitted
 permission mode rather than the headless `bypass-permissions` default: the
 mode is named in the spawn config, and the daemon resolves its gate from it.
 Nobody sits at a daemon's keyboard, so what the mode would ask about is
-refused by the no-terminal approver (with its refusal recorded in the
-session's output), while what it allows — every read-only tool included —
+relayed to the server's clients (falling back to the no-terminal approver's
+refusal, recorded in the session's output, when no answer arrives in time),
+while what it allows — every read-only tool included —
 runs normally. A server admitted for `bypass-permissions` with
 `--allow-bypass` spawns bypass daemons; a `bg.spawn` request can name no mode
 of its own, so no call escalates past the launch. An ask inside a spawned
-daemon is not yet routed to the server's clients as a session-scope
-`permission.asked` — that wiring is a follow-up.
+daemon is **relayed to the server's clients** as a server-scope
+`permission.asked` named by the session's background id: answer it with
+`permission.respond` exactly as an open session's question. The question
+waits for an answer as long as `server.askTimeoutSeconds` says (0, the
+default, forever); with no client to answer in time the daemon falls back to
+the no-terminal refusal above, recorded in its output unchanged. Relayed
+asks are offered `once` or `reject` only — `always` is accepted but lands
+once-strength inside the daemon, and `cascade` on a reject is refused
+`cascade_unavailable` because a relayed session holds no siblings to stop.
+A local `/bg` from a terminal has no server to relay through and keeps the
+plain refusal.
 
 **A starting server re-adopts what an earlier one left.** A background daemon
 outlives whatever started it, so on start the server adopts the daemons an
