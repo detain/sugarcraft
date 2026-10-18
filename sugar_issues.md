@@ -344,7 +344,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-004"></a>
 ### ISS-004 · [P1] Background sessions run in bypass-permissions on servers that refuse bypass
 - **Product / area:** both · permissions (serve mode)
-- **Status:** ⏭ Fixed (partial — ask-routing follow-up documented) (fix-1017 2026-10-17, fed36221a)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 1c3706fec + f5740384a)
 - **Verdict:** CONFIRMED (found by A6; verified and reproduced by V6)
 - **Location:**
   - `candy-code/src/Protocol/Methods/BgMethods.php:72-99` (no mode passed to `spawnSession()`)
@@ -553,7 +553,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-013"></a>
 ### ISS-013 · [P2] auto mode's denylist misses common download-and-execute and exfiltration shapes; the mode description overstates it
 - **Product / area:** candy-code · permissions
-- **Status:** ⏭ Fixed (partial — ExecReviewer optional half) (fix-1017 2026-10-17, 7ca26fa18)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 485b93eed)
 - **Verdict:** CONFIRMED (found by A4; verified and reproduced by V4)
 - **Location:** `candy-code/src/Permissions/SafetyClassifier.php:79-106`; `candy-code/src/Permissions/PermissionMode.php:182-187`
 - **Problem:**
@@ -1183,7 +1183,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-049"></a>
 ### ISS-049 · [P2] Pane auto-dock has no width guard, persists, and re-docks panes the user closed on the next launch
 - **Product / area:** candy-code · tui (layout)
-- **Status:** ⏭ Not fixed — no landed commit found (fix-1017 2026-10-17); never claimed by a lane
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 0eedeb13d + a2b228dcb)
 - **Verdict:** CONFIRMED (found by A5; verified by V5, with a correction on the share)
 - **Location:**
   - `candy-code/src/App/App.php:2041` (`AUTO_ENABLE_PANES`), `:2061-2087` (`autoEnablePane`, no width check), `:1850-1866` (`seedSharesFromFrame`: a quarter, first mutation only)
@@ -1243,6 +1243,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 - **Verification notes:**
   - The backpressure flavour drops only ephemeral events, so its impact is minor.
   - fill-sc (WEB-N4) adds that `server.health` is also unused and a server drain shows only "reconnecting…".
+  - The e2e-kill-host leg of the suggested fix: accepted declined — coverage lives in the store unit tests and the host-loss path exercised by `reconnect.spec`.
 
 <a id="iss-053"></a>
 ### ISS-053 · [P2] Sidebar j/k shortcuts hijack typing in the session filter
@@ -1428,7 +1429,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-065"></a>
 ### ISS-065 · [P3] A sub-agent's file touches mark nested instruction files as delivered for the parent (rest of the turn)
 - **Product / area:** candy-code · instructions (sub-agents)
-- **Status:** ⏭ Fixed (partial — emitted-path loader-view seam (TaskTool granted-tool copies + InstructionFileLoader view)) (fix-1017 2026-10-17, f42ec5fc6)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, c7517759b)
 - **Verdict:** CONFIRMED (found by A1 as P2; verified by V1, narrowed to P3)
 - **Location:**
   - `candy-code/src/Tools/BuiltIn/TaskTool.php:1159` (`grantedToolsFor`), `:1207` (`$granted ?? $engine->tools()`)
@@ -1493,7 +1494,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-070"></a>
 ### ISS-070 · [P3] The pre-compaction memory flush saves notes silently; CONTEXT.md implies otherwise
 - **Product / area:** candy-code · memory
-- **Status:** ⏭ Fixed (partial — memory-flush display wiring seam (rows returned, not surfaced in TUI)) (fix-1017 2026-10-17, 41c111df1)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, bd18936cd)
 - **Verdict:** CONFIRMED (found by A1; verified by V1)
 - **Location:** `candy-code/src/Context/Compaction/MemoryFlush.php:115-134` (returns a count); `candy-code/src/Backend/EngineBackend.php:2018-2030`, `:4451-4466` (both callers discard it; no tool events); `candy-code/docs/CONTEXT.md:276-284`
 - **Problem:** Flush saves produce no notice, unlike auto-memory and dream writes. CONTEXT.md says "nothing about it reaches the transcript but the notes it saved", which reads as if they are shown.
@@ -1915,7 +1916,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-102"></a>
 ### ISS-102 · [P3] Each launch creates an empty session; the tab strip shows hex ids
 - **Product / area:** candy-code · tui (sessions presentation)
-- **Status:** ⏭ Fixed (partial — SessionTabs dormancy ruled; no further wiring owed) (fix-1017 2026-10-17, 743607389)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, 8fb42b8d0 + 06fea42d4)
 - **Verdict:** CONFIRMED (found by A5; verified and reproduced by V5, which noted a mitigation)
 - **Location:** `candy-code/src/Renderer.php:3260-3305` (strip = top 20 of `listSessions()`, name falls back to id); `candy-code/src/Cli/Bootstrap.php:4166-4180` (`createSession()` every launch, then `pruneEmptySessions($id)`); `candy-code/src/Session/EnhancedSessionStore.php:2177-2199` (prunes only rows untouched ≥3600 s); dormant `candy-code/src/Tui/SessionTabs.php`
 - **Problem:**
@@ -2044,7 +2045,7 @@ _Generated 2026-10-16 from six code audits, each followed by an independent adve
 <a id="iss-113"></a>
 ### ISS-113 · [P3] A turn ended by the loop guard shows no harness notice in the browser
 - **Product / area:** both · web-ui
-- **Status:** ⏭ Fixed (partial — ACP StopReasonMap loop_guard arm still absent (web reducer + projector done)) (fix-1017 2026-10-17, 9c1d2f9bb)
+- **Status:** ✅ Fixed (fix-1017 2026-10-17, ea79b9618 + 9c1d2f9bb)
 - **Verdict:** PLAUSIBLE (found by the feature-rating pass, fill-sc.md rows CTX-N3/TL-N2 SCW)
 - **Location:** `candy-code/src/Host/TranscriptProjector.php:446-455` (`stopReason()`); `candy-code-web/src-web/stores/reducer.ts:507-513`, `:560-565`; TUI comparison `candy-code/src/Chat.php:2427-2429`, `:19721-19727`; `candy-code/src/Backend/EngineBackend.php:2495-2506`
 - **Problem:** `TranscriptProjector::stopReason()` maps `stepsTruncated` to `max_steps`, which the reducer shows as "Turn stopped: it reached its step limit.". A turn the repeat-call loop guard ended maps to `end_turn`, so the browser gets no harness notice; only the model's own wrap-up says it stopped. The TUI adds `chat.turn.loop_guard`.
