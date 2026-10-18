@@ -16059,11 +16059,30 @@ final class Chat implements Model
                     $deleted = $store->deleteSession($target, $action === $Action::DeleteWithChildren);
                     $count = count($deleted);
 
-                    return $keep($this->reloadSessionPicker($picker)->withNotice(
-                        $count > 1
-                            ? Lang::t('chat.picker.deleted_with_children', ['sessions' => $this->pluralSessions($count - 1)])
-                            : Lang::t('chat.picker.deleted'),
-                    ));
+                    // ISS-102 (rv5-a): a deleted session's tab goes with it.
+                    // The picker refuses the CURRENT session, but every other
+                    // open tab — a child swept up by DeleteWithChildren, or a
+                    // sibling the user opened with the tab strip — kept its
+                    // tab pointing at a session the store no longer has: the
+                    // header still read its stale name, and switching to it
+                    // resurrected a corpse. closeTab's own guards are exactly
+                    // the semantics wanted here: unknown ids no-op, and the
+                    // last tab cannot be closed, so whatever the store said,
+                    // the strip never empties. This arm therefore bypasses
+                    // $keep, which owns only the picker key.
+                    $tabs = $this->openTabs;
+                    foreach ($deleted as $gone) {
+                        $tabs = $tabs->closeTab((string) $gone);
+                    }
+
+                    return [$this->mutate([
+                        'sessionPicker' => $this->reloadSessionPicker($picker)->withNotice(
+                            $count > 1
+                                ? Lang::t('chat.picker.deleted_with_children', ['sessions' => $this->pluralSessions($count - 1)])
+                                : Lang::t('chat.picker.deleted'),
+                        ),
+                        'openTabs' => $tabs,
+                    ]), null];
 
                 case $Action::Rename:
                     $rename = $picker->renameTarget();

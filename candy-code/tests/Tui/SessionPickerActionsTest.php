@@ -18,6 +18,8 @@ use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionKind;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Tui\SessionTab;
+use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\SessionPicker;
 use SugarCraft\Mouse\Zone;
@@ -222,6 +224,31 @@ final class SessionPickerActionsTest extends TestCase
         $this->assertNull($this->store->getSession($sub), 'a sub-agent child goes with its parent');
         $this->assertNotNull($this->store->getSession($branch), 'a branch is a conversation of its own and stays');
         $this->assertNull($this->store->getSession($branch)['parent_id'], 'detached');
+    }
+
+    public function testDeletingASessionThatHasATabClosesTheTab(): void
+    {
+        // ISS-102 (rv5-a): the picker took the row out of the store and the
+        // tab strip kept pointing at the corpse — the header still read the
+        // stale name, and switching to it resurrected a session the store no
+        // longer has. One down lands on s2 (list is s3, s2, s1), dd deletes
+        // it, and the s2 tab must go with it.
+        $tab = new SessionTab(id: 's1', sessionName: 'First', isActive: true);
+        $tabs = (new SessionTabs(['s1' => $tab], ['s1']))->openTab('s2', 'Second');
+        $chat = (new Chat(
+            history: [Message::user('hi')],
+            backend: new EchoBackend(),
+            sessionStore: $this->store,
+            currentSessionId: 's1',
+            openTabs: $tabs,
+        ))->withSize(100, 30);
+        $this->assertSame(['s1', 's2'], array_column($chat->openTabs()->tabs(), 'id'), 'fixture: two tabs open');
+
+        $after = $this->press($this->open($chat), ['down', 'd', 'd']);
+
+        $this->assertNull($this->store->getSession('s2'), 'fixture: the store row is gone');
+        $this->assertSame(['s1'], array_column($after->openTabs()->tabs(), 'id'), 'the dead sessions tab is gone with it');
+        $this->assertStringContainsString('Deleted', (string) $after->sessionPicker()?->notice(), 'the same press still carries the notice');
     }
 
     public function testShiftDDeletesTheBranchesToo(): void
