@@ -1881,7 +1881,8 @@
                 "properties": {
                     "content": {
                         "type": "string",
-                        "maxLength": 65536
+                        "maxLength": 65536,
+                        "description": "Empty text and project notes over the store bound (ProjectMemoryWriter::MAX_CONTENT_BYTES, setting memory.projectNoteMaxBytes) are refused as invalid_params."
                     },
                     "scope": {
                         "enum": [

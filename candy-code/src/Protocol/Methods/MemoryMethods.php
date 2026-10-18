@@ -119,7 +119,19 @@ final class MemoryMethods
         $scope = $params->enum('scope', self::SCOPES, 'user');
         $tags = $params->strings('tags', 32);
         $writer = self::writer($call);
-        $saved = self::recordAround($writer, 'add', static fn () => $writer->save($content, $scope, 'pattern', $tags));
+        try {
+            $saved = self::recordAround($writer, 'add', static fn () => $writer->save($content, $scope, 'pattern', $tags));
+        } catch (RpcError $e) {
+            throw $e; // a refusal the sandwich itself typed (never here today) rides through
+        } catch (\InvalidArgumentException $e) {
+            // gap-minor N-3: an empty note or the project store's 8 KiB bound
+            // (ProjectMemoryWriter::write) is an input refusal the panel can
+            // show honestly — never the dispatcher's -32099 internal envelope.
+            throw RpcError::invalidParams($e->getMessage());
+        } catch (\RuntimeException $e) {
+            // no store could take the note: the same typed refusal the reads answer with
+            throw RpcError::of(ErrorCode::UnsupportedInServer, $e->getMessage(), 'memory_unavailable');
+        }
 
         return [
             'id' => $saved->id,

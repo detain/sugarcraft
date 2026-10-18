@@ -349,7 +349,7 @@ final class MethodSchemas
             'memory.list' => [Schema::object(['scope' => $memoryScope]), $items(Schema::ref(D::MEMORY_ENTRY))],
             'memory.search' => [Schema::object(['query' => Schema::string(1024), 'limit' => Schema::integer(1, 500)], ['query']), $items(Schema::ref(D::MEMORY_ENTRY))],
             'memory.add' => [
-                Schema::object(['content' => Schema::string(65_536), 'scope' => $memoryScope, 'tags' => Schema::arrayOf(Schema::string(), 32)], ['content']),
+                Schema::object(['content' => Schema::string(65_536)->describe('Empty text and project notes over the store bound (ProjectMemoryWriter::MAX_CONTENT_BYTES, setting memory.projectNoteMaxBytes) are refused as invalid_params.'), 'scope' => $memoryScope, 'tags' => Schema::arrayOf(Schema::string(), 32)], ['content']),
                 Schema::object([
                     'id' => Schema::string(),
                     'source' => Schema::enum(['home', 'repo']),

@@ -143,7 +143,34 @@ final class MemoryMethodsTest extends TestCase
         self::assertSame(glob($outside . '/*.md') ?: [], [], 'no note file may be written through the planted symlink');
     }
 
-    // ── history (roadmap 5.4-2 over the wire) ─────────────────────────
+    // ── typed refusals (gap-minor N-3) ────────────────────────────────
+
+    public function testAnOversizedProjectNoteIsRefusedWithTypedInvalidParams(): void
+    {
+        // gap-minor N-3: the params cap (64 KiB) let an over-bound project
+        // note through, and ProjectMemoryWriter's 8 KiB fail-fast threw past
+        // the dispatcher's Throwable net — the panel got -32099 'internal
+        // error'. The refusal is typed now, naming its reason, and the store
+        // keeps no trace of the rejected note.
+        $note = \str_repeat('x', ProjectMemoryWriter::MAX_CONTENT_BYTES + 1);
+
+        $frame = $this->client()->request('memory.add', ['content' => $note, 'scope' => 'project']);
+
+        self::assertSame(ErrorCode::InvalidParams->value, $frame['error']['code']);
+        self::assertSame('invalid_params', $frame['error']['data']['kind']);
+        self::assertStringContainsString('exceeds', $frame['error']['message']);
+        $repo = ProjectMemoryWriter::forRoot($this->fixture->root)?->store();
+        self::assertNotNull($repo, 'the fixture root hosts a repo store by construction here');
+        foreach ($repo->list('project') as $entry) {
+            self::assertNotSame($note, $entry->content(), 'a refused note leaves no file behind');
+        }
+
+        // Same conversion, sibling reason: whitespace-only text is the
+        // router's empty-note refusal, not an internal error either.
+        $blank = $this->client()->request('memory.add', ['content' => '   ', 'scope' => 'user']);
+        self::assertSame(ErrorCode::InvalidParams->value, $blank['error']['code']);
+        self::assertSame('invalid_params', $blank['error']['data']['kind']);
+    }
 
     public function testAMutationCommitsTheHomeHistoryUnderItsPanelSubject(): void
     {
