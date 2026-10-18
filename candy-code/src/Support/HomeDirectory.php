@@ -193,8 +193,20 @@ final class HomeDirectory
      *    fix, and refusing says so.
      *  - TRAILING SEPARATORS ARE STRIPPED. `HOME=/path/` produced `/path//.candy-code`
      *    in every derived path AND in every refusal key, so two launches of the
-     *    same session keyed the same directory two ways. `/` is returned as
-     *    itself, since stripping it leaves nothing.
+     *    same session keyed the same directory two ways. `/` is what a bare
+     *    `HOME=/` strips down to, and it is REFUSED outright rather than
+     *    returned — see below.
+     *
+     * THE ROOT IS NEVER AN OWNER. At uid 0 every clause after this one passes
+     * VACUOUSLY: `fileowner('/')` is 0, `posix_geteuid()` is 0, and permission
+     * gates are permission gates — a class uid 0 walks through by definition.
+     * A `/.candy-code` minted under a root `HOME=/` then answers `owned()` for
+     * every later consumer, which is exactly the persisted authority the
+     * 2026-10 /-rooted incident family (WorktreeManager link-following, since
+     * fixed) needed to survive the reboot. The refusal is made on the RESOLVED
+     * path, before any uid comparison: `//`, `/./` and a symlinked-to-root
+     * `$HOME` all spell the same hazard, and a non-root caller loses nothing
+     * it had before (the uid clause already refused `/` for them).
      */
     public static function owned(): ?string
     {
@@ -218,6 +230,10 @@ final class HomeDirectory
 
         $real = realpath($home);
         if ($real === false || !is_dir($real)) {
+            return null;
+        }
+
+        if ($real === '/') {
             return null;
         }
 

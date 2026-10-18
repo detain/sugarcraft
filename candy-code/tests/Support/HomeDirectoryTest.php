@@ -135,6 +135,80 @@ final class HomeDirectoryTest extends TestCase
     }
 
     /**
+     * THE ROOT IS NEVER AN OWNER. Behaviorally this reads as a null under a
+     * non-root test process EITHER WAY (the uid clause at the bottom of
+     * `owned()` already refuses `/` for anyone but root — `fileowner('/')` is
+     * 0), so the null assertion is the smoke and the SOURCE SCAN is the pin:
+     * the refusal must sit ABOVE the uid comparison, because the entire point
+     * is that the uid comparison is a no-op for the one caller (euid 0) whose
+     * `HOME=/` matters. Neuter the guard line and exactly this test reddens.
+     */
+    public function testAHomeOfRootIsRefusedAboveTheUidClause(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Support/HomeDirectory.php');
+        $bodyStart = strpos($source, 'public static function owned(');
+        $this->assertIsInt($bodyStart);
+        $body = substr($source, $bodyStart);
+
+        $guardAt = strpos($body, "\$real === '/'");
+        $uidAt = strpos($body, 'posix_geteuid()');
+        $this->assertNotFalse($guardAt, 'owned() no longer refuses a resolved filesystem root');
+        $this->assertIsInt($uidAt, 'the ownership clause vanished — this scan has no floor to sit above');
+        $this->assertLessThan($uidAt, $guardAt, "the root refusal sits BELOW the uid comparison (guard at {$guardAt}, uid at {$uidAt}) — at euid 0 the uid comparison never refuses, so a below-guard refusal is no refusal for the hazard this guards");
+
+        $this->assertStringContainsString('THE ROOT IS NEVER AN OWNER', $source, 'the docblock truth that replaced "/ is returned as itself"');
+        $this->assertStringNotContainsString('is returned as itself', $source);
+
+        $home = getenv('HOME');
+
+        try {
+            putenv('HOME=/');
+            $this->assertNull(HomeDirectory::owned(), 'HOME=/ must answer null for this (non-root) process too');
+        } finally {
+            if ($home === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $home);
+            }
+        }
+    }
+
+    /**
+     * Same claim from a CLEAN process: a `php -r` child with `HOME=/` in its
+     * environment (never `putenv`-ing over a live sandbox) must print NULL for
+     * `owned()`. The child only calls a predicate — it creates nothing, and a
+     * regression that made `owned()` answer `/` would still only be ASSERTED
+     * against here, never written through, because every consumer concatenates
+     * `.candy-code` onto the answer and this probe invokes none of them.
+     */
+    public function testAChildProcessWithRootHomeSeesNoOwner(): void
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $code = 'require ' . var_export($autoload, true) . ';'
+            . 'putenv("HOME=/");'
+            . 'echo "OWNED=" . var_export(\\SugarCraft\\Code\\Support\\HomeDirectory::owned(), true);';
+
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = proc_open(
+            [PHP_BINARY, '-r', $code],
+            $descriptors,
+            $pipes,
+            \dirname(__DIR__, 2),
+            ['PATH' => '/usr/bin:/bin', 'TMPDIR' => sys_get_temp_dir()],
+        );
+
+        $this->assertIsResource($process);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($process);
+
+        $this->assertSame(0, $status, "child probe failed: {$stderr}");
+        $this->assertSame('OWNED=NULL', $stdout, 'a child whose HOME is the filesystem root must not be vouched for');
+    }
+
+    /**
      * The spelling is preserved rather than resolved: every caller concatenates
      * onto this, and returning a `realpath()` would silently rewrite `/tmp/...`
      * to `/private/tmp/...` on macOS in every refusal key and message.
