@@ -2022,9 +2022,9 @@ final class Bootstrap
         // the spend cap — present-but-unusable throws PermissionConfigException
         // and bin/candy-code reports it as an exit-2 usage refusal. Registered
         // here (not in the registry) so the reader owns the settings layer; the
-        // registry is the pure consult (`chordFor()`/`effective()`). Routing
-        // still dispatches on the built-in chords until the handler re-key
-        // follow-up lands — see KeyBindingRegistry::useOverrides().
+        // registry is the pure consult (`chordFor()`/`effective()`), and
+        // `App::handleKey()` honours a registered override at the keystroke
+        // funnel — see KeyBindingRegistry::shippedRuneFor().
         KeyBindingRegistry::useOverrides(self::keybindingsSetting());
 
         // Built here rather than inside the constructor call so its refusals

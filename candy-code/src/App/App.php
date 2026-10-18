@@ -27,6 +27,7 @@ use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\InstructionFileLoader;
@@ -3479,6 +3480,15 @@ final class App implements Model
      */
     private function handleKey(KeyMsg $msg): array
     {
+        // ISS-047 (rv5b): a `keybindings` override lands its chord here, at
+        // the ONE user-keystroke funnel, before any surface reads the press.
+        // Translating the alias to the binding's shipped rune means every
+        // derived claim set and every handler keeps answering from the raw
+        // rows — the override ADDS a chord, the shipped one still fires.
+        // Synthetic internal keys (consumeShellCmd's ctrl(), feedChat) speak
+        // the shipped spelling and pass through untouched.
+        $msg = self::honourKeybindingAliases($msg);
+
         // Escape is the drag's abort key while a gesture is in flight —
         // BEFORE the shell's own bindings, because mid-drag the keystroke
         // means "put the pane back", not "cancel the turn". The press
@@ -3573,6 +3583,25 @@ final class App implements Model
         [$next, $cmd] = $handled;
 
         return $cmd === null ? [$next, null] : $next->consumeShellCmd($cmd);
+    }
+
+    /**
+     * The ISS-047 alias step: a `Ctrl+<rune>` press whose rune some registered
+     * override chord claims is rebuilt as the binding's SHIPPED chord, so the
+     * ordinary claim/dispatch machinery answers it unchanged. Any other press —
+     * not a Ctrl char, or a rune no override touches — is the same message.
+     */
+    private static function honourKeybindingAliases(KeyMsg $msg): KeyMsg
+    {
+        if ($msg->type !== KeyType::Char || !$msg->ctrl) {
+            return $msg;
+        }
+
+        $shipped = KeyBindingRegistry::shippedRuneFor($msg->rune);
+
+        return $shipped === null
+            ? $msg
+            : new KeyMsg(KeyType::Char, $shipped, $msg->alt, $msg->ctrl, $msg->shift);
     }
 
     /**

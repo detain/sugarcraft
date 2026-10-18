@@ -272,8 +272,8 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withReaderSymbol(EnhancedSessionStore::class . '::maxCheckpoints')
                 ->withReadBy('`EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()`'),
             // ISS-047: the key map as a setting. USER tier only (the default —
-            // no withProjectSettable()): a checkout must not be able to
-            // re-point the operator's keys, the same reasoning that keeps
+            // no withProjectSettable()): a checkout must not be able to change
+            // the operator's keys, the same reasoning that keeps
             // `watchFiles` and the spend cap user-only. RESTART apply mode is
             // honest: `Bootstrap::chat()` registers the overrides at launch and
             // nothing re-applies a save mid-session.
@@ -285,9 +285,9 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::Complex)
                 ->withValidators(KeyBindingsValidator::new())
                 ->withLabel(Lang::t('settings.keybindings.label'))
-                ->withHelp('{"shell.palette": "Ctrl+B"}: re-point a binding id (the /keys reference names them) to another Ctrl+<key> chord. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
+                ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA Ctrl+<key> chord to a binding id (the /keys reference names them); the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
-                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `chordFor()`/`effective()`'),
+                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `shippedRuneFor()` (via `effective()`) at `App::handleKey()`'),
         ];
     }
 }

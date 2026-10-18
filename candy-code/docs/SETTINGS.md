@@ -294,7 +294,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `promptSuggestionHistory` | `TitleService::suggestionCall()` → `promptSuggestionHistory()` | **no** |
 | `expandToolOutput` | `Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()` | yes |
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
-| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `chordFor()`/`effective()` | **no** |
+| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `shippedRuneFor()` (via `effective()`) at `App::handleKey()` | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `disabledMcpServers` | `Bootstrap::mcpClient()` → `McpClient::setDenyPatterns()`, at the first MCP launch | yes |
 | `mcp.enabled` | `Bootstrap::mcpConfigDecision()` (so `mcpClient()` and `mcp list`) → `mcpDisabled()` | **no** |

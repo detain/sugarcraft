@@ -218,17 +218,22 @@ final class KeyBindingRegistry
      * same clear-what-you-set convention as every other `use*()` registrar.
      *
      * The two derived-set memos ({@see $ctrlRuneMemo}, {@see $yieldedRuneMemo})
-     * deliberately keep answering from the RAW rows: handler dispatch is keyed
-     * on built-in runes until the re-key follow-up lands, so moving a claim to
-     * an overridden chord would claim a rune nothing dispatches and abandon one
-     * that still fires. Routing re-keys to {@see effective()} with that
-     * follow-up; {@see chordFor()} is the consult order it will read through.
+     * keep answering from the RAW rows BY CONSTRUCTION: a registered override
+     * is honoured at the one keystroke funnel — {@see shippedRuneFor()}, read
+     * by {@see \SugarCraft\Code\App\App::handleKey()} — BEFORE any claim
+     * decision, so the alias arrives at the handlers already translated to the
+     * binding's shipped rune. Moving a claim to the override chord instead
+     * would translate twice and abandon the shipped chord the reference still
+     * lists: the override ADDS a chord, it does not move one.
      *
      * @param array<string, string> $overrides binding id => replacement chord
      */
     public static function useOverrides(array $overrides): void
     {
         self::$overrides = $overrides;
+        // The alias pairs are a function of this map; re-registering (which
+        // includes the `[]` clear) must never serve a stale derivation.
+        self::$aliasMemo = null;
     }
 
     /** The overrides currently registered, by binding id. */
@@ -258,9 +263,9 @@ final class KeyBindingRegistry
      * Every row with its effective chord: rows a registered override touches
      * come back relabelled, every other row passes through unchanged.
      *
-     * The table dispatch and any chord display should resolve through once
-     * they honour the setting — the override-aware view of the same rows
-     * {@see all()} declares.
+     * Dispatch resolves through it ({@see aliasMap()} derives the alias pairs
+     * from this table); a chord display should too, once it honours the
+     * setting — the override-aware view of the same rows {@see all()} declares.
      *
      * @return list<KeyBinding>
      */
@@ -286,6 +291,64 @@ final class KeyBindingRegistry
         }
 
         return $rows;
+    }
+
+    /**
+     * Memo of {@see aliasMap()} — the pressed-rune => shipped-rune pairs the
+     * registered overrides derive. Null means "not yet derived";
+     * {@see useOverrides()} clears it, so it cannot outlive the map it was
+     * built from.
+     *
+     * @var array<string, string>|null
+     */
+    private static ?array $aliasMemo = null;
+
+    /**
+     * The shipped rune a pressed `Ctrl+<rune>` chord dispatches AS when the
+     * `keybindings` setting aliased it to that binding — the consult the
+     * keystroke funnel lands ({@see \SugarCraft\Code\App\App::handleKey()};
+     * ISS-047, rv5b).
+     *
+     * Null for any press that is no override's chord: the built-in dispatch
+     * answers unchanged. A row whose SHIPPED chord is not a bare `Ctrl+<key>`
+     * has no rune to alias onto; the validator refuses such pairs at the
+     * launch boundary, and {@see aliasMap()} stays total anyway. When two
+     * registered overrides share a chord, the earlier-declared row wins —
+     * the derivation follows {@see all()}'s declaration order.
+     */
+    public static function shippedRuneFor(string $pressedRune): ?string
+    {
+        if (self::$overrides === []) {
+            return null;
+        }
+
+        return self::aliasMap()[mb_strtolower($pressedRune)] ?? null;
+    }
+
+    /**
+     * Pressed => shipped, for every row whose effective chord differs from
+     * the declared one and both are bare `Ctrl+<key>` tails (the only shape
+     * handlers claim and dispatch — {@see KeyBinding::ctrlRune()}).
+     *
+     * @return array<string, string>
+     */
+    private static function aliasMap(): array
+    {
+        if (self::$aliasMemo !== null) {
+            return self::$aliasMemo;
+        }
+
+        $pairs = [];
+        foreach (self::effective() as $row) {
+            $pressed = $row->ctrlRune();
+            $shipped = self::byId($row->id)?->ctrlRune();
+            if ($pressed === null || $shipped === null || $pressed === $shipped) {
+                continue;
+            }
+            $pairs[$pressed] ??= $shipped;
+        }
+
+        return self::$aliasMemo = $pairs;
     }
 
     /**

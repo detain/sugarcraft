@@ -320,7 +320,9 @@ final class BootstrapSpendAndSummaryTest extends TestCase
     /**
      * The chord grammar mirrors KeyBinding::ctrlRune(): the handlers claim and
      * dispatch bare single-character Ctrl chords and nothing wider, so a
-     * `Cmd+K` or `Ctrl+AB` override could never be honoured.
+     * `Cmd+K` or `Ctrl+AB` override could never be honoured — and neither
+     * could overriding a row whose SHIPPED chord is not `Ctrl+<key>` (the
+     * alias has no rune to land on).
      *
      * @param array<string,string> $map
      *
@@ -345,6 +347,7 @@ final class BootstrapSpendAndSummaryTest extends TestCase
             'empty tail' => [['shell.palette' => 'Ctrl+']],
             'non-string chord' => [['shell.palette' => 7]],
             'a list is not a map' => [['shell.palette']],
+            'target row ships Enter, not Ctrl+<key>' => [['chat.send' => 'Ctrl+B']],
         ];
     }
 

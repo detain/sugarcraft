@@ -525,10 +525,11 @@ final class KeyBindingRegistryTest extends TestCase
     }
 
     /**
-     * The disclosed seam, pinned so its removal is a decision and not an
-     * accident: handler dispatch is keyed on built-in runes, so the derived
-     * CLAIM sets keep answering from the raw rows. A future re-key moves this
-     * expectation deliberately alongside the handlers.
+     * Pinned so its removal is a decision, not an accident: the alias lands at
+     * the keystroke funnel (App::handleKey → shippedRuneFor) BEFORE any claim
+     * decision, so the derived CLAIM sets still answer from the raw shipped
+     * runes. The override chord is deliberately never claimed here — claiming
+     * it as well would translate twice and strand the shipped rune.
      */
     public function testOverridesDoNotMoveTheClaimSets(): void
     {
@@ -538,7 +539,53 @@ final class KeyBindingRegistryTest extends TestCase
         $after = KeyBindingRegistry::shellCtrlRunes();
 
         $this->assertSame($before, $after);
-        $this->assertContains('k', $after, 'the shipped chord stays claimed until dispatch follows');
-        $this->assertNotContains('q', $after, 'the override chord is not claimed while nothing dispatches it');
+        $this->assertContains('k', $after, 'the shipped chord stays claimed — the alias adds a path to it, never replaces it');
+        $this->assertNotContains('q', $after, 'the override rune is honoured at the funnel, not in the claim set');
+    }
+
+    /**
+     * The consult the funnel lands: an override chord maps to its shipped rune,
+     * the shipped rune maps to itself (no-op translation), and an unrelated or
+     * non-Ctrl-target rune maps to nothing.
+     */
+    public function testShippedRuneForHonoursAnOverrideAndItsBoundaries(): void
+    {
+        KeyBindingRegistry::useOverrides(['shell.palette' => 'Ctrl+Q']);
+
+        $this->assertSame('k', KeyBindingRegistry::shippedRuneFor('q'), 'the alias resolves to the shipped rune');
+        $this->assertSame('k', KeyBindingRegistry::shippedRuneFor('Q'), 'the consult is case-insensitive like the parser');
+        $this->assertNull(KeyBindingRegistry::shippedRuneFor('z'), 'an unbound rune aliases to nothing');
+
+        // The shipped rune must NOT translate to itself via the override, or a
+        // press of `Ctrl+K` would loop — it is its own answer.
+        $this->assertNull(KeyBindingRegistry::shippedRuneFor('k'), 'the shipped rune is not an alias source');
+    }
+
+    /**
+     * A row shipped as a non-`Ctrl+<key>` chord (chat.send ships `Enter`) has no
+     * rune to alias onto; even a hand-registered override of it must not invent
+     * a translation (the validator refuses such pairs at launch).
+     */
+    public function testANonCtrlTargetRowNeverAliases(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.send' => 'Ctrl+Q']);
+
+        $this->assertNull(KeyBindingRegistry::shippedRuneFor('q'), 'an Enter-shipped row has no rune to alias to');
+    }
+
+    /**
+     * The alias map is a function of the registered overrides: re-registering
+     * must never serve a stale derivation.
+     */
+    public function testTheAliasMemoFollowsReRegistration(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.repaint' => 'Ctrl+Q']);
+        $this->assertSame('l', KeyBindingRegistry::shippedRuneFor('q'));
+
+        KeyBindingRegistry::useOverrides(['chat.palette' => 'Ctrl+Q']);
+        $this->assertSame('p', KeyBindingRegistry::shippedRuneFor('q'), 'the old alias must not outlive its map');
+
+        KeyBindingRegistry::useOverrides([]);
+        $this->assertNull(KeyBindingRegistry::shippedRuneFor('q'));
     }
 }

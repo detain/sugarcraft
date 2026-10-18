@@ -16,7 +16,10 @@ use SugarCraft\Code\Config\Settings\SettingValidator;
  * {@see \SugarCraft\Code\Commands\KeyBinding::ctrlRune()} deliberately — a
  * bare single-character `Ctrl+<key>` tail is the only shape today's handlers
  * claim and dispatch, so accepting anything wider would write a value the
- * routing cannot honour.
+ * routing cannot honour. THE SAME SHAPE IS REQUIRED OF THE TARGET: dispatch
+ * aliases the override chord onto the row's shipped rune, so overriding a row
+ * that ships `Enter` (or any non-`Ctrl+<key>` chord) would be accepted,
+ * registered, and silently inert.
  */
 final class KeyBindingsValidator implements SettingValidator
 {
@@ -59,6 +62,13 @@ final class KeyBindingsValidator implements SettingValidator
 
             if (!self::isCtrlChord($chord)) {
                 return "the override for '{$id}' must be a chord of the form Ctrl+<key>";
+            }
+
+            // The alias lands on the row's SHIPPED rune (KeyBindingRegistry::
+            // shippedRuneFor()); a row shipped as `Enter` or a two-key
+            // sequence has no rune to land on, so honouring it is impossible.
+            if (KeyBindingRegistry::byId($id)?->ctrlRune() === null) {
+                return "the override for '{$id}' cannot be honoured: its shipped chord is not a bare Ctrl+<key> to alias";
             }
         }
 
