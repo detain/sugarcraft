@@ -440,7 +440,9 @@ it and the two tables below are generated from the code
 | `memory.delete` | write | yes | `id` | Delete a note from the store that owns the id. |
 | `memory.edit` | write | yes | `id`, `content` | Replace a note's text in the store that owns the id. |
 | `memory.list` | read |  | — | The notes of one memory scope, from both stores, each badged with its source. |
+| `memory.log` | read |  | — | The home store's commit history, newest first — the revisions memory.undo names. |
 | `memory.search` | read |  | `query` | Notes matching a query, best first, across every scope and both stores. |
+| `memory.undo` | write | yes | — | Restore the home store to an earlier revision (by default the state before its latest commit), recorded as a new commit. |
 | `permission.pending` | read |  | — | The questions still open, for one session or all open sessions. |
 | `permission.respond` | approve | yes | `sessionId`, `askId`, `reply` | Answer an open permission question; the first answer wins. |
 | `permission.rules` | read |  | — | The effective permission mode and rules, read-only. |

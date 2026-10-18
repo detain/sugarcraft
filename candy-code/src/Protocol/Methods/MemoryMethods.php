@@ -19,7 +19,8 @@ use SugarCraft\Code\Protocol\Scope;
 
 /**
  * `memory.*` (Appendix O §6.3): the `/memory` surface over the workspace's
- * memory stores — list a scope, search every scope, add, edit, delete.
+ * memory stores — list a scope, search every scope, add, edit, delete, and
+ * (gap-minor N-4) read the home store's history and undo a panel change.
  *
  * ISS-020: the surface is routed through {@see MemoryWriter}, the same router
  * `/memory` and the `Memory` tool use, so a note the model saves and a note
@@ -65,6 +66,8 @@ final class MemoryMethods
         $registry->add(MethodSpec::new('memory.add', Scope::Write, 'Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one.', self::add(...), true));
         $registry->add(MethodSpec::new('memory.edit', Scope::Write, 'Replace a note\'s text in the store that owns the id.', self::edit(...), true));
         $registry->add(MethodSpec::new('memory.delete', Scope::Write, 'Delete a note from the store that owns the id.', self::delete(...), true));
+        $registry->add(MethodSpec::new('memory.log', Scope::Read, 'The home store\'s commit history, newest first — the revisions memory.undo names.', self::log(...)));
+        $registry->add(MethodSpec::new('memory.undo', Scope::Write, 'Restore the home store to an earlier revision (by default the state before its latest commit), recorded as a new commit.', self::undo(...), true));
     }
 
     /** @return array<string, mixed> */
@@ -167,6 +170,89 @@ final class MemoryMethods
         });
 
         return ['deleted' => true];
+    }
+
+    /**
+     * `memory.log` — the home store's history over the wire. The CLI law
+     * holds: whatever changed since the last commit is recorded first, so
+     * the list always ends at what is on disk now (that pre-commit makes
+     * this a committing read, exactly like `/memory log`).
+     *
+     * @return array<string, mixed>
+     */
+    private static function log(CallContext $call, Params $params): array
+    {
+        $limit = $params->int('limit', MemoryHistory::DEFAULT_LOG_ENTRIES, 1, MemoryHistory::MAX_LOG_ENTRIES);
+        $history = self::history($call);
+        $history->commit(MemoryHistoryCommand::OUTSIDE_SUBJECT);
+        $items = [];
+        foreach ($history->log($limit) as $revision) {
+            // Subjects ride raw: this is wire data, not a transcript line —
+            // the panel quotes it the way Chat::reportField() does for the CLI.
+            $items[] = [
+                'sha' => $revision->sha,
+                'shortSha' => $revision->shortSha,
+                'committedAt' => $revision->committedAt->format(\DateTimeInterface::ATOM),
+                'subject' => $revision->subject,
+            ];
+        }
+
+        return ['items' => $items];
+    }
+
+    /**
+     * `memory.undo` — the inverse of a panel mutation, home store only (the
+     * repository's notes are versioned by the user's own checkout, as ever).
+     * Without an explicit revision this names the state before the newest
+     * commit; `restore()` snapshots any pending change into its own commit
+     * first, so nothing written is lost by undoing. The restore records its
+     * own verdict subject, so no `memory: panel undo` sandwich rides here —
+     * it would only ever commit an empty tree.
+     *
+     * @return array<string, mixed>
+     */
+    private static function undo(CallContext $call, Params $params): array
+    {
+        $revision = $params->optionalString('revision', 64);
+        $history = self::history($call);
+        if ($revision === null) {
+            $log = $history->log(2);
+            if (\count($log) < 2) {
+                throw RpcError::invalidParams('the memory history has no earlier state to undo to', 'memory_undo_unavailable');
+            }
+            $revision = $log[1]->sha;
+        }
+        try {
+            $committed = $history->restore($revision);
+        } catch (\InvalidArgumentException $e) {
+            // a malformed or unknown revision — the same input refusal the
+            // typed add answers with, never the -32099 net
+            throw RpcError::invalidParams($e->getMessage());
+        } catch (\RuntimeException $e) {
+            // git named a real failure: the code stays Internal, the cause travels
+            throw RpcError::of(ErrorCode::Internal, $e->getMessage(), 'memory_restore_failed');
+        }
+
+        return ['restored' => $revision, 'commit' => $committed];
+    }
+
+    /**
+     * The home store's history, or a typed refusal: a workspace without a
+     * store, without a directory to version, or without `git` cannot answer
+     * a history question — the CLI says so in prose; the wire says it in a
+     * code and a kind.
+     */
+    private static function history(CallContext $call): MemoryHistory
+    {
+        $history = MemoryHistory::forStore(self::homeStore(self::writer($call)));
+        if ($history === null) {
+            throw RpcError::of(ErrorCode::UnsupportedInServer, 'this memory store keeps no history', 'memory_history_unavailable');
+        }
+        if (!MemoryHistory::available()) {
+            throw RpcError::of(ErrorCode::UnsupportedInServer, 'git is not available; memory keeps no history here', 'memory_history_unavailable');
+        }
+
+        return $history;
     }
 
     /**

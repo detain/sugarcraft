@@ -187,6 +187,75 @@ final class MemoryMethodsTest extends TestCase
         self::assertContains('memory: panel add', $subjects, 'the panel change must be its own commit, not a later "outside" credit');
     }
 
+    public function testTheWireLogAndUndoRideTheHomeHistoryLikeTheCli(): void
+    {
+        if (!MemoryHistory::available()) {
+            $this->markTestSkipped('git is not on PATH; the history is not kept');
+        }
+
+        $client = $this->client();
+        $keeper = $client->call('memory.add', ['content' => 'the keeper note', 'scope' => 'user']);
+        $client->call('memory.add', ['content' => 'the doomed note', 'scope' => 'user']);
+
+        $log = $client->call('memory.log')['items'];
+        $subjects = array_column($log, 'subject');
+        self::assertSame(['memory: panel add', 'memory: panel add'], \array_slice($subjects, 0, 2), 'both adds are committed, newest first');
+        self::assertMatchesRegularExpression('/\A[0-9a-f]{4,64}\z/', $log[0]['sha']);
+        self::assertMatchesRegularExpression('/\A\d{4}-\d{2}-\d{2}T/', $log[0]['committedAt']);
+
+        // Undo by name: back to the keeper-only revision. The restore is its
+        // own commit (CLI law), and only the doomed note disappears.
+        $undone = $client->call('memory.undo', ['revision' => $log[1]['sha']]);
+        self::assertSame($log[1]['sha'], $undone['restored']);
+        self::assertNotNull($undone['commit'], 'a tree-changing restore lands as its own commit');
+        // (not $this->listItems(): a second WireClient shares the dispatcher's
+        // default connection id and would steal this client's later frames)
+        self::assertSame([$keeper['id']], array_column($client->call('memory.list', ['scope' => 'user'])['items'], 'id'), 'the undone note is gone and the keeper stayed');
+
+        // The default undo names the state before the newest commit — here,
+        // undoing the undo brings the undone note back.
+        $redone = $client->call('memory.undo');
+        self::assertSame($log[0]['sha'], $redone['restored'], 'the default undo steps back from the restore commit');
+        self::assertCount(2, $client->call('memory.list', ['scope' => 'user'])['items'], 'the restored-again note is really back');
+    }
+
+    public function testUndoRefusesTypedAndChangesNothing(): void
+    {
+        if (!MemoryHistory::available()) {
+            $this->markTestSkipped('git is not on PATH; the history is not kept');
+        }
+
+        $client = $this->client();
+        // No commit yet: a default undo has no earlier state to name, and a
+        // named revision is either malformed or not a commit here. All are
+        // input refusals (-32602), never the -32099 net.
+        $void = $client->request('memory.undo');
+        self::assertSame(ErrorCode::InvalidParams->value, $void['error']['code']);
+        self::assertSame('memory_undo_unavailable', $void['error']['data']['kind']);
+
+        foreach (['not a hex id', str_repeat('d', 40)] as $revision) {
+            $frame = $client->request('memory.undo', ['revision' => $revision]);
+            self::assertSame(ErrorCode::InvalidParams->value, $frame['error']['code'], $revision);
+            self::assertSame('invalid_params', $frame['error']['data']['kind']);
+        }
+        self::assertSame([], $client->call('memory.list', ['scope' => 'user'])['items'], 'refused undos change nothing');
+    }
+
+    public function testTheHistoryMethodsRefuseAWorkspaceWithoutAMemoryStore(): void
+    {
+        $bare = ProtocolFixture::new();
+        try {
+            $wire = $bare->client();
+            foreach (['memory.log', 'memory.undo'] as $method) {
+                $frame = $wire->request($method);
+                self::assertSame(ErrorCode::UnsupportedInServer->value, $frame['error']['code'], $method);
+                self::assertSame('memory_unavailable', $frame['error']['data']['kind'], $method);
+            }
+        } finally {
+            $bare->tearDown();
+        }
+    }
+
     // ── the standing contract ──────────────────────────────────────────
 
     public function testAWorkspaceWithoutAMemoryStoreStillRefusesWithMemoryUnavailable(): void

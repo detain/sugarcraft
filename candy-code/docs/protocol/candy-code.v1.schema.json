@@ -2033,6 +2033,57 @@
                 ]
             }
         },
+        "memory.log": {
+            "description": "The home store's commit history, newest first — the revisions memory.undo names.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Newest revisions to list (default memory.log's own default). Like /memory log, this commits pending changes first so the list ends at what is on disk now."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "sha": {
+                                    "type": "string"
+                                },
+                                "shortSha": {
+                                    "type": "string"
+                                },
+                                "committedAt": {
+                                    "type": "string",
+                                    "description": "ISO-8601 (DATE_ATOM) commit time."
+                                },
+                                "subject": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "sha",
+                                "shortSha",
+                                "committedAt",
+                                "subject"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        },
         "memory.search": {
             "description": "Notes matching a query, best first, across every scope and both stores.",
             "scope": "read",
@@ -2066,6 +2117,45 @@
                 },
                 "required": [
                     "items"
+                ]
+            }
+        },
+        "memory.undo": {
+            "description": "Restore the home store to an earlier revision (by default the state before its latest commit), recorded as a new commit.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "revision": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "Hex commit id as memory.log lists; omitted means the state before the newest commit."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "restored": {
+                        "type": "string",
+                        "description": "The revision the store was restored to."
+                    },
+                    "commit": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "New commit id, or null when the restored tree equalled the current one."
+                    }
+                },
+                "required": [
+                    "restored"
                 ]
             }
         },

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol\Schema;
 
 use SugarCraft\Code\Host\SessionSnapshot;
+use SugarCraft\Code\Memory\MemoryHistory;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
 
@@ -361,6 +362,22 @@ final class MethodSchemas
                 Schema::object(['id' => Schema::string()], ['id']),
             ],
             'memory.delete' => [Schema::object(['id' => Schema::string(128)], ['id']), Schema::object(['deleted' => Schema::boolean()], ['deleted'])],
+            'memory.log' => [
+                Schema::object(['limit' => Schema::integer(1, MemoryHistory::MAX_LOG_ENTRIES)->describe('Newest revisions to list (default memory.log\'s own default). Like /memory log, this commits pending changes first so the list ends at what is on disk now.')]),
+                $items(Schema::object([
+                    'sha' => Schema::string(),
+                    'shortSha' => Schema::string(),
+                    'committedAt' => Schema::string()->describe('ISO-8601 (DATE_ATOM) commit time.'),
+                    'subject' => Schema::string(),
+                ], ['sha', 'shortSha', 'committedAt', 'subject'])),
+            ],
+            'memory.undo' => [
+                Schema::object(['revision' => Schema::string(64)->describe('Hex commit id as memory.log lists; omitted means the state before the newest commit.')]),
+                Schema::object([
+                    'restored' => Schema::string()->describe('The revision the store was restored to.'),
+                    'commit' => Schema::string()->nullable()->describe('New commit id, or null when the restored tree equalled the current one.'),
+                ], ['restored']),
+            ],
 
             'agents.list' => [$empty, $items(Schema::object([
                 'name' => Schema::string(),
