@@ -76,6 +76,86 @@ final class KeyBindingsValidator implements SettingValidator
     }
 
     /**
+     * Rows WARNING that a (validated) override chord collides with another
+     * binding's SHIPPED chord — the rv6 follow-up to ISS-047's alias funnel.
+     *
+     * WHY A WARNING AND NOT A REFUSAL: the dispatch is correct in this shape.
+     * `KeyBindingRegistry::shippedRuneFor()` translates the pressed chord to
+     * the override target's shipped rune BEFORE any claim decision, so the
+     * user's chosen chord really does run the chosen binding. What no code
+     * fixes is the OTHER row: the binding whose shipped chord was taken stops
+     * answering at its own key — silently, because the alias map has one
+     * winner per rune (declaration order). That is a consequence to SEE at
+     * launch, not a config to reject; the user may want exactly this trade.
+     *
+     * A victim the user ALSO re-chorded is not named: its effective chord is
+     * no longer the stolen rune, so nothing is silently lost — /keys shows
+     * both rows where the overrides put them. The override landing on its
+     * OWN shipped chord (`identity override`) is inert by the funnel's
+     * `$pressed === $shipped` skip and warns of nothing.
+     *
+     * The map is expected pre-{@see validate()}-pass; callers feed it only
+     * launch-accepted values ({@see \SugarCraft\Code\Cli\Bootstrap::keybindingsSetting()}).
+     *
+     * @param array<array-key, mixed> $value binding id => replacement chord
+     *
+     * @return list<string> one rendered row per stealing override
+     */
+    public function collisionNotices(array $value): array
+    {
+        $rows = [];
+        foreach ($value as $id => $chord) {
+            if (!\is_string($id) || !\is_string($chord)) {
+                continue;
+            }
+
+            $rune = self::chordRune($chord);
+            if ($rune === null) {
+                continue;
+            }
+
+            foreach (KeyBindingRegistry::all() as $binding) {
+                if ($binding->id === $id || $binding->ctrlRune() !== $rune) {
+                    continue;
+                }
+
+                // A victim the user re-chorded too is listed under its own
+                // override — the rune it vacated is not silently lost.
+                if (\array_key_exists($binding->id, $value)) {
+                    continue;
+                }
+
+                $rows[] = sprintf(
+                    'the keybindings override for "%s" (%s) collides with the shipped chord of "%s"; pressing %s dispatches to "%s", so "%s" loses its own key',
+                    $id,
+                    $chord,
+                    $binding->id,
+                    $chord,
+                    $id,
+                    $binding->id,
+                );
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The lowercase rune of a `Ctrl+<one char>` chord — the same extraction
+     * {@see \SugarCraft\Code\Commands\KeyBinding::ctrlRune()} makes of a
+     * shipped label, so the two sides of the collision compare in the same
+     * space dispatch does.
+     */
+    private static function chordRune(string $chord): ?string
+    {
+        if (!self::isCtrlChord($chord)) {
+            return null;
+        }
+
+        return mb_strtolower(substr($chord, 5));
+    }
+
+    /**
      * The chord shape the handlers can honour: `Ctrl+` and exactly one
      * character. Mirrors KeyBinding::ctrlRune()'s strictness on purpose.
      */

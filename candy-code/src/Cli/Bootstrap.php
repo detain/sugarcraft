@@ -2024,8 +2024,12 @@ final class Bootstrap
         // here (not in the registry) so the reader owns the settings layer; the
         // registry is the pure consult (`chordFor()`/`effective()`), and
         // `App::handleKey()` honours a registered override at the keystroke
-        // funnel — see KeyBindingRegistry::shippedRuneFor().
+        // funnel — see KeyBindingRegistry::shippedRuneFor(). An override that
+        // lands on another row's shipped chord is legitimate dispatch but a
+        // silent steal of that row's own key, so the drain right after it
+        // says so — {@see reportKeybindingCollisions()}.
         KeyBindingRegistry::useOverrides(self::keybindingsSetting());
+        self::reportKeybindingCollisions();
 
         // Built here rather than inside the constructor call so its refusals
         // survive the statement — see the `commandLoader:` argument below.
@@ -10859,6 +10863,26 @@ final class Bootstrap
 
         /** @var array<string,string> $raw */
         return $raw;
+    }
+
+    /**
+     * Announce every registered `keybindings` override that landed on
+     * another binding's SHIPPED chord (rv6 follow-up to ISS-047).
+     *
+     * Reads the REGISTERED map, not the setting, so it can only name a
+     * collision that dispatch will actually honour — and runs directly after
+     * {@see KeyBindingRegistry::useOverrides()} for the same reason. The
+     * funnel's behavior is correct (the override wins its chord); the row it
+     * steals loses its key with no other signal anywhere, which is what these
+     * rows are the signal for. Drained through {@see warnLaunchRows()} so a
+     * new report does not move the transcript-seam call-site census, the way
+     * every other {@code report*()} launch drain holds that line.
+     */
+    public static function reportKeybindingCollisions(): void
+    {
+        self::warnLaunchRows(
+            KeyBindingsValidator::new()->collisionNotices(KeyBindingRegistry::overrides()),
+        );
     }
 
     /**
