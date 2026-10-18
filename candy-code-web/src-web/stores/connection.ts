@@ -60,6 +60,11 @@ export const useConnectionStore = defineStore('connection', () => {
   const lastError = ref<string | null>(null)
   const serverChanged = ref(false)
   /**
+   * The reconnect ladder ran out (ISS-052): the banner names the server gone
+   * and offers the retry, instead of "reconnecting…" counting down forever.
+   */
+  const exhausted = ref(false)
+  /**
    * The last `server.shutdown` seen (ISS-052): the banner names the reason
    * and the grace the server asked for; a fresh handshake clears it.
    */
@@ -100,6 +105,7 @@ export const useConnectionStore = defineStore('connection', () => {
     retryAt.value = source.retryAt
     lastError.value = source.lastError
     serverChanged.value = source.serverChanged
+    exhausted.value = source.exhausted
     if (source.hello !== hello.value) hello.value = source.hello
   }
 
@@ -253,6 +259,7 @@ export const useConnectionStore = defineStore('connection', () => {
     retryAt,
     lastError,
     serverChanged,
+    exhausted,
     shutdown,
     configure,
     start,

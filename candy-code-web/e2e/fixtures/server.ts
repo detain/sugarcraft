@@ -115,14 +115,34 @@ export class CandyCodeServer {
     return url
   }
 
+  /** Whether the child is reaped — a SIGKILL leaves `exitCode` null and sets `signalCode`. */
+  private get reaped(): boolean {
+    return this.child === null || this.child.exitCode !== null || this.child.signalCode !== null
+  }
+
   async stop(): Promise<void> {
     const child = this.child
-    if (!child || child.exitCode !== null) return
+    if (child === null || this.reaped) return
     const exited = new Promise<void>((r) => child.once('exit', () => r()))
     child.kill('SIGTERM')
     const timer = setTimeout(() => child.kill('SIGKILL'), 20_000)
     await exited
     clearTimeout(timer)
+    this.child = null
+  }
+
+  /**
+   * SIGKILL with no restart (ISS-052): the process dies where it stands, so
+   * no `server.shutdown` ever arrives — the browser only sees the socket go
+   * dead, and the server never answers again.
+   */
+  async kill(): Promise<void> {
+    const child = this.child
+    if (child === null || this.reaped) return
+    const exited = new Promise<void>((r) => child.once('exit', () => r()))
+    child.kill('SIGKILL')
+    await exited
+    this.child = null
   }
 
   /** Stop and start again on the same port and state: sessions persist, browser sign-ins do not. */
@@ -137,7 +157,6 @@ export class CandyCodeServer {
     rmSync(this.scratch, { recursive: true, force: true })
   }
 }
-
 /** Sign $context in with the owner token (a cookie, as a browser holds it). */
 export async function signIn(context: BrowserContext, server: CandyCodeServer): Promise<void> {
   const response = await context.request.post(`${server.baseURL}/api/login`, {

@@ -93,7 +93,10 @@ documents the protocol and the UI).
 - **Status bar**: activity and step, context used, spend, model, and the
   permission mode (changeable).
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
-  ticket, resuming every followed session from its gap-free `seq` cursor.
+  ticket, resuming every followed session from its gap-free `seq` cursor. Six
+  tries make up the ladder; when it runs out the tab stops retrying and says
+  the server is gone — the same verdict `candy-code attach` reaches after its
+  exhausted ladder (SERVER.md) — with *Try again* to spend a fresh one.
 - **Side panels** (the *panels* button): **Agents** — the
   session's delegated runs as a live tree, also under each `Task` card, each
   opening into an agent view with the run's own transcript, a box to message it

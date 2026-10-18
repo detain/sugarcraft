@@ -67,6 +67,18 @@ describe('Backoff', () => {
     expect(new Backoff({ random: () => 1 }).next()).toBe(650)
   })
 
+  it('is spent after six tries — the patience an exhausted ladder grants (ISS-052)', () => {
+    const backoff = new Backoff({ random: () => 0.5 })
+    expect(backoff.exhausted).toBe(false)
+    for (let tryNumber = 0; tryNumber < 6; tryNumber++) backoff.next()
+    expect(backoff.exhausted).toBe(true)
+    backoff.reset()
+    expect(backoff.exhausted).toBe(false)
+    const short = new Backoff({ maxAttempts: 1, random: () => 0.5 })
+    short.next()
+    expect(short.exhausted).toBe(true)
+  })
+
   it('resets after a connection that stayed up 60 s, not after a flap', () => {
     const backoff = new Backoff({ random: () => 0.5 })
     backoff.next()

@@ -1,5 +1,5 @@
 import type { WebSocketRoute } from '@playwright/test'
-import { expect, newSession, openApp, send, test } from './fixtures/server'
+import { CandyCodeServer, expect, newSession, openApp, send, test } from './fixtures/server'
 import { RpcClient } from './fixtures/rpc'
 
 test('a dropped socket reconnects and resumes from its cursor, missing nothing', async ({ page, server }) => {
@@ -65,4 +65,43 @@ test('a restarted server signs the browser out; signing in again finds the sessi
   await expect(page.getByTestId('connection-status')).toContainText('connected')
   await page.locator(`[data-testid="session-link"][data-session-id="${id}"]`).click()
   await expect(page.locator('[data-kind="assistant"] blockquote')).toHaveText('survive a restart')
+})
+
+/**
+ * ISS-052's deferred leg: the server is SIGKILLed and never comes back. No
+ * `server.shutdown` can arrive for a killed process, so the only thing the
+ * tab has is a dead socket and a port that no longer answers. The documented
+ * verdict for that (SERVER.md, "an exhausted ladder") is the terminal
+ * banner — not a "reconnecting… Retrying in 15 s" that lies forever.
+ */
+test('a server killed for good ends at the terminal verdict, and never retries past it', async ({ page }) => {
+  // This arm waits the real ladder out on purpose: six waits — 0.5 + 1 + 2 +
+  // 4 + 8 + 15 s, each ±30 % — so it costs about half a minute plus slack.
+  test.setTimeout(180_000)
+  // Its own server: this one dies for real, so it must not be the worker's,
+  // which the specs above still drive.
+  const doomed = await CandyCodeServer.start()
+  try {
+    await openApp(page, doomed)
+    await newSession(page)
+    await send(page, 'before the kill')
+    await expect(page.locator('[data-kind="assistant"] blockquote')).toHaveText('before the kill')
+
+    await doomed.kill()
+    await expect(page.getByTestId('banner-reconnecting')).toBeVisible()
+
+    await expect(page.getByTestId('banner-offline')).toBeVisible({ timeout: 120_000 })
+    await expect(page.getByTestId('banner-offline')).toContainText('did not answer after 6 tries')
+    await expect(page.getByTestId('banner-offline')).toContainText('Retries have stopped')
+    await expect(page.getByTestId('banner-reconnecting')).toHaveCount(0)
+    await expect(page.getByTestId('connection-status')).toContainText('disconnected')
+
+    // The banner's own way back re-runs a fresh ladder against a port that is
+    // still dead: the tab goes back to trying, and lands at the same verdict.
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(page.getByTestId('banner-reconnecting')).toBeVisible()
+    await expect(page.getByTestId('banner-offline')).toHaveCount(0)
+  } finally {
+    await doomed.dispose()
+  }
 })

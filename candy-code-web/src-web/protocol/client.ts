@@ -10,8 +10,9 @@ export const SUBPROTOCOL = 'candy-code.v1'
  * - `connected`: the handshake is done, requests flow;
  * - `reconnecting`: the socket dropped and a retry is scheduled or running;
  * - `signed-out`: no valid cookie — the user must sign in (no retry);
- * - `stopped`: {@see CandyCodeClient.stop()} was called, or the server
- *   speaks a protocol this client does not.
+ * - `stopped`: {@see CandyCodeClient.stop()} was called, the server speaks a
+ *   protocol this client does not, or the reconnect ladder ran out (then
+ *   {@see CandyCodeClient.exhausted} is true and {@see start()} tries again).
  */
 export type ClientStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'signed-out' | 'stopped'
 
@@ -94,6 +95,12 @@ export class CandyCodeClient {
   rttMs: number | null = null
   retryAt: number | null = null
   lastError: string | null = null
+  /**
+   * The reconnect ladder ran out (ISS-052): a killed or recycled server is
+   * named as such rather than retried in silence forever. {@see start()} —
+   * the banner's retry — spends a fresh ladder.
+   */
+  exhausted = false
 
   constructor(options: ClientOptions) {
     this.options = options
@@ -123,10 +130,15 @@ export class CandyCodeClient {
     return this.firstVersion !== null && this.hello !== null && this.hello.server.version !== this.firstVersion
   }
 
-  /** Connect (or reconnect now, skipping a scheduled wait). */
+  /** Connect (or reconnect now, skipping a scheduled wait). A spent ladder is handed a fresh one. */
   start(): void {
     if (this.status === 'connected' || this.status === 'connecting') return
     this.cancelRetry()
+    if (this.exhausted) {
+      this.exhausted = false
+      this.lastError = null
+      this.backoff.reset()
+    }
     void this.connect()
   }
 
@@ -341,6 +353,10 @@ export class CandyCodeClient {
   private scheduleRetry(): void {
     if (this.status === 'stopped') return
     this.cancelRetry()
+    if (this.backoff.exhausted) {
+      this.giveUp()
+      return
+    }
     const delay = this.backoff.next()
     this.retryAt = this.timers.now() + delay
     this.setStatus('reconnecting')
@@ -348,6 +364,20 @@ export class CandyCodeClient {
       this.retryHandle = null
       void this.connect()
     }, delay)
+  }
+
+  /**
+   * The verdict for a server that never answers: stop the ladder, name what
+   * happened, and refuse what is still waiting — including the idempotent
+   * writes held for a resend that will not come. The banner keeps the only
+   * way back, and it spends a fresh ladder.
+   */
+  private giveUp(): void {
+    this.exhausted = true
+    this.watchdog.disarm()
+    this.lastError = `the server did not answer after ${this.backoff.attempts} tries`
+    this.failAll(ProtocolError.disconnected(), true)
+    this.setStatus('stopped')
   }
 
   private cancelRetry(): void {

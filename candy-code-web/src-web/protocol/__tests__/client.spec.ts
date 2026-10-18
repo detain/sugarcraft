@@ -196,6 +196,38 @@ describe('CandyCodeClient', () => {
     expect(client.lastError).toBe('protocol 2 only')
   })
 
+  it('spends the ladder, names the dead server, and stops retrying (ISS-052)', async () => {
+    const { client, sockets, socket, timers, handshake } = harness()
+    client.start()
+    await flush()
+    handshake()
+
+    const write = client.request('session.send', { sessionId: 's', text: 'hi' })
+    socket().drop()
+    // Six waits go by — 0.5, 1, 2, 4, 8, 15 s — and every attempt dies before its handshake.
+    for (const delay of [500, 1_000, 2_000, 4_000, 8_000, 15_000]) {
+      timers.advance(delay)
+      await flush()
+      expect(client.status).toBe('reconnecting')
+      socket().drop()
+    }
+    expect(client.status).toBe('stopped')
+    expect(client.exhausted).toBe(true)
+    expect(client.lastError).toBe('the server did not answer after 6 tries')
+    expect(timers.pending).toBe(0)
+    // A verdict, not a wait: nothing is held for a reconnect that will not come.
+    await expect(write).rejects.toMatchObject({ kind: 'disconnected' })
+
+    // The banner's way back spends a fresh ladder.
+    client.start()
+    await flush()
+    expect(sockets).toHaveLength(8)
+    expect(client.exhausted).toBe(false)
+    expect(client.status).toBe('reconnecting')
+    socket().drop()
+    expect(client.retryAt).toBe(timers.now() + 500)
+  })
+
   it('refuses a read while disconnected but holds a write for the connection', async () => {
     const { client, socket, handshake } = harness()
     await expect(client.request('session.list', {})).rejects.toMatchObject({ kind: 'disconnected' })

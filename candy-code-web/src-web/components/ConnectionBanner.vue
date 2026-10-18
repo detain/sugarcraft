@@ -31,6 +31,12 @@ function reload(): void {
     <template v-if="retryIn !== null">Retrying in {{ retryIn }} s.</template>
     <button type="button" @click="connection.retryNow()">Retry now</button>
   </div>
+  <div v-else-if="connection.exhausted" class="banner error" role="alert" data-testid="banner-offline">
+    <template v-if="connection.lastError">{{ connection.lastError }}.</template>
+    <template v-else>The server is not answering.</template>
+    Retries have stopped: the sessions it held are gone with it.
+    <button type="button" @click="connection.retryNow()">Try again</button>
+  </div>
   <div v-else-if="connection.status === 'stopped' && connection.lastError" class="banner error" role="alert">
     {{ connection.lastError }}
   </div>

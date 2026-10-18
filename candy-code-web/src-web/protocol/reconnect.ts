@@ -2,6 +2,12 @@
  * Reconnect timing (Appendix O §7.6): 0.5 s, 1 s, 2 s, 4 s, 8 s, then 15 s
  * at most, each with ±30 % jitter so a restarted server is not hit by every
  * tab at once; a connection that stayed up 60 s resets the ladder.
+ *
+ * The ladder is spent after `maxAttempts` tries without one that held, and
+ * the client then gives its verdict (ISS-052) instead of retrying forever:
+ * six waits are 0.5+1+2+4+8+15 s, so a tab notices a server that is gone in
+ * about half a minute — the patience `candy-code attach` documents for the
+ * same event (SERVER.md, "an exhausted ladder").
  */
 export interface BackoffOptions {
   initialMs?: number
@@ -11,6 +17,8 @@ export interface BackoffOptions {
   jitter?: number
   /** A connection up this long counts as stable and resets the ladder. */
   stableMs?: number
+  /** Tries before the ladder is spent. */
+  maxAttempts?: number
   random?: () => number
 }
 
@@ -20,6 +28,7 @@ export class Backoff {
   private readonly factor: number
   private readonly jitter: number
   private readonly stableMs: number
+  readonly maxAttempts: number
   private readonly random: () => number
   private attempt = 0
   private connectedAt: number | null = null
@@ -30,12 +39,18 @@ export class Backoff {
     this.factor = options.factor ?? 2
     this.jitter = options.jitter ?? 0.3
     this.stableMs = options.stableMs ?? 60_000
+    this.maxAttempts = options.maxAttempts ?? 6
     this.random = options.random ?? Math.random
   }
 
   /** How many delays were handed out since the last reset. */
   get attempts(): number {
     return this.attempt
+  }
+
+  /** Every rung of the ladder was tried and none held: the client must stop. */
+  get exhausted(): boolean {
+    return this.attempt >= this.maxAttempts
   }
 
   /** The un-jittered delay of the next attempt. */
