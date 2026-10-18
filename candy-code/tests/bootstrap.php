@@ -328,6 +328,10 @@ $GLOBALS['__candyCodeRealTempDir'] = $realTempDir;
 
 $sandbox = $realTempDir . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x');
 @mkdir($sandbox, 0o700, true);
+// ROOTFIX creator-side stamp (see SafeDelete). This is why the line is here
+// rather than inside the home branch below: sweepOnce() may one day gate on
+// provenance too, and the sandbox root is created unconditionally either way.
+\SugarCraft\Code\Support\SafeDelete::stampSentinel($sandbox);
 
 ToolIpcFiles::sweepOnce($sandbox);
 
@@ -391,28 +395,38 @@ putenv('TMPDIR=' . $sandbox);
 $homeSandbox = $sandbox . '/home';
 if (!is_dir($homeSandbox)) {
     @mkdir($homeSandbox, 0o700, true);
+    // ROOTFIX creator-side stamp: we made this directory, so the courtesy
+    // prune is licensed to empty stale entries from it on later runs.
+    \SugarCraft\Code\Support\SafeDelete::stampSentinel($homeSandbox);
 }
 
 $pruneBoundary = time() - 86400;
-$pruneStack = [$homeSandbox];
-while ($pruneStack !== []) {
-    $pruneDir = array_pop($pruneStack);
-    foreach ((array) @scandir($pruneDir) as $pruneEntry) {
-        if ($pruneEntry === '.' || $pruneEntry === '..') {
-            continue;
-        }
-        $prunePath = $pruneDir . '/' . $pruneEntry;
-        if (is_link($prunePath)) {
-            continue;
-        }
-        if (is_dir($prunePath)) {
-            $pruneStack[] = $prunePath;
+// ROOTFIX: prune only a home sandbox we can prove we created. A directory
+// at this path WITHOUT the sentinel (planted, or re-pointed by a hijack) is
+// left completely whole — the putenv below still points children at it, but
+// nothing here unlinks what this harness did not stamp. is_link first: a
+// symlinked sandbox would send the walk into the link's target.
+if (!is_link($homeSandbox) && \SugarCraft\Code\Support\SafeDelete::carriesSentinel($homeSandbox)) {
+    $pruneStack = [$homeSandbox];
+    while ($pruneStack !== []) {
+        $pruneDir = array_pop($pruneStack);
+        foreach ((array) @scandir($pruneDir) as $pruneEntry) {
+            if ($pruneEntry === '.' || $pruneEntry === '..') {
+                continue;
+            }
+            $prunePath = $pruneDir . '/' . $pruneEntry;
+            if (is_link($prunePath)) {
+                continue;
+            }
+            if (is_dir($prunePath)) {
+                $pruneStack[] = $prunePath;
 
-            continue;
-        }
-        $pruneMtime = @filemtime($prunePath);
-        if ($pruneMtime !== false && $pruneMtime < $pruneBoundary) {
-            @unlink($prunePath);
+                continue;
+            }
+            $pruneMtime = @filemtime($prunePath);
+            if ($pruneMtime !== false && $pruneMtime < $pruneBoundary) {
+                @unlink($prunePath);
+            }
         }
     }
 }

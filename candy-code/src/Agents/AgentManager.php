@@ -20,6 +20,7 @@ use SugarCraft\Code\Skills\SkillListingSection;
 use SugarCraft\Code\Skills\SkillMatcher;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\MediaStore;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
@@ -2702,7 +2703,11 @@ final class AgentManager
 
         $removed = 0;
         foreach ($roots as $root) {
-            if ($root === null || is_link($root) || !is_dir($root)) {
+            // ROOTFIX: baseIsSane refuses '' and '/' — under root the is_dir
+            // and uid checks wave '/' through (root owns it), and a mis-derived
+            // home (HOME=/ plus any future owned() regression) must never aim
+            // this sweep at the top of the tree.
+            if ($root === null || is_link($root) || !is_dir($root) || !SafeDelete::baseIsSane($root)) {
                 continue;
             }
             foreach (scandir($root) ?: [] as $session) {
@@ -2715,7 +2720,7 @@ final class AgentManager
                     continue;
                 }
                 if (!$sessionExists($session) || ($days > 0 && $newest <= $now - $days * 86400)) {
-                    if (self::removeTree($dir, 2)) {
+                    if (self::removeTree($dir, 2, $root)) {
                         $removed++;
                     }
                 }
@@ -2747,16 +2752,28 @@ final class AgentManager
         return $newest;
     }
 
-    /** Remove $dir and what is in it, $depth levels down; a link is unlinked, never followed. */
-    private static function removeTree(string $dir, int $depth): bool
+    /**
+     * Remove $dir and what is in it, $depth levels down, under $base.
+     *
+     * A link is never FOLLOWED (unchanged), and since ROOTFIX it is also only
+     * unlinked when it is provably ours: an escape-shaped entry — a symlink
+     * resolving outside $base, or a dangling link that resolves nowhere —
+     * aborts the whole tree rather than being pruned or silently survived.
+     * Foreign shapes mean the tree is not what this sweep thinks it is; the
+     * caller reports the dir as not removed.
+     */
+    private static function removeTree(string $dir, int $depth, string $base): bool
     {
         foreach (scandir($dir) ?: [] as $entry) {
             $path = $dir . '/' . $entry;
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
+            if (!SafeDelete::deletable($path, $base)) {
+                return false;
+            }
             if (!is_link($path) && is_dir($path)) {
-                if ($depth <= 0 || !self::removeTree($path, $depth - 1)) {
+                if ($depth <= 0 || !self::removeTree($path, $depth - 1, $base)) {
                     return false;
                 }
                 continue;

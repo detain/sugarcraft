@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Cli;
 use SugarCraft\Core\Util\LegacyEnv; // @rename-keep
 use SugarCraft\Core\Util\LegacyPaths; // @rename-keep
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\SafeDelete;
 
 /**
  * First-launch compatibility with the pre-rename environment. // @rename-keep
@@ -84,6 +85,19 @@ final class LegacyMigration
             [$home . '/.config/sugarcraft-crush', $home . '/.config/candy-code'], // @rename-keep
             [$home . '/.local/share/sugar-crush', $home . '/.local/share/candy-code'], // @rename-keep
         ] as [$from, $to]) {
+            // ROOTFIX: a rename is a move of the NAME, and a legacy name that
+            // is a symlink escaping the owned home is not ours to move —
+            // replacing or relocating a foreign link (or following one into a
+            // directory outside $home) is exactly the shape a planted
+            // ~/.sugar-crush takes. '/' itself can no longer be $home at all
+            // (HomeDirectory::owned() refuses it); this covers the rest.
+            if ((is_link($from) && !SafeDelete::deletable($from, $home))
+                || (is_link($to) && !SafeDelete::deletable($to, $home))
+            ) {
+                fwrite($stderr, "candy-code: legacy path '{$from}' involves a symlink outside the owned home; not migrated\n");
+
+                continue;
+            }
             if (($n = LegacyPaths::migrate($from, $to)) !== null) {
                 fwrite($stderr, "candy-code: {$n}\n");
             }

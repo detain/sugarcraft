@@ -654,6 +654,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // crush-media W1.9: partialEntries() lists the session directory the test
         // built itself under a temp storeRoot; `scandir($dir)` is that walk.
         'Support/MediaStoreTest.php' => ['scandir($dir)'],
+        // ROOTFIX: purgeOwnFixtureTree() empties the throwaway sweep bases
+        // setUp() made; `scandir($dir)` is that walk.
+        'Support/SafeDeleteSweepHardeningTest.php' => ['scandir($dir)'],
         // Names the package root only to hand its driver script the vendor
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).

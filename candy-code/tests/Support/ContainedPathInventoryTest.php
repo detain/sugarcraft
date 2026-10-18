@@ -200,6 +200,10 @@ final class ContainedPathInventoryTest extends TestCase
         'Skills/ProposedSkills.php' => 1,
         'Skills/SkillLoader.php' => 3,
         'Support/Directories/DirectoryBrowser.php' => 3,
+        // ROOTFIX: SafeDelete is the single answer to "may this be unlinked"
+        // for every sweep routine; its two arms (symlink, regular) each ask
+        // this class instead of re-spelling a boundary compare.
+        'Support/SafeDelete.php' => 2,
         'Workflows/WorkflowRegistry.php' => 3,
     ];
 
@@ -356,8 +360,8 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
-            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51,
-            'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24,
+            'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53,
+            'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 
         $source = (string) file_get_contents($this->srcDir . '/Support/ContainedPath.php');

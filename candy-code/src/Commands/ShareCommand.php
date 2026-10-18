@@ -12,6 +12,7 @@ use SugarCraft\Code\Share\ShareResult;
 use SugarCraft\Code\Share\ShareSession;
 use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Tools\PathJail;
 
 /**
@@ -257,6 +258,14 @@ final class ShareCommand
         }
 
         if (!is_dir($exportsRoot)) {
+            return 0;
+        }
+
+        // ROOTFIX H1/H2: a sweep aimed at '/' — or any base that is not a real
+        // directory strictly below it — removes nothing, ever. Under root the
+        // uid checks elsewhere wave '/' through (root owns it); this is the
+        // refusal that does not depend on who is running.
+        if (!SafeDelete::baseIsSane($exportsRoot)) {
             return 0;
         }
 

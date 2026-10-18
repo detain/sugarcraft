@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Sessions\BackgroundSession;
 use SugarCraft\Code\Sessions\BackgroundSessionStatus;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;
 
 /**
@@ -196,6 +197,10 @@ final class BackgroundIpcCleanupTest extends TestCase
 
         $first = $ensure->invoke($supervisor);
         $this->assertDirectoryExists($first);
+        // ROOTFIX: the fresh directory carries the creator sentinel, so the
+        // vanished-directory fixture must unlink the marker before the rmdir
+        // (otherwise it is not empty and this "vanish" silently fails).
+        @unlink($first . '/' . SafeDelete::SENTINEL);
         rmdir($first);
 
         $second = $ensure->invoke($supervisor);
@@ -204,6 +209,7 @@ final class BackgroundIpcCleanupTest extends TestCase
             $this->assertDirectoryExists($second);
             $this->assertSame(0o700, fileperms($second) & 0o777);
         } finally {
+            @unlink($second . '/' . SafeDelete::SENTINEL);
             @rmdir($second);
         }
     }
@@ -327,7 +333,11 @@ final class BackgroundIpcCleanupTest extends TestCase
     {
         $dir = $parent . '/' . $name;
         mkdir($dir, 0o700);
-        $entries = ['sess.buffer', 'sess.buffer.log', 'sess.token'];
+        // ROOTFIX: plantDir fakes a directory CREATED by ensurePrivateIpcDir(),
+        // which now carries the creator sentinel — the reaper empties only
+        // stamped directories.
+        SafeDelete::stampSentinel($dir);
+        $entries = ['sess.buffer', 'sess.buffer.log', 'sess.token', SafeDelete::SENTINEL];
         foreach ($entries as $entry) {
             file_put_contents($dir . '/' . $entry, 'x');
         }
@@ -351,6 +361,7 @@ final class BackgroundIpcCleanupTest extends TestCase
     {
         $dir = $this->scratch . '/' . $this->dirName();
         mkdir($dir, 0o700);
+        SafeDelete::stampSentinel($dir);
 
         return $dir;
     }

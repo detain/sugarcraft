@@ -340,6 +340,13 @@ final class ToolIpcFiles
     public static function sweep(?string $dir = null, ?int $olderThanSeconds = null): int
     {
         $dir ??= sys_get_temp_dir();
+        // ROOTFIX: a sweep never runs at '/' or an unresolvable base. The flat
+        // file layout needs no sentinel (production /tmp would carry none and
+        // the prefix+uid+age filter is the authority here); the containment
+        // check below adds the escape-proof entry test on top.
+        if (!SafeDelete::baseIsSane($dir)) {
+            return 0;
+        }
         $cutoff = $olderThanSeconds ?? self::STALE_AFTER_SECONDS;
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
         $now = time();
@@ -359,6 +366,13 @@ final class ToolIpcFiles
                 // A future mtime (clock skew, a restored backup) reads as
                 // age <= 0 and is left alone rather than treated as ancient.
                 if ($now - (int) $stat['mtime'] < $cutoff) {
+                    continue;
+                }
+
+                // ROOTFIX: belt-braces over the lstat regular-file check — the
+                // name must resolve inside $dir. A hardlinked alias still
+                // passes (it is genuinely a plain file here), which is correct.
+                if (!SafeDelete::deletable($path, $dir)) {
                     continue;
                 }
 

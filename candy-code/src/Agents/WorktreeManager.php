@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Agents;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\TimedFileLock;
 use SugarCraft\Code\Workspace\GitRunner;
 
@@ -1233,7 +1234,7 @@ final class WorktreeManager
      *              removed while reporting success is the behaviour this
      *              replaced.
      */
-    private function removeDirectory(string $path): bool
+    private function removeDirectory(string $path, int $depth = SafeDelete::MAX_DEPTH): bool
     {
         // `|| is_link($path)` FOR THE SAME REASON THE LOOP HAS IT: `is_dir()`
         // follows, so a symlinked `$path` would be recursed into and the target
@@ -1247,6 +1248,15 @@ final class WorktreeManager
             // "gone" for it would hand the caller the same lie the void return
             // used to.
             return !file_exists($path) && !is_link($path);
+        }
+
+        // ROOTFIX: the path reached here IS going to be walked and emptied, so
+        // it must be a directory this process can vouch for — never '/' (which
+        // root-run uid checks wave through) and never self-contained at the
+        // tree top. The depth parameter bounds the recursion against a
+        // deep-cycle planted under a worktree.
+        if ($depth <= 0 || !SafeDelete::baseIsSane($path)) {
+            return false;
         }
 
         $entries = @scandir($path);
@@ -1270,8 +1280,14 @@ final class WorktreeManager
                 // Recursion FIRST and the conjunction second: `&&` short-
                 // circuits, and an earlier failure must not stop the remaining
                 // entries being attempted.
-                $emptied = $this->removeDirectory($itemPath) && $emptied;
-            } elseif (!@unlink($itemPath)) {
+                $emptied = $this->removeDirectory($itemPath, $depth - 1) && $emptied;
+            } elseif (!SafeDelete::deletable($itemPath, $path) || !@unlink($itemPath)) {
+                // ROOTFIX: a symlink whose target escapes the tree (or a
+                // dangling one) is NOT unlink- blindfolded any more. Removing
+                // the link name alone would be safe, but a tree carrying
+                // escape-shaped entries is not a tree this manager made, and
+                // the honest answer is "not emptied" — removeWorktree() keeps
+                // the registry entry and the operator looks.
                 $emptied = false;
             }
         }

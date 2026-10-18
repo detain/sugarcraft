@@ -285,19 +285,22 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertFileExists($tree . '/inner/hidden.txt');
     }
     /**
-     * A DIRECTORY SYMLINK IS UNLINKED, NOT WALKED, AND ITS TARGET SURVIVES.
+     * A DIRECTORY SYMLINK ESCAPING THE TREE ABORTS THE REMOVAL, AND ITS
+     * TARGET IS LEFT ALONE.
      *
      * `is_dir()` follows symlinks, so before the `!is_link()` guard the
-     * traversal treated a link to an outside directory as a subdirectory of the
-     * worktree and emptied it. MEASURED on this box before the fix, driving this
-     * exact fixture through `removeDirectory()`: the file below was DELETED,
-     * while the link and the target directory both survived — `rmdir()` fails on
-     * a symlink — so the method also reported `false` for a tree it had
-     * over-removed. Both halves are asserted here: nothing outside was touched,
-     * AND the tree now honestly reports `true`, which it could not have done
-     * while a link was in it.
+     * traversal treated a link to an outside directory as a subdirectory of
+     * the worktree and emptied it — the original H4 defect, still refused.
+     * ROOTFIX hardened the OTHER half too: the link's NAME used to be
+     * unlink-accepted (safe against the target, but it let a tree wearing
+     * planted foreign entries be swept and reported as clean). Now an
+     * escape-shaped entry makes the tree NOT ours to empty: remaining
+     * entries are still attempted best-effort (the loop's existing "do what
+     * it can while reporting honestly" posture), the escape and the tree
+     * survive, and `removeWorktree()` keeps the registry entry pointing at
+     * what the operator must look at.
      */
-    public function testADirectorySymlinkIsUnlinkedAndItsTargetIsLeftAlone(): void
+    public function testADirectorySymlinkEscapingTheTreeAbortsTheRemovalAndItsTargetIsLeftAlone(): void
     {
         $outside = $this->tmpRoot . '/outside';
         mkdir($outside, 0755, true);
@@ -313,8 +316,10 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertTrue(is_dir($tree . '/link'));
         self::assertTrue(is_link($tree . '/link'));
 
-        self::assertTrue(self::removeDirectory($this->manager, $tree));
-        self::assertDirectoryDoesNotExist($tree);
+        self::assertFalse(self::removeDirectory($this->manager, $tree));
+        self::assertDirectoryExists($tree);
+        self::assertTrue(is_link($tree . '/link'), 'the escape-shaped entry survives: it is not ours to remove');
+        self::assertFileDoesNotExist($tree . '/own.txt', 'entries that ARE ours still go (best-effort, honestly reported)');
 
         self::assertFileExists(
             $outside . '/precious.txt',

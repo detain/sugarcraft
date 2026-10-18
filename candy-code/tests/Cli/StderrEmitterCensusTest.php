@@ -500,7 +500,10 @@ final class StderrEmitterCensusTest extends TestCase
         // 8A: the three migration notices (env fold, running-server refusal,
         // per-directory move), all stderr-alone — see INDIRECT_SITES' row for
         // why none of them can ride the transcript seam or the notice sink.
-        'src/Cli/LegacyMigration.php' => 3,
+        // +1 in ROOTFIX: the escape-shaped legacy-link refusal line (same
+        // stderr-alone channel — the migration is deciding per pair before
+        // any home exists to attach a notice to).
+        'src/Cli/LegacyMigration.php' => 4,
         // +1 in wave 11: noticeAttachment()'s prefix literal (channel 1's note).
         // +1 in step 3.D-2: fireSessionEnd()'s refusal line (channel 1's note).
         // +1 in ISS-080: the stdin-silent grace line (channel 1's note).

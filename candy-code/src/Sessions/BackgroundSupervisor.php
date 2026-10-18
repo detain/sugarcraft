@@ -10,6 +10,7 @@ use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Support\ToolIpcFiles;
 use SugarCraft\Code\Tui\StallDetector;
 use SugarCraft\Code\Tui\StallWarning;
@@ -1109,6 +1110,10 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
         }
 
         $this->ipcDir = $dir;
+        // ROOTFIX creator-side stamp: sweepStaleIpcDirs() only empties a stale
+        // directory that carries our sentinel, so the reaper never unlinks
+        // entries inside a foreign directory wearing the name shape.
+        SafeDelete::stampSentinel($dir);
 
         return $dir;
     }
@@ -1182,8 +1187,24 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
             }
         }
 
+        $this->releaseSentinelIfOwn($dir);
         if (@rmdir($dir) && $dir === $this->ipcDir) {
             $this->ipcDir = '';
+        }
+    }
+
+    /**
+     * ROOTFIX: drop our own creator marker when THIS process is the last
+     * out — the sentinel exists to license the startup reaper over foreign
+     * hands; leaving it behind would block the rmdir above forever and leak
+     * an empty directory per process. Only a plain file at the marker name
+     * is unlinked: a link there is not ours.
+     */
+    private function releaseSentinelIfOwn(string $dir): void
+    {
+        $sentinel = $dir . '/' . SafeDelete::SENTINEL;
+        if (is_file($sentinel) && !is_link($sentinel)) {
+            @unlink($sentinel);
         }
     }
 
@@ -1211,6 +1232,10 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
     public static function sweepStaleIpcDirs(?string $dir = null, ?int $olderThanSeconds = null): int
     {
         $dir ??= sys_get_temp_dir();
+        // ROOTFIX: the base gate matches ToolIpcFiles::sweep().
+        if (!SafeDelete::baseIsSane($dir)) {
+            return 0;
+        }
         $cutoff = $olderThanSeconds ?? self::STALE_IPC_DIR_SECONDS;
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
         $now = time();
@@ -1230,6 +1255,15 @@ exit(\SugarCraft\Code\Sessions\BackgroundSessionRunner::main(json_decode(%s, tru
                 || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_DIRECTORY
                 || ($uid !== null && $stat['uid'] !== $uid)
             ) {
+                continue;
+            }
+
+            // ROOTFIX: the name shape, uid, and age can all be forged by a
+            // directory that was never ours; only the creator stamp written
+            // by ensurePrivateIpcDir() authorises emptying it. Pre-sentinel
+            // directories from older binaries are reported as a disclosed
+            // leak rather than pruned on suspicion.
+            if (!SafeDelete::carriesSentinel($path)) {
                 continue;
             }
 

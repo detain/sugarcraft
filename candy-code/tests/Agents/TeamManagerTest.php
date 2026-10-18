@@ -662,7 +662,17 @@ final class TeamManagerTest extends TestCase
         $files = array_diff(scandir($dir) ?: [], ['.', '..']);
         foreach ($files as $file) {
             $path = $dir . '/' . $file;
-            is_dir($path) ? $this->removeDirectory($path) : unlink($path);
+            // ROOTFIX H12: is_link FIRST — the old ternary asked is_dir(),
+            // which follows, so a symlink pointing at a directory (outside the
+            // temp tree or even at '/') would be RECURSED INTO and emptied.
+            // A link is now unlinked as the name it is, never walked.
+            if (is_link($path) || is_file($path)) {
+                @unlink($path);
+                continue;
+            }
+            if (is_dir($path)) {
+                $this->removeDirectory($path);
+            }
         }
         rmdir($dir);
     }

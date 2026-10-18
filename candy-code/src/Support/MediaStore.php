@@ -319,6 +319,11 @@ final class MediaStore
             return 0;
         }
 
+        // ROOTFIX: never aim the sweep at '/' (see AgentManager::pruneSessionArtifacts).
+        if (!SafeDelete::baseIsSane($mediaRoot)) {
+            return 0;
+        }
+
         $cutoff = ($now ?? time()) - $days * 86400;
         $removed = 0;
         foreach (scandir($mediaRoot) ?: [] as $entry) {
@@ -333,7 +338,7 @@ final class MediaStore
             if ($mtime === false || $mtime > $cutoff) {
                 continue;
             }
-            if (self::removeSweptTree($dir, 2)) {
+            if (self::removeSweptTree($dir, 2, $mediaRoot)) {
                 $removed++;
             }
         }
@@ -341,16 +346,25 @@ final class MediaStore
         return $removed;
     }
 
-    /** Remove $dir and what is in it, $depth levels down; a link is unlinked, never followed. */
-    private static function removeSweptTree(string $dir, int $depth): bool
+    /**
+     * Remove $dir and what is in it, $depth levels down, under $base.
+     *
+     * Same ROOTFIX posture as AgentManager::removeTree: an escape-shaped entry
+     * (a link resolving outside $base, or a dangling one) aborts the tree
+     * untouched rather than being pruned around.
+     */
+    private static function removeSweptTree(string $dir, int $depth, string $base): bool
     {
         foreach (scandir($dir) ?: [] as $entry) {
             $path = $dir . '/' . $entry;
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
+            if (!SafeDelete::deletable($path, $base)) {
+                return false;
+            }
             if (!is_link($path) && is_dir($path)) {
-                if ($depth <= 0 || !self::removeSweptTree($path, $depth - 1)) {
+                if ($depth <= 0 || !self::removeSweptTree($path, $depth - 1, $base)) {
                     return false;
                 }
                 continue;
