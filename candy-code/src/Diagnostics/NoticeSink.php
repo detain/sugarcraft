@@ -195,8 +195,15 @@ final class NoticeSink
             $remaining = RuntimeNoticeSink::TURN_NOTICE_LIMIT - $this->turnSurfaced;
 
             if (count($unique) > $remaining) {
+                // KEEP-MOST-RECENT (N-1, owner ruling round gap-6): the rows
+                // that survive a truncation are the TAIL of the batch, in
+                // recorded order — fresher context beats older context in a
+                // transcript the model re-reads every later turn. Head-keeping
+                // was reviewed-and-kept in fix-1017 and reversed here: the
+                // array_slice bound is `min(count, remaining)` either way, so
+                // the excess math below is unchanged by which end survives.
                 $excess = count($unique) - max(0, $remaining);
-                $unique = $remaining > 0 ? array_slice($unique, 0, $remaining) : [];
+                $unique = $remaining > 0 ? array_slice($unique, -$remaining) : [];
                 $this->turnSurfaced += count($unique);
                 $this->turnOverflowAnnounced = true;
 

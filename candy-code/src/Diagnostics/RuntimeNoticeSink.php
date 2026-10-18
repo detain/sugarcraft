@@ -60,8 +60,9 @@ use React\EventLoop\Loop;
  * was the status quo the entry was filed against). {@see beginTurn()} opens a
  * budget of {@see TURN_NOTICE_LIMIT} transcript rows; {@see drain()} enforces
  * it at the PARENT's read side only — children keep writing, because a child
- * cannot see a turn boundary — truncates the batch, appends
- * {@see OVERFLOW_FORMAT} ONCE, and discards everything else until the inbox
+ * cannot see a turn boundary — truncates the batch to the MOST RECENT rows
+ * within the budget (N-1, owner ruling: fresher context wins a truncation),
+ * appends {@see OVERFLOW_FORMAT} ONCE, and discards everything else until the inbox
  * reads empty, so a saturated turn cannot leave {@see hasPending()} true and
      * keep Chat's tick repainting forever. The accounting remains OPT-IN —
      * armed by {@see beginTurn()} and nothing else — and since round 70 the
@@ -263,7 +264,8 @@ final class RuntimeNoticeSink
      * interactive path, so a parent-side queue count would miss every child's
      * contribution; the drain is the one place the whole batch is visible in
      * one process. Children keep writing (their text is in `error_log()`
-     * whatever this cap does); a drained-past-budget batch is truncated, gets
+     * whatever this cap does); a drained-past-budget batch is truncated to its
+     * most recent rows (N-1, fresher context wins), gets
      * one {@see OVERFLOW_FORMAT} row for the turn, and the rest of the inbox
      * is DISCARDED — not deferred, because a transport that stays readable
      * keeps Chat's notice subscription firing on an empty payload.

@@ -272,6 +272,53 @@ final class RuntimeNoticeSinkTest extends TestCase
     }
 
     /**
+     * N-1, THE END THAT SURVIVES (owner ruling, gap-6 wave). The fix-1017
+     * review kept the head of a truncated batch; the ruling reversed it: the
+     * rows a turn gets are the batch's freshest TAIL in recorded order, and
+     * the older head is counted into the overflow row. Both budget pins above
+     * exercise an already-spent budget (`remaining == 0`), where head and tail
+     * collapse to the same shape, so this pin spends only PART of the budget
+     * first — otherwise it would pass under either polarity and pin nothing.
+     */
+    public function testAnOverBudgetDrainKeepsTheMostRecentRowsInRecordOrder(): void
+    {
+        RuntimeNoticeSink::arm(false);
+        RuntimeNoticeSink::beginTurn();
+
+        $spent = 10;
+        for ($i = 0; $i < $spent; $i++) {
+            RuntimeNoticeSink::record("early {$i}");
+        }
+        self::assertCount($spent, RuntimeNoticeSink::drain(), 'the first batch did not spend a partial budget');
+
+        $overrun = 5;
+        $incoming = RuntimeNoticeSink::TURN_NOTICE_LIMIT - $spent + $overrun;
+        for ($i = 0; $i < $incoming; $i++) {
+            RuntimeNoticeSink::record("late {$i}");
+        }
+
+        $rows = RuntimeNoticeSink::drain();
+
+        $kept = $incoming - $overrun;
+        self::assertCount(
+            1 + $kept,
+            $rows,
+            'the truncating drain did not surface the remaining budget plus exactly one overflow row',
+        );
+        $expected = [];
+        for ($i = $overrun; $i < $incoming; $i++) {
+            $expected[] = "late {$i}";
+        }
+        self::assertSame(
+            $expected,
+            array_slice($rows, 0, $kept),
+            'the surfaced half of a truncated batch was not the freshest tail in record order',
+        );
+        self::assertSame(RuntimeNoticeSink::overflowNotice($overrun), $rows[$kept]);
+        self::assertFalse(RuntimeNoticeSink::hasPending(), 'the truncated head stayed pending past its turn');
+    }
+
+    /**
      * E199, THE TRANSPORT HALF — the backend the session cap was actually
      * filed for. Thirty datagrams are in flight; the turn budget spends on the
      * first readable batch, and the truncating drain must read the transport
