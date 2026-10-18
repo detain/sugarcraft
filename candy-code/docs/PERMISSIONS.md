@@ -553,8 +553,9 @@ is not exactly that object, an `allow` at high or unknown risk, a provider
 error or a launch with no provider to review with all mean **ask**, never
 allow. The prompt or refusal you see names the category and the reviewer's
 one-line reason. The review call has the provider's connect timeout and no
-total timeout; it runs once per flagged call, never for a call the classifier
-passed.
+total timeout; it runs once per reviewed call — every flagged non-security
+call and, when `autoReview` is on, every non-read-only shell command the
+pattern list passed, where it can only narrow what would run (ISS-013).
 
 ### `auto`'s circuit breaker
 

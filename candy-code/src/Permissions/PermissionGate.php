@@ -45,7 +45,9 @@ use SugarCraft\Code\Tools\McpToolBridge;
  *                read-only ({@see isReadOnlyMcpTool()}); a security finding
  *                ({@see SECURITY_CATEGORIES}) always Asks; any other flagged
  *                call goes to the optional {@see ExecReviewer} (roadmap
- *                5.11-2) and is otherwise Denied; 3-strike / 20-total
+ *                5.11-2) and is otherwise Denied, and — ISS-013 — a shell
+ *                command the classifier passed goes to that reviewer too
+ *                when one is configured; 3-strike / 20-total
  *                circuit breaker
  *
  * The Plan line has been wrong twice, and both are worth knowing. It first
@@ -153,6 +155,17 @@ final class PermissionGate
         'interactive-shell-portforward',
         SafetyClassifier::CATEGORY_PROTECTED_PATH_WRITE,
     ];
+
+    /**
+     * The breaker category an ISS-013 review of a pattern-list-passed shell
+     * call is recorded under, and the basis line the reviewer itself is told.
+     * The two differ on purpose: the first names a run of like verdicts to the
+     * breaker, the second has to read honestly to a model being asked to judge
+     * a call nothing flagged — telling it the classifier "flagged it as
+     * unflagged" would invite exactly the hallucinated risk it must not invent.
+     */
+    private const UNFLAGGED_REVIEW_CATEGORY = 'unflagged-shell';
+    private const UNFLAGGED_REVIEW_BASIS = 'nothing — the pattern list passed this call, and auto mode reviews shell anyway';
 
     // -------------------------------------------------------------------------
     // Auto-mode circuit breaker state
@@ -890,6 +903,20 @@ final class PermissionGate
 
         $category = $this->classifier->classify($call, $projectRoot);
 
+        // ISS-013: the pattern list is a list of spellings, and download-and-
+        // execute shapes (`bash <(curl …)`, `curl … | python3`) are spellings
+        // it misses. When a reviewer is configured (`autoReview`), a SHELL
+        // call it passed is put to the reviewer anyway — the one call path
+        // where the cheap model widens coverage instead of only softening a
+        // block. Read-only auto-allowed lines stay the fast path they have
+        // always been, and non-shell tools keep the classifier-only verdict:
+        // the issue asks for every non-read-only shell call, not for a paid
+        // review of every `Edit`.
+        $unflaggedReview = $category === null && $this->autoReviewsUnflaggedShell($call, $projectRoot);
+        if ($unflaggedReview) {
+            $category = self::UNFLAGGED_REVIEW_CATEGORY;
+        }
+
         // Action is safe — reset counters and allow
         if ($category === null) {
             $this->consecutiveBlocks = 0;
@@ -910,10 +937,19 @@ final class PermissionGate
         // Any other flagged call goes to the reviewer when one is configured.
         // Its allow is a safe call (the run of blocks is broken), its ask is a
         // question (counters untouched), and its deny is a strike like the
-        // classifier's own — three in a row still reach a person.
-        $this->lastAutoReason = "flagged as {$category}";
+        // classifier's own — three in a row still reach a person. An ISS-013
+        // unflagged-shell review takes the identical arms; only the words
+        // differ, because "flagged as unflagged" would be a sentence that
+        // denies itself.
+        $this->lastAutoReason = $unflaggedReview
+            ? 'not flagged by the pattern list'
+            : "flagged as {$category}";
         if ($this->reviewer !== null) {
-            $verdict = $this->reviewer->review($call, $category, $sessionId);
+            $verdict = $this->reviewer->review(
+                $call,
+                $unflaggedReview ? self::UNFLAGGED_REVIEW_BASIS : $category,
+                $sessionId,
+            );
             $this->lastAutoReason .= '; ' . $verdict->describe();
             if ($verdict->decision === PermissionDecision::Allow) {
                 $this->consecutiveBlocks = 0;
@@ -946,6 +982,20 @@ final class PermissionGate
         }
 
         return PermissionDecision::Deny;
+    }
+
+    /**
+     * Whether a call the pattern list passed still goes to the reviewer
+     * (ISS-013): a shell-subject tool, a reviewer configured, and not a
+     * read-only line the auto-allow already covers. `Bash` and `PtyRun` are
+     * where an attacker's spelling lives; a reviewer per `Edit` would be a
+     * paid call per keystroke of the agent's own work.
+     */
+    private function autoReviewsUnflaggedShell(ToolCall $call, ?string $projectRoot): bool
+    {
+        return $this->reviewer !== null
+            && ShellSubjectTools::covers($call->name)
+            && !$this->isAutoAllowedReadOnlyBash($call, $projectRoot);
     }
 
     /**

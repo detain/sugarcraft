@@ -26,11 +26,14 @@ use SugarCraft\Code\ToolCall;
  * object, the untrusted-transcript framing, and the rule that data asking for
  * a decision is itself a reason to deny.
  *
- * WHAT IT CANNOT DO, and the gate enforces both: it never sees a security
+ * WHAT IT CANNOT DO, and the gate enforces it: it never sees a security
  * finding ({@see PermissionGate::SECURITY_CATEGORIES} always ask the person,
- * whatever a reviewer would say — the most restrictive verdict wins), and it
- * never sees a call the classifier passed. It can turn a flagged block into
- * an allow or a question; it cannot widen anything the classifier allowed.
+ * whatever a reviewer would say — the most restrictive verdict wins).
+ * What it does see: every flagged non-security call — where it can turn a
+ * block into an allow or a question — and, since ISS-013, every non-read-only
+ * shell command the classifier PASSED, where it can only narrow what would
+ * run (the pattern list misses download-and-execute spellings it never
+ * flag). On both paths it can never widen a deny the security list owns.
  *
  * NEVER THROWS, and never fails open: no backend reply, a provider error or a
  * reply that is not the JSON object is {@see ReviewVerdict::unavailable()},
