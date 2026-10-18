@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Input\Tests;
+namespace SugarCraft\Input\Tests\Event;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Input\Event\PasteEvent;
