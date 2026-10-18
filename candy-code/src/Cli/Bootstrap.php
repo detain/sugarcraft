@@ -211,14 +211,15 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 41 is that sum — 40 after the ISS-036 override aggregate joined the
-     * roster — plus one row of headroom. A launch that does hit
+     * 42 is that sum — 41 after the ISS-047 keybinding-collision drain joined
+     * the roster on top of the ISS-036 override aggregate — plus one row of
+     * headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 41;
+    public const LAUNCH_NOTICE_LIMIT = 42;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -292,6 +293,7 @@ final class Bootstrap
         'permissionGate' => 1,
         'availableProviders' => 1,
         'checkPolicyFreshness' => 1,
+        'reportKeybindingCollisions' => 1,
     ];
 
     /**

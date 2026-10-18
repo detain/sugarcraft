@@ -398,7 +398,7 @@ final class SessionHostCommandsTest extends TestCase
         $text = implode("\n", $lines);
         self::assertSame(1, substr_count($text, '->withUiOnly()->withError($error)'), 'the row builder is the flag single point');
         self::assertStringContainsString('private function appendCommandRow(string $text, bool $error = false): void', $text, 'the flag stays opt-in for the success arms');
-        self::assertStringContainsString('$land = function (string $report, bool $error = false)', $text, 'and the occupying path forwards its verdict through the landing closure');
+        self::assertStringContainsString('$land = function (string|Message $report, bool $error = false)', $text, 'and the occupying path forwards its verdict through the landing closure');
     }
 
     /** @return list<Message> the error-flagged rows of $host's transcript */

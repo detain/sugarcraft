@@ -546,6 +546,12 @@ Environment variables:
                           How generated images are painted in the terminal
                           (the ui.imageRenderMode setting's env layer; see
                           docs/ENVIRONMENT.md for the accepted words).
+   CANDY_CODE_ALLOW_ROOT_TESTS
+                          Set to exactly 1 to let the candy-code TEST SUITE
+                          run as root; unset or any other value, the suite
+                          refuses to launch at euid 0. Nothing about a
+                          candy-code launch changes — the suite is not a
+                          user-facing surface.
 
    docs/ENVIRONMENT.md tabulates every variable this build reads, with its
    full contract.

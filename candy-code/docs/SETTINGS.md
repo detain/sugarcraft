@@ -1058,7 +1058,7 @@ project-settable.
 | `repoMap.maxBytes` | Context & Compaction | int | `8192` | U C | — | next turn | spend |
 | `env.gitDiffAfterWrites` | Context & Compaction | bool | `true` | P U C | — | next turn | narrowing |
 | `env.diffMaxBytes` | Context & Compaction | int | `8192` | U C | — | next turn | spend |
-| `notices.transcriptLimit` | Context & Compaction | int | `41` | C | — | restart | tuning |
+| `notices.transcriptLimit` | Context & Compaction | int | `42` | C | — | restart | tuning |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `CANDY_CODE_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `CANDY_CODE_PERMISSION_MODE`, `--permission-mode` | restart | security |

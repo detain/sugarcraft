@@ -80,7 +80,7 @@ final class BootstrapLaunchNoticeCapCensusTest extends TestCase
      */
     public function testTheRosterSumsToTheFigureTheCapDocBlockQuotes(): void
     {
-        self::assertSame(40, array_sum(self::roster()));
+        self::assertSame(41, array_sum(self::roster()));
     }
 
     /**
