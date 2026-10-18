@@ -232,6 +232,46 @@ final class PaneAutoEnableTest extends TestCase
         $this->assertFalse($next->paneAutoShow->settled(Pane::Tools));
     }
 
+    public function testAChatColumnExactlyAtTheFloorIsInsideTheGuard(): void
+    {
+        // rv6 minor B: the guard's comparison is `>=`, and this is the width
+        // where that boundary is REAL, not theoretical. Measured against the
+        // shipped share seeding: a 158-column band leaves the trial dock
+        // (agents, right) resolving the chat column to exactly
+        // AUTO_DOCK_MIN_CHAT_COLS — chat 80 of 158. The twin below lands one
+        // column narrower. The pair discriminates the comparison: a flip to
+        // `>` stops this frame docking (reddening the assertion below), and
+        // the standing width-starvation tests redden any looser flip.
+        $chat = $this->chatWithManager($this->managerOneRun());
+        $app = App::new(new EchoProvider(), 'test-model')->withChat($chat);
+        [$sized] = $app->update(new WindowSizeMsg(158, 40));
+        \assert($sized instanceof App);
+
+        [$docked] = $this->typeChar($sized);
+
+        $dock = $docked->dock();
+        $chatCols = $dock->resolve(new \SugarCraft\Constraints\Region(0, 0, 158, 40))
+            ->regionFor($dock->centerPaneId)?->width ?? -1;
+        $this->assertSame(App::AUTO_DOCK_MIN_CHAT_COLS, $chatCols, 'fixture: the frame must land chat EXACTLY on the floor or this proves nothing');
+        $this->assertTrue($docked->isDocked(Pane::Agents), 'chat exactly at the floor satisfies the guard: >= docks');
+    }
+
+    public function testOneColumnBelowThatBoundaryStandsDownPending(): void
+    {
+        // The twin half of the boundary: 157 cols starves the chat column
+        // under the floor, and the guard's `>=` (not `>`) is what separates
+        // this frame from the docking one above.
+        $chat = $this->chatWithManager($this->managerOneRun());
+        $app = App::new(new EchoProvider(), 'test-model')->withChat($chat);
+        [$sized] = $app->update(new WindowSizeMsg(157, 40));
+        \assert($sized instanceof App);
+
+        [$blocked] = $this->typeChar($sized);
+
+        $this->assertFalse($blocked->isDocked(Pane::Agents));
+        $this->assertFalse($blocked->paneAutoShow->settled(Pane::Agents), 'the skip must stay pending so a wider frame re-offers the dock');
+    }
+
     // ── ISS-049: the verdict outlives the process ─────────────────────────
 
     public function testTheUserToggledListRidesTheLayoutBlobAndReseedsQuietly(): void
