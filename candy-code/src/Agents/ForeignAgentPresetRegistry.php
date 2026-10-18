@@ -150,9 +150,11 @@ final class ForeignAgentPresetRegistry
 
     /**
      * YAML boolean spellings accepted for foreign scalar flags (ISS-086).
-     * Same roster as {@see \SugarCraft\Code\Skills\SkillFrontmatter}'s
-     * private twin; a quoted `background: "false"` is the word, not the
-     * truth — `(bool)` would have made it true.
+     * A nine-word superset of {@see \SugarCraft\Code\Skills\SkillFrontmatter}'s
+     * six-word private twin: foreign agent files in the wild also spell the
+     * booleans `1`/`0`, and an empty value counts as false there. A quoted
+     * `background: "false"` is the word, not the truth — `(bool)` would have
+     * made it true.
      */
     private const TRUE_WORDS = ['true', 'yes', 'on', '1'];
 
