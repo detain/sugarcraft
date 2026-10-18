@@ -57,7 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-six sites (ISS-026 2026-10-17: +1 in
+ *  1. `fwrite(STDERR, …)` — twenty-seven sites (ISS-026 residual 2026-10-18: +1 in
+ *     `Bootstrap::openSession()` for the cross-project `--resume` pick notice,
+ *     stderr-alone like its `--continue` twin below; ISS-026 2026-10-17: +1 in
  *     `Bootstrap::openSession()` for the cross-project `--continue` notice,
  *     stderr-alone by the same decision as the retention rows; ISS-080 2026-10-17: +1 in
  *     `NonInteractive` for the stdin-silent grace line; N-2 2026-10-17: +1 in
@@ -225,9 +227,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * it — THIRTY-SEVEN call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row), each producing a
- * distinct `candy-code: ` line, against a channel-4 credit of seven for that
+ * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
- * fwrite line). Off by roughly five times, in the blind direction.
+ * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
+ * roughly five times, in the blind direction.
  *
  * IT WAS NOT A THEORY. Round 45's review added one
  * `self::warnPermissionConfigOnce('a brand new user visible warning nobody
@@ -315,7 +318,9 @@ final class StderrEmitterCensusTest extends TestCase
         // succeeded, there is nothing the session can no longer DO, and the
         // transcript seam's call-site census lives in docs this writes may
         // not touch.
-        'src/Cli/Bootstrap.php' => 3,
+        // +1 in ISS-026 residual (rv6): the --resume pick's crossed-project
+        // twin, stderr-alone by the identical decision.
+        'src/Cli/Bootstrap.php' => 4,
         // +1 in wave 11 (audit 15b-15 residual): noticeAttachment(), the
         // headless twin of the TUI's UI-only attachment notices - a `-p`
         // mention that matched nothing, a refused file, an image the model
@@ -488,7 +493,9 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/ArgvParser.php' => 28,
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
-        'src/Cli/Bootstrap.php' => 7,
+        // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
+        // envelope too.
+        'src/Cli/Bootstrap.php' => 8,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // 8A: the three migration notices (env fold, running-server refusal,
         // per-directory move), all stderr-alone — see INDIRECT_SITES' row for

@@ -723,6 +723,23 @@ final class Bootstrap
     public const SESSION_RESUME_CROSS_PROJECT_FORMAT = "candy-code: --continue resumed a session from another project (%s); pass --resume to pick deliberately\n";
 
     /**
+     * ISS-026's residual half (rv6): the SAME crossed-project tell for an
+     * EXPLICIT `--resume <id>` pick of a session recorded under another cwd.
+     * The ladder above announces the surprise; naming a session id from the
+     * picker or a remembered id crossed just as quietly, so the picker's
+     * answer ("pass --resume to pick deliberately") was only the launch's
+     * half of the honesty. The pick stands — the user named it — so this row
+     * REPORTS the crossing and asks nothing; the continue arm's clause does
+     * not copy over because there is nothing more deliberate to pass.
+     *
+     * Stderr-alone for the two reasons the continue format already gives,
+     * and NOT in {@see LAUNCH_NOTICE_CATALOGUE} for its same reason.
+     *
+     * `%s` the cwd the picked session was recorded under.
+     */
+    public const SESSION_RESUME_CROSS_PROJECT_PICKED_FORMAT = "candy-code: --resume picked a session from another project (%s)\n";
+
+    /**
      * The envelope {@see reportProjectTierRefusals()} wraps every refused
      * project directory in — the path this launch would not read, and the
      * reason, joined by an em dash.
@@ -4485,6 +4502,17 @@ final class Bootstrap
                 $id = (string) $row['id'];
                 $name = \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null;
 
+                // ISS-026 residual (rv6): the crossing the ladder announced
+                // must not go silent just because the pick was deliberate.
+                $launchCwd = \getcwd();
+                $crossedCwd = self::crossProjectRowCwd($row, \is_string($launchCwd) ? $launchCwd : '');
+                if ($crossedCwd !== null) {
+                    fwrite(STDERR, sprintf(
+                        self::translated(self::SESSION_RESUME_CROSS_PROJECT_PICKED_FORMAT),
+                        $crossedCwd,
+                    ));
+                }
+
                 return ['id' => $id, 'name' => $name, 'history' => Chat::loadTranscript($store, $id), 'picker' => false];
             }
         }
@@ -4517,6 +4545,25 @@ final class Bootstrap
         }
 
         return ['id' => $id, 'name' => null, 'history' => [], 'picker' => self::$sessionLaunchMode === 'resume', 'mint' => $mint];
+    }
+
+    /**
+     * The cwd of a stored session row that was recorded in ANOTHER project
+     * than this launch's, or null when the row does not accuse itself.
+     *
+     * THE SAME PREDICATE AS THE CONTINUE LADDER's `$crossed` flag
+     * ({@see EnhancedSessionStore::latestResumableSessionFromCwd()}): an
+     * absent or empty `cwd` never accuses — rows minted before the column
+     * existed, or by writers with no getcwd, would otherwise spam the launch
+     * of every session they touch.
+     *
+     * @param array<array-key, mixed> $row
+     */
+    private static function crossProjectRowCwd(array $row, string $launchCwd): ?string
+    {
+        $rowCwd = \is_string($row['cwd'] ?? null) ? $row['cwd'] : '';
+
+        return $rowCwd === '' || $launchCwd === '' || $rowCwd === $launchCwd ? null : $rowCwd;
     }
 
     /**

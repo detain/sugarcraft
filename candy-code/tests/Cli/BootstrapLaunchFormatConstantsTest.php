@@ -236,6 +236,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // alone, and this lane may not edit docs), so no PAGE_QUOTES row —
         // the PROMPT_ATTRIBUTION precedent.
         'SESSION_RESUME_CROSS_PROJECT_FORMAT' => ['method' => 'openSession', 'conversions' => 1],
+        // ISS-026's rv6 residual half: the explicit --resume pick's twin.
+        // Same reader census (none), same emitting method.
+        'SESSION_RESUME_CROSS_PROJECT_PICKED_FORMAT' => ['method' => 'openSession', 'conversions' => 1],
         'PROJECT_TIER_REFUSAL_FORMAT' => ['method' => 'reportProjectTierRefusals', 'conversions' => 2],
         'MCP_PARTIAL_START_LOG_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
         'MCP_PARTIAL_START_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
@@ -851,10 +854,13 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            32,
+            33,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
+        // +1 in ISS-026's rv6 residual: the explicit --resume pick's
+        // crossed-project notice, a constant-format twin of the --continue
+        // line above it (same method, same one-call-site-per-format shape).
         // +1 in N-2 (ISS-090 review fix): mcpServerInventory()'s skipped-entry
         // row. Inline on purpose — the sentence is deliberately byte-identical
         // to the McpClient::startServers() original (ISS-091), and pinning one

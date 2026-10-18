@@ -26,7 +26,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-SIX:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-SEVEN:
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, ten —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
@@ -55,13 +55,15 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *  - {@see \SugarCraft\Code\Cli\Acp}, one — `stderr()`, the `acp` verb's
  *    single funnel for what PHP would have printed onto the editor's protocol
  *    and for the launch warnings (roadmap 5.9).
- *  - {@see \SugarCraft\Code\Cli\Bootstrap}, three —
+ *  - {@see \SugarCraft\Code\Cli\Bootstrap}, four —
  *    `warnPermissionConfig()`, which IS the stderr channel the seam delegates
  *    to and so cannot be a migration target, `reportPrunedSessions()`'s
- *    per-session id rows, which stay raw on purpose, and — added by ISS-026 —
+ *    per-session id rows, which stay raw on purpose, — added by ISS-026 —
  *    `openSession()`'s cross-project resume notice, raw for the same reason
  *    the retention rows are: a one-line operational tell on a launch that
- *    succeeded, and the transcript seam's call-site census lives in docs.
+ *    succeeded, and the transcript seam's call-site census lives in docs,
+ *    and — added by ISS-026's rv6 residual — its `--resume` pick twin, raw
+ *    by the identical decision.
  *  - {@see \SugarCraft\Code\Support\SessionRelaunch}, one — `tell()`, the
  *    line saying why `/new` could not restart candy-code in another
  *    directory, and the command to run instead.
