@@ -150,6 +150,11 @@ final class AcpPromptStreamTest extends TestCase
         self::assertSame(StopReasonMap::MAX_TOKENS, StopReasonMap::toAcp(SessionEvent::STOP_LENGTH));
         self::assertSame(StopReasonMap::MAX_TURN_REQUESTS, StopReasonMap::toAcp(SessionEvent::STOP_MAX_STEPS));
         self::assertSame(StopReasonMap::MAX_TURN_REQUESTS, StopReasonMap::toAcp(SessionEvent::STOP_SPEND_CAP));
+        // ISS-113: the loop guard cut the turn short — an editor must be able
+        // to tell that from a clean end_turn, and its next action is the step
+        // budget's: prompt again.
+        self::assertSame(StopReasonMap::MAX_TURN_REQUESTS, StopReasonMap::toAcp(SessionEvent::STOP_LOOP_GUARD));
+        self::assertFalse(StopReasonMap::isError(SessionEvent::STOP_LOOP_GUARD));
         self::assertSame(StopReasonMap::CANCELLED, StopReasonMap::toAcp(SessionEvent::STOP_CANCELLED));
         self::assertSame(StopReasonMap::END_TURN, StopReasonMap::toAcp(null));
         self::assertTrue(StopReasonMap::isError(SessionEvent::STOP_ERROR));
