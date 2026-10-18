@@ -2297,10 +2297,10 @@ final class MyProvider implements ProviderInterface
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**23,351 tests / 562,578 assertions, 0 failures, 2 skipped** — the whole of
+**23,432 tests / 563,967 assertions, 0 failures, 2 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-in 32m40s (measured 2026-10-11). The two skips are expected and rostered: one
+in 22m51s (measured 2026-10-18). The two skips are expected and rostered: one
 test self-skips because its branch needs a file that exists but cannot be read
 without mocking a built-in function, and the skip-roster guard fails the suite
 on any *unrostered* skip or on a roster entry that stops skipping.
