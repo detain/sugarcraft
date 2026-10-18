@@ -9,8 +9,12 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
- * btop's two-line options-menu row, as a convention helper so every
- * consumer's options screen lands on the same geometry.
+ * Options-menu row geometry as a convention helper, so every consumer's
+ * options screen lands on the same shape. Two modes:
+ *
+ *  - {@see render()} — btop's two-line row (label centred over value);
+ *  - {@see renderRow()} — candy-top's one-line row: label left-aligned,
+ *    value right-aligned against the control glyphs, one row per option.
  *
  * Mirrors btop `Menu::optionsMenu` (src/btop_menu.cpp:1687-1700). Relative to
  * the row origin (btop's `x + 1`):
@@ -115,6 +119,102 @@ final class OptionRow
         }
 
         return $line1 . "\n" . self::paint(array_merge($prefix, $middle, $suffix), $valueStyle);
+    }
+
+    /** Widest value the one-line row shows before clipping (btop's value column). */
+    public const VALUE_MAX = 25;
+
+    /** Cells always kept for the label in one-line mode (6 keeps "Presets" legible). */
+    private const ROW_LABEL_MIN = 6;
+
+    /**
+     * One-line row: `← label … value ↵ →` on a single row of exactly $field
+     * cells, so the whole selected row reads as one highlighted block.
+     *
+     * ```
+     * col 0        blank margin
+     * col 1        ← (selected 2D row, not editing)
+     * col 2        blank gutter
+     * cols 3..     label left-aligned; value right-aligned ending at field-5
+     * col F-4      ↵ when the arrows show (editable + 2D), else blank
+     * col F-3      blank
+     * col F-2      → when 2D; ↵ when editable without arrows; else blank
+     * col F-1      blank margin
+     * ```
+     *
+     * The label and the value share the band cols 3..F-5 (field - 7 cells):
+     * the label keeps its full width when it fits next to the value, else it
+     * clamps to {@see ROW_LABEL_MIN} cells before the value clips. While
+     * editing, the TextEdit's caret view rides inline in the value band
+     * (clipped to its slot) and the arrows hide — every slot stays one row.
+     *
+     * @param string|TextEdit $value plain value, or the live editor.
+     * @param bool $hasArrows btop is2D/isBrowsable — show `←`/`→`.
+     * @param bool $editable  btop isEditable — show the `↵` (or `E`) glyph.
+     * @param ?Style $title   unselected label colour (btop `title`).
+     * @param ?Style $main    unselected value colour (btop `main_fg`).
+     */
+    public static function renderRow(
+        string $name,
+        string|TextEdit $value,
+        bool $selected,
+        bool $editing,
+        bool $hasArrows,
+        int $field = self::NAME_COL,
+        ?Style $selBg = null,
+        ?Style $selFg = null,
+        bool $editable = false,
+        bool $tty = false,
+        ?Style $title = null,
+        ?Style $main = null,
+    ): string {
+        $field = max(16, $field);
+        $band = $field - 7;
+        $editing = $editing && $selected;
+
+        $sel = ($selFg ?? Style::new())->inherit($selBg ?? Style::new());
+        $nameStyle = ($selected ? $sel : ($title ?? Style::new()))->bold();
+        $valueStyle = $selected ? $sel : ($main ?? Style::new());
+
+        $showArrows = $selected && $hasArrows && !$editing;
+        $showEnter = $selected && $editable;
+        $enter = $tty ? self::ENTER_TTY : self::ENTER;
+
+        $lwFull = Width::string($name);
+        if ($editing && $value instanceof TextEdit) {
+            $lw = min($lwFull, $band - 8);
+            $vw = $band - 2 - $lw;
+            $shown = self::rjustWidth($value->view(max(1, $vw - 1)), $vw);
+        } else {
+            $plain = $value instanceof TextEdit ? $value->text : $value;
+            $vwFull = min(self::VALUE_MAX, Width::string($plain));
+            $lw = min($lwFull, max(self::ROW_LABEL_MIN, $band - 2 - $vwFull));
+            $vw = max(1, min($vwFull, $band - 2 - $lw));
+            $shown = self::rjustWidth(Width::truncateAnsi($plain, $vw), $vw);
+        }
+        $label = self::ljustWidth(Width::truncateAnsi($name, min($lw, $band - $vw)), $band - $vw);
+
+        return $valueStyle->render(' ')
+            . ($showArrows ? $valueStyle->bold()->render(self::LEFT) : $valueStyle->render(' '))
+            . $valueStyle->render(' ')
+            . $nameStyle->render($label)
+            . $valueStyle->render($shown)
+            . ($showArrows && $showEnter ? $valueStyle->bold()->render($enter) : $valueStyle->render(' '))
+            . $valueStyle->render(' ')
+            . ($showArrows ? $valueStyle->bold()->render(self::RIGHT) : ($showEnter ? $valueStyle->bold()->render($enter) : $valueStyle->render(' ')))
+            . $valueStyle->render(' ');
+    }
+
+    /** Left-align $text in $width cells (ANSI preserved, over-wide already cut). */
+    private static function ljustWidth(string $text, int $width): string
+    {
+        return $text . str_repeat(' ', max(0, $width - Width::string($text)));
+    }
+
+    /** Right-align $text in $width cells (ANSI preserved, over-wide already cut). */
+    private static function rjustWidth(string $text, int $width): string
+    {
+        return str_repeat(' ', max(0, $width - Width::string($text))) . $text;
     }
 
     /**

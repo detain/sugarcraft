@@ -25,9 +25,17 @@ use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Surface;
 
 /**
- * btop's options menu: the banner over a 78-wide box — category tabs on
- * top, the two-row option list (sugar-widgets {@see OptionRow}) on the left,
- * the selected option's description on the right.
+ * btop's options menu: the banner over a one-line-per-option box —
+ * category tabs on top, the option list (sugar-widgets
+ * {@see OptionRow::renderRow()}) on the left, the selected option's
+ * description on the right.
+ *
+ * The box is {@see WIDTH} cells on wide terminals and clamps to
+ * `cols - 2` at narrow ones (minSize holds the line at 80, where the
+ * classic btop 78 geometry — 29-cell option column, 45-cell description
+ * column — stays byte-identical). The extra room goes to the option
+ * column: a one-line row carries label and value side by side, so it
+ * needs the air the two-row btop layout spent on a second line.
  *
  * Keys (btop optionsMenu, with #1411 / #1791b applied):
  *  - escape / q / o / backspace, or a click outside the box, close it;
@@ -55,11 +63,26 @@ use SugarCraft\Top\View\Surface;
  */
 final class OptionsMenu implements Overlay
 {
-    /** btop's box width. */
-    public const WIDTH = 78;
+    /** Box width on terminals wide enough for it; clamped to `cols - 2` below that. */
+    public const WIDTH = 92;
+
+    /** Description column cells — the option column is the box remainder (width - 49). */
+    private const DESCRIPTION_COL = 45;
 
     /** Options whose `←`/`→` cycle a collector-reported list (btop optionsList). */
     private const RUNTIME_LISTS = ['cpu_graph_upper', 'cpu_graph_lower', 'cpu_sensor', 'selected_battery'];
+
+    /** The box's actual width at `$cols` terminal columns (minSize floors cols at 80). */
+    public static function boxWidth(int $cols): int
+    {
+        return min(self::WIDTH, $cols - 2);
+    }
+
+    /** The option column (cells) inside a box of `$width` — the rest is the divider, gutter and description. */
+    public static function fieldWidth(int $width): int
+    {
+        return $width - self::DESCRIPTION_COL - 4;
+    }
 
     private function __construct(
         public readonly string $category = 'general',
@@ -104,7 +127,7 @@ final class OptionsMenu implements Overlay
      * diverge — the box moves down by `delta` and shrinks by `delta`,
      * keeping its bottom row anchored where the banner layout had it.
      *
-     * @return array{x: int, y: int, height: int, ih: int, pages: int, entries: list<string>, index: int, page: int, category: string, categories: list<string>, delta: int}
+     * @return array{x: int, y: int, w: int, field: int, height: int, ih: int, pages: int, entries: list<string>, index: int, page: int, category: string, categories: list<string>, delta: int}
      */
     public function geometry(OverlayContext $c): array
     {
@@ -112,15 +135,13 @@ final class OptionsMenu implements Overlay
         $category = in_array($this->category, $categories, true) ? $this->category : 'general';
         $max = OptionsCatalog::maxItems($c->gpu);
         $y = max(1, intdiv($c->rows, 2) - 3 - $max);
-        $x = intdiv($c->cols, 2) - 39;
+        $w = self::boxWidth($c->cols);
+        $x = intdiv($c->cols, 2) - intdiv($w, 2);
         $delta = self::logoDelta($c);
-        $height = min($c->rows - 7 - $delta, $max * 2 + 4);
-        if ($height % 2 !== 0) {
-            $height--;
-        }
+        $height = min($c->rows - 7 - $delta, $max + 4);
         $entries = OptionsCatalog::entries($category, $c->gpu);
         $n = count($entries);
-        $ih = max(1, min($n, intdiv($height - 4, 2)));
+        $ih = max(1, min($n, $height - 4));
         $pages = max(1, (int) ceil($n / $ih));
         $page = min(intdiv(max(0, $this->index), $ih), $pages - 1);
         $selectMax = min($ih - 1, $n - 1 - $ih * $page);
@@ -133,7 +154,8 @@ final class OptionsMenu implements Overlay
         }
 
         return [
-            'x' => $x, 'y' => $y, 'height' => $height, 'ih' => $ih, 'pages' => $pages,
+            'x' => $x, 'y' => $y, 'w' => $w, 'field' => self::fieldWidth($w),
+            'height' => $height, 'ih' => $ih, 'pages' => $pages,
             'entries' => $entries, 'index' => $index, 'page' => intdiv($index, $ih),
             'category' => $category, 'categories' => $categories, 'delta' => $delta,
         ];
@@ -163,10 +185,7 @@ final class OptionsMenu implements Overlay
         }
         $max = OptionsCatalog::maxItems($c->gpu);
         $y = max(1, intdiv($c->rows, 2) - 3 - $max);
-        $height = min($c->rows - 7 - $delta, $max * 2 + 4);
-        if ($height % 2 !== 0) {
-            $height--;
-        }
+        $height = min($c->rows - 7 - $delta, $max + 4);
 
         return Logo::blockFits($y - 1, $y + 5 + $delta + $height, $c->rows) ? $delta : 0;
     }
@@ -191,9 +210,9 @@ final class OptionsMenu implements Overlay
         }
         $option = $g['entries'][$g['index']];
         if (self::isTwoD($option, $c)) {
-            $line = $g['y'] + 9 + $g['delta'] + 2 * ($g['index'] - $g['page'] * $g['ih']);
-            $map['left'] = [$g['x'] - 1, $line - 1, 5, 2];
-            $map['right'] = [$g['x'] + 24, $line - 1, 5, 2];
+            $line = $g['y'] + 9 + $g['delta'] + ($g['index'] - $g['page'] * $g['ih']);
+            $map['left'] = [$g['x'] - 1, $line - 1, 5, 1];
+            $map['right'] = [$g['x'] + $g['field'] - 5, $line - 1, 5, 1];
         }
 
         return $map;
@@ -262,11 +281,11 @@ final class OptionsMenu implements Overlay
     {
         // btop compares the 1-based mouse cell against its 1-based origin.
         [$mx, $my, $x, $y] = [$msg->x, $msg->y, $g['x'], $g['y']];
-        if ($mx < $x || $mx > $x + 80 || $my < $y + 6 + $g['delta'] || $my > $y + 6 + $g['delta'] + $g['height']) {
+        if ($mx < $x || $mx > $x + $g['w'] + 2 || $my < $y + 6 + $g['delta'] || $my > $y + 6 + $g['delta'] + $g['height']) {
             return OverlayResult::close();
         }
-        if ($mx < $x + 30 && $my > $y + 8 + $g['delta']) {
-            $row = (int) ceil(($my - $y - 8 - $g['delta']) / 2) - 1;
+        if ($mx < $x + $g['field'] + 1 && $my > $y + 8 + $g['delta']) {
+            $row = $my - $y - 9 - $g['delta'];
             $target = $g['page'] * $g['ih'] + $row;
             if ($target !== $g['index']) {
                 return OverlayResult::keep($this->mutate(index: $target));
@@ -478,29 +497,32 @@ final class OptionsMenu implements Overlay
         } else {
             Banner::paint($surface, $y - 1, $ink, $c->tty());
         }
-        MenuDraw::box($surface, $c, $x, $y + 6 + $g['delta'], self::WIDTH, $height, $hi . 'tab' . $ink->fg('main_fg') . '→');
-        $clip = MenuDraw::inside($x, $y + 6 + $g['delta'], self::WIDTH, $height);
-        $frame = Rect::new($x - 1, $y + 5 + $g['delta'], self::WIDTH, $height);
+        MenuDraw::box($surface, $c, $x, $y + 6 + $g['delta'], $g['w'], $height, $hi . 'tab' . $ink->fg('main_fg') . '→');
+        $clip = MenuDraw::inside($x, $y + 6 + $g['delta'], $g['w'], $height);
+        $frame = Rect::new($x - 1, $y + 5 + $g['delta'], $g['w'], $height);
+        $divider = $x + $g['field'] + 1;
         MenuDraw::at(
             $surface,
             $y + 8 + $g['delta'],
             $x,
-            $hi . '├' . $ink->fg('div_line') . str_repeat('─', 29) . '┬' . str_repeat('─', self::WIDTH - 32) . $hi . '┤',
+            $hi . '├' . $ink->fg('div_line') . str_repeat('─', $g['field']) . '┬' . str_repeat('─', $g['w'] - $g['field'] - 3) . $hi . '┤',
             '',
             $frame,
         );
-        MenuDraw::at($surface, $y + 5 + $g['delta'] + $height, $x + 30, $hi . '┴', '', $frame);
+        MenuDraw::at($surface, $y + 5 + $g['delta'] + $height, $divider, $hi . '┴', '', $frame);
         for ($i = 0; $i < $height - 4; $i++) {
-            MenuDraw::at($surface, $y + 9 + $g['delta'] + $i, $x + 30, $ink->fg('div_line') . '│', '', $clip);
+            MenuDraw::at($surface, $y + 9 + $g['delta'] + $i, $divider, $ink->fg('div_line') . '│', '', $clip);
         }
 
-        // Category tabs: `[name]` for the open one, `<digit>name ` else, then
-        // btop's Mv::r(7) (gpu build) / Mv::r(10) gap.
+        // Category tabs: the open one is a selected_bg block around `[name]`,
+        // inactive ones `digit + name `, then btop's Mv::r(7) (gpu build) /
+        // Mv::r(10) gap.
         $col = $x + 4;
+        $active = $ink->bg('selected_bg') . $ink->fg('selected_fg');
         foreach ($g['categories'] as $i => $cat) {
             $label = Lang::t('menu.options.category.' . $cat);
             $text = $cat === $g['category']
-                ? $hi . '[' . $ink->fg('title') . $label . $hi . ']'
+                ? $active . '[' . $label . ']' . MenuDraw::RESET
                 : $hi . $i . $ink->fg('title') . $label . ' ';
             $col += MenuDraw::at($surface, $y + 7 + $g['delta'], $col, $bold . $text, '', $clip) + ($c->gpu ? 7 : 10);
         }
@@ -526,8 +548,8 @@ final class OptionsMenu implements Overlay
         for ($i = $from; $i < min(count($entries), $from + $g['ih']); $i++) {
             $entry = $entries[$i];
             if (OptionsCatalog::isHeading($entry)) {
-                MenuDraw::at($surface, $cy, $x + 2, $hi . $bold . MenuDraw::cut(OptionsCatalog::heading($entry), 27) . MenuDraw::UNBOLD, '', $clip);
-                $cy += 2;
+                MenuDraw::at($surface, $cy, $x + 2, $hi . $bold . MenuDraw::cut(OptionsCatalog::heading($entry), $g['field'] - 2) . MenuDraw::UNBOLD, '', $clip);
+                $cy++;
                 continue;
             }
             $selected = $i === $g['index'];
@@ -538,32 +560,31 @@ final class OptionsMenu implements Overlay
                 $name .= ' ' . (self::position($entry, $list, $c) + 1) . '/' . count($list);
             }
             $editing = $selected && $this->edit !== null;
-            [$line1, $line2] = explode("\n", OptionRow::render(
+            MenuDraw::at($surface, $cy, $x + 1, OptionRow::renderRow(
                 $name,
                 $editing ? $this->edit : $value,
                 $selected,
                 $editing,
                 self::isTwoD($entry, $c),
+                $g['field'],
                 selBg: $styles['selBg'],
                 selFg: $styles['selFg'],
                 editable: self::isEditable($entry, $c),
                 tty: $c->tty(),
                 title: $styles['title'],
                 main: $styles['main'],
-            ));
-            MenuDraw::at($surface, $cy, $x + 1, $line1, '', $clip);
-            MenuDraw::at($surface, $cy + 1, $x + 1, $line2, '', $clip);
-            $cy += 2;
+            ), '', $clip);
+            $cy++;
             if ($selected) {
-                $this->paintDescription($surface, $c, $entry, $x, $y + $g['delta'], $height, $clip);
+                $this->paintDescription($surface, $c, $entry, $x + $g['field'] + 3, $y + $g['delta'], $height, $clip);
             }
         }
 
         $this->warning?->paint($surface, $c);
     }
 
-    /** The selected option's description at x + 32: btop's bold title line, then main_fg (cut at the box bottom). */
-    private function paintDescription(Surface $surface, OverlayContext $c, string $option, int $x, int $y, int $height, Rect $clip): void
+    /** The selected option's description one cell past the divider: btop's bold title line, then main_fg (cut at the box bottom). */
+    private function paintDescription(Surface $surface, OverlayContext $c, string $option, int $descX, int $y, int $height, Rect $clip): void
     {
         $ink = $c->ink;
         $cyy = $y + 8;
@@ -573,7 +594,7 @@ final class OptionsMenu implements Overlay
                 break;
             }
             $sgr = $n === 0 ? $ink->fg('title') . MenuDraw::BOLD : $ink->fg('main_fg');
-            MenuDraw::at($surface, $cyy, $x + 32, $sgr . $line, '', $clip);
+            MenuDraw::at($surface, $cyy, $descX, $sgr . $line, '', $clip);
         }
     }
 
