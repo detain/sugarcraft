@@ -22,7 +22,7 @@ final class AgentsHostCommand implements HostCommand
     public function run(CommandContext $context, string $text): CommandResult
     {
         if ($context->agentManager === null) {
-            return CommandResult::reply($text, Lang::t('host.agents.not_configured'));
+            return CommandResult::errorReply($text, Lang::t('host.agents.not_configured'));
         }
 
         ob_start();

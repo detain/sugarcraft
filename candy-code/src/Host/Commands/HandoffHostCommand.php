@@ -94,16 +94,16 @@ final class HandoffHostCommand implements HostCommand
     {
         $store = $context->sessionStore;
         if ($store === null) {
-            return CommandResult::reply($text, Lang::t('host.handoff.no_store'));
+            return CommandResult::errorReply($text, Lang::t('host.handoff.no_store'));
         }
 
         $sessionId = $context->sessionId;
         if ($sessionId === null) {
-            return CommandResult::reply($text, Lang::t('host.handoff.no_session'));
+            return CommandResult::errorReply($text, Lang::t('host.handoff.no_session'));
         }
 
         if (Message::agentVisible($context->history) === []) {
-            return CommandResult::reply($text, Lang::t('host.handoff.nothing_yet'));
+            return CommandResult::errorReply($text, Lang::t('host.handoff.nothing_yet'));
         }
 
         $backend = $this->summaryBackendSet ? $this->summaryBackend : $context->titleBackend;
@@ -111,7 +111,7 @@ final class HandoffHostCommand implements HostCommand
         return CommandResult::reply($text, Lang::t($backend === null ? 'host.handoff.opening' : 'host.handoff.summarising'))
             ->withEffect(CommandEffect::async(
                 self::call($store, $context->transcripts, $sessionId, $context->history, $backend, CommandText::argument($text)),
-                static fn (mixed $msg): ?string => $msg instanceof HandoffSeededMsg ? self::describe($msg) : null,
+                self::row(...),
             ));
     }
 
@@ -246,6 +246,20 @@ final class HandoffHostCommand implements HostCommand
                 $failed,
             );
         };
+    }
+
+    /**
+     * The row a settled handoff lands as on a headless driver, verdict
+     * carried (ISS-097): a handoff that opened no session FAILED, and the
+     * renderer paints flagged rows in the error colour.
+     */
+    public static function row(mixed $msg): ?Message
+    {
+        if (!$msg instanceof HandoffSeededMsg) {
+            return null;
+        }
+
+        return Message::assistant(self::describe($msg))->withUiOnly()->withError($msg->sessionId === null);
     }
 
     /**

@@ -35,7 +35,7 @@ final class MemoryCommand implements HostCommand
     {
         $home = $context->memoryStore;
         if ($home === null) {
-            return self::respond($inputText, Lang::t('host.memory.not_configured'));
+            return self::respond($inputText, Lang::t('host.memory.not_configured'), true);
         }
         $root = $context->projectRoot();
 
@@ -88,7 +88,7 @@ final class MemoryCommand implements HostCommand
     }
 
     /** A `/memory` answer: the echo and the reply, UI-only. */
-    private static function respond(string $inputText, string $response): CommandResult
+    private static function respond(string $inputText, string $response, bool $error = false): CommandResult
     {
         return CommandResult::reply($inputText, $response);
     }
@@ -121,7 +121,9 @@ final class MemoryCommand implements HostCommand
         ]);
         $lines[] = Lang::t('host.memory.help.history');
 
-        return self::respond($inputText, implode("\n", $lines));
+        // A help screen reached THROUGH an error leads with the error sentence
+        // (ISS-097): the row conveys a failure, so the flag lands here.
+        return self::respond($inputText, implode("\n", $lines), $error !== null);
     }
 
     /**

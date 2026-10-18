@@ -24,11 +24,11 @@ final class BranchCommand implements HostCommand
     {
         $store = $context->sessionStore;
         if ($store === null) {
-            return CommandResult::reply($text, Lang::t('host.rename.no_store'));
+            return CommandResult::errorReply($text, Lang::t('host.rename.no_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, Lang::t('host.rename.no_session'));
+            return CommandResult::errorReply($text, Lang::t('host.rename.no_session'));
         }
 
         if (CommandText::argument($text) !== '') {
@@ -40,7 +40,7 @@ final class BranchCommand implements HostCommand
         try {
             $branch = $store->forkSession($context->sessionId);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
         }
 
         $response = Lang::t('host.branch.created', ['session' => $branch]);

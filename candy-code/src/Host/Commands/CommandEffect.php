@@ -119,10 +119,13 @@ final class CommandEffect
     /**
      * Off-turn work. $run starts it and resolves with whatever the TUI routes
      * (a `Msg`, or null for nothing to show); $describe turns that value into
-     * the row a headless driver appends, or null for none.
+     * the row a headless driver appends, or null for none. The row is a
+     * `Message`, not a string, because its verdict travels with it (ISS-097):
+     * a settled command that FAILED lands a flagged row, and the renderer
+     * never sniffs text to find that out.
      *
      * @param \Closure(): PromiseInterface<mixed> $run
-     * @param (\Closure(mixed): ?string)|null $describe
+     * @param (\Closure(mixed): ?Message)|null $describe
      */
     public static function async(\Closure $run, ?\Closure $describe = null): self
     {
@@ -131,12 +134,14 @@ final class CommandEffect
 
     /**
      * Work that occupies the session until $run resolves with its report —
-     * the text of the UI-only row that settles it. $cancellation is the
+     * the text of the UI-only row that settles it, or the row itself when it
+     * carries a verdict (ISS-097: `/workflow` failures resolve, never reject,
+     * so the error flag has to ride in the row). $cancellation is the
      * turn's own (Esc Esc, `session.cancel`), and $workflow marks the run
      * whose `/workflow pause|status` may still be typed while it holds the
      * session.
      *
-     * @param \Closure(): PromiseInterface<string> $run
+     * @param \Closure(): PromiseInterface<string|Message> $run
      */
     public static function occupyTurn(\Closure $run, CancellationToken $cancellation, bool $workflow = true): self
     {

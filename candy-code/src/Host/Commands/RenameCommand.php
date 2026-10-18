@@ -27,11 +27,11 @@ final class RenameCommand implements HostCommand
     public function run(CommandContext $context, string $text): CommandResult
     {
         if ($context->sessionStore === null) {
-            return CommandResult::reply($text, Lang::t('host.rename.no_store'));
+            return CommandResult::errorReply($text, Lang::t('host.rename.no_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, Lang::t('host.rename.no_session'));
+            return CommandResult::errorReply($text, Lang::t('host.rename.no_session'));
         }
 
         $argument = CommandText::argument($text);
@@ -44,7 +44,7 @@ final class RenameCommand implements HostCommand
                 ? self::regenerate($context)
                 : self::userTitle($context, $argument);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
         }
 
         $result = CommandResult::reply($text, $response);

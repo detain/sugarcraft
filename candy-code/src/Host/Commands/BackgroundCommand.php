@@ -11,6 +11,7 @@ use SugarCraft\Code\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\BackgroundSessionStoppedMsg;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Sessions\BackgroundStopOutcome;
 use SugarCraft\Code\Sessions\BackgroundSupervisor;
 use SugarCraft\Code\Skills\SkillSource;
@@ -43,7 +44,7 @@ final class BackgroundCommand implements HostCommand
     {
         $supervisor = $context->backgroundSupervisor;
         if ($supervisor === null) {
-            return CommandResult::reply($text, self::notConfigured());
+            return CommandResult::errorReply($text, self::notConfigured());
         }
 
         $task = CommandText::argument($text);
@@ -59,7 +60,7 @@ final class BackgroundCommand implements HostCommand
         if ($stopTarget !== null) {
             return CommandResult::echo($text)->withEffect(CommandEffect::async(
                 self::stopThunk($supervisor, $stopTarget),
-                static fn (mixed $msg): ?string => $msg instanceof BackgroundSessionStoppedMsg ? self::stopNotice($msg) : null,
+                self::stopRow(...),
             ));
         }
 
@@ -89,7 +90,7 @@ final class BackgroundCommand implements HostCommand
 
         return CommandEffect::async(
             self::spawnThunk($supervisor, $context->agentManager, $context->projectRoot(), $command, $name, $task, $forkedSessionId),
-            static fn (mixed $msg): ?string => $msg instanceof BackgroundSessionSpawnedMsg ? self::spawnedNotice($msg) : null,
+            self::spawnRow(...),
         );
     }
 
@@ -285,6 +286,55 @@ final class BackgroundCommand implements HostCommand
         $name = TitleService::sanitizeTitle($task);
 
         return $name === '' ? Lang::t('host.bg.default_name') : $name;
+    }
+
+    /**
+     * Whether a settled spawn FAILED (ISS-097). The verdict, not the text:
+     * `start_failed` and the two success wordings all come out of
+     * {@see self::spawnedNotice()}, and the renderer paints rows by the flag
+     * they carry, never by what they say.
+     */
+    public static function isSpawnFailure(BackgroundSessionSpawnedMsg $msg): bool
+    {
+        return $msg->error !== null;
+    }
+
+    /**
+     * Whether a settled stop did NOT achieve its aim (ISS-097). A session
+     * that had already finished is not a failure — nothing needed stopping —
+     * and the two Stopped arms succeeded by definition.
+     */
+    public static function isStopFailure(BackgroundSessionStoppedMsg $msg): bool
+    {
+        return match ($msg->outcome) {
+            BackgroundStopOutcome::UnknownSession, BackgroundStopOutcome::CouldNotStop => true,
+            BackgroundStopOutcome::AlreadyFinished,
+            BackgroundStopOutcome::StoppedViaIpc,
+            BackgroundStopOutcome::StoppedViaSignal => false,
+        };
+    }
+
+    /**
+     * The row a settled spawn lands as on a headless driver, verdict carried
+     * (ISS-097); null when the value is not this command's answer.
+     */
+    public static function spawnRow(mixed $msg): ?Message
+    {
+        if (!$msg instanceof BackgroundSessionSpawnedMsg) {
+            return null;
+        }
+
+        return Message::assistant(self::spawnedNotice($msg))->withUiOnly()->withError(self::isSpawnFailure($msg));
+    }
+
+    /** The row a settled `/bg stop` lands as on a headless driver (ISS-097). */
+    public static function stopRow(mixed $msg): ?Message
+    {
+        if (!$msg instanceof BackgroundSessionStoppedMsg) {
+            return null;
+        }
+
+        return Message::assistant(self::stopNotice($msg))->withUiOnly()->withError(self::isStopFailure($msg));
     }
 
     /**

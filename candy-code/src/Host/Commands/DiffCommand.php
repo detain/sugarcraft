@@ -66,7 +66,7 @@ final class DiffCommand implements HostCommand
 
             return CommandResult::reply($text, $response);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.diff.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.diff.error', ['error' => $e->getMessage()]));
         }
     }
 }

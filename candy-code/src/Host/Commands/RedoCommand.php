@@ -76,7 +76,7 @@ final class RedoCommand implements HostCommand
 
             return Checkpoints::restored($messages, $draft, $cursor, $text, $response, $chips, $chipCount);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.redo.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.redo.error', ['error' => $e->getMessage()]));
         }
     }
 }

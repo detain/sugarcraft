@@ -10,9 +10,9 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Workflows\StageResult;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
-use SugarCraft\Code\Workflows\WorkflowNotRunningException;
 use SugarCraft\Code\Workflows\WorkflowResult;
 use SugarCraft\Code\Workflows\WorkflowStatus;
 
@@ -44,7 +44,7 @@ final class WorkflowCommand implements HostCommand
     {
         $engine = $context->workflowEngine;
         if ($engine === null) {
-            return self::respond($inputText, Lang::t('host.workflow.not_configured'));
+            return self::respond($inputText, Lang::t('host.workflow.not_configured'), true);
         }
 
         [$command, $args] = self::subcommand($inputText);
@@ -87,9 +87,27 @@ final class WorkflowCommand implements HostCommand
      * `/workflow pause|status` mid-run (audit WF-4), and releasing it there
      * would free the run's turn while its fiber keeps going.
      */
-    private static function respond(string $inputText, string $response): CommandResult
+    private static function respond(string $inputText, string $response, bool $error = false): CommandResult
     {
-        return CommandResult::reply($inputText, $response)->holdingTurn();
+        $result = $error
+            ? CommandResult::errorReply($inputText, $response)
+            : CommandResult::reply($inputText, $response);
+
+        // The turn is HELD, not released: every caller runs idle except
+        // `/workflow pause|status` mid-run (audit WF-4), and releasing it
+        // there would free the run's turn while its fiber keeps going.
+        return $result->holdingTurn();
+    }
+
+    /**
+     * The error sentence `/workflow` answers with, as a flagged UI-only row
+     * (ISS-097): the occupy channel's report is a string, so the verdict has
+     * to ride in the row itself — both drivers land a `Message` report
+     * verbatim.
+     */
+    public static function errorRow(string $error): Message
+    {
+        return Message::assistant(Lang::t('host.workflow.error', ['error' => $error]))->withUiOnly()->withError();
     }
 
     /**
@@ -113,7 +131,7 @@ final class WorkflowCommand implements HostCommand
         $lines[] = '';
         $lines[] = Lang::t('host.workflow.help.note');
 
-        return self::respond($inputText, implode("\n", $lines));
+        return self::respond($inputText, implode("\n", $lines), $error !== null);
     }
 
     /**
@@ -184,7 +202,7 @@ final class WorkflowCommand implements HostCommand
 
         // Built here, started by the driver's FIRST timer tick. Everything
         // inside runs off the main stack.
-        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context, $cancellation): string {
+        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context, $cancellation) {
             try {
                 return self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context, $cancellation));
             } catch (\Throwable $e) {
@@ -194,7 +212,7 @@ final class WorkflowCommand implements HostCommand
                 // fiber the distinction matters LESS, not more, because an
                 // uncaught throw here surfaces on the driver's timer tick with
                 // no user-facing context at all.
-                return Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
+                return self::errorRow($e->getMessage());
             }
         });
 
@@ -378,7 +396,7 @@ final class WorkflowCommand implements HostCommand
                     $fiber->isStarted() ? $fiber->resume() : $fiber->start();
                 } catch (\Throwable $e) {
                     $loop->cancelTimer($timer);
-                    $deferred->resolve(Lang::t('host.workflow.error', ['error' => $e->getMessage()]));
+                    $deferred->resolve(self::errorRow($e->getMessage()));
 
                     return;
                 }
@@ -388,7 +406,8 @@ final class WorkflowCommand implements HostCommand
                 }
 
                 $loop->cancelTimer($timer);
-                $deferred->resolve((string) $fiber->getReturn());
+                $report = $fiber->getReturn();
+                $deferred->resolve($report instanceof Message ? $report : (string) $report);
             },
         );
 
@@ -436,16 +455,12 @@ final class WorkflowCommand implements HostCommand
             }
 
             $engine->pause($workflowId);
-            $response = $live
+            return self::respond($inputText, $live
                 ? Lang::t('host.workflow.pause_requested', ['id' => $workflowId])
-                : Lang::t('host.workflow.paused', ['id' => $workflowId]);
-        } catch (WorkflowNotRunningException $e) {
-            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
+                : Lang::t('host.workflow.paused', ['id' => $workflowId]));
         } catch (\Throwable $e) {
-            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
+            return self::respond($inputText, Lang::t('host.workflow.error', ['error' => $e->getMessage()]), true);
         }
-
-        return self::respond($inputText, $response);
     }
 
     /**
@@ -472,14 +487,14 @@ final class WorkflowCommand implements HostCommand
         $cancellation = new CancellationToken();
 
         // Static for the reason start()'s fiber is: it outlives the Chat that typed it.
-        $fiber = new \Fiber(static function () use ($engine, $workflowId, $cancellation): string {
+        $fiber = new \Fiber(static function () use ($engine, $workflowId, $cancellation) {
             try {
                 return self::describeWorkflowResult($workflowId, $engine->resume($workflowId, $cancellation), resumed: true);
             } catch (\Throwable $e) {
                 // WorkflowNotRunningException (nothing paused under that id),
                 // WorkflowNotFoundException (the definition is gone) and the
                 // engine's interleaving refusal all read the same to the user.
-                return Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
+                return self::errorRow($e->getMessage());
             }
         });
 
@@ -503,14 +518,11 @@ final class WorkflowCommand implements HostCommand
 
         try {
             $status = $engine->getStatus($workflowId);
-            $response = Lang::t('host.workflow.status', ['id' => $workflowId, 'status' => $status->value]);
-        } catch (WorkflowNotRunningException $e) {
-            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
-        } catch (\Throwable $e) {
-            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
-        }
 
-        return self::respond($inputText, $response);
+            return self::respond($inputText, Lang::t('host.workflow.status', ['id' => $workflowId, 'status' => $status->value]));
+        } catch (\Throwable $e) {
+            return self::respond($inputText, Lang::t('host.workflow.error', ['error' => $e->getMessage()]), true);
+        }
     }
 
     /**

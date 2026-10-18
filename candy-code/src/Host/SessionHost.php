@@ -1144,9 +1144,9 @@ final class SessionHost
 
         $promise->then(
             function (mixed $value) use ($describe): void {
-                $text = $describe === null ? null : $describe($value);
-                if ($text !== null) {
-                    $this->appendCommandRow($text);
+                $row = $describe === null ? null : $describe($value);
+                if ($row instanceof Message) {
+                    $this->appendMessageRow($row);
                 }
             },
             function (\Throwable $e): void {
@@ -1162,8 +1162,12 @@ final class SessionHost
         $this->workflowTurn = $effect->isWorkflow();
         $generation = ++$this->generation;
 
-        $land = function (string $report, bool $error = false) use ($generation): void {
-            $this->appendCommandRow($report, $error);
+        $land = function (string|Message $report, bool $error = false) use ($generation): void {
+            // A Message report carries its own verdict (ISS-097); a bare
+            // string is an ordinary local answer.
+            $report instanceof Message
+                ? $this->appendMessageRow($report)
+                : $this->appendCommandRow($report, $error);
             if ($generation !== $this->generation) {
                 // Cancelled: the report is the record of what ran, and the
                 // session it held was released by the cancel.
@@ -1195,7 +1199,15 @@ final class SessionHost
      */
     private function appendCommandRow(string $text, bool $error = false): void
     {
-        $row = Message::assistant($text)->withUiOnly()->withError($error);
+        $this->appendMessageRow(Message::assistant($text)->withUiOnly()->withError($error));
+    }
+
+    /**
+     * The one place a later-landing row enters history: the row is built,
+     * verdict and all, by its producer (ISS-097) — this writes and saves it.
+     */
+    private function appendMessageRow(Message $row): void
+    {
         $this->history[] = $row;
         $this->save();
         $this->announceTranscriptRow($row);

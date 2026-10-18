@@ -25,7 +25,7 @@ final class ForkCommand implements HostCommand
     public function run(CommandContext $context, string $text): CommandResult
     {
         if ($context->backgroundSupervisor === null) {
-            return CommandResult::reply($text, BackgroundCommand::notConfigured());
+            return CommandResult::errorReply($text, BackgroundCommand::notConfigured());
         }
 
         $prompt = CommandText::argument($text);
@@ -35,11 +35,11 @@ final class ForkCommand implements HostCommand
 
         $store = $context->sessionStore;
         if ($store === null) {
-            return CommandResult::reply($text, Lang::t('host.fork.no_store'));
+            return CommandResult::errorReply($text, Lang::t('host.fork.no_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, Lang::t('host.rename.no_session'));
+            return CommandResult::errorReply($text, Lang::t('host.rename.no_session'));
         }
 
         // The fork copies what is stored (audit R2): write any debounced change first.
@@ -48,7 +48,7 @@ final class ForkCommand implements HostCommand
         try {
             $forked = $store->forkSession($context->sessionId, SessionKind::Background);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
         }
 
         return CommandResult::echo($text)->withEffect(

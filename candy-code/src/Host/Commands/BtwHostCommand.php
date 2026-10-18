@@ -51,13 +51,13 @@ final class BtwHostCommand implements HostCommand
 
         $backend = $context->titleBackend;
         if ($backend === null) {
-            return CommandResult::reply($text, Lang::t('host.btw.needs_title_model'))->holdingTurn();
+            return CommandResult::errorReply($text, Lang::t('host.btw.needs_title_model'))->holdingTurn();
         }
 
         return CommandResult::new(Message::user($text)->withUiOnly())
             ->withEffect(CommandEffect::async(
                 self::call($backend, $question, $context->history, $context->sessionId),
-                static fn (mixed $msg): ?string => $msg instanceof SideQuestionAnsweredMsg ? self::answerRow($msg) : null,
+                self::answerRowMessage(...),
             ))
             ->holdingTurn();
     }
@@ -112,6 +112,22 @@ final class BtwHostCommand implements HostCommand
                 $failed,
             );
         };
+    }
+
+    /**
+     * The row a settled side question lands as on a headless driver (ISS-097
+     * channel widening: describe returns the row, not the text). An answer is
+     * never an error row: `host.btw.failed` text is woven into the answer
+     * itself, so no verdict field distinguishes it — flagging would need the
+     * DTO widened, a separate ruling.
+     */
+    public static function answerRowMessage(mixed $msg): ?Message
+    {
+        if (!$msg instanceof SideQuestionAnsweredMsg) {
+            return null;
+        }
+
+        return Message::assistant(self::answerRow($msg))->withUiOnly();
     }
 
     /**

@@ -56,6 +56,23 @@ final class CommandResult
         return self::new(Message::user($text)->withUiOnly(), Message::assistant($reply)->withUiOnly());
     }
 
+    /**
+     * The answer to a command that could not do what was asked: $text echoed,
+     * then $reply UI-only AND error-flagged (ISS-097). The flag is the row's
+     * own verdict carried from the producer — the renderer paints flagged
+     * rows in the error colour and never sniffs the text, so a refusal built
+     * through plain {@see self::reply()} would paint as an ordinary local
+     * report. The echo stays unflagged: it is what the user typed, not what
+     * went wrong.
+     */
+    public static function errorReply(string $text, string $reply): self
+    {
+        return self::new(
+            Message::user($text)->withUiOnly(),
+            Message::assistant($reply)->withUiOnly()->withError(),
+        );
+    }
+
     /** $text echoed and nothing else yet: the answer arrives with an effect. */
     public static function echo(string $text): self
     {

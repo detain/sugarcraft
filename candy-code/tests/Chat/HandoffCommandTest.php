@@ -246,7 +246,7 @@ final class HandoffCommandTest extends TestCase
         });
 
         self::assertInstanceOf(HandoffSeededMsg::class, $landed);
-        self::assertStringStartsWith('Handed off to session ' . $landed->sessionId, (string) ($effect->describe())($landed));
+        self::assertStringStartsWith('Handed off to session ' . $landed->sessionId, $effect->describe()($landed)?->content);
         self::assertSame('parent', $this->store->getSession((string) $landed->sessionId)['parent_id']);
     }
 

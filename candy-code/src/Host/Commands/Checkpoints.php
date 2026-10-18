@@ -36,7 +36,7 @@ final class Checkpoints
     public static function refusal(CommandContext $context, string $text): ?CommandResult
     {
         if ($context->sessionStore === null) {
-            return CommandResult::reply($text, Lang::t('host.checkpoint.no_store'));
+            return CommandResult::errorReply($text, Lang::t('host.checkpoint.no_store'));
         }
 
         if (!$context->sessionStore instanceof EnhancedSessionStore) {
@@ -44,7 +44,7 @@ final class Checkpoints
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, Lang::t('host.checkpoint.no_session'));
+            return CommandResult::errorReply($text, Lang::t('host.checkpoint.no_session'));
         }
 
         return null;
@@ -132,7 +132,7 @@ final class Checkpoints
 
             return self::restored($messages, $draft, $cursor, $text, $response, $chips, $chipCount);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
         }
     }
 
@@ -173,7 +173,7 @@ final class Checkpoints
 
             return CommandResult::reply($text, $response);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
         }
     }
 

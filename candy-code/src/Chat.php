@@ -2865,7 +2865,11 @@ final class Chat implements Model
             // belongs in whatever transcript is in front of them now.
             $notice = \SugarCraft\Code\Host\Commands\BackgroundCommand::spawnedNotice($msg);
 
-            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()]]), null];
+            // ISS-097: the same verdict the headless driver's row carries,
+            // read through the same predicate — two drivers, one source.
+            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()->withError(
+                \SugarCraft\Code\Host\Commands\BackgroundCommand::isSpawnFailure($msg),
+            )]]), null];
         }
         if ($msg instanceof BackgroundSessionStoppedMsg) {
             // Record the settled status as already announced, so the next
@@ -2877,7 +2881,9 @@ final class Chat implements Model
             }
 
             return [$this->mutate([
-                'history' => [...$this->history, Message::assistant(self::backgroundStopNotice($msg))->withUiOnly()],
+                'history' => [...$this->history, Message::assistant(self::backgroundStopNotice($msg))->withUiOnly()->withError(
+                    \SugarCraft\Code\Host\Commands\BackgroundCommand::isStopFailure($msg),
+                )],
                 'backgroundStatuses' => $statuses,
             ]), null];
         }
@@ -13351,8 +13357,12 @@ final class Chat implements Model
     private static function settleCommandRun(\Closure $run, CancellationToken $cancellation): \Closure
     {
         return Cmd::promise(static function () use ($run, $cancellation): PromiseInterface {
-            $land = static function (string $text) use ($cancellation): Msg {
-                $report = Message::assistant($text)->withUiOnly();
+            $land = static function (string|Message $value) use ($cancellation): Msg {
+                // A Message report arrives with its verdict already carried
+                // (ISS-097); a bare string is an ordinary local answer.
+                $report = $value instanceof Message
+                    ? $value
+                    : Message::assistant($value)->withUiOnly();
 
                 return $cancellation->isCancelled()
                     ? new CancelledWorkflowReportMsg($report)
@@ -18588,7 +18598,9 @@ final class Chat implements Model
                 ? $report
                 : $report . Lang::t('chat.handoff.stayed');
 
-            return [$this->mutate(['history' => [...$this->history, Message::assistant($row)->withUiOnly()]]), null];
+            // ISS-097: a handoff that opened no session FAILED — the row says
+            // so with the flag the renderer paints, not with its wording.
+            return [$this->mutate(['history' => [...$this->history, Message::assistant($row)->withUiOnly()->withError($msg->sessionId === null)]]), null];
         }
 
         $transcripts = $this->transcripts();

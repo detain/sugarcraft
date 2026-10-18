@@ -52,7 +52,7 @@ final class UndoCommand implements HostCommand
         try {
             $outcome = $committer->undo();
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, Lang::t('host.undo.error', ['error' => $e->getMessage()]));
+            return CommandResult::errorReply($text, Lang::t('host.undo.error', ['error' => $e->getMessage()]));
         }
 
         $short = $outcome['sha'] === null ? '' : substr($outcome['sha'], 0, 7);
@@ -61,7 +61,7 @@ final class UndoCommand implements HostCommand
                 ? Lang::t('host.undo.rewind_hint')
                 : '';
 
-            return CommandResult::reply($text, Lang::t('host.undo.refused', ['reason' => $outcome['reason']]) . $hint);
+            return CommandResult::errorReply($text, Lang::t('host.undo.refused', ['reason' => $outcome['reason']]) . $hint);
         }
 
         $files = implode(', ', $outcome['files']);

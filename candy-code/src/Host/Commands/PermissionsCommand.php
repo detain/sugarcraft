@@ -97,7 +97,7 @@ final class PermissionsCommand implements HostCommand
             ]));
         }
         if (!in_array($mode, self::switchableModes($gate), true)) {
-            return CommandResult::reply($text, Lang::t('host.permissions.mode_refused', [
+            return CommandResult::errorReply($text, Lang::t('host.permissions.mode_refused', [
                 'mode' => $mode->value,
                 'launch' => $gate->launchMode()->value,
             ]));
