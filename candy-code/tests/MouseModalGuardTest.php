@@ -32,6 +32,7 @@ use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Mouse\Zone;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**
  * The keyboard and the mouse must give the SAME answer to the same request.
@@ -74,6 +75,8 @@ use SugarCraft\Mouse\Zone;
  */
 final class MouseModalGuardTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private const VARS = ['CANDY_CODE_DISABLE_MOUSE', 'CANDY_CODE_DISABLE_MOUSE_CLICKS'];
 
     /** @var list<string> */
@@ -965,8 +968,9 @@ final class MouseModalGuardTest extends TestCase
         return new Chat(
             history: $history,
             inFlight: $inFlight,
-            sessionStore: $this->storeWithTwoSessions(),
+            sessionStore: $store = $this->storeWithTwoSessions(),
             currentSessionId: 'session-b',
+            openTabs: self::tabsFromStore($store, activeId: 'session-b'),
             agentManager: $manager,
             pendingPermission: $prompt,
         );
@@ -1016,6 +1020,7 @@ final class MouseModalGuardTest extends TestCase
             history: [Message::assistant('')->withToolResults([ToolResult::ok('grep', "alpha\nbeta", 'abc0')])],
             sessionStore: $store,
             currentSessionId: 'session-b',
+            openTabs: self::tabsFromStore($store, activeId: 'session-b'),
         );
     }
 
@@ -1098,8 +1103,9 @@ final class MouseModalGuardTest extends TestCase
             history: [],
             inputBuf: '',
             backend: new EchoBackend(),
-            sessionStore: $this->storeWithTwoSessions(),
+            sessionStore: $store = $this->storeWithTwoSessions(),
             currentSessionId: 'session-b',
+            openTabs: self::tabsFromStore($store, activeId: 'session-b'),
         ))
             ->registerTool('bash', static fn(array $args): string => 'total 0')
             ->withHooks($hooks)

@@ -160,18 +160,35 @@ final class BootstrapTest extends TestCase
      * so listSessions() stayed empty for the process's whole lifetime and
      * every session-keyed feature was a guaranteed no-op.
      */
-    public function testChatIsSeededWithARealSessionRow(): void
+    public function testChatOpensALazilyMintedSessionAndTheFirstPromptWritesTheRow(): void
     {
         $home = $this->isolatedHome();
 
         $chat = Bootstrap::chat($home);
 
         $sessionId = $chat->currentSessionId();
-        $this->assertNotNull($sessionId, 'Bootstrap::chat() must seed a session id');
+        $this->assertNotNull($sessionId, 'Bootstrap::chat() must still point the Chat at a session id');
 
         $store = $chat->sessionStore();
         $this->assertNotNull($store);
-        $this->assertSame([$sessionId], array_column($store->listSessions(), 'id'));
+        // ISS-102: nothing reaches the store until a prompt goes out. The
+        // dispatch route is the public one — the same InitialPromptMsg
+        // `init()` delivers for `candy-code <prompt>` — so this pins the
+        // real launch→mint chain, closure and all.
+        $this->assertSame([], array_column($store->listSessions(), 'id'), 'an unspoken launch writes no row');
+
+        [$spoken] = $chat->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+
+        $this->assertSame(
+            [$sessionId],
+            array_column($spoken->sessionStore()?->listSessions() ?? [], 'id'),
+            'the dispatched prompt mints exactly the row its id names',
+        );
+        // The LAUNCHER minter wrote it, not a backfilling save: a backfilled
+        // row carries no origin (EnhancedSessionStore::saveTranscript would
+        // stamp 'candy-code'/'unknown' and a NULL cwd).
+        $row = $store->getSession((string) $sessionId);
+        $this->assertSame(getcwd(), $row['cwd'], 'the minted row carries the launch working directory');
     }
 
     /**
@@ -187,11 +204,18 @@ final class BootstrapTest extends TestCase
         $second = Bootstrap::chat($home);
 
         $this->assertNotSame($first->currentSessionId(), $second->currentSessionId());
-        $this->assertCount(2, $second->sessionStore()?->listSessions() ?? []);
+        // ISS-102: two unspoken launches leave NOTHING behind — the empty
+        // rows `--continue` used to reopen are exactly what is gone.
+        $this->assertCount(0, $second->sessionStore()?->listSessions() ?? [], 'a launch mints no row until its first prompt');
 
         $store = $second->sessionStore();
         $this->assertInstanceOf(\SugarCraft\Code\Session\EnhancedSessionStore::class, $store);
-        $store->saveTranscript((string) $second->currentSessionId(), [Message::user('remember me'), Message::assistant('I will.')]);
+        [$secondSpoken] = $second->update(new \SugarCraft\Code\InitialPromptMsg('remember me'));
+        $this->assertNotNull($store->getSession((string) $second->currentSessionId()), 'the dispatch minted the row');
+        // The settled turn is what `--continue` reopens; write the final
+        // transcript state directly (the debounced writer has no tick loop
+        // in-process here, exactly as in the pre-ISS-102 fixture).
+        $store->saveTranscript((string) $secondSpoken->currentSessionId(), [Message::user('remember me'), Message::assistant('I will.')]);
 
         try {
             Bootstrap::useSessionLaunch(true);
@@ -201,7 +225,7 @@ final class BootstrapTest extends TestCase
         }
 
         $this->assertSame($second->currentSessionId(), $continued->currentSessionId());
-        $this->assertCount(2, $continued->sessionStore()?->listSessions() ?? [], '--continue must not create a row');
+        $this->assertCount(1, $continued->sessionStore()?->listSessions() ?? [], '--continue must not create a row, and the never-prompted first launch left none');
         $this->assertSame(
             ['remember me', 'I will.'],
             array_map(static fn(Message $m): string => $m->content, array_slice($continued->history, 0, 2)),
@@ -282,20 +306,26 @@ final class BootstrapTest extends TestCase
         $this->assertSame($app->chat->currentSessionId(), $app->sessionId);
     }
 
-    public function testAppSeedsExactlyOneSessionRowPerLaunch(): void
+    public function testAppLaunchesCarryNoRowsUntilTheirFirstPromptDispatches(): void
     {
         $home = $this->isolatedHome();
 
         $first = Bootstrap::app($home);
-        $rows = $first->chat?->sessionStore()?->listSessions() ?? [];
-        $this->assertSame([$first->sessionId], array_column($rows, 'id'));
+        // ISS-102: the App shell points at a session id but writes no row —
+        // the claim this test used to pin ("seeds exactly one row per
+        // launch") was the empty-session accumulation the issue reports.
+        $this->assertSame([], $first->chat?->sessionStore()?->listSessions() ?? []);
 
-        // Re-seeding inside app() instead of reusing chat()'s seeding would
-        // show up here as a THIRD row after two launches.
+        // A double-mint inside app()'s funnel would show up here as a SECOND
+        // row after the one dispatched prompt.
         $second = Bootstrap::app($home);
         $this->assertNotSame($first->sessionId, $second->sessionId);
         $this->assertSame($second->chat?->currentSessionId(), $second->sessionId);
-        $this->assertCount(2, $second->chat?->sessionStore()?->listSessions() ?? []);
+        $this->assertSame([], $second->chat?->sessionStore()?->listSessions() ?? []);
+
+        $second->chat?->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+
+        $this->assertSame([$second->sessionId], array_column($second->chat?->sessionStore()?->listSessions() ?? [], 'id'));
     }
 
     public function testAppPopulatesTheShellsOwnPanes(): void

@@ -12,6 +12,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\DebouncedTranscriptWriter;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**
  * Audit R2: Chat no longer rewrites the whole transcript synchronously inside
@@ -25,6 +26,8 @@ use SugarCraft\Code\TranscriptFlushMsg;
  */
 final class DebouncedTranscriptPersistenceTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private const FLUSH_SUBSCRIPTION = 'code.transcript-flush';
 
     private string $dir;
@@ -103,7 +106,7 @@ final class DebouncedTranscriptPersistenceTest extends TestCase
     {
         $this->store->createSession('other', 'p', 'm');
         $chat = self::advance(
-            new Chat(sessionStore: $this->store, currentSessionId: 'live'),
+            new Chat(sessionStore: $this->store, currentSessionId: 'live', openTabs: self::openTabsFor(['live', 'other'], activeId: 'live')),
             [Message::user('unsaved line')],
         );
         self::assertNull($this->store->loadTranscript('live'), 'fixture: still pending');

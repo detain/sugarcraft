@@ -19,6 +19,7 @@ use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Skills\SkillRegistry;
 use PHPUnit\Framework\TestCase;
 
@@ -27,6 +28,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class RendererTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private function chat(array $history = [], string $buf = '', bool $inFlight = false): Chat
     {
         return new Chat(
@@ -161,7 +164,11 @@ final class RendererTest extends TestCase
         $store->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
 
         try {
-            $chat = new Chat(sessionStore: $store, currentSessionId: 'session-b');
+            $chat = new Chat(
+                sessionStore: $store,
+                currentSessionId: 'session-b',
+                openTabs: self::openTabsFor(['session-a', 'session-b'], ['session-a' => 'Alpha', 'session-b' => 'Beta']),
+            );
 
             $out = Renderer::render($chat);
 

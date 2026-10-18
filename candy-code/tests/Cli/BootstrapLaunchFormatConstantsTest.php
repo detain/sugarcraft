@@ -503,7 +503,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // ISS-026: the only format is named; the rest are the return-shape
         // keys, the two launch-mode words the body compares against, and the
         // cwd fallback ternary's empty-string probe and fallback word.
-        'openSession' => ["'id'", "'name'", "'history'", "'picker'", "'continue'", "''", "'cwd'", "'unknown'", "'resume'"],
+        'openSession' => ["'id'", "'name'", "'history'", "'picker'", "'continue'", "''", "'cwd'", "'unknown'", "'resume'", "'mint'"],
         // The full stop rtrim()ed off the reason, because STDERR_LINE_FORMAT
         // adds one of its own and two would read as a typo.
         'reportProjectTierRefusals' => ["'.'"],

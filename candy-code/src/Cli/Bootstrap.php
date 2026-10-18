@@ -1567,6 +1567,10 @@ final class Bootstrap
             sessionStore: $sessionStore,
             currentSessionId: $sessionId,
             currentSessionName: $sessionName,
+            // ISS-102: for a plain launch this is the minter of the row the
+            // id above names; every other mode has a real row already and
+            // passes null.
+            sessionMint: $opened['mint'] ?? null,
             // A resumed session keeps the "always" answers it was given.
             permissionGrants: Chat::storedPermissionGrants($sessionStore, $sessionId),
             titleBackend: $workspace->titleBackend,
@@ -4359,8 +4363,12 @@ final class Bootstrap
      * Open the session this launch runs in, as {@see useSessionLaunch()}
      * registered it, with the conversation to put back on screen.
      *
-     *  - new: a fresh row. Empty rows older than an hour that earlier launches
-     *    left behind are swept first ({@see EnhancedSessionStore::pruneEmptySessions()}).
+     *  - new: a fresh row. ISS-102: the row is NOT written here any more —
+     *    the launch only picks the id, and the returned `mint` closure creates
+     *    the row the first time the Chat dispatches a real prompt, so a launch
+     *    abandoned at the prompt leaves no empty record behind. Empty rows
+     *    older than an hour that earlier (pre-lazy) launches left behind are
+     *    still swept ({@see EnhancedSessionStore::pruneEmptySessions()}).
      *  - continue: the most recently used session that holds a conversation,
      *    scoped to this launch's cwd first and falling back to the global
      *    latest ({@see EnhancedSessionStore::latestResumableSessionFromCwd()}),
@@ -4368,7 +4376,7 @@ final class Bootstrap
      *  - resume: the named session; with no target, a fresh row plus the
      *    session picker open over it, so Esc still leaves a working chat.
      *
-     * @return array{id: string, name: ?string, history: list<\SugarCraft\Code\Message>, picker: bool}
+     * @return array{id: string, name: ?string, history: list<\SugarCraft\Code\Message>, picker: bool, mint?: ?\Closure}
      */
     public static function openSession(
         SessionStore|EnhancedSessionStore $store,
@@ -4427,7 +4435,20 @@ final class Bootstrap
         // Ctrl+B branch filter (audit B1), which compares against the process
         // working directory's branch.
         $cwd = getcwd() ?: null;
-        $store->createSession($id, $provider, $model, null, null, $cwd, $cwd === null ? null : SessionStore::gitBranchAt($cwd));
+        $branch = $cwd === null ? null : SessionStore::gitBranchAt($cwd);
+        // ISS-102: the row itself is minted LAZILY — the closure rides to
+        // Chat and runs the first time dispatchTurn() sends a real prompt —
+        // so `candy-code`, look, quit` leaves no empty session record.
+        $mint = static function () use ($store, $id, $provider, $model, $cwd, $branch): void {
+            // Defensive: createSession() INSERTs and a duplicate id throws.
+            // If anything else minted this row between the launch and the
+            // first prompt (a backfilling save, a hand of the same id), the
+            // row exists and that writer's metadata stands.
+            if ($store->getSession($id) !== null) {
+                return;
+            }
+            $store->createSession($id, $provider, $model, null, null, $cwd, $branch);
+        };
         if ($store instanceof EnhancedSessionStore) {
             try {
                 $store->pruneEmptySessions($id);
@@ -4436,7 +4457,7 @@ final class Bootstrap
             }
         }
 
-        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => self::$sessionLaunchMode === 'resume'];
+        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => self::$sessionLaunchMode === 'resume', 'mint' => $mint];
     }
 
     /**

@@ -111,7 +111,12 @@ final class SessionLaunchFlagsTest extends TestCase
         $this->assertNotSame('older', $opened['id']);
         $this->assertSame([], $opened['history']);
         $this->assertFalse($opened['picker']);
-        $this->assertNotNull($store->getSession($opened['id']));
+        // ISS-102: the launch hands back a minter instead of a row. An
+        // abandoned launch writes nothing; the first prompt calls the mint.
+        $this->assertNull($store->getSession($opened['id']), 'a launch must not write an empty session row');
+        $this->assertNotNull($opened['mint'] ?? null, 'the new-session path carries a minter');
+        ($opened['mint'])();
+        $this->assertNotNull($store->getSession($opened['id']), 'minting writes the row the id names');
     }
 
     /**
@@ -130,6 +135,9 @@ final class SessionLaunchFlagsTest extends TestCase
         chdir($repo);
         try {
             $opened = Bootstrap::openSession($store);
+            // ISS-102: the origin record lands with the lazy mint, not the
+            // launch; the closure captures the cwd/branch seen at open.
+            ($opened['mint'])();
             [$seeded] = Bootstrap::seedSession(new EnhancedSessionStore($this->tmpHome . '/.candy-code/seed.db'));
         } finally {
             chdir((string) $previous);
@@ -307,6 +315,10 @@ final class SessionLaunchFlagsTest extends TestCase
         $opened = Bootstrap::openSession($store);
 
         $this->assertNull($store->getSession('abandoned'));
+        // ISS-102: its own row does not exist yet — there is nothing for a
+        // later sweep to exempt, and no empty record if the run quits now.
+        $this->assertNull($store->getSession($opened['id']), 'the launch itself writes no row');
+        ($opened['mint'])();
         $this->assertNotNull($store->getSession($opened['id']));
     }
 

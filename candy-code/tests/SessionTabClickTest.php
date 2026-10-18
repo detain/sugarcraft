@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Renderer;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
@@ -30,6 +31,8 @@ use SugarCraft\Mouse\Zone;
  */
 final class SessionTabClickTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private const VARS = ['CANDY_CODE_DISABLE_MOUSE', 'CANDY_CODE_DISABLE_MOUSE_CLICKS'];
 
     /** @var list<string> */
@@ -78,8 +81,8 @@ final class SessionTabClickTest extends TestCase
         self::assertInstanceOf(Zone::class, $beta);
         // Both tabs sit on the same (first) row, side by side and not
         // overlapping, each at least as wide as its own label. Column order
-        // follows SessionStore::listSessions()' own row order, so it is
-        // derived rather than assumed here.
+        // follows the open-tab order, so it is derived rather than assumed
+        // here.
         self::assertSame($alpha->startRow, $beta->startRow);
         [$left, $right] = $alpha->startCol <= $beta->startCol ? [$alpha, $beta] : [$beta, $alpha];
         self::assertGreaterThan($left->endCol, $right->startCol);
@@ -287,7 +290,17 @@ final class SessionTabClickTest extends TestCase
             $store->createSession((string) $id, 'openai', 'gpt-4', null, $name);
         }
 
-        return new Chat(sessionStore: $store, currentSessionId: $current);
+        // ISS-102: the strip is the OPEN-TAB model; one row alone does not
+        // draw it. Every seeded row is also opened as a tab.
+        return new Chat(
+            sessionStore: $store,
+            currentSessionId: $current,
+            openTabs: self::openTabsFor(
+                array_map('strval', array_keys($sessions)),
+                array_map('strval', $sessions),
+                activeId: $current,
+            ),
+        );
     }
 
     private function resetClickTracker(): void

@@ -15,6 +15,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionLock;
 use SugarCraft\Code\SessionLockRetryMsg;
 use SugarCraft\Code\TranscriptFlushMsg;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**
  * Audit SES-3(b): a second TUI on a session that is already open opens it
@@ -29,6 +30,8 @@ use SugarCraft\Code\TranscriptFlushMsg;
  */
 final class ReadOnlySessionTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private string $dir;
 
     private EnhancedSessionStore $store;
@@ -406,6 +409,8 @@ final class ReadOnlySessionTest extends TestCase
             history: Chat::loadTranscript($this->store, 'shared'),
             sessionStore: $this->store,
             currentSessionId: 'shared',
+            // ISS-102: Ctrl+Tab cycles OPEN TABS; the fixture's other row is opened too.
+            openTabs: self::tabsFromStore($this->store, activeId: 'shared'),
             currentSessionName: 'Shared work',
         ))->withSessionLocking();
     }

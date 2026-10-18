@@ -12,9 +12,12 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 final class SessionCommandTest extends TestCase
 {
+    use OpensSessionTabs;
+
     use HomeSandboxTrait;
 
     private string $homeSandbox = '';
@@ -293,6 +296,7 @@ final class SessionCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
             currentSessionId: $ids[0],
+            openTabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0]),
         );
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
@@ -311,6 +315,7 @@ final class SessionCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
             currentSessionId: $ids[0],
+            openTabs: self::tabsFromStore($this->sessionStore, activeId: $ids[0]),
         );
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true, shift: true));

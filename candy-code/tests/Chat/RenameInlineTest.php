@@ -19,6 +19,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Session\TitleSource;
 use SugarCraft\Code\SessionTitledMsg;
 use SugarCraft\Code\Usage;
@@ -31,6 +32,8 @@ use SugarCraft\Code\Usage;
  */
 final class RenameInlineTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private SessionStore $store;
 
     protected function setUp(): void
@@ -321,18 +324,26 @@ final class RenameInlineTest extends TestCase
         }
     }
 
-    public function testTheTabStripMirrorsTheDraftAndLeadsWithPinnedSessions(): void
+    public function testTheTabStripMirrorsTheDraftAndCarriesNoPinStars(): void
     {
         $this->store->createSession('s2', 'p', 'm');
         $this->store->renameSession('s2', 'Pinned one');
         $this->store->setPinned('s2', true);
-        $open = $this->type($this->submit($this->chat()->withSize(100, 20), '/rename'), 'Draft');
+        // ISS-102: the strip is the open-tab model. Both tabs are open, s2 is
+        // pinned in the store — and the strip still shows no ★ and no
+        // pin-first order: pins lead the PICKER (the whole-store catalog),
+        // while a tab is just a session the run opened. The rename draft
+        // mirror on the current tab is unchanged.
+        $open = $this->type($this->submit($this->chat(openTabs: self::openTabsFor(
+            ['s1', 's2'],
+            ['s2' => 'Pinned one'],
+        ))->withSize(100, 20), '/rename'), 'Draft');
 
         $strip = self::plain(explode("\n", Renderer::render($open))[0]);
 
-        self::assertStringContainsString('★ Pinned one', $strip);
+        self::assertStringContainsString('Pinned one', $strip);
+        self::assertStringNotContainsString('★', $strip, 'pin chrome belongs to the picker, not the tab strip');
         self::assertStringContainsString('[✎ Draft]', $strip);
-        self::assertLessThan(strpos($strip, '✎ Draft'), strpos($strip, '★ Pinned one'), 'pinned sessions lead the strip');
     }
 
     // ── harness ──────────────────────────────────────────────────────────
@@ -344,12 +355,14 @@ final class RenameInlineTest extends TestCase
         array $history = [],
         string $buf = '',
         bool $titled = true,
+        ?\SugarCraft\Code\Tui\SessionTabs $openTabs = null,
     ): Chat {
         return new Chat(
             history: $history,
             inputBuf: $buf,
             backend: new EchoBackend(),
             sessionStore: $this->store,
+            openTabs: $openTabs,
             currentSessionId: 's1',
             currentSessionName: $name,
             titleBackend: $titled ? $this->titleBackend() : null,

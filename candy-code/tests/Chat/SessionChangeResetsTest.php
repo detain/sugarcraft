@@ -16,6 +16,7 @@ use SugarCraft\Code\Context\IdleCompactionPolicy;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 
 /**
  * Audit 15b-06: the compaction thrash breaker and the activity stamp belong to
@@ -28,6 +29,8 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
  */
 final class SessionChangeResetsTest extends TestCase
 {
+    use OpensSessionTabs;
+
     private const WINDOW = 88_000;
 
     private string $dir;
@@ -128,6 +131,7 @@ final class SessionChangeResetsTest extends TestCase
             backend: self::backend(),
             sessionStore: $this->store,
             currentSessionId: 'session-a',
+            openTabs: self::tabsFromStore($this->store, activeId: 'session-a'),
             consecutiveRefillCompactions: IdleCompactionPolicy::REFILL_LIMIT,
         );
         $this->assertTrue(IdleCompactionPolicy::thrashTripped(IdleCompactionPolicy::REFILL_LIMIT));

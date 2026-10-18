@@ -32,6 +32,7 @@ use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -90,6 +91,8 @@ use SugarCraft\Mouse\Zone;
  */
 final class KeyBindingDriftTest extends TestCase
 {
+    use OpensSessionTabs;
+
     use HomeSandboxTrait;
     // The rows are read back from the English catalogue (audit 15b-14).
     use PinsEnglishLocaleTrait;
@@ -2335,11 +2338,14 @@ final class KeyBindingDriftTest extends TestCase
             $ids[] = $id;
         }
 
+        // ISS-102: the strip and Ctrl+Tab read OPEN TABS, so the fixture's
+        // rows are also opened as tabs.
         return (new Chat(
             history: [],
             backend: new EchoBackend(),
             sessionStore: $store,
             currentSessionId: $ids[0],
+            openTabs: self::tabsFromStore($store, activeId: $ids[0]),
         ))->withSize(100, 30);
     }
 

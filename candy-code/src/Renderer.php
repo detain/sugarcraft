@@ -243,39 +243,31 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  * 34-column `AgentsPane` block appears nowhere in it — width, not wording,
  * is what tells the two apart.
  *
- * `Tui\SessionTabs` is not instantiated here either: its constructor always
- * seeds one synthetic "main" tab when started empty, a shape built for a
- * fresh single-session boot rather than for hydrating N pre-existing rows
- * from a `SessionStore`. Retrofitting that would mean changing
- * `SessionTabs.php` itself (not in this item's file scope) or fabricating
- * and discarding a placeholder tab. Its real, tested key surface
- * (`CTRL_TAB`/`CTRL_SHIFT_TAB`, `cycleForward()`/`cycleBackward()`'s
- * wraparound semantics) is instead the design this renderer's tab strip and
- * {@see Chat}'s Ctrl+Tab handling both follow directly against
- * `SessionStore::listSessions()`'s real, persisted row order — see
- * `Chat::cycleSessionTab()`'s docblock for the matching switching half.
+ * `Tui\SessionTabs` IS instantiated here — since the ISS-102 owner ruling it
+ * is the strip's source: `Chat` carries one per run (seeded with the launch
+ * session's tab; every route that puts a session in front of the user opens
+ * or focuses its tab), and this method renders `Chat::openTabs()` in tab
+ * order. The R20-era note explaining why the class was skipped — its
+ * constructor seeding a synthetic "main" tab made it a shape for a fresh
+ * boot rather than for hydrating N store rows — described the store-listing
+ * strip this replaced; the synthetic tab still stands alone for a Chat with
+ * no session, where the strip's `< 2` threshold renders nothing.
  *
- * ### Session rows are created in production (was: "no production code path
- * ever calls `createSession()`")
+ * ### Session rows are created lazily (ISS-102)
  *
- * `renderSessionTabStrip()` reads real rows from
- * {@see \SugarCraft\Code\Session\SessionStore::listSessions()}, and since
- * 737da6413 (W3.S1) those rows exist on a real run:
- * `Cli\Bootstrap::seedSession()` resumes the most recent session or creates
- * one before `Bootstrap::chat()` constructs the Chat, and the Ctrl+P
- * palette's "New session" (`Chat::handlePaletteNewSession()`, which really
- * does call `createSession()`) and `/branch` add more. The note that used
- * to sit here — claiming nothing in `src/` or `bin/` ever called
- * `createSession()`, so `listSessions()` returned `[]` for the whole
- * process lifetime — was written four days before that commit and is simply
- * no longer true.
+ * `renderSessionTabStrip()` reads {@see Chat::openTabs()}; the rows behind
+ * those tabs are real `SessionStore` rows. A plain launch no longer writes
+ * one up front: `Cli\Bootstrap::openSession()` returns a minter closure and
+ * `Chat::dispatchTurn()` runs it the first time a prompt goes out, so an
+ * abandoned launch leaves no empty session record. `--continue`'s fallback
+ * (`Cli\Bootstrap::seedSession()`) still resumes the most recent row or
+ * creates one eagerly, the palette's "New session" and `/branch` create
+ * theirs when the user asks, and the server mints rows on session creation.
  *
- * `count($rows) < 2` still suppresses the strip, and that is the intended
- * shape rather than the leftover of the old gap: a boot seeds ONE row, and
- * a single-session strip would be chrome that never changes. The strip
- * appears the moment a second session exists — the same threshold
- * {@see Chat::cycleSessionTab()} switches at, so the strip and the Ctrl+Tab
- * binding that moves through it become useful together.
+ * The strip appears the moment a SECOND tab is open — the same threshold
+ * {@see Chat::cycleSessionTab()} switches at — so with two or more tabs the
+ * current one is always bracketed and highlighted, satisfying the issue's
+ * third bullet; the store listing remains the picker's catalog.
  */
 final class Renderer
 {
@@ -3394,13 +3386,12 @@ final class Renderer
     }
 
     /**
-     * Render a one-line session tab strip from real {@see Chat::sessionStore()}
-     * rows, with the current session bracketed. Returns '' when there is no
-     * session store or fewer than 2 sessions exist — a single session isn't
-     * worth a tab strip, and {@see Chat}'s Ctrl+Tab handler is itself a no-op
-     * below 2 sessions (see `Chat::cycleSessionTab()`). See the "R20 wiring
-     * decision" note on this class's docblock for why `Tui\SessionTabs`
-     * itself is not instantiated to build this strip.
+     * Render a one-line session tab strip from {@see Chat::openTabs()} — the
+     * tabs the user actually OPENED (ISS-102's open-tab model; the strip used
+     * to list store rows) — with the current session bracketed. Returns ''
+     * when there is no session store or fewer than 2 tabs are open — a single
+     * tab isn't worth a strip, and {@see Chat}'s Ctrl+Tab cycles exactly
+     * these tabs (see `Chat::cycleSessionTab()`).
      *
      * The strip is prepended above the shell, outside every clip, so it has
      * to hold its own two invariants (audit 15b-18):
@@ -3426,13 +3417,17 @@ final class Renderer
             return '';
         }
 
-        $rows = $store->listSessions();
-        if (count($rows) < 2) {
+        // ISS-102 (owner ruling supersedes the old R20 dormancy note): the
+        // strip renders Chat's open-tab model, not the store listing. Tabs
+        // enter it through every route that puts a session in front of the
+        // user — the picker, Ctrl+Tab, a tab click, palette New session,
+        // `/branch`, a background handoff landing. Pin-first ordering and the
+        // ★ marker stay with the picker, which remains the whole-store
+        // catalog; a tab is a decision the user made this run, not a row.
+        $modelTabs = $chat->openTabs()->tabs();
+        if (count($modelTabs) < 2) {
             return '';
         }
-        // P-A4: pinned sessions lead the strip, as they lead the picker; the
-        // store's recency order is kept within each half (usort is stable).
-        usort($rows, static fn (array $a, array $b): int => (int) !empty($b['pinned']) <=> (int) !empty($a['pinned']));
         $editor = $chat->titleEditor();
 
         $cols = max(1, $chat->cols());
@@ -3440,17 +3435,21 @@ final class Renderer
         $currentIndex = null;
         /** @var list<array{id: string, name: string, current: bool}> $tabs */
         $tabs = [];
-        foreach ($rows as $row) {
-            $id = (string) ($row['id'] ?? '');
-            $name = self::sessionTabName((string) ($row['name'] ?? ''));
+        foreach ($modelTabs as $open) {
+            $id = $open->id;
+            $isCurrent = $id !== '' && $id === $current;
+            // The current tab shows the LIVE name — /rename and the title
+            // generator move Chat::currentSessionName() without rewriting the
+            // tab; other tabs keep the name their session had when opened.
+            $raw = $isCurrent ? ($chat->currentSessionName() ?? $open->sessionName) : $open->sessionName;
+            $name = self::sessionTabName($raw);
             if ($name === '') {
                 // ISS-102: the raw hex id was unreadable chrome, not a label.
-                // A nameless session is called what it is; the brackets of the
-                // current tab and the star of a pinned one still tell the
-                // tabs apart, and the picker underneath carries the ids.
+                // A nameless session is called what it is; the bracket of the
+                // current tab still singles it out, and the picker underneath
+                // carries the ids.
                 $name = (string) Lang::t('tui.session.untitled');
             }
-            $isCurrent = $id !== '' && $id === $current;
             if ($isCurrent) {
                 $currentIndex = count($tabs);
                 // P-A4: while the inline title editor is open the current tab
@@ -3460,9 +3459,6 @@ final class Renderer
                 if ($editor !== null) {
                     $name = '✎ ' . self::sessionTabName($editor->value);
                 }
-            }
-            if (!empty($row['pinned'])) {
-                $name = '★ ' . $name;
             }
             $tabs[] = [
                 'id' => $id,

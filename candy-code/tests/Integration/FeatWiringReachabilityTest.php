@@ -122,7 +122,7 @@ final class FeatWiringReachabilityTest extends TestCase
      * `listSessions()` returned `[]` and `currentSessionId()` was `null` for
      * the process's entire lifetime, so both assertions below failed.
      */
-    public function testAPlainLaunchSeedsARealSessionRowAndPointsTheChatAtIt(): void
+    public function testAPlainLaunchPointsTheChatAtASessionMintedOnItsFirstPrompt(): void
     {
         $chat = Bootstrap::chat($this->tempDir . '/repo');
 
@@ -131,11 +131,20 @@ final class FeatWiringReachabilityTest extends TestCase
 
         $store = $chat->sessionStore();
         $this->assertNotNull($store);
+        // ISS-102: the id is a PROMISE until a prompt goes out. Once one
+        // dispatches, the same id names a real persisted row — minted by the
+        // launcher's closure through Chat::dispatchTurn(), which is what
+        // makes the row (and the strip, tabs, /branch) reachable for real.
+        $this->assertSame([], array_column($store->listSessions(), 'id'), 'an unspoken launch writes no row');
+
+        [$spoken] = $chat->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
+
         $this->assertSame(
             [$sessionId],
-            array_column($store->listSessions(), 'id'),
-            'the seeded id must be a real persisted row, not an in-memory label',
+            array_column($spoken->sessionStore()?->listSessions() ?? [], 'id'),
+            'the dispatched prompt mints the row its id names',
         );
+        $this->assertSame(getcwd(), $store->getSession((string) $sessionId)['cwd'], 'by the launcher minter, not a metadata-less backfill');
     }
 
     /**
@@ -152,7 +161,10 @@ final class FeatWiringReachabilityTest extends TestCase
         $second = Bootstrap::chat($this->tempDir . '/repo');
 
         $this->assertNotSame($first->currentSessionId(), $second->currentSessionId());
-        $this->assertCount(2, $second->sessionStore()?->listSessions() ?? []);
+        // ISS-102: two unspoken launches, zero rows. A row appears when a
+        // prompt dispatches, and only then.
+        $this->assertCount(0, $second->sessionStore()?->listSessions() ?? []);
+        $second->update(new \SugarCraft\Code\InitialPromptMsg('first words'));
 
         try {
             Bootstrap::useSessionLaunch(true);
@@ -162,7 +174,7 @@ final class FeatWiringReachabilityTest extends TestCase
         }
 
         $this->assertSame($second->currentSessionId(), $continued->currentSessionId());
-        $this->assertCount(2, $continued->sessionStore()?->listSessions() ?? []);
+        $this->assertCount(1, $continued->sessionStore()?->listSessions() ?? [], '--continue reopens the minted row and adds none');
     }
 
     /**
@@ -171,15 +183,19 @@ final class FeatWiringReachabilityTest extends TestCase
      * otherwise the pane layer's session-keyed state disagrees with the
      * transcript it is displaying.
      */
-    public function testTheAppShellTheBinaryLaunchesCarriesTheSeededSessionId(): void
+    public function testTheAppShellTheBinaryLaunchesCarriesTheSessionIdItWillMint(): void
     {
         $app = Bootstrap::app($this->tempDir . '/repo');
 
         $this->assertNotNull($app->sessionId);
         $this->assertSame($app->chat?->currentSessionId(), $app->sessionId);
-        $this->assertContains(
-            $app->sessionId,
+        // ISS-102: the shell carries the id chat() opened (no second mint in
+        // the funnel — the old double-seed failure mode stays excluded by
+        // there being zero rows until a prompt dispatches).
+        $this->assertSame(
+            [],
             array_column($app->chat?->sessionStore()?->listSessions() ?? [], 'id'),
+            'the App launch writes no row of its own',
         );
     }
 
@@ -203,7 +219,13 @@ final class FeatWiringReachabilityTest extends TestCase
     public function testRealCtrlTabBytesCycleTheSessionOnABootstrapBuiltChat(): void
     {
         $chat = Bootstrap::chat($this->tempDir . '/repo');
+        $seeded = (string) $chat->currentSessionId();
         $other = $this->addSecondSession($chat);
+        // ISS-102: Ctrl+Tab walks OPEN TABS. Two withCurrentSessionId hops
+        // (the test seam for "this run put a session in front of the user")
+        // open both tabs and land back on the launch session, so the forward
+        // step below genuinely moves.
+        $chat = $chat->withCurrentSessionId($other)->withCurrentSessionId($seeded);
 
         $key = $this->soleKeyMsg("\x1b[1;5I");
         $this->assertSame(KeyType::Tab, $key->type);
@@ -225,7 +247,10 @@ final class FeatWiringReachabilityTest extends TestCase
     {
         $chat = Bootstrap::chat($this->tempDir . '/repo');
         $seeded = (string) $chat->currentSessionId();
-        $this->addSecondSession($chat);
+        $other = $this->addSecondSession($chat);
+        // Two tabs open, current back on the launch session (see the forward
+        // test for why the double hop).
+        $chat = $chat->withCurrentSessionId($other)->withCurrentSessionId($seeded);
 
         $forward = $this->soleKeyMsg("\x1b[1;5I");
         $backward = $this->soleKeyMsg("\x1b[1;6I");
