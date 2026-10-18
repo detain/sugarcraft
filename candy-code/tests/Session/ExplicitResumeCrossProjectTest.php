@@ -18,8 +18,10 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
  *
  * The announcement itself lands on stderr (which PHPUnit does not capture, by
  * the {@see LatestResumableSessionCwdTest} doctrine), so the behaviour pins
- * run a real `openSession()` in a child process with fd 2 redirected to a
- * file, and the predicate behind it is pinned directly.
+ * run a real `openSession()` in a child process with fd 2 merged into the
+ * read-back stdout pipe (the shape the {@see ChildStderrCaptureTest} guard
+ * can read; the answer is framed with an `ID:` sentinel so the two streams
+ * split again), and the predicate behind it is pinned directly.
  */
 final class ExplicitResumeCrossProjectTest extends TestCase
 {
@@ -116,7 +118,10 @@ final class ExplicitResumeCrossProjectTest extends TestCase
 
     /**
      * Run {@see Bootstrap::openSession()} for `--resume $id` with the process
-     * started in $workdir, and answer what it wrote to fd 2.
+     * started in $workdir, and answer what it wrote to fd 2. fd 2 rides the
+     * stdout pipe (`2 => ['redirect', 1]`, the readable captured shape), so
+     * the child frames its answer with an `ID:` line and everything that is
+     * not that line is the stderr notice.
      */
     private function launchResumePick(string $id, string $workdir): string
     {
@@ -128,24 +133,36 @@ final class ExplicitResumeCrossProjectTest extends TestCase
             'use SugarCraft\\Code\\Session\\EnhancedSessionStore;',
             'Bootstrap::useSessionLaunch(false, true, $argv[1]);',
             '$open = Bootstrap::openSession(new EnhancedSessionStore($argv[2]));',
-            'fwrite(STDOUT, (string) $open["id"]);',
+            'fwrite(STDOUT, "ID:" . (string) $open["id"] . "\\n");',
         ]));
-        $errFile = $this->dir . '/pick-stderr.txt';
 
         $process = proc_open(
             [PHP_BINARY, $script, $id, $this->dbPath],
-            [1 => ['pipe', 'w'], 2 => ['file', $errFile, 'w']],
+            [1 => ['pipe', 'w'], 2 => ['redirect', 1]],
             $pipes,
             $workdir,
         );
         self::assertIsResource($process, 'the pick child could not start');
-        $stdout = (string) stream_get_contents($pipes[1]);
+        $merged = (string) stream_get_contents($pipes[1]);
         fclose($pipes[1]);
         $status = proc_close($process);
 
-        self::assertSame(0, $status, 'pick child exited ' . $status . '; stderr: ' . (string) @file_get_contents($errFile));
-        self::assertSame($id, $stdout, 'the child did not open the session it named');
+        $answered = '';
+        $noticeLines = [];
+        foreach (explode("\n", $merged) as $line) {
+            if (str_starts_with($line, 'ID:')) {
+                $answered = substr($line, 3);
 
-        return (string) file_get_contents($errFile);
+                continue;
+            }
+            if ($line !== '') {
+                $noticeLines[] = $line;
+            }
+        }
+
+        self::assertSame(0, $status, 'pick child exited ' . $status . '; output: ' . $merged);
+        self::assertSame($id, $answered, 'the child did not open the session it named');
+
+        return implode("\n", $noticeLines);
     }
 }

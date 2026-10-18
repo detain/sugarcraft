@@ -140,7 +140,7 @@ final class ChildStderrCaptureTest extends TestCase
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Providers/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Providers/', 'Session/', 'Support/'];
 
     /**
      * Directories that hold an offending spawn and are NOT yet guarded, each
