@@ -482,7 +482,10 @@ final class StderrEmitterCensusTest extends TestCase
         // P-A3 took it to twenty-four: the subcommand-scoped flag errors (a
         // switch given a value, a value flag with none or an empty one), the
         // same pre-launch exit-2 usage decision.
-        'src/Cli/ArgvParser.php' => 25,
+        // GAP wave took it to twenty-eight: --max-cost's three refusals
+        // (missing value, flag-shaped value, empty value), the same
+        // pre-launch exit-2 usage decision.
+        'src/Cli/ArgvParser.php' => 28,
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         'src/Cli/Bootstrap.php' => 7,
