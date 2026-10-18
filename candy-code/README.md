@@ -1066,7 +1066,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and twenty keys are layered — `provider`, `models`,
+Only these one hundred and twenty-one keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
 `extraBody`, `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1099,8 +1099,8 @@ Only these one hundred and twenty keys are layered — `provider`, `models`,
 `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
 `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
-`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `lintCommands`,
-`disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
+`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
+`lintCommands`, `disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
 `debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
@@ -1145,7 +1145,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, sixty-four keys are **never** taken from a project file:
+Even for a trusted project, sixty-five keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1187,7 +1187,10 @@ price on file bills as $0, so a project-chosen one blinds the spend cap the same
 way a zeroed rate would; `layout`, because it records where the operator chose to put
 their own windows — frame geometry is a personal habit, not a property of the
 checked-out code, and a project that moves your panes behind your back is
-answering to the wrong owner; `maxToolSteps`, because it multiplies how many
+answering to the wrong owner; `keybindings`, for the same habit reason one
+layer deeper — the chords are what the operator's fingers learned, and a
+checkout re-pointing them rewrites what the operator's keystrokes do at the
+prompt, inside their own editor; `maxToolSteps`, because it multiplies how many
 billed provider round-trips one turn may fan out — the `maxOutputTokens` money
 axis counted in calls instead of tokens, and a ceiling a checkout can raise is
 still a bill a clone can run up on the operator's credential; `maxCostUsd`,

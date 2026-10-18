@@ -33,6 +33,14 @@ final class KeyBindingRegistryTest extends TestCase
         $this->resetDerivedRuneSets();
     }
 
+    /** Overrides are a process-wide static — clear-what-you-set, like launch. */
+    protected function tearDown(): void
+    {
+        KeyBindingRegistry::useOverrides([]);
+
+        parent::tearDown();
+    }
+
     public function testIdsAreUnique(): void
     {
         $ids = array_map(static fn(KeyBinding $b): string => $b->id, KeyBindingRegistry::all());
@@ -456,5 +464,81 @@ final class KeyBindingRegistryTest extends TestCase
             (string) $factory->getReturnType(),
             'the factory must still return the class it constructs',
         );
+    }
+
+    // =====================================================================
+    // keybindings overrides (ISS-047): useOverrides/chordFor/effective
+    // =====================================================================
+
+    public function testChordForAnswersTheShippedRowWhenNothingIsOverridden(): void
+    {
+        $this->assertSame('Ctrl+K', KeyBindingRegistry::chordFor('shell.palette'));
+        $this->assertNull(KeyBindingRegistry::chordFor('no.such.binding'));
+    }
+
+    /**
+     * THE consult order the setting exists for: a registered override wins
+     * over the shipped row, and ids without one keep answering as declared.
+     */
+    public function testARegisteredOverrideWinsTheConsult(): void
+    {
+        KeyBindingRegistry::useOverrides(['shell.palette' => 'Ctrl+Q']);
+
+        $this->assertSame('Ctrl+Q', KeyBindingRegistry::chordFor('shell.palette'));
+        $this->assertSame('Ctrl+P', KeyBindingRegistry::chordFor('chat.palette'));
+        $this->assertSame(['shell.palette' => 'Ctrl+Q'], KeyBindingRegistry::overrides());
+    }
+
+    public function testEffectiveRelabelsOnlyTheRowsAnOverrideTouches(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.palette' => 'Ctrl+Q']);
+
+        $rows = KeyBindingRegistry::effective();
+        $declared = KeyBindingRegistry::all();
+
+        $this->assertCount(\count($declared), $rows);
+        foreach ($rows as $index => $row) {
+            $before = $declared[$index];
+            if ($before->id !== 'chat.palette') {
+                $this->assertEquals($before, $row, "untouched row {$before->id} must answer as declared");
+                continue;
+            }
+
+            $this->assertSame('Ctrl+Q', $row->keys);
+            // Every other argument survives the relabel — the row is the same
+            // binding, answering to a different chord.
+            $this->assertSame($before->id, $row->id);
+            $this->assertSame($before->description, $row->description);
+            $this->assertSame($before->context, $row->context);
+            $this->assertSame($before->dormantReason, $row->dormantReason);
+            $this->assertSame($before->yieldsToShellReason, $row->yieldsToShellReason);
+        }
+    }
+
+    /**
+     * With no overrides registered, effective() answers exactly as the shipped
+     * table does — row-for-row, so the fast path cannot re-order or rebuild.
+     */
+    public function testEffectiveWithoutOverridesIsTheShippedTable(): void
+    {
+        $this->assertEquals(KeyBindingRegistry::all(), KeyBindingRegistry::effective());
+    }
+
+    /**
+     * The disclosed seam, pinned so its removal is a decision and not an
+     * accident: handler dispatch is keyed on built-in runes, so the derived
+     * CLAIM sets keep answering from the raw rows. A future re-key moves this
+     * expectation deliberately alongside the handlers.
+     */
+    public function testOverridesDoNotMoveTheClaimSets(): void
+    {
+        $before = KeyBindingRegistry::shellCtrlRunes();
+
+        KeyBindingRegistry::useOverrides(['shell.palette' => 'Ctrl+Q']);
+        $after = KeyBindingRegistry::shellCtrlRunes();
+
+        $this->assertSame($before, $after);
+        $this->assertContains('k', $after, 'the shipped chord stays claimed until dispatch follows');
+        $this->assertNotContains('q', $after, 'the override chord is not claimed while nothing dispatches it');
     }
 }

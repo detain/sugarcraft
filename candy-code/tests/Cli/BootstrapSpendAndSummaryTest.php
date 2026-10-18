@@ -9,12 +9,17 @@ use SugarCraft\Code\Backend\CacheReusingSummaryBackend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\PermissionConfigException;
+use SugarCraft\Code\Config\Settings\ApplyMode;
+use SugarCraft\Code\Config\Settings\SettingsSchema;
+use SugarCraft\Code\Config\Settings\SettingType;
+use SugarCraft\Code\Config\Settings\UiEditability;
 
 /**
- * The two launch-time resolvers crush_code.md Phase 5 items 6 and 7 added:
- * {@see Bootstrap::maxCostUsd()} (the spend cap) and
+ * The launch-time resolvers: the two crush_code.md Phase 5 items 6 and 7 added
+ * — {@see Bootstrap::maxCostUsd()} (the spend cap) and
  * {@see Bootstrap::summaryBackend()} (the tool-less backend `/compact` asks for
- * its exchange summaries).
+ * its exchange summaries) — plus {@see Bootstrap::keybindingsSetting()}, the
+ * ISS-047 override map, which refuses the launch on the same machinery.
  *
  * HOME and the provider env vars are redirected/cleared for the whole class,
  * same convention as {@see BootstrapContextWindowTest}: both resolvers consult
@@ -278,6 +283,124 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         $this->expectException(PermissionConfigException::class);
         $this->expectExceptionMessageMatches('/--max-cost/');
         Bootstrap::maxCostUsd();
+    }
+
+    // =====================================================================
+    // keybindingsSetting() (ISS-047)
+    // =====================================================================
+
+    /** Absence is the shipped bindings: an empty map, not a refusal. */
+    public function testNoKeybindingsSettingMeansTheShippedBindings(): void
+    {
+        $this->assertSame([], Bootstrap::keybindingsSetting());
+    }
+
+    /** A valid map round-trips verbatim — the reader adds and drops nothing. */
+    public function testAValidKeybindingsMapRoundTrips(): void
+    {
+        $this->writeKeybindings(['shell.palette' => 'Ctrl+B']);
+
+        $this->assertSame(['shell.palette' => 'Ctrl+B'], Bootstrap::keybindingsSetting());
+    }
+
+    /**
+     * An id nothing declares is a typo the user must hear about: launching
+     * anyway would leave the binding on its shipped chord while the settings
+     * file claimed otherwise.
+     */
+    public function testAnUnknownBindingIdStopsTheLaunch(): void
+    {
+        $this->writeKeybindings(['nope' => 'Ctrl+B']);
+
+        $this->expectException(PermissionConfigException::class);
+        $this->expectExceptionMessageMatches('/nope.*is not a known binding/s');
+        Bootstrap::keybindingsSetting();
+    }
+
+    /**
+     * The chord grammar mirrors KeyBinding::ctrlRune(): the handlers claim and
+     * dispatch bare single-character Ctrl chords and nothing wider, so a
+     * `Cmd+K` or `Ctrl+AB` override could never be honoured.
+     *
+     * @param array<string,string> $map
+     *
+     * @dataProvider unusableChordSpellings
+     */
+    public function testAChordTheRoutingCannotHonourStopsTheLaunch(array $map): void
+    {
+        $this->writeKeybindings($map);
+
+        $this->expectException(PermissionConfigException::class);
+        $this->expectExceptionMessageMatches('/Ctrl\+/');
+        Bootstrap::keybindingsSetting();
+    }
+
+    /** @return list<array{array<string,string|string>}> */
+    public static function unusableChordSpellings(): array
+    {
+        return [
+            'wrong modifier' => [['shell.palette' => 'Cmd+K']],
+            'missing modifier' => [['shell.palette' => 'K']],
+            'two-character tail' => [['shell.palette' => 'Ctrl+KB']],
+            'empty tail' => [['shell.palette' => 'Ctrl+']],
+            'non-string chord' => [['shell.palette' => 7]],
+            'a list is not a map' => [['shell.palette']],
+        ];
+    }
+
+    /**
+     * The settings family the launch reader trusts: the definition the /settings
+     * view edits must be the Map/user-tier entry the reader validates against.
+     */
+    public function testTheSettingDefinitionIsWiredTheWayTheReaderAssumes(): void
+    {
+        $definition = SettingsSchema::byKey('keybindings');
+
+        $this->assertNotNull($definition, 'the keybindings definition vanished from the schema');
+        $this->assertSame(SettingType::Map, $definition->type);
+        $this->assertSame([], $definition->default);
+        $this->assertSame(ApplyMode::Restart, $definition->applyMode);
+        $this->assertSame(UiEditability::Complex, $definition->ui);
+        $this->assertTrue($definition->layered);
+        $this->assertFalse($definition->projectSettable, 'a project must not be able to re-key the user\'s chords');
+
+        // Save-side and launch-side agree: the schema route refuses the same
+        // shapes Bootstrap::keybindingsSetting() stops the launch on, and
+        // accepts what it accepts.
+        $this->assertNull($definition->validate(null));
+        $this->assertNull($definition->validate([]));
+        $this->assertNull($definition->validate(['chat.palette' => 'Ctrl+B']));
+        $this->assertNotNull($definition->validate(['nope' => 'Ctrl+B']));
+        $this->assertNotNull($definition->validate(['shell.palette' => 'Cmd+K']));
+        $this->assertNotNull($definition->validate(['a', 'b']), 'a list is not a map');
+    }
+
+    /**
+     * The launch actually registers what the reader validated — pinned on the
+     * source because driving chat() end-to-end needs a provider. If the line
+     * is dropped, the setting becomes write-only and the drift is silent.
+     */
+    public function testTheChatLaunchRegistersTheOverrides(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Cli/Bootstrap.php');
+
+        $this->assertSame(
+            1,
+            substr_count($source, 'KeyBindingRegistry::useOverrides(self::keybindingsSetting());'),
+            'Bootstrap::chat() must register the validated keybindings overrides exactly once',
+        );
+    }
+
+    /**
+     * @param array<mixed> $map
+     */
+    private function writeKeybindings(array $map): void
+    {
+        mkdir($this->home . '/.candy-code', 0700, true);
+        file_put_contents(
+            $this->home . '/.candy-code/config.json',
+            (string) json_encode(['keybindings' => $map]),
+        );
     }
 
     // =====================================================================

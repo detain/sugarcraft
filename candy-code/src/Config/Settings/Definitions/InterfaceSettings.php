@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Config\Settings\Definitions;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\OptionsSource;
 use SugarCraft\Code\Config\Settings\RiskClass;
@@ -15,6 +16,7 @@ use SugarCraft\Code\Config\Settings\SettingDefinition;
 use SugarCraft\Code\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
+use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
@@ -269,6 +271,23 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('Turn checkpoints /rewind can return to, per session; the oldest are pruned past this.')
                 ->withReaderSymbol(EnhancedSessionStore::class . '::maxCheckpoints')
                 ->withReadBy('`EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()`'),
+            // ISS-047: the key map as a setting. USER tier only (the default —
+            // no withProjectSettable()): a checkout must not be able to
+            // re-point the operator's keys, the same reasoning that keeps
+            // `watchFiles` and the spend cap user-only. RESTART apply mode is
+            // honest: `Bootstrap::chat()` registers the overrides at launch and
+            // nothing re-applies a save mid-session.
+            SettingDefinition::new('keybindings', SettingType::Map, [])
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withUi(UiEditability::Complex)
+                ->withValidators(KeyBindingsValidator::new())
+                ->withLabel(Lang::t('settings.keybindings.label'))
+                ->withHelp('{"shell.palette": "Ctrl+B"}: re-point a binding id (the /keys reference names them) to another Ctrl+<key> chord. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
+                ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
+                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `chordFor()`/`effective()`'),
         ];
     }
 }

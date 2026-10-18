@@ -193,6 +193,101 @@ final class KeyBindingRegistry
         return null;
     }
 
+    /** Every declared binding id, in declaration order — the ids the `keybindings` setting may name. */
+    public static function ids(): array
+    {
+        return array_map(static fn(KeyBinding $binding): string => $binding->id, self::all());
+    }
+
+    /**
+     * Chord overrides registered from the `keybindings` setting (ISS-047),
+     * keyed by binding id. Empty means "nothing overridden" — the shipped
+     * rows answer for every id.
+     *
+     * @var array<string, string>
+     */
+    private static array $overrides = [];
+
+    /**
+     * Register the `keybindings` overrides for this process.
+     *
+     * Called once at launch ({@see \SugarCraft\Code\Cli\Bootstrap::chat()}),
+     * after {@see \SugarCraft\Code\Cli\Bootstrap::keybindingsSetting()} has
+     * validated the value — an unusable present key stops the launch rather
+     * than registering half a map. Passing `[]` clears the overrides, the
+     * same clear-what-you-set convention as every other `use*()` registrar.
+     *
+     * The two derived-set memos ({@see $ctrlRuneMemo}, {@see $yieldedRuneMemo})
+     * deliberately keep answering from the RAW rows: handler dispatch is keyed
+     * on built-in runes until the re-key follow-up lands, so moving a claim to
+     * an overridden chord would claim a rune nothing dispatches and abandon one
+     * that still fires. Routing re-keys to {@see effective()} with that
+     * follow-up; {@see chordFor()} is the consult order it will read through.
+     *
+     * @param array<string, string> $overrides binding id => replacement chord
+     */
+    public static function useOverrides(array $overrides): void
+    {
+        self::$overrides = $overrides;
+    }
+
+    /** The overrides currently registered, by binding id. */
+    public static function overrides(): array
+    {
+        return self::$overrides;
+    }
+
+    /**
+     * The chord a binding answers to — the consult order the `keybindings`
+     * setting exists for: a registered override WINS over the shipped row.
+     *
+     * Null answers for an id the registry does not declare, overridden or
+     * not; validation rejects unknown ids before they could be registered.
+     */
+    public static function chordFor(string $id): ?string
+    {
+        $override = self::$overrides[$id] ?? null;
+        if ($override !== null) {
+            return $override;
+        }
+
+        return self::byId($id)?->keys;
+    }
+
+    /**
+     * Every row with its effective chord: rows a registered override touches
+     * come back relabelled, every other row passes through unchanged.
+     *
+     * The table dispatch and any chord display should resolve through once
+     * they honour the setting — the override-aware view of the same rows
+     * {@see all()} declares.
+     *
+     * @return list<KeyBinding>
+     */
+    public static function effective(): array
+    {
+        if (self::$overrides === []) {
+            return self::all();
+        }
+
+        $rows = [];
+        foreach (self::all() as $binding) {
+            $chord = self::$overrides[$binding->id] ?? null;
+            $rows[] = $chord === null || $chord === $binding->keys
+                ? $binding
+                : KeyBinding::new(
+                    $binding->id,
+                    $chord,
+                    $binding->description,
+                    $binding->context,
+                    $binding->dormantReason,
+                    $binding->yieldsToShellReason,
+                );
+        }
+
+        return $rows;
+    }
+
     /**
      * `Ctrl+<rune>` chords the pane SHELL answers.
      *

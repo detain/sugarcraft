@@ -18,8 +18,10 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\StreamingCommandBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandLoader;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\PolicySnapshot;
+use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\InstructionFileLoader;
@@ -2015,6 +2017,15 @@ final class Bootstrap
         // fork boundary, which is a separate queued step. See
         // PermissionGateHook::NAME.
         $permissionGate = self::permissionGate(interactive: true);
+
+        // ISS-047: the `keybindings` setting, validated at launch exactly like
+        // the spend cap — present-but-unusable throws PermissionConfigException
+        // and bin/candy-code reports it as an exit-2 usage refusal. Registered
+        // here (not in the registry) so the reader owns the settings layer; the
+        // registry is the pure consult (`chordFor()`/`effective()`). Routing
+        // still dispatches on the built-in chords until the handler re-key
+        // follow-up lands — see KeyBindingRegistry::useOverrides().
+        KeyBindingRegistry::useOverrides(self::keybindingsSetting());
 
         // Built here rather than inside the constructor call so its refusals
         // survive the statement — see the `commandLoader:` argument below.
@@ -10808,6 +10819,46 @@ final class Bootstrap
         }
 
         return (float) $value;
+    }
+
+    /**
+     * The settings key holding user keybinding overrides (ISS-047). Its shape
+     * is owned by {@see \SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator}
+     * — a map of binding id to `Ctrl+<key>` chord — and the definition lives in
+     * the Interface settings family as a user-tier, restart-applied entry.
+     */
+    public const KEYBINDINGS_SETTING = 'keybindings';
+
+    /**
+     * The `keybindings` override map as the launch should apply it.
+     *
+     * Same machinery as {@see maxCostUsd()}: absence is the shipped bindings
+     * (`[]`), a present-but-unusable value is a
+     * {@see PermissionConfigException} that `bin/candy-code` turns into an
+     * exit-2 usage report — running with silently dropped key overrides is a
+     * fail-open on muscle memory, and a typo'd id means the user believed a
+     * binding moved when it did not.
+     *
+     * @return array<string,string> binding id => override chord
+     *
+     * @throws PermissionConfigException when the key is present and unusable
+     */
+    public static function keybindingsSetting(): array
+    {
+        $raw = self::readUserConfig()[self::KEYBINDINGS_SETTING] ?? null;
+        if ($raw === null) {
+            return [];
+        }
+
+        $reason = KeyBindingsValidator::new()->validate($raw);
+        if ($reason !== null) {
+            throw new PermissionConfigException(
+                Lang::t('cli.refuse.keybindings', ['reason' => $reason]),
+            );
+        }
+
+        /** @var array<string,string> $raw */
+        return $raw;
     }
 
     /**

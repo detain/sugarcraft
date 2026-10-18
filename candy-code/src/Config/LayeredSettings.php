@@ -586,6 +586,7 @@ final class LayeredSettings
         'promptSuggestionHistory',
         'expandToolOutput',
         'maxCheckpoints',
+        'keybindings',
         'lintCommands',
         'disabledMcpServers',
         'mcp.enabled',
