@@ -11,6 +11,7 @@ use SugarCraft\Code\Cli\Attach;
 use SugarCraft\Code\Host\RemoteSessionHost;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Role;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\Http\StaticFiles;
@@ -100,6 +101,66 @@ final class AttachResumeTest extends TestCase
         self::assertTrue($this->pumpUntil(function () use (&$received): bool {
             return $this->countType($received, SessionEvent::TURN_COMPLETED) === 2;
         }), 'events after the resume flow live');
+    }
+
+    public function testACursorTheTrimmedLogOutgrewResumesFromASnapshot(): void
+    {
+        // proto#4: the RESET arm of resume(). The replay test above pins a
+        // cursor the log still covers; this pins the other answer — when the
+        // log has forgotten everything past the cursor (a tiny retain trims
+        // as the session turns in the dark), the server sends a fresh
+        // snapshot from the newest seq, and the client must adopt it: the
+        // transcript reappears, no stale event replays, and the next turn
+        // still streams live through the reset cursor.
+        $this->fixture->tearDown();
+        $this->fixture = ProtocolFixture::new(retain: 1);
+
+        $server = $this->server();
+        $host = $this->attached($server);
+        $sessionId = (string) $host->sessionId();
+        $received = [];
+        $host->onEvent(static function (array $envelope) use (&$received): void {
+            $received[] = $envelope;
+        });
+
+        // The socket dies while the session keeps turning: a second client
+        // drives a full turn through the dispatcher, and the (one-event) log
+        // commits every seq in the dark, trimming the attach's cursor out of
+        // replay range.
+        $port = $server->port();
+        $server->stop();
+        self::assertTrue($this->pumpUntil(static fn (): bool => !$host->isOpen()), 'the drop is felt at once');
+
+        $wire = $this->fixture->client('wire');
+        $wire->call('session.send', [
+            'sessionId' => $sessionId,
+            'text' => 'turn in the dark',
+            'delivery' => 'queue',
+            'idempotencyKey' => 'gap-minor-dark-turn',
+        ]);
+        self::assertTrue($this->pumpUntil(fn (): bool => $this->fixture->backend->isRunning()), 'the dark turn started');
+        $this->fixture->backend->settle(Message::assistant('carried on'));
+        self::assertTrue($this->pumpUntil(fn (): bool => !$this->fixture->backend->isRunning()), 'the dark turn committed its events');
+
+        // The redial hellos with a cursor the trimmed log cannot answer from;
+        // only the snapshot path can bring the transcript back.
+        $this->server($port);
+        $carried = static fn (): bool => \count(\array_filter(
+            $host->history(),
+            static fn (Message $m): bool => $m->content === 'carried on' && $m->role === Role::Assistant,
+        )) > 0;
+        self::assertTrue($this->pumpUntil($carried), 'the reset snapshot carried the transcript through the drop');
+        self::assertTrue($host->isOpen(), 'the socket came back');
+        self::assertGreaterThan(0, $host->lastSeq(), 'the reset cursor sits at the server log, not the stale one');
+        self::assertSame([], $this->ofType($received, SessionEvent::TURN_COMPLETED), 'nothing older than the snapshot replays as an event');
+
+        // And the cursor is sane going forward: the next turn completes here, live, exactly once.
+        $host->submit('and again');
+        self::assertTrue($this->pumpUntil(fn (): bool => $this->fixture->backend->isRunning()));
+        $this->fixture->backend->settle(Message::assistant('again done'));
+        self::assertTrue($this->pumpUntil(function () use (&$received): bool {
+            return $this->countType($received, SessionEvent::TURN_COMPLETED) === 1;
+        }), 'events after the reset flow live');
     }
 
     public function testACloseDuringTheBackoffIsFinal(): void
