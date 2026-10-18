@@ -193,4 +193,72 @@ final class OptionRowTest extends TestCase
         $this->assertStringStartsWith(self::B . "\x1b[38;2;255;0;0m", $a);
         $this->assertStringStartsWith("\x1b[38;2;0;255;0m", $b);
     }
+
+    // ─── one-line mode (renderRow) ───────────────────────────────────
+
+    public function testRenderRowUnselectedIsLabelLeftValueRight(): void
+    {
+        $this->assertSame(
+            '   ' . self::B . 'Update ms' . str_repeat(' ', 9) . self::R . '2000    ',
+            OptionRow::renderRow('Update ms', '2000', false, false, true),
+        );
+    }
+
+    public function testRenderRowSelectedIsOneBlockWithArrowsAndEnterSlots(): void
+    {
+        $plain = static fn(string $s): string => self::SEL . $s . self::R;
+        $bold = static fn(string $s): string => self::B . self::SEL . $s . self::R;
+        $this->assertSame(
+            $plain(' ') . $bold('←') . $plain(' ')
+            . $bold('Update ms' . str_repeat(' ', 9))
+            . $plain('2000') . $bold('↵') . $plain(' ') . $bold('→') . $plain(' '),
+            OptionRow::renderRow(
+                'Update ms', '2000', true, false, true,
+                selBg: self::selBg(), selFg: self::selFg(), editable: true,
+            ),
+        );
+    }
+
+    public function testRenderRowEnterOnlyWithoutArrowsSitsInLastSlot(): void
+    {
+        $out = OptionRow::renderRow(
+            'N', 'v', true, false, false,
+            selBg: self::selBg(), selFg: self::selFg(), editable: true, tty: true,
+        );
+        $this->assertSame(' ', self::at($out, 1));
+        $this->assertSame(' ', self::at($out, 25), 'the shifted ↵ slot is blank without arrows');
+        $this->assertSame('E', self::at($out, 27), 'tty substitutes E for ↵');
+        $this->assertSame(29, Width::string($out));
+    }
+
+    public function testRenderRowEditingCarriesTheCaretInlineAndHidesArrows(): void
+    {
+        $out = OptionRow::renderRow(
+            'Presets', TextEdit::new('cpu'), true, true, true,
+            selBg: self::selBg(), selFg: self::selFg(), editable: true,
+        );
+        $this->assertSame(29, Width::string($out));
+        $this->assertSame(' ', self::at($out, 1), 'no ← while editing');
+        $this->assertSame(' ', self::at($out, 25), 'the shifted slot stays blank without arrows');
+        $this->assertSame('↵', self::at($out, 27), 'the confirm glyph keeps field - 2');
+        $this->assertStringContainsString('cpu' . "\x1b[4m", $out, 'caret box rides the value slot');
+    }
+
+    public function testRenderRowWideFieldsAndClipping(): void
+    {
+        $out = OptionRow::renderRow('Presets', 'cpu:1:default,proc:0:default', false, false, true, field: 43);
+        $this->assertSame(43, Width::string($out));
+        $this->assertSame('   Presets    cpu:1:default,proc:0:defa    ', Ansi::strip($out));
+
+        // Tight band: the label keeps ROW_LABEL_MIN cells (6) before the value clips.
+        $tight = OptionRow::renderRow(str_repeat('L', 24), str_repeat('v', 30), false, false, false, field: 29);
+        $this->assertSame(29, Width::string($tight));
+        $this->assertSame('   LLLLLL  ' . str_repeat('v', 14) . '    ', Ansi::strip($tight));
+
+        // The 16-cell floor still renders (band 9: label 1 + value 6 min).
+        $tiny = OptionRow::renderRow('Name', 'value', true, false, true, selBg: self::selBg(), selFg: self::selFg());
+        $this->assertSame(29, Width::string($tiny));
+        $tiny = OptionRow::renderRow('Name', 'value', false, false, false, field: 10, title: Style::new(), main: Style::new());
+        $this->assertSame(16, Width::string($tiny), 'field floors at 16');
+    }
 }
