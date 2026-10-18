@@ -143,7 +143,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-FOUR
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-FIVE
  *     of them, in SIXTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
@@ -605,7 +605,11 @@ final class StderrEmitterCensusTest extends TestCase
         // user opted into semantic recall and is silently not getting it,
         // which nothing else on screen says. One site behind
         // MemoryRecallBlock::firstReportOf(), so once per reason per process.
-        'src/Backend/EngineBackend.php' => 1,
+        // ISS-070 added the second: the one call in surfaceMemoryFlushRows(),
+        // shared by both pre-compaction memory-flush sites — the row names
+        // notes the model saved out of a summarisation that is about to drop
+        // what it read them from, invisible from anywhere else.
+        'src/Backend/EngineBackend.php' => 2,
         // Audit R1's last residual (wave 11): a nested CLAUDE.md/AGENTS.md
         // that loadForPath() refused or deferred mid-session. The routing
         // decision: a file the user wrote and expects obeyed is NOT being

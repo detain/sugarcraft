@@ -33,6 +33,7 @@ use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Attachment;
 use SugarCraft\Code\AttachmentType;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message as TypedMessage;
@@ -2068,10 +2069,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                             ) {
                                 $contextLedger = $contextLedger->withMemoryFlushed();
                                 $app = $app->withContextLedger($contextLedger);
+                                $saved = [];
                                 try {
                                     $flushHooks = $this->resolveHookManager(ToolCallLoopGuard::new());
                                     $flushHooks->register(\SugarCraft\Code\Context\Compaction\MemoryFlush::new());
-                                    \SugarCraft\Code\Context\Compaction\MemoryFlush::run(
+                                    $saved = \SugarCraft\Code\Context\Compaction\MemoryFlush::run(
                                         $this->newRuntime(
                                             $flushHooks,
                                             self::parallelToolCallsEnabled($userConfig),
@@ -2086,6 +2088,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                                 } catch (\Throwable) {
                                     // Best effort: the compaction goes ahead.
                                 }
+                                // ISS-070: the rows the flush saved, on the
+                                // one seam that reaches the transcript from
+                                // here (the turn's $transcript is a typed
+                                // message list and the summary has not been
+                                // asked for yet).
+                                self::surfaceMemoryFlushRows($saved);
                             }
                             $block = \SugarCraft\Code\Context\Compaction\StepSummarizer::summarise(
                                 $runtime,
@@ -3213,6 +3221,38 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             'instructionLoader.delegationView.' . \spl_object_id($loader),
             static fn(): InstructionFileLoader => $loader->forDelegationView(),
         );
+    }
+
+    /**
+     * ISS-070: a pre-compaction memory flush leaves one display-only row on
+     * the mid-session transcript seam, naming what it saved. Both flush
+     * callers used to drop MemoryFlush::run()'s rows on the floor — a silent
+     * flush rewrote memory with nothing on the transcript to show it. The
+     * seam is the only surface reachable from the in-turn site: that runs
+     * inside a turn whose typed transcript cannot carry a notice row, and
+     * the host drains the seam into the conversation, where audit 15b-03
+     * keeps it UI-only — visible to the person, never resent to the model.
+     * Three rows are named, the rest collapse into a count, and the seam
+     * clips the whole row at its own MAX_CHARS.
+     *
+     * @param list<string> $rows one Memory-tool result sentence per saved note
+     */
+    private static function surfaceMemoryFlushRows(array $rows): void
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $shown = array_slice($rows, 0, 3);
+        if (\count($rows) > \count($shown)) {
+            $shown[] = sprintf('and %d more', \count($rows) - \count($shown));
+        }
+
+        \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(Lang::t('chat.memory.flushed_notice', [
+            'count' => \count($rows),
+            'notes' => \count($rows) === 1 ? 'note' : 'notes',
+            'rows' => implode(' ', $shown),
+        ]));
     }
 
     /**
@@ -4525,10 +4565,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
         $flushUsages = [];
         if ($flushMemory && \SugarCraft\Code\Context\Compaction\MemoryFlush::available($app->tools)) {
+            $saved = [];
             try {
                 $flushHooks = $this->resolveHookManager(ToolCallLoopGuard::new());
                 $flushHooks->register(\SugarCraft\Code\Context\Compaction\MemoryFlush::new());
-                \SugarCraft\Code\Context\Compaction\MemoryFlush::run(
+                $saved = \SugarCraft\Code\Context\Compaction\MemoryFlush::run(
                     $this->newRuntime(
                         $flushHooks,
                         self::parallelToolCallsEnabled($userConfig),
@@ -4546,6 +4587,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             } catch (\Throwable) {
                 // Best effort: the compaction goes ahead.
             }
+            // ISS-070: the summary the person is about to get rewrites from a
+            // fresh prefix, so this flush's saved notes must be named on the
+            // transcript before it — one display-only row on the seam that
+            // reaches the host from whichever process runs the summary.
+            self::surfaceMemoryFlushRows($saved);
         }
 
         if ($this->summaryModel !== null) {
