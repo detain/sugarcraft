@@ -12,6 +12,26 @@ use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 require __DIR__ . '/../vendor/autoload.php';
 
 /*
+ * The root refusal, as the FIRST executable statement after the autoload that
+ * makes it possible — before the launch-HOME capture below, before the skip
+ * roster, before any block in this file touches the filesystem.
+ *
+ * The decision itself is {@see \SugarCraft\Code\Support\RootRunGuard}; the
+ * call site is one line and the message is three, because the branch this
+ * guards can never be taken by the suite that pins it (see the class doc-block
+ * for why the polarities live in `tests/Support/RootRunGuardTest.php` and the
+ * wiring is pinned over this file's token stream by
+ * `tests/SuiteRootRunRefusalTest.php`). A `sys_get_temp_dir()` call is
+ * deliberately absent from this block: the ordering contract below owns the
+ * first resolution.
+ */
+$rootRunRefusal = \SugarCraft\Code\Support\RootRunGuard::suiteRefusal();
+if ($rootRunRefusal !== null) {
+    \fwrite(\STDERR, $rootRunRefusal);
+    exit(1);
+}
+
+/*
  * ISS-125, captured FIRST: the HOME the suite was LAUNCHED with, in both
  * spellings, before any block in this file moves the environment.
  *
