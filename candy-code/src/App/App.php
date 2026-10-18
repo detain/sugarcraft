@@ -45,6 +45,7 @@ use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Constraints\Dock\DockLayout;
 use SugarCraft\Constraints\Dock\Side;
+use SugarCraft\Constraints\Region;
 use SugarCraft\Code\Tui\AgentViewMode;
 use SugarCraft\Code\Tui\Commands\CancelCmd;
 use SugarCraft\Code\Tui\Commands\CommandPaletteCmd;
@@ -1824,9 +1825,15 @@ final class App implements Model
      * a later re-add scales it (DockSeedTest pins that toggle-off behaviour),
      * and the carried share is render-inert meanwhile: resolve activates only
      * sides that have slots (sugar-constraints DockLayout.php:370-375).
-     * A dock that is already non-default returns unchanged: seeding is a
-     * one-time hand-off from the legacy measure, never a re-snapshot on
-     * top of sizes the user has chosen.
+     * A dock that is already non-default still gets ONE further seeding, per
+     * ISS-049: when a mutation ACTIVATES a side that is empty and still
+     * carries the untouched 1/3 design share, that side receives the same
+     * quarter measure. Without it, the first docked side seeds a quarter at
+     * the legacy hand-off and every later side activates at thirds — the
+     * "side docked by a later mutation keeps the 1/3 default" asymmetry the
+     * issue names. A side whose share a divider drag has ever measured is
+     * never re-snapshot: seeding stays a hand-off from the drawn frame, not
+     * a overwrite of sizes the user has chosen.
      *
      * The write goes through the manifest parse rather than
      * {@see DockLayout::withColumnShare()} on purpose: withColumnShare
@@ -1850,20 +1857,50 @@ final class App implements Model
      */
     public static function seedSharesFromFrame(DockLayout $dock, int $bandCols, ?Side $docksInto = null): DockLayout
     {
-        if ($bandCols < 1 || !self::isUntouchedDefaultDock($dock)) {
+        if ($bandCols < 1) {
             return $dock;
         }
 
         $share = [max(20, intdiv($bandCols, 4)), $bandCols];
         $manifest = $dock->toArray();
 
-        foreach (Side::cases() as $side) {
-            if ($dock->slots($side) !== [] || $side === $docksInto) {
-                $manifest['columnShare'][$side === Side::Left ? 'left' : 'right'] = $share;
+        if (self::isUntouchedDefaultDock($dock)) {
+            foreach (Side::cases() as $side) {
+                if ($dock->slots($side) !== [] || $side === $docksInto) {
+                    $manifest['columnShare'][$side === Side::Left ? 'left' : 'right'] = $share;
+                }
             }
+
+            return DockLayout::fromArray($manifest);
         }
 
-        return DockLayout::fromArray($manifest);
+        // ISS-049: a side being newly activated on an already-handed-off dock
+        // that still carries the design default was never drawn, so the same
+        // quarter measure belongs to it.
+        if (
+            $docksInto !== null
+            && $dock->slots($docksInto) === []
+            && self::sideCarriesDesignDefault($dock, $docksInto)
+        ) {
+            $manifest['columnShare'][$docksInto === Side::Left ? 'left' : 'right'] = $share;
+
+            return DockLayout::fromArray($manifest);
+        }
+
+        return $dock;
+    }
+
+    /**
+     * Whether a side's column share is byte-identical to the library's
+     * design default (thirds) — the marker of a side nobody has ever
+     * measured.
+     */
+    private static function sideCarriesDesignDefault(DockLayout $dock, Side $side): bool
+    {
+        $share = $dock->columnShare($side);
+
+        return $share['num'] === DockLayout::DEFAULT_SHARE_NUM
+            && $share['denom'] === DockLayout::DEFAULT_SHARE_DENOM;
     }
 
     public function withDock(?DockLayout $v): self
@@ -2062,6 +2099,25 @@ final class App implements Model
     private const AUTO_ENABLE_PANES = [Pane::Todo, Pane::Agents, Pane::Tools, Pane::Files];
 
     /**
+     * ISS-049: the auto-show never starves the center. Before an automatic
+     * dock lands, the TRIAL layout (this pane's side seeded and slotted) is
+     * resolved against the last measured frame; when the chat column would
+     * fall below this many columns, the dock is skipped. The pane is NOT
+     * marked settled by the skip — the guard re-evaluates at every later
+     * Chat transition, so widening the terminal lets the pending pane dock
+     * on its own once there is room for it. A manual dock through
+     * {@see setPaneSide()} or {@see togglePaneDocking()} is user intent and
+     * stays ungated; only this width-blind automation consults the floor.
+     *
+     * Before the first {@see \SugarCraft\Core\Msg\WindowSizeMsg} there is no
+     * measured frame to resolve against — the same unknown that makes
+     * {@see seedSharesFromFrame()} a no-op — and the guard stands down
+     * (allow) rather than silently killing the feature on a headless or
+     * not-yet-sized launch.
+     */
+    public const AUTO_DOCK_MIN_CHAT_COLS = 80;
+
+    /**
      * Dock every roster pane whose predicate just turned true, once per pane
      * per process, on its default side ({@see Pane::dockSide()}).
      *
@@ -2103,12 +2159,36 @@ final class App implements Model
         assert($side !== null); // guarded: the roster is dockable-only
 
         $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
+        $trial = $dock->withSlotAdded($side, $pane->value);
+        if (!$this->autoDockKeepsChatReadable($trial)) {
+            return $this;
+        }
+
         $next = $this->mutate(
-            dock: $dock->withSlotAdded($side, $pane->value),
+            dock: $trial,
             paneAutoShow: $this->paneAutoShow->withAutoShown($pane),
         );
 
         return $this->persistDock($next);
+    }
+
+    /**
+     * Resolve the trial dock against the last measured frame and check the
+     * chat column against {@see AUTO_DOCK_MIN_CHAT_COLS}. See that constant
+     * for the policy, the retry semantics, and the stand-down on unknown
+     * width.
+     */
+    private function autoDockKeepsChatReadable(DockLayout $trial): bool
+    {
+        $bandCols = $this->cols ?? 0;
+        if ($bandCols < 1) {
+            return true;
+        }
+
+        $frame = new Region(0, 0, $bandCols, max(1, $this->rows ?? 1));
+
+        return ($trial->resolve($frame)->regionFor($trial->centerPaneId)?->width ?? 0)
+            >= self::AUTO_DOCK_MIN_CHAT_COLS;
     }
 
     private function dockIsOccupied(DockLayout $dock, Pane $pane): bool
@@ -4141,7 +4221,16 @@ final class App implements Model
      */
     private function handleWindowSize(WindowSizeMsg $msg): array
     {
-        [$next, $cmd] = $this->delegateToChat($msg);
+        // ISS-049: the size lands on the model FIRST. The auto-dock choke
+        // below (delegateToChat → autoEnablePanes) measures the resulting
+        // chat column against App::$cols; when the mutate trailed the
+        // delegation, every resize evaluated that guard against the PREVIOUS
+        // frame — and the very first dispatch decided docks on an unmeasured
+        // (null) width. Sizing first also means every instance the
+        // delegation can hand back (its identity short-circuits included)
+        // already carries the new frame, so no re-mutate is needed on the way out.
+        $sized = $this->mutate(rows: $msg->rows, cols: $msg->cols);
+        [$next, $cmd] = $sized->delegateToChat($msg);
 
         // An open Player resizes itself: the same WindowSizeMsg is its own
         // rebuild contract (decode geometry follows the band).
@@ -4151,7 +4240,7 @@ final class App implements Model
             $cmd ??= $playerCmd;
         }
 
-        return [$next->mutate(rows: $msg->rows, cols: $msg->cols), $cmd];
+        return [$next, $cmd];
     }
 
     /**

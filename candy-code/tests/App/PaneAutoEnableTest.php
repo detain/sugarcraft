@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\App;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\App\App;
@@ -171,6 +172,118 @@ final class PaneAutoEnableTest extends TestCase
         $this->assertNotNull($next->chat->palette(), 'fixture: the command really ran');
         $this->assertTrue($next->isDocked(Pane::Agents), 'the command transition docks pending content itself');
         $this->assertSame(['agents'], $this->slotIds($next, Side::Right));
+    }
+
+    // ── ISS-049: the width guard ──────────────────────────────────────────
+
+    public function testTheGuardSkipsAWidthStarvingDockAndRetriesAfterWidening(): void
+    {
+        $chat = $this->chatWithManager($this->managerOneRun());
+        $app = App::new(new EchoProvider(), 'test-model')->withChat($chat);
+        [$narrow] = $app->update(new WindowSizeMsg(120, 40));
+        \assert($narrow instanceof App);
+
+        [$blocked] = $this->typeChar($narrow);
+        $this->assertFalse($blocked->isDocked(Pane::Agents), 'a right dock at 120 cols leaves chat 60 — auto-dock stands down');
+        $this->assertFalse($blocked->paneAutoShow->settled(Pane::Agents), 'the skip is not a verdict: the pane stays pending');
+
+        [$wide] = $blocked->update(new WindowSizeMsg(200, 40));
+        \assert($wide instanceof App);
+        [$docked] = $this->typeChar($wide);
+        $this->assertTrue($docked->isDocked(Pane::Agents), 'the pending dock lands once the frame can host it');
+        $this->assertSame(['agents'], $this->slotIds($docked, Side::Right));
+    }
+
+    public function testTheGuardMeasuresTheResultingChatColumnNotTheSlotCount(): void
+    {
+        // Tools joins Files on the SAME left column: one 30-col side leaves
+        // chat 90 of 120, so the auto-dock proceeds where the right side,
+        // stacked against the seeded left, would not.
+        $chat = new Chat(history: [
+            Message::user('read it'),
+            Message::assistant('')->withToolResults([ToolResult::ok(Todo::NAME, Todo::UPDATED . "\n\ntodo 0/1", 'c1')]),
+        ]);
+        $app = App::new(new EchoProvider(), 'test-model')->withChat($chat);
+        [$measured] = $app->update(new WindowSizeMsg(120, 40));
+        \assert($measured instanceof App);
+
+        [$next] = $this->typeChar($measured);
+
+        $this->assertTrue($next->isDocked(Pane::Tools), 'chat keeps 90 of the 120-col band: the guard allows it');
+        $this->assertSame(['files', 'tools'], $this->slotIds($next, Side::Left));
+        $this->assertSame([], $this->slotIds($next, Side::Right));
+    }
+
+    public function testANarrowFrameAutoDocksNothing(): void
+    {
+        // The issue's 80x24 failure shape: even the single-column Tools dock
+        // would starve chat to 60 columns, so nothing new docks at all.
+        $chat = new Chat(history: [
+            Message::user('read it'),
+            Message::assistant('')->withToolResults([ToolResult::ok(Todo::NAME, Todo::UPDATED . "\n\ntodo 0/1", 'c1')]),
+        ]);
+        $app = App::new(new EchoProvider(), 'test-model')->withChat($chat);
+        [$measured] = $app->update(new WindowSizeMsg(80, 24));
+        \assert($measured instanceof App);
+
+        [$next] = $this->typeChar($measured);
+
+        $this->assertSame(['files'], $this->slotIds($next, Side::Left), 'the default dock stays; automation adds nothing');
+        $this->assertFalse($next->paneAutoShow->settled(Pane::Tools));
+    }
+
+    // ── ISS-049: the verdict outlives the process ─────────────────────────
+
+    public function testTheUserToggledListRidesTheLayoutBlobAndReseedsQuietly(): void
+    {
+        $captured = [];
+        $chat = $this->chatWithManager($this->managerOneRun());
+        $app = App::new(new EchoProvider(), 'test-model')
+            ->withChat($chat)
+            ->withOnLayoutChange(static function (array $blob) use (&$captured): void {
+                $captured[] = $blob;
+            });
+        [$measured] = $app->update(new WindowSizeMsg(200, 40));
+        \assert($measured instanceof App);
+
+        [$first] = $this->typeChar($measured);
+        $this->assertTrue($first->isDocked(Pane::Agents), 'fixture: 200 cols host the right dock');
+        $this->assertArrayNotHasKey('userToggled', end($captured), 'an auto-dock alone writes no verdict list');
+
+        $closed = $first->togglePaneDocking(Pane::Agents);
+        $this->assertFalse($closed->isDocked(Pane::Agents));
+        $this->assertSame(['agents'], end($captured)['userToggled'], 'the manual close persists through the layout channel');
+
+        // A launch that re-seeds the stored list keeps the pane shut even
+        // though its content is live again — the issue's re-dock scenario.
+        $relaunched = App::new(new EchoProvider(), 'test-model')
+            ->withChat($this->chatWithManager($this->managerOneRun()))
+            ->withPaneAutoShow(new PaneAutoShow([], end($captured)['userToggled']));
+        [$again] = $relaunched->update(new WindowSizeMsg(200, 40));
+        \assert($again instanceof App);
+        [$second] = $this->typeChar($again);
+
+        $this->assertFalse($second->isDocked(Pane::Agents), 'the closed pane does not ride back in on the next activity');
+    }
+
+    public function testLayoutResetHandsTheVerdictListBackToTheAutoShow(): void
+    {
+        $captured = [];
+        $chat = $this->chatWithManager($this->managerOneRun());
+        $app = App::new(new EchoProvider(), 'test-model')
+            ->withChat($chat)
+            ->withOnLayoutChange(static function (array $blob) use (&$captured): void {
+                $captured[] = $blob;
+            });
+        [$measured] = $app->update(new WindowSizeMsg(200, 40));
+        \assert($measured instanceof App);
+        [$first] = $this->typeChar($measured);
+
+        $reset = $first->togglePaneDocking(Pane::Agents)->layoutReset();
+
+        $this->assertSame(App::defaultDock()->toArray(), array_diff_key(end($captured), ['userToggled' => 1]));
+        $this->assertArrayNotHasKey('userToggled', end($captured), 'reset clears the stored verdicts with the layout');
+        $this->assertFalse($reset->paneAutoShow->settled(Pane::Agents), 'and the in-memory memory with them');
     }
 
     private function sized(Chat $chat): App

@@ -29,7 +29,12 @@ use SugarCraft\Constraints\Dock\Side;
  * proportion instead of jumping.
  *
  * The seeding rules this file pins, one per behavior:
- *  - fires only while the dock is byte-identical to the default (one-time),
+ *  - the legacy hand-off fires only while the dock is byte-identical to the
+ *    default, seeding every side that carries slots plus the target (one-time),
+ *  - ISS-049: on an already-handed-off dock, a mutation that ACTIVATES a side
+ *    still carrying the design thirds seeds that side its own quarter too —
+ *    the same drawn-frame measure the first side got — while a side whose
+ *    share has ever been measured is never re-snapshot,
  *  - never fires without a measured width (no WindowSizeMsg yet => nothing
  *    was ever "drawn" to preserve),
  *  - seeds each side that will carry slots after the mutation — the already
@@ -74,6 +79,27 @@ final class DockSeedTest extends TestCase
         // Non-default => the guard returns the SAME instance, not a copy: the
         // hand-off fired once and future mutations never re-snapshot the frame.
         self::assertSame($seeded, App::seedSharesFromFrame($seeded, 200));
+    }
+
+    public function testTheSeedIsANoOpIdentityWithoutADockingTargetOnAMutatedDock(): void
+    {
+        // The undock arm passes no target: nothing is being activated, so the
+        // ISS-049 side-activation seed has nothing to measure and the dock
+        // rides out as the identical instance.
+        $seeded = App::seedSharesFromFrame(App::defaultDock(), 100, Side::Left);
+
+        self::assertSame($seeded, App::seedSharesFromFrame($seeded, 200));
+    }
+
+    public function testTheActivationSeedNeverOverwritesAMeasuredSide(): void
+    {
+        // Left took the legacy hand-off; Right was tightened by a drag to 1/4.
+        // Activating Right now must honor the measured share, not re-seed a
+        // quarter of the newer, wider frame.
+        $dock = App::seedSharesFromFrame(App::defaultDock(), 100, Side::Left)
+            ->withColumnShare(Side::Right, 1, 4);
+
+        self::assertSame($dock, App::seedSharesFromFrame($dock, 200, Side::Right));
     }
 
     public function testSeedSnapshotsTheLegacyMeasureIntoEverySideThatWillCarrySlots(): void
@@ -129,21 +155,24 @@ final class DockSeedTest extends TestCase
         self::assertContainsPaneId('tools', $after);
     }
 
-    public function testTheSeedFiresOnceSoLaterResizesScaleInsteadOfReSnapshotting(): void
+    public function testLaterResizesScaleTheMeasuredSideAndSeedTheActivatedOne(): void
     {
         [$at100] = App::new($this->provider, 'test-model')->update(new WindowSizeMsg(100, 40));
         \assert($at100 instanceof App);
         $seededOnce = $at100->setPaneSide(Pane::Tools, Side::Left);
 
-        // Grow the terminal, then dock again: the left share stays the 25/100
-        // the eye last saw (it now renders 25/100 * 200 ≈ 49, not a re-frozen
-        // 50/200), and the still-empty right side keeps its design thirds.
+        // Grow the terminal, then dock the other side: the left share stays
+        // the 25/100 the eye last saw (it now renders 25/100 * 200 ≈ 49, not
+        // a re-frozen 50/200) — a measured side is never re-snapshot. The
+        // right side, however, is being ACTIVATED while still carrying the
+        // design thirds, so ISS-049 seeds it the same drawn-frame quarter the
+        // first side got instead of leaving it at the 1/3 default.
         [$at200] = $seededOnce->update(new WindowSizeMsg(200, 40));
         \assert($at200 instanceof App);
         $dockedRight = $at200->setPaneSide(Pane::Skills, Side::Right);
 
         self::assertSame([25, 100], $dockedRight->dock()->toArray()['columnShare']['left']);
-        self::assertSame([1, 3], $dockedRight->dock()->toArray()['columnShare']['right']);
+        self::assertSame([50, 200], $dockedRight->dock()->toArray()['columnShare']['right']);
     }
 
     public function testToggleDockingArmSeedsBeforeAddingTheSlot(): void

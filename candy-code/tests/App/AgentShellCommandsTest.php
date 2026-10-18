@@ -147,15 +147,17 @@ final class AgentShellCommandsTest extends TestCase
         $this->assertTrue($group->agentBroadcast);
         $this->assertSame('run-3', $group->agentViewTarget, 'it opened the view on the newest running run');
         $this->assertSame(['run-1', 'run-2', 'run-3'], $group->agentComposerTargets());
-        // Pinned to the CLIPPED form. Since CL-2's pane auto-dock (8013e0f20)
-        // the chat pane is 30 of this frame's 110 cols: cols 26 after the pane
-        // chrome, minus INPUT_CHROME_COLS (4) and the "> " prompt (2) and the
-        // block cursor (1) leaves the ghost 19 cells against the full
-        // "message all 3 agents…" (21) — it genuinely cannot fit at this size.
-        // The clip is the file's shared ellipsising one, so what lands is the
-        // honest cut form, never the old hard slice "message all 3 agent"
-        // (which read as a singular addressee — the fix under this pin).
-        $this->assertStringContainsString('message all 3 agen…', self::plain($group), 'the audience count survives the clip, and the clip announces itself');
+        // Pinned to the FULL placeholder. Since ISS-049's width guard, the
+        // Agents pane no longer auto-docks in this 110-col frame (a right
+        // dock beside the default Files column would starve chat to 56,
+        // under the 80-col floor), so chat keeps the wide band and the
+        // ghost — 21 cells — fits whole. The pre-ISS-049 shape clipped it to
+        // "message all 3 agen…" through the file's shared ellipsiser (CL-2's
+        // auto-dock 8013e0f20 made the chat pane 30 of 110). The old hard
+        // slice "message all 3 agent" (a singular-addressee read — CL-2's
+        // actual defect) stays refused either way: full form and honest clip
+        // both carry the audience count, only the slice truncates mid-word.
+        $this->assertStringContainsString('message all 3 agents…', self::plain($group), 'the ghost fits the unstarved chat band');
 
         [$single] = $group->consumeShellCmd(new GroupInputCmd());
         $this->assertFalse($single->agentBroadcast, 'the second press turns it off');
