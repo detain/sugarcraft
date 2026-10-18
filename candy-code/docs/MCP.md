@@ -243,6 +243,21 @@ server's `initialize` and start-time `tools/list` each wait the same fixed
 `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS` budget, and nothing in the
 entry or the operator tier changes it.
 
+Launch holds are additive and each is bounded — this is the accepted shape of
+ISS-093(f), not an oversight: `McpClient::startServers()` walks the entries
+serially, so a cold `npx` server costs its `startTimeout` before the next
+entry is tried, and several slow entries can hold the first frame for that
+many bounds stacked. An `http` entry pays the same walk with its handshake cut
+by the client's fixed 30 s bound; a `claude-mcp` entry by the fixed start
+budget named above. What the port deliberately does NOT have is a concurrent
+spawn, a wall-clock deadline on the launch as a whole, or a first-frame grace
+notice: the sum of per-entry bounds is already finite, a notice about slow
+synchronous startup would need exactly the asynchronous startup it softens,
+and a blanket launch budget would cut off the user's own slow-but-legitimate
+server for everyone's benefit. Tune the wait per entry with `startTimeout`, or
+park the entry with `enabled: false` — a decision honoured: named in the
+launch report, never launched.
+
 A server that answers `initialize` with a JSON-RPC `error` has refused the
 session, so `start()` treats it as a start failure: the child is stopped and
 the exception carries the server's error code and message plus its stderr
