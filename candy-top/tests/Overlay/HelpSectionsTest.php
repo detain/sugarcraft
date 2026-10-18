@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Overlay;
 
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Top\Input\KeyRow;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
@@ -126,5 +128,100 @@ final class HelpSectionsTest extends OverlayTestCase
         $left = mb_strpos($top, '╭');
         $this->assertSame(1, $left, 'box centred at x=2 (1-based)');
         $this->assertSame($left + HelpMenu::WIDE_WIDTH - 1, mb_strpos($top, '╮'), 'the 117-wide box');
+    }
+
+    /**
+     * The three help trailer rows (the blank line, help.footer, help.url)
+     * land at the tail of the Info section — on the last grid page — so no
+     * first-page golden has ever shown them. Drive the real key handler to
+     * the last page at 120x40 and require the footer, the URL, and section
+     * headings to appear together in one frame. Descriptions word-wrap, and
+     * the columns run side by side, so a flat string match cannot see them;
+     * {@see self::strippedColumns()} reads each column as a vertical strip.
+     */
+    public function testTheFinalPageCarriesTheTrailerRows(): void
+    {
+        $ctx = self::ctx(120, 40);
+        $pages = HelpMenu::geometry(120, 40)[3];
+        $this->assertGreaterThan(1, $pages, '120x40 must paginate so the trailer needs the last page');
+
+        $menu = HelpMenu::new();
+        for ($i = 1; $i < $pages; ++$i) {
+            $menu = $menu->update(new KeyMsg(KeyType::Down), $ctx)->overlay;
+        }
+
+        $surface = Surface::new(120, 40);
+        $menu->paint($surface, $ctx);
+        $columns = self::strippedColumns($surface->plainLines(), 120, 40);
+
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.footer')), 'the footer lands on the last page');
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.url')), 'the URL lands on the last page');
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.section.info')), 'the Info heading shares the last frame with its trailer');
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.section.net')), 'an earlier section heading is still on the same frame');
+
+        $firstPage = Surface::new(120, 40);
+        HelpMenu::new()->paint($firstPage, $ctx);
+        $this->assertFalse(
+            self::anyColumnCarries(self::strippedColumns($firstPage->plainLines(), 120, 40), Lang::t('help.footer')),
+            'the footer is absent from page 1 — the pin proves the page turn is real',
+        );
+    }
+
+    /**
+     * At 120x80 the whole grid fits on a single page, so that one frame must
+     * already carry the footer, the URL, and the Info heading.
+     */
+    public function testTheSinglePageCarriesTheTrailerRows(): void
+    {
+        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], '120x80 holds the grid on one page');
+        $surface = Surface::new(120, 80);
+        HelpMenu::new()->paint($surface, self::ctx(120, 80));
+        $columns = self::strippedColumns($surface->plainLines(), 120, 80);
+
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.footer')), 'the single page carries the footer');
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.url')), 'the single page carries the URL');
+        $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.section.info')), 'the single page carries the Info heading');
+    }
+
+    /**
+     * Each grid column as a whitespace-stripped vertical strip: concatenating
+     * a column top-to-bottom reconstitutes a description that word-wrapped
+     * over several rows. Column offsets come from HelpMenu's public geometry,
+     * never hard-coded.
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private static function strippedColumns(array $lines, int $cols, int $rows): array
+    {
+        $width = HelpMenu::widthFor($cols);
+        $columnCount = HelpMenu::columnsFor($width);
+        $columnWidth = HelpMenu::columnWidth($width, $columnCount);
+        $x = HelpMenu::geometry($cols, $rows)[0];
+
+        $strips = [];
+        for ($j = 0; $j < $columnCount; ++$j) {
+            $start = $x + $j * ($columnWidth + HelpMenu::GUTTER);
+            $text = '';
+            foreach ($lines as $line) {
+                $text .= mb_substr($line, $start, $columnWidth);
+            }
+            $strips[] = preg_replace('/\s+/u', '', $text);
+        }
+
+        return $strips;
+    }
+
+    /** @param list<string> $columns */
+    private static function anyColumnCarries(array $columns, string $needle): bool
+    {
+        $flat = preg_replace('/\s+/u', '', $needle);
+        foreach ($columns as $column) {
+            if (str_contains($column, $flat)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

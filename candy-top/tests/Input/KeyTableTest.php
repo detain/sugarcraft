@@ -46,7 +46,7 @@ final class KeyTableTest extends TestCase
                 $this->assertNotSame($row->keys, $row->keyLabel(), 'missing Lang key ' . $row->keys);
             }
             $this->assertLessThanOrEqual(20, mb_strlen($row->keyLabel()), 'btop cjust(key, 20)');
-            $this->assertLessThanOrEqual(56, mb_strlen($row->description()), 'fits the 78-wide help box');
+            $this->assertLessThanOrEqual(56, mb_strlen($row->description()), 'stay within the 56-cell wrapping bound of the help box');
         }
     }
 
