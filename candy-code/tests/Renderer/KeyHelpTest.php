@@ -1320,6 +1320,35 @@ final class KeyHelpTest extends TestCase
         }
     }
 
+    /**
+     * ISS-047 display leg: a binding moved by the `keybindings` setting is
+     * documented by the chord that ACTUALLY fires, with the shipped one named
+     * beside it — the cheat sheet may not promise a key the setting has
+     * reassigned, nor silently drop the muscle-memory default the user left
+     * behind.
+     */
+    public function testAnOverriddenRowShowsTheEffectiveChordBesideTheShippedOne(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.palette' => 'Ctrl+Q']);
+
+        try {
+            [$chat] = $this->chat('', 120, 40)->update(new KeyMsg(KeyType::Char, '?'));
+
+            $body = $this->body($chat);
+            $this->assertStringContainsString('Ctrl+Q (shipped Ctrl+P)', $body, 'the moved row paints the chord that fires');
+            $this->assertSame(1, substr_count($body, '(shipped '), 'only the overridden row carries the parenthetical');
+        } finally {
+            KeyBindingRegistry::useOverrides([]);
+        }
+    }
+
+    public function testRowsWithoutAnOverrideCarryNoParenthetical(): void
+    {
+        [$chat] = $this->chat('', 120, 40)->update(new KeyMsg(KeyType::Char, '?'));
+
+        $this->assertStringNotContainsString('(shipped', $this->body($chat), 'the default keyboard paints exactly as before the display leg');
+    }
+
     public function testDormantBindingsAreNotAdvertised(): void
     {
         [$chat] = $this->chat('', 120, 40)->update(new KeyMsg(KeyType::Char, '?'));

@@ -264,8 +264,10 @@ final class KeyBindingRegistry
      * come back relabelled, every other row passes through unchanged.
      *
      * Dispatch resolves through it ({@see aliasMap()} derives the alias pairs
-     * from this table); a chord display should too, once it honours the
-     * setting — the override-aware view of the same rows {@see all()} declares.
+     * from this table), and the /keys chord display honours the setting too —
+     * {@see \SugarCraft\Code\Renderer::renderKeyHelp()} consults
+     * {@see chordFor()} per row, the override-aware view of the same rows
+     * {@see all()} declares (ISS-047 display leg).
      *
      * @return list<KeyBinding>
      */

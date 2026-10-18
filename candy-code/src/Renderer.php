@@ -31,6 +31,7 @@ use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\Veil;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
+use SugarCraft\Code\Commands\KeyBinding;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Permissions\PermissionPromptStage;
 use SugarCraft\Code\Permissions\ShellSubjectTools;
@@ -6505,6 +6506,25 @@ final class Renderer
     }
 
     /**
+     * What the key column shows for one row: the shipped chord, unless the
+     * `keybindings` setting has moved the binding — then its EFFECTIVE chord
+     * with the shipped one in parentheses. The reference should paint the key
+     * that actually fires while still naming the muscle-memory default the
+     * user left behind (ISS-047 display leg); the column budget is measured
+     * from the same string, so the parenthetical widens the key column and
+     * never overruns the row.
+     */
+    private static function keyHelpChord(KeyBinding $binding): string
+    {
+        $effective = KeyBindingRegistry::chordFor($binding->id);
+        if ($effective === null || $effective === $binding->keys) {
+            return $binding->keys;
+        }
+
+        return $effective . ' (shipped ' . $binding->keys . ')';
+    }
+
+    /**
      * The in-app keybinding reference, composited over the whole frame by
      * {@see renderView()} via {@see Veil} (crush_code.md Phase 8 item 2).
      * Returns '' (nothing composited) when it is closed — see
@@ -6516,7 +6536,9 @@ final class Renderer
      * have — the drift that made a hand-written cheat sheet not worth
      * shipping. Only {@see KeyBindingRegistry::live()} rows are painted;
      * a row marked dormant is a chord some handler claims but nothing acts
-     * on, and promising it here would be worse than omitting it.
+     * on, and promising it here would be worse than omitting it. A row whose
+     * chord the `keybindings` setting moves shows the EFFECTIVE chord with the
+     * shipped one beside it ({@see keyHelpChord()}, ISS-047 display leg).
      *
      * Sizing follows {@see renderPermissionPrompt()}'s rule — the box's OWN
      * chrome comes off the width first — and lives in
@@ -6557,7 +6579,7 @@ final class Renderer
 
         $keyCol = 0;
         foreach (KeyBindingRegistry::live() as $binding) {
-            $keyCol = max($keyCol, Width::of($binding->keys));
+            $keyCol = max($keyCol, Width::of(self::keyHelpChord($binding)));
         }
         // A pathologically narrow box truncates the KEY so that a column is
         // always left for the description and the space before it: `$room`
@@ -6592,7 +6614,7 @@ final class Renderer
                 // ends mid-word said "Move the cursor one charac" at 49
                 // columns with no sign the sentence went on. The ellipsis is
                 // that sign.
-                $key = self::clipWithEllipsis($binding->keys, $keyCol);
+                $key = self::clipWithEllipsis(self::keyHelpChord($binding), $keyCol);
                 $pad = str_repeat(' ', max(0, $keyCol - Width::of($key)));
                 $room = $width - $keyCol - 1;
                 $desc = $room > 0 ? self::clipWithEllipsis($binding->description, $room) : '';
