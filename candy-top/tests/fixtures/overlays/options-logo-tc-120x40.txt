@@ -6,35 +6,35 @@
 │                     ▀▀▄      ██    ██ ██   ▀▀█ ██   ▄▀█    ██          ██    ▀▀▄  ▄▀█ ██        C7    60%           ││
 │                      ▀█▀▀▀▀▀ ▀█    ▀█ ▀█    ▀█ ▀▀▀▀▀▀▀     ▀█          ▀█     ▀█▀▀▀▀  ▀█                            ││
 │                       ▔▔▔▔▔▔ ▔▔    ▔▔ ▔▔    ▔▔ ▔▔▔▔▔▔      ▔▔          ▔▔      ▔▔▔▔   ▔▔                            ││
-│                   ╭─┐tab→┌─────────────────────────────────────────────────────────────────────╮                    ││
-│                   │   [general]          1cpu           2mem           3net           4proc    │                    ││
-│                   ├─────────────────────────────┬──────────────────────────────────────────────┤────────────────────╯│
-│                   │  Appearance                 │ Set color theme.                             │                     │
-╰───────────────────│                             │                                              │─────────────────────╯
-╭─┐²mem┌────────────│       Color theme 1/2       │ Choose from all theme files in the bundled   │─────────────────────╮
-│ Total: 16.0 GiB   │ ←         Default         → │ candy-top themes directory and               │           MemB  Cpu%│
-│ Used: 10.2 GiB    │       Theme background      │ "~/.config/candy-top/themes".                │        198 MiB  27.8│
-│ Available: 5.80 Gi│             True            │                                              │       90.0 MiB  25.0│
-│ Cached: 3.20 GiB  │          Truecolor          │ "pastel" is candy-top's default theme.       │es      244 MiB  13.6│
-│ Free: 2.60 GiB    │             True            │ "Default" for btop's builtin theme.          │        398 MiB  11.5│
-│                   │  Terminal and input         │ "TTY" for builtin 16-color theme.            │        502 MiB   7.9│
-│ Swap: 205 MiB / 2.│                             │                                              │ta      305 MiB   7.2│
-│                   │          Force tty          │ For theme updates see:                       │        612 MiB   6.6│
-│                   │            False            │ https://github.com/aristocratos/btop         │        360 MiB   2.6│
-│                   │           Vim keys          │                                              │                     │
-│                   │            False            │                                              │                     │
-│                   │        Disable mouse        │                                              │                     │
-│                   │            False            │                                              │                     │
-╰───────────────────│  Layout                     │                                              │                     │
-╭─┐³net┌────────────│                             │                                              │                     │
-│ eth0              │       Disable presets       │                                              │                     │
-│                   │             Off             │                                              │                     │
-│                   │           Presets           │                                              │                     │
-│                   │  cpu:1:default,proc:0:defa  │                                              │                     │
-│                   │         Shown boxes         │                                              │                     │
-│                   │       cpu mem net proc      │                                              │                     │
-│                   │          Cpu bottom         │                                              │                     │
-│                   │            False            │                                              │                     │
-│                   ╰─┘↑ page 1/3 ↓└──────────────┴──────────────────────────────────────────────╯                     │
-│                         ╰─┘upload└────────────────╯││                                                                │
+│            ╭─┐tab→┌───────────────────────────────────────────────────────────────────────────────────╮             ││
+│            │   [general]          1cpu           2mem           3net           4proc                  │             ││
+│            ├───────────────────────────────────────────┬──────────────────────────────────────────────┤─────────────╯│
+│            │  Appearance                               │ Set color theme.                             │              │
+╰────────────│ ← Color theme 1/2              Default  → │                                              │──────────────╯
+╭─┐²mem┌─────│   Theme background                True    │ Choose from all theme files in the bundled   │──────────────╮
+│ Total: 16.0│   Truecolor                       True    │ candy-top themes directory and               │    MemB  Cpu%│
+│ Used: 10.2 │  Terminal and input                       │ "~/.config/candy-top/themes".                │ 198 MiB  27.8│
+│ Available: │   Force tty                      False    │                                              │90.0 MiB  25.0│
+│ Cached: 3.2│   Vim keys                       False    │ "pastel" is candy-top's default theme.       │ 244 MiB  13.6│
+│ Free: 2.60 │   Disable mouse                  False    │ "Default" for btop's builtin theme.          │ 398 MiB  11.5│
+│            │  Layout                                   │ "TTY" for builtin 16-color theme.            │ 502 MiB   7.9│
+│ Swap: 205 M│   Disable presets                  Off    │                                              │ 305 MiB   7.2│
+│            │   Presets    cpu:1:default,proc:0:defa    │ For theme updates see:                       │ 612 MiB   6.6│
+│            │   Shown boxes         cpu mem net proc    │ https://github.com/aristocratos/btop         │ 360 MiB   2.6│
+│            │   Cpu bottom                     False    │                                              │              │
+│            │   Mem below net                  False    │                                              │              │
+│            │   Proc left                      False    │                                              │              │
+│            │   Proc box width percent            55    │                                              │              │
+╰────────────│  Runtime and rendering                    │                                              │              │
+╭─┐³net┌─────│   Update ms                       2000    │                                              │              │
+│ eth0       │   Rounded corners                 True    │                                              │              │
+│            │   Terminal sync                   True    │                                              │              │
+│            │  Graph glyphs                             │                                              │              │
+│            │   Graph symbol                 braille    │                                              │              │
+│            │   Graph symbol cpu             default    │                                              │              │
+│            │   Graph symbol mem             default    │                                              │              │
+│            │   Graph symbol net             default    │                                              │              │
+│            │   Graph symbol proc            default    │                                              │              │
+│            │  Status and units                         │                                              │              │
+│            ╰─┘↑ page 1/2 ↓└────────────────────────────┴──────────────────────────────────────────────╯              │
 ╰────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯

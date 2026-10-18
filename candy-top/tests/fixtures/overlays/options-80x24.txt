@@ -8,17 +8,17 @@
 │   [general]          1cpu           2mem           3net           4proc    │─╯
 ├─────────────────────────────┬──────────────────────────────────────────────┤─╮
 │  Appearance                 │ Set color theme.                             │%│
-│                             │                                              │8│
-│       Color theme 1/2       │ Choose from all theme files in the bundled   │0│
-│ ←         Default         → │ candy-top themes directory and               │6│
-│       Theme background      │ "~/.config/candy-top/themes".                │5│
-│             True            │                                              │9│
-│          Truecolor          │ "pastel" is candy-top's default theme.       │2│
-│             True            │ "Default" for btop's builtin theme.          │6│
-│  Terminal and input         │ "TTY" for builtin 16-color theme.            │6│
-│                             │                                              │ │
-│          Force tty          │ For theme updates see:                       │ │
-│            False            │ https://github.com/aristocratos/btop         │ │
-╰─┘↑ page 1/6 ↓└──────────────┴──────────────────────────────────────────────╯ │
-│               ╰─┘upload└────────╯││                                          │
+│ ← Color theme 1  Default  → │                                              │8│
+│   Theme background  True    │ Choose from all theme files in the bundled   │0│
+│   Truecolor         True    │ candy-top themes directory and               │6│
+│  Terminal and input         │ "~/.config/candy-top/themes".                │5│
+│   Force tty        False    │                                              │9│
+│   Vim keys         False    │ "pastel" is candy-top's default theme.       │2│
+│   Disable mouse    False    │ "Default" for btop's builtin theme.          │6│
+│  Layout                     │ "TTY" for builtin 16-color theme.            │6│
+│   Disable presets    Off    │                                              │ │
+│   Preset  cpu:1:default,    │ For theme updates see:                       │ │
+│   Shown   cpu mem net pr    │ https://github.com/aristocratos/btop         │ │
+│   Cpu bottom       False    │                                              │ │
+╰─┘↑ page 1/3 ↓└──────────────┴──────────────────────────────────────────────╯ │
 ╰──────────────────────────────────╯╰──────────────────────────────────────────╯
