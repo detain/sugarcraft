@@ -229,7 +229,8 @@ failure and *not* a reason to refuse to launch. A broken optional input costs
 the feature, never the turn.
 
 The server surface the web app's Memory panel rides (`memory.list`,
-`memory.search`, `memory.add`, `memory.edit`, `memory.delete`) is routed
+`memory.search`, `memory.add`, `memory.edit`, `memory.delete`, plus the history pair
+`memory.log`/`memory.undo`) is routed
 through the same `Memory\MemoryWriter` as this command (ISS-020). A `project`
 listing therefore carries both stores — the repository's notes first, then the
 home ones — and every row is badged with the `source` store it came from,

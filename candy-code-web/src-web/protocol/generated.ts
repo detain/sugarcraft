@@ -526,6 +526,7 @@ export interface Methods {
   /** Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one. */
   "memory.add": {
     params: {
+      /** Empty text and project notes over the store bound (ProjectMemoryWriter::MAX_CONTENT_BYTES, setting memory.projectNoteMaxBytes) are refused as invalid_params. */
       content: string
       scope?: "user" | "project" | "agent"
       tags?: string[]
@@ -571,6 +572,22 @@ export interface Methods {
       items: MemoryEntry[]
     }
   }
+  /** The home store's commit history, newest first — the revisions memory.undo names. */
+  "memory.log": {
+    params: {
+      /** Newest revisions to list (default memory.log's own default). Like /memory log, this commits pending changes first so the list ends at what is on disk now. */
+      limit?: number
+    }
+    result: {
+      items: {
+        sha: string
+        shortSha: string
+        /** ISO-8601 (DATE_ATOM) commit time. */
+        committedAt: string
+        subject: string
+      }[]
+    }
+  }
   /** Notes matching a query, best first, across every scope and both stores. */
   "memory.search": {
     params: {
@@ -579,6 +596,21 @@ export interface Methods {
     }
     result: {
       items: MemoryEntry[]
+    }
+  }
+  /** Restore the home store to an earlier revision (by default the state before its latest commit), recorded as a new commit. */
+  "memory.undo": {
+    params: {
+      /** Hex commit id as memory.log lists; omitted means the state before the newest commit. */
+      revision?: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      /** The revision the store was restored to. */
+      restored: string
+      /** New commit id, or null when the restored tree equalled the current one. */
+      commit?: string | null
     }
   }
   /** The questions still open, for one session or all open sessions. */
@@ -1184,7 +1216,9 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "memory.delete": "write",
   "memory.edit": "write",
   "memory.list": "read",
+  "memory.log": "read",
   "memory.search": "read",
+  "memory.undo": "write",
   "permission.pending": "read",
   "permission.respond": "approve",
   "permission.rules": "read",
@@ -1236,6 +1270,7 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "memory.add",
   "memory.delete",
   "memory.edit",
+  "memory.undo",
   "permission.respond",
   "server.shutdown",
   "session.cancel",
@@ -1307,7 +1342,7 @@ export interface Events {
     content: string
     createdAt?: number
   }
-  /** A question was put in an open session: permission.requested with its sessionId, for every client, following the session or not. */
+  /** A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. */
   "permission.asked": {
     askId: string
     toolCallId: string
@@ -1336,7 +1371,7 @@ export interface Events {
     note?: string
     cancelled?: boolean
   }
-  /** A question of an open session was answered or cancelled (permission.resolved, for every client). */
+  /** A question was answered or cancelled (permission.resolved for every client) — a background session's relayed question included, cancelled when its session settled unanswered. */
   "permission.settled": {
     sessionId: SessionId
     askId: string

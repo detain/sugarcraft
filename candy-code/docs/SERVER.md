@@ -1019,7 +1019,9 @@ over `serve`, its output sent back as message chunks; one only a screen can run
 (`/help`, say) is answered with a `refusal` saying so.
 
 **Stop reasons.** `end_turn`, `max_tokens` (the provider's length stop),
-`max_turn_requests` (the step budget, or the spend cap), `cancelled`, and
+`max_turn_requests` (the step budget, the spend cap, or the loop guard — the
+web projector still names that row `loop_guard`; the ACP wire has no own value
+for it), `cancelled`, and
 `refusal` for a prompt the session would not take (the spend cap reached, an
 empty prompt) — its reason is sent as a message chunk first. A turn that fails
 answers the prompt with a JSON-RPC error carrying the failure.
