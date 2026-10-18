@@ -92,7 +92,8 @@ composer require sugarcraft/candy-code        # as a dependency; the binary is v
 composer install && ./bin/candy-code
 ```
 
-Requirements: PHP 8.3+, `ext-sqlite3` and `pdo_sqlite` (the session store),
+Requirements: PHP 8.3+, `ext-sqlite3` (it backs the Team task list) and
+`pdo_sqlite` (the session store),
 `ext-curl` for the HTTP providers, and `ext-mbstring` with `ext-intl` (text
 width and locale handling, used directly by the rendering stack). `ext-pcntl` is strongly recommended:
 each turn runs in a forked child, and without it turns, parallel tool calls and
