@@ -264,16 +264,28 @@ final class SafeDeleteSweepHardeningTest extends TestCase
         $this->assertSame(0, BackgroundSupervisor::sweepStaleIpcDirs('/', 1));
     }
 
-    public function testTheCourtesyPruneInBootstrapSitsBehindTheSentinel(): void
+    public function testTheCourtesyPruneIsOneHelperWithTheSentinelGateAheadOfTheWalk(): void
     {
         $bootstrap = (string) file_get_contents(\dirname(__DIR__) . '/bootstrap.php');
+        $helper = (string) file_get_contents(__DIR__ . '/SuiteHomeSandbox.php');
+        self::assertNotSame('', $helper, 'fixture: the prune helper could not be read, so this scan is void');
 
-        $gate = strpos($bootstrap, 'carriesSentinel($homeSandbox)');
-        $walk = strpos($bootstrap, '$pruneStack = [$homeSandbox]');
-        $this->assertNotFalse($gate, 'the home-sandbox prune must consult the creator sentinel');
+        // F-1 (rv7): the walk left bootstrap.php so the pin can drive it
+        // behaviorally; a second inline copy coming back is the drift this
+        // scan exists to catch. The creator stamps stay write-once here.
+        $this->assertStringContainsString('SuiteHomeSandbox::pruneCourtesy($homeSandbox', $bootstrap, 'the home-sandbox prune stopped routing through the helper');
+        $this->assertStringNotContainsString('$pruneStack = [', $bootstrap, 'a second inline prune walk reappeared in the bootstrap — the helper owns that loop now');
+        $this->assertGreaterThanOrEqual(2, substr_count($bootstrap, 'stampSentinel'), 'both the sandbox root and the home sandbox carry creator stamps');
+
+        // The ordering contract moved with the loop: gate before unlink, and
+        // the sentinel is skipped by name (its survival is pinned
+        // behaviorally in SuiteHomeSandboxTest, not by a string here).
+        $gate = strpos($helper, 'carriesSentinel($base)');
+        $walk = strpos($helper, '$pruneStack = [');
+        $this->assertNotFalse($gate, 'the helper prune must consult the creator sentinel');
         $this->assertNotFalse($walk);
         $this->assertLessThan($walk, $gate, 'the prune walk must sit BEHIND the sentinel gate, not beside it');
-        $this->assertGreaterThanOrEqual(2, substr_count($bootstrap, 'stampSentinel'), 'both the sandbox root and the home sandbox carry creator stamps');
+        $this->assertStringContainsString('$pruneEntry === SafeDelete::SENTINEL', $helper);
     }
 
     public function testTheTeamManagerFixtureDeleterChecksLinksFirst(): void

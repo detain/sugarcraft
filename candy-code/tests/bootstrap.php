@@ -400,36 +400,14 @@ if (!is_dir($homeSandbox)) {
     \SugarCraft\Code\Support\SafeDelete::stampSentinel($homeSandbox);
 }
 
-$pruneBoundary = time() - 86400;
-// ROOTFIX: prune only a home sandbox we can prove we created. A directory
-// at this path WITHOUT the sentinel (planted, or re-pointed by a hijack) is
-// left completely whole — the putenv below still points children at it, but
-// nothing here unlinks what this harness did not stamp. is_link first: a
-// symlinked sandbox would send the walk into the link's target.
-if (!is_link($homeSandbox) && \SugarCraft\Code\Support\SafeDelete::carriesSentinel($homeSandbox)) {
-    $pruneStack = [$homeSandbox];
-    while ($pruneStack !== []) {
-        $pruneDir = array_pop($pruneStack);
-        foreach ((array) @scandir($pruneDir) as $pruneEntry) {
-            if ($pruneEntry === '.' || $pruneEntry === '..') {
-                continue;
-            }
-            $prunePath = $pruneDir . '/' . $pruneEntry;
-            if (is_link($prunePath)) {
-                continue;
-            }
-            if (is_dir($prunePath)) {
-                $pruneStack[] = $prunePath;
-
-                continue;
-            }
-            $pruneMtime = @filemtime($prunePath);
-            if ($pruneMtime !== false && $pruneMtime < $pruneBoundary) {
-                @unlink($prunePath);
-            }
-        }
-    }
-}
+// ROOTFIX: prune only a home sandbox we can prove we created; the refuse-
+// unstamped gate, the age window, and the walk itself live, once, in
+// SuiteHomeSandbox::pruneCourtesy(). Round F (rv7 F-1) moved the loop out of
+// this file because the inline walk unlinked the creator sentinel when it
+// aged — deleting its own licence and permanently disabling this prune — and
+// the helper now skips the sentinel by name, a rule pinned behaviorally by
+// tests/Support/SuiteHomeSandboxTest.php rather than by a scan of this file.
+\SugarCraft\Code\Tests\Support\SuiteHomeSandbox::pruneCourtesy($homeSandbox, time());
 
 putenv('HOME=' . $homeSandbox);
 $_SERVER['HOME'] = $homeSandbox;
