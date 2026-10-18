@@ -82,13 +82,21 @@ final class TtyModeFrameTest extends TestCase
     /** @return iterable<string, array{int, int, list<string>, ?class-string}> */
     public static function states(): iterable
     {
-        $page2 = array_merge(['o'], array_fill(0, 12, 'down'));
         foreach ([[80, 24], [120, 40]] as [$w, $h]) {
             yield "{$w}x{$h} frame" => [$w, $h, [], null];
             yield "{$w}x{$h} main menu" => [$w, $h, ['m'], MainMenu::class];
             yield "{$w}x{$h} options" => [$w, $h, ['o'], OptionsMenu::class];
-            yield "{$w}x{$h} options page 2" => [$w, $h, $page2, OptionsMenu::class];
-            yield "{$w}x{$h} options editing" => [$w, $h, [...$page2, 'enter'], OptionsMenu::class];
+            // The one-row layout refit the pages: the old 12-downs drive no
+            // longer leaves page one. Land on the LAST page at every shape.
+            yield "{$w}x{$h} options last page" => [$w, $h, self::optionsLastPageKeys($w, $h), OptionsMenu::class];
+        }
+        // Editing requires a last-page row whose Enter opens the editor.
+        // At 80x24 the last page ends on the free-text log_level row; probed
+        // at 120x40 (every category, every last-page row, trial Enter) no
+        // last page carries an editable row, so the editing sweep runs where
+        // the label is true.
+        yield "80x24 options editing" => [80, 24, self::optionsEditingKeys(), OptionsMenu::class];
+        foreach ([[80, 24], [120, 40]] as [$w, $h]) {
             yield "{$w}x{$h} help" => [$w, $h, ['h'], HelpMenu::class];
             yield "{$w}x{$h} signals" => [$w, $h, ['down', 's'], SignalMenu::class];
             yield "{$w}x{$h} renice" => [$w, $h, ['down', 'N'], ReniceMenu::class];
@@ -98,6 +106,72 @@ final class TtyModeFrameTest extends TestCase
         }
         // btop.cpp:158-170 term_resize notice — painted instead of the boxes, not an overlay.
         yield '50x12 size notice' => [50, 12, [], null];
+    }
+
+    /**
+     * `'o'` plus the downs that stop on the options menu's last page (the
+     * geometry speaks, the test just obeys — page counts move with the
+     * viewport, so no pressed-count constant survives a layout refit).
+     *
+     * @return non-empty-list<string>
+     */
+    private static function optionsLastPageKeys(int $cols, int $rows): array
+    {
+        return self::driveToLastPage($cols, $rows)[0];
+    }
+
+    /**
+     * As {@see optionsLastPageKeys()}, but parked on a last-page row Enter
+     * ACTUALLY opens an editor on (editability lives in OptionsMenu::choices,
+     * not in a predicate the test may mirror — so probe it): returns the keys
+     * ending in that Enter.
+     *
+     * @return non-empty-list<string>
+     */
+    private static function optionsEditingKeys(): array
+    {
+        [$keys] = self::driveToLastPage(80, 24, true);
+
+        return $keys;
+    }
+
+    /**
+     * @return array{non-empty-list<string>, bool} the drive keys, and whether
+     *                                                  they end inside the editor
+     */
+    private static function driveToLastPage(int $cols, int $rows, bool $needEditor = false): array
+    {
+        static $memo = [];
+        $shape = $cols . 'x' . $rows . ($needEditor ? '+edit' : '');
+        if (isset($memo[$shape])) {
+            return $memo[$shape];
+        }
+        $app = self::running($cols, $rows);
+        [$app] = $app->update(self::keyMsg('o'));
+        $keys = ['o'];
+        for ($press = 0; $press < 120; $press++) {
+            [$app] = $app->update(self::keyMsg('down'));
+            $keys[] = 'down';
+            $menu = $app->overlay();
+            \assert($menu instanceof OptionsMenu);
+            $g = $menu->geometry($app->overlayContext());
+            // A single-page category has no "last" page to land on.
+            if ($g['pages'] < 2 || $g['page'] !== $g['pages'] - 1) {
+                continue;
+            }
+            if (!$needEditor) {
+                return $memo[$shape] = [$keys, false];
+            }
+            // Trial Enter on a scratch copy; $app itself only moves once the
+            // row proves editable (the successful trial's Enter rides the key
+            // list, replacing the escape it would otherwise need).
+            [$trial] = $app->update(self::keyMsg('enter'));
+            $menu = $trial->overlay();
+            if ($menu instanceof OptionsMenu && $menu->edit !== null) {
+                return $memo[$shape] = [[...$keys, 'enter'], true];
+            }
+        }
+        throw new \RuntimeException("no row on the options menu's last page at {$cols}x{$rows} opens an editor");
     }
 
     /**

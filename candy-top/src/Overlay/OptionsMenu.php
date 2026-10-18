@@ -73,13 +73,13 @@ final class OptionsMenu implements Overlay
     private const RUNTIME_LISTS = ['cpu_graph_upper', 'cpu_graph_lower', 'cpu_sensor', 'selected_battery'];
 
     /** The box's actual width at `$cols` terminal columns (minSize floors cols at 80). */
-    public static function boxWidth(int $cols): int
+    private static function boxWidth(int $cols): int
     {
         return min(self::WIDTH, $cols - 2);
     }
 
     /** The option column (cells) inside a box of `$width` — the rest is the divider, gutter and description. */
-    public static function fieldWidth(int $width): int
+    private static function fieldWidth(int $width): int
     {
         return $width - self::DESCRIPTION_COL - 4;
     }
@@ -483,6 +483,16 @@ final class OptionsMenu implements Overlay
             || (!OptionsCatalog::isBool($option) && !OptionsCatalog::isHeading($option) && self::choices($option, $c) === null);
     }
 
+    /**
+     * Paint banner, frame, category tabs, one row per visible option and the
+     * description pane. Row cells come straight from OptionRow::renderRow():
+     * the label region is always padded two cells wider than the label's
+     * truncation cap (`$vw = $band - 2 - $lw`, filled by ljust), so label and
+     * value keep a two-cell gutter; while editing the label cap drops to
+     * `$band - 8` and the live TextEdit draws one cell narrower than the
+     * value band it owns (`view($vw - 1)`) to leave its caret room. Nothing
+     * pads $name here; the reservation lives in the widget.
+     */
     public function paint(Surface $surface, OverlayContext $c): void
     {
         $ink = $c->ink;

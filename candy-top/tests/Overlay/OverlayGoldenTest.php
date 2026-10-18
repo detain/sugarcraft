@@ -178,6 +178,20 @@ final class OverlayGoldenTest extends TestCase
         $this->assertGolden(self::DIR . 'main-120x40.sgr', self::cropSgr($surface, 24, 9, 72, 16));
     }
 
+    /**
+     * The options tab band WITH escapes: the .txt goldens strip SGR, so the
+     * selected_bg block around the active tab (and the fg-only inactive
+     * tabs) is only reviewable as a styled crop. Rows: the box top border
+     * (with the `tab→` title), the tab line, the divider row; the full
+     * 92-cell box width so the trailing gap after the last tab is captured.
+     */
+    public function testOptionsTabsSgrGolden(): void
+    {
+        $surface = self::framed(120, 40, null, ['o']);
+        // Logo pinned off by setUp: box top border at row 6, tab line 7.
+        $this->assertGolden(self::DIR . 'options-tabs-120x40.sgr', self::cropSgr($surface, 13, 6, 92, 3));
+    }
+
     public function testTtyMainMenuSgrGolden(): void
     {
         $host = Harness::host();

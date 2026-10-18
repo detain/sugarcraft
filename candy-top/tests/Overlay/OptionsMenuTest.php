@@ -12,6 +12,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\Schema;
+use SugarCraft\Top\Lang;
+use SugarCraft\Top\Overlay\MenuDraw;
 use SugarCraft\Top\Overlay\MsgBox;
 use SugarCraft\Top\Overlay\OptionsCatalog;
 use SugarCraft\Top\Overlay\OptionsMenu;
@@ -332,6 +334,62 @@ final class OptionsMenuTest extends OverlayTestCase
             $surface->style($g['x'] + 1, $line - 1),
             'the selected name row is selected_bg / selected_fg, bold',
         );
+    }
+
+    /**
+     * The active category tab is a selected_bg/selected_fg block over its
+     * `[label]`; inactive tabs stay fg-only. Same paint path and derived
+     * canonical style as the row pin in
+     * {@see self::testPaintShowsTheSelectionValueAndDescription()}, asserted
+     * on the tab line for both polarities (the block moves with the open
+     * tab) so blanking it cannot pass.
+     */
+    public function testTheActiveTabIsABlockAndTheRestAreNot(): void
+    {
+        $assertTabs = static function (OptionsMenu $menu, OverlayContext $c): void {
+            $surface = Surface::new(120, 40);
+            $menu->paint($surface, $c);
+            $g = $menu->geometry($c);
+            $line = $g['y'] + 7 + $g['delta'];
+            $row = $surface->plainLines()[$line - 1];
+            $ink = $c->ink;
+            // Derived, never hardcoded: the one canonical escape the active
+            // block must show on every cell of its tab.
+            $active = Surface::canonical(MenuDraw::BOLD . $ink->bg('selected_bg') . $ink->fg('selected_fg'));
+            // What an inactive tab may legally carry: bold, the digit's
+            // hi_fg, the label's title colour, and the bare bold of a cell
+            // written straight after the active block's RESET.
+            $inactiveAllowed = [
+                Surface::canonical(MenuDraw::BOLD),
+                Surface::canonical(MenuDraw::BOLD . $ink->fg('hi_fg')),
+                Surface::canonical(MenuDraw::BOLD . $ink->fg('hi_fg') . $ink->fg('title')),
+            ];
+            $from = 0;
+            foreach ($g['categories'] as $i => $cat) {
+                $label = Lang::t('menu.options.category.' . $cat);
+                $needle = $cat === $g['category'] ? '[' . $label . ']' : $i . $label;
+                $at = strpos($row, $needle, $from);
+                self::assertNotFalse($at, 'tab ' . $cat . ' painted on the tab line');
+                $from = $at + strlen($needle);
+                // plainLines is one array cell per terminal cell, so the
+                // display width of the prefix is the tab's column directly.
+                $col = Width::string(substr($row, 0, $at));
+                $span = Width::string($needle);
+                $seen = [];
+                for ($cell = 0; $cell < $span; $cell++) {
+                    $seen[] = $surface->style($col + $cell, $line - 1);
+                }
+                if ($cat === $g['category']) {
+                    self::assertSame(array_fill(0, $span, $active), $seen, 'every cell of the active tab carries the selected_bg block');
+                } else {
+                    self::assertSame([], array_values(array_filter($seen, static fn (string $s): bool => !in_array($s, $inactiveAllowed, true))), 'inactive tab ' . $cat . ' stays fg-only');
+                }
+            }
+        };
+        $c = self::context();
+        $assertTabs(OptionsMenu::new(), $c);
+        $assertTabs(self::after(['1'], $c), $c);
+        $assertTabs(self::after(['4'], $c), $c);
     }
 
     public function testOnlyKeysAndMouseReachIt(): void
