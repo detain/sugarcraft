@@ -2821,7 +2821,11 @@ final class Chat implements Model
                 if ($held['sessionId'] !== $this->currentSessionId) {
                     return [$this->mutate(['backgroundSummary' => null]), null];
                 }
-                $usable = $msg->error === null && $msg->blockedBy === null;
+                // CTX-4: a HOLD verdict discards the summaries just as an error
+                // or a hook block does — a collapsed splice must never be
+                // offered to the 85% tier. The tier re-parks on its own and the
+                // fresh request's landing carries the advisory.
+                $usable = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null;
 
                 return [$this->mutate(['backgroundSummary' => [
                     ...$held,
@@ -15765,14 +15769,39 @@ final class Chat implements Model
             'pendingCompactionId' => null,
         ];
 
+        // CTX-4: a HOLD verdict means the model text must not land, and what
+        // that costs each route differs. The typed command refuses outright —
+        // nothing is waiting on it, so preserving the full history whole is
+        // strictly better than folding it on a collapsed summary. The parked
+        // tier cannot refuse: the prompt already went in, and holding it would
+        // 400 a turn the user pressed Enter for, so it degrades to the
+        // heuristic fold (empty summaries are exactly the pre-model shape
+        // compactedHistory has always taken) with an advisory naming what the
+        // audit saw. The audit runs on a reply whose request was cap-gated at
+        // scheduling time, and the fold it leaves behind is re-measured by
+        // every check below untouched — the 95% blocking tier stays reachable
+        // under HOLD, which is what keeps the CTX-13 refusal path live.
+        $hold = $blocked === [] ? $msg->safeguardHold : null;
+        $summaries = $hold === null ? $msg->summaries : [];
+        if ($hold !== null && $msg->parkedSubmission !== null) {
+            $prefix .= $this->compactionService()->safeguardFoldAdvisory($hold);
+        }
+
         // The '/compact' line - or, on the parked route, the user's prompt - is
         // already in the transcript from the scheduling pass, so this must not
         // append a second one.
         if ($msg->parkedSubmission === null) {
-            return [$this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $msg->summaries, $prefix)), null];
+            if ($hold !== null) {
+                return [$this->mutate([
+                    'history' => [...$this->history, Message::notice($this->compactionService()->safeguardHoldRefusal($hold))],
+                    'pendingCompactionId' => null,
+                ]), null];
+            }
+
+            return [$this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix)), null];
         }
 
-        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $msg->summaries, $prefix, true));
+        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix, true));
 
         // Hoisted above every judgement below because the breaker's measurement and
         // the 95% tier must read the SAME post-compaction state, or the two would

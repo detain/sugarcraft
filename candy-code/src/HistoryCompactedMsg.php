@@ -144,6 +144,20 @@ final class HistoryCompactedMsg implements Msg
      *                             {@see Chat::submit()} splices it in only while
      *                             $fingerprint still matches the history — so the
      *                             tier compacts without parking the prompt.
+     * @param ?string $safeguardHold Non-null when the CTX-4 summary safeguard
+     *                             ({@see Context\Compaction\SummarySafeguard})
+     *                             audited this reply and ruled its model text
+     *                             structurally collapsed; the value is the audit's
+     *                             one-line detail, written into whatever notice
+     *                             the route shows. Non-null means the summaries on
+     *                             this message MUST NOT LAND: a typed `/compact`
+     *                             refuses and preserves the history whole, the
+     *                             automatic routes degrade to the heuristic fold
+     *                             with an advisory, and a held background slot
+     *                             discards them rather than offering a collapsed
+     *                             splice. Null on every PASS and FILL verdict —
+     *                             which is every route as it behaved before the
+     *                             audit existed, word for word.
      */
     public function __construct(
         public readonly string $compactionId,
@@ -155,5 +169,6 @@ final class HistoryCompactedMsg implements Msg
         public readonly ?string $heuristicNotice = null,
         public readonly ?Context\Compaction\HistoryFingerprint $fingerprint = null,
         public readonly bool $background = false,
+        public readonly ?string $safeguardHold = null,
     ) {}
 }

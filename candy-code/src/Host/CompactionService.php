@@ -10,6 +10,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
+use SugarCraft\Code\Context\Compaction\SummarySafeguard;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
@@ -780,6 +781,32 @@ final class CompactionService
     }
 
     /**
+     * `/compact`'s answer when the CTX-4 safeguard audited the model's summary
+     * and found structural collapse: refuse outright and keep the full history,
+     * the same shape as {@see compactCommandCapNotice()} — the command reports
+     * that nothing was compacted rather than quietly landing junk. $detail is
+     * the audit's own sentence ({@see SummarySafeguard::summary()}), flattened
+     * like every summary-bound string before it reaches a transcript row.
+     */
+    public function safeguardHoldRefusal(string $detail): string
+    {
+        return Lang::t('host.compact.safeguard.hold', ['detail' => self::sanitizeSummaryLine($detail)]);
+    }
+
+    /**
+     * The automatic routes' answer to the same verdict. They do NOT hold: the
+     * 85% tier's prompt is already typed and parked, and refusing it would 400
+     * a turn the user already pressed Enter for. The fold lands on the
+     * heuristic — which is what the pre-model tiers always wrote — and this
+     * sentence makes the report own why. Same trailing-space family as the
+     * fold sentences in {@see modelSummaryFallbackPrefix()}.
+     */
+    public function safeguardFoldAdvisory(string $detail): string
+    {
+        return Lang::t('host.compact.safeguard.folded', ['detail' => self::sanitizeSummaryLine($detail)]);
+    }
+
+    /**
      * `/compact`'s answer while the model writes its summaries: the transcript
      * compacts when {@see HistoryCompactedMsg} lands, not now.
      */
@@ -1144,6 +1171,13 @@ final class CompactionService
             static fn (Message $m): int => mb_strlen($m->content),
             \array_slice($prompt, 1),
         ));
+        // CTX-4: the same texts as one string, because the safeguard audit
+        // mines them for the quoted and numeric needles — the words and
+        // figures the instruction told the model to carry verbatim.
+        $sourceText = implode("\n", array_map(
+            static fn (Message $m): string => $m->content,
+            \array_slice($prompt, 1),
+        ));
         $stateFallback = self::heuristicState($probeHistory);
 
         // Roadmap 2.4-2: a backend that can send the conversation's OWN request
@@ -1162,7 +1196,7 @@ final class CompactionService
         $fingerprint = HistoryFingerprint::of($exchanges, $priorSummaries);
         $trigger = $parkedSubmission === null && !$background ? self::TRIGGER_MANUAL : self::TRIGGER_AUTO;
 
-        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback, $journal, $fingerprint, $trigger, $background, $claimMemoryFlush): PromiseInterface {
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $sourceText, $stateFallback, $journal, $fingerprint, $trigger, $background, $claimMemoryFlush): PromiseInterface {
             $steer = self::renderFocusForSummary($focus, $hookGuidance);
             if ($steer !== '') {
                 $prompt[] = Message::user($steer);
@@ -1201,14 +1235,22 @@ final class CompactionService
                 // routinely the largest single prompt this app sends; a readout
                 // that silently omitted it was under-reporting its own biggest
                 // call.
-                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $stateFallback, $journal, $fingerprint, $trigger, $background): HistoryCompactedMsg {
+                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $sourceText, $stateFallback, $journal, $fingerprint, $trigger, $background): HistoryCompactedMsg {
                     $rejection = self::summaryRejection($msg, $sourceChars);
                     if ($rejection !== null) {
                         // Billed all the same: the usage still rides along.
                         return new HistoryCompactedMsg($compactionId, [], $rejection, $msg->usage, $parkedSubmission, fingerprint: $fingerprint, background: $background);
                     }
 
-                    $summaries = self::parseCompactionReply($msg->content, $keys, $stateFallback);
+                    [$summaries, $safeguard] = self::auditCompactionReply($msg->content, $keys, $stateFallback, $sourceText);
+                    // CTX-4: the audit's only live consequence is collapse. A PASS
+                    // or FILL lands exactly as it did before this call existed;
+                    // a HOLD stamps its detail on the message and each landing
+                    // route decides what discarding the model text means for it
+                    // ({@see SummarySafeguardVerdict::HOLD}). The summaries
+                    // themselves still ride along — this layer reports, the
+                    // landings own the history.
+                    $safeguardHold = $safeguard !== null && $safeguard->isHold() ? $safeguard->summary() : null;
                     // Roadmap 5.4-1: every model-written summary is journalled
                     // as it is produced — here, off update(), as the promise
                     // settles. A journal that cannot be written never costs the
@@ -1223,6 +1265,7 @@ final class CompactionService
                         $parkedSubmission,
                         fingerprint: $fingerprint,
                         background: $background,
+                        safeguardHold: $safeguardHold,
                     );
                 },
                 // Reported, not swallowed: unlike the session-title call this
@@ -1421,6 +1464,40 @@ final class CompactionService
         $state = $block === null ? $fallback : StateSummaryTemplate::parse($block)->filledFrom($fallback);
 
         return [...$summaries, StateSummaryTemplate::SUMMARY_KEY => $state->render()];
+    }
+
+    /**
+     * The same parse with the CTX-4 coverage audit alongside it: the landing
+     * summaries plus the safeguard's report (null when there was no model text
+     * to audit at all — a reply that wrote nothing is the ordinary
+     * `model_empty` fold, a verdict this class does not re-litigate). The audit
+     * reads the model's OWN words only ({@see SummarySafeguard}); the returned
+     * summaries are byte-identical to {@see parseCompactionReply()}'s because
+     * the fill happens there before anything is measured.
+     *
+     * @param list<string> $keys
+     * @return array{0: array<string,string>, 1: ?SummarySafeguard}
+     */
+    public static function auditCompactionReply(string $reply, array $keys, StateSummaryTemplate $fallback, string $sourceText): array
+    {
+        $summaries = self::parseCompactionReply($reply, $keys, $fallback);
+        if ($summaries === []) {
+            return [$summaries, null];
+        }
+
+        [$block] = StateSummaryTemplate::extractFromReply($reply);
+        $records = $summaries;
+        unset($records[StateSummaryTemplate::SUMMARY_KEY]);
+
+        return [$summaries, SummarySafeguard::assess(
+            $block === null ? null : StateSummaryTemplate::parse($block),
+            $fallback,
+            $sourceText,
+            implode("\n", $records),
+            count($keys),
+            count($records),
+            $block ?? '',
+        )];
     }
 
     /**

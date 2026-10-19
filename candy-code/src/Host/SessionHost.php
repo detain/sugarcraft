@@ -134,8 +134,11 @@ final class SessionHost
      * is out and `[]` when it came back unusable — held as a failure so one
      * cycle does not re-ask a failing summarizer every turn, dropped as soon
      * as the reminder tier stops firing or the fingerprint moves.
+     * `safeguardHold` carries a CTX-4 HOLD verdict's detail so the tier that
+     * lands the heuristic fold can say why; the held summaries themselves are
+     * discarded by the settle below and never spliced.
      *
-     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>}
+     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>,safeguardHold:?string}
      */
     private ?array $aheadOfNeed = null;
 
@@ -862,6 +865,18 @@ final class SessionHost
                 // below, and the next 70% dispatch asks afresh.
                 $this->aheadOfNeed = null;
             }
+            // CTX-4 on the served route: the slot holds a HOLD verdict's
+            // detail instead of splices. Nothing is refused — a served turn
+            // parks nothing and holding it would 400 a request already
+            // accepted — the fold the tier writes is the heuristic one, so the
+            // fold's own report carries the advisory naming the audit.
+            $safeguardFold = null;
+            if ($spliced === null && $held !== null && ($held['safeguardHold'] ?? null) !== null
+                && $held['fingerprint']->matches($compaction->historyFingerprint($this->compactor, $this->history))
+            ) {
+                $safeguardFold = $held['safeguardHold'];
+                $this->aheadOfNeed = null;
+            }
 
             $tier = $turns->inlineTier(
                 $compaction,
@@ -886,6 +901,11 @@ final class SessionHost
             }
             $baseHistory = $tier['history'];
             $this->announceCompaction($tier, $tokenCount);
+            if ($safeguardFold !== null) {
+                // Cause before effect: the advisory names the audit, the
+                // tier's own report then measures the fold it describes.
+                $reports[] = Message::notice($compaction->safeguardFoldAdvisory($safeguardFold));
+            }
             foreach ([$tier['compactionNotice'], $tier['truncationNotice']] as $report) {
                 if ($report instanceof Message) {
                     $reports[] = $report;
@@ -1427,6 +1447,7 @@ final class SessionHost
                     'id' => $request['id'],
                     'fingerprint' => $request['fingerprint'],
                     'summaries' => null,
+                    'safeguardHold' => null,
                 ];
                 $request['promise']()->then(function (HistoryCompactedMsg $msg) use ($request): void {
                     // Billed before the latch check, as the TUI bills it: a
@@ -1436,9 +1457,13 @@ final class SessionHost
                     if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
                         return;
                     }
-                    $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null
+                    // CTX-4: a HOLD is remembered so the tier that lands the
+                    // heuristic fold can say why, but its summaries are
+                    // discarded and never spliced.
+                    $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null
                         ? $msg->summaries
                         : [];
+                    $this->aheadOfNeed['safeguardHold'] = $msg->safeguardHold;
                 });
             }
         }
