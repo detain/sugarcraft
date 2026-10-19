@@ -50,6 +50,36 @@ export function parseUnifiedDiff(diff: string): DiffLine[] {
   return lines
 }
 
+/**
+ * The section of a multi-file unified diff that belongs to one path — the
+ * `diff --git a/… b/…` header and everything up to the next file header, or
+ * null when the diff has no section for it (an untracked file never does).
+ * Matches either side of the header so a rename answers to both names.
+ */
+export function diffSectionForPath(diff: string, path: string): string | null {
+  if (diff === '' || path === '') return null
+  const lines = diff.split('\n')
+  let header: string | null = null
+  let body: string[] = []
+  let found = false
+  const flush = (): string | null => {
+    if (!found || header === null) return null
+    return [header, ...body].join('\n').replace(/\n+$/, '')
+  }
+  for (const line of lines) {
+    if (line.startsWith('diff --git ')) {
+      const match = /^diff --git a\/(.*) b\/(.*)$/.exec(line)
+      if (found) break
+      header = line
+      body = []
+      found = match !== null && (match[1] === path || match[2] === path)
+    } else if (header !== null) {
+      body.push(line)
+    }
+  }
+  return flush()
+}
+
 export function diffStats(lines: DiffLine[]): DiffStats {
   let added = 0
   let removed = 0

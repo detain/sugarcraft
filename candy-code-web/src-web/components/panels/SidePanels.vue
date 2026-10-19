@@ -8,6 +8,7 @@ import { useSessionStore } from '../../stores/session'
 import AgentsPanel from '../agents/AgentsPanel.vue'
 import AgentCatalogPanel from '../agents/AgentCatalogPanel.vue'
 import BackgroundPanel from './BackgroundPanel.vue'
+import ChangesPanel from './ChangesPanel.vue'
 import MemoryPanel from './MemoryPanel.vue'
 import RulesPanel from './RulesPanel.vue'
 import TodoPanel from './TodoPanel.vue'
@@ -95,6 +96,7 @@ function onKey(event: KeyboardEvent): void {
       <MemoryPanel v-else-if="panels.active === 'memory'" />
       <RulesPanel v-else-if="panels.active === 'rules'" :session-id="sessionId" />
       <AgentCatalogPanel v-else-if="panels.active === 'catalog'" />
+      <ChangesPanel v-else-if="panels.active === 'changes'" />
     </div>
   </aside>
 </template>
