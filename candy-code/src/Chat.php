@@ -1182,6 +1182,21 @@ final class Chat implements Model
          */
         private readonly ?string $pendingCompactionId = null,
         /**
+         * The idle auto-fold's own latch (CTX-5): `{id, fingerprint,
+         * sessionId}` for the summarisation request the idle watch put out, or
+         * null when none is out. Its own latch rather than
+         * `$pendingCompactionId`, for the reason `$backgroundSummary` has one:
+         * this fold has no parked turn behind it — the manual latch's
+         * supersede-and-release discipline is about WHOSE prompt the landing
+         * dispatches, and an idle fold dispatches nobody's. The fingerprint
+         * re-checks at landing (a transcript that moved under the request
+         * drops the fold rather than rewriting under it — see
+         * {@see applyIdleCompaction()}), and the session id rides along
+         * because a switch can land between the tick and the reply even though
+         * {@see sessionChangeResets()} also releases this latch.
+         */
+        private readonly ?array $pendingIdleCompaction = null,
+        /**
          * How many AUTOMATIC-tier compactions in a row have left the context back
          * at or over the tier that asked for them — the circuit breaker's counter
          * (prompt_expand.md §4.23, which records that Claude Code shipped the
@@ -2334,6 +2349,8 @@ final class Chat implements Model
      *
      * - `pendingCompactionId`: a `/compact` issued against the old transcript
      *   must not rewrite the new one when its summary lands.
+     * - `pendingIdleCompaction`: the same rule for the CTX-5 idle fold —
+     *   its summaries were written about the session being left behind.
      * - `queuedPrompts`: typed for the old conversation, not this one.
      * - `scrollOffset`: indexes into the transcript that went away.
      * - `consecutiveRefillCompactions`: the thrash breaker counts refills of ONE
@@ -2352,6 +2369,7 @@ final class Chat implements Model
     {
         return [
             'pendingCompactionId' => null,
+            'pendingIdleCompaction' => null,
             'queuedPrompts' => [],
             'scrollOffset' => 0,
             'consecutiveRefillCompactions' => 0,
@@ -2802,6 +2820,9 @@ final class Chat implements Model
         if ($msg instanceof McpLoginProgressMsg) {
             return $this->handleMcpLoginProgress($msg);
         }
+        if ($msg instanceof IdleCompactTickMsg) {
+            return $this->handleIdleCompactTick();
+        }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
             // AssistantMsg arm accounts before its staleness guard: the
@@ -2834,6 +2855,19 @@ final class Chat implements Model
                     ...$held,
                     'summaries' => $usable ? $msg->summaries : [],
                 ]]), null];
+            }
+
+            // CTX-5: the idle fold's landing. Same message shape as a
+            // `/compact` answer, its own latch, and a different ending — it
+            // rewrites the transcript where it stands and dispatches no turn
+            // (nobody sent anything). Checked before the supersede guard
+            // below for the same reason the background latch is checked
+            // first: this compactionId was never in pendingCompactionId, so
+            // the generic guard would silently eat it.
+            if ($this->pendingIdleCompaction !== null
+                && $msg->compactionId === $this->pendingIdleCompaction['id']
+            ) {
+                return $this->applyIdleCompaction($msg);
             }
 
             // Superseded: a second /compact was issued, or one of the FOUR
@@ -3289,6 +3323,10 @@ final class Chat implements Model
                 // scheduled with no token, on purpose, and that method's own
                 // docblock says why the two triggers differ.
                 'pendingCompactionId' => null,
+                // CTX-5: same release for an idle fold in flight. Escape is the
+                // user being HERE; a fold landing under a session they just
+                // interrupted rewrites the transcript they were reading.
+                'pendingIdleCompaction' => null,
                 // `queuedPrompts` is deliberately ABSENT, which is a decision and
                 // not an omission. This arm clears `inFlight`, so it is the one
                 // turn-ending site that does NOT call
@@ -10744,6 +10782,7 @@ final class Chat implements Model
             'maxCostUsd' => $this->maxCostUsd,
             'summaryBackend' => $this->summaryBackend,
             'pendingCompactionId' => $this->pendingCompactionId,
+            'pendingIdleCompaction' => $this->pendingIdleCompaction,
             // Carried, not recomputed: this is a run of results across turns, and
             // a clone that reset it to zero on the next keystroke would make the
             // breaker un-trippable — every keystroke would hand the tier a clean
@@ -12890,6 +12929,11 @@ final class Chat implements Model
         if ($dueForReminder
             && $backgroundSummary === null
             && $this->pendingCompactionId === null
+            // CTX-5: an idle fold already out owns the next rewrite of this
+            // history; two summarisers racing the same transcript is one too
+            // many billed round-trips (and the fold's landing would fingerprint-
+            // mismatch the moment the reminder's summaries applied).
+            && $this->pendingIdleCompaction === null
             && !$this->spendCapReached()
         ) {
             $request = $this->buildSummarizationRequest($dispatched, null, null, '', true, $baseHistory);
@@ -13526,8 +13570,10 @@ final class Chat implements Model
                         'scrollOffset' => 0,
                         'expanded' => [],
                         // An outstanding `/compact` summarization is abandoned:
-                        // the exchanges it summarised are gone.
+                        // the exchanges it summarised are gone — and with them
+                        // the idle fold's too (CTX-5, see the double-Escape arm).
                         'pendingCompactionId' => null,
+                        'pendingIdleCompaction' => null,
                         // Unarm the breaker with the transcript that tripped it.
                         'consecutiveRefillCompactions' => 0,
                     ];
@@ -13548,6 +13594,7 @@ final class Chat implements Model
                     // A summary landing after a restore would compact the
                     // transcript the user just recovered (see applyModelCompaction()).
                     $changes['pendingCompactionId'] = null;
+                    $changes['pendingIdleCompaction'] = null;
                     $cursor = $effect->cursor();
                     break;
 
@@ -15369,11 +15416,18 @@ final class Chat implements Model
      * 2.10, {@see dispatchTurn()}); its PreCompact trigger is `auto`, the
      * tier it stands in for.
      *
+     * $unattended is CTX-5's idle fold ({@see handleIdleCompactTick()}): no
+     * prompt is parked behind it and nobody is watching, so it asks the
+     * automatic-tier backend (`compaction.mode` `off` still means heuristic)
+     * and carries the `auto` PreCompact trigger, like the parked tier it
+     * rides — but its landing folds the transcript instead of dispatching a
+     * turn.
+     *
      * @param list<Message> $probeHistory
      * @param ?list<Message> $conversation
      * @return array{id:string,count:int,fingerprint:Context\Compaction\HistoryFingerprint,cmd:\Closure}|null
      */
-    private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null, string $focus = '', bool $background = false, ?array $conversation = null): ?array
+    private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null, string $focus = '', bool $background = false, ?array $conversation = null, bool $unattended = false): ?array
     {
         // Roadmap 2.11: the host's compactions flush the memory too, once per
         // compaction cycle — claimed on the session's context ledger when the
@@ -15396,7 +15450,7 @@ final class Chat implements Model
         };
 
         $request = $this->compactionService()->buildSummarizationRequest(
-            $this->compactionSummaryBackend(automatic: $parkedSubmission !== null || $background),
+            $this->compactionSummaryBackend(automatic: $parkedSubmission !== null || $background || $unattended),
             $this->compactor,
             $probeHistory,
             $parkedSubmission,
@@ -15411,7 +15465,7 @@ final class Chat implements Model
         }
 
         $gate = $this->preCompactGate(
-            $parkedSubmission === null && !$background
+            $parkedSubmission === null && !$background && !$unattended
                 ? \SugarCraft\Code\Host\CompactionService::TRIGGER_MANUAL
                 : \SugarCraft\Code\Host\CompactionService::TRIGGER_AUTO,
             $focus,
@@ -15794,6 +15848,276 @@ final class Chat implements Model
     private static function sanitizeSummaryLine(string $text): string
     {
         return \SugarCraft\Code\Host\CompactionService::sanitizeSummaryLine($text);
+    }
+
+    /**
+     * Whether the idle auto-compaction watch (CTX-5, `compaction.idleAuto`)
+     * should have a tick running. The membership gate for
+     * {@see \SugarCraft\Code\App\App::subscriptions()}'s keyed tick —
+     * deliberately reading only SESSION-scoped state, never the transcript's
+     * size: a session that could fold asks occasionally, and whether THIS
+     * minute is a folding minute is the tick's own re-check.
+     *
+     * Every conjunct is a machine-level reason a fold could not land even
+     * with a willing user, so none is left for the tick to discover per
+     * minute. `idleAuto` off is the user's answer; a session with automatic
+     * compaction off has already refused the tier this rides; a zero idle
+     * window disables the offer and, with it, the clock; a read-only session
+     * writes no transcript; an outstanding summarization (typed `/compact`,
+     * parked, or ahead-of-need) owns the next rewrite; and a tripped refill
+     * breaker means rewrites keep buying nothing — paying for one nobody is
+     * watching would be pure loss, and the breaker arms the pause the user
+     * can read about in the transcript, not a silent background burner.
+     */
+    public function shouldWatchIdleCompaction(): bool
+    {
+        $config = $this->compactor->config();
+
+        return $config->idleAuto
+            && $config->autoCompacts()
+            && $config->idleOfferSeconds > 0
+            && !$this->readOnlySession
+            && $this->pendingCompactionId === null
+            && $this->pendingIdleCompaction === null
+            && !IdleCompactionPolicy::thrashTripped($this->consecutiveRefillCompactions, $config->refillLimit);
+    }
+
+    /**
+     * One tick of the idle watch (CTX-5): re-derive the whole verdict HERE.
+     * The subscription's produce closure is stateless by necessity —
+     * sugar-core's Program keeps the closure installed at arm time for as
+     * long as the id is wanted (the E655 lesson) — so the tick is the clock
+     * and this is the judgment.
+     *
+     * SILENT by design on every "not now": a false is free to re-check in a
+     * minute, and none of these conditions may mint a refusal row per minute
+     * the way the keystroke paths mint one per press. The transient silences
+     * mirror the watchFiles arm's list — input in the box, queued prompts,
+     * any overlay or permission prompt open: the user is ABOUT to be back,
+     * and a fold landing under their hands is exactly the surprise the
+     * opt-in's gating exists to prevent. They never disarm the
+     * subscription; they only answer "not this minute".
+     *
+     * The over-tier test is the real one: the same
+     * {@see \SugarCraft\Code\Context\ContextCompactor::shouldCompact()} 85%
+     * measurement over the same wire and window submit() takes, so the fold
+     * fires at the tier and nowhere else. The idle clock —
+     * {@see IdleCompactionPolicy::shouldAutoCompact()} at the user's own
+     * `compaction.idleOfferSeconds` — is the AND-side, never a reason on its
+     * own. estimateTokenCount() is pure character arithmetic over the
+     * transcript (no git walk, no provider probe, no repo-map rebuild),
+     * which is what makes the per-minute re-check cheap.
+     *
+     * Past the verdict: a reached spend cap ends the wait on the FREE
+     * heuristic rewrite (a cap-breached session cannot pay for the model's
+     * opinion, and folding without it is what the tier does offline anyway);
+     * no model route (`compaction.mode` `off`/`heuristic`, or nothing left to
+     * condense) folds heuristically on the spot for the same reason.
+     * Otherwise the unattended request goes out and the latch rides until
+     * {@see applyIdleCompaction()} or one of the release routes ends it.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleIdleCompactTick(): array
+    {
+        if (!$this->shouldWatchIdleCompaction()) {
+            return [$this, null];
+        }
+
+        if ($this->inFlight
+            || $this->inputBuf !== ''
+            || $this->queuedPrompts !== []
+            || $this->keyHelp !== null
+            || $this->pendingPermission !== null
+            || $this->palette !== null
+            || $this->sessionPicker !== null
+            || $this->dirPicker !== null
+            || $this->historySearch !== null
+        ) {
+            return [$this, null];
+        }
+
+        $config = $this->compactor->config();
+        $wireHistory = self::compactionWire($this->history);
+        $tokenLimit = $this->contextTokenLimit();
+        $overTier = $this->compactor->shouldCompact(
+            $wireHistory,
+            $tokenLimit,
+            \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($this->history), $this->history),
+        );
+        if (!IdleCompactionPolicy::shouldAutoCompact(
+            $overTier,
+            $this->lastActivityAt,
+            $config->idleAuto,
+            idleSeconds: $config->idleOfferSeconds,
+        )) {
+            return [$this, null];
+        }
+
+        if ($this->spendCapReached()) {
+            return $this->idleHeuristicFold($wireHistory, $tokenLimit);
+        }
+
+        $request = $this->buildSummarizationRequest(
+            $this->history,
+            null,
+            null,
+            '',
+            false,
+            null,
+            true, // unattended: the automatic backend and the `auto` PreCompact trigger
+        );
+        if ($request === null) {
+            return $this->idleHeuristicFold($wireHistory, $tokenLimit);
+        }
+
+        return [$this->mutate(['pendingIdleCompaction' => [
+            'id' => $request['id'],
+            'fingerprint' => $request['fingerprint'],
+            'sessionId' => $this->currentSessionId,
+        ]]), $request['cmd']];
+    }
+
+    /**
+     * The idle fold WITHOUT a model: run the automatic tier's synchronous
+     * heuristic rewrite ({@see \SugarCraft\Code\Host\TurnController::inlineTier()}
+     * with no summaries spliced) and announce it (CTX-5).
+     *
+     * Silent when the tier buys nothing — `$tier['compactionNotice'] === null`
+     * is the heuristic's own "saved 0%" answer, the same adopt-only-when-it-
+     * bought rule the keystroke paths apply. It is also the self-limiting
+     * quiet: a fold that landed under tier fails the next tick's over-tier
+     * test, so nothing stamps a row every minute.
+     *
+     * The 95% blocking outcome is not refused here — unlike submit(), nothing
+     * is waiting on a prompt, so a fold that helped is worth keeping even
+     * when the context remains large; the breaker measures the attempt with
+     * `turnSent: false` (no turn was sent, so a refill that did not clear the
+     * tier extends a run the user is not in the middle of).
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function idleHeuristicFold(array $wireHistory, int $tokenLimit): array
+    {
+        $tokenCount = $this->estimateTokenCount($this->history);
+        $tier = $this->turnController()->inlineTier(
+            $this->compactionService(),
+            $this->compactor,
+            $this->history,
+            $wireHistory,
+            $tokenLimit,
+            $tokenCount,
+            $this->estimateTokenCount(...),
+            [],
+        );
+        if ($tier['compactionNotice'] === null) {
+            return [$this, null];
+        }
+
+        $rows = [...$tier['history'], $tier['compactionNotice']];
+        if ($tier['truncationNotice'] !== null) {
+            $rows[] = $tier['truncationNotice'];
+        }
+        $rows[] = Message::notice(Lang::t('chat.compact.idle_folded', [
+            'before' => $tokenCount,
+            'after' => $tier['tokenCount'],
+        ]));
+
+        $folded = $this->mutate(['history' => $rows, 'pendingIdleCompaction' => null]);
+        $next = $folded->withCompactionOutcome(
+            $folded->compactor->shouldCompact(self::compactionWire($folded->history), $tokenLimit),
+            turnSent: false,
+        );
+
+        return [$next, $this->postCompactCmd(
+            \SugarCraft\Code\Host\CompactionService::TRIGGER_AUTO,
+            $this->history,
+            $next->history,
+        )];
+    }
+
+    /**
+     * Land an idle fold: rewrite the transcript with the summaries the
+     * unattended request bought, dispatch no turn (CTX-5).
+     *
+     * Every early exit RELEASES the latch — a stuck latch would permanently
+     * disarm the watch through {@see shouldWatchIdleCompaction()}. The guards
+     * are the parked landing's minus everything that only made sense for a
+     * parked prompt: there is no submission to dispatch, no 95% re-test
+     * (nothing to block), and no spend-cap re-check — the summary's cost is
+     * accounted by update() before this method runs, and the fold itself is
+     * free from here.
+     *
+     * A CTX-4 HOLD degrades rather than refusing, which is the parked
+     * tier's rule and the right one here too: the fold has a human opt-in
+     * behind it and no prompt in front of it, so the conservative move is the
+     * heuristic fold with an advisory naming what the audit saw — refusing
+     * outright (typed `/compact`'s answer) would leave an idle session
+     * over-tier with nobody to act on the refusal.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function applyIdleCompaction(HistoryCompactedMsg $msg): array
+    {
+        $release = [$this->mutate(['pendingIdleCompaction' => null]), null];
+
+        if ($this->pendingIdleCompaction['sessionId'] !== $this->currentSessionId) {
+            return $release;
+        }
+        // The user is back mid-round-trip and their own turn is running: the
+        // fold's probe history predates whatever that turn has appended, and
+        // rewriting under a live stream is the desync the in-flight guards
+        // exist to prevent. The summaries die; the next idle tick re-asks.
+        if ($this->inFlight) {
+            return $release;
+        }
+        // The request's fingerprint must still be the leading run of the
+        // CURRENT transcript — the same test the ahead-of-need splice applies
+        // at submit(). A turn that appended, a /rewind, or any other rewrite
+        // since dispatch means these summaries describe a history that no
+        // longer stands as summarised; dropping is the only honest fold.
+        if ($msg->fingerprint === null || !$msg->fingerprint->matches(
+            $this->compactionService()->historyFingerprint($this->compactor, $this->history),
+        )) {
+            return $release;
+        }
+        // A PreCompact chain refused the fold: say so once, in the same voice
+        // the parked landing uses (an automatic block, `parked: true`), and
+        // stand down until the next idle window.
+        if ($msg->blockedBy !== null) {
+            return [$this->mutate([
+                'history' => [...$this->history, Message::notice(
+                    $this->compactionService()->compactionBlockedNotice($msg->blockedBy, true),
+                )],
+                'pendingIdleCompaction' => null,
+            ]), null];
+        }
+
+        $prefix = $this->compactionService()->modelSummaryFallbackPrefix($msg);
+        $hold = $msg->safeguardHold;
+        $summaries = $hold === null ? $msg->summaries : [];
+        if ($hold !== null) {
+            $prefix .= $this->compactionService()->safeguardFoldAdvisory($hold);
+        }
+
+        $before = $this->estimateTokenCount($this->history);
+        $changes = $this->compactionChanges('', $this->history, $summaries, $prefix);
+        $history = [...$changes['history'], Message::notice(Lang::t('chat.compact.idle_folded', [
+            'before' => $before,
+            'after' => $this->estimateTokenCount($changes['history']),
+        ]))];
+
+        $folded = $this->mutate([...$changes, 'history' => $history, 'pendingIdleCompaction' => null]);
+        $next = $folded->withCompactionOutcome(
+            $folded->compactor->shouldCompact(self::compactionWire($folded->history), $this->contextTokenLimit()),
+            turnSent: false,
+        );
+
+        return [$next, $this->postCompactCmd(
+            \SugarCraft\Code\Host\CompactionService::TRIGGER_AUTO,
+            $this->history,
+            $next->history,
+        )];
     }
 
     /**

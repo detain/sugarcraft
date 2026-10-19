@@ -140,6 +140,18 @@ final class App implements Model
     public const AGENT_VIEW_SUBSCRIPTION = 'agent-view:';
 
     /**
+     * How often the idle auto-compaction watch re-derives its verdict
+     * (CTX-5). Coarse on purpose: the idle window it polices is an hour by
+     * default, so a minute of slop on the fold timing is invisible, while a
+     * missed minute after the user's answer is a tick that fires before the
+     * first keystroke lands.
+     */
+    public const IDLE_COMPACT_TICK_SECONDS = 60.0;
+
+    /** The idle watch's tick id — single per app, no keying needed. */
+    public const IDLE_COMPACT_SUBSCRIPTION = 'idle-compact';
+
+    /**
      * Log windows read at once when a view opens, so a finished run's whole
      * transcript (up to 4 MB) is on screen at once instead of over the ticks.
      */
@@ -4497,6 +4509,24 @@ final class App implements Model
                 self::AGENT_VIEW_SUBSCRIPTION . $id,
                 self::AGENT_VIEW_TICK_SECONDS,
                 static fn (): CoreMsg => new \SugarCraft\Code\OpenAgentViewMsg($id),
+            );
+        }
+
+        // CTX-5: the idle auto-compaction watch (`compaction.idleAuto`,
+        // default off). Declared while the Chat says a fold could ever land
+        // — session-scoped conditions only, so the id churns a handful of
+        // times per session, not per minute. The tick always dispatches an
+        // IdleCompactTickMsg; EVERY condition that reads the transcript or
+        // the keyboard lives in Chat::handleIdleCompactTick(), which is what
+        // keeps this produce closure stateless — load-bearing, because
+        // Program keeps the closure installed at arm time for as long as the
+        // id is wanted (the E655 lesson the agent-view tick above already
+        // documents).
+        if ($this->chat?->shouldWatchIdleCompaction() === true) {
+            $subscriptions = ($subscriptions ?? new Subscriptions())->withTick(
+                self::IDLE_COMPACT_SUBSCRIPTION,
+                self::IDLE_COMPACT_TICK_SECONDS,
+                static fn (): CoreMsg => new \SugarCraft\Code\IdleCompactTickMsg(),
             );
         }
 
