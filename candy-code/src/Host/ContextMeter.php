@@ -73,6 +73,15 @@ final class ContextMeter
      */
     public const IMAGE_ATTACHMENT_TOKEN_ESTIMATE = 1600;
 
+    /**
+     * CTX-2: a PDF's contribution when it is NOT on a document-capable wire.
+     * The text heuristic must never run over binary bytes — both because the
+     * answer is meaningless and because scanning megabytes of PDF on every
+     * tier read is a stall — so a document gets a flat floor estimate, the
+     * same shape the image branch answers with.
+     */
+    public const DOCUMENT_ATTACHMENT_TOKEN_ESTIMATE = 1600;
+
     private function __construct()
     {
     }
@@ -121,6 +130,13 @@ final class ContextMeter
             // prompt.
             foreach ($msg->attachments as $attachment) {
                 if (!$attachment instanceof Attachment || $attachment->data === null) {
+                    continue;
+                }
+                // CTX-2: a document's bytes are binary too - flat floor, never
+                // the text heuristic.
+                if ($attachment->type === AttachmentType::Document) {
+                    $total += self::DOCUMENT_ATTACHMENT_TOKEN_ESTIMATE;
+
                     continue;
                 }
                 $total += $attachment->type === AttachmentType::Image

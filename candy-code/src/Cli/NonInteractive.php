@@ -1171,9 +1171,11 @@ final class NonInteractive
             $resolved = FileMentions::resolve($prompt, $mentionRoot);
             $context = ($contextMentions ?? ContextMentions::new($mentionRoot))->resolve($prompt);
             foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
-                $message = $attachment->type === AttachmentType::Image
-                    ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
-                    : $message->attachFile($attachment->path, $attachment->data);
+                $message = match ($attachment->type) {
+                    AttachmentType::Image => $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType),
+                    AttachmentType::Document => $message->attachDocument($attachment->path, $attachment->data, $attachment->mimeType),
+                    AttachmentType::File => $message->attachFile($attachment->path, $attachment->data),
+                };
             }
             $mentionNotices = [...$resolved['notices'], ...$context['notices']];
         }

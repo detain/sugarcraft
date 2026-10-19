@@ -19,16 +19,21 @@ final class AttachmentTypeTest extends TestCase
         $this->assertSame('Image', AttachmentType::Image->name);
     }
 
+    public function testDocumentCaseExists(): void
+    {
+        $this->assertSame('Document', AttachmentType::Document->name);
+    }
+
     public function testCaseCount(): void
     {
-        $this->assertCount(2, AttachmentType::cases());
+        $this->assertCount(3, AttachmentType::cases());
     }
 
     public function testIsPureEnum(): void
     {
         // AttachmentType is a pure enum (not backed), not an enum with string/int backing
         $cases = AttachmentType::cases();
-        $this->assertCount(2, $cases);
+        $this->assertCount(3, $cases);
         $this->assertInstanceOf(AttachmentType::class, $cases[0]);
     }
 

@@ -51,6 +51,11 @@ final readonly class UserMessage implements Message
         return $this->withAttachment(new Attachment($path, AttachmentType::Image));
     }
 
+    public function withDocument(string $path): self
+    {
+        return $this->withAttachment(new Attachment($path, AttachmentType::Document));
+    }
+
     /**
      * The text a provider sends for this turn: the prompt, then every FILE
      * attachment inlined as a `<file>` block (audit 15b-15) — or a
@@ -65,7 +70,9 @@ final readonly class UserMessage implements Message
      *
      * Images are not part of this text; a vision-capable encoder sends
      * {@see images()} as their own content parts, and a text-only one uses
-     * {@see textOnly()}.
+     * {@see textOnly()}. Documents (CTX-2) follow the same rule through
+     * {@see documents()}: a PDF is bytes on a document-capable wire, never
+     * inlined prose.
      */
     public function wireText(): string
     {
@@ -77,6 +84,16 @@ final readonly class UserMessage implements Message
                 // it is named here, where EVERY encoder reads.
                 if (!self::isSendableImage($attachment)) {
                     $blocks[] = "[Attached image {$path} could not be included: its bytes were not captured.]";
+                }
+
+                continue;
+            }
+            if ($attachment->type === AttachmentType::Document) {
+                // A PDF's bytes are their own block on the one wire that reads
+                // them ({@see \SugarCraft\Code\Providers\AttachmentEncoding::anthropicBlocks()});
+                // never inlined as text, and never silent without bytes.
+                if (!self::isSendableDocument($attachment)) {
+                    $blocks[] = "[Attached document {$path} could not be included: its bytes were not captured.]";
                 }
 
                 continue;
@@ -117,6 +134,11 @@ final readonly class UserMessage implements Message
                     . ' was not sent: this request carries text only.]';
                 $text = $text === '' ? $line : $text . "\n\n" . $line;
             }
+            if (self::isSendableDocument($attachment)) {
+                $line = '[Document attachment ' . self::attributeValue($attachment->path)
+                    . ' was not sent: this request carries text only.]';
+                $text = $text === '' ? $line : $text . "\n\n" . $line;
+            }
         }
 
         return $text;
@@ -136,9 +158,31 @@ final readonly class UserMessage implements Message
         ));
     }
 
+    /**
+     * The document attachments whose bytes were captured, in attach order -
+     * what a document-capable encoder sends as document parts (CTX-2).
+     *
+     * @return list<Attachment>
+     */
+    public function documents(): array
+    {
+        return array_values(array_filter(
+            $this->attachments,
+            self::isSendableDocument(...),
+        ));
+    }
+
     private static function isSendableImage(Attachment $a): bool
     {
         return $a->type === AttachmentType::Image
+            && $a->data !== null
+            && $a->data !== ''
+            && $a->mimeType !== null;
+    }
+
+    private static function isSendableDocument(Attachment $a): bool
+    {
+        return $a->type === AttachmentType::Document
             && $a->data !== null
             && $a->data !== ''
             && $a->mimeType !== null;

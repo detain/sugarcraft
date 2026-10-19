@@ -652,6 +652,18 @@ final class Message implements \JsonSerializable
     }
 
     /**
+     * Attach a PDF document (CTX-2). `$bytes`/`$mimeType` are the snapshot a
+     * document-capable provider is sent as its own block
+     * ({@see \SugarCraft\Code\Providers\AttachmentEncoding::anthropicBlocks()}).
+     */
+    public function attachDocument(string $path, ?string $bytes = null, ?string $mimeType = null): self
+    {
+        return $this->mutate([
+            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::Document, $bytes, $mimeType)],
+        ]);
+    }
+
+    /**
      * Create a message with tool calls (for assistant responses that invoke tools).
      *
      * @param list<ToolCall> $toolCalls
@@ -1171,6 +1183,9 @@ final class Message implements \JsonSerializable
             $type = match ($a['type'] ?? null) {
                 'Image' => AttachmentType::Image,
                 'File' => AttachmentType::File,
+                // Without this arm a resumed session would silently drop every
+                // PDF attached before the drop (the default is `null`).
+                'Document' => AttachmentType::Document,
                 default => null,
             };
             if ($type !== null) {

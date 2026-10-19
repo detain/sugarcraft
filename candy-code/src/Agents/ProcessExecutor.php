@@ -1486,9 +1486,13 @@ foreach ((is_array($requestSpec['messages'] ?? null) ? $requestSpec['messages'] 
                     // must not die over an attachment label it does not know.
                     return new SugarCraft\Code\Attachment(
                         $a['path'],
-                        $type === 'Image'
-                            ? SugarCraft\Code\AttachmentType::Image
-                            : SugarCraft\Code\AttachmentType::File,
+                        match ($type) {
+                            'Image' => SugarCraft\Code\AttachmentType::Image,
+                            // CTX-2: a PDF rehydrated as File would have its
+                            // binary inlined as prose on the worker's wire.
+                            'Document' => SugarCraft\Code\AttachmentType::Document,
+                            default => SugarCraft\Code\AttachmentType::File,
+                        },
                     );
                 },
                 is_array($entry['attachments'] ?? null) ? $entry['attachments'] : [],

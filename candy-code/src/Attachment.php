@@ -33,13 +33,16 @@ final readonly class Attachment
         public string $path,
         public AttachmentType $type,
         /**
-         * The file's text (a {@see AttachmentType::File}) or the image's raw
-         * bytes (a {@see AttachmentType::Image}), as captured at attach time.
+         * The file's text (a {@see AttachmentType::File}), the image's raw
+         * bytes (a {@see AttachmentType::Image}), or the document's raw PDF
+         * bytes (a {@see AttachmentType::Document}), as captured at attach
+         * time.
          */
         public ?string $data = null,
         /**
-         * The sniffed media type of an image's bytes (`image/png`, …); null for
-         * a file, and for an image whose bytes were not captured.
+         * The sniffed media type of an image's or document's bytes
+         * (`image/png`, `application/pdf`, …); null for a file, and for an
+         * image or document whose bytes were not captured.
          */
         public ?string $mimeType = null,
         /**

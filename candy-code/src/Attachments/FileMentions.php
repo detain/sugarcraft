@@ -36,7 +36,8 @@ use SugarCraft\Code\AttachmentType;
  * prompt, so it is bounded: at most {@see MAX_MENTIONS} files, text capped at
  * {@see TEXT_MAX_BYTES} (longer files are truncated, and say so), images at
  * {@see IMAGE_MAX_BYTES} (larger ones are refused with a notice, because a
- * half image is not an image).
+ * half image is not an image), and PDFs at {@see DOCUMENT_MAX_BYTES} (refused
+ * the same way - a half PDF is not a PDF either).
  */
 final class FileMentions
 {
@@ -52,6 +53,15 @@ final class FileMentions
      * every vision provider here accepts.
      */
     public const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * Largest document attached. 20 MiB keeps one PDF under the 32 MiB
+     * per-request ceiling the Anthropic document family answers to, with
+     * room for the rest of the turn's blocks. Over it the file is REFUSED
+     * with a notice, never clipped: a truncated PDF is an unparseable file,
+     * the same doctrine as {@see IMAGE_MAX_BYTES}.
+     */
+    public const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
     /** Most directory entries one completion looks at. */
     private const COMPLETION_SCAN_LIMIT = 2000;
@@ -244,6 +254,15 @@ final class FileMentions
     }
 
     /**
+     * The media type of document bytes, by magic number - PDF, the one
+     * document type a wire here carries as its own block (CTX-2) - or null.
+     */
+    public static function sniffDocument(string $bytes): ?string
+    {
+        return str_starts_with($bytes, '%PDF-') ? 'application/pdf' : null;
+    }
+
+    /**
      * Read one resolved file into an attachment, or explain why not.
      *
      * @return array{0: ?Attachment, 1: ?string}
@@ -274,6 +293,23 @@ final class FileMentions
                 return [new Attachment($display, AttachmentType::Image, $bytes, $mime), null];
             }
 
+            // Before the NUL refusal: PDFs are full of NUL bytes and are
+            // anything but text.
+            $mime = self::sniffDocument($head);
+            if ($mime !== null) {
+                if ($size > self::DOCUMENT_MAX_BYTES) {
+                    return [null, sprintf(
+                        '@%s was not attached: the document is %s, over the %s limit.',
+                        self::shown($display),
+                        self::bytes($size),
+                        self::bytes(self::DOCUMENT_MAX_BYTES),
+                    )];
+                }
+                $bytes = $head . (string) stream_get_contents($handle);
+
+                return [new Attachment($display, AttachmentType::Document, $bytes, $mime), null];
+            }
+
             $text = $head . (string) stream_get_contents($handle, self::TEXT_MAX_BYTES - strlen($head));
         } finally {
             fclose($handle);
@@ -281,7 +317,7 @@ final class FileMentions
 
         if (str_contains($text, "\0")) {
             return [null, sprintf(
-                '@%s was not attached: it is neither text nor a PNG, JPEG, GIF or WebP image.',
+                '@%s was not attached: it is neither text nor a PNG, JPEG, GIF or WebP image, nor a PDF document.',
                 self::shown($display),
             )];
         }
