@@ -9,7 +9,9 @@ use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\Settings\SettingValidator;
 
 /**
- * The `keybindings` map: binding id => replacement chord.
+ * The `keybindings` map: binding id => replacement chord, or null to UNBIND
+ * that binding (plan_comparison TUI-4b — the row stops claiming its chord and
+ * the /keys reference shows it as `keys.unbound`).
  *
  * IDS ARE CHECKED AGAINST THE REGISTRY, not a snapshot: a renamed row must
  * refuse the stale override at the next save rather than park it under an id
@@ -63,6 +65,13 @@ final class KeyBindingsValidator implements SettingValidator
 
             if (KeyBindingRegistry::byId($id) === null) {
                 return "'{$id}' is not a known binding (the /keys reference lists them)";
+            }
+
+            // A null value UNBINDS the binding (plan_comparison TUI-4b): the
+            // id check above is the whole contract — unknown ids still stop
+            // the launch, known ids park in the suppression set.
+            if ($chord === null) {
+                continue;
             }
 
             $pressed = \is_string($chord) ? KeyBinding::parseChord($chord) : null;
@@ -138,6 +147,13 @@ final class KeyBindingsValidator implements SettingValidator
 
             foreach (KeyBindingRegistry::all() as $binding) {
                 if ($binding->id === $id || $binding->chord() !== $pressed) {
+                    continue;
+                }
+
+                // An unbound victim has no key to lose (plan_comparison
+                // TUI-4b): warning about the theft of a chord the user
+                // already vacated would warn about nothing.
+                if (in_array($binding->id, KeyBindingRegistry::suppressed(), true)) {
                     continue;
                 }
 

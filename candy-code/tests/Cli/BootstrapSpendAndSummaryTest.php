@@ -384,7 +384,9 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         $this->assertNull($definition->validate(['chat.session-cycle' => 'Alt+S']));
         $this->assertNull($definition->validate(['shell.menu' => 'F11']), 'function keys need no modifier');
         $this->assertNull($definition->validate(['chat.keys' => 'Ctrl+Space']));
+        $this->assertNull($definition->validate(['chat.palette' => null, 'chat.newline' => 'Ctrl+Q']), 'null unbinds (TUI-4b); strings still alias beside it');
         $this->assertNotNull($definition->validate(['nope' => 'Ctrl+B']));
+        $this->assertNotNull($definition->validate(['nope' => null]), 'a null still names an id — an unknown one stops the save');
         $this->assertNotNull($definition->validate(['shell.palette' => 'Cmd+K']));
         $this->assertNotNull($definition->validate(['chat.send' => 'Enter']), 'a bare named key would steal ordinary typing');
         $this->assertNotNull($definition->validate(['chat.send' => 'Esc Esc']), 'a sequence is not one pressable chord');

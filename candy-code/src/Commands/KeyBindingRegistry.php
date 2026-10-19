@@ -211,32 +211,77 @@ final class KeyBindingRegistry
     private static array $overrides = [];
 
     /**
+     * Chords the `keybindings` setting UNBOUND (`"<id>": null`,
+     * plan_comparison TUI-4b) — binding id => true.
+     *
+     * @var array<string, true>
+     */
+    private static array $suppressed = [];
+
+    /**
+     * The rune a suppressed chord is rewritten to at the funnel. Two bytes of
+     * U+001C with ctrl held: no decoder reports a multi-character rune for a
+     * control press, no handler arm names this rune, `Chat`'s generic
+     * `Char && ctrl` arm makes it inert, and the pane shell's `default` arm
+     * drops it — the press exists only to SUPPRESS, never to do.
+     */
+    public const UNBOUND_SENTINEL = "\x1c\x1c";
+
+    /**
      * Register the `keybindings` overrides for this process.
      *
      * Called once at launch ({@see \SugarCraft\Code\Cli\Bootstrap::chat()}),
      * after {@see \SugarCraft\Code\Cli\Bootstrap::keybindingsSetting()} has
      * validated the value — an unusable present key stops the launch rather
-     * than registering half a map. Passing `[]` clears the overrides, the
-     * same clear-what-you-set convention as every other `use*()` registrar.
+     * than registering half a map. Passing `[]` clears everything, the same
+     * clear-what-you-set convention as every other `use*()` registrar.
      *
-     * The two derived-set memos ({@see $ctrlRuneMemo}, {@see $yieldedRuneMemo})
-     * keep answering from the RAW rows BY CONSTRUCTION: a registered override
-     * is honoured at the one keystroke funnel — {@see aliasPress()}, read by
+     * A null value UNBINDS the binding (plan_comparison TUI-4b): the row
+     * contributes no alias pair, its shipped chord is dropped from the
+     * derived claim sets — which is how a dual claim like `Ctrl+G` returns
+     * to the pane shell once the chat side is unbound — and a press of the
+     * vacated chord only reaches a handler when some still-live row ships
+     * that same chord.
+     *
+     * A plain (string) override must NOT move a claim: the alias is honoured
+     * at the one keystroke funnel — {@see aliasPress()}, read by
      * {@see \SugarCraft\Code\App\App::handleKey()} — BEFORE any claim
-     * decision, so the alias arrives at the handlers already translated to the
-     * binding's shipped chord. Moving a claim to the override chord instead
-     * would translate twice and abandon the shipped chord the reference still
-     * lists: the override ADDS a chord, it does not move one.
+     * decision, so the alias arrives at the handlers already translated to
+     * the binding's shipped chord. Moving a claim to the override chord
+     * instead would translate twice and abandon the shipped chord the
+     * reference still lists: the override ADDS a chord, it does not move
+     * one. A suppression is different in kind — it removes an effect, so it
+     * removes the claim with it, deliberately and with the memo clears
+     * below to prove it.
      *
-     * @param array<string, string> $overrides binding id => replacement chord
+     * @param array<string, string|null> $overrides binding id => replacement chord, or null to unbind
      */
     public static function useOverrides(array $overrides): void
     {
-        self::$overrides = $overrides;
-        // The alias pairs are a function of this map; re-registering (which
-        // includes the `[]` clear) must never serve a stale derivation.
+        self::$overrides = [];
+        self::$suppressed = [];
+        foreach ($overrides as $id => $chord) {
+            if ($chord === null) {
+                self::$suppressed[$id] = true;
+                continue;
+            }
+            self::$overrides[$id] = $chord;
+        }
+
+        // The alias pairs and the derived sets are functions of these maps;
+        // re-registering (which includes the `[]` clear) must never serve a
+        // stale derivation — suppression feeds the claim sets BY DESIGN.
         self::$aliasMemo = null;
         self::$chordAliasMemo = null;
+        self::$inertChordMemo = null;
+        self::$ctrlRuneMemo = [];
+        self::$yieldedRuneMemo = null;
+    }
+
+    /** The binding ids the setting unbound, in registration order. */
+    public static function suppressed(): array
+    {
+        return array_keys(self::$suppressed);
     }
 
     /** The overrides currently registered, by binding id. */
@@ -247,7 +292,10 @@ final class KeyBindingRegistry
 
     /**
      * The chord a binding answers to — the consult order the `keybindings`
-     * setting exists for: a registered override WINS over the shipped row.
+     * setting exists for: a registered override WINS over the shipped row,
+     * and a suppression replaces it with the reference's own "unbound" word
+     * (plan_comparison TUI-4b — the /keys column reads this method, so an
+     * unbound row shows what it IS there without the reference editing).
      *
      * Null answers for an id the registry does not declare, overridden or
      * not; validation rejects unknown ids before they could be registered.
@@ -257,6 +305,10 @@ final class KeyBindingRegistry
         $override = self::$overrides[$id] ?? null;
         if ($override !== null) {
             return $override;
+        }
+
+        if (isset(self::$suppressed[$id])) {
+            return Lang::t('keys.unbound');
         }
 
         return self::byId($id)?->keys;
@@ -348,6 +400,9 @@ final class KeyBindingRegistry
 
         $pairs = [];
         foreach (self::effective() as $row) {
+            if (isset(self::$suppressed[$row->id])) {
+                continue;
+            }
             $pressed = $row->ctrlRune();
             $shipped = self::byId($row->id)?->ctrlRune();
             if ($pressed === null || $shipped === null || $pressed === $shipped) {
@@ -412,12 +467,62 @@ final class KeyBindingRegistry
     }
 
     /**
+     * Memo of the INERT chord set — the shipped chords a suppression has
+     * vacated with nobody left to answer them. Null means "not yet derived";
+     * {@see useOverrides()} clears it.
+     *
+     * @var array<string, true>|null
+     */
+    private static ?array $inertChordMemo = null;
+
+    /**
+     * Chord ids that dispatch to NOTHING because every row shipping one has
+     * been unbound by the setting (plan_comparison TUI-4b). Derived from the
+     * RAW rows in both directions: a chord still shipped by a live row is NOT
+     * inert — pressing it dispatches that row, which is precisely how
+     * unbinding `chat.history-search` hands the dual claim `Ctrl+G` back to
+     * the pane shell's Broadcast instead of silencing the key.
+     *
+     * @return array<string, true>
+     */
+    private static function inertChords(): array
+    {
+        if (self::$inertChordMemo !== null) {
+            return self::$inertChordMemo;
+        }
+
+        $inert = [];
+        if (self::$suppressed !== []) {
+            $live = [];
+            $vacated = [];
+            foreach (self::all() as $binding) {
+                $id = $binding->chord();
+                if ($id === null) {
+                    continue;
+                }
+                if (isset(self::$suppressed[$binding->id])) {
+                    $vacated[$id] = true;
+                    continue;
+                }
+                $live[$id] = true;
+            }
+            foreach (array_keys($vacated) as $id) {
+                if (!isset($live[$id])) {
+                    $inert[$id] = true;
+                }
+            }
+        }
+
+        return self::$inertChordMemo = $inert;
+    }
+
+    /**
      * The keystroke funnel the `keybindings` setting rides — the ONE place a
      * pressed chord is translated to the chord it dispatches AS
      * ({@see \SugarCraft\Code\App\App::handleKey()}; ISS-047, rv5b, and
      * plan_comparison TUI-4c for the chord-shape widening).
      *
-     * Two lanes, consulted in order:
+     * Three consults, in order:
      *
      * 1. the RUNE lane — a `Ctrl+<char>` press whose lowercased rune an
      *    override borrowed for another binding's bare `Ctrl+<rune>` row;
@@ -426,13 +531,19 @@ final class KeyBindingRegistry
      * 2. the CHORD lane — any press whose canonical id
      *    ({@see KeyBinding::pressId()}) an override points at a binding
      *    shipped with a different parseable chord; the press is rebuilt as
-     *    the SHIPPED chord, `Alt+Enter` and `Ctrl+Tab` and `F10` included.
+     *    the SHIPPED chord, `Alt+Enter` and `Ctrl+Tab` and `F10` included;
+     * 3. SUPPRESSION ({@see inertChords()}, TUI-4b) — a press whose chord
+     *    every shipping row has unbound is rewritten to
+     *    {@see UNBOUND_SENTINEL}, a rune no handler can name, so the key
+     *    does nothing anywhere rather than falling through to ordinary
+     *    typing.
      *
-     * Null answers an unaliased press: dispatch continues unchanged.
+     * Null answers an unaliased, un-suppressed press: dispatch continues
+     * unchanged.
      */
     public static function aliasPress(KeyMsg $msg): ?KeyMsg
     {
-        if (self::$overrides === []) {
+        if (self::$overrides === [] && self::$suppressed === []) {
             return null;
         }
 
@@ -443,9 +554,15 @@ final class KeyBindingRegistry
             }
         }
 
-        $target = self::chordAliasMap()[KeyBinding::pressId($msg)] ?? null;
+        $pressed = KeyBinding::pressId($msg);
+        $target = self::chordAliasMap()[$pressed] ?? null;
+        if ($target !== null) {
+            return KeyBinding::keyMsgFromId($target);
+        }
 
-        return $target === null ? null : KeyBinding::keyMsgFromId($target);
+        return isset(self::inertChords()[$pressed])
+            ? new KeyMsg(KeyType::Char, self::UNBOUND_SENTINEL, ctrl: true)
+            : null;
     }
 
     /**
@@ -583,6 +700,9 @@ final class KeyBindingRegistry
             if ($binding->context !== self::CONTEXT_CHAT || !$binding->yieldsToShell()) {
                 continue;
             }
+            if (isset(self::$suppressed[$binding->id])) {
+                continue; // an unbound chord yields nothing (TUI-4b)
+            }
             $rune = $binding->ctrlRune();
             if ($rune !== null && !in_array($rune, $runes, true)) {
                 $runes[] = $rune;
@@ -597,8 +717,11 @@ final class KeyBindingRegistry
      *
      * The rows are compile-time data ({@see all()} is nine literal arrays with
      * no external input, on an all-static `final` class that is never
-     * instantiated), so each derivation is a pure function of a constant and
-     * caching it for the life of the process cannot go stale.
+     * instantiated); what moves them is the `keybindings` suppression set
+     * (plan_comparison TUI-4b), and {@see useOverrides()} clears these memos
+     * for exactly that reason — each derivation is a pure function of the
+     * rows MINUS the registered suppressions, and within one registration it
+     * cannot go stale.
      *
      * What the hot path asks for, MEASURED rather than counted off the call
      * sites. Counting off the call sites got it wrong in both directions,
@@ -696,6 +819,9 @@ final class KeyBindingRegistry
         foreach (self::all() as $binding) {
             if ($binding->context !== $context) {
                 continue;
+            }
+            if (isset(self::$suppressed[$binding->id])) {
+                continue; // TUI-4b: an unbound chord claims nothing — that is the shell-regain leg
             }
             $rune = $binding->ctrlRune();
             if ($rune !== null && !in_array($rune, $runes, true)) {

@@ -2792,4 +2792,5 @@ TXT,
     // --- fix-w2-chat 2026-10-14 ---
     'chat.launch.echo_backend' => 'No provider is configured, so this session runs on the built-in offline echo backend — replies are echoed locally, no model is called. Run `candy-code doctor` to see what a provider needs, then press Ctrl+P to switch model once one is configured.',
     'keys.chat.repaint' => 'Clear the screen and repaint the frame',
+    'keys.unbound' => 'unbound',
 ];

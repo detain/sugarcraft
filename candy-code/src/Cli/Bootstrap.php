@@ -11242,7 +11242,7 @@ final class Bootstrap
      * fail-open on muscle memory, and a typo'd id means the user believed a
      * binding moved when it did not.
      *
-     * @return array<string,string> binding id => override chord
+     * @return array<string,string|null> binding id => override chord, or null for an unbound binding
      *
      * @throws PermissionConfigException when the key is present and unusable
      */
@@ -11260,7 +11260,7 @@ final class Bootstrap
             );
         }
 
-        /** @var array<string,string> $raw */
+        /** @var array<string,string|null> $raw */
         return $raw;
     }
 
@@ -11275,7 +11275,10 @@ final class Bootstrap
      * steals loses its key with no other signal anywhere, which is what these
      * rows are the signal for. Drained through {@see warnLaunchRows()} so a
      * new report does not move the transcript-seam call-site census, the way
-     * every other {@code report*()} launch drain holds that line.
+     * every other {@code report*()} launch drain holds that line. Suppressed
+     * bindings take part on neither side (plan_comparison TUI-4b): they are
+     * not in {@see KeyBindingRegistry::overrides()}, and a victim the user
+     * already unbound has no key to lose.
      */
     public static function reportKeybindingCollisions(): void
     {

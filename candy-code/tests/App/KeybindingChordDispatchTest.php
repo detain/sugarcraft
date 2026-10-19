@@ -100,6 +100,27 @@ final class KeybindingChordDispatchTest extends TestCase
         $this->assertNotContains('b', KeyBindingRegistry::chatCtrlRunes());
     }
 
+    /**
+     * plan_comparison TUI-4b end to end: unbinding the chat's `Ctrl+G`
+     * leaves no history-search overlay behind, and unbinding `Ctrl+P`
+     * leaves neither a palette NOR typed characters — the sentinel lands in
+     * `Chat`'s inert control arm, which is exactly the "the key does
+     * nothing" contract, not "the key types its letter".
+     */
+    public function testAnUnboundChordOpensNothingAndTypesNothing(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.history-search' => null]);
+
+        [$afterG] = $this->chatHostedApp()->update(new KeyMsg(KeyType::Char, 'g', ctrl: true));
+        $this->assertNull($afterG->chat->historySearch(), 'the unbound overlay must not open');
+
+        KeyBindingRegistry::useOverrides(['chat.palette' => null]);
+
+        [$afterP] = $this->chatHostedApp()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($afterP->chat->palette(), 'the unbound chord opens no palette');
+        $this->assertSame('', $afterP->chat->inputBuf, 'and types nothing — the sentinel is inert, not text');
+    }
+
     private function chatHostedApp(): App
     {
         $chat = (new Chat(backend: new EchoBackend()))->withSize(120, 20);

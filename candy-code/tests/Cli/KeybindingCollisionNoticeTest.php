@@ -113,6 +113,28 @@ final class KeybindingCollisionNoticeTest extends TestCase
         self::assertSame([], self::collisionRows());
     }
 
+    public function testASuppressedVictimIsNotACollision(): void
+    {
+        // `chat.session-picker` unbinds to null, vacating `Ctrl+R`. Moving
+        // `chat.palette` onto the vacated chord steals from nobody — the row
+        // that used to answer is silent by the user's own hand — so no row
+        // may print. The suppression rides the registry static (plan-
+        // comparison TUI-4b), not the map passed in, which is exactly the
+        // seam this pins: collisionNotices() must consult it.
+        KeyBindingRegistry::useOverrides(['chat.session-picker' => null]);
+
+        self::assertSame([], KeyBindingsValidator::new()->collisionNotices(['chat.palette' => 'Ctrl+R']));
+
+        // Control: with the picker live, the same move is a steal and the
+        // launch must name it.
+        KeyBindingRegistry::useOverrides([]);
+
+        $notices = KeyBindingsValidator::new()->collisionNotices(['chat.palette' => 'Ctrl+R']);
+        self::assertCount(1, $notices);
+        self::assertStringContainsString(self::ROW_FRAGMENT, $notices[0]);
+        self::assertStringContainsString('chat.session-picker', $notices[0]);
+    }
+
     public function testTheValidatorAnswersWithoutTheSeam(): void
     {
         $notices = KeyBindingsValidator::new()->collisionNotices(['chat.repaint' => 'Ctrl+P']);

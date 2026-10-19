@@ -737,4 +737,86 @@ final class KeyBindingRegistryTest extends TestCase
         $this->assertSame(KeyType::F10, $function->type);
         $this->assertSame('f10', KeyBinding::pressId($function));
     }
+
+    // =====================================================================
+    // plan_comparison TUI-4b: unbind — `"<id>": null`
+    // =====================================================================
+
+    /**
+     * The shell-regain leg: unbinding the CHAT side of the dual claim
+     * `Ctrl+G` drops the rune from the derived chat set — the claim layer
+     * is derived, so removing it there is the removal — while the raw
+     * shipped rows keep answering for the shell, which now owns the key in
+     * every ordinary pane. Re-registering restores both, memos and all.
+     */
+    public function testUnbindingOneSideOfADualClaimReturnsTheKeyToTheShell(): void
+    {
+        $before = KeyBindingRegistry::chatCtrlRunes();
+        $this->assertContains('g', $before);
+
+        KeyBindingRegistry::useOverrides(['chat.history-search' => null]);
+
+        $this->assertSame(['chat.history-search'], KeyBindingRegistry::suppressed());
+        $this->assertNotContains('g', KeyBindingRegistry::chatCtrlRunes(), 'the unbound chord must leave the derived chat set');
+        $this->assertContains('g', KeyBindingRegistry::shellCtrlRunes(), 'the shell side ships the chord independently — untouched');
+        $this->assertSame('unbound', KeyBindingRegistry::chordFor('chat.history-search'), 'the /keys column reads chordFor()');
+        $this->assertSame('Ctrl+G', KeyBindingRegistry::chordFor('shell.group-input'), 'the live twin is unaffected');
+
+        KeyBindingRegistry::useOverrides([]);
+        $this->assertSame([], KeyBindingRegistry::suppressed());
+        $this->assertContains('g', KeyBindingRegistry::chatCtrlRunes(), 'the clear must restore what the registration removed');
+        $this->assertSame('Ctrl+G', KeyBindingRegistry::chordFor('chat.history-search'));
+    }
+
+    /**
+     * The inert leg: when EVERY row shipping a chord is unbound, the funnel
+     * rewrites the press to a rune no handler names ({@see
+     * KeyBindingRegistry::UNBOUND_SENTINEL}) — the key does nothing rather
+     * than falling through to ordinary typing. A chord with a live twin is
+     * NOT inert: it dispatches the twin (the test above), so the rewrite
+     * consults the rows, not just the suppression list.
+     */
+    public function testTheFunnelInertsUnboundChordsNobodyLeftToAnswer(): void
+    {
+        KeyBindingRegistry::useOverrides(['chat.palette' => null]);
+
+        $inert = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($inert, 'the vacated chord must be rewritten, not passed through');
+        $this->assertSame(KeyBindingRegistry::UNBOUND_SENTINEL, $inert->rune);
+        $this->assertTrue($inert->ctrl, 'the sentinel carries ctrl so Chat\'s inert control arm — never the typing arm — absorbs it');
+
+        // The dual: unbinding the chat side alone leaves Ctrl+G live for the
+        // shell, so the funnel must NOT rewrite it.
+        KeyBindingRegistry::useOverrides(['chat.history-search' => null]);
+        $this->assertNull(KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'g', ctrl: true)), 'a chord a live row still ships is no one\'s ghost');
+
+        // Unbinding BOTH sides vacates it for real.
+        KeyBindingRegistry::useOverrides(['chat.history-search' => null, 'shell.group-input' => null]);
+        $both = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'g', ctrl: true));
+        $this->assertNotNull($both, 'with every shipper unbound the chord goes inert');
+        $this->assertSame(KeyBindingRegistry::UNBOUND_SENTINEL, $both->rune);
+
+        KeyBindingRegistry::useOverrides([]);
+        $this->assertNull(KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Char, 'p', ctrl: true)));
+    }
+
+    /**
+     * An unbound row contributes no yield and its vacated named chord goes
+     * inert — the suppression and the alias lanes are disjoint by
+     * construction (an id answers to at most one of them).
+     */
+    public function testAnUnboundRowYieldsNothingAndItsNamedChordGoesInert(): void
+    {
+        KeyBindingRegistry::useOverrides([
+            'chat.newline' => null,
+            'chat.session-picker' => null,
+        ]);
+
+        $newline = KeyBindingRegistry::aliasPress(new KeyMsg(KeyType::Enter, '', alt: true));
+        $this->assertNotNull($newline, 'Alt+Enter had exactly one shipper');
+        $this->assertSame(KeyBindingRegistry::UNBOUND_SENTINEL, $newline->rune);
+
+        $this->assertNotContains('r', KeyBindingRegistry::chatCtrlRunesYieldedToShell());
+        $this->assertContains('g', KeyBindingRegistry::chatCtrlRunesYieldedToShell(), 'the still-bound yielding row keeps its entry');
+    }
 }
