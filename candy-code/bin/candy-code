@@ -13,7 +13,20 @@ declare(strict_types=1);
 ini_set('display_errors', 'stderr');
 
 (static function () {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+    $candidates = ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
+    // DST-1: under the phar build (tools/build-phar.php) THIS file is the
+    // archive's stub, so __FILE__/__DIR__ name the phar on the real filesystem
+    // and every candidate above resolves outside the archive. The archive's
+    // own path is then the only correct root, and it exists as a candidate
+    // exactly when it can hit: Phar::running() is '' in every composer-mode
+    // checkout, so the three-candidate behaviour above is byte-untouched
+    // there (tests/Integration/BinCandyCodeAutoloadGuardTest.php restates
+    // precisely those three for that reason).
+    $runningPhar = \Phar::running(false);
+    if ($runningPhar !== '') {
+        $candidates[] = $runningPhar . '/vendor/autoload.php';
+    }
+    foreach ($candidates as $candidate) {
         $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
         if (is_file($path)) {
             require $path;
