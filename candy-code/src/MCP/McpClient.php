@@ -198,7 +198,8 @@ final class McpClient
      * @param array<string, string> $denyPatterns
      */
     public function setDenyPatterns(array $denyPatterns): void
-    {        $this->denyPatterns = $denyPatterns;
+    {
+        $this->denyPatterns = $denyPatterns;
     }
 
     /**

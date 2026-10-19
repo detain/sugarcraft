@@ -31,7 +31,7 @@ final class McpDispatchParityTest extends TestCase
 {
     private static int $serial = 0;
 
-    private function server(): string
+    private function ruleServer(): string
     {
         return 'parity-' . (++self::$serial) . '-' . getmypid();
     }
@@ -51,7 +51,7 @@ final class McpDispatchParityTest extends TestCase
 
     public function testARestrictiveRuleOnTheWireNameBindsBothSpellings(): void
     {
-        $srv = $this->server();
+        $srv = $this->ruleServer();
         $rule = new PermissionRule(self::wire($srv, 'drop_table'), PermissionAction::Deny);
 
         $this->assertTrue($rule->matches(new ToolCall(self::wire($srv, 'drop_table'), [])), 'the direct spelling, as ever');
@@ -62,7 +62,7 @@ final class McpDispatchParityTest extends TestCase
 
     public function testAGlobOnTheServerPrefixBindsTheArgsForm(): void
     {
-        $srv = $this->server();
+        $srv = $this->ruleServer();
         $star = chr(42);
         $rule = new PermissionRule(self::wire($srv, '') . $star, PermissionAction::Deny);
         $askAll = new PermissionRule(McpToolBridge::NAME_PREFIX . $star, PermissionAction::Ask);
@@ -75,7 +75,7 @@ final class McpDispatchParityTest extends TestCase
 
     public function testARestrictiveRuleOnTheDispatcherBindsBridgedNames(): void
     {
-        $srv = $this->server();
+        $srv = $this->ruleServer();
         $denyCall = new PermissionRule(McpCallTool::NAME, PermissionAction::Deny);
         $askCall = new PermissionRule(McpCallTool::NAME, PermissionAction::Ask);
 
@@ -87,7 +87,7 @@ final class McpDispatchParityTest extends TestCase
 
     public function testAllowTranslatesInNeitherDirection(): void
     {
-        $srv = $this->server();
+        $srv = $this->ruleServer();
         $grantWire = new PermissionRule(self::wire($srv, 'list_rows'), PermissionAction::Allow);
         $grantCall = new PermissionRule(McpCallTool::NAME, PermissionAction::Allow);
 
@@ -111,7 +111,7 @@ final class McpDispatchParityTest extends TestCase
 
     public function testAMalformedArgsFormIsNotAGlobEscapeHatch(): void
     {
-        $srv = $this->server();
+        $srv = $this->ruleServer();
         $rule = new PermissionRule(self::wire($srv, 'drop_table'), PermissionAction::Deny);
 
         foreach ([[], ['server' => $srv], ['tool' => 'drop_table'], ['server' => $srv, 'tool' => 7]] as $i => $args) {
@@ -127,7 +127,7 @@ final class McpDispatchParityTest extends TestCase
 
     private function lazyShapeWithHints(): array
     {
-        $srv = $this->server();
+        $srv = $this->ruleServer();
         $read = McpTool::fromArray(['name' => 'reads', 'description' => str_repeat('r', 3000), 'annotations' => ['readOnlyHint' => true]], $srv);
         $write = McpTool::fromArray(['name' => 'drops', 'description' => str_repeat('d', 3000)], $srv);
         $shape = McpToolShape::derive(new McpClient('/nonexistent/mcp-7-parity/.mcp.json'), [$read, $write], [], 10);

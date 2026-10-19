@@ -24,7 +24,7 @@ final class McpToolShapeTest extends TestCase
 {
     private static int $serial = 0;
 
-    private function server(): string
+    private function shapeServer(): string
     {
         return 'shape-' . (++self::$serial) . '-' . getmypid();
     }
@@ -47,8 +47,8 @@ final class McpToolShapeTest extends TestCase
 
     public function testAServerAtOrOverTheFloorIsDispatchedAndOneUnderStaysBridged(): void
     {
-        $big = $this->server();
-        $small = $this->server();
+        $big = $this->shapeServer();
+        $small = $this->shapeServer();
         $fat = $this->descriptor($big, 'heavy', 2000);
         $light = $this->descriptor($small, 'ping');
 
@@ -82,7 +82,7 @@ final class McpToolShapeTest extends TestCase
 
     public function testTheFloorZeroNeverDefersAnything(): void
     {
-        $big = $this->server();
+        $big = $this->shapeServer();
         $shape = McpToolShape::derive(
             new McpClient('/nonexistent/mcp-7-shape/.mcp.json'),
             [$this->descriptor($big, 'heavy', 5000)],
@@ -100,8 +100,8 @@ final class McpToolShapeTest extends TestCase
         // Two servers of 60-ish tokens each: the SUM is over 100, neither
         // server alone is. The dispatcher defuses schema bombs; it must not
         // tax a small server for a noisy neighbour.
-        $a = $this->server();
-        $b = $this->server();
+        $a = $this->shapeServer();
+        $b = $this->shapeServer();
         $shape = McpToolShape::derive(
             new McpClient('/nonexistent/mcp-7-shape/.mcp.json'),
             [$this->descriptor($a, 'one'), $this->descriptor($b, 'two')],
@@ -133,7 +133,7 @@ final class McpToolShapeTest extends TestCase
     #[DataProvider('eagerSpellings')]
     public function testTheEagerFlagUsesTheHouseTruthyVocabulary(mixed $spelling, bool $expected): void
     {
-        $big = $this->server();
+        $big = $this->shapeServer();
         $shape = McpToolShape::derive(
             new McpClient('/nonexistent/mcp-7-shape/.mcp.json'),
             [$this->descriptor($big, 'heavy', 5000)],
@@ -149,7 +149,7 @@ final class McpToolShapeTest extends TestCase
 
     public function testTheEagerBridgesAreIndistinguishableFromDirectlyBuiltOnes(): void
     {
-        $srv = $this->server();
+        $srv = $this->shapeServer();
         $descriptors = [$this->descriptor($srv, 'ping'), $this->descriptor($srv, 'pong')];
         $client = new McpClient('/nonexistent/mcp-7-shape/.mcp.json');
 
@@ -168,7 +168,7 @@ final class McpToolShapeTest extends TestCase
 
     public function testDeriveSeedsTheHintTableForDispatchedDescriptorsToo(): void
     {
-        $srv = $this->server();
+        $srv = $this->shapeServer();
         $read = $this->descriptor($srv, 'reads', 5000, ['readOnlyHint' => true]);
         $open = $this->descriptor($srv, 'fetches', 5000, ['readOnlyHint' => true, 'openWorldHint' => true]);
         $plain = $this->descriptor($srv, 'drops', 5000);
@@ -191,7 +191,7 @@ final class McpToolShapeTest extends TestCase
         $this->assertNull(McpToolBridge::dispatchedWireName([]));
         $this->assertNull(McpToolBridge::dispatchedWireName(['server' => '', 'tool' => 'x']));
         $this->assertNull(McpToolBridge::dispatchedWireName(['server' => 's', 'tool' => 42]));
-        $srv = $this->server();
+        $srv = $this->shapeServer();
         $this->assertSame(
             McpToolBridge::wireNameFor($srv, 'go'),
             McpToolBridge::dispatchedWireName(['server' => $srv, 'tool' => 'go']),

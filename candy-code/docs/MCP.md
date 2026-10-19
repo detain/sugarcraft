@@ -651,8 +651,8 @@ never listed, and a call naming it is refused — on the unrestricted main-agent
 path as well as through `McpRouter` for a preset-routed client. Names are the
 raw config keys, not the sanitised `mcp__<key>__` spelling. A trusted project
 may set the list too, since a deny only removes servers; your own list replaces
-a project's rather than merging with it. It is read once, at the first MCP
-launch, so a change applies on restart:
+a project's rather than merging with it. It is read once, when the session
+first builds the MCP client, so a change applies on restart:
 
 ```json
 { "disabledMcpServers": ["untrusted_*", "scratch"] }
@@ -674,9 +674,15 @@ tools:
   `server` to see one server; no arguments for everything.
 - **`mcp_call`** (position 40) runs one of them:
   `mcp_call(server, tool, arguments)`. The call goes through the exact same
-  `McpClient::callTool()` path a bridge uses, so the router's allow/deny and
-  the whole `PreToolUse` chain are unchanged — the deferral moves the spelling,
-  never the gate.
+  `McpClient::callTool()` path a bridge uses, so the router's allow/deny still
+  decides it and the permission gate still translates your rules across both
+  spellings (below). The one thing that genuinely differs: `PreToolUse` hooks
+  receive the tool call as the model made it, so for a deferred server the
+  hook frame is `mcp_call` with the server and tool inside its arguments — an
+  operator hook whose matcher names `mcp__git__*` keeps firing for every
+  bridged server, and must additionally match `mcp_call` to keep seeing the
+  deferred ones. Gate and router are unchanged; the hook's view of the name
+  moves with the spelling.
 
 Three properties make this safe to turn on by default:
 

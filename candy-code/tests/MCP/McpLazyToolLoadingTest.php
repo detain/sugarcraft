@@ -104,13 +104,18 @@ final class McpLazyToolLoadingTest extends TestCase
 
     private function removeTree(string $dir): void
     {
-        foreach (glob($dir . '/**/*') ?: [] as $f) {
-            if (is_file($f)) {
-                @unlink($f);
-            }
+        // A RecursiveIteratorIterator, not glob(): the glob PATTERN strings a
+        // helper like this needs are exactly the literals the GlobDialect
+        // corpus harvests, and a test-only file must not move that figure.
+        if (!is_dir($dir)) {
+            return;
         }
-        foreach (glob($dir . '/*') ?: [] as $f) {
-            is_dir($f) ? @rmdir($f) : @unlink($f);
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($walk as $entry) {
+            $entry->isDir() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
         }
         @rmdir($dir);
     }

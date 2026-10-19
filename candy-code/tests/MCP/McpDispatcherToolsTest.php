@@ -30,7 +30,7 @@ final class McpDispatcherToolsTest extends TestCase
         $this->deadPath = '/nonexistent/mcp-7-dispatch-' . getmypid() . '/.mcp.json';
     }
 
-    private function server(): string
+    private function dispatchServer(): string
     {
         return 'disp-' . (++self::$serial) . '-' . getmypid();
     }
@@ -67,7 +67,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testThePairDeclareStableBuiltInShapedSchemas(): void
     {
-        $shape = $this->lazyShape($this->fatSet($this->server(), 'a'));
+        $shape = $this->lazyShape($this->fatSet($this->dispatchServer(), 'a'));
         $list = $shape->listTool();
         $call = $shape->callTool();
 
@@ -88,7 +88,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testTheListNamesServersToolsAndSchemasOfTheFrozenRoster(): void
     {
-        $srv = $this->server();
+        $srv = $this->dispatchServer();
         $shape = $this->lazyShape([...$this->fatSet($srv, 'alpha_tool', 'beta_tool')]);
 
         $result = $shape->listTool()->execute(['id' => 'r1']);
@@ -103,7 +103,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testTheListFiltersByServerAndSaysSoWhenNothingMatches(): void
     {
-        $srv = $this->server();
+        $srv = $this->dispatchServer();
         $shape = $this->lazyShape($this->fatSet($srv, 'alpha_tool'));
 
         $hit = $shape->listTool()->execute(['server' => $srv]);
@@ -121,7 +121,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testTheCallRefusesToLeaveTheFrozenRoster(): void
     {
-        $srv = $this->server();
+        $srv = $this->dispatchServer();
         $bridged = $this->descriptor($srv, 'kept_eager');
         $shape = McpToolShape::derive(
             new McpClient($this->deadPath),
@@ -143,7 +143,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testTheCallValidatesItsArgumentEnvelope(): void
     {
-        $shape = $this->lazyShape($this->fatSet($this->server(), 'a'));
+        $shape = $this->lazyShape($this->fatSet($this->dispatchServer(), 'a'));
         $call = $shape->callTool();
 
         foreach ([
@@ -161,7 +161,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testADispatchedCallTravelsThroughTheClientsRouterAndCarriesItsFailureEnvelope(): void
     {
-        $srv = $this->server();
+        $srv = $this->dispatchServer();
         $shape = $this->lazyShape($this->fatSet($srv, 'round_trip'));
         $expectedWire = McpToolBridge::wireNameFor($srv, 'round_trip');
 
@@ -188,7 +188,7 @@ final class McpDispatcherToolsTest extends TestCase
 
     public function testThePairSchemasAreDescribedNotJustNamed(): void
     {
-        $shape = $this->lazyShape($this->fatSet($this->server(), 'a'));
+        $shape = $this->lazyShape($this->fatSet($this->dispatchServer(), 'a'));
 
         $this->assertStringContainsString('mcp_call', $shape->listTool()->description());
         $this->assertStringContainsString('schema', strtolower($shape->listTool()->description()));

@@ -608,7 +608,8 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
     }
 
     /** Elapsed whole milliseconds since `$start`; public so the MCP-7 dispatcher stamps identically. */
-    public static function elapsedMs(float|int $start): int    {
+    public static function elapsedMs(float|int $start): int
+    {
         return (int) ((hrtime(true) - $start) / 1_000_000);
     }
 
