@@ -213,7 +213,20 @@ final class CommandEffect
         return (string) ($this->data['text'] ?? '');
     }
 
+    /**
+     * Submit $text as the session's next prompt once the command's rows have
+     * landed ({@see CommandEffectKind::SubmitPrompt}).
+     */
+    public static function submitPrompt(string $text): self
+    {
+        return new self(CommandEffectKind::SubmitPrompt, ['prompt' => $text]);
+    }
 
+    /** The prompt carried by {@see self::submitPrompt()}. */
+    public function promptText(): string
+    {
+        return (string) ($this->data['prompt'] ?? '');
+    }
 
     public function grants(): ?\SugarCraft\Code\Permissions\SessionPermissionMemo
     {

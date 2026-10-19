@@ -7,10 +7,15 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Commands\InitCommand;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
 use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Host\Commands\CommandContext;
+use SugarCraft\Code\Host\Commands\CommandEffectKind;
+use SugarCraft\Code\Host\Commands\GoalHostCommand;
+use SugarCraft\Code\Host\Commands\GrindHostCommand;
+use SugarCraft\Code\Host\Commands\InitHostCommand;
 use SugarCraft\Code\Host\Commands\ModelHostCommand;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\CompactionService;
@@ -26,17 +31,18 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 
 /**
- * WEB-2: /compact and /model gained host bodies, so the served session runs
- * them for real instead of answering -32030.
+ * WEB-2: compact, model, init, goal and grind gained host bodies, so the
+ * served session runs them for real instead of answering -32030.
  *
- * The admission mechanism is pinned from both ends: the spellings carry a
- * body (the wire's runsIn marker derives from exactly that field —
+ * The admission mechanism is pinned from both ends: the five spellings now
+ * carry a body (the wire's runsIn marker derives from exactly that field —
  * CommandMethods::runsIn is quoted as source to prove the DERIVATION, not a
  * hand-copied roster), and a body-less built-in still answers client. The
  * behaviours mirror what the TUI's handlers do, through the host's own
  * machinery: /compact folds through CompactionService (typed HOLD refuses,
- * the exact branch Chat lands) and /model rebinds the session's backend
- * without touching settings.
+ * the exact branch Chat lands), /model rebinds the session's backend without
+ * touching settings, and init/goal/grind start a real turn by having the
+ * host submit the same prompt the TUI types into its buffer.
  */
 final class WebTwoHostCommandsTest extends TestCase
 {
@@ -60,9 +66,9 @@ final class WebTwoHostCommandsTest extends TestCase
         @rmdir($this->dir);
     }
 
-    public function testTheCompactAndModelSpellingsCarryHostBodies(): void
+    public function testTheFiveWebTwoSpellingsCarryHostBodies(): void
     {
-        foreach (['compact', 'model'] as $spelling) {
+        foreach (['compact', 'model', 'init', 'goal', 'grind'] as $spelling) {
             $command = BuiltInCommands::forSpelling($spelling);
             self::assertNotNull($command, "/{$spelling} is a built-in spelling");
             self::assertNotNull($command->hostCommand, "/{$spelling} must be admitted to the server");
@@ -229,16 +235,87 @@ final class WebTwoHostCommandsTest extends TestCase
         self::assertStringContainsString('No backend for provider', $flagged[0]->content);
     }
 
+    public function testInitEchoesThenStartsThePromptedTurn(): void
+    {
+        $host = $this->host();
 
+        $host->runCommand('init');
+        $this->drain($host);
 
+        $contents = array_map(static fn (Message $m): string => $m->content, $host->history());
+        self::assertContains('/init', $contents, 'the draft echoes first');
+        $needle = substr(InitCommand::prompt(''), 0, 24);
+        self::assertNotEmpty($needle);
+        $carried = array_values(array_filter(
+            $contents,
+            static fn (string $c): bool => str_contains($c, $needle),
+        ));
+        self::assertNotEmpty($carried, 'the host submitted the same prompt the TUI types');
+        self::assertFalse($host->isBusy());
+    }
 
+    public function testGoalSetsMarksAndKicksOffWithoutATitleModelRefusal(): void
+    {
+        $host = $this->host(title: true);
 
+        $host->runCommand('goal', 'ship the demo');
+        $this->drain($host);
 
-    public function testReadOnlyModelRefusesTheSwitchAndKeepsTheListing(): void
+        $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
+        self::assertStringContainsString('ship the demo', $listing);
+        self::assertStringContainsString('/goal', $listing, 'the set row names the command');
+        self::assertFalse($host->isBusy());
+    }
+
+    public function testGoalWithoutATitleModelRefusesToStartALoop(): void
+    {
+        $host = $this->host();
+
+        $host->runCommand('goal', 'ship the demo');
+
+        $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
+        self::assertStringContainsString('needs a title model', $listing);
+        self::assertSame([], array_values(array_filter(
+            $host->history(),
+            static fn (Message $m): bool => str_contains($m->content, \SugarCraft\Code\Goal\GoalState::MARKER_PREFIX),
+        )), 'neither a goal marker nor a kickoff turn was written — the loop never armed');
+    }
+
+    public function testGoalBareAfterSetAnswersStatusAndClearTakesItBack(): void
+    {
+        $host = $this->host(title: true);
+        $host->runCommand('goal', 'ship the demo');
+        $this->drain($host);
+
+        $host->runCommand('goal');
+        $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
+        self::assertStringContainsString('round', strtolower($listing));
+
+        $host->runCommand('goal', 'clear');
+        $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
+        self::assertStringContainsString('cleared', strtolower($listing));
+    }
+
+    public function testGrindRidesTheGoalBodyAtItsOwnRoundCeiling(): void
+    {
+        $host = $this->host(title: true);
+
+        $host->runCommand('grind', 'fix every red');
+        $this->drain($host);
+
+        $listing = implode("\n", array_map(static fn (Message $m): string => $m->content, $host->history()));
+        self::assertStringContainsString('50', $listing, 'grind means maxRounds 50, not goal\'s 10');
+        self::assertStringContainsString('fix every red', $listing);
+    }
+
+    public function testReadOnlyBodiesRefuseTheirMutatingArmsAndKeepTheirListings(): void
     {
         $context = CommandContext::new(history: [], readOnly: true);
 
         self::assertTrue((new ModelHostCommand())->run($context, '/model openai gpt')->isRefused());
+        self::assertTrue((new GoalHostCommand())->run($context, '/goal aim')->isRefused());
+        self::assertTrue((new InitHostCommand())->run($context, '/init')->isRefused());
+        self::assertTrue((new GrindHostCommand())->run($context, '/grind aim')->isRefused());
 
         $listing = (new ModelHostCommand())->run($context, '/model');
         self::assertFalse($listing->isRefused(), 'a bare listing writes nothing and stays answerable');

@@ -1308,6 +1308,7 @@ final class SessionHost
         // this command's own rows have landed — the transcript reads echo,
         // marker, turn, exactly the order the TUI's `withInputBuf(...)->submit()`
         // route produces.
+        $queuedPrompt = '';
         foreach ($result->effects as $effect) {
             switch ($effect->kind) {
                 case CommandEffectKind::ClearTranscript:
@@ -1348,6 +1349,9 @@ final class SessionHost
                     $this->typedCompact($effect->compactText());
                     break;
 
+                case CommandEffectKind::SubmitPrompt:
+                    $queuedPrompt = $effect->promptText();
+                    break;
 
                 case CommandEffectKind::SwitchSession:
                 case CommandEffectKind::RenameSession:
@@ -1362,6 +1366,15 @@ final class SessionHost
             $this->announceTranscriptRow($row);
         }
 
+        if ($queuedPrompt !== '') {
+            $ticket = $this->submit($queuedPrompt);
+            if (!$ticket->isAdmitted()) {
+                // The turn never went out (cap, blocking tier, a refusing
+                // hook): the reason lands where the user just watched the
+                // command settle, the way the TUI's stopped-goal row does.
+                $this->appendCommandRow((string) $ticket->reason, true);
+            }
+        }
     }
 
     /**

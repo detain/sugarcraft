@@ -74,4 +74,12 @@ enum CommandEffectKind: string
      */
     case CompactTranscript = 'compact-transcript';
 
-    }
+    /**
+     * Submit $text as the session's next prompt (the commands that START A
+     * TURN — `/init`, `/goal`, `/grind`; WEB-2). The driver applies it after
+     * the command's own rows have landed, so the transcript reads echo,
+     * markers, then the turn — the TUI's `withInputBuf(...)->submit()` order
+     * rendered onto a headless session.
+     */
+    case SubmitPrompt = 'submit-prompt';
+}
