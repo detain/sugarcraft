@@ -129,10 +129,20 @@ final class McpClient
         private readonly ?McpAuthStore $authStore = null,
         // Audit MCP-5: asked of every entry AFTER it is canonicalised and
         // BEFORE anything is built or spawned — `(string $name, mixed $type,
-        // array $entry): bool`. Evaluated on the bytes this client itself
-        // loaded, so there is no window between a check and the start in
-        // which `.mcp.json` could change. Null admits everything, as before.
+        // array $entry, string $tierPath): bool`. Evaluated on the bytes this
+        // client itself loaded, so there is no window between a check and the
+        // start in which `.mcp.json` could change. Null admits everything, as
+        // before. MCP-3 appends `$tierPath`: the file that entry was read
+        // from, so the grant site can tell its two tiers apart. A 3-param
+        // closure still mounts — PHP hands extra arguments to user functions
+        // that ignore them.
         private readonly ?\Closure $admit = null,
+        // MCP-3: the operator tier file, read after the project file and
+        // shadowed by it name for name. Empty string = no user tier for this
+        // client. Neither path is re-adjudicated here: containment and trust
+        // were decided at the grant site, and an entry that lost its verdict
+        // arrives as an empty path, not as a second opinion.
+        private readonly string $userConfigPath = '',
     ) {
         // Injectable so tests can supply a MockHandler-backed client; defaults to
         // a real client for production use.
@@ -190,7 +200,7 @@ final class McpClient
      */
     public function startServers(): void
     {
-        $config = $this->loadConfig();
+        $tiers = $this->loadConfig();
         $failures = [];
         $this->disabledServers = [];
         $this->refusedServers = [];
@@ -198,30 +208,43 @@ final class McpClient
         $this->authRequired = [];
         $this->strippedSecretEnv = [];
 
-        foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
-            // ISS-091: the shape check rides HERE, in the loop, rather than
-            // relying on {@see startServer()}'s typed parameters. `declare
-            // (strict_types=1)` is in force: a JSON key like `"1"` arrives from
-            // json_decode as an INT key (PHP casts numeric-string keys), and a
-            // `"mcpServers": {"x": []}` whose value is not an object fails the
-            // same way — either would raise a TypeError on the call itself,
-            // BEFORE startServer()'s per-entry guard existed, aborting the loop
-            // exactly like the old `match` throw did: later servers never
-            // started, and the inventory — which reads the file, not the loop —
-            // kept listing them, so `mcp list` and the launch disagreed.
-            if (!is_string($name) || !is_array($serverConfig)) {
-                $failures[] = sprintf(
-                    '%s (entry is %s, not a named server object)',
-                    is_string($name) && $name !== '' ? $name : json_encode($name, JSON_PARTIAL_OUTPUT_ON_ERROR),
-                    get_debug_type($serverConfig),
-                );
+        // MCP-3: read in tier order (project first) with one rule — a name the
+        // first tier declared is not started twice. The shadow test runs
+        // BEFORE the shape check, so a shadowed user entry is invisible to
+        // every report; the higher tier owns the name, including owning the
+        // right to mis-shape it.
+        $declaredNames = [];
+        foreach ($tiers as $tier) {
+            foreach ($tier['servers'] as $name => $serverConfig) {
+                if (\in_array($name, $declaredNames, true)) {
+                    continue;
+                }
+                $declaredNames[] = $name;
 
-                continue;
-            }
+                // ISS-091: the shape check rides HERE, in the loop, rather than
+                // relying on {@see startServer()}'s typed parameters. `declare
+                // (strict_types=1)` is in force: a JSON key like `"1"` arrives from
+                // json_decode as an INT key (PHP casts numeric-string keys), and a
+                // `"mcpServers": {"x": []}` whose value is not an object fails the
+                // same way — either would raise a TypeError on the call itself,
+                // BEFORE startServer()'s per-entry guard existed, aborting the loop
+                // exactly like the old `match` throw did: later servers never
+                // started, and the inventory — which reads the file, not the loop —
+                // kept listing them, so `mcp list` and the launch disagreed.
+                if (!is_string($name) || !is_array($serverConfig)) {
+                    $failures[] = sprintf(
+                        '%s (entry is %s, not a named server object)',
+                        is_string($name) && $name !== '' ? $name : json_encode($name, JSON_PARTIAL_OUTPUT_ON_ERROR),
+                        get_debug_type($serverConfig),
+                    );
 
-            $failure = $this->startServer($name, $serverConfig);
-            if ($failure !== null) {
-                $failures[] = $failure;
+                    continue;
+                }
+
+                $failure = $this->startServer($name, $serverConfig, $tier['path']);
+                if ($failure !== null) {
+                    $failures[] = $failure;
+                }
             }
         }
 
@@ -561,7 +584,7 @@ final class McpClient
      *         every entry has been attempted; null for a clean start and for a
      *         runtime failure alike
      */
-    private function startServer(string $name, array $config): ?string
+    private function startServer(string $name, array $config, string $tierPath = ''): ?string
     {
         $type = $config['type'] ?? 'stdio';
         if (is_string($type)) {
@@ -582,7 +605,7 @@ final class McpClient
 
                 return null;
             }
-            if ($this->admit !== null && ($this->admit)($name, $type, $entry) !== true) {
+            if ($this->admit !== null && ($this->admit)($name, $type, $entry, $tierPath) !== true) {
                 $this->refusedServers[] = $name;
 
                 return null;
@@ -1047,20 +1070,22 @@ final class McpClient
     }
 
     /**
-     * Read the config whose PATH this method never judged.
+     * Read the config whose PATHS this method never judged.
      *
      * Containment and trust are decided at the grant site, {@see
      * \SugarCraft\Code\Cli\Bootstrap::mcpConfigDecision()}, which is what put
-     * `$configPath` into this client; this method re-reads rather than
-     * re-adjudicates. That is {@see \SugarCraft\Code\Support\ContainedPath}'s
-     * house rule stated where the window lives (E40(a)): between the grant's
-     * `is_file()` + `within()` and this `file_get_contents()` the bytes under the
-     * granted path can change, and nothing here narrows the window, because a
-     * co-resident writer that could swap the file after the grant could have
-     * written it before it. The residual is a config that names servers nobody
-     * approved between two stats — answered by the trust gate upstream, not by a
-     * second containment here. The hard-link limit of that grant is qualified at
-     * {@see \SugarCraft\Code\Support\ContainedPath}'s threat-model paragraph.
+     * `$configPath` (and since MCP-3 `$userConfigPath`) into this client; an
+     * entry that lost its verdict arrives as an EMPTY path, and this method
+     * re-reads rather than re-adjudicates. That is {@see
+     * \SugarCraft\Code\Support\ContainedPath}'s house rule stated where the
+     * window lives (E40(a)): between the grant's `is_file()` + `within()` and
+     * this `file_get_contents()` the bytes under the granted path can change,
+     * and nothing here narrows the window, because a co-resident writer that
+     * could swap the file after the grant could have written it before it. The
+     * residual is a config that names servers nobody approved between two
+     * stats — answered by the trust gate upstream, not by a second containment
+     * here. The hard-link limit of that grant is qualified at {@see
+     * \SugarCraft\Code\Support\ContainedPath}'s threat-model paragraph.
      *
      * E41 (c) — WHAT SAID: an existing-but-broken config used to answer `[]`
      * three different ways (unreadable, unparseable, wrong shape) and the launch
@@ -1074,33 +1099,51 @@ final class McpClient
      * in the transcript — the alternative was users debugging a silently absent
      * toolset; the inventory arm already refused to stay silent about these
      * three.
+     *
+     * MCP-3: the E41(c) law now applies PER FILE, and a broken user file throws
+     * for the same reason a broken project file always did — naming ITSELF.
+     * The project tier is read first and precedence (project wins a shared
+     * name) is applied by the walk in {@see startServers()}, not here; this
+     * method only reads, in order.
+     *
+     * @return list<array{path: string, servers: array<array-key, mixed>}>
      */
     private function loadConfig(): array
     {
-        if (!file_exists($this->configPath)) {
-            return [];
+        $tiers = [];
+
+        // ONE read site for both tiers: the census row for this file counts
+        // call SITES, and looping the two paths through the body below keeps
+        // the file at exactly one, instead of cloning the (deliberately
+        // un-hashed, deliberately instrumented) read.
+        foreach ([$this->configPath, $this->userConfigPath] as $tierPath) {
+            if ($tierPath === '' || !file_exists($tierPath)) {
+                continue;
+            }
+
+            $content = @file_get_contents($tierPath);
+            if (!is_string($content)) {
+                throw new \RuntimeException($tierPath . ' could not be read');
+            }
+
+            try {
+                $data = json_decode($content, true, 512, \JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                throw new \RuntimeException(
+                    $tierPath . ' is not valid JSON (' . $e->getMessage() . ')',
+                    0,
+                    $e,
+                );
+            }
+
+            if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
+                throw new \RuntimeException($tierPath . ' has no "mcpServers" object');
+            }
+
+            $tiers[] = ['path' => $tierPath, 'servers' => $data['mcpServers']];
         }
 
-        $content = @file_get_contents($this->configPath);
-        if (!is_string($content)) {
-            throw new \RuntimeException($this->configPath . ' could not be read');
-        }
-
-        try {
-            $data = json_decode($content, true, 512, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
-            throw new \RuntimeException(
-                $this->configPath . ' is not valid JSON (' . $e->getMessage() . ')',
-                0,
-                $e,
-            );
-        }
-
-        if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
-            throw new \RuntimeException($this->configPath . ' has no "mcpServers" object');
-        }
-
-        return $data;
+        return $tiers;
     }
 
     /**

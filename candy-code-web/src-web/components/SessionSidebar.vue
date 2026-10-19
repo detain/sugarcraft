@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine } from '../lib/format'
 import type { SessionSummary } from '../protocol/generated'
@@ -98,15 +98,26 @@ async function exportRow(summary: SessionSummary, format: 'markdown' | 'json' | 
   })
 }
 
-/** Save exported text through a blob link: the browser downloads it, no navigation. */
+/**
+ * Save exported text through a blob link: the browser downloads it, no
+ * navigation. w2h M4: the URL is revoked when the next export replaces it
+ * or the sidebar unmounts — revoking synchronously right after click() can
+ * race the browser, which may not have read the blob yet.
+ */
+let downloadUrl: string | null = null
+
 function download(filename: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain' }))
+  if (downloadUrl !== null) URL.revokeObjectURL(downloadUrl)
+  downloadUrl = URL.createObjectURL(new Blob([content], { type: 'text/plain' }))
   const link = document.createElement('a')
-  link.href = url
+  link.href = downloadUrl
   link.download = filename
   link.click()
-  URL.revokeObjectURL(url)
 }
+
+onBeforeUnmount(() => {
+  if (downloadUrl !== null) URL.revokeObjectURL(downloadUrl)
+})
 
 /**
  * j / k move between sessions, as in a list view — but only for keyboard

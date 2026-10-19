@@ -294,15 +294,16 @@ final class McpAuthCommand
     }
 
     /**
-     * E701: the in-chat `login` arm GUIDES and never runs. The loopback
-     * login owns a terminal for the whole browser leg — it prints a URL,
-     * waits up to its timeout, and answers a local HTTP callback — and the
-     * TUI owns this terminal; blocking its loop here would freeze the
-     * renderer the human needs in order to copy the URL at all. So this
-     * prints the exact shell command and returns; {@see \SugarCraft\Code\MCP\OAuthLoopbackFlow}
-     * runs from a plain CLI invocation instead. No Chat change is needed:
-     * `parseMcpArgs` already routes both `/mcp login` and `/mcp auth login`
-     * here as the `login` sub-command.
+     * E701: this class's `login` arm GUIDES and never runs — kept true by
+     * construction. The MCP-5 follow-up moved the DOING one layer up, not
+     * into here: Chat intercepts `login <server>` before the host command
+     * and forks the CLI's own loopback flow as a background child
+     * ({@see \SugarCraft\Code\Support\McpLoginFork}), so the TUI never
+     * blocks on the browser leg and this method is reached only for the
+     * bare `login` guide (no server named). This class still binds no
+     * socket and runs no flow, so the E701 byte-pins hold: a blocking
+     * loop here would freeze the renderer the human needs in order to
+     * copy the URL at all.
      */
     private function printLoginGuidance(): int
     {

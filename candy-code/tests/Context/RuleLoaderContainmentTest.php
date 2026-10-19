@@ -363,6 +363,94 @@ final class RuleLoaderContainmentTest extends TestCase
         self::assertArrayHasKey('~/.candy-code/rules', $loader->refusedPaths(), 'refusal recorded under the ~/ spelling when no path resolves');
     }
 
+    // -- INT-2: the foreign trees inherit the whole discipline ----------------
+
+    public function testAUserClaudeRulesDirectoryLinkedAtHomeSshIsRefusedAndRecorded(): void
+    {
+        $home = $this->sandbox . '/home-claude-ssh';
+        $spelled = $home . '/.claude/rules';
+        mkdir($home . '/.claude', 0o700, true);
+        mkdir($home . '/.ssh', 0o700, true);
+        $this->stageDoc($home . '/.ssh/id_ed25519.md', 'stolen-key');
+        self::assertTrue(symlink($home . '/.ssh', $spelled));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserClaudeRules(), 'the tighter anchor tightens per family: a claude rules dir is held inside ~/.claude, not ~/.ssh');
+        self::assertArrayHasKey($spelled, $loader->refusedPaths(), 'and the refusal is recorded under the spelling used');
+    }
+
+    public function testAUserCursorRulesDirectoryLinkedOutsideItsAnchorIsRefusedAndRecorded(): void
+    {
+        $home = $this->sandbox . '/home-cursor-escape';
+        $spelled = $home . '/.cursor/rules';
+        mkdir($home . '/.cursor', 0o700, true);
+        mkdir($home . '/elsewhere', 0o700, true);
+        $this->stageDoc($home . '/elsewhere/sneak.mdc', 'sneak');
+        self::assertTrue(symlink($home . '/elsewhere', $spelled));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserCursorRules());
+        self::assertArrayHasKey($spelled, $loader->refusedPaths(), 'a link out of .cursor is refused even though the target stays inside the home - the anchor is the tool namespace');
+    }
+
+    public function testAProjectClaudeRulesDirectoryLinkedOutOfTheCheckoutIsRefused(): void
+    {
+        $root = $this->sandbox . '/repo-claude-escape';
+        mkdir($root, 0o755, true);
+        mkdir($root . '/.claude', 0o755, true);
+        mkdir($this->sandbox . '/outside-root', 0o755, true);
+        $this->stageDoc($this->sandbox . '/outside-root/payload.md', 'payload');
+        self::assertTrue(symlink($this->sandbox . '/outside-root', $root . '/.claude/rules'));
+
+        $loader = new RuleLoader($root);
+
+        self::assertSame([], $loader->loadProjectClaudeRules(), 'the checkout anchor holds the foreign project trees exactly like the native one');
+        self::assertArrayHasKey($root . '/.claude/rules', $loader->refusedPaths());
+    }
+
+    public function testAWorldWritableHomeRefusesBothForeignTreesUnderTheirLiteralSpellings(): void
+    {
+        $home = $this->sandbox . '/loose-home-foreign';
+        mkdir($home . '/.claude/rules', 0o700, true);
+        mkdir($home . '/.cursor/rules', 0o700, true);
+        $this->stageDoc($home . '/.claude/rules/mine.md', 'mine');
+        $this->stageDoc($home . '/.cursor/rules/mine.mdc', 'mine-mdc');
+        chmod($home, 0o777);
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserClaudeRules());
+        self::assertSame([], $loader->loadUserCursorRules());
+        self::assertArrayHasKey('~/.claude/rules', $loader->refusedPaths(), 'the no-anchor guarantee holds the foreign tiers too');
+        self::assertArrayHasKey('~/.cursor/rules', $loader->refusedPaths());
+        chmod($home, 0o700);
+    }
+
+    public function testADanglingMdcSymlinkInAForeignTreeIsARecordedRefusalNamingBothExtensions(): void
+    {
+        $home = $this->sandbox . '/home-dangling-mdc';
+        $claude = $home . '/.claude/rules';
+        mkdir($claude, 0o700, true);
+        self::assertTrue(symlink($home . '/nowhere.mdc', $claude . '/ghost.mdc'));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserClaudeRules());
+        self::assertArrayHasKey($claude . '/ghost.mdc', $loader->refusedPaths(), 'NIT-5 extends to the widened extension set');
+        self::assertStringContainsString('does not resolve to a regular file', $loader->refusedPaths()[$claude . '/ghost.mdc']);
+        self::assertStringContainsString('.md or .mdc', $loader->refusedPaths()[$claude . '/ghost.mdc'], 'the message names the set this walk accepted - not a stale .md');
+    }
+
     private function scrubSandbox(string $dir): void
     {
         if (!is_dir($dir)) {

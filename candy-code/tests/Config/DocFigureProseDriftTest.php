@@ -718,7 +718,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/and the (eight)\s+subcommands \(([^)]*)\)/s', $arch, $m),
+            preg_match('/and the (nine)\s+subcommands \(([^)]*)\)/s', $arch, $m),
             'the pre-flight paragraph no longer spells its subcommand word-count and list together',
         );
         preg_match_all('/`([^`]+)`/', $m[2], $listed);
@@ -1145,16 +1145,16 @@ final class DocFigureProseDriftTest extends TestCase
         $loaderClass = new \ReflectionClass(RuleLoader::class);
 
         self::assertSame(
-            3,
+            7,
             substr_count($loader, '$this->loadFromDirectory('),
-            'RuleLoader no longer walks exactly three directories — flip the header sentence\'s first factor and this probe in-step',
+            'RuleLoader no longer walks exactly seven directories (three native, four INT-2 imports) — flip the header sentence\'s first factor and this probe in-step',
         );
         self::assertSame(
             1,
             preg_match('/\(directories walked x MAX_FILES\) = (\d+) x (\d+)\s+\*\s+= (\d+) reads/s', $loader, $m),
             'the aggregate-arithmetic sentence no longer spells directories, cap and product in one breath',
         );
-        self::assertSame(3, (int) $m[1], 'prose directory count drifted from the live call-site count');
+        self::assertSame(7, (int) $m[1], 'prose directory count drifted from the live call-site count');
         self::assertSame((int) $loaderClass->getConstant('MAX_FILES'), (int) $m[2], 'prose per-directory cap drifted from MAX_FILES');
         self::assertSame((int) $m[1] * (int) $m[2], (int) $m[3], 'the stated product is no longer directories x cap');
         self::assertSame(
@@ -1789,9 +1789,13 @@ final class DocFigureProseDriftTest extends TestCase
      * multiplier claim ("the 1.6x lesson") about the pair itself. Neither
      * digit has an in-repo generator (the escape ratio is data-dependent), but
      * the two sites quoting ONE history must not fork, the one-decimal ratio
-     * must survive its own pair, and RuleLoader's "can no longer emit" is
-     * backed by live caps: 193 x MAX_FILE_BYTES < 12,724,235 (cb's held row,
-     * promoted).
+     * must survive its own pair, and RuleLoader's file-count/walk-ceiling sum
+     * must stay the live product of the caps. INT-2 flipped this arm's last
+     * leg: with seven walked directories the cap product (449 x MAX_FILE_BYTES
+     * = 29,425,664) now EXCEEDS the historical 12,724,235, so the "can no
+     * longer emit" claim rests on the splice budget, not the walk — which is
+     * exactly what the reworded sentence says, and what the re-polarised
+     * assertion pins (cb's held row, promoted, re-derived).
      */
     public function testSpliceHistoryPairAgreesAcrossItsTwoSites(): void
     {
@@ -1800,11 +1804,11 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/the (\d+)-file worst case can no longer emit ([\d,]+) raw bytes\s+\*\s+\(([\d,]+) after escape\)/s', $loader, $m),
-            'the RuleLoader sentence no longer ties the file count to the historical byte pair — re-pin with the prose, do not delete it',
+            preg_match('/the (\d+)-file worst case can no longer emit its own ([\d,]+)-byte\s+\*\s+walk ceiling, let alone the ([\d,]+) raw bytes\s+\*\s+\(([\d,]+) after escape\)/s', $loader, $m),
+            'the RuleLoader sentence no longer ties the file count to the walk ceiling and the historical byte pair — re-pin with the prose, do not delete it',
         );
-        $raw = (int) str_replace(',', '', $m[2]);
-        $escaped = (int) str_replace(',', '', $m[3]);
+        $raw = (int) str_replace(',', '', $m[3]);
+        $escaped = (int) str_replace(',', '', $m[4]);
 
         self::assertSame(
             1,
@@ -1816,12 +1820,22 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((float) $r[3], round($escaped / $raw, 1), 'the stated multiplier is no longer the one-decimal ratio of the pair it names');
 
         $loaderClass = new \ReflectionClass(RuleLoader::class);
-        $files = 3 * (int) $loaderClass->getConstant('MAX_FILES') + 1;
-        self::assertSame($files, (int) $m[1], 'the historical sentence\'s file count drifted from the live walk (3 dirs x MAX_FILES + root) that arm L pins — do not touch one side alone');
-        self::assertLessThan(
+        // The walked-directory count is derived LIVE from the number of
+        // loadFromDirectory() call sites in the class's own source (INT-2: three
+        // native tiers plus four foreign imports), so adding or removing a tier
+        // walk reddens this arm until the prose sum is recomputed with it.
+        $walkDirs = preg_match_all('/\$this->loadFromDirectory\(/', $loader);
+        $files = $walkDirs * (int) $loaderClass->getConstant('MAX_FILES') + 1;
+        self::assertSame($files, (int) $m[1], "the sentence's file count drifted from the live walk ({$walkDirs} dirs x MAX_FILES + root) — do not touch one side alone");
+        self::assertSame(
+            number_format($files * (int) $loaderClass->getConstant('MAX_FILE_BYTES'), 0, '.', ','),
+            $m[2],
+            'the stated walk ceiling is no longer the product of the caps the prose claims to be multiplying — recompute HERE and in the sentence together',
+        );
+        self::assertGreaterThan(
             $raw,
             $files * (int) $loaderClass->getConstant('MAX_FILE_BYTES'),
-            'the walk caps now admit what the prose says they "can no longer emit" — the FU5 claim needs re-checking, HERE and in the sentence together',
+            'INT-2 re-polarity: the walk ceiling must EXCEED the historical emission for the sentence to mean what it now says — the SPLICE budget (Runtime), not the caps, is what "can no longer emit" rests on; if the product falls back below the pair, the prose comparison ("let alone") stopped being the stronger claim and both sites need rereading',
         );
     }
 
@@ -3981,7 +3995,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
 
         self::assertSame(
             1,
@@ -4009,7 +4023,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
         $commands = constant('SugarCraft\Code\Cli\ParsedArgs::SUBCOMMANDS');
         sort($commands);
-        self::assertCount($wordNumbers['eight'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+        self::assertCount($wordNumbers['nine'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
         // The screen's ENGLISH text (15b-14-2 moved it into the catalogue):
         // the page quotes English, so the lookup pins the locale.
@@ -4018,7 +4032,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'], $helpSource, 'the help screen is not the cli.help.screen catalogue entry');
         self::assertSame(
             1,
-            preg_match('/lists exactly eight under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            preg_match('/lists exactly nine under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
             'the exactly-seven sentence reworded — the help block below must keep carrying six rows',
         );
         $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
@@ -4042,7 +4056,7 @@ final class DocFigureProseDriftTest extends TestCase
         // MCP one — the page says which, rather than the old "there is none".
         self::assertTrue(in_array('serve', $commands, true), 'the serve subcommand left the roster — the page still describes it');
         self::assertStringContainsString('`candy-code serve` is not one of them', $mcp, 'the serve-is-not-MCP claim left the page');
-        self::assertStringContainsString('five answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the one subcommand that does not exit');
+        self::assertStringContainsString('six answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the one subcommand that does not exit');
         foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'StdioMcpServer'] as $class) {
             $half = 'SugarCraft\Code\MCP\\' . $class;
             self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
@@ -4050,7 +4064,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`run` is a ninth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            preg_match('/`run` is a tenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
             'the run-is-a-ninth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
         );
         self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
@@ -4062,7 +4076,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['nine'], array_merge($commands, ['run']), 'the eight-plus-run-is-a-ninth arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['ten'], array_merge($commands, ['run']), 'the nine-plus-run-is-a-tenth arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request
@@ -5299,7 +5313,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('ClaudeCodeInvocation', $segment, 'the table no longer says the claude-code row rides over ClaudeCodeInvocation');
         self::assertTrue(class_exists('SugarCraft\Code\Providers\ClaudeCodeInvocation'), 'ClaudeCodeInvocation, cited as the claude-code row carrier, is gone');
 
-        self::assertStringContainsString('**`echo` is not one of the eight.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
+        self::assertStringContainsString('**`echo` is not one of the nine.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
         self::assertNotContains('echo', $liveTypes, 'echo joined availableTypes() — the exclusion this paragraph stakes out is no longer true');
         self::assertStringContainsString('Unknown provider type:', $factory, 'the factory no longer throws the named rejection the echo paragraph quotes');
         $provider = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), 'provider', 6000);
@@ -7052,7 +7066,7 @@ final class DocFigureProseDriftTest extends TestCase
             . '__' . \SugarCraft\Code\Tools\McpToolBridge::sanitize('deploy app');
         self::assertSame('/mcp__srv__deploy_20app', $sample, 'the sanitizer law moved — the page example lies');
         self::assertStringContainsString('a prompt called `deploy app`', $page, 'the page example pair was reworded out from under this pin');
-        self::assertStringContainsString($sample, $page, 'MCP.md example no longer matches what the sanitizer produces');
+        self::assertStringContainsString('`' . $sample . '`', $page, 'MCP.md example no longer matches what the sanitizer produces');
 
         // The tier constant and the page's tier word.
         self::assertSame('mcp', \SugarCraft\Code\Commands\McpPromptCommands::TIER, 'the tier word moved — page and transcript badge move with it');

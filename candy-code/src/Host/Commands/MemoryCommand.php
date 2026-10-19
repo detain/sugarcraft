@@ -68,6 +68,11 @@ final class MemoryCommand implements HostCommand
             'delete' => self::delete($home, $root, $inputText, $args),
             'clear' => self::clear($home, $root, $inputText, $args),
             'edit' => self::edit($home, $root, $inputText, $args),
+            // `/memory open` is a TUI command: the Chat dispatch arms the
+            // editor before this router ever sees it. Reaching this arm means
+            // there is no terminal to hand over, so the honest answer is the
+            // notice, never a silent success.
+            'open' => self::respond($inputText, Lang::t('host.memory.open-needs-terminal')),
             'import' => self::import($home, $root, $inputText, $args),
             'log' => self::respond($inputText, MemoryHistoryCommand::log($history, $args)),
             'restore' => self::respond($inputText, MemoryHistoryCommand::restore($history, $args)),
@@ -110,6 +115,7 @@ final class MemoryCommand implements HostCommand
         $lines[] = Lang::t('host.memory.help.search');
         $lines[] = Lang::t('host.memory.help.delete');
         $lines[] = Lang::t('host.memory.help.edit');
+        $lines[] = Lang::t('host.memory.help.open');
         $lines[] = Lang::t('host.memory.help.clear');
         $lines[] = Lang::t('host.memory.help.import');
         $lines[] = Lang::t('host.memory.help.log', ['count' => MemoryHistory::DEFAULT_LOG_ENTRIES]);

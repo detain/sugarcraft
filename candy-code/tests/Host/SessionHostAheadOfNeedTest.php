@@ -118,6 +118,64 @@ final class SessionHostAheadOfNeedTest extends TestCase
         }
     }
 
+    /**
+     * CTX-4 on the served route: a HOLD lands in the slot as a discarded
+     * summary plus its detail. The 85% tier never holds and never refuses on
+     * account of the audit — the request was already accepted, and holding it
+     * would 400 the client — so the tier folds on the heuristic exactly as it
+     * would with no summary at all, but the fold's report carries the
+     * advisory naming the audit, and the slot is used up rather than re-asked.
+     */
+    public function testAHeldSafeguardHoldFoldsTheTierAndSaysWhy(): void
+    {
+        $backend = new AheadBackend(88_000, str_repeat('z', 60_000), self::collapsedSummaryReply());
+        $host = $this->host($backend);
+        $rows = self::reminderBandPairs();
+        $rows[1] = $rows[1]->withToolResults([
+            new \SugarCraft\Code\ToolResult('Read', 'contents', arguments: ['file_path' => 'src/Router.php']),
+            new \SugarCraft\Code\ToolResult('Read', 'contents', arguments: ['file_path' => 'src/Handler.php']),
+        ]);
+        self::setHistory($host, $rows);
+
+        $host->submit('first question', SubmitOptions::new()->withIdempotencyKey('k'));
+        $held = self::held($host);
+        self::assertNotNull($held['safeguardHold'] ?? null, 'the HOLD detail is remembered in the slot');
+        self::assertSame([], $held['summaries'], 'the collapsed summaries are discarded, never held for splice');
+
+        $ticket = $host->submit('x', SubmitOptions::new()->withIdempotencyKey('k2'));
+
+        self::assertSame(TurnTicket::STARTED, $ticket->admitted, 'the fold sends the turn; served never holds');
+        self::assertNull(self::held($host), 'the slot is used up by the fold it announced');
+        $advisories = array_values(array_filter(
+            $host->history(),
+            static fn (Message $row): bool => str_contains($row->content, 'discarded by the safeguard audit'),
+        ));
+        self::assertCount(1, $advisories, 'the advisory lands once, beside the fold');
+        self::assertStringContainsString('compacted with the local heuristic instead', $advisories[0]->content);
+        $text = self::agentText($host->history());
+        self::assertStringContainsString('[summary]', $text, 'the heuristic lines landed');
+        self::assertStringNotContainsString('collapsed record', $text, 'the model records did not');
+        self::assertSame(1, $backend->summaryCalls, 'the hold does not re-ask the summarizer');
+    }
+
+    /**
+     * A block writing three of the eight model sections and carrying neither
+     * of the two file bullets the fallback records from the tool rows: the
+     * only shape the audit calls collapse. The records beside it are sound —
+     * the block arm is what fires.
+     */
+    private static function collapsedSummaryReply(): string
+    {
+        $records = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $records[] = "{$i}.\nasked: collapsed record {$i}";
+        }
+
+        return implode("\n", $records)
+            . "\n<session-state>\n## Goal\nwork happened\n## Progress\nsome exchanges\n"
+            . "## Next step\ncontinue\n</session-state>";
+    }
+
     public function testTheEightyFiveTierSplicesTheHeldSummaryWithoutReasking(): void
     {
         $backend = new AheadBackend(88_000, str_repeat('z', 60_000), self::summaryReply());

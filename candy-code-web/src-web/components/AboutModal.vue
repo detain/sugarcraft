@@ -23,6 +23,11 @@ const loading = ref(false)
 async function load(): Promise<void> {
   loading.value = true
   error.value = null
+  // w2h M3: a re-open never renders the previous visit's answers. Both
+  // feeds start null every load, so a failed fetch shows the failure —
+  // not last session's stale version, uptime, or health line.
+  info.value = null
+  health.value = null
   const [first, second] = await Promise.allSettled([connection.request('server.info', {}), connection.request('server.health', {})])
   if (first.status === 'fulfilled') info.value = first.value
   else error.value = describe(first.reason)

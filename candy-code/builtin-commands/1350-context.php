@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Roadmap 5.6. Read-only and local, in the `/notices` family: it measures what
 // the next request will carry and calls no model. `/tokens` is the spelling
@@ -14,5 +15,6 @@ return BuiltInCommand::new(CommandSpec::new(
     'context',
     Lang::t('cmd.context.description'),
     Lang::t('cmd.category.app'),
+    paletteAction: PaletteAction::ShowContext,
 ))->withHandler('handleContextCommand')->withAliases('tokens')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\ContextHostCommand::class);

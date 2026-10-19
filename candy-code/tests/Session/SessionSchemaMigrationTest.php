@@ -25,6 +25,7 @@ final class SessionSchemaMigrationTest extends TestCase
     private const NEW_COLUMNS = [
         'kind', 'parent_id', 'parent_call_id', 'agent', 'status', 'title_source',
         'pinned', 'archived_at', 'cwd', 'git_branch', 'turns', 'last_preview',
+        'cost_usd', 'cost_unpriced',
     ];
 
     private string $tempDir;
@@ -66,6 +67,8 @@ final class SessionSchemaMigrationTest extends TestCase
         $this->assertNull($row->parentId);
         $this->assertSame('Old work', $row->name);
         $this->assertNull($row->titleSource, 'a pre-migration name has no recorded source');
+        $this->assertNull($row->costUsd, 'a session that recorded nothing has no spend, which is not a measured zero');
+        $this->assertFalse($row->costUnpriced);
 
         // Still listed: the default filter matches the defaulted columns.
         $this->assertSame(['legacy'], array_column($store->listSessions(), 'id'));

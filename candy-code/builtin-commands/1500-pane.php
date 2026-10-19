@@ -12,6 +12,7 @@ use SugarCraft\Code\Lang;
 // paletteAction because its dock side-variants share the one verb and the two
 // pseudo-rows (pane-dock-left/right) own the palette surface — `toggle` has no
 // palette twin, it is a keyboard-only undock.
+// VIS-4 ruling: stays slash-only — bare '/pane' prints usage; the palette-expressible actions are the dock-left/dock-right rows.
 return BuiltInCommand::new(CommandSpec::new(
     'pane',
     Lang::t('cmd.pane.description'),

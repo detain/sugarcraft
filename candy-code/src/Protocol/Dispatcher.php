@@ -10,6 +10,7 @@ use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Protocol\Methods\AgentsMethods;
 use SugarCraft\Code\Protocol\Methods\BgMethods;
 use SugarCraft\Code\Protocol\Methods\CommandMethods;
+use SugarCraft\Code\Protocol\Methods\ContextMethods;
 use SugarCraft\Code\Protocol\Methods\FilesMethods;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
 use SugarCraft\Code\Protocol\Methods\MemoryMethods;
@@ -132,6 +133,7 @@ final class Dispatcher implements MessageHandler
         CommandMethods::register($registry);
         SettingsMethods::register($registry);
         MemoryMethods::register($registry);
+        ContextMethods::register($registry);
         AgentsMethods::register($registry);
         BgMethods::register($registry);
         FilesMethods::register($registry);

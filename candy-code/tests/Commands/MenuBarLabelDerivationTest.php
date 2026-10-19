@@ -24,8 +24,9 @@ use SugarCraft\Core\Util\Width;
 final class MenuBarLabelDerivationTest extends TestCase
 {
     /**
-     * Every slash-only built-in (no paletteLabel, because the palette never
-     * lists it) and the menu text its description derives to.
+     * Every built-in that carries no hand-authored paletteLabel — the
+     * slash-only rows AND, since VIS-4, the palette rows promoted at their
+     * derived text — and the menu text its description derives to.
      */
     private const DERIVED_LABELS = [
         'keys' => 'Show the keyboard',
@@ -38,6 +39,9 @@ final class MenuBarLabelDerivationTest extends TestCase
         'compress' => 'Ask the model',
         'decompress' => 'Send a compressed',
         'recompress' => 'Restore the summary',
+        // The `/hooks` row (roadmap VIS-3a) landed without its table entry —
+        // red at the VIS-4 base, cured in-step here.
+        'hooks' => 'List the hook chain',
         'rules' => 'List the rule packs',
         'newrule' => 'Have the agent draft',
         'pane' => 'Dock a pane to a side',
@@ -53,6 +57,8 @@ final class MenuBarLabelDerivationTest extends TestCase
         'undo' => 'Take back the last',
         'redo' => 'Step forward again',
         'diff' => 'Show what changed',
+        'review' => 'Review the diff',
+        'security-review' => 'Security-review',
         'bg' => 'Run a task',
         'fork' => 'Clone',
         'websearch' => 'Search the web',

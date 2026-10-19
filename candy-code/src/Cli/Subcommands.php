@@ -9,6 +9,7 @@ use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionRow;
@@ -96,6 +97,7 @@ final class Subcommands
         return match ($args->subcommand) {
             'doctor'     => self::doctor($args),
             'models'     => self::models($args),
+            'login'      => self::login($args),
             'session'    => self::session($args),
             'serve'      => Serve::run($args),
             'attach'     => Attach::run($args),
@@ -647,6 +649,236 @@ final class Subcommands
             : Lang::t('cli.models.selected_legend', ['path' => Bootstrap::userConfigPath()])) . "\n";
 
         return NonInteractive::EXIT_OK;
+    }
+
+    // ---------------------------------------------------------------------
+    // login (PRV-4 tier 2)
+    // ---------------------------------------------------------------------
+
+    /**
+     * The three built-in types whose credential IS an API key this command
+     * can store. The env names are the ones ProviderFactory's own defaults
+     * read; naming one nothing consumes would be worse than naming none.
+     *
+     * @var array<string, string>
+     */
+    private const LOGIN_KEY_ENVS = [
+        'openai' => 'OPENAI_API_KEY',
+        'anthropic' => 'ANTHROPIC_API_KEY',
+        'gemini' => 'GEMINI_API_KEY',
+    ];
+
+    /**
+     * Test seam for the passthrough spawn: null runs the real proc_open
+     * inheritance. The suite NEVER launches a vendor login flow — that would
+     * open browsers, wait on terminals, and spend real accounts.
+     *
+     * @var (callable(array<string>): int)|null
+     */
+    private static ?\Closure $loginSpawn = null;
+
+    /**
+     * Test seam for reading the pasted key; null reads one STDIN line.
+     *
+     * @var (callable(): string|false)|null
+     */
+    private static ?\Closure $loginKeyRead = null;
+
+    /**
+     * @param (callable(array<string>): int)|null $spawn
+     * @param (callable(): string|false)|null $keyRead
+     */
+    public static function setLoginSeamsForTesting(?\Closure $spawn, ?\Closure $keyRead): void
+    {
+        self::$loginSpawn = $spawn;
+        self::$loginKeyRead = $keyRead;
+    }
+
+    public static function resetLoginSeamsForTesting(): void
+    {
+        self::setLoginSeamsForTesting(null, null);
+    }
+
+    /**
+     * `candy-code login <provider>` — the tier-2 half of PRV-4.
+     *
+     * Deliberately NOT a credential system: subscription arms hand over to
+     * the upstream CLI (`claude auth login`, `codex login` — both probed
+     * present on 2026-10-19) whose OWN auth code writes the token, so no
+     * secret ever passes through this process; API-key arms store via the
+     * existing {@see Bootstrap::writeUserConfig()} path into the SAME
+     * `providers` block every launch already reads ({@see
+     * \SugarCraft\Code\Cli\Bootstrap::providerOverrides()} — which is why
+     * the entry carries `type`, the reader requires it); ambient arms get a
+     * refusal naming who actually owns their credential. Tier 3 (extracting
+     * MCP-OAuth into a shared store) is explicitly out of scope.
+     */
+    private static function login(ParsedArgs $args): int
+    {
+        $words = $args->subcommandArgs;
+        $types = \implode(', ', (new ProviderFactory())->availableTypes());
+
+        if ($words === []) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.login.usage'),
+                $args->outputFormat,
+                Lang::t('cli.sub.login.selectable', ['types' => $types]),
+            );
+        }
+
+        if (count($words) > 1) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.login.too_many', ['count' => (string) count($words)]),
+                $args->outputFormat,
+            );
+        }
+
+        $type = $words[0];
+        if (!\in_array($type, (new ProviderFactory())->availableTypes(), true)) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.login.unknown', ['name' => $type]),
+                $args->outputFormat,
+                Lang::t('cli.sub.login.selectable', ['types' => $types]),
+            );
+        }
+
+        return match ($type) {
+            'claude-code' => self::loginPassthrough(['claude', 'auth', 'login'], 'cli.sub.login.passthrough_claude'),
+            'codex' => self::loginPassthrough(['codex', 'login'], 'cli.sub.login.passthrough_codex'),
+            'openai', 'anthropic', 'gemini' => self::loginStoreKey($type),
+            default => self::loginAmbient($type),
+        };
+    }
+
+    /**
+     * Hand the terminal to the vendor's own login command. No pipes are set
+     * up on purpose: an OAuth flow prints a URL, opens a browser, and waits —
+     * it must inherit exactly the stdio the user is sitting at.
+     *
+     * @param array<string> $cmd
+     */
+    private static function loginPassthrough(array $cmd, string $explainKey): int
+    {
+        echo Lang::t($explainKey) . "\n";
+
+        $spawn = self::$loginSpawn ?? static function (array $argv): int {
+            // E672 pre-check twin: under the containment wrapper a missing
+            // binary would exit 127 attributed to the run; name it ourselves.
+            if (ProcessContainment::detachedSpawnBinary() !== ''
+                && !(str_contains($argv[0], '/')
+                    ? is_executable($argv[0])
+                    : ProcessContainment::locateOnPath($argv[0]) !== '')
+            ) {
+                return -1;
+            }
+
+            // `@`: with no wrapper the failed exec raises an E_WARNING from
+            // proc_open() itself; the classification below is by return value,
+            // and failOnWarning must not red a run this command answers.
+            $process = @proc_open(
+                ProcessContainment::spawnSpec($argv),
+                [],
+                $pipes,
+                null,
+                ProcessContainment::env()
+            );
+
+            return is_resource($process) ? proc_close($process) : -1;
+        };
+
+        $status = $spawn($cmd);
+
+        if ($status === -1) {
+            echo Lang::t('cli.sub.login.missing_binary', ['name' => $cmd[0]]) . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        echo Lang::t('cli.sub.login.passthrough_done', ['name' => $cmd[0], 'code' => (string) $status]) . "\n";
+
+        return $status === 0 ? NonInteractive::EXIT_OK : NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
+     * Read one key from stdin and persist it into the user config's
+     * `providers` map — merging onto the file's EXISTING map by hand, because
+     * writeUserConfig() merges shallow at the top level and replacing the
+     * whole `providers` key would silently drop every other named provider.
+     */
+    private static function loginStoreKey(string $type): int
+    {
+        $path = Bootstrap::userConfigPath();
+        echo Lang::t('cli.sub.login.ask_key', ['provider' => $type, 'path' => $path]) . "\n";
+
+        $read = self::$loginKeyRead ?? static fn (): string|false => fgets(\STDIN);
+        $key = trim((string) $read());
+
+        if ($key === '') {
+            echo Lang::t('cli.sub.login.empty_key') . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (\preg_match('/[\x00-\x1F\x7F]/', $key) === 1) {
+            echo Lang::t('cli.sub.login.control_chars') . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $providers = [];
+        if (is_file($path)) {
+            $raw = file_get_contents($path);
+            if ($raw !== false && $raw !== '') {
+                $decoded = json_decode($raw, true);
+                if (!is_array($decoded)) {
+                    echo Lang::t('cli.sub.login.corrupt_config', ['path' => $path]) . "\n";
+
+                    return NonInteractive::EXIT_FAILURE;
+                }
+                if (is_array($decoded['providers'] ?? null)) {
+                    $providers = $decoded['providers'];
+                }
+            }
+        }
+
+        $providers[$type] = ['type' => $type, 'apiKey' => $key];
+        Bootstrap::writeUserConfig(['providers' => $providers]);
+
+        // writeUserConfig() can bail without writing (lock contention, an
+        // unresolvable symlink); the confirmation must not promise a persist
+        // that did not happen, so re-read the exact slot instead.
+        $settled = json_decode((string) @file_get_contents($path), true);
+        if (!is_array($settled) || ($settled['providers'][$type]['apiKey'] ?? null) !== $key) {
+            echo Lang::t('cli.sub.login.stored_failed', ['path' => $path]) . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        echo Lang::t('cli.sub.login.stored', ['provider' => $type, 'path' => $path, 'env' => self::LOGIN_KEY_ENVS[$type]]) . "\n";
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * Types with no credential this command could sensibly take: the vendor
+     * chain or the provider block owns theirs. Answers and exits 1 — the
+     * requested login did not happen.
+     */
+    private static function loginAmbient(string $type): int
+    {
+        // Full literal keys, never concatenation: CliLangCatalogueTest proves
+        // every cli.* key is asked for by name, and a composed name is invisible
+        // to that scan.
+        $hint = match ($type) {
+            'sglang' => Lang::t('cli.sub.login.hint_sglang'),
+            'bedrock' => Lang::t('cli.sub.login.hint_bedrock'),
+            'vertex' => Lang::t('cli.sub.login.hint_vertex'),
+            default => Lang::t('cli.sub.login.hint_custom'),
+        };
+
+        echo Lang::t('cli.sub.login.ambient', ['provider' => $type, 'hint' => $hint]) . "\n";
+
+        return NonInteractive::EXIT_FAILURE;
     }
 
     // ---------------------------------------------------------------------
@@ -1724,6 +1956,7 @@ final class Subcommands
         'attach' => 'cli.completion.verb.attach',
         'completion' => 'cli.completion.verb.completion',
         'doctor' => 'cli.completion.verb.doctor',
+        'login' => 'cli.completion.verb.login',
         'mcp' => 'cli.completion.verb.mcp',
         'models' => 'cli.completion.verb.models',
         'serve' => 'cli.completion.verb.serve',

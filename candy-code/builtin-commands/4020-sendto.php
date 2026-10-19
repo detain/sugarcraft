@@ -12,6 +12,7 @@ use SugarCraft\Code\Lang;
 //   /sendto masked.png --to inpaint --mask mask.png
 // Imports the file's parameters chunk (server png-info only when absent and
 // configured), then opens the form on the draft. Reads local disk only.
+// VIS-4 ruling: stays slash-only — bare '/sendto' has no PNG path to import.
 return BuiltInCommand::new(CommandSpec::new(
     'sendto',
     Lang::t('cmd.sendto.description'),

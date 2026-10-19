@@ -555,6 +555,21 @@ final class MemoryStore
     }
 
     /**
+     * The on-disk path of note $id, or null when there is no such note
+     * (VIS-2b: the address `/memory open` hands to `$EDITOR`). Same guard
+     * chain as get() — an id that is not a bare note id never reaches the
+     * directory scan, so this can no more escape the store than read can.
+     */
+    public function notePath(string $id): ?string
+    {
+        if (!self::isNoteId($id)) {
+            return null;
+        }
+
+        return $this->findNoteFile($id);
+    }
+
+    /**
      * Update an existing memory entry, or insert it if it does not exist.
      *
      * This is an upsert: writeEntry() will create the file if missing.

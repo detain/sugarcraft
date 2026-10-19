@@ -86,6 +86,61 @@ final class RulesCommandTest extends TestCase
 
     // -- the listing ----------------------------------------------------------
 
+    public function testTheListingBadgesForeignUserPacksByProvenance(): void
+    {
+        $claude = $this->home . '/.claude/rules';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($claude, 0o700, true);
+        mkdir($cursor, 0o700, true);
+        $this->writePackFile($claude . '/imported.md', "FROM CLAUDE\n");
+        $this->writePackFile($cursor . '/modern.mdc', "FROM CURSOR\n");
+        $this->writePackFile($this->rulesDir . '/standing.md', "NATIVE\n");
+
+        $text = $this->reply($this->submit('/rules'));
+
+        self::assertStringContainsString('imported', $text);
+        self::assertStringContainsString('modern', $text, 'the .mdc stem is a toggle handle like any other');
+        self::assertStringContainsString('[claude]', $text, 'provenance is the Source-column fact for a foreign pack');
+        self::assertStringContainsString('[cursor]', $text);
+        self::assertStringContainsString('rules', $text, 'native packs keep answering with the directory word');
+    }
+
+    public function testTogglingAForeignUserPackSilencesItThroughTheSharedState(): void
+    {
+        $claude = $this->home . '/.claude/rules';
+        mkdir($claude, 0o700, true);
+        $this->writePackFile($claude . '/quiet.md', "NOISE\n");
+        $state = RulesState::new();
+
+        $off = $this->submit('/rules quiet', $state);
+
+        self::assertStringContainsString('Pack quiet: OFF for this session.', $this->reply($off));
+        self::assertSame(['quiet'], $state->disabled(), 'a foreign pack is a user-tier pack: the same toggle, the same set');
+        self::assertStringNotContainsString('this name matches', $this->reply($off), 'one pack, no collision note');
+    }
+
+    public function testAStemSharedAcrossAllFourUserDirectoriesDisclosesFour(): void
+    {
+        $claude = $this->home . '/.claude/rules';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($claude, 0o700, true);
+        mkdir($cursor, 0o700, true);
+        $this->writePackFile($this->rulesDir . '/focus.md', "RULES\n");
+        $this->writePackFile($this->packsDir . '/focus.md', "RULEBOOKS\n");
+        $this->writePackFile($claude . '/focus.md', "CLAUDE\n");
+        $this->writePackFile($cursor . '/focus.mdc', "CURSOR\n");
+
+        $state = RulesState::new();
+        $off = $this->submit('/rules focus', $state);
+
+        self::assertSame(['focus'], $state->disabled(), 'one handle still names one set entry however many packs answer to it');
+        self::assertStringContainsString(
+            'this name matches 4 packs — all toggled',
+            $this->reply($off),
+            'INT-2 raised the collision maximum from two to four - the disclosure must count what it actually silenced',
+        );
+    }
+
     public function testTheBareListingNamesEveryPackInBothUserDirectories(): void
     {
         $this->writePackFile($this->rulesDir . '/standing.md', "STANDING\n");
@@ -206,7 +261,7 @@ final class RulesCommandTest extends TestCase
         self::assertSame(['focus'], $state->disabled(), 'one handle, one set entry, both packs out');
         self::assertStringContainsString('Pack focus: OFF for this session.', $this->reply($off));
         self::assertStringContainsString(
-            'this name matches 2 packs — both toggled',
+            'this name matches 2 packs — all toggled',
             $this->reply($off),
             'the sentence must not describe a two-file action in the singular',
         );
@@ -214,7 +269,7 @@ final class RulesCommandTest extends TestCase
         // The note is about the NAME, not the direction, so the way back says it too.
         $on = $this->submit('/rules focus', $state);
         self::assertStringContainsString('Pack focus: ON for this session.', $this->reply($on));
-        self::assertStringContainsString('this name matches 2 packs — both toggled', $this->reply($on));
+        self::assertStringContainsString('this name matches 2 packs — all toggled', $this->reply($on));
 
         // The control: an unshared name reads exactly as it did before this note
         // existed, because `/rules x` with two rows is a different fact from

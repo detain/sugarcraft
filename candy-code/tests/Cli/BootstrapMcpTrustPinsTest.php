@@ -224,9 +224,14 @@ final class BootstrapMcpTrustPinsTest extends TestCase
         $result = ['refused' => $client->refusedServers(), 'started' => $client->startedSnapshot()];
         $client->stopServers();
 
-        $path = Bootstrap::mcpConfigDecision($this->root)['path'];
+        // MCP-3: the memo entry lives under Bootstrap::mcpConfigMemoKey() —
+        // the composite of both tier paths — not under the project path alone.
+        // Dropped through the production builder so this helper can never
+        // clear a stale key and silently launch twice-on-one-client.
+        $builder = new \ReflectionMethod(Bootstrap::class, 'mcpConfigMemoKey');
+        $key = (string) $builder->invoke(null, Bootstrap::mcpConfigDecision($this->root));
         $memo = self::memo('mcpClients');
-        unset($memo[getmypid() ?: 0][$path]);
+        unset($memo[getmypid() ?: 0][$key]);
         self::setMemo('mcpClients', $memo);
 
         return $result;

@@ -1606,7 +1606,7 @@ final class RendererTest extends TestCase
     /** An open palette, optionally with $query already typed into it. */
     private function openPalette(string $query = ''): Chat
     {
-        [$current] = $this->chat()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        [$current] = $this->chat()->withSize(100, 80)->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         foreach (str_split($query) as $ch) {
             [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
         }
@@ -1700,10 +1700,15 @@ final class RendererTest extends TestCase
     /** §4 E7: a recently-run row renders at the top of the reopened palette. */
     public function testRecentlyUsedRowRendersFirst(): void
     {
-        $chat = new Chat(
+        // The VIS-4 superset palette is taller than the default viewport can
+        // host: at the bootstrap-pinned ambient size the overlay merge glues
+        // the MRU row onto the input-box line, and stripBox cannot peel a
+        // mid-line frame. Same honest adaptation as openPalette(): give the
+        // palette a viewport tall enough to render it un-glued.
+        $chat = (new Chat(
             palette: \SugarCraft\Code\Palette\PaletteState::root(),
             paletteMru: ['Switch theme'],
-        );
+        ))->withSize(100, 80);
 
         $rows = [];
         foreach ($this->visibleLines(Renderer::render($chat)) as $line) {

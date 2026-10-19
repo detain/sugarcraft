@@ -294,6 +294,10 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — trustProjectMcp() reading the decision-path `.mcp.json` for `candy-code mcp trust` '
                 . '(audit MCP-5): the same mcpConfigDecision() containment, reached only on the UNTRUSTED or '
                 . 'TRUSTED verdict; it is fingerprinted and printed, never executed',
+            'OWNED_HOME — mcpUserTierRows() reading the user tier `~/.candy-code/mcp.json` for the listing '
+                . '(MCP-3): reached only when HomeDirectory::owned() established the home as this user\'s and '
+                . 'the file exists; the same three broken-shape reports as the project read, and the bytes '
+                . 'are listed and shadowed, never executed',
         ],
         'Cli/Bootstrap.php|fopen' => [
             'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
@@ -570,6 +574,13 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — `mcp import`\'s operand: the operator\'s own argv names the file, '
                 . 'the verb reads one document, translates it through the shared McpForeignTranslate '
                 . 'table, and PRINTS (the never-write law); nothing read here is ever executed',
+            // W4 (PRV-4): `candy-code login` merges its new key onto the file's EXISTING
+            // providers map — same operator-named path as the `doctor` row above.
+            'CALLER_SUPPLIED — `login`\'s merge-read (Subcommands::loginStoreKey): Bootstrap::userConfigPath(), '
+                . 'decoded to keep the other providers\' entries when the map is rewritten through '
+                . 'Bootstrap::writeUserConfig(); the corrupt-config branch refuses, never repairs',
+            'CALLER_SUPPLIED — `login`\'s write-back re-read: the SAME path, re-read only to confirm the '
+                . 'slot settled before promising it on stdout (writeUserConfig() can bail unwritten)',
         ],
         'Lint/LintRunner.php|file_get_contents' => [
             'PATH_JAIL — the file a Write/Edit call named, resolved through PathJail against the hook\'s '

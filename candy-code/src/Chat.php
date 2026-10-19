@@ -2799,6 +2799,9 @@ final class Chat implements Model
         if ($msg instanceof CustomCommandExpandedMsg) {
             return $this->resumeCustomCommand($msg);
         }
+        if ($msg instanceof McpLoginProgressMsg) {
+            return $this->handleMcpLoginProgress($msg);
+        }
         if ($msg instanceof HistoryCompactedMsg) {
             // Accounted BEFORE the latch check, and for the same reason the
             // AssistantMsg arm accounts before its staleness guard: the
@@ -2821,7 +2824,11 @@ final class Chat implements Model
                 if ($held['sessionId'] !== $this->currentSessionId) {
                     return [$this->mutate(['backgroundSummary' => null]), null];
                 }
-                $usable = $msg->error === null && $msg->blockedBy === null;
+                // CTX-4: a HOLD verdict discards the summaries just as an error
+                // or a hook block does — a collapsed splice must never be
+                // offered to the 85% tier. The tier re-parks on its own and the
+                // fresh request's landing carries the advisory.
+                $usable = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null;
 
                 return [$this->mutate(['backgroundSummary' => [
                     ...$held,
@@ -9608,7 +9615,7 @@ final class Chat implements Model
 
         $chat = $this;
         $cmds = [];
-        $now = $held = $nextTurn = $restart = $refused = [];
+        $now = $held = $nextTurn = $reload = $restart = $refused = [];
         $engine = false;
         $compactor = false;
         $config = null;
@@ -9627,6 +9634,14 @@ final class Chat implements Model
 
             if ($mode === \SugarCraft\Code\Config\Settings\ApplyMode::NextTurn) {
                 $nextTurn[] = $key;
+                continue;
+            }
+
+            if ($mode === \SugarCraft\Code\Config\Settings\ApplyMode::Reload) {
+                // TUI-4a: the saved file IS the new state; `/keys reload` (or
+                // the next launch) applies it. A save alone applies nothing —
+                // saying "restart" here would lie now that the word works.
+                $reload[] = $key;
                 continue;
             }
 
@@ -9698,7 +9713,7 @@ final class Chat implements Model
             ]);
         }
 
-        $summary = self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $restart);
+        $summary = self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $reload, $restart);
         if ($refused !== []) {
             $summary .= ' · ' . Lang::t('chat.settings.not_a_spend_cap', ['keys' => implode(', ', $refused)]);
         }
@@ -9706,7 +9721,7 @@ final class Chat implements Model
             $summary,
             match (true) {
                 $refused !== [] => \SugarCraft\Toast\ToastType::Warning,
-                $restart === [] => \SugarCraft\Toast\ToastType::Success,
+                $restart === [] && $reload === [] => \SugarCraft\Toast\ToastType::Success,
                 default => \SugarCraft\Toast\ToastType::Info,
             },
         );
@@ -9834,7 +9849,7 @@ final class Chat implements Model
      *
      * @param list<string> $restart
      */
-    private static function settingsSavedSummary(int $count, ?string $savedTo, int $now, int $held, int $nextTurn, array $restart): string
+    private static function settingsSavedSummary(int $count, ?string $savedTo, int $now, int $held, int $nextTurn, array $reload, array $restart): string
     {
         $parts = [Lang::t($count === 1 ? 'chat.settings.saved.one' : 'chat.settings.saved.other', ['count' => $count])
             . ($savedTo === null || $savedTo === '' ? '' : Lang::t('chat.settings.saved_to', ['path' => $savedTo]))];
@@ -9846,6 +9861,12 @@ final class Chat implements Model
         }
         if ($nextTurn > 0) {
             $parts[] = Lang::t('chat.settings.next_turn', ['count' => $nextTurn]);
+        }
+        if ($reload !== []) {
+            $parts[] = Lang::t(\count($reload) === 1 ? 'chat.settings.reload.one' : 'chat.settings.reload.other', [
+                'count' => \count($reload),
+                'keys' => implode(', ', $reload),
+            ]);
         }
         if ($restart !== []) {
             $parts[] = Lang::t(\count($restart) === 1 ? 'chat.settings.needs_restart.one' : 'chat.settings.needs_restart.other', [
@@ -13163,8 +13184,11 @@ final class Chat implements Model
      *   keeps that exact, for every command at once.
      * - `$text === '/' . $name` ({@see
      *   \SugarCraft\Code\Commands\Specs\BuiltInCommand::accepts()} for a
-     *   `CommandArguments::None` spec) is what keeps the four argument-less
-     *   commands argument-less. `/exit now` and `/keys foo` were prompts before this
+     *   `CommandArguments::None` spec) is what keeps the argument-less
+     *   commands argument-less; TUI-4a grew the ONE exception-shaped lane —
+     *   a row may list allowed sub-arguments, and `keys` now lists `reload`,
+     *   so `/keys reload` dispatches while `/keys foo` stays prose.
+     *   `/exit now` and `/keys foo` were prompts before this
      *   refactor because their arms compared the WHOLE trimmed buffer; a bare
      *   name match would have quietly turned both into commands.
      *
@@ -13266,15 +13290,34 @@ final class Chat implements Model
             return null;
         }
 
-        $skill = $registry->userInvocable($name) ?? $registry->userInvocable(strtolower($name));
+        // A colon-namespaced skill (`ns:sub`) spells its own name with a
+        // colon, and the head-truncated $name above can never find it —
+        // while the mention channel resolves that spelling freely (the
+        // SkillMentions pattern admits colons). So the colon form is walked
+        // LONGEST NAME FIRST: `/ns:sub extra` reaches ns:sub with `extra`,
+        // `/ns:sub:quickly` still reaches ns:sub with the second colon read
+        // as the separator the way `/shipit:review` always was, and a miss
+        // all the way down ends at the head, where the old lookup lived —
+        // the final candidate is exactly the former $name, so no existing
+        // spelling changes meaning (w3c review m-2).
+        $spelling = $name;
+        $skill = null;
+        $segments = \explode(':', $shape[1]);
+        for ($take = \count($segments); $skill === null && $take >= 1; $take--) {
+            $candidate = \implode(':', \array_slice($segments, 0, $take));
+            $skill = $registry->userInvocable($candidate) ?? $registry->userInvocable(strtolower($candidate));
+            if ($skill !== null) {
+                $spelling = $candidate;
+            }
+        }
         if ($skill === null) {
             return null;
         }
 
-        // The name ends at the first space or `:`, as CommandParser reads it,
-        // so everything typed after the name — space form, colon form, or
-        // newline — becomes the mention's argument text.
-        $rest = \substr($text, 1 + \strlen($name));
+        // The name ends where the matched spelling ends, so everything typed
+        // after it — space form, colon form, or newline — becomes the
+        // mention's argument text.
+        $rest = \substr($text, 1 + \strlen($spelling));
         if (\str_starts_with($rest, ':')) {
             $rest = \ltrim(\substr($rest, 1));
             $rest = $rest === '' ? '' : ' ' . $rest;
@@ -13659,6 +13702,57 @@ final class Chat implements Model
     }
 
     /**
+     * `/review [ref]` (roadmap GIT-1) — a command that STARTS A TURN, the
+     * InitCommand technique: the canned review prompt re-enters submit() as
+     * the draft, and it closes on the `@diff` mention so the scanner attaches
+     * the change set exactly as it would for typed prose.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleReviewCommand(string $text): array
+    {
+        return $this->reviewTurn($text, security: false);
+    }
+
+    /**
+     * `/security-review [ref]` (roadmap GIT-1) — the threat-shaped sibling;
+     * same turn-starting dispatch, same `@diff` close, different body.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleSecurityReviewCommand(string $text): array
+    {
+        return $this->reviewTurn($text, security: true);
+    }
+
+    /**
+     * The shared review dispatch: a named ref is validated against the
+     * mention scanner's own pattern first, so a typo answers loudly instead
+     * of submitting a review whose diff never attaches; a valid (or absent)
+     * ref becomes the prompt's closing mention and the turn begins.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function reviewTurn(string $inputText, bool $security): array
+    {
+        $ref = \trim(self::commandArgument($inputText));
+        if ($ref !== '' && !\SugarCraft\Code\Attachments\ContextMentions::isDiffRef($ref)) {
+            return [
+                $this->mutate([
+                    'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(Lang::t('cmd.review.bad-ref', ['ref' => $ref]))->withUiOnly()],
+                    'inputBuf' => '',
+                    'inFlight' => false,
+                ]),
+                null,
+            ];
+        }
+
+        return $this->withInputBuf(
+            \SugarCraft\Code\Commands\ReviewCommand::prompt($ref, $security),
+        )->submit();
+    }
+
+    /**
      * `/settings [search]` (`/config`) — roadmap N-P1. The settings view is
      * SHELL state ({@see \SugarCraft\Code\App\App::$settingsEditor}), so
      * this clears the box and asks the host for it over the Cmd channel, the
@@ -13799,8 +13893,22 @@ final class Chat implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    private function handleKeysCommand(): array
+    private function handleKeysCommand(array $args = []): array
     {
+        // TUI-4a (plan_comparison 6.14): the ONE argument this row takes.
+        // `/keys reload` re-applies the `keybindings` setting through
+        // Bootstrap::reloadKeybindings() and consumes the draft WITHOUT
+        // opening the reference. MID-TURN nothing new refuses — `submit()`
+        // already refuses every command while a turn runs, so the word waits;
+        // and because the turn child read its settings when the turn STARTED,
+        // a reload issued the moment a turn ends applies to the next turn as
+        // the settings docs already promise for every other save.
+        if ($args !== []) {
+            \SugarCraft\Code\Cli\Bootstrap::reloadKeybindings();
+
+            return [$this->withInputBuf(''), null];
+        }
+
         return [$this->withInputBuf('')->withKeyHelp(0), null];
     }
 
@@ -15765,14 +15873,39 @@ final class Chat implements Model
             'pendingCompactionId' => null,
         ];
 
+        // CTX-4: a HOLD verdict means the model text must not land, and what
+        // that costs each route differs. The typed command refuses outright —
+        // nothing is waiting on it, so preserving the full history whole is
+        // strictly better than folding it on a collapsed summary. The parked
+        // tier cannot refuse: the prompt already went in, and holding it would
+        // 400 a turn the user pressed Enter for, so it degrades to the
+        // heuristic fold (empty summaries are exactly the pre-model shape
+        // compactedHistory has always taken) with an advisory naming what the
+        // audit saw. The audit runs on a reply whose request was cap-gated at
+        // scheduling time, and the fold it leaves behind is re-measured by
+        // every check below untouched — the 95% blocking tier stays reachable
+        // under HOLD, which is what keeps the CTX-13 refusal path live.
+        $hold = $blocked === [] ? $msg->safeguardHold : null;
+        $summaries = $hold === null ? $msg->summaries : [];
+        if ($hold !== null && $msg->parkedSubmission !== null) {
+            $prefix .= $this->compactionService()->safeguardFoldAdvisory($hold);
+        }
+
         // The '/compact' line - or, on the parked route, the user's prompt - is
         // already in the transcript from the scheduling pass, so this must not
         // append a second one.
         if ($msg->parkedSubmission === null) {
-            return [$this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $msg->summaries, $prefix)), null];
+            if ($hold !== null) {
+                return [$this->mutate([
+                    'history' => [...$this->history, Message::notice($this->compactionService()->safeguardHoldRefusal($hold))],
+                    'pendingCompactionId' => null,
+                ]), null];
+            }
+
+            return [$this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix)), null];
         }
 
-        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $msg->summaries, $prefix, true));
+        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix, true));
 
         // Hoisted above every judgement below because the breaker's measurement and
         // the 95% tier must read the SAME post-compaction state, or the two would
@@ -16899,13 +17032,73 @@ final class Chat implements Model
      * Handle /memory commands — {@see \SugarCraft\Code\Host\Commands\MemoryCommand} (roadmap O-2h):
      * list, add, search, delete, edit, clear, import, log and restore over the
      * session's home store and project root, through the router the `Memory`
-     * tool shares.
+     * tool shares. `/memory open <id>` (VIS-2b) is answered here rather than
+     * by the router, because it needs the Cmd channel: only an exec Cmd hands
+     * the terminal to `$EDITOR` and back.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleMemoryCommand(string $inputText): array
     {
+        $open = $this->memoryOpenArm($inputText);
+        if ($open !== null) {
+            return $open;
+        }
+
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\MemoryCommand(), $inputText);
+    }
+
+    /**
+     * The `/memory open <id>` answer as [Chat, Cmd] — null for every other
+     * /memory form, so the router keeps them. A bare `/memory open` gets the
+     * usage row; an id the stores do not have gets the unknown row (checked
+     * repository-first through the same {@see MemoryWriter} the `Memory` tool
+     * shares); a hit gets the editor Cmd onto the exec channel.
+     *
+     * @return ?array{0:Chat,1:?\Closure}
+     */
+    private function memoryOpenArm(string $inputText): ?array
+    {
+        $home = $this->memoryStore();
+        if ($home === null) {
+            return null; // no store configured: the router's not_configured row is the answer
+        }
+
+        $after = self::commandArgument($inputText);
+        if ($after === '') {
+            return null; // bare /memory: the router prints help
+        }
+
+        $parts = \preg_split('/\s+/', $after, 2);
+        if (($parts[0] ?? '') !== 'open') {
+            return null;
+        }
+
+        $id = \trim($parts[1] ?? '');
+        if ($id === '') {
+            return [$this->memoryRow($inputText, Lang::t('host.memory.usage.open')), null];
+        }
+
+        $located = \SugarCraft\Code\Memory\MemoryWriter::new($home, $this->projectRoot())->locate($id);
+        $path = $located === null ? null : $located[1]->notePath($id);
+        if ($path === null) {
+            return [$this->memoryRow($inputText, Lang::t('host.memory.open-unknown', ['id' => $id])), null];
+        }
+
+        return [
+            $this->withInputBuf(''),
+            \SugarCraft\Code\Commands\EditorCommand::new()->openFile($path),
+        ];
+    }
+
+    /** A `/memory` row this arm answers without the router: echo and reply, UI-only. */
+    private function memoryRow(string $inputText, string $response): self
+    {
+        return $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
     }
 
     private function withInputBuf(string $buf): self
@@ -18321,6 +18514,20 @@ final class Chat implements Model
     }
 
     /**
+     * Run a root-palette row by label.
+     *
+     * VIS-4 (palette-as-superset): the explicit arms below are only the
+     * EXCEPTIONS — rows with no slash spelling (NewSession, NewSessionPicker,
+     * OpenDocs, PinSession, DeleteSession), actions whose palette text is a
+     * specific SUB-command rather than the bare name (the dock pair,
+     * LayoutReset, ToggleMcp's list), actions that open shell state rather
+     * than run the slash handler (OpenSettings, OpenMediaForm, Exit), and the
+     * two second-level lists handled above. Every other palette row falls to
+     * {@see dispatchPaletteCommand()}, which dispatches the row's own slash
+     * handler exactly as typing the bare command does — so promoting a row to
+     * the palette is one `paletteAction:` line in its spec file, never a new
+     * arm here.
+     *
      * @return array{0: self, 1: ?\Closure}
      */
     private function runRootPaletteAction(string $label): array
@@ -18350,9 +18557,11 @@ final class Chat implements Model
         $closed = $this->mutate(['palette' => null]);
 
         return match ($action) {
-            PaletteAction::ShareSession => $closed->handleShareCommand('/share'),
-            PaletteAction::SwitchAgent => $closed->handleAgentsCommand('/agents'),
-            PaletteAction::SwitchSession => $closed->handleSessionsCommand('/sessions'),
+            // ShareSession, SwitchAgent, SwitchSession, RenameSession and
+            // BranchSession drove their slash handlers with the bare command
+            // text by hand; VIS-4's generic dispatch IS that behaviour, so
+            // they fell out of this match. Rename's read-only gate rides in
+            // {@see dispatchPaletteCommand()}.
             PaletteAction::ToggleMcp => $closed->handleMcpAuthCommand('mcp auth list'),
             PaletteAction::NewSession => $closed->handlePaletteNewSession(),
             PaletteAction::NewSessionPicker => $closed->handleNewCommand('/new'),
@@ -18367,15 +18576,42 @@ final class Chat implements Model
             // W3.10: same story for the generation form — it paints a modal
             // and writes no turn state until Generate is pressed.
             PaletteAction::OpenMediaForm => $closed->openMediaFormView(),
-            // P-A4: the session actions. Rename opens the inline editor through
-            // the slash handler, refused in a read-only window as `/rename` is.
-            PaletteAction::RenameSession => $closed->readOnlyRefusal('/rename') ?? $closed->handleRenameCommand('/rename'),
-            PaletteAction::BranchSession => $closed->handleBranchCommand('/branch'),
+            // P-A4: the session actions with no slash spelling of their own.
             PaletteAction::PinSession => $closed->togglePinCurrentSession(),
             PaletteAction::DeleteSession => $closed->openSessionListToDelete(),
             PaletteAction::Exit => [$closed, Cmd::quit()],
-            default => [$closed, null],
+            default => $this->dispatchPaletteCommand($closed, $action),
         };
+    }
+
+    /**
+     * VIS-4's generic palette tail: dispatch the action's own registry row as
+     * if the user had typed its bare command.
+     *
+     * One funnel through {@see dispatchCommand()}, the same one a typed
+     * submit takes, including the read-only-session gate submit() applies
+     * ahead of dispatch — a palette row must not open in a read-only window
+     * the typed spelling is refused in. A file-based row cannot reach here
+     * (the registry's palette rows are built-ins, and a template row has no
+     * private handler to name); a row whose handler is absent is a wiring bug
+     * {@see CommandRegistryTest} turns red, and fails closed to a no-op here.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchPaletteCommand(self $closed, PaletteAction $action): array
+    {
+        $spec = CommandRegistry::forPaletteAction($action);
+        if ($spec === null || $spec->isFileBased() || !$spec->slashVisible) {
+            return [$closed, null];
+        }
+
+        $text = '/' . $spec->name;
+        $readOnly = $closed->readOnlyRefusal($text);
+        if ($readOnly !== null) {
+            return $readOnly;
+        }
+
+        return $closed->dispatchCommand($text) ?? [$closed, null];
     }
 
     /**
@@ -19972,7 +20208,45 @@ final class Chat implements Model
      */
     private function accountUsage(?Usage $usage): void
     {
-        $this->spendLedger()->account($this->tokenTracker, $usage);
+        $this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink());
+    }
+
+    /**
+     * The durable ledger sink SES-1 hands the accounting choke: one
+     * `usage_records` row per accounted call, appended through the same
+     * single guard the in-process tracker rides. This is the TUI path's
+     * sink; the serve path reaches the SAME table through its own mirror
+     * at {@see \SugarCraft\Code\Host\SessionHost::usageRecordSink()},
+     * because a SessionHost is not a Chat ({@see SessionHost}) — the one
+     * choke that makes a second APPEND SITE unnecessary is the ledger's,
+     * not this method's. Null when this Chat has no enhanced store —
+     * accounting then stays exactly as durable as it was before the table.
+     *
+     * The closure resolves store kind at build time but the session ID at
+     * CALL time on purpose: an ISS-102 lazy mint hands the Chat its row's id
+     * only after construction, mid-first-turn, and a ledger that stamped the
+     * null it saw at launch would silently lose the very first session's
+     * spend — the thing this whole table exists to stop losing.
+     */
+    private function usageRecordSink(): ?\Closure
+    {
+        $store = $this->sessionStore;
+        if (!$store instanceof EnhancedSessionStore) {
+            return null;
+        }
+
+        return function (Usage $usage) use ($store): void {
+            $sessionId = $this->currentSessionId;
+            if ($sessionId === null) {
+                return;
+            }
+
+            $store->appendUsageRecord(
+                $sessionId,
+                $usage,
+                $this->backend instanceof Backend\EngineBackend ? $this->backend->model() : null,
+            );
+        };
     }
 
     /**
@@ -20763,11 +21037,83 @@ final class Chat implements Model
      * Handle the `/mcp` slash command (and its legacy bare `mcp auth …`
      * spelling) for managing MCP server OAuth credentials.
      *
+     * MCP-5: `login <server>` (also via the `auth` noun — every spelling
+     * reduces to the same argv here) is intercepted before the host route
+     * and forked as a background child by {@see armMcpLogin()}, so the
+     * loopback wait happens off the TUI's terminal. Everything else — the
+     * bare `login` guide, list/add/remove/reconnect — still runs through
+     * the host command unchanged.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleMcpAuthCommand(string $inputBuf): array
     {
+        $argv = self::parseMcpArgs($inputBuf);
+        $server = trim((string) ($argv[1] ?? ''));
+
+        if (($argv[0] ?? '') === 'login' && $server !== '' && !str_starts_with($server, '--')) {
+            return $this->armMcpLogin($server, \array_slice($argv, 2), $inputBuf);
+        }
+
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\McpAuthHostCommand(), $inputBuf);
+    }
+
+    /**
+     * Open the forked login child and echo the outcome into the transcript
+     * as UI-only rows (the draft itself never reaches the model). The poll
+     * Cmd rides the return channel — the terminal hand-back problem that
+     * killed every in-process editor attempt is exactly what forking solves:
+     * the child owns no terminal, so the TUI keeps painting throughout.
+     *
+     * @param list<string> $rest
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function armMcpLogin(string $server, array $rest, string $inputText): array
+    {
+        [$notice, $armed] = \SugarCraft\Code\Support\McpLoginFork::arm($server, $rest, $this->projectRoot());
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($notice)->withUiOnly()],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
+        return [$next, $armed ? \SugarCraft\Code\Support\McpLoginFork::pollCmd($server) : null];
+    }
+
+    /**
+     * Translate one {@see McpLoginProgressMsg} beat into transcript rows and
+     * the follow-up Cmd. `waiting`/`gone` change nothing visible; `url`
+     * announces the browser link so the user can act without hunting the
+     * child's (invisible) stdout; `done` closes with the exit status plus
+     * the honest sentence about when the token takes effect — a live
+     * session's client memoizes its store, so the grant attaches at the
+     * NEXT launch, and `/mcp list` is what refreshes the panel's view.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleMcpLoginProgress(McpLoginProgressMsg $msg): array
+    {
+        if ($msg->phase === McpLoginProgressMsg::PHASE_WAITING || $msg->phase === McpLoginProgressMsg::PHASE_GONE) {
+            return [$this, $msg->phase === McpLoginProgressMsg::PHASE_WAITING
+                ? \SugarCraft\Code\Support\McpLoginFork::pollCmd($msg->server)
+                : null];
+        }
+
+        $row = $msg->phase === McpLoginProgressMsg::PHASE_URL
+            ? Lang::t('cmd.mcp-auth.login-url', ['server' => $msg->server, 'url' => $msg->text])
+            : Lang::t($msg->exitCode === 0 ? 'cmd.mcp-auth.login-done' : 'cmd.mcp-auth.login-failed', [
+                'server' => $msg->server,
+                'code' => (string) $msg->exitCode,
+            ]);
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::assistant($row)->withUiOnly()],
+        ]);
+
+        return [$next, $msg->phase === McpLoginProgressMsg::PHASE_URL
+            ? \SugarCraft\Code\Support\McpLoginFork::pollCmd($msg->server)
+            : null];
     }
 
     /**

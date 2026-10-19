@@ -9,6 +9,7 @@ import AgentsPanel from '../agents/AgentsPanel.vue'
 import AgentCatalogPanel from '../agents/AgentCatalogPanel.vue'
 import BackgroundPanel from './BackgroundPanel.vue'
 import ChangesPanel from './ChangesPanel.vue'
+import ContextPanel from './ContextPanel.vue'
 import MemoryPanel from './MemoryPanel.vue'
 import RulesPanel from './RulesPanel.vue'
 import TodoPanel from './TodoPanel.vue'
@@ -97,6 +98,7 @@ function onKey(event: KeyboardEvent): void {
       <RulesPanel v-else-if="panels.active === 'rules'" :session-id="sessionId" />
       <AgentCatalogPanel v-else-if="panels.active === 'catalog'" />
       <ChangesPanel v-else-if="panels.active === 'changes'" />
+      <ContextPanel v-else-if="panels.active === 'context' && sessionId" :session-id="sessionId" />
     </div>
   </aside>
 </template>

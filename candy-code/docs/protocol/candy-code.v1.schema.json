@@ -129,6 +129,452 @@
             ],
             "description": "A background (/bg) session; never its output."
         },
+        "ContextSources": {
+            "type": "object",
+            "properties": {
+                "instructionFiles": {
+                    "type": [
+                        "array",
+                        "null"
+                    ],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "maxLength": 4096
+                            },
+                            "bytes": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "tier": {
+                                "enum": [
+                                    "project",
+                                    "personal"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "path",
+                            "bytes",
+                            "tier"
+                        ]
+                    },
+                    "description": "The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them."
+                },
+                "memorySections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/MemoryEntry"
+                    },
+                    "description": "Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first, ISS-020)."
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "tier": {
+                                "type": "string",
+                                "description": "Who put the file there — a SkillOrigin value, not the format."
+                            },
+                            "enabled": {
+                                "type": "boolean",
+                                "description": "False when the `disabledSkills` setting withheld it."
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "tier",
+                            "enabled"
+                        ]
+                    },
+                    "description": "The skills registry, as the prompt listing sees it."
+                },
+                "mcp": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "description": "The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this."
+                        },
+                        "error": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "skipped": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "servers": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "transport": {
+                                        "type": "string"
+                                    },
+                                    "trust": {
+                                        "enum": [
+                                            "trusted"
+                                        ],
+                                        "description": "Rows exist only while the file is trusted; the http entry's URL stays off the wire (the `server.hello` media restraint, restated)."
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "transport",
+                                    "trust"
+                                ]
+                            }
+                        }
+                    },
+                    "required": [
+                        "status",
+                        "error",
+                        "skipped",
+                        "servers"
+                    ],
+                    "description": "The `.mcp.json` declaration as `candy-code mcp list` reads it (ISS-091 census), minus per-entry details."
+                },
+                "untrusted": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "maxLength": 4096
+                            },
+                            "reason": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "path",
+                            "reason"
+                        ]
+                    },
+                    "description": "Instruction paths the loader refused and why."
+                },
+                "breakdown": {
+                    "type": "object",
+                    "properties": {
+                        "window": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "sections": {
+                            "type": [
+                                "array",
+                                "null"
+                            ],
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "label": {
+                                        "type": "string"
+                                    },
+                                    "stability": {
+                                        "type": "string"
+                                    },
+                                    "sections": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    },
+                                    "bytes": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    },
+                                    "tokens": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    }
+                                },
+                                "required": [
+                                    "label",
+                                    "stability",
+                                    "sections",
+                                    "bytes",
+                                    "tokens"
+                                ]
+                            }
+                        },
+                        "toolCount": {
+                            "type": [
+                                "integer",
+                                "null"
+                            ],
+                            "minimum": 0
+                        },
+                        "toolTokens": {
+                            "type": [
+                                "integer",
+                                "null"
+                            ],
+                            "minimum": 0
+                        },
+                        "historyTokens": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "historyMessages": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "uiOnlyRows": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "largest": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "index": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    },
+                                    "role": {
+                                        "type": "string"
+                                    },
+                                    "tokens": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    },
+                                    "preview": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "index",
+                                    "role",
+                                    "tokens",
+                                    "preview"
+                                ]
+                            }
+                        },
+                        "lastCache": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "properties": {
+                                "read": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "prompt": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            },
+                            "required": [
+                                "read",
+                                "prompt"
+                            ]
+                        },
+                        "sessionCache": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "properties": {
+                                "read": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "prompt": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "replies": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            },
+                            "required": [
+                                "read",
+                                "prompt",
+                                "replies"
+                            ]
+                        },
+                        "pruning": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "properties": {
+                                "mode": {
+                                    "type": "string"
+                                },
+                                "sessionMode": {
+                                    "type": "boolean"
+                                },
+                                "outputs": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "outputTokens": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "files": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "contextRows": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "contextRowTokens": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "block": {
+                                    "type": [
+                                        "object",
+                                        "null"
+                                    ],
+                                    "properties": {
+                                        "id": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        },
+                                        "compressed": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        },
+                                        "summary": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
+                                    },
+                                    "required": [
+                                        "id",
+                                        "compressed",
+                                        "summary"
+                                    ]
+                                },
+                                "rows": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "ref": {
+                                                "type": [
+                                                    "integer",
+                                                    "null"
+                                                ],
+                                                "minimum": 0
+                                            },
+                                            "tool": {
+                                                "type": "string"
+                                            },
+                                            "reason": {
+                                                "type": "string"
+                                            },
+                                            "by": {
+                                                "type": "string"
+                                            },
+                                            "tokens": {
+                                                "type": "integer",
+                                                "minimum": 0
+                                            }
+                                        },
+                                        "required": [
+                                            "tool",
+                                            "reason",
+                                            "by",
+                                            "tokens"
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": [
+                                "mode",
+                                "sessionMode",
+                                "outputs",
+                                "outputTokens",
+                                "contextRows",
+                                "contextRowTokens",
+                                "rows"
+                            ]
+                        },
+                        "cacheBreaks": {
+                            "type": [
+                                "object",
+                                "null"
+                            ],
+                            "properties": {
+                                "breaks": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "last": {
+                                    "type": [
+                                        "object",
+                                        "null"
+                                    ],
+                                    "properties": {
+                                        "from": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        },
+                                        "to": {
+                                            "type": "integer",
+                                            "minimum": 0
+                                        }
+                                    },
+                                    "required": [
+                                        "from",
+                                        "to"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "breaks"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "window",
+                        "sections",
+                        "toolCount",
+                        "toolTokens",
+                        "historyTokens",
+                        "historyMessages",
+                        "uiOnlyRows",
+                        "largest",
+                        "lastCache",
+                        "sessionCache"
+                    ],
+                    "description": "The `/context` figures ({@see \\SugarCraft\\Code\\Context\\ContextBreakdown}) — same measurement, same single writer (WEB-3a)."
+                }
+            },
+            "required": [
+                "instructionFiles",
+                "memorySections",
+                "skills",
+                "mcp",
+                "untrusted",
+                "breakdown"
+            ],
+            "description": "WEB-3a: what the session's context is built from — structure for the panel `/context` prints as text."
+        },
         "Error": {
             "type": "object",
             "properties": {
@@ -1429,6 +1875,25 @@
                 "required": [
                     "items"
                 ]
+            }
+        },
+        "context.sources": {
+            "description": "What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, and the token breakdown.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "$ref": "#/$defs/ContextSources"
             }
         },
         "files.changed": {
@@ -3577,6 +4042,7 @@
                                     "enum": [
                                         "live",
                                         "next-turn",
+                                        "reload",
                                         "restart",
                                         "frozen"
                                     ]

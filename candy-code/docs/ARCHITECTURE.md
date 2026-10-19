@@ -15,7 +15,7 @@ subsystem that is documented and does nothing, a stderr line inside a frame.
 bin/candy-code                argv → pre-flight → dispatch
       │
       ├─ ArgvParser / Help / NonInteractive / Subcommands
-      │      --help --version, eight subcommands, -p one-shot
+      │      --help --version, nine subcommands, -p one-shot
       │
       └─ Cli\Bootstrap              ALL wiring lives here
              │
@@ -43,8 +43,8 @@ which is the whole of the next warning.
 
 The order in it is deliberate, and its size is whatever `wc -l bin/candy-code`
 says today — this sentence used to carry a line count and quotes none on
-purpose — quoted figures rot within rounds. `--help`, `--version` and the eight
-subcommands (`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`,
+purpose — quoted figures rot within rounds. `--help`, `--version` and the nine
+subcommands (`doctor`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`,
 `serve`, `attach`, `acp`, `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them but `attach` and `acp` is a question about
 the *install* rather than a turn of conversation: they must answer on a machine
@@ -152,7 +152,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 49
+palette, session tabs, the permission prompt, and the dispatch arms for 51
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -930,7 +930,7 @@ its keys and its main argument, and its result is sent as it was.
 
 ## Providers
 
-`ProviderFactory::availableTypes()` returns **eight** selectable
+`ProviderFactory::availableTypes()` returns **nine** selectable
 names, and each builds a different class. Measured by constructing every one of
 them on this tree:
 
@@ -939,6 +939,7 @@ them on this tree:
 | `openai` | `OpenAIProvider` |
 | `anthropic` | **`AnthropicProvider`**, native Messages wire |
 | `claude-code` | `ClaudeCodeProvider` (over `ClaudeCodeInvocation`) |
+| `codex` | `CodexProvider` (over `CodexInvocation`) |
 | `sglang` | `SglangProvider` |
 | `bedrock` | `BedrockProvider` |
 | `vertex` | `VertexProvider` |
@@ -961,7 +962,7 @@ of `anthropic`: `createClaudeCode()` returns the real
 `ClaudeCodeProvider`, and `php bin/candy-code models` prints
 `claude-code claude-sonnet-4-6` as its own row.
 
-**`echo` is not one of the eight.** `$factory->create(['type' => 'echo'])`
+**`echo` is not one of the nine.** `$factory->create(['type' => 'echo'])`
 raises `Unknown provider type: echo`. `EchoProvider` is nonetheless live, from a
 different direction: `Cli\Bootstrap::provider()` returns
 `new EchoProvider()` whenever the run selected no provider, or the selected one

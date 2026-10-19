@@ -45,7 +45,8 @@ use SugarCraft\Code\Protocol\Scope;
  */
 final class MemoryMethods
 {
-    private const SCOPES = ['user', 'project', 'agent'];
+    /** The memory scopes a note can live in (`memory.*` surface and `context.sources` alike). */
+    public const SCOPES = ['user', 'project', 'agent'];
 
     private const MAX_NOTE_BYTES = 65_536;
 

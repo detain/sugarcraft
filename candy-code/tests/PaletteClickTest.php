@@ -447,7 +447,7 @@ final class PaletteClickTest extends TestCase
      */
     public function testEveryPaletteRowAnswersAClickExactlyAsItAnswersEnter(bool $inFlight): void
     {
-        $chat = new Chat(palette: PaletteState::root(), inFlight: $inFlight);
+        $chat = (new Chat(palette: PaletteState::root(), inFlight: $inFlight))->withSize(100, 80);
         $rows = $chat->paletteMatches();
         self::assertGreaterThan(1, count($rows), 'fixture: the root palette must offer several rows');
 
@@ -552,7 +552,10 @@ final class PaletteClickTest extends TestCase
     /** An open root palette, optionally with $query already typed into it. */
     private function openPalette(string $query = ''): Chat
     {
-        $chat = new Chat(palette: PaletteState::root());
+        // VIS-4: the superset list is taller than the default frame, and the
+        // Veil composite clips what does not fit — every row here must be
+        // PAINTED for its zone pin to be a fair test of the zone registry.
+        $chat = (new Chat(palette: PaletteState::root()))->withSize(100, 80);
         foreach (str_split($query) as $ch) {
             [$chat] = $chat->update(new KeyMsg(KeyType::Char, $ch));
         }

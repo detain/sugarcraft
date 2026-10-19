@@ -226,7 +226,12 @@ final class ReadmeRosterDriftTest extends TestCase
         $roster = (string) preg_split('/\n\s*\n/', $section)[0];
         $flat = (string) preg_replace('/\s+/', ' ', $roster);
 
-        preg_match_all('/(\()?`\/([a-z]+)`/', $flat, $m, PREG_SET_ORDER);
+        // `[a-z][a-z-]*`: GIT-1's /security-review is the first hyphenated
+        // built-in row, and the older `[a-z]+` leg could not scrape it off the
+        // roster — it stopped at the hyphen and then failed the closing
+        // backtick, so the README read as one row short of the registry.
+        // (Precedent: the TrustKey census needed the same widening.)
+        preg_match_all('/(\()?`\/([a-z][a-z-]*)`/', $flat, $m, PREG_SET_ORDER);
 
         $advertised = [];
         $aliases = [];

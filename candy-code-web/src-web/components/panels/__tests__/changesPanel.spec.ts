@@ -113,20 +113,36 @@ describe('ChangesPanel (WEB-1b)', () => {
     expect(wrapper.find('[data-testid="diff-truncated"]').exists()).toBe(true)
   })
 
-  it('fails soft: a refusal is an error line, and reload tries both again', async () => {
+  it('fails soft per side: a diff refusal keeps the list and shows a stub; reload tries both again', async () => {
     await wire.connect()
     const wrapper = mount(ChangesPanel)
     await flushPromises()
     await wire.answer('files.changed', CHANGED)
     await wire.fail('files.diff', -32002, 'git_unavailable', 'git is not available here')
     await flushPromises()
-    expect(wrapper.find('[data-testid="changes-error"]').text()).toContain('git is not available here')
-    expect(wrapper.find('[data-testid="changes-count"]').exists()).toBe(false)
+    // w4j: Promise.allSettled — the fetched changed-list survives its sibling's refusal.
+    expect(wrapper.find('[data-testid="changes-count"]').text()).toBe('3 changed')
+    expect(wrapper.findAll('[data-testid^="changed-row-"]')).toHaveLength(3)
+    expect(wrapper.find('[data-testid="changes-diff-error"]').text()).toContain('git is not available here')
+    expect(wrapper.find('[data-testid="changes-error"]').exists()).toBe(false)
 
     await wrapper.find('[data-testid="changes-reload"]').trigger('click')
     await flushPromises()
     expect(wire.sent('files.changed')).toHaveLength(2)
     expect(wire.sent('files.diff')).toHaveLength(2)
+  })
+
+  it('does not call a refused diff "untracked": the stub answers the selected row', async () => {
+    await wire.connect()
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    await wire.answer('files.changed', CHANGED)
+    await wire.fail('files.diff', -32002, 'git_unavailable', 'git is not available here')
+    await flushPromises()
+    await wrapper.find('[data-testid="changed-row-src/a.ts"]').trigger('click')
+    expect(wrapper.find('[data-testid="changes-untracked"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="changes-diff-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="diff"]').exists()).toBe(false)
   })
 
   it('keeps a selection that survives a reload and drops one that does not', async () => {

@@ -21,7 +21,10 @@ use SugarCraft\Code\Support\Frontmatter;
  *
  * FRONTMATTER KEYS this class reads, exactly the set the plan names for the
  * rules tier: `name`, `description`, `enabled`, `models`, plus the two P6.S1
- * trigger keys `paths:` and `keywords:`. The frontmatter grammar itself
+ * trigger keys `paths:` and `keywords:`, plus the two INT-2 foreign-tree keys
+ * that map ONTO existing fields rather than minting new ones — `globs:` is read
+ * as an alias of `paths:` (Cursor's spelling) and `alwaysApply:` folds into
+ * `enabled` with AND semantics (Claude's and Cursor's opt-out). The frontmatter grammar itself
  * (the `---` fence, scalar coercion, list-of-scalars) is {@see Frontmatter},
  * reached through the same single fenced-block read {@see \SugarCraft\Code\Commands\CommandSpec::fromFile()}
  * uses, so a rules file and a command file cannot disagree about what a block
@@ -114,6 +117,26 @@ final class Rule
     private const TIERS = ['user', 'project', 'root'];
 
     /**
+     * Which directory family a loaded file came from: {@see ORIGIN_NATIVE} for
+     * this port's own `~/.candy-code` trees, {@see ORIGIN_CLAUDE} and
+     * {@see ORIGIN_CURSOR} for the foreign trees INT-2 folds in.
+     *
+     * PROVENANCE, NOT AUTHORITY - the rulebooks argument, reused verbatim where
+     * it applies. A foreign directory does NOT mint a tier: the bytes under
+     * `~/.claude/rules` were written by the operator of this machine, exactly
+     * like the bytes under `~/.candy-code/rules`, so the tier stays `user` and
+     * the prompt's framing stays honest. What origin carries is the answer to
+     * "which directory family did this come from", the one fact the `/rules`
+     * Source column and a toggle notice must show - see {@see badge()}.
+     */
+    public const ORIGIN_NATIVE = 'native';
+    public const ORIGIN_CLAUDE = 'claude';
+    public const ORIGIN_CURSOR = 'cursor';
+
+    /** @var list<string> */
+    public const ORIGINS = [self::ORIGIN_NATIVE, self::ORIGIN_CLAUDE, self::ORIGIN_CURSOR];
+
+    /**
      * @param string           $name        Stable identifier: the frontmatter `name:` when present, else the loader's derived filename stem.
      * @param string           $body        The prompt text (everything after the closing `---`), un-trimmed.
      * @param string           $path        The resolved absolute path this rule was read from.
@@ -123,6 +146,7 @@ final class Rule
      * @param list<string>     $models      Model identifiers from `models:` (empty when the key is absent).
      * @param list<Trigger>    $triggers    The trigger value objects built from this file's frontmatter, in canonical order.
      * @param string           $key         The loader's pack identity for this file - never derived from frontmatter, so a `name:` cannot move what `/rules` types.
+     * @param string           $origin      One of {@see ORIGINS} - which directory family the loader walked this file from; provenance for the `/rules` Source column, never an authority level.
      */
     private function __construct(
         public readonly string $name,
@@ -134,6 +158,7 @@ final class Rule
         public readonly array $models,
         public readonly array $triggers,
         public readonly string $key,
+        public readonly string $origin = self::ORIGIN_NATIVE,
     ) {
     }
 
@@ -161,15 +186,23 @@ final class Rule
      *
      * @throws InvalidArgumentException on a non-mapping frontmatter block, a
      *         non-string `name`/`description`/`models` entry, a non-boolean
-     *         `enabled`, or an out-of-range `$tier` operand.
+     *         `enabled`/`alwaysApply`, or an out-of-range `$tier`/`$origin` operand.
      */
-    public static function new(string $path, string $tier, string $content, string $fallbackName, ?string $key = null): self
+    public static function new(string $path, string $tier, string $content, string $fallbackName, ?string $key = null, string $origin = self::ORIGIN_NATIVE): self
     {
         if (!in_array($tier, self::TIERS, true)) {
             throw new InvalidArgumentException(sprintf(
                 'Rule tier must be one of %s, "%s" given (%s).',
                 implode(', ', self::TIERS),
                 $tier,
+                $path,
+            ));
+        }
+        if (!in_array($origin, self::ORIGINS, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Rule origin must be one of %s, "%s" given (%s).',
+                implode(', ', self::ORIGINS),
+                $origin,
                 $path,
             ));
         }
@@ -197,7 +230,12 @@ final class Rule
             throw new InvalidArgumentException(sprintf('Rule name resolved to blank (%s).', $path));
         }
         $description = self::stringField($meta, 'description', $path);
-        $enabled = self::boolField($meta, 'enabled', $path) ?? true;
+        // INT-2: `alwaysApply:` (Claude/Cursor spelling of the same opt-out)
+        // folds into `enabled` with AND semantics - either key says off, the
+        // rule is off; a mis-map here would leave an imported rule standing in
+        // every prompt, the exact hazard FrontmatterKeyAudit exists to catch.
+        $enabled = (self::boolField($meta, 'enabled', $path) ?? true)
+            && (self::boolField($meta, 'alwaysApply', $path) ?? true);
         $models = self::stringListField($meta, 'models', $path);
 
         return new self(
@@ -210,6 +248,7 @@ final class Rule
             models: $models,
             triggers: self::buildTriggers($meta, $description, $path),
             key: $key ?? $fallbackName,
+            origin: $origin,
         );
     }
 
@@ -235,7 +274,13 @@ final class Rule
             $triggers[] = KeywordTrigger::new($keywords);
         }
 
+        // INT-2: foreign trees spell the path trigger `globs:` (Cursor's key);
+        // it is an ALIAS of `paths:`, not a second trigger kind, and `paths:`
+        // wins when one file somehow declares both.
         $paths = self::stringListField($meta, 'paths', $path);
+        if ($paths === []) {
+            $paths = self::stringListField($meta, 'globs', $path);
+        }
         if ($paths !== []) {
             $triggers[] = PathTrigger::new($paths);
         }
@@ -302,10 +347,22 @@ final class Rule
     }
 
     /**
+     * The `/rules` Source-column badge for this rule's origin: `''` for the
+     * native directories (where the directory name itself is the label the
+     * column prints), else `[claude]` / `[cursor]` - the same bracket spelling
+     * {@see \SugarCraft\Code\Skills\SkillSource::badge()} uses for imported
+     * skills, so the two provenance vocabularies read alike.
+     */
+    public function badge(): string
+    {
+        return $this->origin === self::ORIGIN_NATIVE ? '' : '[' . $this->origin . ']';
+    }
+
+    /**
      * Reconstruct with selected fields replaced, trusting already-parsed state.
      * Only the fields that have a `with*()` builder are operands here; every
      * other field carries through unchanged, and the ones a builder cannot
-     * touch (identity `name` and pack identity `key`, source `path`/`tier`, and the read-only
+     * touch (identity `name` and pack identity `key`, source `path`/`tier`/`origin`, and the read-only
      * `description`/`models` parsed once from the file) have no parameter to
      * get out of sync.
      */
@@ -324,6 +381,7 @@ final class Rule
             models: $this->models,
             triggers: $triggers ?? $this->triggers,
             key: $this->key,
+            origin: $this->origin,
         );
     }
 

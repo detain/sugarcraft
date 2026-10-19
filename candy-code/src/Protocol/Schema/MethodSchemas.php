@@ -285,7 +285,7 @@ final class MethodSchemas
                     'min' => Schema::number(),
                     'max' => Schema::number(),
                     'riskClass' => Schema::string(),
-                    'applies' => Schema::enum(['live', 'next-turn', 'restart', 'frozen']),
+                    'applies' => Schema::enum(['live', 'next-turn', 'reload', 'restart', 'frozen']),
                     'appliesLabel' => Schema::string(),
                     'ui' => Schema::enum(['easy', 'list', 'complex', 'read-only', 'hidden']),
                     'layered' => Schema::boolean(),
@@ -392,6 +392,11 @@ final class MethodSchemas
                     'restored' => Schema::string()->describe('The revision the store was restored to.'),
                     'commit' => Schema::string()->nullable()->describe('New commit id, or null when the restored tree equalled the current one.'),
                 ], ['restored']),
+            ],
+
+            'context.sources' => [
+                $sessionOnly,
+                Schema::ref(D::CONTEXT_SOURCES),
             ],
 
             'agents.list' => [$empty, $items(Schema::object([

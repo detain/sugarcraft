@@ -33,6 +33,14 @@ final class SessionRow
         public readonly ?string $gitBranch,
         public readonly int $turns,
         public readonly ?string $lastPreview,
+        /**
+         * The SES-1 cached spend, straight off the row: dollars as recorded,
+         * or null when the session never accounted a call. NOT a bill when
+         * {@see $costUnpriced} reads true — it is a lower bound, the law
+         * every dollar surface states with a leading `≥`.
+         */
+        public readonly ?float $costUsd,
+        public readonly bool $costUnpriced,
         public readonly string $createdAt,
         public readonly string $updatedAt,
     ) {
@@ -66,6 +74,11 @@ final class SessionRow
             gitBranch: $str('git_branch'),
             turns: (int) ($row['turns'] ?? 0),
             lastPreview: $str('last_preview'),
+            // A pre-migration row (or a SELECT that skipped the columns)
+            // reads as "no spend recorded", never as a measured zero — the
+            // same null-is-unknown law Usage carries one level up.
+            costUsd: isset($row['cost_usd']) ? (float) $row['cost_usd'] : null,
+            costUnpriced: (int) ($row['cost_unpriced'] ?? 0) !== 0,
             createdAt: (string) ($row['created_at'] ?? ''),
             updatedAt: (string) ($row['updated_at'] ?? ''),
         );
@@ -104,6 +117,8 @@ final class SessionRow
             'git_branch' => $this->gitBranch,
             'turns' => $this->turns,
             'last_preview' => $this->lastPreview,
+            'cost_usd' => $this->costUsd,
+            'cost_unpriced' => $this->costUnpriced ? 1 : 0,
         ];
     }
 }

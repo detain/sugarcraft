@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Two surfaces in one command (ISS-089): bare /skills lists the invocable
 // skills the launch discovery loaded, and roadmap 5.4-3's propose mode lives
@@ -16,6 +17,7 @@ return BuiltInCommand::new(CommandSpec::new(
     'skills',
     Lang::t('cmd.skills.description'),
     Lang::t('cmd.category.memory'),
+    paletteAction: PaletteAction::ListSkills,
     argumentHint: Lang::t('cmd.skills.hint'),
 ))->withHandler('handleSkillsCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\SkillsHostCommand::class);

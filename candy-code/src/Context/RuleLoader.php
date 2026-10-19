@@ -22,13 +22,24 @@ use SugarCraft\Code\Support\ProjectRoot;
  *   1b. user   - `~/.candy-code/rulebooks/*.md`, the same tier's named packs
  *                (P6.S3): one file per pack, pack identity = filename minus the
  *                extension, toggled for the session by `/rules <name>`
+ *   1c. user   - `~/.claude/rules/**` (INT-2), the same operator bytes written
+ *                for Claude Code, imported with a `[claude]` provenance badge
+ *   1d. user   - `~/.cursor/rules/**` (INT-2), same idea, `[cursor]` badge,
+ *                `.mdc` accepted beside `.md`
  *   2. project - `<repoRoot>/.candy-code/rules/*.md`, shipped in-repo
+ *   2b. project - `<repoRoot>/.claude/rules/**` (INT-2)
+ *   2c. project - `<repoRoot>/.cursor/rules/**` (INT-2)
  *   3. root    - `<repoRoot>/RULES.md`, an optional single file at the top
  *
- * FOUR DIRECTORIES, THREE TIERS. Rulebooks are not a tier of their own and the
+ * EIGHT DIRECTORIES, THREE TIERS. Rulebooks are not a tier of their own and the
  * reason is in {@see loadUserRulebooks()}: a tier records authorship, the
  * operator authored these bytes, so `user` is the true value and the fence that
- * renders them says so.
+ * renders them says so. The INT-2 foreign trees take the SAME argument one
+ * step further - `~/.claude/rules` and `~/.cursor/rules` are neither a fourth
+ * nor a fifth tier: they are the operator's (1c/1d) and the repository's (2b/2c)
+ * bytes wearing another tool's filename, so they load into the tier their
+ * authorship names and carry an {@see Rule::$origin} badge for everything that
+ * needs to show WHICH directory, never for what the prompt's fence says.
  *
  * THE TIERS AND WHO CHOOSES THEM (OD1 ruling, resolving a wording clash in the
  * sources): the project rules tier IS allowed to exist. prompt_expand.md seam 8
@@ -105,18 +116,22 @@ use SugarCraft\Code\Support\ProjectRoot;
  * order, so the files that survive them are the same on every machine.
  *
  * THE AGGREGATE ARITHMETIC OF THE FILE CAP, stated out loud because P6.S3 added a
- * directory to the walk and a reader is entitled to do the sum without opening
- * the loop: the counter is LOCAL TO ONE {@see loadFromDirectory()} CALL, so the
- * ceiling a single `load()` can spend is (directories walked x MAX_FILES) = 3 x 64
- * = 192 reads - user `rules`, user `rulebooks`, project `rules` - plus the root
+ * directory to the walk, INT-2 added four more, and a reader is entitled to do
+ * the sum without opening the loop: the counter is LOCAL TO ONE
+ * {@see loadFromDirectory()} CALL, so the
+ * ceiling a single `load()` can spend is (directories walked x MAX_FILES) = 7 x 64
+ * = 448 reads - user `rules`, user `rulebooks`, user `~/.claude/rules`, user
+ * `~/.cursor/rules`, project `rules`, project `.claude/rules`, project
+ * `.cursor/rules` - plus the root
  * tier's single `RULES.md`, which has no walk to count it but is no uncapped
  * outlier either: the root file reaches the same {@see readRule()} stat-before-read
- * gate, so all 193 files this sum can name are bounded at {@see MAX_FILE_BYTES}
+ * gate, so all 449 files this sum can name are bounded at {@see MAX_FILE_BYTES}
  * each. What the walk's caps never bounded was the SPLICE, and FU5 closed that:
  * {@see Runtime::MAX_STANDING_RULE_BYTES} prices the standing loops at 65,536
  * framed post-escape bytes per prompt build and defers the overflow to pointer
- * lines, so the 193-file worst case can no longer emit 12,724,235 raw bytes
- * (20,313,188 after escape). Per-directory is the
+ * lines, so the 449-file worst case can no longer emit its own 29,425,664-byte
+ * walk ceiling, let alone the 12,724,235 raw bytes
+ * (20,313,188 after escape) the pre-FU5 splice actually pushed. Per-directory is the
  * semantics kept, deliberately and after measurement: the P6.S2 finding this cap
  * answers was an untrusted clone forcing UNBOUNDED reads, and a fixed, closed set
  * of directories each under its own ceiling is still a bounded aggregate. What a
@@ -194,6 +209,18 @@ final class RuleLoader
     private const MAX_FILE_BYTES = 65536;
 
     /**
+     * Extensions the INT-2 foreign trees accept, alongside the native tiers'
+     * plain `md`: `.mdc` is Cursor's rule file, and `.md` exists in both foreign
+     * trees (Claude's rules are plain markdown). A foreign directory still reads
+     * as nothing but markdown to the parser - one template, every tree - and the
+     * native walk deliberately does NOT accept `.mdc`: a file in the wrong
+     * extension is a file the operator's own tool would not load either.
+     *
+     * @var list<string>
+     */
+    private const FOREIGN_EXTENSIONS = ['md', 'mdc'];
+
+    /**
      * Containment refusals: path as spelled => why it was not read.
      *
      * Loader-local (OD2 ruling), in {@see InstructionFileLoader::refusedPaths()}'s
@@ -208,8 +235,9 @@ final class RuleLoader
      *
      * Two shapes of entry, and both are containment questions in the same sense:
      * a path that resolves OUTSIDE its boundary (a link aimed at `~/.ssh`), and a
-     * `*.md` path that resolves to NOTHING at all (a dangling symlink, or a
-     * directory wearing the extension - NIT-5, closed at P6.S3). The second is
+     * path carrying one of the accepted rule extensions that resolves to NOTHING
+     * at all (a dangling symlink, or a directory wearing the extension - NIT-5,
+     * closed at P6.S3). The second is
      * here rather than in {@see skippedFiles()} because the boundary claim cannot
      * be checked on a target that does not exist, and the standing rule for that
      * asymmetry is that an unknown spelling costs a false positive and never a
@@ -275,8 +303,11 @@ final class RuleLoader
     /**
      * Every tier loaded, in load order, deduplicated, enabled, and model-matched.
      *
-     * The single assembly-facing entry point: it walks user rules, user rulebooks,
-     * then project, then root, and folds the lists through the two de-dup passes
+     * The single assembly-facing entry point: it walks the user tier - native
+     * `rules`, native `rulebooks`, then the INT-2 foreign imports `~/.claude/rules`
+     * and `~/.cursor/rules` - then the project tier in the same family order
+     * (native, claude, cursor), then root, and folds the lists through the two
+     * de-dup passes
      * so a file reached by more than one tier is emitted once (first-seen wins).
      * The returned rules are those whose `enabled:` frontmatter is true (or
      * absent) AND whose pack this session has not turned off AND whose
@@ -297,7 +328,11 @@ final class RuleLoader
         $ordered = [
             ...$this->loadUserRules(),
             ...$this->loadUserRulebooks(),
+            ...$this->loadUserClaudeRules(),
+            ...$this->loadUserCursorRules(),
             ...$this->loadProjectRules(),
+            ...$this->loadProjectClaudeRules(),
+            ...$this->loadProjectCursorRules(),
             ...$this->loadRootRules(),
         ];
 
@@ -486,6 +521,82 @@ final class RuleLoader
     }
 
     /**
+     * Tier 1c - `~/.claude/rules/**`, Claude Code's user rules imported (INT-2).
+     *
+     * THE SAME TIER, A BADGE INSTEAD OF A LABEL. The authorship argument that
+     * files rulebooks under `user` applies unchanged: these bytes were written
+     * by the operator of this machine, so the fence and preamble they render
+     * behind must not lie about that. Provenance rides {@see Rule::$origin} and
+     * surfaces in `/rules` as the `[claude]` badge - {@see Rule::badge()} - so
+     * an operator can still tell at a glance which directory a toggle is
+     * silencing. The import is READ-ONLY forever: this loader never writes a
+     * byte into another tool's directory.
+     *
+     * Anchored at `$HOME/.claude` - the foreign tool's own namespace - the
+     * same "one level tighter" discipline the native user tier documents: a
+     * `rules` link escaping it, to `.ssh` or anywhere else, is refused.
+     *
+     * @return list<Rule>
+     */
+    public function loadUserClaudeRules(): array
+    {
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            $reason = 'Skipping user Claude rules: this process cannot establish that $HOME is this user\'s own '
+                . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
+                . '~/.claude/rules inside.';
+            $this->report($reason);
+            // Recorded under the literal `~/...` spelling for the reason
+            // loadUserRules() gives for its own: establishing a resolved path is
+            // precisely what failed.
+            $this->refusedPaths['~/.claude/rules'] = $reason;
+
+            return [];
+        }
+
+        return $this->loadFromDirectory(
+            $home . '/.claude/rules',
+            $home . '/.claude',
+            'user',
+            Rule::ORIGIN_CLAUDE,
+            self::FOREIGN_EXTENSIONS,
+        );
+    }
+
+    /**
+     * Tier 1d - `~/.cursor/rules/**`, Cursor's user rules imported (INT-2).
+     *
+     * {@see loadUserClaudeRules()} in every respect but the directory and the
+     * badge. `.mdc` is Cursor's native extension and rides beside `.md` in the
+     * accepted set ({@see FOREIGN_EXTENSIONS}); `alwaysApply:` and `globs:`
+     * frontmatter are mapped by {@see Rule} itself, not here, so one parse
+     * template serves every tree.
+     *
+     * @return list<Rule>
+     */
+    public function loadUserCursorRules(): array
+    {
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            $reason = 'Skipping user Cursor rules: this process cannot establish that $HOME is this user\'s own '
+                . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
+                . '~/.cursor/rules inside.';
+            $this->report($reason);
+            $this->refusedPaths['~/.cursor/rules'] = $reason;
+
+            return [];
+        }
+
+        return $this->loadFromDirectory(
+            $home . '/.cursor/rules',
+            $home . '/.cursor',
+            'user',
+            Rule::ORIGIN_CURSOR,
+            self::FOREIGN_EXTENSIONS,
+        );
+    }
+
+    /**
      * Tier 2 - `<repoRoot>/.candy-code/rules/*.md`, shipped in-repo.
      *
      * `$repoRoot` is the trust anchor, not merely used to build the path: it is
@@ -504,6 +615,51 @@ final class RuleLoader
             rtrim($root, '/') . '/.candy-code/rules',
             $root,
             'project',
+        );
+    }
+
+    /**
+     * Tier 2b - `<repoRoot>/.claude/rules/**`, Claude's project rules imported
+     * from an untrusted clone (INT-2).
+     *
+     * `$repoRoot` anchors this exactly as it anchors {@see loadProjectRules()}:
+     * a `<root>/.claude/rules -> $HOME/.ssh` link resolves outside the checkout
+     * and dies at the ordinary directory gate, badge or no badge. Foreign
+     * project bytes are the REPOSITORY's voice, not a smuggled user's - the
+     * tier value says so and the framing with it.
+     *
+     * @return list<Rule>
+     */
+    public function loadProjectClaudeRules(): array
+    {
+        $root = $this->resolvedRoot();
+
+        return $this->loadFromDirectory(
+            rtrim($root, '/') . '/.claude/rules',
+            $root,
+            'project',
+            Rule::ORIGIN_CLAUDE,
+            self::FOREIGN_EXTENSIONS,
+        );
+    }
+
+    /**
+     * Tier 2c - `<repoRoot>/.cursor/rules/**`, Cursor's project rules imported
+     * from an untrusted clone (INT-2). See {@see loadProjectClaudeRules()} for
+     * the anchor argument; only the directory and badge differ.
+     *
+     * @return list<Rule>
+     */
+    public function loadProjectCursorRules(): array
+    {
+        $root = $this->resolvedRoot();
+
+        return $this->loadFromDirectory(
+            rtrim($root, '/') . '/.cursor/rules',
+            $root,
+            'project',
+            Rule::ORIGIN_CURSOR,
+            self::FOREIGN_EXTENSIONS,
         );
     }
 
@@ -619,10 +775,12 @@ final class RuleLoader
      * @param string      $dir       The tier directory as spelled by the caller.
      * @param string|null $anchoredIn The boundary the directory must live strictly inside; null for a directory no repository chose.
      * @param string      $tier      One of user/project/root, threaded to {@see Rule::new()}.
+     * @param string      $origin    Which directory family this is - {@see Rule::ORIGIN_NATIVE} for this port's trees, a foreign constant for an INT-2 import; threaded to every rule the walk yields.
+     * @param list<string> $extensions Lower-case extensions this directory accepts; the foreign trees widen it to {@see FOREIGN_EXTENSIONS}.
      *
      * @return list<Rule>
      */
-    private function loadFromDirectory(string $dir, ?string $anchoredIn, string $tier): array
+    private function loadFromDirectory(string $dir, ?string $anchoredIn, string $tier, string $origin = Rule::ORIGIN_NATIVE, array $extensions = ['md']): array
     {
         $realDir = realpath($dir);
         if ($realDir === false || !is_dir($realDir)) {
@@ -654,7 +812,7 @@ final class RuleLoader
         $exhausted = false;
         $candidates = array_values(array_filter(
             $this->sortedLeaves($realDir, $exhausted),
-            static fn(string $path): bool => strtolower(pathinfo($path, PATHINFO_EXTENSION)) === 'md',
+            static fn(string $path): bool => in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), $extensions, true),
         ));
         sort($candidates, SORT_STRING);
 
@@ -697,9 +855,10 @@ final class RuleLoader
             if (!$file->isFile()) {
                 $dangling = $file->getPathname();
                 $reason = sprintf(
-                    'Skipping rules file %s: the name ends in .md but the path does not resolve to a regular file'
+                    'Skipping rules file %s: the name ends in %s but the path does not resolve to a regular file'
                     . ' (a broken symlink or a directory), inside %s.',
                     $dangling,
+                    implode(' or ', array_map(static fn(string $ext): string => '.' . $ext, $extensions)),
                     $realDir,
                 );
                 $this->report($reason);
@@ -745,7 +904,7 @@ final class RuleLoader
             $realPath = (string) realpath($spelled);
             $key = $this->ruleKeyFor($realDir, $realPath);
             $reads++;
-            $rule = $this->readRule($realPath, $tier, $key);
+            $rule = $this->readRule($realPath, $tier, $key, $origin);
             if ($rule === null) {
                 continue;
             }
@@ -841,7 +1000,7 @@ final class RuleLoader
      * without allocating it, and a file that became unreadable between the walk
      * and the read still falls through to the false-return below.
      */
-    private function readRule(string $realPath, string $tier, string $key): ?Rule
+    private function readRule(string $realPath, string $tier, string $key, string $origin = Rule::ORIGIN_NATIVE): ?Rule
     {
         clearstatcache(true, $realPath);
         $size = @filesize($realPath);
@@ -879,10 +1038,10 @@ final class RuleLoader
         // the end of the file and therefore in the body, where the model reads
         // the rule. The fallback name comes from the FILENAME, which is bytes
         // too; the key keeps the raw spelling because it is identity, not text.
-        $content = Utf8Scrub::announced($content, "rules file {$key}.md");
+        $content = Utf8Scrub::announced($content, 'rules file ' . basename($realPath));
 
         try {
-            $rule = Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key);
+            $rule = Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key, origin: $origin);
         } catch (\Throwable $e) {
             $reason = sprintf('Failed to load rule from %s: %s', $realPath, $e->getMessage());
             $this->report($reason);
@@ -903,18 +1062,23 @@ final class RuleLoader
     }
 
     /**
-     * The file's path relative to its tier directory, minus the `.md`
-     * extension, separators normalised to "/" - the key {@see loadFromDirectory()}
-     * sorts on and the fallback name a name-less file gets. Derives the sort
-     * order from filename (the plan's "ordered by filename") rather than from a
-     * `name:` field that two files may legitimately share.
+     * The file's path relative to its tier directory, minus the extension it was
+     * accepted under, separators normalised to "/" - the key
+     * {@see loadFromDirectory()} sorts on and the fallback name a name-less file
+     * gets. Derives the sort order from filename (the plan's "ordered by
+     * filename") rather than from a `name:` field that two files may
+     * legitimately share. INT-2 made the stripped suffix the file's ACTUAL
+     * extension rather than a hard-coded `.md`: a foreign `style.mdc` and a
+     * native `style.md` must both key as `style`, and an operator toggling
+     * `/rules style` means the stem, not one tool's spelling of it.
      */
     private function ruleKeyFor(string $baseDir, string $filePath): string
     {
         $relative = substr($filePath, strlen($baseDir) + 1);
         $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+        $extension = pathinfo($relative, PATHINFO_EXTENSION);
 
-        return substr($relative, 0, -strlen('.md'));
+        return $extension === '' ? $relative : substr($relative, 0, -strlen($extension) - 1);
     }
 
     /**

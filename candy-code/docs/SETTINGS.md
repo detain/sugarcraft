@@ -296,7 +296,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `promptSuggestionHistory` | `TitleService::suggestionCall()` → `promptSuggestionHistory()` | **no** |
 | `expandToolOutput` | `Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()` | yes |
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
-| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` | **no** |
+| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a) | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `formatCommands` | `Bootstrap::hooks()` → `FormatRunner::withCommands()` | **no** |
 | `disabledMcpServers` | `Bootstrap::mcpClient()` → `McpClient::setDenyPatterns()`, at the first MCP launch | yes |
@@ -592,8 +592,9 @@ it does so exactly as quietly as the wrong-depth name above.
 The same names are a conversation command. `/rules` lists every pack the loader
 found — both user directories, `~/.candy-code/rules` and
 `~/.candy-code/rulebooks`, the second holding the named packs of the same tier
-(`RuleLoader` walks four directories across three tiers: user rules, user
-rulebooks, project rules, root `RULES.md`) — and it lists them even when they are
+(`RuleLoader` walks eight directories across three tiers: user rules, user
+rulebooks, user `~/.claude/rules` and `~/.cursor/rules`, project rules, project
+`.claude/rules` and `.cursor/rules`, root `RULES.md`) — and it lists them even when they are
 currently OFF, because a list that hides what is silenced cannot help you un-silence
 it. `/rules <name>` flips one pack out of, or back into, the session's
 `RulesState`; a pack whose stem sits in both user directories is two packs sharing
@@ -1166,7 +1167,7 @@ project-settable.
 | `promptSuggestionHistory` | Interface | int | `12` | U C | — | live | spend |
 | `expandToolOutput` | Interface | bool | `false` | P U C | — | live | cosmetic |
 | `maxCheckpoints` | Interface | int | `100` | U C | — | live | tuning |
-| `keybindings` | Interface | object | `{}` | U C | — | restart | tuning |
+| `keybindings` | Interface | object | `{}` | U C | — | reload | tuning |
 | `lintCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `formatCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `hooksDefaultTimeoutSeconds` | Hooks & MCP | number | `60` | C | — | restart | tuning |
@@ -1320,11 +1321,12 @@ Saved is not applied: see the next section for when each key takes effect.
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `keybindings`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
+| reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
+| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `formatCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** thirty-five live, fifty-five next turn, seventy restart and
-seven next launch.
+**In numbers:** thirty-five live, fifty-five next turn, one reload, sixty-nine
+restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1390,13 +1392,79 @@ switch), `theme` and `provider` when the `Chat` is constructed, `models` wheneve
 — a mid-session edit to that file waits for a restart like the rest, though a
 `/rules` toggle flips the seeded set live, from the next turn onward — and
 `allowedTools`/`disabledTools` when the tool set is assembled.
-Changing any of those means restarting.
+Changing any of those means restarting — with one exception, `keybindings`,
+which carries its own word: see "`/keys reload`" below.
 
 The **trust list is not**: it is frozen for the life of the process, so a
 project cannot become trusted mid-session. The asymmetry is deliberate — you
 opted the repository in, and the project tier cannot reach `provider`,
 `instructions` or any permission key — but "trusted, frozen" would otherwise
 read as covering both halves.
+
+### `/keys reload` — the keybinding word
+
+`keybindings` is the one launch-time key that does not wait for the next
+launch. The table badges it `reload`: edit the setting (file or settings
+view), then say the word.
+
+- `/keys` alone still opens the key-reference overlay, exactly as before.
+- `/keys reload` re-reads the merged setting, re-applies the alias table, and
+  answers in the transcript — `keybindings reloaded — N override(s) live
+  from the next press`, `keybindings unchanged — the live keymap already
+  matches the setting`, or `keybindings reload refused: <reason> — the live
+  keymap is kept` when the file no longer parses or the map no longer
+  validates. A refused reload leaves the working keymap alone. Collisions
+  under the new map are announced as the same rows the launch reports — on
+  the transcript and the error channel, never a second launch banner.
+
+A turn that is already running swallows nothing: slash commands are refused
+mid-turn, `/keys reload` included, so the effective moment is the first idle
+keystroke after the word. And because the launch registers the same setting
+the word re-reads (`Bootstrap::chat()` → `Bootstrap::reloadKeybindings()`),
+a reload you never said still cannot surprise you across a restart — word and
+launch apply one file (plan_comparison TUI-4a).
+
+This is deliberately not a file watcher: nothing reloads silently, the word
+is the door.
+
+### macOS: the Option key
+
+Terminals that speak the Kitty keyboard protocol — kitty, Ghostty, WezTerm —
+report Alt chords natively and need nothing below. On Terminal.app and
+iTerm2, Option does not send meta bytes unless you turn it on — "Use Option
+as Meta key" in Terminal.app, "Left Option: Esc+" in iTerm2 — so the shipped
+Alt chords (newline on Alt+Enter, plan-mode on Alt+M, the agents strip on
+Alt+Down, agent-view paging on Alt+N and Alt+P) do nothing, and plain letters
+typed with Option arrive as accents instead. On a Mac whose terminal
+announces no Kitty protocol candy-code records a launch hint saying so
+(plan_comparison TUI-5 stage 1) — a notice row, not a refusal; every other
+key works.
+
+If you would rather keep Option for composing accents, alias the same
+commands to unclaimed Ctrl runes. This preset covers all five Alt commands
+above (stage 2 — paste into `~/.candy-code/config.json`, then `/keys
+reload`):
+
+```json
+{
+    "keybindings": {
+        "chat.newline": "Ctrl+Q",
+        "chat.plan-mode": "Ctrl+U",
+        "chat.agents-strip": "Ctrl+T",
+        "agentview.next": "Ctrl+Y",
+        "agentview.prev": "Ctrl+E"
+    }
+}
+```
+
+Two limits worth knowing. Aliases ADD chords — the shipped Alt chord keeps
+working beside the new one. And two motions cannot ride the map at all: word
+motion (Alt+Left/Right) and the Alt+B/Alt+F word jumps are coded against raw
+keys, not registry rows, so on a non-Kitty Mac terminal they need
+Option-as-Meta. The preset deliberately avoids Ctrl+H, Ctrl+I, Ctrl+J and
+Ctrl+M: on every legacy decoder those bytes *are* Backspace, Tab, Enter and
+Escape and can never reach a handler as Ctrl runes. Ctrl+B is taken by the
+branch picker.
 
 ## When a file is ignored
 

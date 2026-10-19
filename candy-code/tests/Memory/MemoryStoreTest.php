@@ -1166,4 +1166,23 @@ final class MemoryStoreTest extends TestCase
         }
         rmdir($dir);
     }
+
+    /**
+     * VIS-2b: notePath answers with the file the read path reads, guarded
+     * exactly like get() — a malformed id never reaches the scan, and an
+     * unknown one resolves to null rather than to a path that is not there.
+     */
+    public function testNotePathResolvesThroughTheSameGuardsAsGet(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Open this note', 'user');
+        $path = $store->notePath($id);
+
+        $this->assertIsString($path);
+        $this->assertFileExists($path);
+        $this->assertSame($id, basename($path, '.md'));
+        $this->assertNull($store->notePath('missing-note-id'));
+        $this->assertNull($store->notePath('../escape'));
+    }
 }

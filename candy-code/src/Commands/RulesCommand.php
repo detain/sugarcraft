@@ -33,8 +33,9 @@ use SugarCraft\Code\Lang;
  * capture - which is the only correct shape now that the screen belongs to the
  * frame renderer.
  *
- * WHAT A PACK IS. Every `*.md` file in the operator's two user directories
- * (`~/.candy-code/rulebooks/` and `~/.candy-code/rules/`) is a pack, named by
+ * WHAT A PACK IS. Every rule file in the operator's four user directories
+ * (`~/.candy-code/rulebooks/`, `~/.candy-code/rules/`, and the INT-2 imports
+ * `~/.claude/rules/` and `~/.cursor/rules/`) is a pack, named by
  * its filename minus the extension - the identity {@see RuleLoader} already
  * derives and {@see Rule::$key} already carries. There is no registry of pack
  * names and no index file: the directories ARE the list, which is what makes a
@@ -48,7 +49,11 @@ use SugarCraft\Code\Lang;
  * and an operator who wants to toggle `rules/no-prose.md` should not have to
  * move the file to earn the toggle. The two are therefore both toggleable and
  * the listing names which directory each came from, because that is the one
- * fact that distinguishes them.
+ * fact that distinguishes them. The INT-2 foreign directories are listed on the
+ * same principle - a pack the prompt carries is a pack `/rules` must be able to
+ * silence - and they answer the "which directory" question with a provenance
+ * badge (`[claude]` / `[cursor]`) where the native pair answers it with the
+ * directory word.
  *
  * WHAT A TOGGLE DOES NOT TOUCH. Only the user tier - a project's
  * `.candy-code/rules` and a checkout's `RULES.md` are the repository's voice,
@@ -127,9 +132,10 @@ final class RulesCommand
 
     /**
      * Every toggleable pack this loader can see, in the order the loader emits
-     * them (filename order within each directory, `rules/` before `rulebooks/`).
+     * them (filename order within each directory, `rules/` and `rulebooks/`
+     * before the INT-2 imports in their load order).
      *
-     * Built from the two user-tier methods rather than {@see RuleLoader::load()}
+     * Built from the four user-tier methods rather than {@see RuleLoader::load()}
      * on purpose: `load()` returns ENABLED rules only, so a pack that is off - by
      * either route - would vanish from the listing, and a command whose whole job
      * is to switch things back on would list only the ones that need no switching.
@@ -138,7 +144,12 @@ final class RulesCommand
      */
     private function packs(): array
     {
-        return [...$this->loader->loadUserRules(), ...$this->loader->loadUserRulebooks()];
+        return [
+            ...$this->loader->loadUserRules(),
+            ...$this->loader->loadUserRulebooks(),
+            ...$this->loader->loadUserClaudeRules(),
+            ...$this->loader->loadUserCursorRules(),
+        ];
     }
 
     /**
@@ -185,11 +196,12 @@ final class RulesCommand
     private function toggle(string $name, array $args): int
     {
         $known = [];
-        // How many PACKS answer to this name, not merely whether one does. The two
+        // How many PACKS answer to this name, not merely whether one does. The four
         // user directories are separate walks, each de-duplicated by key inside
         // {@see RuleLoader::loadFromDirectory()}, so a key appears at most once per
-        // directory and at most TWICE across {@see packs()} — which is what makes
-        // "both" in {@see collisionNote()} an exact figure rather than a guess.
+        // directory and at most FOUR times across {@see packs()} — which is what
+        // makes the count in {@see collisionNote()} an exact figure rather than a
+        // guess.
         $matches = [];
         foreach ($this->packs() as $rule) {
             $known[$rule->key] = $rule;
@@ -265,9 +277,10 @@ final class RulesCommand
      * remembered name and moved on took away the wrong arithmetic.
      *
      * The count is stated as a number rather than only "several" because the maximum
-     * is two and the operator can check it: the value is "did I just switch off more
+     * is four and the operator can check it: the value is "did I just switch off more
      * than the file I meant", and one row of the listing per directory makes that
-     * legible.
+     * legible. Two user directories set the old maximum; INT-2's imports raised it
+     * to one pack per walked user directory.
      */
     private function collisionNote(int $matchingPacks): string
     {
@@ -295,9 +308,17 @@ final class RulesCommand
     /**
      * Which user directory a pack came from - the one fact the name alone cannot
      * carry, and the reason two files in the two directories are not one pack.
+     * The INT-2 imports answer with their provenance badge instead of a
+     * directory word: `~/.claude/rules` is neither `rules/` nor `rulebooks/`,
+     * and the tool that wrote the file is the fact worth showing.
      */
     private function sourceLabel(Rule $rule): string
     {
+        $badge = $rule->badge();
+        if ($badge !== '') {
+            return $badge;
+        }
+
         return str_ends_with(dirname($rule->path), '/rulebooks') ? 'rulebooks' : 'rules';
     }
 

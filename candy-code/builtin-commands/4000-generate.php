@@ -10,6 +10,7 @@ use SugarCraft\Code\Lang;
 //   /generate "a cat" --steps 20 --size 1024x1024 --seed 42 --save
 // Runs the same GenerateImage tool the model is gated through. No key chord
 // (the command roster is the surface); the interactive form door is W3.1.
+// VIS-4 ruling: stays slash-only — bare '/generate' has no prompt; the palette's twin for this is the generate-form row.
 return BuiltInCommand::new(CommandSpec::new(
     'generate',
     Lang::t('cmd.generate.description'),

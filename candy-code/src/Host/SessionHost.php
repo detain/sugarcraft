@@ -35,6 +35,7 @@ use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\CommandText;
+use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
@@ -43,8 +44,10 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
+use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionLock;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 
 /**
@@ -134,8 +137,11 @@ final class SessionHost
      * is out and `[]` when it came back unusable — held as a failure so one
      * cycle does not re-ask a failing summarizer every turn, dropped as soon
      * as the reminder tier stops firing or the fingerprint moves.
+     * `safeguardHold` carries a CTX-4 HOLD verdict's detail so the tier that
+     * lands the heuristic fold can say why; the held summaries themselves are
+     * discarded by the settle below and never spliced.
      *
-     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>}
+     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>,safeguardHold:?string}
      */
     private ?array $aheadOfNeed = null;
 
@@ -862,6 +868,18 @@ final class SessionHost
                 // below, and the next 70% dispatch asks afresh.
                 $this->aheadOfNeed = null;
             }
+            // CTX-4 on the served route: the slot holds a HOLD verdict's
+            // detail instead of splices. Nothing is refused — a served turn
+            // parks nothing and holding it would 400 a request already
+            // accepted — the fold the tier writes is the heuristic one, so the
+            // fold's own report carries the advisory naming the audit.
+            $safeguardFold = null;
+            if ($spliced === null && $held !== null && ($held['safeguardHold'] ?? null) !== null
+                && $held['fingerprint']->matches($compaction->historyFingerprint($this->compactor, $this->history))
+            ) {
+                $safeguardFold = $held['safeguardHold'];
+                $this->aheadOfNeed = null;
+            }
 
             $tier = $turns->inlineTier(
                 $compaction,
@@ -886,6 +904,11 @@ final class SessionHost
             }
             $baseHistory = $tier['history'];
             $this->announceCompaction($tier, $tokenCount);
+            if ($safeguardFold !== null) {
+                // Cause before effect: the advisory names the audit, the
+                // tier's own report then measures the fold it describes.
+                $reports[] = Message::notice($compaction->safeguardFoldAdvisory($safeguardFold));
+            }
             foreach ([$tier['compactionNotice'], $tier['truncationNotice']] as $report) {
                 if ($report instanceof Message) {
                     $reports[] = $report;
@@ -1341,6 +1364,29 @@ final class SessionHost
         );
     }
 
+    /**
+     * WEB-3a: this session's structured context sources for `context.sources`
+     * ({@see \SugarCraft\Code\Protocol\Methods\ContextMethods}). Built through
+     * the same {@see commandContext()} `/context` runs with and measured by
+     * the same {@see \SugarCraft\Code\Host\ContextSources} provider — with the
+     * history figure taken from this host's own calibrated estimate, exactly
+     * as the status bar shows it. No `Chat` state is reached: the session IS
+     * the provider (the seam WEB-3a's brief anticipated).
+     *
+     * @return array<string, mixed>
+     */
+    public function contextSources(): array
+    {
+        $context = $this->commandContext();
+        $instructionFiles = ContextSources::priceInstructionFiles($this->workspace->root);
+
+        return ContextSources::answer(
+            workspace: $this->workspace,
+            breakdown: ContextSources::measure($context, $instructionFiles, historyTokens: $this->estimate($this->history)),
+            instructionFiles: $instructionFiles,
+        );
+    }
+
     // ── dispatch ───────────────────────────────────────────────────────
 
     /**
@@ -1427,18 +1473,23 @@ final class SessionHost
                     'id' => $request['id'],
                     'fingerprint' => $request['fingerprint'],
                     'summaries' => null,
+                    'safeguardHold' => null,
                 ];
                 $request['promise']()->then(function (HistoryCompactedMsg $msg) use ($request): void {
                     // Billed before the latch check, as the TUI bills it: a
                     // paid-for provider call is never unbilled, even when the
                     // summaries it carried are superseded on arrival.
-                    $this->ledger()->account($this->spend, $msg->usage);
+                    $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());
                     if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
                         return;
                     }
-                    $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null
+                    // CTX-4: a HOLD is remembered so the tier that lands the
+                    // heuristic fold can say why, but its summaries are
+                    // discarded and never spliced.
+                    $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null
                         ? $msg->summaries
                         : [];
+                    $this->aheadOfNeed['safeguardHold'] = $msg->safeguardHold;
                 });
             }
         }
@@ -1516,7 +1567,7 @@ final class SessionHost
                 return;
             }
 
-            $this->ledger()->account($this->spend, $reply->usage);
+            $this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink());
             if ($generation !== $this->generation) {
                 // A cancelled turn's reply: billed, never shown.
                 return;
@@ -1802,6 +1853,39 @@ final class SessionHost
         $service = $this->workspace->service(SpendLedger::class);
 
         return $service instanceof SpendLedger ? $service : SpendLedger::new();
+    }
+
+    /**
+     * The durable ledger sink SES-1 hands the host's accounting sites: one
+     * `usage_records` row per accounted call, appended through the same
+     * single guard the in-process tracker rides at {@see SpendLedger::account()}.
+     * This is the serve path's mirror of {@see Chat::usageRecordSink()} —
+     * SessionHost is NOT a Chat (its own class docblock says so) and settles
+     * its turns through its own two accounting sites, so a sink handed only
+     * to Chat would persist nothing for `serve --continue`. Null when the
+     * workspace holds only the base store; accounting then stays exactly as
+     * durable as it was before the table.
+     *
+     * The store's kind is judged at build time and the session id and model
+     * are read at CALL time — not because a host can late-mint (its id is
+     * `readonly`, named before the first turn), but because one shape for
+     * both sinks is one shape to keep correct.
+     */
+    private function usageRecordSink(): ?\Closure
+    {
+        $store = $this->workspace->sessionStore;
+        if (!$store instanceof EnhancedSessionStore) {
+            return null;
+        }
+
+        return function (Usage $usage) use ($store): void {
+            $backend = $this->workspace->backend;
+            $store->appendUsageRecord(
+                $this->sessionId,
+                $usage,
+                $backend instanceof EngineBackend ? $backend->model() : null,
+            );
+        };
     }
 
     private function meter(): ContextMeter

@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Session;
 use PDO;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Usage;
+use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Workspace\ShadowGarbageCollector;
 use SugarCraft\Code\Workspace\WorkspaceCheckpointer;
 
@@ -672,6 +674,46 @@ final class EnhancedSessionStore
                 PRIMARY KEY (session_id, seq),
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             ) WITHOUT ROWID
+        ');
+
+        // The durable spend ledger (SES-1, plan_comparison §SES-1): one row
+        // per accounted provider call, appended at the single accounting
+        // choke ({@see \SugarCraft\Code\Host\SpendLedger::account()}) so the
+        // TUI and serve — each through ITS OWN sink, {@see \SugarCraft\Code\Chat::usageRecordSink()}
+        // and {@see \SugarCraft\Code\Host\SessionHost::usageRecordSink()}, since
+        // a SessionHost is not a Chat — write it through one table and one
+        // guard without either owning a second append site. Before this
+        // table, per-session spend existed only in a per-process
+        // TokenTracker: `--continue` restarted `/budget` at $0.00. The token
+        // buckets keep Usage's null-is-unreported law (a 0 row means the
+        // provider measured zero, a NULL means it said nothing), `unpriced`
+        // marks the rows whose model has no rate on file so every dollar
+        // rollup can disclose that it bounds from below, and `model` is
+        // recorded now so the day×model rollups (OBS-3) ride this table
+        // without a second writer. The FK cascade takes a deleted or pruned
+        // session's ledger with it, exactly as it takes its events.
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS usage_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                ts INTEGER NOT NULL,
+                model TEXT,
+                total_tokens INTEGER NOT NULL,
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                cache_read_tokens INTEGER,
+                cache_creation_tokens INTEGER,
+                reasoning_tokens INTEGER,
+                cost_usd REAL NOT NULL,
+                unpriced INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        ');
+        // usageTotals()/the rollups read one session's rows; nothing ever
+        // scans the table by anything else, so this is the only index kept.
+        $this->pdo->exec('
+            CREATE INDEX IF NOT EXISTS idx_usage_records_session
+            ON usage_records(session_id)
         ');
     }
 
@@ -2163,6 +2205,135 @@ final class EnhancedSessionStore
         $oldest = \is_array($row) && $row[0] !== null ? (int) $row[0] : null;
 
         return [$oldest, $oldest === null ? 0 : (int) $row[1]];
+    }
+
+    /**
+     * Append one accounted provider call to the session's durable spend
+     * ledger (SES-1) and fold it into the row's cached `cost_usd` /
+     * `cost_unpriced` in the SAME transaction — the cache and the records
+     * may disagree only mid-write, never after one.
+     *
+     * THE ONE APPEND SITE, reached through the closure
+     * {@see \SugarCraft\Code\Host\SpendLedger::account()} hands every
+     * accounted call to. A missing session row is recreated around the write
+     * for the reason {@see appendSessionEvent()} states for the same FK.
+     *
+     * Like {@see saveContextLedger()}, this returns false rather than
+     * throwing when the store refuses: the tracker in the process already
+     * carries the truth for THIS session, and losing a ledger row to a busy
+     * database must never cost the user their turn. `$model` is the model
+     * the call was billed against, recorded for the OBS-3 rollups; null is
+     * honest for paths that cannot name one.
+     */
+    public function appendUsageRecord(string $sessionId, Usage $usage, ?string $model = null): bool
+    {
+        if ($sessionId === '') {
+            return false;
+        }
+
+        try {
+            $this->writeTransaction(function () use ($sessionId, $usage, $model): void {
+                if ($this->sessionStore->getSession($sessionId) === null) {
+                    $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
+                }
+
+                $this->pdo->prepare('
+                    INSERT INTO usage_records
+                        (session_id, ts, model, total_tokens, input_tokens, output_tokens,
+                         cache_read_tokens, cache_creation_tokens, reasoning_tokens, cost_usd, unpriced)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ')->execute([
+                    $sessionId,
+                    time(),
+                    $model,
+                    $usage->totalTokens,
+                    $usage->inputTokens,
+                    $usage->outputTokens,
+                    $usage->cacheReadTokens,
+                    $usage->cacheCreationTokens,
+                    $usage->reasoningTokens,
+                    $usage->costUsd,
+                    $usage->unpricedModel !== null ? 1 : 0,
+                ]);
+
+                $this->sessionStore->addSessionSpend($sessionId, $usage->costUsd, $usage->unpricedModel !== null);
+            });
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * What $sessionId's durable ledger holds: call count, token sum, dollar
+     * sum, and whether ANY row was unpriced — or null when the session
+     * recorded nothing (a fresh launch and a session that only ever saw
+     * unreported calls are the same answer here, and neither needs a
+     * tracker).
+     *
+     * @return null|array{calls: int, totalTokens: int, costUsd: float, unpriced: bool}
+     */
+    public function usageTotals(string $sessionId): ?array
+    {
+        $stmt = $this->pdo->prepare('
+            SELECT COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost_usd), 0.0), COALESCE(MAX(unpriced), 0)
+              FROM usage_records WHERE session_id = ?
+        ');
+        $stmt->execute([$sessionId]);
+        $row = $stmt->fetch(PDO::FETCH_NUM);
+        $stmt->closeCursor();
+
+        $calls = \is_array($row) ? (int) $row[0] : 0;
+        if ($calls === 0) {
+            return null;
+        }
+
+        return [
+            'calls' => $calls,
+            'totalTokens' => (int) $row[1],
+            'costUsd' => (float) $row[2],
+            'unpriced' => (int) $row[3] !== 0,
+        ];
+    }
+
+    /**
+     * A {@see TokenTracker} reseeded from the session's durable ledger, or
+     * null when the ledger is empty — the SES-1 resume seam. The launch
+     * hands the answer to Chat's `tokenTracker:` argument, whose `?? new
+     * TokenTracker()` fallback keeps a fresh session starting at zero with
+     * byte-identical semantics to every launch before this table existed.
+     *
+     * The sums land via {@see TokenTracker::addTotalUsage()} — the unsplit
+     * bucket — because every row this table holds was accounted through
+     * `addTotalUsage()` on its way in: the reseeded tracker reports the same
+     * figures, in the same buckets, with the same lower-bound disclosure
+     * (the `unpriced` bit restores {@see TokenTracker::noteUnpricedUsage()}),
+     * as the session that wrote the rows.
+     */
+    public function resumedTokenTracker(string $sessionId): ?TokenTracker
+    {
+        $totals = $this->usageTotals($sessionId);
+        if ($totals === null) {
+            return null;
+        }
+
+        $tracker = new TokenTracker();
+        $tracker->addTotalUsage($totals['totalTokens'], $totals['costUsd']);
+        if ($totals['unpriced']) {
+            $tracker->noteUnpricedUsage();
+        }
+
+        return $tracker;
+    }
+
+    /**
+     * The cached dollar figure on the session row (SES-1) — see
+     * {@see SessionStore::sessionCost()}.
+     */
+    public function sessionCost(string $sessionId): ?float
+    {
+        return $this->sessionStore->sessionCost($sessionId);
     }
 
     /**

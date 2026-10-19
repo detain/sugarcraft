@@ -149,8 +149,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-FIVE
- *     of them, in SIXTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — THIRTY-NINE
+ *     of them, in SEVENTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -538,7 +538,11 @@ final class StderrEmitterCensusTest extends TestCase
         // refusal line (usage channel, stderr + JSON document both via
         // NonInteractive::failUsage).
         // +1 in N-2: warnSkippedMcpEntries()'s per-entry 'candy-code: ' skip line.
-        'src/Cli/Subcommands.php' => 30,
+        // +3 in plan_comparison W4 (PRV-4 tier 2): the `login <provider>` door —
+        // usage, too_many_operands and unknown_provider. Same stderr-only
+        // decision as every sibling here: a separate CLI process, no live
+        // session transcript to name, nothing was opened or changed.
+        'src/Cli/Subcommands.php' => 33,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
@@ -636,6 +640,13 @@ final class StderrEmitterCensusTest extends TestCase
         // notes the model saved out of a summarisation that is about to drop
         // what it read them from, invisible from anywhere else.
         'src/Backend/EngineBackend.php' => 2,
+        // plan_comparison W4 (TUI-4a/TUI-5): the four notice-seam writes in
+        // Bootstrap — reload_unchanged, reloaded, the collision rows riding the
+        // same sink, and the macOS Option-as-Meta launch fallback. The routing
+        // decision was made IN THE LANE: these ride the RuntimeNoticeSink
+        // deliberately and never a second launch banner, so the keymap state a
+        // live session is running on stays visible without a restart notice.
+        'src/Cli/Bootstrap.php' => 4,
         // Audit R1's last residual (wave 11): a nested CLAUDE.md/AGENTS.md
         // that loadForPath() refused or deferred mid-session. The routing
         // decision: a file the user wrote and expects obeyed is NOT being

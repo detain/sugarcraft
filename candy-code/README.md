@@ -489,9 +489,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/exit` (`/quit`) `/fork` `/generate` `/goal` `/grind` `/handoff` `/help`
 `/hooks` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/new` `/newrule`
 `/notices` `/pane` `/permissions` `/play` `/pruning` `/recompress` `/redo`
-`/rename` `/rendermode` `/rewind` `/rules` `/sendto` `/sessions`
-`/settings` (`/config`) `/share` `/skills` `/sweep` `/theme` `/undo`
-`/websearch` `/workflow`.
+`/rename` `/rendermode` `/review` `/rewind` `/rules` `/security-review`
+`/sendto` `/sessions` `/settings` (`/config`) `/share` `/skills` `/sweep`
+`/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -1961,6 +1961,7 @@ store instead. Binding anything but loopback additionally needs the explicit
 ```sh
 candy-code doctor                    # check this installation, exit 1 if anything FAILs
 candy-code models                    # providers this install can select; * marks the selected one
+candy-code login <provider>            # log one in: upstream CLI flow, pasted key, or an owner-naming refusal
 candy-code session list              # stored sessions, pinned then newest first
                                      #   [--children] [--archived] [--all] [--limit N]
 candy-code session show <target>     # one session's details + transcript (Markdown)

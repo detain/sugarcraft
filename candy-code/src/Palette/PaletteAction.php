@@ -44,6 +44,44 @@ enum PaletteAction: string
     case DeleteSession = 'delete_session';
     case BranchSession = 'branch_session';
 
+    // VIS-4: the palette became a superset of the slash commands — every
+    // registry row whose BARE '/name' form does something meaningful lists
+    // here too. These cases exist to make their rows visible to the palette
+    // ({@see CommandRegistry::paletteEntries()}); their dispatch is generic
+    // ({@see \SugarCraft\Code\Chat::dispatchPaletteCommand()}), so no handler
+    // name lives on any of them. The case VALUES are wire-stable ids like the
+    // older ones' — none may be renamed, and rows whose bare form only prints
+    // usage stayed slash-only with the judgement recorded in their spec file.
+    case ShowKeys = 'show_keys';
+    case ShowHelp = 'show_help';
+    case ShowPermissions = 'show_permissions';
+    case ShowNotices = 'show_notices';
+    case ShowContext = 'show_context';
+    case RunSweep = 'run_sweep';
+    case ShowPruning = 'show_pruning';
+    case CompressNow = 'compress_now';
+    case SendCompressed = 'send_compressed';
+    case RestoreSummary = 'restore_summary';
+    case InspectHooks = 'inspect_hooks';
+    case ListRules = 'list_rules';
+    case DraftRule = 'draft_rule';
+    case OpenEditor = 'open_editor';
+    case CompactNow = 'compact_now';
+    case ClearTranscript = 'clear_transcript';
+    case ShowBudget = 'show_budget';
+    case ShowWorkflows = 'show_workflows';
+    case BrowseMemory = 'browse_memory';
+    case ListSkills = 'list_skills';
+    case InitializeProject = 'initialize_project';
+    case RewindSession = 'rewind_session';
+    case UndoTurn = 'undo_turn';
+    case RedoTurn = 'redo_turn';
+    case ShowDiff = 'show_diff';
+    case GoalStatus = 'goal_status';
+    case GrindStatus = 'grind_status';
+    case HandOffSession = 'hand_off_session';
+    case ShowRenderMode = 'show_render_mode';
+
     /**
      * This action's registry row. Throws rather than returning null: an
      * action with no row would be listed by nothing and dispatchable by

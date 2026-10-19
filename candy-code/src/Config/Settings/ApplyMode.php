@@ -11,6 +11,8 @@ namespace SugarCraft\Code\Config\Settings;
  *  - Live      the running session picks it up (a `/theme`, a dock move).
  *  - NextTurn  `EngineBackend` re-reads the merged config at every turn start,
  *              in the forked child, so the next turn sees it with no plumbing.
+ *  - Reload    read live, and `/keys reload` (or the next launch) re-applies
+ *              the saved file — no watcher, the user says the word.
  *  - Restart   read once at launch or at backend build.
  *  - Frozen    deliberately pinned for the life of the process — the trust
  *              lists — so a session cannot be re-trusted from inside itself.
@@ -19,6 +21,7 @@ enum ApplyMode: string
 {
     case Live = 'live';
     case NextTurn = 'next-turn';
+    case Reload = 'reload';
     case Restart = 'restart';
     case Frozen = 'frozen';
 
@@ -28,6 +31,7 @@ enum ApplyMode: string
         return match ($this) {
             self::Live => 'live',
             self::NextTurn => 'next turn',
+            self::Reload => 'reload',
             self::Restart => 'restart',
             self::Frozen => 'next launch',
         };

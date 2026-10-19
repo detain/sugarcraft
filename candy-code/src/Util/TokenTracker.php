@@ -192,6 +192,16 @@ final class TokenTracker
             $split .= sprintf(' + %d unsplit', $this->unsplitTokens);
         }
 
-        return $split . sprintf(' | Cost: $%.4f', $this->totalCost);
+        // The unpriced-lower-bound law (SES-1): once any accounted call
+        // arrived from a model with no rate on file, the dollar figure is a
+        // FLOOR, and the floor is stated on the number itself — a reader
+        // who skips the explanatory sentence still cannot mistake `≥$0.0000`
+        // for a settled bill. Priced sessions keep the exact spelling (and
+        // byte length) they always had.
+        return $split . sprintf(
+            ' | Cost: %s$%.4f',
+            $this->hasUnpricedUsage ? '≥' : '',
+            $this->totalCost,
+        );
     }
 }

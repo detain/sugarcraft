@@ -36,6 +36,7 @@ final class BuiltInCommand
     /**
      * @param list<string> $aliases
      * @param class-string<HostCommand>|null $hostCommand
+     * @param list<string> $subcommands
      */
     private function __construct(
         public readonly CommandSpec $spec,
@@ -43,13 +44,14 @@ final class BuiltInCommand
         public readonly CommandArguments $arguments,
         public readonly array $aliases,
         public readonly ?string $hostCommand,
+        public readonly array $subcommands = [],
     ) {
     }
 
     /** A row with no dispatch: palette-only until {@see withHandler()} gives it one. */
     public static function new(CommandSpec $spec): self
     {
-        return new self($spec, null, CommandArguments::Text, [], null);
+        return new self($spec, null, CommandArguments::Text, [], null, []);
     }
 
     /** Route `/name` to the private `Chat` method `$method`, handing it `$arguments`. */
@@ -113,8 +115,33 @@ final class BuiltInCommand
      */
     public function accepts(string $text, string $name): bool
     {
-        return $this->handler !== null
-            && ($this->arguments !== CommandArguments::None || $text === '/' . $name);
+        if ($this->handler === null) {
+            return false;
+        }
+
+        // TUI-4a: the sub-argument lane. `/exit now` stays a prompt because
+        // its row names no subcommand; `/keys reload` reaches its handler
+        // because the keys row allows exactly that one word. The narrow half
+        // is the point — a row without a list behaves precisely as before.
+        if ($this->subcommands !== []) {
+            return $text === '/' . $name
+                || \in_array(\trim(\substr($text, 1 + \strlen($name))), $this->subcommands, true);
+        }
+
+        return $this->arguments !== CommandArguments::None || $text === '/' . $name;
+    }
+
+    /**
+     * Allow the listed argument words to reach the handler beside the bare
+     * name; every other trailing text stays a prompt (TUI-4a's `/keys
+     * reload`). The hint painted by the slash menu is a spec concern
+     * ({@see CommandSpec::$argumentHint}); this is the ROUTING concern —
+     * which spellings dispatch — and it lives here so a row and its gate
+     * cannot be added apart.
+     */
+    public function withSubcommands(string ...$subcommands): self
+    {
+        return $this->mutate(['subcommands' => \array_values($subcommands)]);
     }
 
     /** @param array<string, mixed> $changes */
@@ -122,6 +149,13 @@ final class BuiltInCommand
     {
         $state = array_merge(get_object_vars($this), $changes);
 
-        return new self($state['spec'], $state['handler'], $state['arguments'], $state['aliases'], $state['hostCommand']);
+        return new self(
+            $state['spec'],
+            $state['handler'],
+            $state['arguments'],
+            $state['aliases'],
+            $state['hostCommand'],
+            $state['subcommands'],
+        );
     }
 }

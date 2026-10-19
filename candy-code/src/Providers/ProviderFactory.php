@@ -131,6 +131,13 @@ final readonly class ProviderFactory
             'required' => ['claudePath'],
             'optional' => ['model', 'bare', 'fallbackModels'],
         ],
+        // PRV-4: `codexPath` mirrors `claudePath` (the binary to spawn); no
+        // apiKey key exists on purpose — subscription auth rides `codex login`
+        // upstream and OPENAI_API_KEY rides the inherited environment.
+        'codex' => [
+            'required' => ['codexPath'],
+            'optional' => ['model', 'sandbox', 'fallbackModels'],
+        ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
             'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey', 'contextWindow'],
@@ -473,7 +480,7 @@ final readonly class ProviderFactory
      */
     public function availableTypes(): array
     {
-        return ['openai', 'anthropic', 'claude-code', 'sglang', 'bedrock', 'vertex', 'gemini', 'custom'];
+        return ['openai', 'anthropic', 'claude-code', 'codex', 'sglang', 'bedrock', 'vertex', 'gemini', 'custom'];
     }
 
     /**
@@ -526,6 +533,13 @@ final readonly class ProviderFactory
                 'type' => 'claude-code',
                 'claudePath' => 'claude',
                 'model' => 'claude-sonnet-4-6',
+            ],
+            'codex' => [
+                'type' => 'codex',
+                'codexPath' => 'codex',
+                // Sourced from the provider const, not repeated as a literal,
+                // the SglangProvider::DEFAULT_MODEL doctrine.
+                'model' => CodexProvider::DEFAULT_MODEL,
             ],
             'sglang' => [
                 'type' => 'sglang',
@@ -822,6 +836,7 @@ final readonly class ProviderFactory
             'openai' => $this->createOpenAI($config),
             'anthropic' => $this->createAnthropic($config),
             'claude-code' => $this->createClaudeCode($config),
+            'codex' => $this->createCodex($config),
             'sglang' => $this->createSglang($config),
             'bedrock' => $this->createBedrock($config),
             'vertex' => $this->createVertex($config),
@@ -1130,6 +1145,32 @@ final readonly class ProviderFactory
         // deliberate choice to let the CLI keep its normal setting sources
         // (subscription login reachable) at the cost of the --bare isolation.
         return new ClaudeCodeProvider($invocation, $model, self::configuredBare($config['bare'] ?? null));
+    }
+
+    /**
+     * PRV-4: the codex arm. Auth is intentionally absent from this method —
+     * it lives in `codex login` upstream (~/.codex) or the inherited
+     * OPENAI_API_KEY, and this product never mints, stores, or routes a codex
+     * credential.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function createCodex(array $config): CodexProvider
+    {
+        $codexPath = $config['codexPath'];
+        $model = $config['model'] ?? CodexProvider::DEFAULT_MODEL;
+
+        $invocation = new CodexInvocation(codexPath: $codexPath);
+
+        $sandbox = $config['sandbox'] ?? null;
+        if ($sandbox !== null && !is_string($sandbox)) {
+            throw new \InvalidArgumentException(sprintf(
+                'sandbox must be a string or null, got %s',
+                get_debug_type($sandbox),
+            ));
+        }
+
+        return new CodexProvider($invocation, $model, $sandbox);
     }
 
     /**

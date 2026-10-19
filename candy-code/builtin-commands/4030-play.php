@@ -12,6 +12,7 @@ use SugarCraft\Code\Lang;
 //   /play output.mp4
 //   /play video-1728514200-a1b2.mp4        (this session's saved artifact)
 // Reads local disk only and spawns at most the accounted decoder child.
+// VIS-4 ruling: stays slash-only — bare '/play' has no video artifact to open.
 return BuiltInCommand::new(CommandSpec::new(
     'play',
     Lang::t('cmd.play.description'),
