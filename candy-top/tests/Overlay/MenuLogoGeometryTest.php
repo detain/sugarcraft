@@ -154,10 +154,14 @@ final class MenuLogoGeometryTest extends OverlayTestCase
 
     public function testHelpPageRowRidesTheDeltaOntoTheBorderRow(): void
     {
+        // Section frames ALSO draw bottom borders inside the box, so the
+        // ride is pinned from the bottom: the lowest `╰` and the `↑ page`
+        // counter must be the same row — the outer box's bottom border.
         $lines = self::helpPainted(self::logoCtx());
-        $border = self::indexOfFirst($lines, '╰');
+        $border = self::indexOfLast($lines, '↑ page');
         $this->assertNotNull($border);
-        $this->assertSame($border, self::indexOfFirst($lines, '↑ page'), 'the help page counter rides the border');
+        $this->assertStringContainsString('╰', $lines[$border], 'the page counter embeds into a bottom border');
+        $this->assertSame($border, self::indexOfLast($lines, '╰'), 'the help page counter rides the OUTER bottom border — every frame closes above it');
     }
 
     public function testHelpJustFitsAtExactBottomRowKeepsTheLogo(): void
@@ -217,6 +221,19 @@ final class MenuLogoGeometryTest extends OverlayTestCase
         }
 
         return null;
+    }
+
+    /** @param list<string> $lines */
+    private static function indexOfLast(array $lines, string $needle): ?int
+    {
+        $found = null;
+        foreach ($lines as $i => $line) {
+            if (str_contains($line, $needle)) {
+                $found = $i;
+            }
+        }
+
+        return $found;
     }
 
     /** @return list<string> */
