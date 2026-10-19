@@ -26,6 +26,7 @@ use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
+use SugarCraft\Code\ToolResult as BootProbe;
 
 #[BuiltInTool(name: 'Read', permission: ToolPermissionClass::Read, position: 2)]
 final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructionLoader, ParallelSafe, CarriesSessionState, PromptGuidance, BuildsFromCatalog
@@ -272,7 +273,10 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             . 'that footer reached the end of the file. A file longer than one page, read without '
             . '`offset` or `limit`, also gets an outline of its declarations and their line numbers '
             . 'after the first page, so you can read the part you need by offset. A single line longer '
-            . 'than a page comes back cut short and marked. Prefer this over `cat`/`head` through Bash: '
+            . 'than a page comes back cut short and marked. An image file (PNG, JPEG, GIF or WebP) no larger than '
+            . number_format(FileMentions::IMAGE_MAX_BYTES) . ' bytes comes back as a caption of the image and rides '
+            . 'to the human-visible tool-result channel beside your context — the pixels never enter it, so never '
+            . 'describe what an image shows. Prefer this over `cat`/`head` through Bash: '
             . implode('; ', $advantages) . '.';
     }
 
@@ -421,17 +425,21 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // ledger with an observation of garbage, and — for images — threw
         // away the one fact that mattered, which kind of image it is. The
         // sniff runs on a head read, so it costs nothing on the text path it
-        // never fires for. This is NOT an error: the note is the answer, and
-        // the note names the way forward. (Routing image BYTES to a vision
-        // wire is a later seam — Read's contract has only ever been lines.)
+        // never fires for. This is NOT an error: the note is the answer.
+        // SHL-3 T1: an image within the display cap now also RIDES the result
+        // as imageBytes — the pre-existing human-visible ToolResult image
+        // channel paints it (Runtime threads the fields onto the message,
+        // Renderer::renderToolImage runs the mosaic ladder) — while the
+        // caption tells the model what the file is without pretending the
+        // pixels entered its context. Routing image bytes to a VISION wire is
+        // a later tier; over-cap images still answer with the note alone,
+        // never with truncated bytes (a cut PNG is not a PNG — the same
+        // doctrine FileMentions::read() applies to @-mentions, and the same
+        // cap constant, reused rather than re-invented).
         if (is_file($path)) {
-            $binary = self::binaryNotice($path);
+            $binary = self::binaryAnswer($path, $args['id'] ?? '');
             if ($binary !== null) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: $binary,
-                    isError: false,
-                );
+                return $binary;
             }
         }
 
@@ -668,19 +676,26 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     }
 
     /**
-     * ISS-060: a one-line account of $path when it is binary — a magic-number
-     * image, or a NUL anywhere in the sniff head — or null when it should be
-     * read as text.
+     * ISS-060: the binary arm's answer — an image-bearing {@see ToolResult}
+     * for a magic-number image that fits the display cap (SHL-3 T1), a
+     * plain note for every other binary (a NUL anywhere in the sniff head,
+     * or an image past {@see FileMentions::IMAGE_MAX_BYTES}), or null when
+     * the file should be read as text.
      *
      * NUL is the whole heuristic for the non-image arm, and the UTF-16
      * refusal is on purpose: nothing here claims to decode it, and the
      * alternative answer is a page of mojibake that reads like content. The
      * note names the escape hatch instead of faking one.
      *
+     * The image cap decision takes the stat, not the read: over-cap images
+     * are refused whole rather than slurped and then clipped, and a size the
+     * stat could not answer counts as over-cap — refusing a real file beats
+     * guessing at a huge one.
+     *
      * A failed open answers null — the read below produces the real error,
      * with the message callers and their tests already know.
      */
-    private static function binaryNotice(string $path): ?string
+    private static function binaryAnswer(string $path, string $callId): ?ToolResult
     {
         $handle = @fopen($path, 'rb');
         if ($handle === false) {
@@ -698,19 +713,63 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
             $image = FileMentions::sniffImage($head);
             if ($image !== null) {
-                return "Binary image ($image), $shown — not shown as text. Read answers with lines and a {$image} has none; mention the file (@...) where the wire carries attachments, or use a tool that renders images.";
+                $size = $stat !== false ? (int) $stat['size'] : PHP_INT_MAX;
+                if ($size > FileMentions::IMAGE_MAX_BYTES) {
+                    return new ToolResult(
+                        toolCallId: $callId,
+                        content: "Binary image ($image), $shown — not shown as text. Read answers with lines and a {$image} has none; the file also exceeds the "
+                            . number_format(FileMentions::IMAGE_MAX_BYTES) . '-byte display cap, so its pixels were not carried either. Mention the file (@...) where the wire carries attachments, or use a tool that renders images.',
+                        isError: false,
+                    );
+                }
+
+                $bytes = $head . (string) stream_get_contents($handle);
+
+                return new ToolResult(
+                    toolCallId: $callId,
+                    content: self::imageCaption($path, $image, $bytes),
+                    isError: false,
+                    imageBytes: $bytes,
+                    imagePath: $path,
+                    imageProtocol: BootProbe::mosaic()->protocol(),
+                );
             }
 
             if (str_contains($head, "\0")) {
-                return "Binary file, $shown — not shown as text (a NUL byte appears in the first "
-                    . number_format(self::BINARY_SNIFF_BYTES) . ' bytes). If this is UTF-16 or similar, convert it first, e.g. with Bash `iconv -f UTF-16 -t UTF-8 '
-                    . $path . '`.';
+                return new ToolResult(
+                    toolCallId: $callId,
+                    content: "Binary file, $shown — not shown as text (a NUL byte appears in the first "
+                        . number_format(self::BINARY_SNIFF_BYTES) . ' bytes). If this is UTF-16 or similar, convert it first, e.g. with Bash `iconv -f UTF-16 -t UTF-8 '
+                        . $path . '`.',
+                    isError: false,
+                );
             }
 
             return null;
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * The model-facing caption of a carried image: what kind, how big, where
+     * it is, and the boundary the model must not cross — the bytes ride to
+     * the human-visible ToolResult channel, never into its context. The
+     * dimensions come from the carried bytes themselves (getimagesize-
+     * fromstring parses headers, never decodes pixels — the same cheap probe
+     * {@see \SugarCraft\Code\Renderer::collapsedImageNotice()} uses) and are
+     * simply absent when a forged header cannot answer; the caption states
+     * facts it can verify, never a placeholder.
+     */
+    private static function imageCaption(string $path, string $image, string $bytes): string
+    {
+        $probe = @getimagesizefromstring($bytes);
+        $shape = $probe !== false ? $probe[0] . '×' . $probe[1] . ', ' : '';
+
+        return "Binary image ($image), {$shape}" . number_format(strlen($bytes))
+            . " bytes at $path — the image itself rides this result to the human-visible tool-result channel. "
+            . 'Its pixels are not in your context: do not describe what the image depicts; '
+            . 'reason from its path and name, or ask the user.';
     }
 
     /**

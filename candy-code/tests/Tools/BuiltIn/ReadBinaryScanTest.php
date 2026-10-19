@@ -5,15 +5,25 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools\BuiltIn;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\ReadLedger;
 
 /**
- * ISS-060: Read sniffs binaries on a bounded head read — a PNG answers with
- * an image note, not mojibake lines — and the line-counting pass is bounded
- * too: past the scan budget the footer's count is a floor (`of ≥N`), an
- * offset inside the real file is not refused against the floor, and the
- * ledger records a null hash instead of a prefix pretending to be the whole.
+ * ISS-060 + SHL-3 T1: Read sniffs binaries on a bounded head read — a PNG
+ * within the display cap rides the result as image bytes with a caption
+ * (never mojibake lines), a NUL-headed file answers with the note — and the
+ * line-counting pass is bounded too: past the scan budget the footer's count
+ * is a floor (`of ≥N`), an offset inside the real file is not refused against
+ * the floor, and the ledger records a null hash instead of a prefix
+ * pretending to be the whole.
+ *
+ * THE IMAGE POLARITY FLIPPED HERE, deliberately: the pre-SHL-3 pins asserted
+ * a PNG answered with a refusal note ("not shown as text"); tier 1 routes
+ * those bytes to the pre-existing human-visible ToolResult image channel, so
+ * the same fixtures now assert the image-bearing result. The non-image (NUL)
+ * refusal rows stay byte-true, and over-cap images keep the old refusal —
+ * the flip is the cap's inside, not a deletion of the notice.
  *
  * The refusal pair matters: test 7 (floor, no refusal) pins the new arm and
  * test 8 (exact count still refuses) pins that the arm did not arrive by
@@ -55,17 +65,72 @@ final class ReadBinaryScanTest extends TestCase
     // The binary sniff
     // =========================================================================
 
-    public function testAPngAnswersWithAnImageNoteNotAPage(): void
+    public function testAPngWithinTheCapRidesTheResultAsAnImageNotAPage(): void
     {
         $png = "\x89PNG\r\n\x1a\n" . str_repeat("\x00", 200) . 'IHDR-not-really';
         $path = $this->file('logo.png', $png);
 
         $result = (new Read())->execute(['file_path' => $path]);
 
-        self::assertFalse($result->isError(), 'a binary image is an answer, not a failure');
+        self::assertFalse($result->isError(), 'an image read is an answer, not a failure');
+        self::assertTrue($result->hasImage(), 'the bytes must ride the human-visible channel');
+        self::assertSame($png, $result->imageBytes(), 'the whole file, uncut');
+        self::assertSame($path, $result->imagePath());
+        self::assertIsString($result->imageProtocol(), 'the probe-once mosaic protocol rides along, as GenerateImage builds it');
         self::assertStringContainsString('Binary image (image/png)', $result->content());
         self::assertStringContainsString(number_format(strlen($png)) . ' bytes', $result->content());
+        self::assertStringContainsString($path, $result->content(), 'the caption names the file');
+        self::assertStringNotContainsString('1×1', $result->content(), 'a forged header cannot answer dimensions — and must not fake any');
+        self::assertStringNotContainsString('not shown as text', $result->content(), 'the old refusal is gone for carried images');
         self::assertStringNotContainsString('1: ', $result->content(), 'the mojibake page must not be produced at all');
+    }
+
+    /**
+     * A header a real decoder can answer gets its dimensions in the caption:
+     * this is a genuine 1x1 PNG (base64 of the smallest lossless one), not
+     * the forged magic-only fixture above.
+     */
+    public function testARealPngCaptionCarriesItsDimensions(): void
+    {
+        $png = (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', true);
+        $path = $this->file('pixel.png', $png);
+
+        $result = (new Read())->execute(['file_path' => $path]);
+
+        self::assertTrue($result->hasImage());
+        self::assertStringContainsString('1×1, ' . number_format(strlen($png)) . ' bytes', $result->content());
+        self::assertStringContainsString('human-visible tool-result channel', $result->content());
+    }
+
+    /**
+     * The other half of the flip's honesty: past the cap the old note stays,
+     * because a truncated PNG is not a PNG — the same doctrine (and the same
+     * constant) FileMentions applies to @-mention attachments. Boundary
+     * pinned from both sides: AT the cap carries, ONE OVER refuses.
+     */
+    public function testAnImageOverTheDisplayCapKeepsTheRefusalNote(): void
+    {
+        $bytes = "\x89PNG\r\n\x1a\n" . str_repeat('a', FileMentions::IMAGE_MAX_BYTES - 8 + 1);
+        $path = $this->file('huge.png', $bytes);
+
+        $result = (new Read())->execute(['file_path' => $path]);
+
+        self::assertFalse($result->isError(), 'the note is still an answer, not a failure');
+        self::assertFalse($result->hasImage(), 'over-cap bytes are refused whole, never clipped to fit');
+        self::assertStringContainsString('Binary image (image/png)', $result->content());
+        self::assertStringContainsString(number_format(strlen($bytes)) . ' bytes', $result->content());
+        self::assertStringContainsString(number_format(FileMentions::IMAGE_MAX_BYTES) . '-byte display cap', $result->content());
+    }
+
+    public function testAnImageExactlyAtTheCapStillRidesTheResult(): void
+    {
+        $bytes = "\x89PNG\r\n\x1a\n" . str_repeat('a', FileMentions::IMAGE_MAX_BYTES - 8);
+        $path = $this->file('edge.png', $bytes);
+
+        $result = (new Read())->execute(['file_path' => $path]);
+
+        self::assertTrue($result->hasImage(), 'the cap refuses OVER it, not AT it');
+        self::assertSame(strlen($bytes), strlen((string) $result->imageBytes()));
     }
 
     public function testAnElfBinaryAnswersWithTheNulNote(): void
