@@ -5333,6 +5333,12 @@ final class DocFigureProseDriftTest extends TestCase
         // SHL-2 era (plan_comparison W1): Ls.php joined the directory — same
         // in-step rule, same generator re-spelling of both pages.
         $wordNumbers['thirty-two'] = 32;
+
+        // SHL-1 era (plan_comparison W2): ShellOutput.php and ShellStop.php
+        // joined the directory — same in-step rule, same generator
+        // re-spelling of both pages.
+        $wordNumbers['thirty-three'] = 33;
+        $wordNumbers['thirty-four'] = 34;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));

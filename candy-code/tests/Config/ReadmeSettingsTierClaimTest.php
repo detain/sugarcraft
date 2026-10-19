@@ -435,6 +435,8 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         28 => 'twenty-eight',
         29 => 'twenty-nine',
         30 => 'thirty',
+        31 => 'thirty-one',
+        32 => 'thirty-two',
     ];
 
     /**

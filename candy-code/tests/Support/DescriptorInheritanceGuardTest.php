@@ -161,6 +161,22 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'reason' => 'double-forked session daemon whose happy path never reaps; E366 HIGH',
         ],
 
+        // SHL-1. A background shell is LONG-LIVED BY DESIGN — it outlives the
+        // call that spawned it and answers to ShellStop or the lifetime wall.
+        // The inherited-fd half is the same exposure every row here licenses:
+        // the spawn rides the containment env/spawnSpec choke point, not an
+        // fd-cloexec census. Its stdio are FILE sinks (0 is /dev/null, 1/2 are
+        // the registry's own 0600 files), so no pipe write-end leaks into a
+        // later forked child — the reason the design chose files at all.
+        // Death is accounted two ways: teardown() group-kills every live
+        // shell at exit (Bootstrap::stopBackgroundShells), and a settled
+        // shell's wrapper exits itself, reparenting to the reaper.
+        'Sessions/BackgroundShellRegistry.php::start' => [
+            'count' => 1,
+            'reason' => 'long-lived background shell with file sinks for stdio; group-killed by '
+                . 'ShellStop, the lifetime wall, and the launch teardown hook',
+        ],
+
         // E366 MEDIUM. The handle goes into a local array literal, that array
         // into `$this->processes[$id]`, and the array is returned as well.
         //

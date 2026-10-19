@@ -4144,7 +4144,16 @@ DOC;
         // of `Glob`: one scandir-shaped listing of a jailed directory, no write
         // primitive in its source at all, so it moves no byte anywhere and does
         // not re-arm the diff.
-        return ['Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo'];
+        // `ShellOutput` (SHL-1) joins on that doctrine once removed: it tails
+        // files THIS launch created under the home shell directory — harness
+        // state a read cannot dirty — and it kills nothing; the mutation half
+        // of the feature is `ShellStop`, which the catalog classes Write and
+        // which the roster above carries. `Ls` is not a new judgement but a
+        // cure: SHL-2 landed the tool without its classification here, and
+        // this sweep has been red on master ever since (base bc37503bf); it
+        // lists a directory, exactly what the roster's `Glob` row already
+        // answers read-only.
+        return ['Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput'];
     }
 
     /**
