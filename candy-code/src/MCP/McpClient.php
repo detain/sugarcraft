@@ -806,6 +806,76 @@ final class McpClient
     }
 
     /**
+     * MCP-1 wire half: every allowed provider server's CURRENT resource
+     * roster, keyed by server name (resources are addressed by URI, so the
+     * server that owns one must travel with it — unlike the flat tool merge).
+     *
+     * GATE PARITY with {@see listTools()}: the per-server filter is
+     * {@see isServerAllowed()} — the very predicate callTool enforces — so a
+     * deny pattern or a preset allowlist hides a server's resources exactly
+     * as surely as it hides its tools, and with no preset attached nothing
+     * is listed unless $unrestricted was explicitly set (fail-closed). The
+     * E677 idle pump mounts here too, at the dispatch caller.
+     *
+     * Servers that do not implement {@see McpResourceProvider} are skipped,
+     * not refused — capability absence is ordinary (a git-MCP server has no
+     * resources), and naming one directly on read is the loud path.
+     *
+     * @return array<string, list<array<mixed>>> raw rows per provider server
+     */
+    public function listResources(): array
+    {
+        $this->pumpStderr(); // E677, see listTools()
+
+        $resources = [];
+
+        foreach ($this->servers as $name => $server) {
+            if (!$this->isServerAllowed($name)) {
+                continue;
+            }
+
+            if (!$server instanceof McpResourceProvider) {
+                continue;
+            }
+
+            $resources[$name] = $server->listResources();
+        }
+
+        return $resources;
+    }
+
+    /**
+     * Read one resource from one server. Mirrors callTool's refusal ladder
+     * exactly — unknown server, server outside the current gates (a caller
+     * cannot bypass listResources() by naming a denied server directly), and
+     * then the capability question — before any exchange is entered.
+     *
+     * @return array<mixed> the raw `result` — untrusted server bytes; framing
+     *         for the transcript is the surface's PromptFence job (W3), not
+     *         this transport's
+     */
+    public function readResource(string $serverName, string $uri): array
+    {
+        $server = $this->servers[$serverName] ?? null;
+
+        if ($server === null) {
+            throw new \RuntimeException("Unknown MCP server: $serverName");
+        }
+
+        if (!$this->isServerAllowed($serverName)) {
+            throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
+        }
+
+        if (!$server instanceof McpResourceProvider) {
+            throw new \RuntimeException("MCP server does not provide resources: $serverName");
+        }
+
+        $this->pumpStderr(); // E677, see listTools()
+
+        return $server->readResource($uri);
+    }
+
+    /**
      * Build an McpRouter over this client's currently-started servers,
      * forwarding the configured global deny patterns alongside the servers
      * so both halves of McpRouter's enforcement (allowlist + deny patterns)

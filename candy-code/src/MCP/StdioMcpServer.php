@@ -49,7 +49,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  * mid-exchange, and teardown reserved to the process that started it. See
  * the library class's FORK SAFETY note.
  */
-final class StdioMcpServer implements McpServer
+final class StdioMcpServer implements McpServer, McpResourceProvider
 {
     /**
      * Handshake ceiling default, DERIVED from the library constant so the two
@@ -247,5 +247,161 @@ final class StdioMcpServer implements McpServer
     public function toolTimeoutSeconds(): float
     {
         return $this->toolTimeoutSeconds;
+    }
+
+    /**
+     * Page ceiling for the provider cursor walks below. The same wall as the
+     * library's tools-list walk and HttpMcpServer's private page ceiling —
+     * three times the number by design: 32 pages past a typical page of a
+     * hundred entries is far past any real server, and the guard that actually
+     * catches a broken server is the repeated-cursor refusal; this one catches
+     * the adversarial shape of a server inventing a fresh cursor forever.
+     */
+    private const MAX_PROVIDER_PAGES = 32;
+
+    /**
+     * MCP-1 wire half. The library transport already exposes a public
+     * `request()` ("resources/list … one call away" in its doc-block) — this
+     * method adds only what the adapter owns on top of it: the per-call
+     * ceiling ({@see providerDeadline()}, never disableable, exactly the
+     * callTool policy) and the cursor-walk/error gates that keep a partial or
+     * refused roster from masquerading as a whole one.
+     *
+     * @return list<array<mixed>> raw `resources` rows — see RAW BYTES LAW on
+     *         {@see McpResourceProvider}
+     */
+    public function listResources(): array
+    {
+        return $this->collectProviderPages('resources/list', 'resources');
+    }
+
+    /**
+     * @return array<mixed> the raw `result` of the `resources/read` reply
+     */
+    public function readResource(string $uri): array
+    {
+        return $this->requireProviderResult('resources/read', $this->transport->request(
+            'resources/read',
+            ['uri' => $uri],
+            $this->providerDeadline(),
+        ));
+    }
+
+    /**
+     * One provider exchange's worth of bound, on the library's absolute
+     * hrtime basis: E646 keeps us away from new blanket timeouts, so each leg
+     * simply re-uses the entry's existing per-call ceiling — the same
+     * `toolTimeout`-or-default that bounds callTool. A walk of N pages is N
+     * bounded calls, never one unbounded loop.
+     */
+    private function providerDeadline(): float
+    {
+        return \hrtime(true) / 1_000_000_000.0 + $this->toolTimeoutSeconds;
+    }
+
+    /**
+     * Gate one provider reply and hand back its raw result member. The three
+     * refusals mirror the library's tools/list gates: no reply at all (dead
+     * pipe, or the call outlived its bound), an error reply (capability-gated
+     * servers answer -32601 — that is a diagnosis, not "empty"), and a reply
+     * whose result is missing or not an object.
+     *
+     * @return array<mixed>
+     */
+    private function requireProviderResult(string $method, ?\SugarCraft\McpClient\McpMessage $reply): array
+    {
+        if ($reply === null) {
+            throw new \RuntimeException("Failed to reach MCP server: {$this->name} — {$method} got no reply (the server is down or the call outlived its bound)");
+        }
+
+        if ($reply->error !== null) {
+            throw new \RuntimeException("MCP server {$this->name} refused {$method}" . self::describeJsonRpcError($reply->error));
+        }
+
+        if (!is_array($reply->result)) {
+            throw new \RuntimeException("MCP server {$this->name} answered {$method} with no result");
+        }
+
+        return $reply->result;
+    }
+
+    /**
+     * Walk a paginated provider list to its end, gating every page the same
+     * way (ISS-093(b) law, product-side): a mid-walk error is as fatal as a
+     * front one, a repeating cursor is a server lying about its pagination,
+     * and a roster still cursing after the page wall is known-truncated —
+     * missing entries are invisible downstream, which is the whole defect
+     * family the walk exists to close.
+     *
+     * Rows are returned RAW except for shape defence: a non-array container
+     * or non-array row would warn inside `foreach` (the parseTools lesson,
+     * measured on the tools path), and junk elements are not rows.
+     *
+     * @return list<array<mixed>>
+     */
+    private function collectProviderPages(string $method, string $key): array
+    {
+        $entries = [];
+        $seenCursors = [];
+        $params = null;
+
+        for ($page = 1; $page <= self::MAX_PROVIDER_PAGES; $page++) {
+            $result = $this->requireProviderResult($method, $this->transport->request(
+                $method,
+                $params,
+                $this->providerDeadline(),
+            ));
+
+            $rows = $result[$key] ?? [];
+
+            if (!is_array($rows)) {
+                $rows = [];
+            }
+
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    $entries[] = $row;
+                }
+            }
+
+            $cursor = $result['nextCursor'] ?? null;
+
+            if (!is_string($cursor) || $cursor === '') {
+                return $entries;
+            }
+
+            if (isset($seenCursors[$cursor])) {
+                throw new \RuntimeException(
+                    "MCP server {$this->name} repeated {$method} cursor {$cursor} at page {$page} — refusing to walk a pagination loop",
+                );
+            }
+            $seenCursors[$cursor] = true;
+            $params = ['cursor' => $cursor];
+        }
+
+        throw new \RuntimeException("MCP server {$this->name} {$method} still had a nextCursor after "
+            . self::MAX_PROVIDER_PAGES . ' pages — refusing to return a truncated roster');
+    }
+
+    /**
+     * `" (code): message"` for a JSON-RPC error member — the same formatter
+     * shape HttpMcpServer::describeError applies to http refusals, kept local
+     * because the two transports encode the envelope differently (McpMessage
+     * here, parsed array there).
+     */
+    private static function describeJsonRpcError(mixed $error): string
+    {
+        if (!is_array($error)) {
+            return ': ' . (is_string($error) ? $error : (string) \json_encode($error, JSON_PARTIAL_OUTPUT_ON_ERROR));
+        }
+
+        $code = $error['code'] ?? null;
+        $message = $error['message'] ?? null;
+
+        return \sprintf(
+            '%s: %s',
+            is_int($code) || is_string($code) ? " ({$code})" : '',
+            is_string($message) && $message !== '' ? $message : (string) \json_encode($error, JSON_PARTIAL_OUTPUT_ON_ERROR),
+        );
     }
 }
