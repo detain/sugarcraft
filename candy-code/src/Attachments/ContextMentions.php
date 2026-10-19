@@ -85,6 +85,17 @@ final class ContextMentions
     private const REF_PATTERN = '#\A[A-Za-z0-9_./~^@{}+][A-Za-z0-9_./~^@{}+:-]*\z#';
 
     /**
+     * Whether $ref is spellable inside `@diff:<ref>` (GIT-1: `/review <ref>`
+     * validates against the scanner's own pattern before assembling its
+     * prompt, so a command can never submit a diff mention the scanner would
+     * refuse to attach and the review would silently run against nothing).
+     */
+    public static function isDiffRef(string $ref): bool
+    {
+        return preg_match(self::REF_PATTERN, $ref) === 1;
+    }
+
+    /**
      * Flags on the diff read — the environment block's, for its reasons: the
      * plumbing `diff-index` never rewrites the index, and no external diff
      * tool or textconv driver can run.

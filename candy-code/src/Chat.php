@@ -13663,6 +13663,57 @@ final class Chat implements Model
     }
 
     /**
+     * `/review [ref]` (roadmap GIT-1) — a command that STARTS A TURN, the
+     * InitCommand technique: the canned review prompt re-enters submit() as
+     * the draft, and it closes on the `@diff` mention so the scanner attaches
+     * the change set exactly as it would for typed prose.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleReviewCommand(string $text): array
+    {
+        return $this->reviewTurn($text, security: false);
+    }
+
+    /**
+     * `/security-review [ref]` (roadmap GIT-1) — the threat-shaped sibling;
+     * same turn-starting dispatch, same `@diff` close, different body.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleSecurityReviewCommand(string $text): array
+    {
+        return $this->reviewTurn($text, security: true);
+    }
+
+    /**
+     * The shared review dispatch: a named ref is validated against the
+     * mention scanner's own pattern first, so a typo answers loudly instead
+     * of submitting a review whose diff never attaches; a valid (or absent)
+     * ref becomes the prompt's closing mention and the turn begins.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function reviewTurn(string $inputText, bool $security): array
+    {
+        $ref = \trim(self::commandArgument($inputText));
+        if ($ref !== '' && !\SugarCraft\Code\Attachments\ContextMentions::isDiffRef($ref)) {
+            return [
+                $this->mutate([
+                    'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(Lang::t('cmd.review.bad-ref', ['ref' => $ref]))->withUiOnly()],
+                    'inputBuf' => '',
+                    'inFlight' => false,
+                ]),
+                null,
+            ];
+        }
+
+        return $this->withInputBuf(
+            \SugarCraft\Code\Commands\ReviewCommand::prompt($ref, $security),
+        )->submit();
+    }
+
+    /**
      * `/settings [search]` (`/config`) — roadmap N-P1. The settings view is
      * SHELL state ({@see \SugarCraft\Code\App\App::$settingsEditor}), so
      * this clears the box and asks the host for it over the Cmd channel, the

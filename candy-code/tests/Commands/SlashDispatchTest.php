@@ -41,6 +41,8 @@ final class SlashDispatchTest extends TestCase
         'init' => 'a canned AGENTS.md-writing prompt (roadmap 5.14e)',
         'compress' => 'the manual trigger the model\'s Compress tool is offered on (roadmap 3.B-4)',
         'newrule' => 'a canned prompt drafting a project rule into .candy-code/rules/ (roadmap 5.14d)',
+        'review' => 'a canned review prompt closing on @diff (roadmap GIT-1)',
+        'security-review' => 'the threat-shaped sibling of that prompt (roadmap GIT-1)',
     ];
 
     private string $sandbox = '';
