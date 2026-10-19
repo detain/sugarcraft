@@ -118,8 +118,14 @@ final class StartupSummaryTest extends TestCase
 
     public function testComposeShortensHomeToTilde(): void
     {
+        // Move BOTH spellings: $_SERVER['HOME'] does not follow putenv(), so a
+        // half-moved sandbox leaks the developer's real home to superglobal-reading
+        // code (the OneSidedHomeSandboxTest census rule: migrate, never add a row).
+        // HomeDirectory::resolved() prefers getenv(), so the pins below are unaffected.
         $home = getenv('HOME');
+        $serverHome = $_SERVER['HOME'] ?? null;
         putenv('HOME=/home/pinned-user');
+        $_SERVER['HOME'] = '/home/pinned-user';
         try {
             $rows = explode("\n", StartupSummary::compose([
                 'cwd' => '/home/pinned-user/projects/app',
@@ -134,6 +140,11 @@ final class StartupSummaryTest extends TestCase
             $this->assertSame('/etc/other/place', $outside[1]);
         } finally {
             putenv($home === false ? 'HOME' : 'HOME=' . $home);
+            if ($serverHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $serverHome;
+            }
         }
     }
 
