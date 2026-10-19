@@ -150,7 +150,10 @@ final class BackgroundShellRegistry
     /** The HOME-rooted tree every default session shares one level above. */
     public static function defaultRoot(): string
     {
-        return HomeDirectory::owned() . DIRECTORY_SEPARATOR . 'shells';
+        // The house doctrine is `HomeDirectory::owned() . '/.candy-code/…'`
+        // (agents, teams, commands, workflows, servers all live there); a
+        // bare `$HOME/shells` would litter the home directory itself.
+        return HomeDirectory::owned() . '/.candy-code/shells';
     }
 
     /** Absolute path of this table's session directory (created lazily by {@see start()}). */
@@ -388,6 +391,18 @@ final class BackgroundShellRegistry
                 @proc_terminate($process);
             }
         }
+        // Final group sweep: a row can look settled (leader reaped, even an
+        // exit file written by a `cmd & exit 0` shape) while members of its
+        // group outlive it — TERM-proof or merely orphaned. The teardown
+        // guarantee is about the GROUP: no background process of this
+        // registry survives the launch, so every still-living group gets a
+        // KILL after the polite pass, unconditionally.
+        foreach ($this->rows as $row) {
+            $pid = (int) ($row['pid'] ?? 0);
+            if ($pid > 0 && self::groupMemberAlive($pid)) {
+                ProcessContainment::terminatePid($pid, 9);
+            }
+        }
         // Drop the map; each resource closes with its last reference. NOT
         // proc_close(): reaping belongs to the launch's wait machinery, and a
         // blocking close here would couple teardown to a child's schedule.
@@ -502,8 +517,15 @@ final class BackgroundShellRegistry
                 if ($status['running'] === false) {
                     // Exited under our hands; the wrapper still wrote the
                     // exit file first (it precedes the exit), but read it
-                    // directly — the code is what the answer needs.
+                    // directly — the code is what the answer needs. A DEAD
+                    // LEADER IS NOT THE SHELL: the unit of life is the
+                    // process group, and a member that survived the leader
+                    // keeps the shell running (MAJOR-1: leader-only death
+                    // let TERM-proof members outlive every later signal).
                     $code = $this->readExitFile($row);
+                    if ($code === null && self::groupMemberAlive((int) $row['pid'])) {
+                        return ['state' => 'running', 'exitCode' => null];
+                    }
 
                     return ['state' => 'finished', 'exitCode' => $code];
                 }
@@ -515,63 +537,90 @@ final class BackgroundShellRegistry
             unset($this->handles[$id]);
         }
         if (\function_exists('posix_kill')) {
-            return ['state' => @posix_kill((int) $row['pid'], 0) ? 'running' : 'unknown', 'exitCode' => null];
+            $leader = @posix_kill((int) $row['pid'], 0);
+
+            return ['state' => ($leader || self::groupMemberAlive((int) $row['pid'])) ? 'running' : 'unknown', 'exitCode' => null];
         }
 
         return ['state' => 'unknown', 'exitCode' => null];
     }
 
     /**
-     * TERM the group, poll for the exit file, KILL the same group, poll for
-     * quiet. The return follows the ISS-014 law: `confirmed` is true only
-     * when the death was OBSERVED (exit file landed, or the leader stopped
-     * answering); a ladder that signalled without confirmation says so, and
-     * no caller narrates an unconfirmed stop as a kill.
-     */
-    /**
-     * TERM the group, grace, KILL the group. The ladder is given the leader
-     * PID, never the recorded pgid: terminatePid() takes a pid and consults
+     * TERM the group, grace, KILL the group, grace. Confirmation is GROUP
+     * death, never leader death: the recorded pid leads a process group, and
+     * a member that traps TERM outlives its leader — a ladder that accepted
+     * "the wrapper exited" would report a shell as stopped while a trapped
+     * survivor kept running, unreachable by anything afterwards (the group
+     * id points at a dead leader). The ladder is given the leader PID, never
+     * the recorded pgid: terminatePid() takes a pid and consults
      * posix_getpgid() itself, and because spawnSpec makes the child's pid its
      * group id, passing the leader pid IS the group kill. (Feeding it the
      * pgid as if it were a pid looks identical and signals nobody.)
      */
     private function runKillLadder(string $id, int $pid): bool
     {
-        $termSent = ProcessContainment::terminatePid($pid, 15);
-        if ($this->awaitSettled($id, $pid, self::TERM_GRACE_SECONDS)) {
+        ProcessContainment::terminatePid($pid, 15);
+        if ($this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS)) {
             return true;
         }
         ProcessContainment::terminatePid($pid, 9);
 
-        return $this->awaitSettled($id, $pid, self::TERM_GRACE_SECONDS) || !$termSent;
+        return $this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS);
     }
 
-    /** Poll the exit file and the leader until the shell is visibly gone. */
-    private function awaitSettled(string $id, int $pid, float $budgetSeconds): bool
+    /**
+     * Poll until NO live (non-zombie) member of the shell's process group
+     * remains. A zombie leader holds the group id in `kill(-pgid, 0)`
+     * answers, so the Linux path reads /proc and discounts state Z; the
+     * fallback (no /proc) probes the group with signal 0 and accepts the
+     * exit file as the wrapper's own proof of a clean finish.
+     */
+    private function awaitGroupDeath(string $id, int $pid, float $budgetSeconds): bool
     {
         $deadline = \microtime(true) + $budgetSeconds;
         while (true) {
-            $row = $this->rows[$id] ?? null;
-            if ($row === null) {
-                return true;
-            }
-            if ($this->readExitFile($row) !== null) {
-                return true;
-            }
-            $handle = $this->handles[$id] ?? null;
-            if (\is_resource($handle)) {
-                $status = @proc_get_status($handle);
-                if (\is_array($status) && $status['running'] === false) {
-                    return true;
-                }
-            } elseif (\function_exists('posix_kill') && !@posix_kill($pid, 0)) {
+            if (!isset($this->rows[$id]) || !$this::groupMemberAlive($pid)) {
                 return true;
             }
             if (\microtime(true) >= $deadline) {
-                return false;
+                return !self::groupMemberAlive($pid);
             }
             $this->sleep(self::STOP_POLL_SECONDS);
         }
+    }
+
+    /**
+     * True while at least one NON-ZOMBIE process carries $pgid as its
+     * process group. /proc scan on Linux (a zombie must not keep a dead
+     * shell "alive"); signal-0 group probe elsewhere.
+     */
+    private static function groupMemberAlive(int $pgid): bool
+    {
+        if (\is_dir('/proc')) {
+            foreach ((array) @\scandir('/proc') as $entry) {
+                if ($entry === '' || $entry[0] === '.' || !\ctype_digit($entry)) {
+                    continue;
+                }
+                $stat = @\file_get_contents('/proc/' . $entry . '/stat');
+                if (!\is_string($stat)) {
+                    continue; // vanished mid-scan
+                }
+                // comm may contain spaces: parse AFTER the last ')'.
+                $close = \strrpos($stat, ')');
+                if ($close === false) {
+                    continue;
+                }
+                $fields = \explode(' ', \trim(\substr($stat, $close + 1)));
+                // fields after comm: state ppid pgid ...
+                if (($fields[0] ?? '') !== 'Z' && (int) ($fields[2] ?? -1) === $pgid) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return \function_exists('posix_kill') && @posix_kill(-$pgid, 0);
     }
 
     /**

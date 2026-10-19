@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Sessions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Sessions\BackgroundShellRegistry;
 
 /**
@@ -143,6 +144,11 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertSame('', $third['stdout']);
         self::assertSame('', $third['stderr']);
         self::assertSame(8, $third['cursor'], 'reading past the end answers empty and keeps the cursor at the end');
+
+        $again = $registry->read($id, $third['cursor'], 4);
+        self::assertSame('', $again['stdout']);
+        self::assertSame('', $again['stderr']);
+        self::assertSame(8, $again['cursor'], 're-reading past the end is idempotent — the cursor never wanders');
     }
 
     public function testADefaultFreshReadAnswersTheNewestBytesAndSaysHowManyWereSkipped(): void
@@ -205,18 +211,21 @@ final class BackgroundShellRegistryTest extends TestCase
     public function testStopReachesTheKillRungWhenTheGroupIgnoresTermination(): void
     {
         $registry = $this->registry();
-        // The fixture ARGUES the ladder in its own transcript: TERM is rung
-        // one, so the ladder itself delivers it — the test cannot peek at the
-        // intermediate state between rungs (and should not: the ladder is one
-        // operation). What is observable afterwards is decisive: the group
-        // recorded that TERM arrived and refused to die from it, yet the
-        // shell IS gone — which is only true if the KILL rung fired — and the
-        // exit file is still ABSENT, because a SIGKILLed wrapper never
-        // reaches the trailer. A neutered KILL rung would leave the shell
-        // running and `confirmed` false; a broken TERM rung would leave the
-        // transcript without the note.
+        // MAJOR-1 fixture, shaped exactly like the leak it cures: the leader
+        // takes TERM gracefully into a trapping handler (so `got-term` proves
+        // rung one fired) AND spawns a member that ignores TERM outright.
+        // The setsid/sh wrapper dies, the leader and the member do not — a
+        // ladder that confirms on LEADER death reports success while both
+        // survivors keep running inside a group whose id now points at a
+        // corpse. Decisive assertions after stop(): the transcript carries
+        // the TERM note, `confirmed` is true, and the GROUP ITSELF is dead —
+        // `kill(-pid, 0)` no longer finds a single member. Neutering only
+        // the KILL rung reddens exactly this test: the trapped pair survives
+        // TERM, so group death can only have come from the second rung. The
+        // exit file stays empty: a SIGKILLed wrapper never reaches the
+        // trailer, and the honest answer for that code is null.
         $started = $registry->start(
-            'trap \'printf got-term >&2; while true; do sleep 0.05; done\' TERM; printf ready >&2; while true; do sleep 0.05; done',
+            'trap \'printf got-term >&2; while :; do sleep 0.05; done\' TERM; printf ready >&2; bash -c \'trap "" TERM; while :; do sleep 0.05; done\' & wait',
             'term-proof',
         );
         $id = (string) $started['shell']['id'];
@@ -226,13 +235,18 @@ final class BackgroundShellRegistryTest extends TestCase
             8.0,
         );
         self::assertTrue($ready, 'the fixture never announced itself');
+        $pid = (int) $registry->status($id)['pid'];
 
         $stopped = $registry->stop($id);
         self::assertTrue($stopped['wasRunning']);
-        self::assertTrue($stopped['confirmed'], 'a TERM-proof shell must still die to the KILL rung');
+        self::assertTrue($stopped['confirmed'], 'a TERM-proof group must still die to the KILL rung');
         $transcript = (string) ($registry->read($id)['stderr'] ?? '');
         self::assertStringContainsString('got-term', $transcript, 'the TERM rung never reached the shell');
         self::assertNotSame('running', $registry->status($id)['state']);
+        self::assertFalse(
+            \function_exists('posix_kill') ? @posix_kill(-$pid, 0) : false,
+            'the process group survived the ladder — a settled leader is not a dead shell',
+        );
         self::assertNull($registry->status($id)['exitCode'], 'a killed wrapper leaves its exit file empty — the code is honestly unknown');
     }
 
@@ -255,14 +269,18 @@ final class BackgroundShellRegistryTest extends TestCase
         $first = $registry->start('sleep 120', 'one');
         $second = $registry->start('sleep 120', 'two');
         $ids = [(string) $first['shell']['id'], (string) $second['shell']['id']];
+        $pids = [];
         foreach ($ids as $id) {
-            self::assertSame('running', $registry->status($id)['state']);
+            $state = $registry->status($id);
+            self::assertSame('running', $state['state']);
+            $pids[$id] = (int) $state['pid'];
         }
 
         $registry->teardown();
 
         foreach ($ids as $id) {
             self::assertNotSame('running', $registry->status($id)['state'], $id . ' survived the teardown');
+            self::assertFalse(@posix_kill(-$pids[$id], 0), $id . ' left a live process group behind the teardown');
         }
         self::assertSame([], $registry->localIds(), 'teardown releases every handle this process held');
     }
@@ -279,8 +297,9 @@ final class BackgroundShellRegistryTest extends TestCase
     public function testAShellPastTheWallIsKilledAndReportedExpiredOnTheNextStatus(): void
     {
         $registry = $this->registry();
-        $started = $registry->start('sleep 120', 'over the wall');
+        $started = $registry->start('printf past-the-wall; sleep 120', 'over the wall');
         $id = (string) $started['shell']['id'];
+        self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => \str_contains((string) ($r->read($id, 0, 100)['stdout'] ?? ''), 'past-the-wall')));
 
         // Backdate the row past the wall through the row the registry
         // publishes — the alternative is a 30-minute test, and the seam the
@@ -295,6 +314,11 @@ final class BackgroundShellRegistryTest extends TestCase
         $row = $registry->status($id);
         self::assertTrue($row['expired']);
         self::assertNotSame('running', $registry->status($id)['state'], 'the wall killed the shell before answering');
+
+        $late = $registry->read($id, 0, 100);
+        self::assertTrue($late['ok']);
+        self::assertTrue($late['expired']);
+        self::assertStringContainsString('past-the-wall', $late['stdout'], 'the wall kills the process but the output file survives — ShellOutput still reads it back');
     }
 
     public function testMergingIsIdempotentAndInformedRowsBeatUninformedOnes(): void
@@ -367,5 +391,55 @@ final class BackgroundShellRegistryTest extends TestCase
         $refused = $registry->start('true', 'too many');
         self::assertFalse($refused['ok']);
         self::assertStringContainsString('ShellStop', (string) $refused['error']);
+    }
+
+    public function testTheLaunchBucketHandsOneRegistryPerRootAndStopKillsAndClearsIt(): void
+    {
+        // MINOR-1 (SHL-1 review): Bootstrap::backgroundShells() is the ONLY
+        // door through which a registry exists, and stopBackgroundShells()
+        // is the shutdown hook behind it — both were unpinned. A temp HOME
+        // keeps the launch-scoped sinks out of the real ~/.candy-code.
+        $home = sys_get_temp_dir() . '/w2d-home-' . getmypid() . '-' . bin2hex(random_bytes(3));
+        mkdir($home, 0o700);
+        $projectRoot = $home . '/project';
+        mkdir($projectRoot, 0o700);
+        $previousHome = getenv('HOME');
+        putenv('HOME=' . $home);
+
+        $buckets = new \ReflectionProperty(Bootstrap::class, 'shellRegistries');
+        $armed = new \ReflectionProperty(Bootstrap::class, 'shellsShutdownRegistered');
+        $buckets->setAccessible(true);
+        $armed->setAccessible(true);
+        $priorBuckets = $buckets->getValue(null);
+        $priorArmed = $armed->getValue(null);
+        $buckets->setValue(null, []);
+        $armed->setValue(null, false);
+
+        try {
+            $first = Bootstrap::backgroundShells($projectRoot);
+            self::assertSame($first, Bootstrap::backgroundShells($projectRoot), 'a second call for the same root reuses the bucket — never a second table of live shells');
+            self::assertNotSame($first, Bootstrap::backgroundShells($home . '/other'), 'a different project root gets its own registry');
+
+            $started = $first->start('printf bucket-proof; sleep 120', 'bucket pin');
+            self::assertTrue($started['ok']);
+            $id = (string) $started['shell']['id'];
+            $pid = (int) $first->status($id)['pid'];
+            self::assertStringStartsWith($home . '/.candy-code/shells', (string) $first->status($id)['stdoutPath'], 'the launch bucket places sinks under the .candy-code session home, per doctrine');
+            self::assertTrue($this->waitFor($first, static fn (BackgroundShellRegistry $r): bool => str_contains((string) ($r->read($id, 0, 200)['stdout'] ?? ''), 'bucket-proof')));
+
+            Bootstrap::stopBackgroundShells();
+            self::assertNotSame('running', $first->status($id)['state'], 'the launch shutdown killed the shell it bucketed');
+            self::assertFalse(@posix_kill(-$pid, 0), 'the shutdown sweep left no live group');
+            self::assertNotSame($first, Bootstrap::backgroundShells($projectRoot), 'the bucket is released — the next call mints a fresh registry');
+        } finally {
+            Bootstrap::stopBackgroundShells();
+            $buckets->setValue(null, $priorBuckets);
+            $armed->setValue(null, $priorArmed);
+            if ($previousHome === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $previousHome);
+            }
+        }
     }
 }
