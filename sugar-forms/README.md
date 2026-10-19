@@ -296,8 +296,10 @@ sugar-forms is built on five shared packages:
   scheduling the next, so rapid keystrokes only fire one network request.
 - **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
   (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
-  CursorRight, DeleteChar, YankLine, …). sugar-widgets and
-  sugar-readline delegate to it — new bindings benefit all 3 libs at once.
+  CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Both text
+  widgets run on it — TextInput single-line, TextArea multi-line (TUI-3B:
+  `j`/`k` rows, `v` visual selection) — and sugar-widgets and
+  sugar-readline delegate to it — new bindings benefit all consumers at once.
   Text objects (`ci"`, `da{`, `yiw`, …) resolve through
   `VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) +
   `TextObjectScope` (i/a) + a target key feed `TextObject::resolve()`,

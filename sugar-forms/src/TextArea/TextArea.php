@@ -8,6 +8,9 @@ use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
 use SugarCraft\Forms\HasKeyOverrides;
 use SugarCraft\Forms\Util\ViewportPan;
+use SugarCraft\Forms\Vim\VimAction;
+use SugarCraft\Forms\Vim\VimKeyHandler;
+use SugarCraft\Forms\Vim\VimState;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
@@ -42,6 +45,16 @@ use SugarCraft\Core\Util\Width;
  * Selection spans render as reverse-video. The anchor survives plain typing
  * (deliberate: clearing it from every edit path would churn the keyboard
  * behaviour this component has shipped with); `clearSelection()` resets it.
+ *
+ * Vim Mode (TUI-3B): `withVimMode(true)` routes keys through the shared
+ * {@see VimKeyHandler} exactly like TextInput does — host key-override
+ * bindings still win first, Insert mode preserves this widget's built-in
+ * editing verbatim, and the multi-line buffer adds what the single-line
+ * consumer could not: vertical motion (`j`/`k` via `VimAction::CursorDown`/
+ * `CursorUp`) and character-wise visual selection (`v` anchors a selection,
+ * motion extends it, Escape cancels). Visual-LINE entry stays un-wired here:
+ * its pinned j/k direction is an open owner ruling (E736 plan 3.2 / campaign
+ * R4) and this port deliberately does not pre-empt it.
  */
 final class TextArea implements Model
 {
@@ -113,6 +126,21 @@ final class TextArea implements Model
          * @var array<string,string>
          */
         public readonly array $keyOverrides = [],
+        /**
+         * TUI-3B — vim editing toggle (mirrors
+         * {@see \SugarCraft\Forms\TextInput\TextInput::$vimMode}).
+         * False (default) leaves the built-in key handling byte-identical to
+         * the pre-vim widget.
+         */
+        public readonly bool $vimMode = false,
+        /**
+         * TUI-3B — the parsed vim editing state. Normal whenever vim mode is
+         * (re-)armed; Insert while typing; Visual while the selection anchor
+         * is live for the mode. TextArea never enters VisualLine from its own
+         * dispatch (E736 3.2 / R4 ruling pending), but the slot keeps every
+         * {@see VimState} representable for consumers that drive it directly.
+         */
+        public readonly VimState $vimState = VimState::Normal,
     ) {}
 
     /**
@@ -178,6 +206,25 @@ final class TextArea implements Model
             return $this->applyKeyOverride($override);
         }
 
+        // TUI-3B — vim mode takes the wheel after the override door, the
+        // identical seam order TextInput ships (overrides > vim > built-ins).
+        if ($this->vimMode) {
+            return $this->vimUpdate($msg);
+        }
+
+        return $this->applyEditKey($msg);
+    }
+
+    /**
+     * The built-in editing arms (ctrl chords + key-type dispatch). Shared by
+     * the non-vim path and vim Insert mode verbatim — a port copy would drift,
+     * this seam cannot (TUI-3B; TextInput keeps its own inline twin because
+     * its extract would churn a byte-pinned file).
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function applyEditKey(KeyMsg $msg): array
+    {
         if ($msg->ctrl) {
             return match ($msg->rune) {
                 'a'     => [$this->moveCursor($this->row, 0), null],
@@ -249,6 +296,270 @@ final class TextArea implements Model
             self::OVERRIDE_NOOP            => [$this, null],
             default                        => throw new \InvalidArgumentException("unreachable override action: {$action}"),
         };
+    }
+
+    // ---- vim mode (TUI-3B) ---------------------------------------------
+
+    /**
+     * Dispatch a focused KeyMsg through the vim state machine. The key is
+     * answered by {@see VimKeyHandler} for the current state (Insert keeps
+     * the built-in editing arms instead — the mode where characters are
+     * typed, not commanded).
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimUpdate(KeyMsg $msg): array
+    {
+        // Clipboard chords are this widget's contract (E736 5.13) and Ctrl+O
+        // opens the external editor — none of the three are vim bindings, the
+        // shared layer models none of them, so Ctrl+C/X/O reach applyEditKey()
+        // from any vim state. Vim's own y/p register is unaffected (it stays
+        // in the unconsumed operator family, identical to TextInput).
+        if ($msg->ctrl && ($msg->rune === 'c' || $msg->rune === 'x' || $msg->rune === 'o')) {
+            return $this->applyEditKey($msg);
+        }
+
+        return match ($this->vimState) {
+            VimState::Insert     => $this->vimUpdateInsertMode($msg),
+            VimState::VisualLine => $this->vimUpdateViaHandler($msg, VimState::VisualLine),
+            VimState::Visual     => $this->vimUpdateViaHandler($msg, VimState::Visual),
+            VimState::Normal     => $this->vimUpdateViaHandler($msg, VimState::Normal),
+        };
+    }
+
+    /**
+     * Normal/Visual dispatch: ask the handler, consume what it returns,
+     * beep (no-op) on anything it declines to translate — the same shape
+     * TextInput's normal-mode arm has.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimUpdateViaHandler(KeyMsg $msg, VimState $state): array
+    {
+        [$key, $ctrl] = VimKeyHandler::normalizeKeyMsg($msg);
+        $action = VimKeyHandler::handle($key, $state, VimKeyHandler::FEAT_ALL, $ctrl);
+
+        if ($action === null || $action === VimAction::NoOp) {
+            return [$this, null];
+        }
+
+        return $this->consumeVimAction($action, $msg);
+    }
+
+    /**
+     * Insert mode: Escape returns to normal, everything else falls through
+     * to {@see applyEditKey()} verbatim — arrows, Enter (newline), Tab,
+     * Backspace line-merge, ctrl chords and character insertion all behave
+     * exactly as they do with vim mode off (TextInput's insert arm ships the
+     * same "preserve original behavior" contract).
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimUpdateInsertMode(KeyMsg $msg): array
+    {
+        if ($msg->type === KeyType::Escape) {
+            return [$this->mutate(vimState: VimState::Normal), null];
+        }
+
+        return $this->applyEditKey($msg);
+    }
+
+    /**
+     * Execute a {@see VimAction} on this model — the consumer side of the
+     * shared handler vocabulary. Unhandled actions (the pending-operator and
+     * clipboard family) fall through untouched, exactly as in TextInput:
+     * this port adds vertical motion and visual selection, not a new
+     * operator engine.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function consumeVimAction(VimAction $action, KeyMsg $msg): array
+    {
+        return match ($action) {
+            // Mode switches. Visual cancel clears the anchor (the mode owns
+            // it); plain blur keeps the selection per the clipboard docblock.
+            VimAction::EnterNormalMode
+                => [$this->clearSelection()->mutate(vimState: VimState::Normal), null],
+
+            VimAction::EnterInsertMode
+                => $this->handleEnterInsertMode($msg),
+
+            VimAction::EnterVisualMode
+                => $this->handleEnterVisualMode(),
+
+            // Horizontal motion — the line-crossing arrows the widget ships.
+            VimAction::CursorLeft
+                => [$this->moveLeft(), null],
+
+            VimAction::CursorRight
+                => [$this->moveRight(), null],
+
+            // Vertical motion: j/k (TUI-3B cases) and the arrow keys, whose
+            // HistoryUp/HistoryDown spelling this widget re-reads as its row
+            // move — TextArea carries no history model, so the vertical
+            // INTENT resolves to buffer rows. (Same consumer-interprets-the-
+            // vocabulary law the visual-line Left/Right pin documents.)
+            VimAction::CursorUp, VimAction::HistoryUp
+                => [$this->cursorUp(), null],
+
+            VimAction::CursorDown, VimAction::HistoryDown
+                => [$this->cursorDown(), null],
+
+            VimAction::CursorWordForward
+                => [$this->vimWordForward(), null],
+
+            VimAction::CursorWordBackward
+                => [$this->vimWordBackward(), null],
+
+            VimAction::CursorLineStart
+                => [$this->moveCursor($this->row, 0), null],
+
+            VimAction::CursorLineEnd
+                => [$this->moveCursor($this->row, $this->lineLen($this->row)), null],
+
+            VimAction::DeleteChar
+                => [$this->vimDeleteChar(), null],
+
+            default
+                => [$this, null],
+        };
+    }
+
+    /**
+     * `i`/`a`/`A`/`I` — enter Insert with the line-relative cursor adjust.
+     * The handler lowercases keys (all four return EnterInsertMode), so the
+     * original rune is read off the KeyMsg — TextInput's identical seam,
+     * clamped to the CARET LINE rather than the buffer.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function handleEnterInsertMode(KeyMsg $msg): array
+    {
+        $rune    = $msg->type === KeyType::Char ? $msg->rune : '';
+        $lineLen = $this->lineLen($this->row);
+        $col     = $this->col;
+
+        if ($rune === 'a') {
+            $col = min($lineLen, $col + 1);
+        } elseif ($rune === 'A') {
+            $col = $lineLen;
+        } elseif ($rune === 'I') {
+            $col = 0;
+        }
+
+        return [$this->mutate(col: $col, vimState: VimState::Insert), null];
+    }
+
+    /**
+     * `v` — open character-wise visual selection: anchor at the caret (the
+     * existing E736 5.13 anchor model), the caret then extends the span
+     * through any motion below, across rows and soft-wrapped pieces alike.
+     * `V` arrives as the same action (the handler lowercases) and opens the
+     * same character-wise mode: line-wise entry would have to reinterpret
+     * the pinned visual-line j/k direction, and that is exactly what the
+     * E736 3.2 / R4 owner ruling reserves.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function handleEnterVisualMode(): array
+    {
+        return [$this->withSelect($this->row, $this->col)->mutate(vimState: VimState::Visual), null];
+    }
+
+    /**
+     * Start of the next word ON THE CARET LINE (vim `w`). Line-local like
+     * 0/$/I/A — the row-crossing variant lives in the host app, not in this
+     * port (TextInput's single-line algorithm, transplanted per line).
+     */
+    private function vimWordForward(): self
+    {
+        $line = $this->lines[$this->row];
+        $len  = mb_strlen($line, 'UTF-8');
+        $pos  = $this->col;
+
+        if ($pos >= $len) {
+            return $this;
+        }
+
+        while ($pos < $len && $this->isWordCharAt($line, $pos)) {
+            $pos++;
+        }
+        while ($pos < $len && !$this->isWordCharAt($line, $pos)) {
+            $pos++;
+        }
+
+        return $this->moveCursor($this->row, $pos);
+    }
+
+    /** Start of the previous word ON THE CARET LINE (vim `b`). */
+    private function vimWordBackward(): self
+    {
+        $line = $this->lines[$this->row];
+        $pos  = $this->col;
+
+        if ($pos <= 0) {
+            return $this;
+        }
+
+        $pos--;
+
+        while ($pos > 0 && !$this->isWordCharAt($line, $pos)) {
+            $pos--;
+        }
+        while ($pos > 0 && $this->isWordCharAt($line, $pos - 1)) {
+            $pos--;
+        }
+
+        return $this->moveCursor($this->row, $pos);
+    }
+
+    private function isWordCharAt(string $line, int $pos): bool
+    {
+        if ($pos < 0 || $pos >= mb_strlen($line, 'UTF-8')) {
+            return false;
+        }
+        $char = mb_substr($line, $pos, 1, 'UTF-8');
+        return $char !== '' && preg_match('/[a-zA-Z0-9_]/', $char) === 1;
+    }
+
+    /**
+     * Delete the character under the cursor (vim `x`), line-local and
+     * end-of-line-refusing like TextInput's — the Delete KEY keeps its
+     * merge-next-line behaviour; `x` never eats a row boundary.
+     */
+    private function vimDeleteChar(): self
+    {
+        $line = $this->lines[$this->row];
+        $len  = mb_strlen($line, 'UTF-8');
+        if ($this->col >= $len) {
+            return $this;
+        }
+
+        $newLines             = $this->lines;
+        $newLines[$this->row] = mb_substr($line, 0, $this->col, 'UTF-8')
+            . mb_substr($line, $this->col + 1, null, 'UTF-8');
+
+        return $this->mutate(lines: $newLines);
+    }
+
+    /**
+     * Enable or disable vim keybindings mode. Mirrors
+     * {@see \SugarCraft\Forms\TextInput\TextInput::withVimMode()}: arming starts in normal mode, and the
+     * widget's own navigation primitives (j/k rows, w/b, 0/$, i/a/A/I, x,
+     * Escape, visual selection via v) come from the shared VimKeyHandler
+     * rather than a per-widget binding table.
+     */
+    public function withVimMode(bool $enabled = true): self
+    {
+        return $this->mutate(vimMode: $enabled, vimState: VimState::Normal);
+    }
+
+    /**
+     * Short-form alias for {@see withVimMode()} (TextInput's twin alias).
+     */
+    public function vimMode(bool $enabled = true): self
+    {
+        return $this->withVimMode($enabled);
     }
 
     /** Render the component as a multi-line ANSI string. */
@@ -459,10 +770,10 @@ final class TextArea implements Model
         return [$this->mutate(cursor: $cursor, focused: true), $cmd];
     }
 
-    /** Release focus; companion to { focus()}. */
+    /** Release focus; companion to { focus()}. Resets the vim mode to normal (TextInput's twin). */
     public function blur(): self
     {
-        return $this->mutate(cursor: $this->cursor->blur(), focused: false);
+        return $this->mutate(cursor: $this->cursor->blur(), focused: false, vimState: VimState::Normal);
     }
 
     public function setValue(string $v): self
@@ -1356,6 +1667,8 @@ final class TextArea implements Model
         ?int $anchorRow = null, bool $anchorSet = false,
         ?int $anchorCol = null,
         ?array $keyOverrides = null,
+        ?bool $vimMode = null,
+        ?VimState $vimState = null,
     ): self {
         $newLines = $lines ?? $this->lines;
         $resolvedValidate = $validateSet ? $validate : $this->validate;
@@ -1400,6 +1713,8 @@ final class TextArea implements Model
             anchorRow:             $anchorSet            ? $anchorRow : $this->anchorRow,
             anchorCol:             $anchorSet           ? $anchorCol : $this->anchorCol,
             keyOverrides:          $keyOverrides        ?? $this->keyOverrides,
+            vimMode:               $vimMode             ?? $this->vimMode,
+            vimState:              $vimState            ?? $this->vimState,
         );
     }
 

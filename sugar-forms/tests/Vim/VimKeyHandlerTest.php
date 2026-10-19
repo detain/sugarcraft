@@ -80,6 +80,15 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::CursorWordBackward, VimKeyHandler::handle('b', VimState::Normal));
     }
 
+    public function testNormalModeVerticalMotionCasesExist(): void
+    {
+        // TUI-3B: j/k now resolve to the vertical vocabulary. The single-line
+        // TextInput consumer leaves both actions unhandled (its consumeVimAction
+        // default), so widening here cannot move it; TextArea executes them.
+        $this->assertSame(VimAction::CursorDown, VimKeyHandler::handle('j', VimState::Normal));
+        $this->assertSame(VimAction::CursorUp,   VimKeyHandler::handle('k', VimState::Normal));
+    }
+
     public function testNormalModeLineBounds(): void
     {
         $this->assertSame(VimAction::CursorLineStart, VimKeyHandler::handle('0', VimState::Normal));
@@ -146,6 +155,13 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::CursorWordBackward, VimKeyHandler::handle('b', VimState::Visual));
         $this->assertSame(VimAction::CursorLineStart,    VimKeyHandler::handle('0', VimState::Visual));
         $this->assertSame(VimAction::CursorLineEnd,      VimKeyHandler::handle('$', VimState::Visual));
+    }
+
+    public function testVisualModeVerticalMovement(): void
+    {
+        // TUI-3B: character-wise visual selection extends across rows.
+        $this->assertSame(VimAction::CursorDown, VimKeyHandler::handle('j', VimState::Visual));
+        $this->assertSame(VimAction::CursorUp,   VimKeyHandler::handle('k', VimState::Visual));
     }
 
     public function testVisualModeNoOpForCtrl(): void

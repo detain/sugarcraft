@@ -26,6 +26,16 @@ final class VimActionTest extends TestCase
         $this->assertSame('cursor-right', VimAction::CursorRight->value);
     }
 
+    public function testCursorUpCaseExists(): void
+    {
+        $this->assertSame('cursor-up', VimAction::CursorUp->value);
+    }
+
+    public function testCursorDownCaseExists(): void
+    {
+        $this->assertSame('cursor-down', VimAction::CursorDown->value);
+    }
+
     public function testCursorWordForwardCaseExists(): void
     {
         $this->assertSame('cursor-word-forward', VimAction::CursorWordForward->value);
@@ -148,10 +158,10 @@ final class VimActionTest extends TestCase
     public function testAllCasesAreDistinct(): void
     {
         $cases = VimAction::cases();
-        $this->assertCount(25, $cases);
+        $this->assertCount(27, $cases);
 
         $values = array_map(static fn(VimAction $c): string => $c->value, $cases);
-        $this->assertCount(25, array_unique($values));
+        $this->assertCount(27, array_unique($values));
     }
 
     // =========================================================================

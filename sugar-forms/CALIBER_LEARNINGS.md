@@ -54,9 +54,17 @@ any extraction. Also keep the lang keys (`spinner.*`, `scrollbar.*`) in
 `sugar-forms/src/Vim/VimKeyHandler` provides a unified vim keybinding handler
 (enum VimState: Insert/Normal/Visual/VisualLine; enum VimAction: CursorLeft,
 CursorRight, CursorWord, DeleteChar, etc.). 4 libs now delegate to it:
-sugar-forms TextInput, sugar-readline ViMode, sugar-forms (via class_alias),
+sugar-forms TextInput + TextArea (TUI-3B: vertical CursorUp/CursorDown motion
+and character-wise visual selection ride the same shared vocabulary),
+sugar-readline ViMode, sugar-forms (via class_alias),
 sugar-widgets (via class_alias). Add new bindings to VimAction enum + VimKeyHandler
 so all consumers benefit. Mirrors: `docs/repo_map_step_24.md`.
+
+Note (TUI-3B, campaign R4 pending): the visual-LINE mode's pinned
+j→CursorLeft/k→CursorRight direction is NOT flipped by the new vertical
+cases — TextArea opens character-wise visual for both `v` and `V`; the
+line-wise direction stays an open owner ruling (findings/plan_sugar-forms.md
+3.2).
 
 Anti-pattern: Do NOT add new vim keybindings to per-lib branching logic.
 Always add to `VimAction` enum + `VimKeyHandler` so all 4 libs benefit.

@@ -15,7 +15,7 @@ use SugarCraft\Core\Msg\KeyMsg;
  * consuming model. This collapses 4 independent vim-mode codepaths into 1.
  *
  * Key format for string keys:
- *   - Single characters: 'h', 'l', 'w', 'b', '0', '$', 'x', 'i', 'a', 'A', 'I', 'v', 'd', 'y', 'p', 'u'
+ *   - Single characters: 'h', 'j', 'k', 'l', 'w', 'b', '0', '$', 'x', 'i', 'a', 'A', 'I', 'v', 'd', 'y', 'p', 'u'
  *   - Special keys: 'left', 'right', 'up', 'down', 'home', 'end', 'esc', 'backspace', 'delete',
  *                   'ctrl_a', 'ctrl_e', 'ctrl_u', 'ctrl_k', 'ctrl_p', 'ctrl_n', 'ctrl_r'
  *
@@ -148,6 +148,12 @@ final class VimKeyHandler
             // Movement
             'h' => VimAction::CursorLeft,
             'l' => VimAction::CursorRight,
+            // Vertical motion (TUI-3B): multi-line consumers move rows; the
+            // single-line TextInput consumer has no vertical primitive and
+            // leaves the action unconsumed, exactly like the pending-operator
+            // vocabulary (DeleteLine et al.) already does.
+            'j' => VimAction::CursorDown,
+            'k' => VimAction::CursorUp,
             'w' => VimAction::CursorWordForward,
             'b' => VimAction::CursorWordBackward,
             '0' => VimAction::CursorLineStart,
@@ -201,6 +207,8 @@ final class VimKeyHandler
             return match ($keyLower) {
                 'h' => VimAction::CursorLeft,
                 'l' => VimAction::CursorRight,
+                'j' => VimAction::CursorDown,
+                'k' => VimAction::CursorUp,
                 'w' => VimAction::CursorWordForward,
                 'b' => VimAction::CursorWordBackward,
                 '0' => VimAction::CursorLineStart,
@@ -226,12 +234,15 @@ final class VimKeyHandler
             return VimAction::EnterNormalMode;
         }
 
-        // Movement keys in visual-line mode. The port's action vocabulary
-        // is horizontal — VimAction has no CursorUp/CursorDown — and the
-        // consumers interpret Left/Right as previous/next entry (ItemList
-        // semantics). The old "up/down one line" comments named actions
-        // that do not exist in this enum; behaviour is unchanged here,
-        // only the description was false (E736 plan 3.2).
+        // Movement keys in visual-line mode. The pinned mapping stays
+        // horizontal: this mode's consumers (ItemList-family) interpret
+        // Left/Right as previous/next entry, and the j/k DIRECTION itself is
+        // an open owner ruling (E736 plan 3.2 / campaign R4) — deliberately
+        // NOT flipped here. VimAction has since grown vertical CursorUp/
+        // CursorDown cases (TUI-3B, consumed by TextArea's normal/visual
+        // modes), but visual-line keeps its entry-relative vocabulary until
+        // the ruling lands; behaviour is byte-identical to the pre-TUI-3B
+        // port, only the enum-vocabulary claim in the old comment changed.
         if (!$ctrl) {
             return match ($keyLower) {
                 'j' => VimAction::CursorLeft,   // previous entry

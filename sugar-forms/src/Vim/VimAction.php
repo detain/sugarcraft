@@ -20,6 +20,17 @@ enum VimAction: string
     /** Move cursor one character to the right. */
     case CursorRight = 'cursor-right';
 
+    /**
+     * Move cursor up one line (TUI-3B). Multi-line consumers execute this as
+     * a row move; the single-line TextInput has no vertical primitive, so the
+     * action falls through its consumer untouched — vocabulary widening is
+     * additive and never re-spells an existing key's output.
+     */
+    case CursorUp = 'cursor-up';
+
+    /** Move cursor down one line. Companion to {@see self::CursorUp} (TUI-3B). */
+    case CursorDown = 'cursor-down';
+
     /** Move cursor to the start of the next word. */
     case CursorWordForward = 'cursor-word-forward';
 
