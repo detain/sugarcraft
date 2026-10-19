@@ -331,4 +331,168 @@ final class HelpFramedLayoutTest extends OverlayTestCase
             $page,
         );
     }
+
+    /**
+     * (i) the planner's per-page used-row census is pinned as a table: if
+     * the greedy's placement or the roster's wrap profile drifts, this fails
+     * first and names the pages. At 120x40 (width 118) the three pages
+     * consume 28/20/24 of the 31-row capacity, so the fitted boxes are
+     * 31/23/27 rows inside the 34-row global frame.
+     */
+    public function testUsedRowsTableAt120x40(): void
+    {
+        [$x, $y, $height] = HelpMenu::geometry(120, 40);
+        $this->assertSame(34, $height, 'the global box: min(40 - 6, 60 + 3)');
+        $plan = HelpMenu::plan(HelpMenu::widthFor(120), $height - HelpMenu::CHROME_ROWS);
+        $this->assertSame(
+            [28, 20, 24],
+            array_map(static fn (array $page): int => HelpMenu::usedRows($page), $plan),
+            'per-page usedRows at 120x40 — planner metadata drift lands here',
+        );
+        $this->assertSame(
+            [31, 23, 27],
+            array_map(
+                static fn (array $page): int => min($height, HelpMenu::usedRows($page) + HelpMenu::CHROME_ROWS),
+                $plan,
+            ),
+            'fitted outer-box heights = usedRows + 3 chrome, capped at the global height',
+        );
+    }
+
+    /**
+     * (j) the fitted outer box, wide-terminal shape (168 columns → the
+     * 166-wide box, 40 rows → 34-row global frame): every page's bottom
+     * border sits exactly one row under the deepest section box on it
+     * (zero empty inner rows), the page counter rides that fitted border,
+     * and the top border never moves across page turns. The last page
+     * spends 15 of the 31 capacity rows, so its box is 18 rows where the
+     * global is 34 — sixteen rows of former filler simply stop being drawn.
+     */
+    public function testOuterBoxFitsThePageContent(): void
+    {
+        [$x, $y, $height] = HelpMenu::geometry(168, 40);
+        $width = HelpMenu::widthFor(168);
+        $plan = HelpMenu::plan($width, $height - HelpMenu::CHROME_ROWS);
+        $this->assertSame([30, 15], array_map(static fn (array $page): int => HelpMenu::usedRows($page), $plan), 'page census at 168x40: a near-full first page, a half-empty last');
+
+        $menu = HelpMenu::new();
+        $tops = [];
+        foreach ($plan as $page => $columns) {
+            $used = HelpMenu::usedRows($columns);
+            $boxHeight = min($height, $used + HelpMenu::CHROME_ROWS);
+            $surface = Surface::new(168, 40);
+            $menu->paint($surface, self::ctx(168, 40));
+            $lines = $surface->plainLines();
+
+            // (d) the top border rides at the unchanged row on every page.
+            $this->assertSame('╭', mb_substr($lines[$y + 5], $x - 1, 1), "page $page: the box top does not move");
+            $tops[] = $y + 5;
+
+            // The outer bottom border, found surface-locally on the page
+            // counter that rides it — never recomputed from the formula.
+            $border = null;
+            foreach ($lines as $i => $line) {
+                if (str_contains($line, '↑ page')) {
+                    $border = $i;
+                }
+            }
+            $this->assertNotNull($border, "page $page: the page counter paints");
+
+            // (a) it sits at the fitted height, not the global one.
+            $this->assertSame($y + 5 + $boxHeight - 1, $border, "page $page: bottom border at y+5+height_p-1, height_p = usedRows + " . HelpMenu::CHROME_ROWS);
+
+            $menu = $menu->update(new KeyMsg(KeyType::Down), self::ctx(168, 40))->overlay;
+        }
+        $this->assertSame(array_fill(0, count($plan), $y + 5), $tops, 'the top border row is identical across all pages');
+    }
+
+    /**
+     * (l) the no-filler invariant alone, surface-local so it discriminates
+     * on its own: every page's outer box ENDS at its bottom border (no side
+     * glyphs below it), the row directly above the border is a closing
+     * section frame (zero empty inner rows), and on a page shorter than the
+     * global frame the whole former filler band — down to where the global
+     * border used to ride — paints nothing. Fallback-to-global renders paint
+     * the border at the global bottom with an empty row above it and the
+     * counter itself in that band: reddens here without the (a) equality.
+     */
+    public function testNoEmptyRowsInsideTheFittedBorder(): void
+    {
+        [$x, $y, $height] = HelpMenu::geometry(168, 40);
+        $width = HelpMenu::widthFor(168);
+        $plan = HelpMenu::plan($width, $height - HelpMenu::CHROME_ROWS);
+        $menu = HelpMenu::new();
+        foreach ($plan as $page => $columns) {
+            $boxHeight = min($height, HelpMenu::usedRows($columns) + HelpMenu::CHROME_ROWS);
+            $surface = Surface::new(168, 40);
+            $menu->paint($surface, self::ctx(168, 40));
+            $lines = $surface->plainLines();
+            $border = null;
+            foreach ($lines as $i => $line) {
+                if (str_contains($line, '↑ page')) {
+                    $border = $i;
+                }
+            }
+            $this->assertNotNull($border, "page $page paints the counter");
+
+            $inner = mb_substr($lines[$border - 1], $x, $width - 2);
+            $this->assertTrue(
+                str_contains($inner, '╰') || str_contains($inner, '╯'),
+                "page $page: the lowest section box closes directly under the outer bottom border — zero empty inner rows",
+            );
+            $this->assertStringNotContainsString('│', mb_substr($lines[$border + 1] ?? '', $x - 1, 1), "page $page: no box side below the bottom border");
+
+            if ($boxHeight < $height) {
+                for ($row = $border + 1; $row <= $y + 4 + $height; ++$row) {
+                    $band = mb_substr($lines[$row] ?? '', $x - 1, $width);
+                    $this->assertSame(trim($band), '', "page $page: former filler row $row draws no box glyphs");
+                }
+            }
+
+            $menu = $menu->update(new KeyMsg(KeyType::Down), self::ctx(168, 40))->overlay;
+        }
+    }
+
+    /**
+     * (k) the 80x24 band, both polarities of the fit: a page whose deepest
+     * column spends the FULL 15-row capacity keeps the global 18-row box
+     * byte-unchanged (fitted height == usedRows + 3 == global), while the
+     * last page (10 rows used) shrinks to 13 — under the 18 the brief's
+     * "height_p < 18" pin measures against.
+     */
+    public function testFittedHeightKeepsFullPagesAndShrinksShortOnes(): void
+    {
+        [$x, $y, $height] = HelpMenu::geometry(80, 24);
+        $perColumn = $height - HelpMenu::CHROME_ROWS;
+        $this->assertSame(18, $height, 'the global box at 24 rows');
+        $plan = HelpMenu::plan(HelpMenu::widthFor(80), $perColumn);
+        $used = array_map(static fn (array $page): int => HelpMenu::usedRows($page), $plan);
+        $this->assertCount(10, $plan, 'ten pages at 80x24 — the pins below address indices into this census');
+        $this->assertSame($perColumn, $used[6], 'page 7 fills its column to capacity — the equality the fitted box must answer with the GLOBAL height');
+        $this->assertLessThan($perColumn, $used[count($used) - 1], 'the last page leaves rows to give away');
+
+        foreach ([6, count($plan) - 1] as $page) {
+            $menu = HelpMenu::new();
+            for ($i = 0; $i < $page; ++$i) {
+                $menu = $menu->update(new KeyMsg(KeyType::Down), self::ctx(80, 24))->overlay;
+            }
+            $surface = Surface::new(80, 24);
+            $menu->paint($surface, self::ctx(80, 24));
+            $lines = $surface->plainLines();
+            $border = null;
+            foreach ($lines as $i => $line) {
+                if (str_contains($line, '↑ page')) {
+                    $border = $i;
+                }
+            }
+            $this->assertNotNull($border, "page $page paints the counter");
+            $boxHeight = min($height, $used[$page] + HelpMenu::CHROME_ROWS);
+            $this->assertSame($y + 5 + $boxHeight - 1, $border, "page $page: fitted bottom border");
+            if ($page === 6) {
+                $this->assertSame($height, $boxHeight, 'a full-capacity page keeps the global height exactly');
+            } else {
+                $this->assertLessThan(18, $boxHeight, 'the last 80x24 page draws a box shorter than the global 18');
+            }
+        }
+    }
 }
