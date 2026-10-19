@@ -18,13 +18,19 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * prompt resumes that stored transcript instead of refusing the parse.
  *
  * Every case drives {@see NonInteractive::run()} with NO injected backend —
- * the one shape that owns a session ($ownsSession) — against a sandbox HOME
- * and the offline echo default, so the answer is deterministic, nothing
- * touches the network, and the row/transcript assertions read the store the
- * same code path wrote. The envelope's usage leg is pinned at the format
- * layer instead of the e2e layer on purpose: the echo provider bills nothing,
- * and an ABSENT `usage` there is the honest default this design commits to
- * (`jq '.usage'` answers null because nothing was measured).
+ * the one shape that owns a session ($ownsSession) — against a sandbox HOME,
+ * so the row/transcript assertions read the store the same code path wrote.
+ *
+ * Most cases answer from the offline echo default, and an ABSENT `usage`
+ * there is the honest default this design commits to (`jq '.usage'` answers
+ * null because nothing was measured). The billed case below closes the other
+ * half of that claim (review w1a m-2): it points the funnel's own provider
+ * selection at a throwaway OpenAI-compatible endpoint on loopback that DOES
+ * report usage, so the observer → Usage::sum → envelope → store chain is
+ * exercised POPULATED end-to-end, not only at the format layer. The
+ * prune-free-read law of the funnel's store opens (review w1a m-1) is pinned
+ * structurally over the run() body, because every functional mode of that
+ * argument looks identical to a caller — only the sweep it would run is not.
  */
 final class NonInteractiveSessionPersistenceTest extends TestCase
 {
@@ -266,5 +272,216 @@ final class NonInteractiveSessionPersistenceTest extends TestCase
         self::assertSame('sess-1', $full['session_id']);
         self::assertSame(42, $full['usage']['totalTokens'], 'the buckets ride Usage::toArray verbatim');
         self::assertSame(0.25, $full['usage']['costUsd']);
+    }
+
+    /**
+     * Review w1a m-1, structural arm: BOTH of run()'s session-store opens read
+     * with `prune: false`, and neither may drift to the pruning default. A
+     * read-only one-shot run must not delete rows it never wrote — the sweep
+     * belongs to the TUI's owning launch ({@see Bootstrap::sessionStore()}'s
+     * docblock says so, and this slice is the only teeth that claim has.
+     *
+     * WHY STRUCTURAL AND NOT FUNCTIONAL: both argument modes hand back the
+     * same store object, so no caller-observable behaviour distinguishes them
+     * inside one run; the only honest witness is the call-site text itself.
+     */
+    public function testTheOneShotFunnelOpensTheSessionStoreWithoutPruning(): void
+    {
+        $run = self::sliceRunBody(
+            (string) file_get_contents(__DIR__ . '/../../src/Cli/NonInteractive.php')
+        );
+
+        self::assertSame(
+            2,
+            substr_count($run, 'Bootstrap::sessionStore(prune: false)'),
+            'run() opens the store exactly twice — the funnel read and the @session: mention closure — and both must say prune: false',
+        );
+        self::assertSame(
+            1,
+            substr_count($run, '$sessionStore = Bootstrap::sessionStore(prune: false);'),
+            'the funnel site keeps its assignment form; a rewrite that drops the named variable would hide a later pruning reopen from this census',
+        );
+        self::assertSame(
+            1,
+            substr_count($run, 'static fn () => Bootstrap::sessionStore(prune: false)'),
+            'the @session: mention closure stays lazy AND prune-free',
+        );
+        self::assertSame(
+            0,
+            preg_match_all('/Bootstrap::sessionStore\((?:\s*prune:\s*true\s*)?\)/', $run),
+            'a bare sessionStore() re-enables the retention sweep by default — as loud a violation as naming true',
+        );
+    }
+
+    /**
+     * Slice run()'s body out of the NonInteractive source. The terminator is
+     * the first column-4 closing brace, which cannot precede run()'s own end:
+     * every block nested inside a PSR-12 method closes at eight or deeper.
+     */
+    private static function sliceRunBody(string $source): string
+    {
+        $start = strpos($source, 'public static function run(');
+        if ($start === false) {
+            self::fail('NonInteractive no longer declares "public static function run(" — update this pin, do not delete it.');
+        }
+
+        $end = strpos($source, "\n    }\n", $start);
+        if ($end === false) {
+            self::fail('Could not find the end of NonInteractive::run().');
+        }
+
+        return substr($source, $start, $end - $start);
+    }
+
+    /**
+     * Review w1a m-2: the populated half of the envelope, end-to-end through
+     * the funnel's OWN provider selection. A throwaway loopback endpoint
+     * answers the OpenAI-compatible batch call with real usage figures; the
+     * run is pointed at it with the same two environment variables an
+     * operator would use (CANDY_CODE_PROVIDER + OPENAI_BASE_URL), so
+     * backendFor() builds a REAL EngineBackend, withStepUsageObserver fires
+     * with a billed Usage, and session_id + usage must BOTH land in the
+     * envelope AND the persisted row. Absence pins prove the null shape;
+     * this proves the wire-to-store chain actually carries numbers.
+     */
+    public function testABilledOneShotPopulatesSessionIdAndUsageEndToEnd(): void
+    {
+        [$process, $pipes, $address] = $this->startBilledEndpoint();
+
+        $savedProvider = getenv('CANDY_CODE_PROVIDER');
+        $savedBaseUrl = getenv('OPENAI_BASE_URL');
+        putenv('CANDY_CODE_PROVIDER=custom');
+        putenv('OPENAI_BASE_URL=http://' . $address . '/v1');
+
+        try {
+            [$code, $stdout] = $this->oneShot(['-p', 'bill this run', '--output-format', 'json']);
+
+            self::assertSame(NonInteractive::EXIT_OK, $code);
+            $document = json_decode(trim($stdout), true, 512, JSON_THROW_ON_ERROR);
+
+            $id = (string) $this->store()->listSessions(10)[0]['id'];
+            self::assertSame($id, $document['session_id'], 'the envelope names the row the funnel minted');
+            self::assertSame('billed answer', $document['result']);
+
+            self::assertArrayHasKey('usage', $document, 'a provider that reported 18 tokens must not envelope as if it measured nothing');
+            self::assertSame(18, $document['usage']['totalTokens']);
+            self::assertSame(11, $document['usage']['inputTokens']);
+            self::assertSame(7, $document['usage']['outputTokens']);
+            // Numeric, not a fixed figure: the dollar value is whatever the
+            // active price table says for the model today (the built-in
+            // custom-server table answers 0), and the token legs above are
+            // what this case exists to prove end-to-end.
+            self::assertIsNumeric($document['usage']['costUsd']);
+
+            $row = $this->store()->getSession($id);
+            self::assertSame('custom', $row['provider'] ?? null, 'the row carries the selected provider, not the echo default');
+            $transcript = TranscriptStore::new($this->store())->load($id);
+            self::assertCount(2, $transcript, 'the billed answer persisted through the same save as the echo cases');
+        } finally {
+            $savedProvider === false ? putenv('CANDY_CODE_PROVIDER') : putenv('CANDY_CODE_PROVIDER=' . $savedProvider);
+            $savedBaseUrl === false ? putenv('OPENAI_BASE_URL') : putenv('OPENAI_BASE_URL=' . $savedBaseUrl);
+            $this->stopBilledEndpoint($process, $pipes);
+        }
+    }
+
+    /**
+     * Launch the throwaway endpoint as a detached PHP child (the house
+     * tempnam-script + proc_open-array shape) and wait for its READY line,
+     * which carries the address it bound to port 0. The child self-expires:
+     * a 20-second accept timeout ends its loop even if this process dies, so
+     * a crash here leaves no listener behind.
+     *
+     * @return array{0: resource, 1: array<int, resource>, 2: string}
+     */
+    private function startBilledEndpoint(): array
+    {
+        $script = <<<'PHP'
+            <?php
+            $server = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+            if ($server === false) {
+                fwrite(STDERR, "bind failed: {$errstr}\n");
+                exit(1);
+            }
+            fwrite(STDOUT, 'READY ' . stream_socket_get_name($server, false) . "\n");
+            fflush(STDOUT);
+
+            $first = 'data: ' . json_encode(['choices' => [[
+                'index' => 0,
+                'delta' => ['role' => 'assistant', 'content' => 'billed answer'],
+                'finish_reason' => 'stop',
+            ]]]) . "\n\n";
+            $usage = 'data: ' . json_encode(['choices' => [], 'usage' => [
+                'prompt_tokens' => 11,
+                'completion_tokens' => 7,
+                'total_tokens' => 18,
+            ]]) . "\n\n";
+            $body = $first . $usage . "data: [DONE]\n\n";
+
+            for ($seen = 0; $seen < 16; $seen++) {
+                $conn = @stream_socket_accept($server, 20);
+                if ($conn === false) {
+                    break;
+                }
+                stream_set_timeout($conn, 5);
+
+                $head = '';
+                while (!feof($conn)) {
+                    $line = fgets($conn, 8192);
+                    if (!is_string($line)) {
+                        break;
+                    }
+                    $head .= $line;
+                    if (str_ends_with($head, "\r\n\r\n")) {
+                        break;
+                    }
+                }
+                if (preg_match('/Content-Length:\s*(\d+)/i', $head, $match) === 1) {
+                    if (stripos($head, 'expect: 100-continue') !== false) {
+                        fwrite($conn, "HTTP/1.1 100 Continue\r\n\r\n");
+                    }
+                    $left = (int) $match[1];
+                    while ($left > 0 && !feof($conn)) {
+                        $chunk = fread($conn, min(8192, $left));
+                        if (!is_string($chunk) || $chunk === '') {
+                            break;
+                        }
+                        $left -= strlen($chunk);
+                    }
+                }
+                fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\nContent-Length: " . strlen($body) . "\r\n\r\n" . $body);
+                fclose($conn);
+            }
+            fclose($server);
+            PHP;
+
+        $file = $this->tempDir . '/billed-endpoint-child.php';
+        self::assertIsInt(file_put_contents($file, $script));
+
+        $process = proc_open([PHP_BINARY, $file], [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes);
+        self::assertIsResource($process, 'the billed endpoint child did not start');
+        stream_set_timeout($pipes[1], 10);
+
+        $ready = fgets($pipes[1]);
+        self::assertIsString($ready, 'the billed endpoint never announced its address');
+        self::assertMatchesRegularExpression('/^READY 127\.0\.0\.1:\d+\R$/', $ready);
+
+        return [$process, $pipes, substr(trim($ready), 6)];
+    }
+
+    /** @param array<int, resource> $pipes */
+    private function stopBilledEndpoint($process, array $pipes): void
+    {
+        foreach ($pipes as $pipe) {
+            @fclose($pipe);
+        }
+        $status = proc_get_status($process);
+        if ($status['running']) {
+            proc_terminate($process, \defined('SIGTERM') ? SIGTERM : 15);
+        }
+        proc_close($process);
     }
 }

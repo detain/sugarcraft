@@ -1475,7 +1475,7 @@ final class DenialPrefixRosterTest extends TestCase
         // on the strength of the words `hook` and `refused` appearing
         // somewhere else in a 1,000-line file. So the fixture plants a decoy
         // on each side of the paragraph and the slice must exclude both.
-        $fixture = "intro DECOY-HEAD\n\nOne key is **conditional**: FIXTURE-BODY\n\n"
+        $fixture = "intro DECOY-HEAD\n\nThree keys are **conditional**: FIXTURE-BODY\n\n"
             . "Before this,\ntail DECOY-TAIL\n";
         $sliced = self::refusalsParagraphIn($fixture);
         self::assertStringContainsString(
@@ -1521,7 +1521,12 @@ final class DenialPrefixRosterTest extends TestCase
      */
     private static function refusalsParagraphIn(string $markdown): string
     {
-        $open = strpos($markdown, 'One key is **conditional**');
+        // Anchored on the numeral-free tail of the sentence opening, not the
+        // count word: AUT-2 widened this paragraph from one conditional key
+        // to three, and a guard pinned to "One"/"Three" re-breaks on the next
+        // honest edit. "are **conditional**" is unique in README.md, and the
+        // embedded space keeps the literal out of the GlobDialect corpus.
+        $open = strpos($markdown, 'are **conditional**');
         if ($open === false) {
             throw new \RuntimeException('README.md no longer opens the refusals paragraph the way this '
                 . 'guard finds it; the schema may still be published, but this guard cannot answer for it');
