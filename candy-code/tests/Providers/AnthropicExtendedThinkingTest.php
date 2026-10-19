@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Providers;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Attachment;
+use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\HistorySanitizer;
@@ -48,6 +50,9 @@ final class AnthropicExtendedThinkingTest extends TestCase
         'thinking' => 'weighing the options',
         'signature' => 'Eq4BCnEIARABGAIqQ...',
     ];
+
+    /** Owned-name spelling: byte-identical data under a shared name would trip the const-drift census. */
+    private const MINI_PDF = '%PDF-1.7' . "\n" . "\x00\x00\x00" . 'body' . "\n%%EOF\n";
 
     private const REDACTED_BLOCK = [
         'type' => 'redacted_thinking',
@@ -357,6 +362,56 @@ final class AnthropicExtendedThinkingTest extends TestCase
         self::assertSame(self::SIGNED_BLOCK, $blocks[0], 'the signed block replays FIRST, verbatim - the chain of custody');
         self::assertSame('tool_use', $blocks[1]['type']);
         self::assertSame('tu_1', $blocks[1]['id']);
+    }
+
+    /**
+     * plan_comparison CTX-2 review MAJOR: the combined shape of the two
+     * families in ONE wire body. Documents ride USER turns' content arrays
+     * ({@see \SugarCraft\Code\Providers\AttachmentEncoding::anthropicBlocks()});
+     * signed thinking blocks lead ASSISTANT turns. They cannot collide today
+     * - and that is exactly why the shape needs a pin: a future refactor
+     * merging thinking into the user turn (or documents into the assistant
+     * turn) would 400 at Anthropic with zero test red.
+     */
+    public function testThinkingReplayLeadsTheAssistantTurnWhileTheDocumentRidesTheUserTurn(): void
+    {
+        $captured = [];
+        $provider = $this->providerWithBudget(2048, ['content' => []], $captured);
+
+        $provider->complete($this->turnRequest(messages: [
+            (new UserMessage('read the first spec'))
+                ->withAttachment(new Attachment('spec.pdf', AttachmentType::Document, self::MINI_PDF, 'application/pdf')),
+            new AssistantMessage('reading now', [new ToolCall('tu_1', 'Read', ['path' => 'spec.pdf'])], null, null, false, [self::SIGNED_BLOCK]),
+            new ToolResultMessage('tu_1', 'the contents'),
+            (new UserMessage('and the second'))
+                ->withAttachment(new Attachment('plan.pdf', AttachmentType::Document, self::MINI_PDF, 'application/pdf')),
+        ]));
+
+        $turns = $captured[1]['messages'];
+        self::assertCount(3, $turns, 'tool_result is a user turn, so it merges with the user turn that follows it');
+
+        self::assertSame('user', $turns[0]['role']);
+        self::assertSame(['text', 'document'], array_column($turns[0]['content'], 'type'), 'text first, then the document block');
+        self::assertSame('spec.pdf', $turns[0]['content'][1]['title']);
+
+        self::assertSame('assistant', $turns[1]['role']);
+        $assistantTypes = array_column($turns[1]['content'], 'type');
+        self::assertSame(['thinking', 'text', 'tool_use'], $assistantTypes, 'the signed block LEADS the assistant turn, ahead of its text and tool_use');
+        self::assertSame(self::SIGNED_BLOCK, $turns[1]['content'][0]);
+        self::assertArrayHasKey('signature', $turns[1]['content'][0], 'the chain of custody rides verbatim');
+
+        self::assertSame('user', $turns[2]['role']);
+        self::assertSame(['tool_result', 'text', 'document'], array_column($turns[2]['content'], 'type'), 'the tool_result precedes the merged user content, and the second document rides a user turn too');
+
+        foreach ($turns as $turn) {
+            if ($turn['role'] === 'assistant') {
+                self::assertNotContains('document', array_column($turn['content'], 'type'), 'no PDF block ever enters an assistant turn - the API takes thinking there, not documents');
+            }
+        }
+        $leadings = array_map(static fn (array $t): array => array_column($t['content'], 'type'), array_values(array_filter($turns, static fn (array $t): bool => $t['role'] === 'user')));
+        foreach ($leadings as $i => $types) {
+            self::assertNotContains('thinking', $types, "user turn {$i} carries a replayed thinking block - that shape 400s");
+        }
     }
 
     public function testStoredBlocksStayOutOfRequestsThatDidNotAskForThinking(): void
