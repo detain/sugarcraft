@@ -754,7 +754,7 @@ keeping fresh was in fact unpinned on this page and in
 because "there is a generator" is exactly the claim a reader stops checking.)
 In a project you have listed
 under `trustedProjectSettings` (an untrusted project's `disabledTools` never
-reaches the merge at all, and all twenty-nine tools survive):
+reaches the merge at all, and all thirty-one tools survive):
 
 ```json
 { "disabledTools": ["[!B]*"] }
@@ -765,7 +765,7 @@ exactly `Bash` and removing everything else — the same tool set
 `allowedTools: ["Bash"]` produces, and the same degradation to opaque shell
 text. (This line said "eight characters" until the count was re-derived:
 `[!B]*` is five, `"[!B]*"` seven, `["[!B]*"]` nine, and nothing here is eight.
-The point the figure was making — that the value names none of the twenty-eight tools it
+The point the figure was making — that the value names none of the thirty tools it
 removes — is what survives, so the sentence stays and the number is corrected.
 This line once continued
 "`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
@@ -798,7 +798,7 @@ corrected; a page that re-derives a number and then contradicts itself further
 down is worse than one that never re-derived it.)
 
 **Two things narrow this, and both are measured.** An *untrusted* project's
-`disabledTools` never reaches the merge — all twenty-nine tools survive — so this
+`disabledTools` never reaches the merge — all thirty-one tools survive — so this
 needs a `trustedProjectSettings` grant you made yourself. And the layers merge
 **key by key, not as a union**: if *you* name any `disabledTools` at all, yours
 replaces the project's entirely. Measured: your `["Read"]` against a trusted
@@ -817,11 +817,12 @@ project's tool removals are reported at launch, naming the file, the tools it
 took and the tools it left:
 
 ```
-candy-code: /repo/.candy-code/settings.json (disabledTools) disabled 28 of the
-29 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+candy-code: /repo/.candy-code/settings.json (disabledTools) disabled 30 of the
+31 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
 WebSearch, doctor, Skill, Lsp, Memory, RepoMap, Prune, Todo, Compress, Workflow,
 Recall, Team, ApplyPatch, AskUser, PlanExit, SendMessage, Subagents,
-InterruptAgent, GenerateImage, GenerateVideo, PtyRun, Ls — leaving: Bash.
+InterruptAgent, GenerateImage, GenerateVideo, PtyRun, Ls, ShellOutput, ShellStop
+— leaving: Bash.
 ```
 
 That is the stderr form, byte for byte. The `candy-code: ` prefix and the
