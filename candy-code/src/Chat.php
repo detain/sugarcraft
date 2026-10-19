@@ -40,6 +40,7 @@ use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Code\Support\SystemClipboard;
 use SugarCraft\Code\Attachments\FileMentions;
+use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\QueueMode;
@@ -683,6 +684,19 @@ final class Chat implements Model
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
         /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
         private readonly int $slashMenuIndex = 0,
+        /**
+         * TUI-1: highlighted row in the `@` mention popup (see
+         * {@see mentionPopupRows()}). Like slashMenuIndex, reset whenever the
+         * draft TEXT changes; a caret move between two mention tokens can land
+         * the stored index on a differently-sized list, so the read side
+         * clamps rather than trusting it.
+         */
+        private readonly int $mentionMenuIndex = 0,
+        /**
+         * TUI-1: Escape closes the mention popup; it stays closed until the
+         * draft text changes again (reset with the index in the two funnels).
+         */
+        private readonly bool $mentionMenuDismissed = false,
         /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
         private readonly string $themeName = 'dark',
         /** Ctrl+P command palette state; null when closed. */
@@ -3118,6 +3132,16 @@ final class Chat implements Model
         // The session picker is excluded for the same reason the palette is:
         // Escape closes the overlay there (see handleSessionPickerKey()),
         // which is more specific than "cancel the in-flight turn".
+        // TUI-1 adds the same more-specific exclusion for the `@` mention
+        // popup, one arm EARLIER than that `if` rather than a sixth conjunct:
+        // while the popup is up, Escape is the popup's close, and it must not
+        // arm the two-beat stop binding at all (plan: Esc closes BEFORE the
+        // stop-binding arms). mentionPopupOpen()'s own modal guards make the
+        // palette/picker exclusions moot here.
+        if ($msg->type === KeyType::Escape && $this->mentionPopupOpen()) {
+            return [$this->mutate(['mentionMenuDismissed' => true]), null];
+        }
+
         if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null) {
             if (!$this->inFlight) {
                 return [$this->mutate(['lastEscapeAt' => null]), null];
@@ -3318,10 +3342,16 @@ final class Chat implements Model
             // draft, so splitting an existing line in two was impossible.
             $msg->type === KeyType::Enter && ($msg->alt || $msg->shift || $msg->ctrl)
                 => [$this->withInput($this->input->insertRune("\n")), null],
+            $msg->type === KeyType::Enter && $this->slashMenuShouldIntercept()
+                => $this->completeSlashMenuSelection(),
+            // TUI-1: Enter accepts the highlighted `@` file while the popup
+            // is up — the draft is still being composed, so this must not
+            // submit. completeMention() takes the selected row when the
+            // popup is open and falls back to the prefix path otherwise.
+            $msg->type === KeyType::Enter && $this->mentionPopupOpen()
+                => $this->completeMention(),
             $msg->type === KeyType::Enter
-                => $this->slashMenuShouldIntercept()
-                    ? $this->completeSlashMenuSelection()
-                    : $this->recordInputHistory()->submit(),
+                => $this->recordInputHistory()->submit(),
             // Walking prompt history (↑ on an empty box started it, see the
             // recall arm below) outranks the "/" popup: a recalled `/sessions`
             // opens the popup, and without this ↑ would start browsing it
@@ -3337,6 +3367,15 @@ final class Chat implements Model
                 => [$this->moveSlashMenuSelection(-1), null],
             $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
                 => [$this->moveSlashMenuSelection(1), null],
+            // TUI-1: the `@` popup browses with the same two keys. The two
+            // popups cannot be open at once (a `/` prefix dies at the first
+            // space; a mention token needs `@`), so arm order here is
+            // precedence-free — the slash arms stay first for byte-identical
+            // existing behaviour.
+            $msg->type === KeyType::Up && $this->mentionPopupOpen()
+                => [$this->moveMentionSelection(-1), null],
+            $msg->type === KeyType::Down && $this->mentionPopupOpen()
+                => [$this->moveMentionSelection(1), null],
             // Bare Tab completes the HIGHLIGHTED "/" popup row into the draft
             // (the row slashMenuIndex() points at, which Up/Down above move —
             // not "the first match"), and does nothing else: it never submits.
@@ -10584,6 +10623,8 @@ final class Chat implements Model
             'currentSessionId' => $this->currentSessionId,
             'lastActivityAt' => $this->lastActivityAt,
             'slashMenuIndex' => $this->slashMenuIndex,
+            'mentionMenuIndex' => $this->mentionMenuIndex,
+            'mentionMenuDismissed' => $this->mentionMenuDismissed,
             'themeName' => $this->themeName,
             'palette' => $this->palette,
             'onConfigChange' => $this->onConfigChange,
@@ -12259,6 +12300,8 @@ final class Chat implements Model
         return [$after->mutate([
             'input' => $draft,
             'slashMenuIndex' => $this->slashMenuIndex,
+            'mentionMenuIndex' => $this->mentionMenuIndex,
+            'mentionMenuDismissed' => $this->mentionMenuDismissed,
         ]), $cmd];
     }
 
@@ -16689,6 +16732,8 @@ final class Chat implements Model
         $changes = ['inputBuf' => $buf];
         if ($buf !== $this->inputBuf) {
             $changes['slashMenuIndex'] = 0;
+            $changes['mentionMenuIndex'] = 0;
+            $changes['mentionMenuDismissed'] = false;
         }
 
         return $this->snapScrolledFrameToDraft($changes);
@@ -16782,6 +16827,8 @@ final class Chat implements Model
         $changes = ['input' => $input];
         if ($input->value() !== $this->inputBuf) {
             $changes['slashMenuIndex'] = 0;
+            $changes['mentionMenuIndex'] = 0;
+            $changes['mentionMenuDismissed'] = false;
         }
 
         return $this->snapScrolledFrameToDraft($changes);
@@ -17345,6 +17392,73 @@ final class Chat implements Model
     }
 
     /**
+     * TUI-1: whether the fuzzy `@` file popup is up RIGHT NOW — the one
+     * predicate the Escape arm, the ↑/↓/Enter arms and the renderer all read,
+     * mirroring how slashMenuOwnsTab() is the one predicate both the shell's
+     * Tab yield and the completion arm read.
+     *
+     * Costs no I/O after the first listing per root: MentionIndex memoizes
+     * the file list per canonical root and ranks per (root, partial), so this
+     * is safe to call once per rendered frame (E646: no timers, no repeat
+     * exec on a re-render). A dismissed or non-`@` draft answers [] upstream,
+     * and every modal guard that buries the popup also buries this.
+     */
+    public function mentionPopupOpen(): bool
+    {
+        return !$this->mentionMenuDismissed
+            && $this->keyHelp === null
+            && $this->pendingPermission === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && $this->dirPicker === null
+            && $this->mentionPopupRows() !== [];
+    }
+
+    /**
+     * The popup's rows for the mention token under the caret, best match
+     * first ({@see MentionIndex::rank()}). Empty for a `$skill` token — those
+     * keep their prefix-only completion — and on a non-git root, where the
+     * cold-index fallback ({@see FileMentions::complete()} via Tab) stays the
+     * whole feature.
+     *
+     * @return list<array{path: string, subject: string, indices: list<int>, score: int}>
+     */
+    public function mentionPopupRows(): array
+    {
+        $root = $this->projectRoot();
+        if ($root === null || $this->mentionMenuDismissed) {
+            return [];
+        }
+
+        $token = $this->mentionTokenAtCaret();
+        if ($token === null || $token['sigil'] !== '@') {
+            return [];
+        }
+
+        return MentionIndex::rank($token['partial'], $root);
+    }
+
+    /** The highlighted popup row, clamped — a caret move between two mention
+     *  tokens can leave the stored index past the end of a shorter list. */
+    public function mentionMenuIndex(): int
+    {
+        $count = count($this->mentionPopupRows());
+
+        return $count === 0 ? 0 : min($this->mentionMenuIndex, $count - 1);
+    }
+
+    /** @see moveSlashMenuSelection() — same wrap, own list. */
+    private function moveMentionSelection(int $delta): self
+    {
+        $count = count($this->mentionPopupRows());
+        if ($count === 0) {
+            return $this;
+        }
+
+        return $this->mutate(['mentionMenuIndex' => ((($this->mentionMenuIndex() + $delta) % $count) + $count) % $count]);
+    }
+
+    /**
      * The `@` or `$` token the caret ends, in CHARACTER offsets (the widget's
      * unit), with its sigil. A `$` token is one only while the workspace's
      * skill registry has a user-invocable name it is the start of
@@ -17391,6 +17505,25 @@ final class Chat implements Model
         $token = $this->mentionTokenAtCaret();
         if ($token === null) {
             return [$this, null];
+        }
+
+        // TUI-1: while the fuzzy popup is up, the HIGHLIGHTED row wins over
+        // the prefix path below — Tab/Enter accept it exactly like the "/"
+        // popup's completion does. The prefix completion stays what it was
+        // for every other case, including the cold index (a non-git root, or
+        // a file created after this process first opened the popup): the
+        // popup simply does not show, and this method falls through.
+        if ($token['sigil'] === '@' && $this->mentionPopupOpen()) {
+            $rows = $this->mentionPopupRows();
+            $row = $rows[$this->mentionMenuIndex()] ?? null;
+            if ($row !== null) {
+                $replacement = '@' . $row['path'] . ' ';
+                $from = $token['start'];
+                $to = $from + 1 + mb_strlen($token['partial'], 'UTF-8');
+                $buffer = mb_substr($this->inputBuf, 0, $from, 'UTF-8') . $replacement . mb_substr($this->inputBuf, $to, null, 'UTF-8');
+
+                return [$this->withInputBuf($buffer)->withInputCursor($from + mb_strlen($replacement, 'UTF-8')), null];
+            }
         }
 
         if ($token['sigil'] === '$') {

@@ -1926,10 +1926,17 @@ final class Renderer
             $theme,
             max(3, $frameRows - $popup - self::SLASH_MENU_CHROME_ROWS),
         );
+        // TUI-1: the `@` mention popup takes the SAME frame slot — the two
+        // are never both up (a "/" prefix dies at the first space, a mention
+        // needs `@`), so the second call only pays its guard when the first
+        // painted, and shares the budget that already sizes the box.
+        $mentionMenu = $slashMenu === ''
+            ? self::renderMentionMenu($chat, $theme, max(3, $frameRows - $popup - self::SLASH_MENU_CHROME_ROWS))
+            : '';
 
         $content = $shell . "\n"
             . ($agentStrip !== '' ? $agentStrip . "\n" : '')
-            . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
+            . $input . ($slashMenu !== '' ? "\n" . $slashMenu : ($mentionMenu !== '' ? "\n" . $mentionMenu : ''));
 
         if ($tabStrip !== '') {
             $content = $tabStrip . "\n" . $content;
@@ -6006,36 +6013,127 @@ final class Renderer
         // ISS-046: the window. When the list fits under $maxRows this paints
         // exactly the frame the popup always painted; otherwise the cap is
         // centered on the highlighted row and faint "more" rows count what
-        // the cut left out on each side. A side touching an edge gives its
-        // reserved row back to the items (so up to $maxRows-1 commands are
-        // visible with one marker), and the extension always leaves at least
-        // one item beyond the surviving marker — a "more" row that would say
-        // "1 more" about nothing is not rendered at all.
+        // the cut left out on each side. Extracted verbatim as
+        // {@see menuWindow()} for the TUI-1 mention popup, which shares the
+        // whole contract — including the two "more" lang rows.
+        $lines = self::menuWindow($lines, $selected, $maxRows, $theme, $budget);
+
+        return Style::new()
+            ->border(Border::normal())
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->render(implode("\n", $lines));
+    }
+
+    /**
+     * ISS-046's window contract, shared by both candidate popups (the "/"
+     * menu and the TUI-1 `@` menu). When the list fits under $maxRows this
+     * returns the lines untouched; otherwise the cap is centered on the
+     * highlighted row and faint "more" rows count what the cut left out on
+     * each side. A side touching an edge gives its reserved row back to the
+     * items (so up to $maxRows-1 entries are visible with one marker), and
+     * the extension always leaves at least one item beyond the surviving
+     * marker — a "more" row that would say "1 more" about nothing is not
+     * rendered at all.
+     *
+     * @param list<string> $lines pre-styled item rows, in list order
+     *
+     * @return list<string>
+     */
+    private static function menuWindow(array $lines, int $selected, int $maxRows, Theme $theme, int $budget): array
+    {
         $total = count($lines);
-        if ($total > $maxRows) {
-            $itemCap = max(1, $maxRows - 2);
-            $start = max(0, min($selected - intdiv($itemCap, 2), $total - $itemCap));
-            $end = $start + $itemCap;
-            if ($start === 0) {
-                $end = $end + 1 < $total ? $end + 1 : $total - 1;
-            } elseif ($end === $total) {
-                $start = $start - 1;
+        if ($total <= $maxRows) {
+            return $lines;
+        }
+
+        $itemCap = max(1, $maxRows - 2);
+        $start = max(0, min($selected - intdiv($itemCap, 2), $total - $itemCap));
+        $end = $start + $itemCap;
+        if ($start === 0) {
+            $end = $end + 1 < $total ? $end + 1 : $total - 1;
+        } elseif ($end === $total) {
+            $start = $start - 1;
+        }
+
+        $window = array_slice($lines, $start, $end - $start);
+        $moreStyle = Style::new()->foreground($theme->systemLabel)->faint();
+        // The marker pays the SAME width budget an item row pays (marker
+        // excluded, the box's longest row rules), or a 15-column
+        // "↓ 46 more" would widen the box past a 7-column terminal —
+        // FrameWidthClipTest sweeps exactly that.
+        if ($start > 0) {
+            array_unshift($window, $moreStyle->render('  ' . self::clipToWidth(Lang::t('tui.slash.more_above', ['count' => $start]), $budget)));
+        }
+        if ($end < $total) {
+            $window[] = $moreStyle->render('  ' . self::clipToWidth(Lang::t('tui.slash.more_below', ['count' => $total - $end]), $budget));
+        }
+
+        return $window;
+    }
+
+    /**
+     * TUI-1 (plan_comparison): the fuzzy `@` file popup. Same box, same
+     * width budget, same windowing as {@see renderSlashMenu()} — one popup
+     * is ever up, and they share the row budget in the frame — with the row
+     * being a file instead of a command: the basename (or the whole path,
+     * when only the path carried the match) with the matched codepoints
+     * highlighted, then the directory it lives in, faint, absorbing whatever
+     * columns the name leaves.
+     */
+    private static function renderMentionMenu(Chat $chat, Theme $theme, int $maxRows): string
+    {
+        if (!$chat->mentionPopupOpen()) {
+            return '';
+        }
+
+        $rows = $chat->mentionPopupRows();
+        $selected = $chat->mentionMenuIndex();
+
+        // The identical budget derivation and its reasoning live above, in
+        // renderSlashMenu(); the two popups sit in the same frame slot, so
+        // they must be the same width or the frame keystone sweeps would
+        // disagree with each other popup-to-popup.
+        $budget = max(1, min(
+            max(12, $chat->cols() - self::SHELL_CHROME_COLS - self::SLASH_MENU_CHROME_COLS - 2),
+            $chat->cols() - self::SLASH_MENU_CHROME_COLS - 2,
+        ));
+
+        $highlighter = new Highlighter();
+        $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
+
+        $lines = [];
+        foreach ($rows as $index => $row) {
+            $rowStyle = $index === $selected
+                ? Style::new()->foreground($theme->userLabel)->bold()
+                : Style::new()->foreground($theme->systemLabel)->faint();
+
+            // Every piece is hostile filename data (a repo may contain a
+            // file named with an ESC); sanitized before measured, exactly
+            // as the "/" popup requires (audit 15b-16).
+            $name = self::slashMenuText($row['subject']);
+            $plainName = self::clipToWidth($name, max(0, $budget - 1));
+            $match = new MatchResult('', $plainName, $row['score'], $row['indices']);
+
+            $reopen = self::sgrOpen($rowStyle);
+            $styled = $highlighter->highlight(
+                $match,
+                static fn(string $run): string => $matchStyle->render($run) . $reopen,
+            );
+
+            $dir = \dirname($row['path']);
+            $tail = '';
+            if ($dir !== '.' && $dir !== '') {
+                $room = $budget - Width::of($plainName) - 3;
+                if ($room > 1) {
+                    $tail = '  ' . Style::new()->foreground($theme->systemLabel)->faint()->render(self::clipToWidth(self::slashMenuText($dir) . '/', max(1, $room)));
+                }
             }
 
-            $window = array_slice($lines, $start, $end - $start);
-            $moreStyle = Style::new()->foreground($theme->systemLabel)->faint();
-            // The marker pays the SAME width budget an item row pays (marker
-            // excluded, the box's longest row rules), or a 15-column
-            // "↓ 46 more" would widen the box past a 7-column terminal —
-            // FrameWidthClipTest sweeps exactly that.
-            if ($start > 0) {
-                array_unshift($window, $moreStyle->render('  ' . self::clipToWidth(Lang::t('tui.slash.more_above', ['count' => $start]), $budget)));
-            }
-            if ($end < $total) {
-                $window[] = $moreStyle->render('  ' . self::clipToWidth(Lang::t('tui.slash.more_below', ['count' => $total - $end]), $budget));
-            }
-            $lines = $window;
+            $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $styled . $tail);
         }
+
+        $lines = self::menuWindow($lines, $selected, $maxRows, $theme, $budget);
 
         return Style::new()
             ->border(Border::normal())
