@@ -18,6 +18,10 @@ use SugarCraft\Code\Messages\UserMessage;
  * {@see \SugarCraft\Code\Backend\EngineBackend::toTypedMessages()} - a
  * provider that answers false never has an image handed to it, and the
  * text-only encoders still name any that arrive ({@see UserMessage::textOnly()}).
+ * Tool results are the exception to "once": the tool cannot know the wire,
+ * so SHL-3 T2 re-checks the capability at render time inside
+ * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::toolResultImage()},
+ * through {@see anthropicImage()} shared with this class's user-attachment leg.
  *
  * A turn with no sendable image keeps the exact pre-15b-15 shape on every wire
  * (a plain string `content` for the OpenAI family, one text block for the block
@@ -78,14 +82,7 @@ final class AttachmentEncoding
             $blocks[] = ['type' => 'text', 'text' => $text];
         }
         foreach ($message->images() as $image) {
-            $blocks[] = [
-                'type' => 'image',
-                'source' => [
-                    'type' => 'base64',
-                    'media_type' => $image->mimeType,
-                    'data' => base64_encode((string) $image->data),
-                ],
-            ];
+            $blocks[] = self::anthropicImage((string) $image->mimeType, (string) $image->data);
         }
         foreach ($message->documents() as $document) {
             $blocks[] = [
@@ -100,6 +97,26 @@ final class AttachmentEncoding
         }
 
         return $blocks;
+    }
+
+    /**
+     * The Anthropic family's base64 `image` block, in exactly one spelling:
+     * the user-attachment leg above and the vision-gated `tool_result` leg in
+     * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire} share it,
+     * so a pixel entering through either door presents identically (SHL-3 T2).
+     *
+     * @return array{type: string, source: array{type: string, media_type: string, data: string}}
+     */
+    public static function anthropicImage(string $mediaType, string $bytes): array
+    {
+        return [
+            'type' => 'image',
+            'source' => [
+                'type' => 'base64',
+                'media_type' => $mediaType,
+                'data' => base64_encode($bytes),
+            ],
+        ];
     }
 
     /**

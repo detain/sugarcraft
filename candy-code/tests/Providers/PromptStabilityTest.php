@@ -16,6 +16,7 @@ use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Messages\AssistantMessage;
+use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\SglangProvider;
@@ -301,6 +302,46 @@ final class PromptStabilityTest extends TestCase
         $prefix = substr(self::messagesBytes($this->rawBody(0)), 0, -1);
 
         $this->assertStringStartsWith($prefix, self::messagesBytes($this->rawBody(1)));
+    }
+
+    /**
+     * SHL-3 T2: an image-bearing tool result must not break this wire family's
+     * prefix discipline either. The OpenAI-family `role: "tool"` message is
+     * string-only, and the recorded decision is caption-alone, no workaround
+     * ({@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::toolResultImage()}
+     * names the rejected follow-up-user-turn technique and why). The rejection
+     * gets its teeth here rather than in a comment: an image sitting at the
+     * head of the growing history must STILL extend the byte prefix strictly,
+     * and must leak no smuggled `image_url` part anywhere into it.
+     */
+    public function testAnImageBearingToolResultExtendsThePrefixAsCaptionTextOnly(): void
+    {
+        $provider = $this->provider();
+        $png = "\x89PNG\r\n\x1a\n" . str_repeat('a', 64);
+
+        $turnOne = [
+            new UserMessage('look at this'),
+            new ToolResultMessage(
+                toolCallId: 'tu_1',
+                content: 'Binary image (image/png), 72 bytes — caption',
+                imageBytes: $png,
+                imageProtocol: 'sixel',
+            ),
+        ];
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $turnOne,
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [...$turnOne, new AssistantMessage('a pixel'), new UserMessage('thanks')],
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
+
+        $first = self::messagesBytes($this->rawBody(0));
+        $this->assertStringNotContainsString('image_url', $first, 'the carried image stays out of this wire family entirely — the caption is the whole answer');
+        $this->assertStringStartsWith(substr($first, 0, -1), self::messagesBytes($this->rawBody(1)));
     }
 
     public function testToolSchemaSerializationIsByteStableAcrossTurns(): void

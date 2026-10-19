@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers\Concerns;
 
+use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\SystemMessage;
@@ -71,6 +72,19 @@ trait AnthropicMessagesWire
      */
     public const METHOD_GENERATE_CONTENT = 'generateContent';
     public const METHOD_STREAM_GENERATE_CONTENT = 'streamGenerateContent';
+
+    /**
+     * SHL-3 T2: how many RAW bytes an image riding a tool_result may carry to
+     * enter the model's context as an `image` block. The lineage is the 256KiB
+     * contract of the text page - {@see FileMentions::TEXT_MAX_BYTES} - reused
+     * rather than re-invented, and pinned equal to it by test. The tool's own
+     * 5MiB cap ({@see FileMentions::IMAGE_MAX_BYTES}) governs the HUMAN display
+     * channel; base64 bloat inside a prompt prefix is a MODEL cost, so the
+     * model budget is the smaller number. An image between the two caps rides
+     * to the human as always and stays caption-only text on this wire — the
+     * caption states its own visibility, so nothing is silently lost.
+     */
+    public const TOOL_RESULT_IMAGE_MAX_BYTES = 256 * 1024;
 
     private const PUBLISHER_ANTHROPIC = 'anthropic';
     private const PUBLISHER_GOOGLE = 'google';
@@ -724,10 +738,19 @@ trait AnthropicMessagesWire
     private function anthropicBlocks(Message $msg): array
     {
         if ($msg instanceof ToolResultMessage) {
+            $content = $msg->content();
+            $image = $this->toolResultImage($msg);
+            if ($image !== null) {
+                $content = $content === '' ? [$image] : [
+                    ['type' => 'text', 'text' => $content],
+                    $image,
+                ];
+            }
+
             $block = [
                 'type' => 'tool_result',
                 'tool_use_id' => $msg->toolCallId(),
-                'content' => $msg->content(),
+                'content' => $content,
             ];
 
             if ($msg->isError()) {
@@ -773,6 +796,60 @@ trait AnthropicMessagesWire
         }
 
         return $blocks;
+    }
+    /**
+     * The using class answers for itself: images ride the wire only for a
+     * vision-capable model (SHL-3 T2). Both users already implement it from
+     * {@see \SugarCraft\Code\Providers\ProviderInterface}; the declaration
+     * here exists so this trait's call is defined, as the thinking-budget
+     * hook is for its own override point.
+     */
+    abstract public function supportsVision(): bool;
+    /**
+     * SHL-3 T2: the pixels a tool carried (T1: Read's in-cap image) enter the
+     * model's context as an `image` block inside this `tool_result` — under an
+     * explicit chain of decisions, each falling back to the caption text
+     * rather than to a silently different wire shape:
+     *
+     *   - not an error result (`is_error` rows are text by construction);
+     *   - the tool actually carried bytes ({@see ToolResultMessage::hasImage()});
+     *   - this provider sees — {@see supportsVision()}, decided HERE because
+     *     the tool cannot know the wire it will be rendered onto;
+     *   - within the model budget ({@see TOOL_RESULT_IMAGE_MAX_BYTES});
+     *   - and the header still sniffs — the bytes are re-sniffed rather than
+     *     trusting the tool's earlier classification, so forged or rotted
+     *     payload bytes stay caption text on the wire instead of becoming a
+     *     400 from the API.
+     *
+     * WHY NOT THE OPENAI-FAMILY WORKAROUND (DECISION, not an omission): that
+     * wire's `role: "tool"` message is string-only, so the known technique is
+     * to smuggle the image in a FOLLOW-UP user turn. Rejected: it inverts the
+     * role alternation the tool loop depends on, inserts a turn no call ever
+     * produced (which the sanitizer and replay ledgers must then be taught to
+     * forgive), and breaks the prompt-cache prefix at the insertion point on
+     * every image-bearing turn. On those wires the caption travels alone, and
+     * the caption names its own visibility; the bytes stay in the
+     * human-visible tool-result channel.
+     *
+     * @return ?array<string, mixed>
+     */
+    private function toolResultImage(ToolResultMessage $msg): ?array
+    {
+        if ($msg->isError() || !$msg->hasImage() || !$this->supportsVision()) {
+            return null;
+        }
+
+        $bytes = (string) $msg->imageBytes();
+        if ($bytes === '' || strlen($bytes) > self::TOOL_RESULT_IMAGE_MAX_BYTES) {
+            return null;
+        }
+
+        $mediaType = FileMentions::sniffImage($bytes);
+        if ($mediaType === null) {
+            return null;
+        }
+
+        return AttachmentEncoding::anthropicImage($mediaType, $bytes);
     }
     /**
      * Assistant tool calls have to be replayed back to Anthropic as `tool_use`

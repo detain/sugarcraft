@@ -10,9 +10,10 @@ use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\ReadLedger;
 
 /**
- * ISS-060 + SHL-3 T1: Read sniffs binaries on a bounded head read — a PNG
+ * ISS-060 + SHL-3 T1/T3: Read sniffs binaries on a bounded head read — a PNG
  * within the display cap rides the result as image bytes with a caption
- * (never mojibake lines), a NUL-headed file answers with the note — and the
+ * (never mojibake lines), a PDF answers with the document notice (magic
+ * before NUL), a NUL-headed file answers with the note — and the
  * line-counting pass is bounded too: past the scan budget the footer's count
  * is a floor (`of ≥N`), an offset inside the real file is not refused against
  * the floor, and the ledger records a null hash instead of a prefix
@@ -100,6 +101,14 @@ final class ReadBinaryScanTest extends TestCase
         self::assertTrue($result->hasImage());
         self::assertStringContainsString('1×1, ' . number_format(strlen($png)) . ' bytes', $result->content());
         self::assertStringContainsString('human-visible tool-result channel', $result->content());
+        // SHL-3 T2 flipped this contract: the caption may no longer claim the
+        // pixels NEVER enter context (a vision wire puts them in a tool_result
+        // image block) nor forbid describing them (a seeing model must be
+        // allowed to see). It states the CONDITION and lets the model check
+        // it — so the caption pins both halves of that wording.
+        self::assertStringContainsString('vision-capable wire', $result->content());
+        self::assertStringContainsString('If you can see the image', $result->content());
+        self::assertStringNotContainsString('never describe what an image shows', $result->content());
     }
 
     /**
@@ -143,6 +152,41 @@ final class ReadBinaryScanTest extends TestCase
         self::assertStringContainsString('Binary file', $result->content());
         self::assertStringContainsString('NUL byte', $result->content());
         self::assertStringNotContainsString('1: ', $result->content());
+    }
+
+    public function testAPdfAnswersWithTheDocumentNoticeEvenThoughItsStreamIsFullOfNuls(): void
+    {
+        // The arm ORDER is the pin: PDF streams carry NUL bytes by design, so
+        // if the NUL leg fired first this fixture would answer with the
+        // generic note and the model would never hear about the two roads its
+        // text CAN take (document block via @-mention, pdftotext via Bash).
+        $pdf = "%PDF-1.4\n" . str_repeat("\x00", 64) . "trailer\n%%EOF\n";
+        $path = $this->file('spec.pdf', $pdf);
+
+        $result = (new Read())->execute(['file_path' => $path]);
+
+        self::assertFalse($result->isError(), 'the notice is an answer, not a failure');
+        self::assertFalse($result->hasImage(), 'PDF bytes are a document, never an image — there is no in-tree rasterizer and none is faked');
+        self::assertStringContainsString('Binary PDF document', $result->content());
+        self::assertStringContainsString('document block', $result->content());
+        self::assertStringContainsString(number_format(FileMentions::DOCUMENT_MAX_BYTES) . '-byte document cap', $result->content());
+        self::assertStringContainsString('pdftotext ' . $path . ' -', $result->content(), 'the notice names the Bash escape hatch with the real path');
+        self::assertStringNotContainsString('NUL byte', $result->content(), 'the magic answer wins over the payload smell');
+        self::assertStringNotContainsString('1: ', $result->content());
+    }
+
+    public function testAPdfWithoutNulBytesStillAnswersWithTheDocumentNotice(): void
+    {
+        // The notice must key on the magic, not on the NUL heuristic that the
+        // leg below it uses: an all-ASCII PDF stub is still a PDF.
+        $pdf = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
+        $path = $this->file('clean.pdf', $pdf);
+
+        $result = (new Read())->execute(['file_path' => $path]);
+
+        self::assertFalse($result->hasImage());
+        self::assertStringContainsString('Binary PDF document', $result->content());
+        self::assertStringNotContainsString('NUL byte', $result->content());
     }
 
     public function testPlainTextStillComesBackAsNumberedLines(): void

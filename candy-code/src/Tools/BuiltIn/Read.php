@@ -274,9 +274,12 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             . '`offset` or `limit`, also gets an outline of its declarations and their line numbers '
             . 'after the first page, so you can read the part you need by offset. A single line longer '
             . 'than a page comes back cut short and marked. An image file (PNG, JPEG, GIF or WebP) no larger than '
-            . number_format(FileMentions::IMAGE_MAX_BYTES) . ' bytes comes back as a caption of the image and rides '
-            . 'to the human-visible tool-result channel beside your context — the pixels never enter it, so never '
-            . 'describe what an image shows. Prefer this over `cat`/`head` through Bash: '
+            . number_format(FileMentions::IMAGE_MAX_BYTES) . ' bytes comes back as a caption of the image; the pixels always '
+            . 'ride to the human-visible tool-result channel, and on a vision-capable wire within the '
+            . number_format(FileMentions::TEXT_MAX_BYTES) . '-byte model budget they also enter your context as an image block — '
+            . 'describe them when you see them, and when you do not, reason from the file\'s path and name instead. A PDF comes back '
+            . 'as a notice: its text reaches you by mentioning the file where the wire carries document blocks, or by '
+            . 'extracting it with Bash `pdftotext <path> -`. Prefer this over `cat`/`head` through Bash: '
             . implode('; ', $advantages) . '.';
     }
 
@@ -430,12 +433,15 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // as imageBytes — the pre-existing human-visible ToolResult image
         // channel paints it (Runtime threads the fields onto the message,
         // Renderer::renderToolImage runs the mosaic ladder) — while the
-        // caption tells the model what the file is without pretending the
-        // pixels entered its context. Routing image bytes to a VISION wire is
-        // a later tier; over-cap images still answer with the note alone,
-        // never with truncated bytes (a cut PNG is not a PNG — the same
-        // doctrine FileMentions::read() applies to @-mentions, and the same
-        // cap constant, reused rather than re-invented).
+        // caption tells the model what the file is and states its own
+        // visibility condition. SHL-3 T2 landed the vision wire: the Anthropic
+        // family admits these bytes into the model's context as a
+        // vision-gated, budget-gated `image` block inside the tool_result
+        // ({@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::TOOL_RESULT_IMAGE_MAX_BYTES});
+        // over-cap images still answer with the note alone, never with
+        // truncated bytes (a cut PNG is not a PNG — the same doctrine
+        // FileMentions::read() applies to @-mentions, and the same cap
+        // constant, reused rather than re-invented).
         if (is_file($path)) {
             $binary = self::binaryAnswer($path, $args['id'] ?? '');
             if ($binary !== null) {
@@ -677,10 +683,15 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     /**
      * ISS-060: the binary arm's answer — an image-bearing {@see ToolResult}
-     * for a magic-number image that fits the display cap (SHL-3 T1), a
-     * plain note for every other binary (a NUL anywhere in the sniff head,
-     * or an image past {@see FileMentions::IMAGE_MAX_BYTES}), or null when
-     * the file should be read as text.
+     * for a magic-number image that fits the display cap (SHL-3 T1), a notice
+     * for a PDF document naming the document-block and pdftotext roads to its
+     * text (SHL-3 T3), a plain note for every other binary (a NUL anywhere in
+     * the sniff head, or an image past {@see FileMentions::IMAGE_MAX_BYTES}),
+     * or null when the file should be read as text.
+     *
+     * The PDF leg sits BEFORE the NUL leg on purpose: PDF streams are full of
+     * NUL bytes, and a file whose magic answers is known better than its
+     * payload smells.
      *
      * NUL is the whole heuristic for the non-image arm, and the UTF-16
      * refusal is on purpose: nothing here claims to decode it, and the
@@ -735,6 +746,23 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
                 );
             }
 
+            if (FileMentions::sniffDocument($head) !== null) {
+                // SHL-3 T3: a PDF is a DOCUMENT, not an image — pixels would
+                // need an in-tree rasterizer, and there is none (DECLINED), so
+                // Read never carries PDF bytes as imageBytes. The notice names
+                // the two roads the text CAN take: the AttachmentType::Document
+                // plumbing (a @-mention renders a `document` block on the
+                // wires that accept it — CTX-2), or pdftotext through Bash.
+                return new ToolResult(
+                    toolCallId: $callId,
+                    content: "Binary PDF document, $shown — not shown as text (a PDF has no lines to number). "
+                        . 'Mention the file (@' . $path . ') where the wire carries attachments to send it as a document block '
+                        . 'up to the ' . number_format(FileMentions::DOCUMENT_MAX_BYTES) . '-byte document cap, or extract its text '
+                        . 'with Bash `pdftotext ' . $path . ' -`.',
+                    isError: false,
+                );
+            }
+
             if (str_contains($head, "\0")) {
                 return new ToolResult(
                     toolCallId: $callId,
@@ -753,10 +781,16 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     /**
      * The model-facing caption of a carried image: what kind, how big, where
-     * it is, and the boundary the model must not cross — the bytes ride to
-     * the human-visible ToolResult channel, never into its context. The
-     * dimensions come from the carried bytes themselves (getimagesize-
-     * fromstring parses headers, never decodes pixels — the same cheap probe
+     * it is, and the honest visibility boundary — the bytes always ride the
+     * human-visible ToolResult channel, and whether the MODEL also sees them
+     * is decided per wire (SHL-3 T2: the Anthropic family admits them as a
+     * vision-gated, budget-gated `image` block inside the tool_result; other
+     * wires carry the caption alone). The tool cannot know which wire renders
+     * it, so the caption states the condition rather than either polarity as
+     * fact — an instruction to never describe would lie to a vision model
+     * looking straight at the pixels. The dimensions come from the carried
+     * bytes themselves (getimagesizefromstring parses headers, never decodes
+     * pixels — the same cheap probe
      * {@see \SugarCraft\Code\Renderer::collapsedImageNotice()} uses) and are
      * simply absent when a forged header cannot answer; the caption states
      * facts it can verify, never a placeholder.
@@ -767,9 +801,10 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         $shape = $probe !== false ? $probe[0] . '×' . $probe[1] . ', ' : '';
 
         return "Binary image ($image), {$shape}" . number_format(strlen($bytes))
-            . " bytes at $path — the image itself rides this result to the human-visible tool-result channel. "
-            . 'Its pixels are not in your context: do not describe what the image depicts; '
-            . 'reason from its path and name, or ask the user.';
+            . " bytes at $path — the image itself rides this result to the human-visible tool-result channel, "
+            . 'and on a vision-capable wire within the model budget its pixels enter your context too. '
+            . 'If you can see the image, describe what it shows; if you cannot, reason from its path and name, '
+            . 'or ask the user.';
     }
 
     /**
