@@ -39,6 +39,15 @@
 .php-cs-fixer.cache
 
 .candy-code-build/
+# The release-phar workflow builds into a repo-root dist/ (its explicit
+# --out=dist/candy-code.phar; the script's own default lands under candy-code/,
+# which that lib's .gitignore already covers). The ROOT-anchored form is
+# deliberate: an unanchored dist/ would also swallow candy-code-web/dist/,
+# which is committed on purpose. Untracked here, this dirt would falsify
+# build-phar's fail-closed dirty-tree preflight (git status --porcelain from
+# the candy-code subdir reports the root path as `?? dist/`) — a second local
+# build refused by the first (rev-w2j3 N-M3, owner queue 2026-10-19).
+/dist/
 /.candy-code-prompt/
 codacy-coverage-reporter
 # E737 housekeeping: the operator's repo-root MCP config is untracked local state that must never
