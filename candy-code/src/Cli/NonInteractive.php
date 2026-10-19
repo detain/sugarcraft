@@ -250,6 +250,12 @@ final class NonInteractive
         // operator's money.
         try {
             $spendCapUsd = Bootstrap::maxCostUsd();
+            // The steps ceiling is judged here too and its value DISCARDED:
+            // the resolver reads the same static later at backend build, but
+            // an unusable `--max-turns` must refuse with this exit-2 usage
+            // shape, not surface from inside backendFor()'s catch as a
+            // mislabeled provider failure.
+            Bootstrap::maxTurns();
         } catch (PermissionConfigException $e) {
             return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
         }

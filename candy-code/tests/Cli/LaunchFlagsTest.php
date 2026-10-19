@@ -59,6 +59,7 @@ final class LaunchFlagsTest extends TestCase
         Bootstrap::useModel(null);
         Bootstrap::usePermissionMode(null);
         Bootstrap::useMaxCost(null);
+        Bootstrap::useMaxTurns(null);
     }
 
     protected function tearDown(): void
@@ -68,6 +69,7 @@ final class LaunchFlagsTest extends TestCase
         Bootstrap::useModel(null);
         Bootstrap::usePermissionMode(null);
         Bootstrap::useMaxCost(null);
+        Bootstrap::useMaxTurns(null);
 
         if ($this->originalHome !== '') {
             putenv('HOME=' . $this->originalHome);
@@ -179,6 +181,39 @@ final class LaunchFlagsTest extends TestCase
     }
 
     /**
+     * `--max-turns` carries its value RAW too (AUT-5): the parser judges only
+     * the SHAPE failures that make "which value was asked for" unanswerable
+     * (missing, flag-eaten, empty). Whether `five` or `0` or an
+     * unrepresentable figure is a step ceiling is judged in ONE place —
+     * Bootstrap::maxTurns() — which refuses naming the flag.
+     *
+     * @return array<string, array{list<string>, ?string}>
+     */
+    public static function maxTurnsSpellings(): array
+    {
+        return [
+            'turns spaced'      => [['candy-code', '--max-turns', '8'], '8'],
+            'turns attached'    => [['candy-code', '--max-turns=12'], '12'],
+            'leading zero raw'  => [['candy-code', '--max-turns=007'], '007'],
+            'negative raw'      => [['candy-code', '--max-turns=-5'], '-5'],
+            'prose raw'         => [['candy-code', '--max-turns', 'five'], 'five'],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     * @dataProvider maxTurnsSpellings
+     */
+    public function testTheMaxTurnsFlagParsesRawAndIsNotAnUnknownFlag(array $argv, ?string $turns): void
+    {
+        $args = ArgvParser::parse($argv);
+
+        $this->assertSame($turns, $args->maxTurns);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertNull($args->usageError);
+    }
+
+    /**
      * A bare flag that swallows the NEXT OPTION is a typo, not a value. Left
      * lenient, `--permission-mode -p "..."` would drop the one-shot prompt and
      * silently start the TUI under the config's mode.
@@ -225,6 +260,14 @@ final class LaunchFlagsTest extends TestCase
             'cost ate a flag'       => [['candy-code', '--max-cost', '-p', 'hi'], '--max-cost expects a spend ceiling, but the next argument is the option -p'],
             'cost, empty attached'  => [['candy-code', '--max-cost='], '--max-cost expects a spend ceiling, but the value is empty'],
             'cost, empty spaced'    => [['candy-code', '--max-cost', ''], '--max-cost expects a spend ceiling, but the value is empty'],
+
+            // --max-turns joins the strict family (AUT-5): a step ceiling
+            // whose value went missing must refuse the launch, never silently
+            // defer to the maxToolSteps setting the operator just overrode.
+            'turns, list ended'      => [['candy-code', '--max-turns'], '--max-turns expects a step ceiling, but the argument list ended'],
+            'turns ate a flag'       => [['candy-code', '--max-turns', '-p', 'hi'], '--max-turns expects a step ceiling, but the next argument is the option -p'],
+            'turns, empty attached'  => [['candy-code', '--max-turns='], '--max-turns expects a step ceiling, but the value is empty'],
+            'turns, empty spaced'    => [['candy-code', '--max-turns', ''], '--max-turns expects a step ceiling, but the value is empty'],
         ];
     }
 
@@ -241,6 +284,7 @@ final class LaunchFlagsTest extends TestCase
         $this->assertNull($args->model);
         $this->assertNull($args->permissionMode);
         $this->assertNull($args->maxCost);
+        $this->assertNull($args->maxTurns);
     }
 
     /**
@@ -258,6 +302,7 @@ final class LaunchFlagsTest extends TestCase
             ['candy-code', '--permission-mode', ''],
             ['candy-code', '--model', ''],
             ['candy-code', '--max-cost', ''],
+            ['candy-code', '--max-turns', ''],
         ] as $argv) {
             $args = ArgvParser::parse($argv);
 
@@ -542,7 +587,9 @@ final class LaunchFlagsTest extends TestCase
         $this->assertMatchesRegularExpression('/^ +--model(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--permission-mode(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--max-cost(?:[ =,]|$)/m', $screen);
+        $this->assertMatchesRegularExpression('/^ +--max-turns(?:[ =,]|$)/m', $screen);
         $this->assertStringContainsString('it beats $CANDY_CODE_MAX_COST', $screen);
+        $this->assertStringContainsString('it beats the maxToolSteps setting key', $screen);
         $this->assertStringContainsString('not a provider', $screen);
         foreach (PermissionMode::cases() as $mode) {
             $this->assertStringContainsString($mode->value, $screen, "help omits {$mode->value}");
@@ -562,9 +609,11 @@ final class LaunchFlagsTest extends TestCase
 
             $needleModel = $shell === 'fish' ? '-l model' : '--model';
             $needleMode = $shell === 'fish' ? '-l permission-mode' : '--permission-mode';
+            $needleTurns = $shell === 'fish' ? '-l max-turns' : '--max-turns';
 
             $this->assertStringContainsString($needleModel, $script, "{$shell} omits --model");
             $this->assertStringContainsString($needleMode, $script, "{$shell} omits --permission-mode");
+            $this->assertStringContainsString($needleTurns, $script, "{$shell} omits --max-turns");
 
             foreach (PermissionMode::cases() as $mode) {
                 $this->assertStringContainsString(

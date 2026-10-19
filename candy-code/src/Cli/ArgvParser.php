@@ -134,6 +134,7 @@ final class ArgvParser
         $model = null;
         $permissionMode = null;
         $maxCost = null;
+        $maxTurns = null;
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
@@ -573,6 +574,58 @@ final class ArgvParser
                 continue;
             }
 
+            // --max-turns=<value>  (no space)
+            //
+            // The step-ceiling twin of --max-cost directly above, and the
+            // same two-layer split: the parser judges only the SHAPE of
+            // presence (missing/empty values are indistinguishable from an
+            // absent flag once parsed), while what counts as a usable
+            // ceiling is judged by Bootstrap::maxTurns() through the same
+            // positive-whole-number check the maxToolSteps setting gets from
+            // Bootstrap::resolvedMaxToolSteps() — so flag and config fail
+            // with one message shape and one exit path. See
+            // Bootstrap::useMaxTurns().
+            if (\str_starts_with($arg, '--max-turns=')) {
+                $value = \substr($arg, 12); // length of "--max-turns="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyMaxTurnsError();
+                        $usageHint = self::maxTurnsValueHint();
+                    }
+                    ++$i;
+                    continue;
+                }
+                $maxTurns = $value;
+                ++$i;
+                continue;
+            }
+
+            // --max-turns <value>
+            if ($arg === '--max-turns') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'candy-code: ' . Lang::t('cli.argv.max_turns.missing')
+                            : 'candy-code: ' . Lang::t('cli.argv.max_turns.flag', ['option' => $next]);
+                        $usageHint = self::maxTurnsValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyMaxTurnsError();
+                        $usageHint = self::maxTurnsValueHint();
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $maxTurns = $next;
+                $i += 2;
+                continue;
+            }
+
             // -c / --continue: reopen the most recently used session, with
             // its transcript, instead of starting a new one.
             if ($arg === '--continue' || $arg === '-c') {
@@ -745,7 +798,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns);
     }
 
     /**
@@ -1056,6 +1109,26 @@ final class ArgvParser
     private static function maxCostValueHint(): string
     {
         return Lang::t('cli.argv.hint.max_cost');
+    }
+
+    /**
+     * The usage error for `--max-turns=` and `--max-turns ""` — the empty
+     * value rule {@see emptyMaxCostError()} documents, on the steps axis.
+     */
+    private static function emptyMaxTurnsError(): string
+    {
+        return 'candy-code: ' . Lang::t('cli.argv.max_turns.empty');
+    }
+
+    /**
+     * The remedy line under the `--max-turns` usage errors: plain prose, the
+     * same reason {@see maxCostValueHint()} gives — the grammar is "a
+     * positive whole number", not a closed set anything can be re-read
+     * against; the number check itself lives in Bootstrap::maxTurns().
+     */
+    private static function maxTurnsValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.max_turns');
     }
 
     /**

@@ -4054,6 +4054,76 @@ final class Bootstrap
     private const MAX_TOOL_STEPS_CONFIG_KEY = 'maxToolSteps';
 
     /**
+     * The RAW string `--max-turns` named, or null. Declared and read inside
+     * this resolver region — the flag exists only to speak into
+     * {@see resolvedMaxToolSteps()}. {@see useMaxTurns()} for why it is
+     * stored RAW; {@see maxTurns()} for the judgment.
+     */
+    private static ?string $maxTurnsOverride = null;
+
+    /**
+     * Register `--max-turns <n>` for this process. See {@see useMaxCost()}
+     * for why this is a static storing the RAW value: the number is judged
+     * by {@see maxTurns()}, which throws {@see PermissionConfigException}
+     * where the dispatch can catch it — one-shot runs in
+     * {@see NonInteractive::run()}'s own pre-flight try, the TUI through the
+     * backend construction `bin/candy-code` wraps — so a ceiling that is
+     * present and unusable refuses the launch with exit 2 rather than
+     * silently running uncapped, exactly as a bad `--max-cost` does.
+     */
+    public static function useMaxTurns(?string $maxTurns): void
+    {
+        self::$maxTurnsOverride = ($maxTurns === null || $maxTurns === '') ? null : $maxTurns;
+    }
+
+    /**
+     * The `--max-turns` ceiling for this launch as a positive whole number,
+     * or null when the flag was not given.
+     *
+     * THE FLAG REFUSES WHAT THE SETTING ONLY LOSES: a `maxToolSteps` config
+     * value this cannot read resolves to null and is reported by
+     * {@see reportNonsenseLimits()} — a hand-edited file's typo costs that
+     * one knob. A typed flag is an explicit act (the argument
+     * {@see useMaxCost()} documents for the money ceiling): present and
+     * unreadable refuses the launch, in the same message shape family as
+     * `cli.refuse.max_cost_flag`. Accepted spelling: digits only, one or
+     * greater, no sign, no separators, no leading `$`, nothing within range
+     * of the int overflow that the float path guards below.
+     *
+     * @throws PermissionConfigException when the flag is present and unusable
+     */
+    public static function maxTurns(): ?int
+    {
+        $raw = self::$maxTurnsOverride;
+        if ($raw === null) {
+            return null;
+        }
+
+        $trimmed = trim($raw);
+        if (preg_match('/^\d+$/', $trimmed) === 1) {
+            // Digits longer than PHP_INT_MAX's spelling overflow (int) — a
+            // ceiling too large to represent is the "never triggers" class
+            // maxCostUsd() refuses 1e309 for. Refused, not clamped: the
+            // resolver's own doctrine against guessed bounds. The comparison
+            // is on zero-stripped decimal strings, where lexical order IS
+            // numeric order for equal lengths.
+            $max = (string) PHP_INT_MAX;
+            $digits = ltrim($trimmed, '0') === '' ? '0' : ltrim($trimmed, '0');
+            if (strlen($digits) < strlen($max) || (strlen($digits) === strlen($max) && $digits <= $max)) {
+                $value = (int) $digits;
+                if ($value >= 1) {
+                    return $value;
+                }
+            }
+        }
+
+        throw new PermissionConfigException(
+            Lang::t('cli.refuse.max_turns_flag', ['value' => $trimmed]),
+        );
+    }
+
+
+    /**
      * The `settings.json` key E707 made configurable, as
      * `EngineBackend::MAX_OUTPUT_TOKENS_CONFIG_KEY` spells it — named here for
      * {@see reportNonsenseLimits()}, the launch's only reader of it.
@@ -4061,8 +4131,10 @@ final class Bootstrap
     private const MAX_OUTPUT_TOKENS_CONFIG_KEY = 'maxOutputTokens';
 
     /**
-     * The operator's per-turn provider-call ceiling, or null when no usable
-     * one was configured - F2 (spawn-latency plan).
+     * The operator's per-turn provider-call ceiling — the `--max-turns`
+     * flag ({@see maxTurns()}) if given, else the settings key below — or
+     * null when no usable one was set - F2 (spawn-latency plan), flag half
+     * added by COMPARISON.md §6.5 AUT-5.
      *
      * NULL IS THE DEFAULT'S VOICE: with no resolved value the engine keeps
      * its shipped `maxSteps` (1000 since WAVE_PLAN_2 §5; it was 8 when this
@@ -4070,9 +4142,12 @@ final class Bootstrap
      * {@see \SugarCraft\Code\Backend\EngineBackend::maxOutputTokens()}
      * records for the token ceiling - nonsense answers null rather than
      * clamping, and no env hatch is worth a second authority over a money
-     * axis. Accepted: any positive WHOLE number, whether a JSON int, an
-     * integral float (`8.0`) or a numeric string (`"16"`); no upper bound -
-     * the spend cap and the operator own that question.
+     * axis. (The flag is held to a HIGHER standard than the key: present
+     * and unusable, it refuses the launch — see {@see maxTurns()} — while
+     * a bad hand-edited key still just resolves to null and is reported.)
+     * Accepted for the key: any positive WHOLE number, whether a JSON int,
+     * an integral float (`8.0`) or a numeric string (`"16"`); no upper
+     * bound - the spend cap and the operator own that question.
      *
      * A FRACTION IS NONSENSE, NOT A ROUNDING PROBLEM (audit 15d-16): a step
      * is a provider call, there is no half of one, and docs/SETTINGS.md has
@@ -4104,6 +4179,17 @@ final class Bootstrap
      */
     public static function resolvedMaxToolSteps(?array $config = null): ?int
     {
+        // `--max-turns` outranks the settings key when it is given, and is
+        // already judged — maxTurns() returns a positive whole number or
+        // refuses, so a present flag never reaches this method's nonsense-
+        // tolerant path. The precedence this ranks is flag-over-config; it
+        // does not touch the explicit per-run override TaskTool raises on
+        // the constructed instance afterwards, which still wins.
+        $flag = self::maxTurns();
+        if ($flag !== null) {
+            return $flag;
+        }
+
         $raw = ($config ?? self::readUserConfig())[self::MAX_TOOL_STEPS_CONFIG_KEY] ?? null;
 
         if (is_string($raw)) {

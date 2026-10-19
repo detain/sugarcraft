@@ -55,6 +55,7 @@ final class BootstrapLayeredSettingsTest extends TestCase
         mkdir($this->projectRoot . '/' . LayeredSettings::dir(), 0o700, true);
 
         $this->useHomeSandbox($this->home);
+        Bootstrap::useMaxTurns(null);
     }
 
     protected function tearDown(): void
@@ -63,6 +64,10 @@ final class BootstrapLayeredSettingsTest extends TestCase
         // the suite at temp paths this tearDown is about to delete.
         Bootstrap::useProjectRootForSettings(null);
         Bootstrap::useConfigPath(null);
+        // AUT-5: the flag override is a process-wide static like these two.
+        // A leaked value here would short-circuit the resolver before every
+        // later maxToolSteps test in the file reads its config layer.
+        Bootstrap::useMaxTurns(null);
         $this->restoreHomeSandbox();
 
         if (is_string($this->originalPermissionMode)) {
@@ -806,6 +811,99 @@ final class BootstrapLayeredSettingsTest extends TestCase
             substr_count($src, 'self::withResolvedMaxToolSteps($engine)'),
             'F2 expects exactly the backend() and backendFor() wraps; a third call site needs its own argument, and a lost one is a silent settings regression',
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // AUT-5: the --max-turns flag over this resolver — flag-over-config, and
+    // STRICTER than the config key by design (the config layer forgives
+    // nonsense as "operator said nothing"; a nonsense FLAG refuses the launch
+    // because the operator demonstrably said something).
+    // -------------------------------------------------------------------------
+
+    public function testTheMaxTurnsFlagBeatsEveryConfigLayer(): void
+    {
+        $this->writeUserSettings(['maxToolSteps' => 5]);
+
+        Bootstrap::useMaxTurns('3');
+
+        self::assertSame(3, $this->resolveStepsFrom(['maxToolSteps' => 5]), 'the flag outranks a passed layer');
+        self::assertSame(3, $this->resolveStepsFrom(null), 'the flag outranks the ambient merged read too');
+    }
+
+    public function testTheFlagLandsOnTheEngineThroughTheSameChokeAsTheKey(): void
+    {
+        $this->writeUserSettings(['maxToolSteps' => 5]);
+        Bootstrap::useMaxTurns('3');
+
+        $engine = new \SugarCraft\Code\Backend\EngineBackend(new \SugarCraft\Code\Providers\EchoProvider(), 'aut5');
+        $capped = (new \ReflectionMethod(Bootstrap::class, 'withResolvedMaxToolSteps'))->invoke(null, $engine);
+
+        self::assertNotSame($engine, $capped, 'the wrap must not mutate — EngineBackend is immutable by contract');
+        self::assertSame(3, self::readMaxSteps($capped), 'flag and key share one application point, so no factory can honour one and miss the other');
+    }
+
+    public function testAnAbsentFlagLeavesTheConfigResolverByteIdentical(): void
+    {
+        $this->writeUserSettings(['maxToolSteps' => 5]);
+        Bootstrap::useMaxTurns(null);
+
+        self::assertSame(5, $this->resolveStepsFrom(null), 'unset flag is not zero — the key speaks exactly as before AUT-5');
+
+        Bootstrap::useMaxTurns('');
+        self::assertSame(5, $this->resolveStepsFrom(null), 'the setter reads an empty override as unset, mirroring useMaxCost — an empty value never reaches it from the parser, which refuses it as a usage error');
+
+        $plain = new \SugarCraft\Code\Backend\EngineBackend(new \SugarCraft\Code\Providers\EchoProvider(), 'aut5-null');
+        $wrapped = (new \ReflectionMethod(Bootstrap::class, 'withResolvedMaxToolSteps'))->invoke(null, $plain);
+        self::assertSame(5, self::readMaxSteps($wrapped), 'a null flag falls through to the key — the raise lands exactly as it did pre-AUT-5');
+    }
+
+    /**
+     * Shapes the config layer would forgive (nonsense → null → "default
+     * speaks") are REFUSED at the flag, naming it — and the refusal fires
+     * through the resolver, i.e. at the launch pre-flight, before any request.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function unusableFlagValues(): iterable
+    {
+        yield 'zero' => ['0'];
+        yield 'a word' => ['x'];
+        yield 'a fraction' => ['1.5'];
+        yield 'a negative' => ['-5'];
+        yield 'one past the int range' => ['99999999999999999999999'];
+        yield 'PHP_INT_MAX plus one' => ['9223372036854775808'];
+    }
+
+    /**
+     * @dataProvider unusableFlagValues
+     */
+    public function testAnUnusableFlagValueRefusesTheLaunchNamingTheFlag(string $raw): void
+    {
+        Bootstrap::useMaxTurns($raw);
+
+        $this->expectException(\SugarCraft\Code\Cli\PermissionConfigException::class);
+        $this->expectExceptionMessage('--max-turns');
+
+        $this->resolveStepsFrom(null);
+    }
+
+    /** @return iterable<string, array{string, int}> */
+    public static function usableFlagValues(): iterable
+    {
+        yield 'padded spaces' => [' 8 ', 8];
+        yield 'leading zeros' => ['007', 7];
+        yield 'one, the smallest honoured ceiling' => ['1', 1];
+        yield 'PHP_INT_MAX spelled exactly' => [(string) PHP_INT_MAX, PHP_INT_MAX];
+    }
+
+    /**
+     * @dataProvider usableFlagValues
+     */
+    public function testUsableFlagShapesResolveToTheirInteger(string $raw, int $expected): void
+    {
+        Bootstrap::useMaxTurns($raw);
+
+        self::assertSame($expected, $this->resolveStepsFrom(null));
     }
 
     /** @param ?array<string, mixed> $config */

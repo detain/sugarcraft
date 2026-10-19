@@ -1613,6 +1613,7 @@ candy-code --config ~/policies/crush.json       # read settings/permissions from
 candy-code --model gpt-5 -p "audit this"        # pick the model (not the provider)
 candy-code --permission-mode plan -p "audit this" # pick the permission mode for this run
 candy-code --max-cost 2.50 -p "audit this"        # cap this launch's spend (USD)
+candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop steps
 candy-code --help                               # prints and exits (never opens the TUI)
 candy-code --version                            # prints the installed version and exits
 candy-code -- --not-a-flag                      # `--` ends options; everything after is positional
@@ -1664,6 +1665,17 @@ ranked above both (see *Budget*). A value that is not a positive number refuses
 the launch with exit 2, in the same message shape the variable and the setting
 already produce; an empty value — `--max-cost=` or `--max-cost ""` — is a usage
 error, also exit 2, following `--permission-mode`'s strictness.
+
+`--max-turns <n>` (also `--max-turns=<n>`) caps this launch's agentic tool
+loop at `n` provider-calling steps — the same ceiling the `maxToolSteps`
+settings key sets, ranked above it (this axis has no environment variable).
+It belongs to the strict flag family: an empty value is a usage error, and a
+value that is not a positive whole number refuses the launch with exit 2
+rather than silently deferring to the setting — a hand-edited `maxToolSteps`
+typo only costs that knob and is reported at launch, but a typed flag is an
+explicit act and is honored or the run does not start. The flag applies to
+the TUI and to `-p`/`run` alike; a sub-agent run whose ceiling TaskTool
+raises for its own turn keeps that raise.
 
 `--config <file>` (also `--config=<file>`) replaces the per-user
 `~/.candy-code/config.json` for this run: the theme, the persisted provider,

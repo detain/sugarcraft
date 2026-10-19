@@ -69,6 +69,7 @@ return [
     'cli.argv.hint.flag_alone' => 'Write it as {flag} alone.',
     'cli.argv.hint.flag_value' => 'Write it as {flag}=<value>; it may not be omitted.',
     'cli.argv.hint.max_cost' => 'Expected a spend ceiling in US dollars, for example 5 or $2.50.',
+    'cli.argv.hint.max_turns' => 'Expected a positive whole number of tool-loop steps, for example 8.',
     'cli.argv.hint.model_value' => 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.',
     'cli.argv.hint.output_format_value' => 'Write it as --output-format=<value> if the format begins with "-"; it may not be omitted.',
     'cli.argv.hint.output_formats' => 'Valid formats are: {formats} (lowercase).',
@@ -81,6 +82,9 @@ return [
     'cli.argv.max_cost.empty' => '--max-cost expects a spend ceiling, but the value is empty',
     'cli.argv.max_cost.flag' => '--max-cost expects a spend ceiling, but the next argument is the option {option}',
     'cli.argv.max_cost.missing' => '--max-cost expects a spend ceiling, but the argument list ended',
+    'cli.argv.max_turns.empty' => '--max-turns expects a step ceiling, but the value is empty',
+    'cli.argv.max_turns.flag' => '--max-turns expects a step ceiling, but the next argument is the option {option}',
+    'cli.argv.max_turns.missing' => '--max-turns expects a step ceiling, but the argument list ended',
     'cli.argv.mode_flag.empty' => '--permission-mode expects a mode, but the value is empty',
     'cli.argv.mode_flag.flag' => '--permission-mode expects a mode, but the next argument is the option {option}',
     'cli.argv.mode_flag.missing' => '--permission-mode expects a mode, but the argument list ended',
@@ -127,6 +131,7 @@ return [
     'cli.completion.option.continue' => 'Continue the most recent session',
     'cli.completion.option.help' => 'Show the help screen',
     'cli.completion.option.max_cost' => 'Spend ceiling for the launch, in US dollars',
+    'cli.completion.option.max_turns' => 'Tool-loop step ceiling for the launch',
     'cli.completion.option.mode' => 'Permission mode to run under',
     'cli.completion.option.model' => 'Conversation model name (not a provider)',
     'cli.completion.option.output_format' => 'Output format: text or json',
@@ -375,6 +380,14 @@ Options:
                          leading $ accepted ($2.50); zero and negative are
                          refused rather than read as "no cap". /budget still
                          raises or clears the cap for the running session.
+      --max-turns <n>    Cap this launch at <n> tool-loop steps: the turn
+                         that uses them all stops where it is and says so.
+                         Also accepts --max-turns=<n>. Highest precedence:
+                         it beats the maxToolSteps setting key (this axis
+                         has no environment variable). A positive whole
+                         number; zero is refused rather than read as "no
+                         cap", and an unusable value refuses the launch
+                         rather than silently deferring to the setting.
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
                          every launch opens a new session; Up in an empty
@@ -728,6 +741,7 @@ TXT,
     'cli.refuse.max_cost_env' => '$CANDY_CODE_MAX_COST is \'{value}\', which is not a spend ceiling. Expected a positive number of US dollars (fractional allowed, a leading $ accepted), for example 5 or $2.50. Zero and negative are refused rather than read as "no cap" because they are the opposite request; a figure too large to represent (1e309, i.e. infinity) is refused because it would install a cap that never triggers. Unset the variable for no cap. Refusing to start rather than run uncapped with a ceiling you asked for.',
     'cli.refuse.max_cost_flag' => '--max-cost is \'{value}\', which is not a spend ceiling. Expected a positive number of US dollars (fractional allowed, a leading $ accepted), for example 5 or $2.50. Zero and negative are refused rather than read as "no cap" because they are the opposite request; a figure too large to represent (1e309, i.e. infinity) is refused because it would install a cap that never triggers. Drop the flag for no cap. Refusing to start rather than run uncapped with a ceiling you asked for.',
     'cli.refuse.max_cost_setting' => 'maxCostUsd in your settings is {value}, which is not a spend ceiling. Expected a positive number of US dollars, for example 5 or 2.5. Remove the key for no cap. Refusing to start rather than run uncapped with a ceiling you asked for.',
+    'cli.refuse.max_turns_flag' => '--max-turns is \'{value}\', which is not a step ceiling. Expected a positive whole number of tool-loop steps, for example 8. Zero is refused rather than read as "no cap" because it is the opposite request; a figure too large to represent is refused because it would install a cap that never triggers. Drop the flag to defer to the maxToolSteps setting. Refusing to start rather than run uncapped with a ceiling you asked for.',
     'cli.refuse.no_home' => 'this process cannot determine which home directory is yours ($HOME is unset, $USERPROFILE is unset, and there is no passwd entry for its uid), so the permission policy and hook chain in ~/.candy-code cannot be located. Refusing to start rather than read either of them out of a world-writable fallback directory — export HOME to the account this session belongs to.',
     'cli.refuse.no_project_root' => 'cannot determine a project root — the process working directory is unavailable (deleted or unreadable). Pass --root <dir>.',
     'cli.refuse.not_searchable' => '{dir} is not searchable by this process',

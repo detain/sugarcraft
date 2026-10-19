@@ -490,7 +490,9 @@ final class StderrEmitterCensusTest extends TestCase
         // GAP wave took it to twenty-eight: --max-cost's three refusals
         // (missing value, flag-shaped value, empty value), the same
         // pre-launch exit-2 usage decision.
-        'src/Cli/ArgvParser.php' => 28,
+        // AUT-5 took it to thirty-one: --max-turns' same three refusal shapes,
+        // the same pre-launch exit-2 usage decision.
+        'src/Cli/ArgvParser.php' => 31,
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own

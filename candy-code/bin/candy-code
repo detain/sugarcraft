@@ -160,7 +160,7 @@ ini_set('display_errors', 'stderr');
     // `--root` joined it in audit CLI-2; `--output-format` joined it in
     // ISS-084, which is why it is handled by its own branch below rather than
     // listed here — its consumed value is the one thing this scan reads.
-    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--resume'];
+    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--max-turns', '--resume'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {
@@ -404,6 +404,13 @@ Bootstrap::usePermissionMode($args->permissionMode);
 // launching uncapped. Both the -p path (which never reaches chat()) and the
 // TUI path read the same one static.
 Bootstrap::useMaxCost($args->maxCost);
+// --max-turns joins the raw-register family: Bootstrap::maxTurns() judges it
+// through the positive-whole-number check the maxToolSteps setting gets from
+// resolvedMaxToolSteps(), so a ceiling that is present and unusable throws
+// PermissionConfigException inside the dispatch (one-shot runs catch it in
+// NonInteractive::run(); the TUI path reads it at backend/chat construction)
+// and both the -p path and the TUI read the same one static.
+Bootstrap::useMaxTurns($args->maxTurns);
 Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
 
 // The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
