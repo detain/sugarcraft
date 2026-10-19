@@ -9521,9 +9521,11 @@ final class Bootstrap
             return self::$lspClients[$pid][$root];
         }
 
+        $config = self::readUserConfig();
         $launcher = \SugarCraft\Code\LSP\LspLauncher::fromConfig(
-            self::readUserConfig()[\SugarCraft\Code\LSP\LspLauncher::SETTINGS_KEY] ?? null,
+            $config[\SugarCraft\Code\LSP\LspLauncher::SETTINGS_KEY] ?? null,
             $root,
+            ($config[\SugarCraft\Code\LSP\LspLauncher::AUTO_DETECT_SETTINGS_KEY] ?? false) === true,
         );
         $client = null;
         if ($launcher->hasServers()) {

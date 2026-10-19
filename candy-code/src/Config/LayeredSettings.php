@@ -266,6 +266,13 @@ final class LayeredSettings
      *                 WRITES the file (which is why `FormatRunner` hashes
      *                 before and after and puts the bytes back when a
      *                 formatter corrupts them).
+     *  - `lspAutoDetect` {@see \SugarCraft\Code\LSP\LspLauncher::fromConfig()},
+     *                 reached from `Bootstrap::lspClient()` (EDT-2): lets the
+     *                 project FINGERPRINTS start their language servers. USER-
+     *                 TIER ONLY for `lsp`'s reason — detecting is reading, but
+     *                 the detection's output is a LAUNCH, and a checkout that
+     *                 could switch this on would name servers through its
+     *                 files after all.
      *  - `layout`   {@see \SugarCraft\Constraints\Dock\DockLayout::fromArray()},
      *                 loaded by {@see \SugarCraft\Code\Cli\Bootstrap::app()}
      *                 onto {@see \SugarCraft\Code\App\App::$dock} and saved
@@ -580,6 +587,7 @@ final class LayeredSettings
         'includeGitInstructions',
         'attribution',
         'lsp',
+        'lspAutoDetect',
         'autoCommit',
         'theme',
         'statusLine',

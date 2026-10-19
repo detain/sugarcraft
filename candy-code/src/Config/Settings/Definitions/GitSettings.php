@@ -61,6 +61,19 @@ final class GitSettings implements SettingDefinitionSet
                 ->withHelp('{"php": {"command": "intelephense", "args": ["--stdio"]}}: servers for post-edit diagnostics, Read outlines and the Lsp tool.')
                 ->withReaderSymbol(Bootstrap::class . '::lspClient')
                 ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
+            // EDT-2. Exec for its sibling's reason: detecting is reading, but
+            // the detection's whole output is STARTING a server, so the table
+            // may only run where the user said so — and never from the
+            // project, which would let a checkout switch on the launching of
+            // whatever its fingerprints name.
+            SettingDefinition::new(LspLauncher::AUTO_DETECT_SETTINGS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Git)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.lspAutoDetect.label'))
+                ->withHelp('Start the language server a project fingerprint names (composer.json → intelephense, package.json + tsconfig.json → typescript-language-server, pyproject.toml or setup.py → pyright-langserver, go.mod → gopls, Cargo.toml → rust-analyzer) when its binary is on PATH; manual `lsp` entries win per language.')
+                ->withReaderSymbol(Bootstrap::class . '::lspClient')
+                ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
             // Step 3.G. Exec and never project-settable: a commit runs the
             // repository's own hooks, and a checkout must not be able to turn
             // on commits into the operator's history.

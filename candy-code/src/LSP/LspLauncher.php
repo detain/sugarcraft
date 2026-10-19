@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\LSP;
 
+use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
+
 /**
  * Starts the language servers the user configured under the `lsp` settings
  * key and hands them over as one {@see LspClient} (step 3.F).
@@ -21,6 +23,13 @@ namespace SugarCraft\Code\LSP;
  * `command` (required), `args`, `extensions` (default: the key itself), `env`,
  * `initializationOptions`, `timeout` (seconds per request, default
  * {@see DEFAULT_TIMEOUT_SECONDS}) and `disabled`.
+ *
+ * AUTO-DETECT IS THE OTHER USER-TIER STATEMENT (EDT-2): with `lspAutoDetect`
+ * true, {@see AUTO_TABLE} starts the server a project fingerprint names and a
+ * binary is installed for. Detection reads; launching is the execution, so
+ * the table runs ONLY on that opt-in, explicit entries win per language, the
+ * MAX_SERVERS cap is shared, and every started-by-fingerprint server reports
+ * itself through {@see problems()} so no launch has a mystery server.
  *
  * THE HANDSHAKE IS SPOKEN HERE, not through {@see LspConnection::initialize()},
  * because that one sends no `rootUri`: a server that is not told the workspace
@@ -41,6 +50,8 @@ namespace SugarCraft\Code\LSP;
  */
 final class LspLauncher
 {
+    use DetectsCapabilities;
+
     /** The settings key the server list is read from. */
     public const SETTINGS_KEY = 'lsp';
 
@@ -72,6 +83,69 @@ final class LspLauncher
     public const MAX_SERVERS = 8;
 
     /**
+     * The settings key that lets the fingerprints below start servers (EDT-2).
+     * User tier, default off: auto-DETECTING a language is reading a file, but
+     * the detection's whole output is a LAUNCH, and launching is the code
+     * execution {@see self::$root}'s docblock above reserves to the user — so
+     * the table may only run where the user has said "yes, launch what you
+     * find". With the key off nothing here consults the table at all, which is
+     * what keeps every parse below byte-identical to the manual-only launcher
+     * it grew out of.
+     */
+    public const AUTO_DETECT_SETTINGS_KEY = 'lspAutoDetect';
+
+    /**
+     * Fingerprint => language => candidate servers, in preference order (the
+     * first candidate whose binary is on PATH wins; none present, nothing
+     * starts). A row fires only when EVERY file in `files` is missing its
+     * `any` flag or at least one is present with it; the language is the
+     * standard LSP `didOpen` identifier and `extensions` the suffixes that
+     * route into it ({@see \SugarCraft\Code\LSP\LspClient::languageFor()}).
+     *
+     * @var list<array{language: string, files: list<string>, any: bool, extensions: list<string>, candidates: array<string, list<string>>}>
+     */
+    private const AUTO_TABLE = [
+        [
+            'language' => 'php',
+            'files' => ['composer.json'],
+            'any' => false,
+            'extensions' => ['php'],
+            'candidates' => ['intelephense' => ['--stdio']],
+        ],
+        [
+            // Both files: package.json alone is plain JavaScript, and
+            // typescript-language-server on a JS-only tree indexes nothing
+            // the tooling resolves — the pair is the TypeScript fingerprint.
+            'language' => 'typescript',
+            'files' => ['package.json', 'tsconfig.json'],
+            'any' => false,
+            'extensions' => ['ts', 'tsx', 'js', 'jsx'],
+            'candidates' => ['typescript-language-server' => ['--stdio']],
+        ],
+        [
+            'language' => 'python',
+            'files' => ['pyproject.toml', 'setup.py'],
+            'any' => true,
+            'extensions' => ['py'],
+            'candidates' => ['pyright-langserver' => ['--stdio']],
+        ],
+        [
+            'language' => 'go',
+            'files' => ['go.mod'],
+            'any' => false,
+            'extensions' => ['go'],
+            'candidates' => ['gopls' => []],
+        ],
+        [
+            'language' => 'rust',
+            'files' => ['Cargo.toml'],
+            'any' => false,
+            'extensions' => ['rs'],
+            'candidates' => ['rust-analyzer' => []],
+        ],
+    ];
+
+    /**
      * @param list<array{language: string, command: string, args: list<string>, extensions: list<string>, env: array<string, string>, initializationOptions: ?array<mixed>, timeout: float}> $servers
      * @param list<string> $problems
      */
@@ -85,23 +159,46 @@ final class LspLauncher
     /**
      * Parse the `lsp` setting for a launch rooted at $root. Null or absent is
      * "no servers", not a problem.
+     *
+     * With `$autoDetect` (the `lspAutoDetect` key, EDT-2) the
+     * {@see AUTO_TABLE} fingerprints of $root are consulted after the
+     * explicit entries: a row fills only a language NO explicit entry spoke
+     * for — including a `disabled` one, because switching a language off is
+     * the user speaking for it — and only when a candidate binary passes
+     * `$binaryPresent`. `$binaryPresent` is a seam so tests never read the
+     * real PATH; production leaves it null and gets the shared
+     * capability-memo lookup.
      */
-    public static function fromConfig(mixed $raw, string $root): self
+    public static function fromConfig(mixed $raw, string $root, bool $autoDetect = false, ?callable $binaryPresent = null): self
     {
         if ($raw === null || $raw === [] || $raw === false) {
-            return new self($root, [], []);
-        }
-        if (!\is_array($raw) || array_is_list($raw)) {
-            return new self($root, [], ['the `lsp` setting must be an object of language => server; it was ignored']);
+            $raw = [];
+        } elseif (!\is_array($raw) || array_is_list($raw)) {
+            if (!$autoDetect) {
+                return new self($root, [], ['the `lsp` setting must be an object of language => server; it was ignored']);
+            }
+            // Under auto-detect the map is not the only source of servers, so
+            // a malformed one costs the explicit half, not the whole key.
+            $malformed = ['the `lsp` setting must be an object of language => server; it was ignored'];
+            $raw = [];
         }
 
         $servers = [];
-        $problems = [];
+        $problems = $malformed ?? [];
+        // Every language an entry SPOKE for — started, disabled, or ignored
+        // after its shape named the language. The first two hold it from the
+        // table by right; the third holds it by caution: the user meant to
+        // define php, and quietly launching some other php server over their
+        // broken one would hide the problem line they need to read.
+        $claimed = [];
         foreach ($raw as $language => $spec) {
             $language = (string) $language;
             if (\count($servers) >= self::MAX_SERVERS) {
                 $problems[] = sprintf('lsp: only the first %d servers are started; "%s" and later entries were skipped', self::MAX_SERVERS, $language);
                 break;
+            }
+            if (preg_match('/^[A-Za-z][A-Za-z0-9_+.-]*$/', $language) === 1 && \is_array($spec) && !($spec !== [] && array_is_list($spec))) {
+                $claimed[$language] = true;
             }
             $parsed = self::parseServer($language, $spec);
             if (\is_string($parsed)) {
@@ -111,7 +208,60 @@ final class LspLauncher
             }
         }
 
+        if ($autoDetect) {
+            $binaryPresent ??= static fn (string $binary): bool => self::capabilityPresent($binary);
+            foreach (self::AUTO_TABLE as $row) {
+                if (isset($claimed[$row['language']]) || \count($servers) >= self::MAX_SERVERS) {
+                    continue;
+                }
+                if (!self::fingerprintMatches($root, $row['files'], $row['any'])) {
+                    continue;
+                }
+                foreach ($row['candidates'] as $command => $args) {
+                    if (!$binaryPresent($command)) {
+                        continue;
+                    }
+                    $servers[] = [
+                        'language' => $row['language'],
+                        'command' => $command,
+                        'args' => $args,
+                        'extensions' => $row['extensions'],
+                        'env' => [],
+                        'initializationOptions' => null,
+                        'timeout' => self::DEFAULT_TIMEOUT_SECONDS,
+                    ];
+                    // Provenance, not a problem: the launch report is the
+                    // surface that shows WHERE a server came from, and a
+                    // server started by fingerprint rather than by name must
+                    // never look like the user's own entry.
+                    $problems[] = sprintf('lspAutoDetect started %s=%s', $row['language'], $command);
+                    break;
+                }
+            }
+        }
+
         return new self($root, $servers, $problems);
+    }
+
+    /**
+     * Whether $root carries the row's fingerprint: every file when $any is
+     * false, at least one when it is true.
+     */
+    private static function fingerprintMatches(string $root, array $files, bool $any): bool
+    {
+        $seen = false;
+        foreach ($files as $file) {
+            if (is_file($root . '/' . $file)) {
+                if ($any) {
+                    return true;
+                }
+                $seen = true;
+            } elseif (!$any) {
+                return false;
+            }
+        }
+
+        return $seen;
     }
 
     /** Whether any server is configured (and not disabled). */
