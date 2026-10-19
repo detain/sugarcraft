@@ -99,12 +99,15 @@ final class HelpSectionsTest extends OverlayTestCase
     }
 
     /**
-     * A tall 120-column terminal holds the whole grid on one page. The plan
-     * order (every heading once, in declared section order) is checked on
-     * the pure box plan itself — with a tall enough column every section is
-     * a single atomic box, so each heading appears exactly once; the paint
-     * then pins the adaptive borders: a cols-2 box at 120 columns, the full
-     * WIDE_WIDTH cap once the terminal saturates it.
+     * The plan order (every heading once, unsegmented) is checked on the
+     * pure box plan itself — with a tall enough column every section is a
+     * single atomic box, so each heading appears exactly once (the greedy
+     * interleaves the two columns, so the column-major scan is a multiset
+     * check, with the declared first section pinned as the first box); the
+     * paint then pins the adaptive borders: a cols-2 box at 120 columns,
+     * the full WIDE_WIDTH cap once the terminal saturates it. The outer box
+     * rect is packing-independent, so the 120x80 frame rows survive the
+     * wrapped grid's second page.
      */
     public function testPaintStreamsEverySectionOnce(): void
     {
@@ -117,7 +120,12 @@ final class HelpSectionsTest extends OverlayTestCase
                 }
             }
         }
-        $this->assertSame($headings, $seen, 'every heading enters the plan exactly once, in order, unsegmented');
+        $expected = $headings;
+        $observed = $seen;
+        sort($expected);
+        sort($observed);
+        $this->assertSame($expected, $observed, 'every heading enters the plan exactly once, unsegmented');
+        $this->assertSame($headings[0], $seen[0], 'the first box is the first section — placement never reorders reading order');
 
         $surface = Surface::new(120, 80);
         HelpMenu::new()->paint($surface, self::ctx(120, 80));
@@ -174,15 +182,17 @@ final class HelpSectionsTest extends OverlayTestCase
     }
 
     /**
-     * At 120x80 the whole grid fits on a single page, so that one frame must
-     * already carry the footer, the URL, and the Info heading.
+     * At 168x80 — the zero-wrap width — the whole grid fits on a single
+     * page, so that one frame must already carry the footer, the URL, and
+     * the Info heading. (The wrapped 118-wide grid cannot: its 119 box rows
+     * plus eight stack gaps exceed one 2 x 60-row page.)
      */
     public function testTheSinglePageCarriesTheTrailerRows(): void
     {
-        $this->assertSame(1, HelpMenu::geometry(120, 80)[3], '120x80 holds the grid on one page');
-        $surface = Surface::new(120, 80);
-        HelpMenu::new()->paint($surface, self::ctx(120, 80));
-        $columns = self::strippedColumns($surface->plainLines(), 120, 80);
+        $this->assertSame(1, HelpMenu::geometry(168, 80)[3], '168x80 holds the grid on one page');
+        $surface = Surface::new(168, 80);
+        HelpMenu::new()->paint($surface, self::ctx(168, 80));
+        $columns = self::strippedColumns($surface->plainLines(), 168, 80);
 
         $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.footer')), 'the single page carries the footer');
         $this->assertTrue(self::anyColumnCarries($columns, Lang::t('help.url')), 'the single page carries the URL');

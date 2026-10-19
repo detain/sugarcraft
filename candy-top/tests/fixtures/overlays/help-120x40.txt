@@ -7,33 +7,33 @@
 ╭─┐help┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────╮││
 │        Key:        Description:                                                                                    │││
 │╭─┐General┌─────────────────────────────────────────────╮  ╭─┐Panels & views┌──────────────────────────────────────╮│││
-││       Esc, m       Toggles main menu.                 │  │                    fans, temps; root).                ││││
-││      ctrl + r      Reloads config file from disk.     │  │          d         Toggle disks view in MEM box.      ││╯│
-││     q, ctrl + c    Quits program.                     │  │          c         Toggle per-core cpu usage of       ││ │
-││       +, -, =      Add/Subtract 100ms to/from update  │  │                    processes.                         ││─╯
-││                    timer.                             │  │          r         Reverse sorting order in processes ││─╮
-│╰───────────────────────────────────────────────────────╯  │                    box.                               ││%│
-│╭─┐Panels & views┌──────────────────────────────────────╮  │          e         Toggle processes tree view.        ││8│
-││          p         Cycle view presets forwards.       │  │          E         Collapse/expand all processes in   ││0│
-││      shift + p     Cycle view presets backwards.      │  │                    tree view.                         ││6│
-││          1         Toggle CPU box.                    │  │          %         Toggles memory display mode in     ││5│
-││          2         Toggle MEM box.                    │  │                    processes box.                     ││9│
-││          3         Toggle NET box.                    │  │          O         Toggle hiding containers and VMs in││2│
-││          4         Toggle PROC box.                   │  │                    process list.                      ││6│
-││  5, 6, 7, 8, 9, 0  Toggle GPU box.                    │  │     g, ctrl + g    Toggle GPU-only process filter     ││6│
-││          x         Toggle CTR (containers) box.       │  │                    (vim_keys: ctrl + g).              ││ │
-││        [, ]        Select previous/next container in  │  ╰───────────────────────────────────────────────────────╯│ │
-││                    CTR box.                           │  ╭─┐Navigation & scrolling┌──────────────────────────────╮│ │
-││          v         Toggle the VM dashboard (hides mem,│  │      Up, Down      Select in process list.            ││ │
-││                    net, proc, ctr).                   │  │   Pg Up, Pg Down   Jump 1 page in process list.       ││ │
-││        s, S        Next/previous VM card order (VM    │  │      Home, End     Jump to first or last page in      ││ │
-││                    dashboard).                        │  │                    process list.                      ││ │
-││      shift + i     Toggle the ipmi box (BMC power,    │  │     h, j, k, l     With vim_keys: left, down, up,     ││ │
+││       Esc, m       Toggles main menu.                 │  │          p         Cycle view presets forwards.       ││││
+││      ctrl + r      Reloads config file from disk.     │  │      shift + p     Cycle view presets backwards.      ││╯│
+││     q, ctrl + c    Quits program.                     │  │          1         Toggle CPU box.                    ││ │
+││       +, -, =      Add/Subtract 100ms to/from update  │  │          2         Toggle MEM box.                    ││─╯
+││                    timer.                             │  │          3         Toggle NET box.                    ││─╮
+│╰───────────────────────────────────────────────────────╯  │          4         Toggle PROC box.                   ││%│
+│                                                           │  5, 6, 7, 8, 9, 0  Toggle GPU box.                    ││8│
+│╭─┐Panels & views┌──────────────────────────────────────╮  │          x         Toggle CTR (containers) box.       ││0│
+││                    fans, temps; root).                │  │        [, ]        Select previous/next container in  ││6│
+││          d         Toggle disks view in MEM box.      │  │                    CTR box.                           ││5│
+││          c         Toggle per-core cpu usage of       │  │          v         Toggle the VM dashboard (hides mem,││9│
+││                    processes.                         │  │                    net, proc, ctr).                   ││2│
+││          r         Reverse sorting order in processes │  │        s, S        Next/previous VM card order (VM    ││6│
+││                    box.                               │  │                    dashboard).                        ││6│
+││          e         Toggle processes tree view.        │  │      shift + i     Toggle the ipmi box (BMC power,    ││ │
+││          E         Collapse/expand all processes in   │  ╰───────────────────────────────────────────────────────╯│ │
+││                    tree view.                         │                                                           │ │
+││          %         Toggles memory display mode in     │  ╭─┐Navigation & scrolling┌──────────────────────────────╮│ │
+││                    processes box.                     │  │      Up, Down      Select in process list.            ││ │
+││          O         Toggle hiding containers and VMs in│  │   Pg Up, Pg Down   Jump 1 page in process list.       ││ │
+││                    process list.                      │  │      Home, End     Jump to first or last page in      ││ │
+││     g, ctrl + g    Toggle GPU-only process filter     │  │                    process list.                      ││ │
+││                    (vim_keys: ctrl + g).              │  │     h, j, k, l     With vim_keys: left, down, up,     ││ │
 │╰───────────────────────────────────────────────────────╯  │                    right in lists.                    ││ │
 │                                                           │        g, G        With vim_keys: first / last process││ │
 │                                                           │                    in the list.                       ││ │
 │                                                           ╰───────────────────────────────────────────────────────╯│ │
-│                                                                                                                    │ │
 │                                                                                                                    │ │
 │                                                                                                                    │ │
 │                                                                                                                    │ │
