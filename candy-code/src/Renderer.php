@@ -5970,15 +5970,18 @@ final class Renderer
             $description = self::slashMenuText($spec->description);
             $argumentHint = $spec->argumentHint === null ? null : self::slashMenuText($spec->argumentHint);
 
-            // ISS-036's display half: whose file this row is, right behind
-            // the name — an override the operator cannot SEE is the same
-            // silence the launch report this badge ships beside fixes for the
-            // launch. Built-in rows carry no tier and so no badge, and the
-            // badge is never clipped: the description tail absorbs its width
-            // through both budgets below (audit 15b-16 sanitization already
-            // covers the bytes — tier is loader-set data, but the popup
-            // treats every piece of a row as hostile input).
-            $badge = $spec->tierBadge() === null ? '' : ' ' . self::slashMenuText($spec->tierBadge());
+            // ISS-036's display half, widened by INT-3: whose file this row
+            // is AND whose format produced it, right behind the name — an
+            // override the operator cannot SEE is the same silence the launch
+            // report this badge ships beside fixes for the launch. Built-in
+            // rows carry no tier and no source, so they carry no badge, and
+            // the badges are never clipped: the description tail absorbs
+            // their width through both budgets below (audit 15b-16
+            // sanitization already covers the bytes — tier and source are
+            // loader-set data, but the popup treats every piece of a row as
+            // hostile input).
+            $badges = array_filter([$spec->tierBadge(), $spec->sourceBadge()]);
+            $badge = $badges === [] ? '' : ' ' . self::slashMenuText(implode(' ', $badges));
 
             // The name keeps its columns ahead of everything else, so this clip
             // only bites on a name wider than the whole budget - which the

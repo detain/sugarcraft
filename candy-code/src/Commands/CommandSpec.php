@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Commands;
 use Symfony\Component\Yaml\Exception\ParseException;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Palette\PaletteAction;
+use SugarCraft\Code\Skills\SkillSource;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
@@ -233,6 +234,18 @@ final class CommandSpec
          * @var list<string>
          */
         public readonly array $ignoredFrontmatter = [],
+        /**
+         * WHICH CONVENTION's tree this file was written for — the second axis
+         * next to {@see $tier}: tier answers WHERE ON DISK (user/project, and
+         * it is what gates shells), source answers WHOSE FORMAT (Claude /
+         * opencode, and it is only ever a display badge). Null is this port's
+         * own convention or an in-process row, which needs no badge because
+         * it is what every other row is measured against. Imported by INT-3
+         * alongside the row's tier; the two axes are independent on purpose —
+         * a `~/.claude/commands` file is USER tier AND Claude format, and
+         * collapsing them would lose one of the two answers the popup gives.
+         */
+        public readonly ?SkillSource $source = null,
     ) {}
 
     public static function new(
@@ -249,6 +262,7 @@ final class CommandSpec
         bool $subtask = false,
         ?string $tier = null,
         array $ignoredFrontmatter = [],
+        ?SkillSource $source = null,
     ): self {
         return new self(
             $name,
@@ -264,13 +278,16 @@ final class CommandSpec
             $subtask,
             $tier,
             $ignoredFrontmatter,
+            $source,
         );
     }
 
     /**
      * Build a row from a user-authored command file: YAML frontmatter
      * (`description`, `argument-hint`, `model`, `subtask` — the last two
-     * inert) plus a template body. Frontmatter is optional - a bare markdown file is a valid command
+     * inert — plus opencode's `template`, read only as an empty body's
+     * substitute, see {@see $source}) plus a template body. Frontmatter is
+     * optional - a bare markdown file is a valid command
      * whose body is the whole prompt.
      *
      * Everything here is user-controlled input, so it fails closed: any
@@ -284,8 +301,13 @@ final class CommandSpec
      *                     the caller from the file's path.
      * @param ?string $tier `'user'` or `'project'` — see {@see $tier}. Supplied
      *                      by the caller, never by the file.
+     * @param ?SkillSource $source which CONVENTION's tree the caller read the
+     *                      file from — see {@see $source}. Like the tier, it is
+     *                      the loader's answer, never the file's claim, and it
+     *                      additionally decides whether opencode's frontmatter
+     *                      `template:` key is consulted (below).
      */
-    public static function fromFile(string $path, string $name, ?string $tier = null): self
+    public static function fromFile(string $path, string $name, ?string $tier = null, ?SkillSource $source = null): self
     {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(Lang::t('cmd.file.unsafe-name', ['name' => $name]));
@@ -320,6 +342,17 @@ final class CommandSpec
         }
 
         $template = trim($body);
+        // INT-3: opencode's `command(s)/*.md` files keep their prompt in the
+        // frontmatter `template:` key while the body is documentation, so an
+        // opencode-tagged row with an empty body consults the key before the
+        // empty-file refusal fires. Gated on the CALLER'S tag, not on the key
+        // merely being present, because a native or Claude file that carries a
+        // stray `template:` line is answering nobody's contract — its empty
+        // body stays the author error it has always been. `stringField()`
+        // types the value exactly like `model:` (a YAML list there throws).
+        if ($template === '' && $source === SkillSource::Opencode) {
+            $template = trim(self::stringField($meta, 'template', $path) ?? '');
+        }
         if ($template === '') {
             throw new \InvalidArgumentException(Lang::t('cmd.file.empty', ['path' => $path]));
         }
@@ -350,6 +383,7 @@ final class CommandSpec
             // Audited LAST, after every field above typed cleanly: a file the
             // loader skips has no keys worth reporting as ignored.
             ignoredFrontmatter: FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, $meta),
+            source: $source,
         );
     }
 
@@ -392,6 +426,25 @@ final class CommandSpec
     public function tierBadge(): ?string
     {
         return $this->tier === null ? null : '[' . $this->tier . ']';
+    }
+
+    /**
+     * The popup badge that says WHOSE FORMAT this row is: `[claude]` /
+     * `[opencode]` for a row {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery}
+     * imported, null for anything this port's own trees or an in-process
+     * caller produced (INT-3). The second axis next to {@see tierBadge()} —
+     * together they answer "whose file, from which tool's habit" without
+     * either badge ever deciding a permission: provenance is display, the
+     * tier is the gate. The literal bytes are {@see SkillSource::badge()}'s,
+     * the same shape the skill listing already paints, and the popup clips
+     * everything else before these (see
+     * {@see \SugarCraft\Code\Renderer::renderSlashMenu()}).
+     */
+    public function sourceBadge(): ?string
+    {
+        $badge = $this->source?->badge();
+
+        return $badge === null || $badge === '' ? null : $badge;
     }
 
     /**

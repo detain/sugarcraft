@@ -216,11 +216,20 @@ final class FrontmatterKeyAuditTest extends TestCase
     public function testCommandSpecCarriesWhatItsFileIgnores(): void
     {
         $path = $this->dir . '/c.md';
-        file_put_contents($path, "---\ndescription: D\nmodel: big\nagent: build\n---\nDo it.\n");
+        file_put_contents($path, "---\ndescription: D\nmodel: big\nagent: build\ncolour: red\n---\nDo it.\n");
 
+        // INT-3 flipped `agent` from unrecognised to KNOWN: it is Claude
+        // Code's own command syntax and the imported trees are read now, so
+        // did-you-mean on it would nag every file the import exists to
+        // support. `colour` keeps the unknown-key row the seam is for.
         self::assertSame(
-            ['`model` is not acted on', '`agent` is not a command field'],
+            ['`model` is not acted on', '`colour` is not a command field'],
             CommandSpec::fromFile($path, 'c')->ignoredFrontmatter,
+        );
+        self::assertSame(
+            [],
+            FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['allowed-tools' => 'Bash', 'template' => 'body']),
+            'the imported vocabulary earns no notice of either kind (KNOWN, not INERT — see the KNOWN doc-block)'
         );
         self::assertSame([], CommandSpec::new('help', 'Help', 'Session')->ignoredFrontmatter);
     }

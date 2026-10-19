@@ -9,16 +9,27 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
+use SugarCraft\Code\Skills\SkillSource;
 
 /**
  * Discovers file-based custom commands, mirroring the three-tier pattern
  * {@see \SugarCraft\Code\Skills\SkillLoader} already proves for skills:
- * built-in ({@see CommandRegistry::all()}) < user (`~/.candy-code/commands`)
+ * FOREIGN ({@see ForeignCommandDiscovery::discover()}, the other tools'
+ * trees — lowest, added by INT-3) < built-in
+ * ({@see CommandRegistry::all()}) < user (`~/.candy-code/commands`)
  * < project (`<root>/.candy-code/commands`), later sources overriding
  * earlier ones by name so a project file can replace a built-in row — EXCEPT
  * for {@see CommandRegistry::CONTROL_PLANE}, the names by which the user drives
  * and leaves the application, which {@see loadAll()} takes back and records on
  * {@see refusedCommands()}.
+ *
+ * THE FOREIGN FLOOR CANNOT WIN A NAME (plan_comparison.md INT-3, ruling
+ * R7 — owner-approved). `array_merge()` is right-biased, so listing foreign
+ * FIRST means a `.claude/commands/exit.md` simply loses to the built-in
+ * `/exit`: no refusal notice, no {@see overrides()} row, because a foreign
+ * row is never the merge winner over a name this port already answers —
+ * see {@see ForeignCommandDiscovery} for the reasoning that puts imported
+ * content below even the trust question it would otherwise raise.
  *
  * A file's path under the commands directory IS its name - `test.md` gives
  * `/test`, `deploy/staging.md` gives `/deploy/staging`.
@@ -377,9 +388,14 @@ final class CommandLoader
      *        files may reach a shell; null leaves the rows untiered, which for
      *        `` !`cmd` `` is treated as "an in-process caller chose this", not as
      *        "project".
+     * @param SkillSource|null $source stamped onto every row this call produces
+     *        ({@see CommandSpec::$source}) — the CONVENTION the directory is
+     *        written for, display-only where $tier is the gate. Passed only by
+     *        {@see ForeignCommandDiscovery}; the native walkers leave rows
+     *        unbadged, which is what "this port's own format" looks like.
      * @return array<string, CommandSpec>
      */
-    public function loadFromDirectory(string $dir, ?string $anchoredIn = null, ?string $tier = null): array
+    public function loadFromDirectory(string $dir, ?string $anchoredIn = null, ?string $tier = null, ?SkillSource $source = null): array
     {
         $realDir = realpath($dir);
         if ($realDir === false || !is_dir($realDir)) {
@@ -437,7 +453,7 @@ final class CommandLoader
             $name = $this->commandNameFor($realDir, $realPath);
 
             try {
-                $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier);
+                $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier, $source);
                 $this->commandSources[$name] = $realPath;
             } catch (\Throwable $e) {
                 $skip = Lang::t('cmd.loader.file-failed', ['file' => $realPath, 'error' => $e->getMessage()]);
@@ -518,9 +534,11 @@ final class CommandLoader
     }
 
     /**
-     * Every command both surfaces should know about: built-in rows first,
-     * then user files, then project files - each tier overriding the previous
-     * tier's row of the same name, EXCEPT where two rules take names back:
+     * Every command both surfaces should know about: foreign rows first
+     * (INT-3 — the other tools' trees, and FIRST means LOWEST, see the class
+     * doc-block), then built-in rows, then user files, then project files -
+     * each tier overriding the previous tier's row of the same name, EXCEPT
+     * where two rules take names back:
      *
      *  - the control plane (below) is never file-based, whatever the tier;
      *  - since ISS-036, a PROJECT-tier file may not replace a built-in unless
@@ -562,10 +580,20 @@ final class CommandLoader
             $builtIn[$spec->name] = $spec;
         }
 
+        // INT-3's floor, walked FIRST — and the walk order is not incidental:
+        // array_merge below keeps foreign LAST-wON, exactly the precedence the
+        // merge gives it, so the invariant {@see $commandSources} carries into
+        // the CONTROL_PLANE/ISS-036 loops ("the path stored for a name is the
+        // file that won it") survives foreign claimants. A foreign row can
+        // overwrite another foreign row's source entry; it can never overwrite
+        // a native tier's, because those walks run after this one and out-rank
+        // it in the merge — the same right-bias does both jobs.
+        $foreign = (new ForeignCommandDiscovery($this))->discover($projectRoot);
+
         $user = $this->loadUserCommands();
         $project = $this->loadProjectCommands($projectRoot);
 
-        $merged = array_merge($builtIn, $user, $project);
+        $merged = array_merge($foreign, $builtIn, $user, $project);
 
         // THE CONTROL PLANE IS NOT OVERRIDABLE. Everything above this line is
         // the override the tiering exists for; this loop takes back the seven

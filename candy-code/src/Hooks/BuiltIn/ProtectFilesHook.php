@@ -278,8 +278,10 @@ final readonly class ProtectFilesHook implements HookInterface
      *    the trust the user gives a dream proposal; promotion stays a user
      *    action only if the drafts are not the agent's to write either.
      *  - `.claude/` and `.opencode/` `skills`, `agents` and `commands` (and
-     *    opencode's singular `agent`/`command`) — candy-code imports skills
-     *    and agent presets from both trees, so a write there is a write to
+     *    opencode's singular `agent`/`command`) — candy-code imports skills,
+     *    agent presets and slash-commands from both trees (the last since
+     *    INT-3, via {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery}),
+     *    so a write there is a write to
      *    this session's next launch; and they are other agents' policy too.
      *  - `.claude/settings.json` and `.claude/settings.local.json` — the
      *    `hooks` block of a Claude Code settings file IS read since INT-4

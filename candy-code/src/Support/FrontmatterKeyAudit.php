@@ -59,6 +59,21 @@ final class FrontmatterKeyAudit
      * `alwaysApply:` folds into `enabled` at the parse boundary. They belong in
      * KNOWN precisely so an imported rule using them earns no did-you-mean -
      * and in no INERT row, because both keys decide something.
+     *
+     * COMMAND keys `allowed-tools`, `disallowed-tools` and `agent` are Claude
+     * Code's command frontmatter and `template` is opencode's prompt body; all
+     * four joined the list when INT-3 started READING those trees, under the
+     * same argument as the rule pair above: a file written for the convention
+     * we chose to import must not pay a did-you-mean for its own syntax.
+     * `template` is consumed — it substitutes for an empty body, see
+     * {@see \SugarCraft\Code\Commands\CommandSpec::fromFile()}. The three
+     * Claude keys are deliberately KNOWN-but-not-INERT: the docs pin INERT to
+     * COMMANDS.md's Inert rows, and the import floor (ruling R7) makes their
+     * no-op a property of THIS port rather than of the file — the syntax is
+     * correct and the reader's silence is ours, which is the skill side's
+     * descriptive-fields category, not the "looks active but does nothing"
+     * one. Widening INERT (and the matching doc rows) is an owner-side step
+     * if the imported trio ever lands on the acted-on-later ledger.
      */
     public const KNOWN = [
         self::AGENT => [
@@ -70,7 +85,7 @@ final class FrontmatterKeyAudit
             'disable-model-invocation', 'allowed-tools', 'disallowed-tools', 'model', 'effort', 'context',
             'paths', 'requires', 'os',
         ],
-        self::COMMAND => ['description', 'argument-hint', 'model', 'subtask'],
+        self::COMMAND => ['description', 'argument-hint', 'model', 'subtask', 'allowed-tools', 'disallowed-tools', 'agent', 'template'],
         self::RULE => ['name', 'description', 'enabled', 'models', 'keywords', 'paths', 'globs', 'alwaysApply'],
     ];
 
