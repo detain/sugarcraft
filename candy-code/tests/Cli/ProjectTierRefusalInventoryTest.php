@@ -152,16 +152,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             'and a refused control-plane override reaches it too',
         );
 
+        // INT-3 (w5d) added the fourth: the foreign floor tags every spec with
+        // its origin (`?SkillSource`), so a badge can name where a command came
+        // from. Anchor discipline unchanged — still second, still optional.
+
         // The anchor survived the wiring — the gate was added BEFORE the
-        // consumer, and acquiring a consumer must not relax it. THREE parameters
-        // now, not two: the third is `$tier`, added when `` !`cmd` `` shipped,
+        // consumer, and acquiring a consumer must not relax it. FOUR parameters
+        // now, not two or three: the third is `$tier`, added when `` !`cmd` `` shipped,
         // because which DIRECTORY a command came out of is what decides whether
         // its shell form may run. What is pinned is that the anchor is still
         // SECOND and still optional — the count is asserted so a fourth
         // parameter cannot arrive unremarked, not because two was the property.
         $anchored = (new \ReflectionMethod(CommandLoader::class, 'loadFromDirectory'))
             ->getParameters();
-        $this->assertCount(3, $anchored);
+        $this->assertCount(4, $anchored);
         $this->assertSame('anchoredIn', $anchored[1]->getName());
         $this->assertTrue($anchored[1]->isOptional());
         $this->assertSame('tier', $anchored[2]->getName());
@@ -231,7 +235,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/WorktreeConfig.php|.candy-code/config.json' => self::REPOSITORY,
         // The settings layering's project tier. Both files arrive with a CLONE,
         // and neither feeds this collector — see the gap list in
-        // {@see testTheNineThatFeedTheCollectorAndTheTenThatAreNamedGaps()}
+        // {@see testTheNineThatFeedTheCollectorAndTheThirteenThatAreNamedGaps()}
         // for why a silent refusal is right for these two specifically. THREE
         // rows joined the repository-chosen block in this change-set; the row
         // above is the third and it is a RECLASSIFICATION, not a new path, so
@@ -412,6 +416,19 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // loads nothing, resolves nothing, and serves no project tier at all.
         'Providers/ProviderFactory.php|.candy-code/config.json' => self::USER,
 
+        // INT-3 (plan_comparison W5, lane w5d): the foreign command floor
+        // reads the claude/opencode trees the skills side already classifies
+        // BOTH — a cloned repository chooses its own project copies, `~` holds
+        // the user's, from one literal (XDG `.config/opencode` is home-only
+        // here, so USER, matching the skills row above).
+        'Commands/ForeignCommandDiscovery.php|.claude/commands' => self::BOTH,
+        'Commands/ForeignCommandDiscovery.php|.opencode/command' => self::BOTH,
+        'Commands/ForeignCommandDiscovery.php|.opencode/commands' => self::BOTH,
+        'Commands/ForeignCommandDiscovery.php|.config/opencode' => self::USER,
+        // AUT-1 (lane w5c): the schedule store is a user home file (0600,
+        // `~`), same basis as the shells and media rows.
+        'Sessions/ScheduleRegistry.php|.candy-code/schedules.json' => self::USER,
+
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.candy-code/worktrees' => self::NOT_A_TIER,
         // OAuth discovery's wire paths. They used to sit in TWO files — the
@@ -454,11 +471,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SIXTY-THREE occurrences — one per entry
-     * in {@see DOT_PATHS} — of FORTY-TWO distinct paths. TWENTY-FOUR of those
+     * APPEARS IN. On this tree that is SIXTY-EIGHT occurrences — one per entry
+     * in {@see DOT_PATHS} — of FORTY-SIX distinct paths. TWENTY-SEVEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
-     * they are NINETEEN distinct paths — which is the figure
+     * they are TWENTY-TWO distinct paths — which is the figure
      * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
      * on PATHS. All four figures are measured off the map above, and each is
      * written next to the thing it counts because the pair has been mixed up in
@@ -530,10 +547,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * NINETEEN repository-chosen paths, and the enumeration in
+     * TWENTY-TWO repository-chosen paths, and the enumeration in
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
-     * ten; it now names nineteen. See that doc-block for which of the three
+     * ten; it now names twenty-two. See that doc-block for which of the three
      * additions is a NEW path and which is one literal reclassified.
      *
      * `BOTH` counts here: a string serving the project tier is repository-chosen
@@ -543,7 +560,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     {
         $repository = $this->repositoryChosenPaths();
 
-        $this->assertCount(19, $repository);
+        $this->assertCount(22, $repository);
 
         // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
         // file-wide, this passed while the enumeration itself was missing a name,
@@ -627,16 +644,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(42, $distinct, 'distinct dot-DIRECTORY paths in src/');
-        self::assertCount(19, $this->repositoryChosenPaths(), 'of which repository-chosen');
+        self::assertCount(46, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(22, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
             \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
             'public static function projectTierRefusals()',
         );
 
-        self::assertStringContainsString('NINETEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('FORTY-TWO distinct', $enumeration);
+        self::assertStringContainsString('TWENTY-TWO repository-chosen', $enumeration);
+        self::assertStringContainsString('FORTY-SIX distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -652,17 +669,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE',
             56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN', 58 => 'FIFTY-EIGHT',
             59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE',
-            62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE'];
+            62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR', 65 => 'SIXTY-FIVE',
+            66 => 'SIXTY-SIX', 67 => 'SIXTY-SEVEN', 68 => 'SIXTY-EIGHT'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE', 36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN',
             38 => 'THIRTY-EIGHT', 39 => 'THIRTY-NINE', 40 => 'FORTY',
-            41 => 'FORTY-ONE', 42 => 'FORTY-TWO'];
+            41 => 'FORTY-ONE', 42 => 'FORTY-TWO', 43 => 'FORTY-THREE',
+            44 => 'FORTY-FOUR', 45 => 'FORTY-FIVE', 46 => 'FORTY-SIX'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY',
             21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO',
-            23 => 'TWENTY-THREE', 24 => 'TWENTY-FOUR'];
+            23 => 'TWENTY-THREE', 24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE',
+            26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;
@@ -700,8 +720,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the NINETEEN reach the collector, and which are gated elsewhere.
-     * NINE and TEN — stated here so "nine feeders" cannot quietly stand in
+     * Which of the TWENTY-TWO reach the collector, and which are gated elsewhere.
+     * NINE and THIRTEEN — stated here so "nine feeders" cannot quietly stand in
      * for "and eight paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
@@ -750,7 +770,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * matching evidence row in the same edit. The positive direction is what
      * this covers, and it is the direction the defect ran in.
      */
-    public function testTheNineThatFeedTheCollectorAndTheTenThatAreNamedGaps(): void
+    public function testTheNineThatFeedTheCollectorAndTheThirteenThatAreNamedGaps(): void
     {
         $feeders = ['.agents/skills', '.claude/agents', '.claude/skills', '.opencode/agents',
             '.opencode/skills', '.candy-code/agents', '.candy-code/commands',
@@ -759,10 +779,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             '.candy-code/config.json', '.candy-code/memory',
             '.candy-code/settings.json', '.candy-code/settings.local.json',
             '.candy-code/rules', '.claude/rules', '.cursor/rules',
-            '.github/copilot-instructions.md'];
+            // INT-3 (w5d): loader-gated command floors, refusals recorded
+            // loader-local and never drained — the same discipline as the
+            // rules trees beside them.
+            '.github/copilot-instructions.md',
+            '.claude/commands', '.opencode/command', '.opencode/commands'];
 
         $this->assertCount(9, $feeders, 'the NINE this test is named for');
-        $this->assertCount(10, $gaps, 'and the TEN');
+        $this->assertCount(13, $gaps, 'and the THIRTEEN');
 
         $union = array_merge($feeders, $gaps);
         sort($union);

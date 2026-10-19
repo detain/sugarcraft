@@ -2420,10 +2420,10 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * NINETEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * TWENTY-TWO repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * FORTY-TWO distinct ones on this tree, nineteen of them classified
+     * FORTY-SIX distinct ones on this tree, twenty-two of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2444,6 +2444,12 @@ final class Bootstrap
      * {@see \SugarCraft\Code\Context\RuleLoader} serving both tiers, so the
      * project leg is repository-chosen and joins the gap column under the same
      * loader-local discipline as its native `.candy-code/rules` sibling.
+     * INT-3 (plan_comparison W5, lane w5d) made it TWENTY-TWO with the three
+     * foreign command-floor trees `.claude/commands`, `.opencode/command` and
+     * `.opencode/commands` — each ONE literal in
+     * {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery} serving both
+     * tiers, so the project legs are repository-chosen and gated loader-local
+     * under the same discipline as the rules trees above.
      *
      *  - `.candy-code/settings.json` and `.candy-code/settings.local.json` are
      *    genuinely new — the project tier of
@@ -2486,8 +2492,9 @@ final class Bootstrap
      * `.candy-code/config.json`, `.candy-code/settings.json`,
      * `.candy-code/settings.local.json`, the rules tier `.candy-code/rules`,
      * the import sentinel `.candy-code/memory`, and the instruction tail alias
-     * `.github/copilot-instructions.md` — are itemised on
-     * {@see $projectTierRefusals}, all eight of them.
+     * `.github/copilot-instructions.md`, and the three command-floor trees
+     * `.claude/commands`, `.opencode/command` and `.opencode/commands` — are
+     * itemised on {@see $projectTierRefusals}, all eleven of them.
      *
      * `.candy-code/commands` IS NOT ONE OF THEM, and this sentence used to say
      * it was — a gap list that went stale when crush_code.md Phase 2 item 4

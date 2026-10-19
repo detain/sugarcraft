@@ -226,36 +226,45 @@ final class SseMcpServerTest extends TestCase
     public function testAPortChangeIsADifferentOrigin(): void
     {
         $this->endpointData = 'http://locked.example:9999/messages';
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the origin gate to refuse a port change');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('DIFFERENT ORIGIN', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the origin gate to refuse a port change');
+        self::assertStringContainsString('DIFFERENT ORIGIN', $failure);
         self::assertSame([], $this->postLog);
     }
 
     public function testAQueryOnlyEndpointRefusesToGuess(): void
     {
         $this->endpointData = '?' . 'only=query';
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the no-path refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('a reference without a path; refusing to guess where requests POST', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the no-path refusal');
+        self::assertStringContainsString('a reference without a path; refusing to guess where requests POST', $failure);
         self::assertSame([], $this->postLog);
     }
 
     public function testAnEmptyEndpointEventRefuses(): void
     {
         $this->endpointData = '';
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the empty-URI refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('the endpoint event carried no URI', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the empty-URI refusal');
+        self::assertStringContainsString('the endpoint event carried no URI', $failure);
     }
 
     // ------------------------------------------------------------------
@@ -267,12 +276,15 @@ final class SseMcpServerTest extends TestCase
         $this->headStatusLine = 'HTTP/1.1 302 Found';
         $this->headHeaders = ['Content-Type' => 'text/event-stream', 'Location' => 'http://elsewhere.test/sse'];
         $this->endpointData = null;
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the redirect refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('does not follow redirects', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the redirect refusal');
+        self::assertStringContainsString('does not follow redirects', $failure);
     }
 
     public function testAUnauthorizedGetRaisesTheTypedAuthExceptionBeforeAnyPost(): void
@@ -292,24 +304,30 @@ final class SseMcpServerTest extends TestCase
     {
         $this->headHeaders = ['Content-Type' => 'application/json', 'Transfer-Encoding' => 'chunked'];
         $this->endpointData = null;
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the content-type gate');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('not text/event-stream', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the content-type gate');
+        self::assertStringContainsString('not text/event-stream', $failure);
     }
 
     public function testAStreamThatEndsWithoutAnEndpointEventRefuses(): void
     {
         $this->endpointData = null;
         $this->terminateStream = true;
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the closed-before-endpoint refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('the event stream closed before its endpoint event', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the closed-before-endpoint refusal');
+        self::assertStringContainsString('the event stream closed before its endpoint event', $failure);
     }
 
     // ------------------------------------------------------------------
@@ -355,12 +373,15 @@ final class SseMcpServerTest extends TestCase
             // never reported as a clean close.
             fwrite($server, "zz\r\nleftover");
         };
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the malformed-chunk refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('malformed chunk size line', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the malformed-chunk refusal');
+        self::assertStringContainsString('malformed chunk size line', $failure);
     }
 
     public function testAStreamThatDiesMidChunkNamesTheLoss(): void
@@ -372,12 +393,15 @@ final class SseMcpServerTest extends TestCase
             fwrite($server, "1a\r\nabcd");
             stream_socket_shutdown($server, STREAM_SHUT_WR);
         };
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the mid-chunk refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('died mid-chunk (expected 22 more bytes)', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the mid-chunk refusal');
+        self::assertStringContainsString('died mid-chunk (expected 22 more bytes)', $failure);
     }
 
     public function testAFramingLinePastTheBoundRefusesWithoutBufferingForever(): void
@@ -386,12 +410,15 @@ final class SseMcpServerTest extends TestCase
         $this->rawSpec = function ($server): void {
             fwrite($server, str_repeat('a', 8192));
         };
+        $server = $this->server();
+        $failure = null;
         try {
-            $this->server()->start();
-            self::fail('expected the line-bound refusal');
+            $server->start();
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('framing line past 8192', $e->getMessage());
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'expected the line-bound refusal');
+        self::assertStringContainsString('framing line past 8192', $failure);
     }
 
     // ------------------------------------------------------------------

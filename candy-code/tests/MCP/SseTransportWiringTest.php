@@ -127,14 +127,16 @@ final class SseTransportWiringTest extends TestCase
             'bad' => ['type' => 'websocket', 'url' => 'http://legacy.example/ws'],
         ]), $this->mockClient(), null, true);
 
+        $failure = null;
         try {
             $client->startServers();
-            self::fail('a websocket entry must still surface as a build failure');
         } catch (RuntimeException $e) {
-            self::assertStringContainsString('bad (Unknown MCP server type: websocket)', $e->getMessage());
-            self::assertStringNotContainsString('fine', $e->getMessage(),
-                'the sse entry built — only genuinely unknown types belong in the report');
+            $failure = $e->getMessage();
         }
+        self::assertNotNull($failure, 'a websocket entry must still surface as a build failure');
+        self::assertStringContainsString('bad (Unknown MCP server type: websocket)', $failure);
+        self::assertStringNotContainsString('fine', $failure,
+            'the sse entry built — only genuinely unknown types belong in the report');
 
         // The sse entry survived its own start: the connect to the RFC-closed
         // port 9 is refused, which is the RUNTIME silent-skip class, not a

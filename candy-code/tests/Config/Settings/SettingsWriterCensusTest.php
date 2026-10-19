@@ -127,6 +127,12 @@ final class SettingsWriterCensusTest extends TestCase
             // session. One write of exactly that key, through the sanctioned
             // SettingsWriter path — the session grant it rides on is already
             // recorded, so a refused save is reported, never fatal.
+            // PRV-2 (w5b): /effort remembers the chosen shape across launches.
+            // Two token-sites — the set branch and the clear-to-default branch —
+            // and any one invocation writes exactly once, user tier, the
+            // reasoningEffort key alone; a failed save rides the note, never
+            // fatal.
+            'Chat.php::persistEffort->write' => 2,
             'Chat.php::persistPermissionRules->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             // crush-media W5.7: /rendermode writes the chosen render mode

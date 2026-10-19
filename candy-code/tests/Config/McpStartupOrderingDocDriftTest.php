@@ -81,7 +81,7 @@ final class McpStartupOrderingDocDriftTest extends TestCase
     private static function mcpTypeTableSection(): string
     {
         $page = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
-        $start = strpos($page, 'Four types, and they are');
+        $start = strpos($page, 'types, and they are'); // numeral-agnostic: MCP-4 grew four to five
         self::assertNotFalse($start, 'docs/MCP.md lost its server-type table');
 
         $end = strpos($page, '### Foreign spellings', $start);

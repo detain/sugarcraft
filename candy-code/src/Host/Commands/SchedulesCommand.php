@@ -108,9 +108,11 @@ final class SchedulesCommand implements HostCommand
         if ($row === null) {
             return CommandResult::errorReply($text, Lang::t('host.schedules.unknown', ['name' => $name]));
         }
-        $verb = $enable ? 'enabled' : 'disabled';
         if (!$row->persisted) {
-            return CommandResult::reply($text, Lang::t('host.schedules.' . $verb . '_loop', ['name' => $name]));
+            return CommandResult::reply($text, Lang::t(
+                $enable ? 'host.schedules.enabled_loop' : 'host.schedules.disabled_loop',
+                ['name' => $name],
+            ));
         }
         try {
             $registry->persist();
@@ -121,7 +123,10 @@ final class SchedulesCommand implements HostCommand
             ]));
         }
 
-        return CommandResult::reply($text, Lang::t('host.schedules.' . $verb, ['name' => $name]));
+        return CommandResult::reply($text, Lang::t(
+            $enable ? 'host.schedules.enabled' : 'host.schedules.disabled',
+            ['name' => $name],
+        ));
     }
 
     /** @param list<string> $words */
