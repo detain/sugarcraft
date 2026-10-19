@@ -124,13 +124,29 @@ final class TokenEstimate
     {
         $tokens = 0;
         foreach ($tools as $tool) {
-            $json = json_encode(
-                ['name' => $tool->name(), 'description' => $tool->description(), 'parameters' => $tool->inputSchema()],
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
-            );
-            $tokens += self::ofText($json === false ? $tool->name() . ' ' . $tool->description() : $json);
+            $tokens += self::ofToolSchema($tool->name(), $tool->description(), $tool->inputSchema());
         }
 
         return $tokens;
+    }
+
+    /**
+     * Price one tool definition without a Tool instance (MCP-7).
+     *
+     * The lazy-shape decision runs over MCP descriptors, which are data, not
+     * built tools — and a bridge must NOT be constructed just to measure one,
+     * because construction records read-only hints and the decision has no
+     * business mutating gate state for tools it may dispatch. Same JSON
+     * envelope, same flags, same ofText: the floor is measured in exactly the
+     * currency `ofToolSchemas` charges for the built-in half of the request.
+     */
+    public static function ofToolSchema(string $name, string $description, array $inputSchema): int
+    {
+        $json = json_encode(
+            ['name' => $name, 'description' => $description, 'parameters' => $inputSchema],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+
+        return self::ofText($json === false ? $name . ' ' . $description : $json);
     }
 }

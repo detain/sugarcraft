@@ -120,6 +120,19 @@ final class McpClient
      */
     private ?array $surfaceRosters = null;
 
+    /**
+     * MCP-7: the raw config entry seen for each server name at `startServers()`
+     * time (project and user tiers alike, denied and disabled ones included —
+     * this is metadata about the FILE, not an admission record). The lazy-shape
+     * decision reads the per-entry `eager` flag from here, so the answer to
+     * "did the operator ask for first-class bridges?" comes from the same
+     * bytes the client itself loaded, never from a re-read that could have
+     * drifted mid-session.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $entriesByName = [];
+
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
@@ -164,6 +177,19 @@ final class McpClient
     }
 
     /**
+     * MCP-7: the config entries this client read during `startServers()`,
+     * keyed by server name, project tier winning each shared name (the
+     * shadow-safe record point is inside `startServer()`). Metadata only —
+     * the lazy-shape decision's `eager` lookup.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function configEntries(): array
+    {
+        return $this->entriesByName;
+    }
+
+    /**
      * Set the global wildcard deny-pattern map (server-name pattern => "deny")
      * forwarded to McpRouter on every routed call, alongside the active agent
      * preset's allowlist, and applied by the unrestricted arm and by
@@ -172,8 +198,7 @@ final class McpClient
      * @param array<string, string> $denyPatterns
      */
     public function setDenyPatterns(array $denyPatterns): void
-    {
-        $this->denyPatterns = $denyPatterns;
+    {        $this->denyPatterns = $denyPatterns;
     }
 
     /**
@@ -592,6 +617,10 @@ final class McpClient
      */
     private function startServer(string $name, array $config, string $tierPath = ''): ?string
     {
+        // MCP-7: shadow-safe record point — startServers() only ever calls
+        // this for the tier that declared the name (MCP-3), so the entry the
+        // lazy-shape decision reads is the entry the launch honours.
+        $this->entriesByName[$name] = $config;
         $type = $config['type'] ?? 'stdio';
         if (is_string($type)) {
             $type = McpForeignTranslate::TYPE_ALIASES[$type] ?? $type;

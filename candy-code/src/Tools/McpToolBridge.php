@@ -123,8 +123,55 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
         private McpTool $descriptor,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
     ) {
-        $name = $this->name();
-        self::$readOnlyByName[$name] = (self::$readOnlyByName[$name] ?? true) && $this->readOnly();
+        self::recordReadOnlyHint($this->name(), $this->readOnly());
+    }
+
+    /**
+     * Seed the read-only table for a wire name WITHOUT constructing a bridge.
+     *
+     * WHY IT EARNS ITS PLACE: the MCP-7 dispatcher reaches tools that never
+     * construct a bridge, so the constructor cannot be the only writer — an
+     * unseeded dispatched tool would read as "false for a name no bridge was
+     * built under", degrading hint-driven Auto allows to asks and silently
+     * widening plan refusals. Same AND-merge, same conservatism: re-recording
+     * only ever narrows, never widens.
+     */
+    public static function recordReadOnlyHint(string $wireName, bool $readOnly): void
+    {
+        self::$readOnlyByName[$wireName] = (self::$readOnlyByName[$wireName] ?? true) && $readOnly;
+    }
+
+    /**
+     * The wire spelling of one (server, tool) pair — the exact `name()` of the
+     * bridge that pair would get. One funnel so permission parity between the
+     * bridge spelling and the `mcp_call` args spelling cannot drift: the
+     * dispatcher's synthesized name and a real bridge's name are computed by
+     * the same lines.
+     */
+    public static function wireNameFor(string $server, string $tool): string
+    {
+        return self::NAME_PREFIX . self::sanitize($server) . '__' . self::sanitize($tool);
+    }
+
+    /**
+     * The bridge wire name a `mcp_call` argument pair addresses, or null when
+     * the pair is not a well-formed dispatch (missing/non-string/empty half).
+     *
+     * The one dialect {@see \SugarCraft\Code\Permissions\PermissionRule} and
+     * {@see \SugarCraft\Code\Permissions\PermissionGate} consult so a rule
+     * naming `mcp__server__tool` sees through both spellings of the call.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public static function dispatchedWireName(array $arguments): ?string
+    {
+        $server = $arguments['server'] ?? null;
+        $tool = $arguments['tool'] ?? null;
+        if (!is_string($server) || $server === '' || !is_string($tool) || $tool === '') {
+            return null;
+        }
+
+        return self::wireNameFor($server, $tool);
     }
 
     /**
@@ -224,10 +271,7 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
      */
     public function name(): string
     {
-        return self::NAME_PREFIX
-            . self::sanitize($this->descriptor->serverName)
-            . '__'
-            . self::sanitize($this->descriptor->name);
+        return self::wireNameFor($this->descriptor->serverName, $this->descriptor->name);
     }
 
     /**
@@ -531,19 +575,40 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
             );
         }
 
+        return self::replyResult(
+            $raw,
+            $id,
+            $start,
+            fn (string $text): string => $this->truncateOutput($text, $this->maxOutputBytes),
+        );
+    }
+
+    /**
+     * Turn one raw `tools/call` reply into the ToolResult envelope the bridge
+     * has always produced — same announcement, same renderer, same error-flag
+     * precedence; only the truncation budget arrives as a closure.
+     *
+     * WHY IT EARNS ITS PLACE: the MCP-7 dispatcher reaches the very same
+     * servers through `mcp_call` and must return byte-identical results — if
+     * rendering lived only in the bridge, the two spellings of one capability
+     * would answer with two different renderers, and the parity promise would
+     * stop at the permission gate. `TruncatesOutput` is trait-private in each
+     * class, so the cutter rides in rather than being duplicated.
+     *
+     * @param array<string, mixed> $raw
+     */
+    public static function replyResult(array $raw, string $id, float|int $start, callable $truncate): ToolResult
+    {
         return new ToolResult(
             toolCallId: $id,
-            content: $this->truncateOutput(
-                self::announceUnreadableErrorFlag($raw) . self::renderContent($raw),
-                $this->maxOutputBytes,
-            ),
+            content: $truncate(self::announceUnreadableErrorFlag($raw) . self::renderContent($raw)),
             isError: self::isError($raw),
             durationMs: self::elapsedMs($start),
         );
     }
 
-    private static function elapsedMs(float|int $start): int
-    {
+    /** Elapsed whole milliseconds since `$start`; public so the MCP-7 dispatcher stamps identically. */
+    public static function elapsedMs(float|int $start): int    {
         return (int) ((hrtime(true) - $start) / 1_000_000);
     }
 
