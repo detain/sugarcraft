@@ -83,7 +83,7 @@ final class PaletteSupersetDispatchTest extends TestCase
     {
         $this->restoreHomeSandbox();
         if (is_dir($this->paletteSandbox)) {
-            exec('rm -rf ' . escapeshellarg($this->paletteSandbox));
+            exec('rm -rf ' . escapeshellarg($this->paletteSandbox) . ' 2>&1');
         }
     }
 

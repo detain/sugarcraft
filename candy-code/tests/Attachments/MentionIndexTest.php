@@ -36,7 +36,7 @@ final class MentionIndexTest extends TestCase
     protected function tearDown(): void
     {
         MentionIndex::forget();
-        exec('rm -rf ' . escapeshellarg($this->root));
+        exec('rm -rf ' . escapeshellarg($this->root) . ' 2>&1');
     }
 
     public function testItListsTrackedAndUntrackedFilesInPathOrder(): void
@@ -115,7 +115,7 @@ final class MentionIndexTest extends TestCase
         $this->assertSame([], MentionIndex::files($stray));
         $this->assertSame([], MentionIndex::rank('loose', $stray));
 
-        exec('rm -rf ' . escapeshellarg($stray));
+        exec('rm -rf ' . escapeshellarg($stray) . ' 2>&1');
     }
 
     public function testTheListingIsAMemoAndForgetRefreshesIt(): void

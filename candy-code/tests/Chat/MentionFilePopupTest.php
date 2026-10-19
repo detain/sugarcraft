@@ -39,7 +39,7 @@ final class MentionFilePopupTest extends TestCase
     protected function tearDown(): void
     {
         MentionIndex::forget();
-        exec('rm -rf ' . escapeshellarg($this->w2bRoot));
+        exec('rm -rf ' . escapeshellarg($this->w2bRoot) . ' 2>&1');
     }
 
     public function testATypedAtOpensThePopupOverTheProject(): void
@@ -133,7 +133,7 @@ final class MentionFilePopupTest extends TestCase
         [$tab] = $chat->update(new KeyMsg(KeyType::Tab));
         $this->assertSame('@loose.txt ', $tab->inputBuf, 'prefix completion works with no index at all');
 
-        exec('rm -rf ' . escapeshellarg($stray));
+        exec('rm -rf ' . escapeshellarg($stray) . ' 2>&1');
     }
 
     public function testADraftWithoutAnAtTokenHasNoPopup(): void
