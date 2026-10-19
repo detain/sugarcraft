@@ -10,6 +10,7 @@ use SugarCraft\Code\App\App;
 use SugarCraft\Code\Context\MemoryRecallBlock;
 use SugarCraft\Code\Context\SessionPromptMemo;
 use SugarCraft\Code\Context\TurnContextBlock;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Memory\MemoryStore;
@@ -239,6 +240,90 @@ final class MemoryRecallBlockTest extends TestCase
         $app = App::new(new ScriptedProvider([]), 'm')->withMessages([new UserMessage('deploy')]);
 
         self::assertSame('', $this->runtime()->memoryRecall($app)->render());
+    }
+
+    // ── VIS-6: the per-turn recall row ────────────────────────────────
+
+    /**
+     * The priming door announces: one count-only row per NEW non-empty
+     * ranking, and nothing else — not the ids, not the bodies, because the
+     * row is a transcript cue (uiOnly at the pump), not a second copy of the
+     * prompt payload. Re-priming the same set stays silent even under a
+     * different query, an empty recall records no row at all, and the same
+     * set returning after an empty turn speaks again.
+     */
+    public function testThePrimingDoorRecordsOneCountOnlyRowPerNewRanking(): void
+    {
+        $first = $this->store->add('Deploys go through staging.', MemoryScope::Project);
+        $second = $this->store->add('Deploys happen on Tuesdays.', MemoryScope::Project);
+        $runtime = $this->runtime()->withSessionPromptMemo(SessionPromptMemo::new());
+
+        RuntimeNoticeSink::arm(false);
+        try {
+            RuntimeNoticeSink::drain();
+
+            $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
+            $rows = RuntimeNoticeSink::drain();
+            self::assertCount(1, $rows, 'a non-empty ranking records exactly one row');
+            self::assertStringStartsWith("\u{1F4AD} ", $rows[0], 'the recall glyph is the house prefix for the row');
+            self::assertStringContainsString('Recalled 2 notes for this turn', $rows[0]);
+            self::assertStringNotContainsString('staging', $rows[0], 'count only: the row never copies note text');
+            self::assertStringNotContainsString($first, $rows[0]);
+            self::assertStringNotContainsString($second, $rows[0]);
+
+            $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
+            self::assertSame([], RuntimeNoticeSink::drain(), 'the same set re-primed stays silent');
+
+            $runtime->primeMemoryRecall($this->app([Message::user('anything at all qq')]), 'anything at all qq', null);
+            self::assertSame([], RuntimeNoticeSink::drain(), 'an empty recall records no row');
+
+            $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
+            $again = RuntimeNoticeSink::drain();
+            self::assertCount(1, $again, 'the set returning after an empty turn speaks again');
+            self::assertStringContainsString('Recalled 2 notes for this turn', $again[0]);
+        } finally {
+            RuntimeNoticeSink::reset();
+        }
+    }
+
+    public function testASingleRecalledNoteReadsSingular(): void
+    {
+        $this->store->add('Deploys go through staging.', MemoryScope::Project);
+        $runtime = $this->runtime()->withSessionPromptMemo(SessionPromptMemo::new());
+
+        RuntimeNoticeSink::arm(false);
+        try {
+            RuntimeNoticeSink::drain();
+            $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
+            $rows = RuntimeNoticeSink::drain();
+            self::assertCount(1, $rows);
+            self::assertStringContainsString('Recalled 1 note for this turn', $rows[0]);
+        } finally {
+            RuntimeNoticeSink::reset();
+        }
+    }
+
+    /**
+     * The cold-warmup half of VIS-6's silence law: the keyword-only re-prime
+     * INSIDE {@see \SugarCraft\Code\Runtime::memoryRecall()} stores its
+     * ranking exactly like the priming door but never announces — otherwise
+     * every sessionless render path (background work, sub-agents, `-p`)
+     * would stamp its own recall row into a turn the user never primed.
+     */
+    public function testTheSilentReprimeInsideMemoryRecallRecordsNothing(): void
+    {
+        $this->store->add('Deploys go through staging.', MemoryScope::Project);
+        $runtime = $this->runtime()->withSessionPromptMemo(SessionPromptMemo::new());
+
+        RuntimeNoticeSink::arm(false);
+        try {
+            RuntimeNoticeSink::drain();
+            $block = $runtime->memoryRecall($this->app([Message::user('deploy it')]));
+            self::assertNotSame('', $block->render(), 'the fallback still ranks');
+            self::assertSame([], RuntimeNoticeSink::drain(), 'but the silent door does not announce');
+        } finally {
+            RuntimeNoticeSink::reset();
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────

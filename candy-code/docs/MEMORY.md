@@ -453,6 +453,15 @@ mid-turn message that changed the latest user row, `-p`, a sub-agent — ranks
 keyword-only on first use instead. The row is re-sent only when its bytes change,
 so a turn whose recall matches the previous one adds nothing.
 
+**The user sees it too (VIS-6).** A non-empty ranking records one count-only
+row — `💭 Recalled N notes for this turn` — through the runtime notice sink
+(`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::record()`, drained by
+`Chat::pumpRuntimeNotices()`). The row is uiOnly, so it lands in the transcript
+and never in the model's history or behind the prompt cache. It speaks once per
+change: a re-ranking identical to the last announced one stays silent, an empty
+recall never records a row, and the keyword-only re-prime inside a turn is
+silent by design — only the per-turn priming door announces.
+
 The standing instructions make the recall step mandatory: before answering a
 question about prior work — decisions, dates, people, preferences, open todos —
 the model reads the recall block and, when it does not answer, calls the

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code;
 
 use SugarCraft\Code\App\App;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Context\ContextWindow;
 use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
@@ -5789,7 +5790,9 @@ final class Runtime
      * the ranking for this query. A Runtime that finds no ranking for its
      * query (a path that never primed, or a mid-turn steering message that
      * changed the latest user row) ranks keyword-only here, once: the result
-     * is stored the same way, so every later step of the turn reads it.
+     * is stored the same way, so every later step of the turn reads it. The
+     * re-prime is SILENT — the VIS-6 recall row is emitted only at the
+     * per-turn priming door ({@see primeMemoryRecall()}).
      */
     public function memoryRecall(App $app): Context\MemoryRecallBlock
     {
@@ -5803,7 +5806,7 @@ final class Runtime
             return $holder['block'];
         }
 
-        return $this->primeMemoryRecall($app, $query, null);
+        return $this->rankMemoryRecall($app, $query, null, emit: false);
     }
 
     /**
@@ -5819,9 +5822,26 @@ final class Runtime
      * per-session cap, evict the session's oldest slots — the static
      * `<env>` and the repo map — and move message 0.
      *
+     * THIS IS THE LOUD DOOR (VIS-6): a non-empty ranking the user has not
+     * yet been told about puts one count-only notice on the turn's row via
+     * {@see announceMemoryRecall()}. The silent re-prime inside
+     * {@see memoryRecall()} is the cold-warmup counterpart — a render that
+     * finds no primed block must not re-announce the same set every frame.
+     *
      * @param ?\Closure(list<string>): list<list<float>> $embedder
      */
     public function primeMemoryRecall(App $app, string $query, ?\Closure $embedder): Context\MemoryRecallBlock
+    {
+        return $this->rankMemoryRecall($app, $query, $embedder, emit: true);
+    }
+
+    /**
+     * The shared ranking path behind both doors; only the per-turn priming
+     * door emits the recall row.
+     *
+     * @param ?\Closure(list<string>): list<list<float>> $embedder
+     */
+    private function rankMemoryRecall(App $app, string $query, ?\Closure $embedder, bool $emit): Context\MemoryRecallBlock
     {
         if ($app->memoryStore === null) {
             return Context\MemoryRecallBlock::empty();
@@ -5832,7 +5852,49 @@ final class Runtime
         $holder['query'] = $query;
         $holder['block'] = $block;
 
+        if ($emit) {
+            $this->announceMemoryRecall($holder, $block);
+        }
+
         return $block;
+    }
+
+    /**
+     * The VIS-6 row: ONE notice per turn whose recall is non-empty AND
+     * different from the last announced one — count and the ordered entry
+     * ids are the identity, so a re-ranked set the user already saw stays
+     * silent while a genuinely new set (or the same set returning after an
+     * empty turn) speaks once.
+     *
+     * `record()` and not `warn()`: this is ordinary information, not a
+     * degraded path — it belongs in the transcript the pump drains, not the
+     * error log. The pump turns each row into a uiOnly notice
+     * (`Chat::pumpRuntimeNotices()`), so the row reaches the user's frame
+     * and never the model's history or the prompt cache
+     * (`RuntimeNoticeSink`'s uiOnly law). An unarmed sink drops, which is
+     * what keeps library-level callers (and this suite's harnesses) from
+     * accumulating rows no one drains.
+     */
+    private function announceMemoryRecall(\ArrayObject $holder, Context\MemoryRecallBlock $block): void
+    {
+        $entries = $block->entries();
+        $count = \count($entries);
+        $signature = $count === 0
+            ? ''
+            : $count . ':' . \implode(',', \array_map(static fn ($entry): string => $entry->id(), $entries));
+
+        if (($holder['row'] ?? null) === $signature) {
+            return;
+        }
+        $holder['row'] = $signature;
+        if ($count === 0) {
+            return;
+        }
+
+        RuntimeNoticeSink::record('💭 ' . Lang::t('chat.memory.recalled_notice', [
+            'count' => $count,
+            'notes' => $count === 1 ? 'note' : 'notes',
+        ]));
     }
 
     /**

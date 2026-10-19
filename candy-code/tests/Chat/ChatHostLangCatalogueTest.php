@@ -13,7 +13,8 @@ use SugarCraft\Code\Lang;
  * its call sites in `src/Chat.php`, `src/Host/**`, the grant scopes
  * `src/Permissions/SessionPermissionMemo.php` names for Chat's modal, and —
  * since ISS-070 — `src/Backend/EngineBackend.php`, which records one
- * catalogue row of its own onto the notice seam the host drains.
+ * catalogue row of its own onto the notice seam the host drains, joined for
+ * VIS-6 by `src/Runtime.php`, whose recall row rides that same seam.
  *
  * LangParityTest already proves every literal key src asks for exists. What it
  * cannot see is the other half of a call: the parameters. A call that passes
@@ -125,8 +126,9 @@ final class ChatHostLangCatalogueTest extends TestCase
         // words Chat's permission modal shows (`this exact command`), and
         // PendingAsk why a question cannot be remembered (`asked by hook …`).
         // EngineBackend joins for ISS-070: its memory-flush notice lands on
-        // the seam the host drains into the same transcript.
-        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php'];
+        // the seam the host drains into the same transcript. Runtime joins for
+        // VIS-6: its recall row rides that same sink from the priming door.
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php'];
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(self::SRC . '/Host', \FilesystemIterator::SKIP_DOTS),
         );
