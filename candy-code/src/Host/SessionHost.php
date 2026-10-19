@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host;
 
+use React\EventLoop\Loop;
+use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\AssistantMsg;
 use SugarCraft\Code\Backend;
@@ -144,6 +146,19 @@ final class SessionHost
      * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>,safeguardHold:?string}
      */
     private ?array $aheadOfNeed = null;
+
+    /**
+     * The CTX-5 idle auto-compaction watch, served-host edition. The TUI
+     * re-derives its verdict from a periodic tick because it has a keystroke
+     * stream to notice; this host has one clock that matters — the instant
+     * the last prompt was accepted — so a single one-shot timer at the end
+     * of the idle window is the whole watch. Every condition lives in the
+     * callback ({@see onIdleAutoCompaction()}), which fires a pure state
+     * check and never aborts work in flight — the E646 law, unchanged: the
+     * fold is a money decision, and a timer is allowed to re-ask whether
+     * the money is worth spending, not to kill a request already made.
+     */
+    private ?TimerInterface $idleAutoTimer = null;
 
     /** E17 calibration of the token estimate, and the raw proxy it pairs with. */
     private ?float $calibration = null;
@@ -518,12 +533,169 @@ final class SessionHost
             }
         }
         $this->lastPromptAt = new \DateTimeImmutable();
+        $this->armIdleAutoCompaction();
 
         $ticket = $this->isBusy()
             ? $this->admitWhileBusy($text, $options)
             : $this->admit($text, $options);
 
         return $ticket->withIdempotencyKey($options->idempotencyKey);
+    }
+
+    /**
+     * Put out the ahead-of-need summarisation request (roadmap 2.10) and
+     * latch its landing slot — the block the 70% dispatch tier used to carry
+     * inline, shared now with the CTX-5 idle watch. Sharing is the point:
+     * the timer's whole trick is to run the very request the next dispatch
+     * would have asked for, through the same gate, so the served splice —
+     * billing included — never sees two sources and never pays twice.
+     *
+     * @param list<Message> $dispatched the history the summaries are asked against
+     * @param list<Message> $baseHistory the conversation to summarise
+     * @return bool whether a request actually went out
+     */
+    private function requestAheadOfNeed(array $dispatched, array $baseHistory): bool
+    {
+        $request = $this->compaction()->buildSummarizationRequest(
+            $this->backend(),
+            $this->compactor,
+            $dispatched,
+            null,
+            null,
+            '',
+            true,
+            $baseHistory,
+        );
+        if ($request === null) {
+            return false;
+        }
+
+        $this->aheadOfNeed = [
+            'id' => $request['id'],
+            'fingerprint' => $request['fingerprint'],
+            'summaries' => null,
+            'safeguardHold' => null,
+        ];
+        $request['promise']()->then(function (HistoryCompactedMsg $msg) use ($request): void {
+            // Billed before the latch check, as the TUI bills it: a
+            // paid-for provider call is never unbilled, even when the
+            // summaries it carried are superseded on arrival.
+            $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());
+            if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
+                return;
+            }
+            // CTX-4: a HOLD is remembered so the tier that lands the
+            // heuristic fold can say why, but its summaries are
+            // discarded and never spliced.
+            $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null
+                ? $msg->summaries
+                : [];
+            $this->aheadOfNeed['safeguardHold'] = $msg->safeguardHold;
+        });
+
+        return true;
+    }
+
+    /**
+     * (Re-)arm the CTX-5 idle auto-compaction watch. One shot per accepted
+     * prompt: a fresh submit replaces the deadline (cancel first — a user
+     * who returned must not leave an orphan alarm that fires against the
+     * NEXT quiet gap and charges for it to the wrong window), and the
+     * opt-out shape never arms at all, so the default-off default costs a
+     * served session exactly nothing.
+     *
+     * The +2 s slack exists because {@see IdleCompactionPolicy::shouldAutoCompact()}
+     * keeps the offer clock's strict `>` semantics while an event-loop timer's
+     * wall-clock elapsed at fire time can land a hair under its deadline —
+     * and, unlike the TUI's tick, this watch gets no second chance. An
+     * unattended fold that waits two extra seconds of an hour-long idle is
+     * invisible; a fold whose one-shot alarm under-shot by a rounding and so
+     * silently never fired until the next prompt is the bug.
+     */
+    private function armIdleAutoCompaction(): void
+    {
+        if ($this->idleAutoTimer !== null) {
+            Loop::cancelTimer($this->idleAutoTimer);
+            $this->idleAutoTimer = null;
+        }
+
+        $config = $this->compactor->config();
+        if (!$config->idleAuto || !$config->autoCompacts()
+            || $config->idleOfferSeconds <= 0 || $this->workspace->backend === null
+        ) {
+            return;
+        }
+
+        $markedAt = $this->lastPromptAt;
+        $this->idleAutoTimer = Loop::addTimer(
+            (float) ($config->idleOfferSeconds + 2),
+            function () use ($markedAt): void {
+                $this->idleAutoTimer = null;
+                $this->onIdleAutoCompaction($markedAt);
+            },
+        );
+    }
+
+    /**
+     * The idle watch's verdict, every condition re-derived at fire time —
+     * between the arming and the alarm anything they depend on has had an
+     * hour to move. Passing means exactly what passing means at the tier:
+     * the shared {@see requestAheadOfNeed()}, whose landed summaries the
+     * existing splice consumes on the next submit, nobody re-billed and no
+     * turn ever dispatched unattended.
+     */
+    private function onIdleAutoCompaction(?\DateTimeImmutable $markedAt): void
+    {
+        // The user returned — a later prompt re-stamped the clock (and
+        // re-armed) — or a turn owns the transcript right now. Either way
+        // this is no longer an idle fold; the ordinary tiers take it.
+        if ($this->lastPromptAt !== $markedAt || $this->isBusy()) {
+            return;
+        }
+
+        $config = $this->compactor->config();
+        // One request per cycle (the dispatch mirror's own rule), nobody to
+        // pay while the cap is breached, and the breaker: a fold run that
+        // keeps refilling without a turn in between is the loop the tier
+        // already refuses to start, and an unattended one has even less
+        // business being started.
+        if ($this->aheadOfNeed !== null
+            || $this->workspace->backend === null
+            || $this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd)
+            || IdleCompactionPolicy::thrashTripped($this->consecutiveRefills, $config->refillLimit)
+        ) {
+            return;
+        }
+
+        // The tier itself, measured exactly as submit() measures it, AND-ed
+        // with the shared idle clock so one policy answers both verdicts.
+        if (!IdleCompactionPolicy::shouldAutoCompact(
+            $this->compactor->shouldCompact(
+                CompactionService::compactionWire($this->history),
+                $this->meter()->limit($this->backend()),
+                CompactionService::tierTokenCount($this->estimate($this->history), $this->history),
+            ),
+            $this->lastPromptAt,
+            $config->idleAuto,
+            idleSeconds: $config->idleOfferSeconds,
+        )) {
+            return;
+        }
+
+        if ($this->requestAheadOfNeed($this->history, $this->history)) {
+            // The human learns what the machine did while nobody was
+            // watching, in the transcript, like the advisory above it.
+            // Message::notice() is uiOnly by construction, and
+            // compactionWire() reads agent-visible rows only — the row
+            // cannot move the fingerprint the splice validates against.
+            $row = Message::notice(Lang::t('chat.compact.idle_auto_scheduled', [
+                'tokens' => $this->estimate($this->history),
+                'limit' => $this->meter()->limit($this->backend()),
+            ]));
+            $this->history[] = $row;
+            $this->save();
+            $this->announceTranscriptRow($row);
+        }
     }
 
     /**
@@ -1458,40 +1630,7 @@ final class SessionHost
             && $this->workspace->backend !== null
             && !$this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd)
         ) {
-            $request = $this->compaction()->buildSummarizationRequest(
-                $this->backend(),
-                $this->compactor,
-                $dispatched,
-                null,
-                null,
-                '',
-                true,
-                $baseHistory,
-            );
-            if ($request !== null) {
-                $this->aheadOfNeed = [
-                    'id' => $request['id'],
-                    'fingerprint' => $request['fingerprint'],
-                    'summaries' => null,
-                    'safeguardHold' => null,
-                ];
-                $request['promise']()->then(function (HistoryCompactedMsg $msg) use ($request): void {
-                    // Billed before the latch check, as the TUI bills it: a
-                    // paid-for provider call is never unbilled, even when the
-                    // summaries it carried are superseded on arrival.
-                    $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());
-                    if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
-                        return;
-                    }
-                    // CTX-4: a HOLD is remembered so the tier that lands the
-                    // heuristic fold can say why, but its summaries are
-                    // discarded and never spliced.
-                    $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null
-                        ? $msg->summaries
-                        : [];
-                    $this->aheadOfNeed['safeguardHold'] = $msg->safeguardHold;
-                });
-            }
+            $this->requestAheadOfNeed($dispatched, $baseHistory);
         }
 
         if ($refilled !== null) {
