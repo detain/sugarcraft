@@ -172,6 +172,15 @@ final class SessionHost
 
     private readonly ContextCompactor $compactor;
 
+    /**
+     * WEB-2: this session's `/model` override, built by
+     * {@see \SugarCraft\Code\Host\Commands\ModelHostCommand} from the
+     * workspace's own provider factory. Null until a served switch happens;
+     * never written to settings, so the NEXT launch is unaffected — the same
+     * session-scoped life {@see self::$permissionMode} gives a mode change.
+     */
+    private ?Backend $sessionBackend = null;
+
     /** @var array<string, CommandSpec> */
     private readonly array $customCommands;
 
@@ -1295,6 +1304,10 @@ final class SessionHost
      */
     private function applyCommandResult(CommandResult $result): void
     {
+        // WEB-2: a prompt an init-style command queued is submitted only AFTER
+        // this command's own rows have landed — the transcript reads echo,
+        // marker, turn, exactly the order the TUI's `withInputBuf(...)->submit()`
+        // route produces.
         foreach ($result->effects as $effect) {
             switch ($effect->kind) {
                 case CommandEffectKind::ClearTranscript:
@@ -1324,6 +1337,18 @@ final class SessionHost
                     $this->setPermissionMode($effect->permissionMode());
                     break;
 
+                case CommandEffectKind::SetModel:
+                    $built = $effect->modelBackend();
+                    if ($built !== null) {
+                        $this->sessionBackend = $built;
+                    }
+                    break;
+
+                case CommandEffectKind::CompactTranscript:
+                    $this->typedCompact($effect->compactText());
+                    break;
+
+
                 case CommandEffectKind::SwitchSession:
                 case CommandEffectKind::RenameSession:
                 case CommandEffectKind::OpenTitleEditor:
@@ -1334,6 +1359,57 @@ final class SessionHost
         $this->history = [...$this->history, ...$result->rows];
         $this->save();
         foreach ($result->rows as $row) {
+            $this->announceTranscriptRow($row);
+        }
+
+    }
+
+    /**
+     * WEB-2: the typed `/compact` fold on a served session — the shared
+     * {@see CompactionService::compactedHistory()} engine, run now, on this
+     * host's own compactor, window and estimate. A landed ahead-of-need
+     * summary whose fingerprint still matches rides the fold; a landed HOLD
+     * REFUSES it outright (CTX-4's typed-route verdict, the exact branch
+     * `Chat::landModelCompaction()` lands), and anything else folds on the heuristic
+     * the engine builds from the history itself. The echo and report rows come
+     * back INSIDE the folded history — announce what the fold appended, and
+     * the transcript matches the terminal row for row.
+     */
+    private function typedCompact(string $text): void
+    {
+        $compaction = $this->compaction();
+        $held = $this->aheadOfNeed;
+        $matches = $held !== null
+            && $held['fingerprint']->matches($compaction->historyFingerprint($this->compactor, $this->history));
+
+        if ($matches) {
+            $this->aheadOfNeed = null;
+            if ($held['safeguardHold'] !== null) {
+                // The fold's own echo never lands on this branch, so the
+                // refusal carries it: the draft must stay visible in the
+                // transcript even though nothing was condensed.
+                $this->appendMessageRow(Message::user($text)->withUiOnly());
+                $this->appendMessageRow(Message::notice($compaction->safeguardHoldRefusal($held['safeguardHold'])));
+
+                return;
+            }
+        }
+
+        $summaries = $matches && ($held['summaries'] ?? []) !== []
+            ? CompactionService::splicedSummaries($held['summaries'], $this->history)
+            : [];
+
+        $before = count($this->history);
+        $this->history = $compaction->compactedHistory(
+            $this->compactor,
+            $text,
+            $this->history,
+            $summaries,
+            fn (): int => $this->meter()->limit($this->backend()),
+            $this->estimate(...),
+        );
+        $this->save();
+        foreach (array_slice($this->history, $before) as $row) {
             $this->announceTranscriptRow($row);
         }
     }
@@ -1524,7 +1600,10 @@ final class SessionHost
     /** The session as a host command reads it ({@see CommandContext}). */
     private function commandContext(): CommandContext
     {
-        $backend = $this->workspace->backend;
+        // The session's own view of its backend: an override this host's
+        // `/model` stored must be what the bodies measure and switch from
+        // (WEB-2); with no override this is exactly what was read before.
+        $backend = $this->sessionBackend ?? $this->workspace->backend;
 
         return CommandContext::new(
             history: $this->history,
@@ -1919,13 +1998,15 @@ final class SessionHost
     }
 
     /**
-     * The workspace's backend, judged by this session's own permission mode
-     * when it has one: a gate in that mode over the same rules, so a client
-     * choosing `accept-edits` for one session changes nothing for another.
+     * The backend this session runs on: its own `/model` override when one
+     * was chosen (WEB-2), else the workspace's — judged by this session's own
+     * permission mode when it has one: a gate in that mode over the same
+     * rules, so a client choosing `accept-edits` for one session changes
+     * nothing for another.
      */
     private function backend(): Backend
     {
-        $backend = $this->workspace->backend ?? throw new \LogicException('This session has no backend.');
+        $backend = ($this->sessionBackend ?? $this->workspace->backend) ?? throw new \LogicException('This session has no backend.');
         if (!$backend instanceof EngineBackend) {
             return $backend;
         }

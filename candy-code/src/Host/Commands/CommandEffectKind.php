@@ -55,4 +55,23 @@ enum CommandEffectKind: string
 
     /** Switch the session's permission mode for its next turns (`/permissions mode`). */
     case SetPermissionMode = 'set-permission-mode';
-}
+
+    /**
+     * The session's next turns run on another provider/model (`/model` —
+     * WEB-2). The driver stores the built backend as a SESSION override; the
+     * TUI ignores this kind (its `/model` handler never routes the body), and
+     * nothing is written to settings: a served switch lives for the session,
+     * the way `SetPermissionMode` does, not for the launch config.
+     */
+    case SetModel = 'set-model';
+
+    /**
+     * Fold the transcript now (typed `/compact` — WEB-2). The driver runs the
+     * fold through the same {@see \SugarCraft\Code\Host\CompactionService}
+     * its automatic tier uses, splicing a landed model summary when one is
+     * held, and honoring the CTX-4 typed-HOLD refusal: a held HOLD verdict
+     * refuses the fold outright instead of degrading it.
+     */
+    case CompactTranscript = 'compact-transcript';
+
+    }

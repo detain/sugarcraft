@@ -179,7 +179,10 @@ final class SessionHostTest extends TestCase
         self::assertSame(TurnTicket::REFUSED, $host->submit('   ')->admitted);
         // Roadmap O-2h: built-ins run headless now; the ones whose body is a
         // screen (or has not left Chat yet) say so — see SessionHostCommandsTest.
-        self::assertStringContainsString('runs in the TUI client only', (string) $host->submit('/compact')->reason);
+        // WEB-2 moved /compact onto the host body, so /compress — the model
+        // writes the section summaries there and that route lives in Chat —
+        // is the client-only example from here on.
+        self::assertStringContainsString('runs in the TUI client only', (string) $host->submit('/compress')->reason);
         self::assertStringContainsString('runs in the TUI client only', (string) $host->submit('/theme dark')->reason);
         self::assertFalse($host->isBusy());
 

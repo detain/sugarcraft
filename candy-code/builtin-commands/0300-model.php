@@ -16,6 +16,11 @@ use SugarCraft\Code\Palette\PaletteAction;
 // The only handler that wants the PARSED arguments rather than the raw text: a
 // provider name and a model id are one token each, and CommandParser has
 // already unquoted them.
+//
+// WEB-2: ModelHostCommand serves the same three forms headless — the roster
+// from Bootstrap::availableProviders(), the switch built through the
+// workspace's provider factory — as a SESSION-scoped override; the `models`
+// settings write stays the terminal's, and the row says so.
 return BuiltInCommand::new(CommandSpec::new(
     'model',
     Lang::t('cmd.model.description'),
@@ -23,4 +28,5 @@ return BuiltInCommand::new(CommandSpec::new(
     paletteAction: PaletteAction::SwitchModel,
     paletteLabel: Lang::t('cmd.model.label'),
     argumentHint: Lang::t('cmd.model.hint'),
-))->withHandler('handleModelCommand', CommandArguments::Parsed);
+))->withHandler('handleModelCommand', CommandArguments::Parsed)
+    ->withHostCommand(\SugarCraft\Code\Host\Commands\ModelHostCommand::class);

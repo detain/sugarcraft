@@ -164,6 +164,57 @@ final class CommandEffect
         return new self(CommandEffectKind::SetPermissionMode, ['mode' => $mode]);
     }
 
+    /**
+     * Switch the session's backend to $backend ({@see CommandEffectKind::SetModel}).
+     * The body BUILDS it — via the workspace's own provider factory, the same
+     * construction `/model`'s palette route uses — so the driver only stores it.
+     * $provider/$model are the names to report and to remember the choice by.
+     */
+    public static function setModel(string $provider, string $model, \SugarCraft\Code\Backend $backend): self
+    {
+        return new self(CommandEffectKind::SetModel, [
+            'provider' => $provider,
+            'model' => $model,
+            'backend' => $backend,
+        ]);
+    }
+
+    public function modelProvider(): string
+    {
+        return (string) ($this->data['provider'] ?? '');
+    }
+
+    public function modelName(): string
+    {
+        return (string) ($this->data['model'] ?? '');
+    }
+
+    public function modelBackend(): ?\SugarCraft\Code\Backend
+    {
+        $backend = $this->data['backend'] ?? null;
+
+        return $backend instanceof \SugarCraft\Code\Backend ? $backend : null;
+    }
+
+    /**
+     * Fold the transcript now ({@see CommandEffectKind::CompactTranscript}).
+     * $text is the typed draft; the driver hands it to the shared
+     * compaction engine, which writes the command's echo and report rows
+     * inside the folded history, exactly as the TUI's synchronous route does.
+     */
+    public static function compactTranscript(string $text): self
+    {
+        return new self(CommandEffectKind::CompactTranscript, ['text' => $text]);
+    }
+
+    /** The draft text carried by {@see self::compactTranscript()}. */
+    public function compactText(): string
+    {
+        return (string) ($this->data['text'] ?? '');
+    }
+
+
+
     public function grants(): ?\SugarCraft\Code\Permissions\SessionPermissionMemo
     {
         $grants = $this->data['grants'] ?? null;
