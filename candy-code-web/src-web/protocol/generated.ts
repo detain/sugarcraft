@@ -38,6 +38,103 @@ export interface BackgroundSession {
   adopted: boolean
 }
 
+/** WEB-3a: what the session's context is built from — structure for the panel `/context` prints as text. */
+export interface ContextSources {
+  /** The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them. */
+  instructionFiles: ({
+    path: string
+    bytes: number
+    tier: "project" | "personal"
+  })[] | null
+  /** Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first, ISS-020). */
+  memorySections: MemoryEntry[]
+  /** The skills registry, as the prompt listing sees it. */
+  skills: {
+    name: string
+    /** Who put the file there — a SkillOrigin value, not the format. */
+    tier: string
+    /** False when the `disabledSkills` setting withheld it. */
+    enabled: boolean
+  }[]
+  /** The `.mcp.json` declaration as `candy-code mcp list` reads it (ISS-091 census), minus per-entry details. */
+  mcp: {
+    /** The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this. */
+    status: string
+    error: string | null
+    skipped: string[]
+    servers: {
+      name: string
+      transport: string
+      /** Rows exist only while the file is trusted; the http entry's URL stays off the wire (the `server.hello` media restraint, restated). */
+      trust: "trusted"
+    }[]
+  }
+  /** Instruction paths the loader refused and why. */
+  untrusted: {
+    path: string
+    reason: string
+  }[]
+  /** The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a). */
+  breakdown: {
+    window: number
+    sections: {
+      label: string
+      stability: string
+      sections: number
+      bytes: number
+      tokens: number
+    }[] | null
+    toolCount: number | null
+    toolTokens: number | null
+    historyTokens: number
+    historyMessages: number
+    uiOnlyRows: number
+    largest: {
+      index: number
+      role: string
+      tokens: number
+      preview: string
+    }[]
+    lastCache: {
+      read: number
+      prompt: number
+    } | null
+    sessionCache: {
+      read: number
+      prompt: number
+      replies: number
+    } | null
+    pruning?: {
+      mode: string
+      sessionMode: boolean
+      outputs: number
+      outputTokens: number
+      files?: string | null
+      contextRows: number
+      contextRowTokens: number
+      block?: {
+        id: number
+        compressed: number
+        summary: number
+      } | null
+      rows: ({
+        ref?: number | null
+        tool: string
+        reason: string
+        by: string
+        tokens: number
+      })[]
+    } | null
+    cacheBreaks?: {
+      breaks: number
+      last?: {
+        from: number
+        to: number
+      } | null
+    } | null
+  }
+}
+
 export interface Error {
   code: number
   message: string
@@ -388,6 +485,13 @@ export interface Methods {
         runsIn: "server" | "client"
       })[]
     }
+  }
+  /** What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, and the token breakdown. */
+  "context.sources": {
+    params: {
+      sessionId: SessionId
+    }
+    result: ContextSources
   }
   /** The workspace's changed and untracked files. */
   "files.changed": {
@@ -1231,6 +1335,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "client.viewing": "read",
   "command.exec": "write",
   "command.list": "read",
+  "context.sources": "read",
   "files.changed": "read",
   "files.diff": "read",
   "files.read": "read",
