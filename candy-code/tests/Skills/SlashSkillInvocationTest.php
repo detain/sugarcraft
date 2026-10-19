@@ -254,4 +254,26 @@ final class SlashSkillInvocationTest extends TestCase
         $this->assertTrue($next->inFlight);
         $this->assertSame('$shipit review the diff', $this->added($next)[0]->content);
     }
+
+    /**
+     * The tie half of the longest-first walk (rev-w4c MINOR-2): when BOTH a
+     * head and its deepest namesake are registered, the full colon name wins
+     * — the walk descends from the longest candidate, so `/alpha:beta extra`
+     * reaches alpha:beta with `extra` rather than degrading to alpha with
+     * `beta extra`. Every other pin here registers one name or the other, so
+     * inverting the walk to shortest-first stays green without this test.
+     */
+    public function testTheLongestRegisteredNameWinsTheColonTie(): void
+    {
+        $next = $this->pressEnter('/alpha:beta extra', $this->registry([
+            'alpha' => 'the short namesake',
+            'alpha:beta' => 'the deep namesake: $ARGUMENTS',
+        ]));
+
+        $this->assertTrue($next->inFlight);
+        $added = $this->added($next);
+        $this->assertSame('$alpha:beta extra', $added[0]->content, 'the deepest registered name wins, not the head');
+        $this->assertSame('alpha:beta', $added[0]->attachments[0]->skill);
+        $this->assertSame('the deep namesake: extra', $added[0]->attachments[0]->data);
+    }
 }

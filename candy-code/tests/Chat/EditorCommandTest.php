@@ -16,6 +16,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\EditorCommand;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * Roadmap 5.14h: `/editor` opens $VISUAL/$EDITOR through sugar-core's
@@ -24,6 +25,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 final class EditorCommandTest extends TestCase
 {
     use HomeSandboxTrait;
+    use SlicesDeclaredMethodsTrait;
 
     private string $sandbox = '';
 
@@ -212,5 +214,36 @@ final class EditorCommandTest extends TestCase
         $unstarted = EditorCommand::openCollect('/tmp/n.md', 'vim', 0, new \RuntimeException('no tty'));
         self::assertInstanceOf(ErrorMsg::class, $unstarted);
         self::assertStringContainsString('no tty', $unstarted->message);
+    }
+
+    /**
+     * The wiring itself, pinned by source slice (rev-w4c MINOR-1): openFile's
+     * completion callback must name openCollect, never the paste-path collect.
+     * No behavioural pin can see the difference from the exec channel — both
+     * are static row-builders — while the swap would silently read the note
+     * back and UNLINK it, a paste-box contract that must never touch an
+     * in-place edit. The row semantics of each collector are pinned apart;
+     * this is the only pin that the right one is WIRED.
+     */
+    public function testOpenFileWiresItsCompletionToOpenCollectAndNeverToThePasteCollector(): void
+    {
+        $reflection = new \ReflectionMethod(EditorCommand::class, 'openFile');
+        $filename = $reflection->getFileName();
+        self::assertNotFalse($filename);
+        $lines = file($filename);
+        self::assertNotFalse($lines);
+        $body = self::declaredSlice($lines, 'openFile', $reflection->getStartLine(), $reflection->getEndLine());
+
+        self::assertSame(
+            1,
+            substr_count($body, 'self::openCollect('),
+            'openFile() must hand its completion callback to openCollect exactly once',
+        );
+        self::assertSame(
+            0,
+            substr_count($body, 'self::collect('),
+            "openFile() must not reference the paste-path collect(): that collector reads the "
+            . 'file back and removes it, which would UNLINK the note an in-place edit is about.',
+        );
     }
 }
