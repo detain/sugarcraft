@@ -209,6 +209,12 @@ final readonly class ParsedArgs
          *  {@see \SugarCraft\Code\Cli\Bootstrap::maxTurns()}, not here —
          *  the same raw-store-and-later-judge shape as {@see $maxCost}. */
         public ?string $maxTurns = null,
+        /** The RAW string `--json-schema` named — inline JSON or a file
+         *  path, AUT-4. Decoded and judged at
+         *  {@see \SugarCraft\Code\Cli\NonInteractive}'s boundary, not here:
+         *  the parser performs no filesystem read (same shape as
+         *  {@see $maxCost}'s raw-store-and-later-judge law). */
+        public ?string $jsonSchema = null,
     ) {
     }
 
@@ -293,7 +299,8 @@ final readonly class ParsedArgs
         array $subcommandFlags = [],
         ?string $maxCost = null,
         ?string $maxTurns = null,
+        ?string $jsonSchema = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema);
     }
 }

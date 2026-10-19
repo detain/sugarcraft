@@ -317,10 +317,16 @@ final class ClaudeCodeProviderTest extends TestCase
     // ClaudeCodeProvider Method Tests - supportsJsonSchema()
     // =========================================================================
 
-    public function testClaudeCodeProviderSupportsJsonSchemaReturnsTrue(): void
+    /**
+     * AUT-4 honesty flip: the capability was advertised and never consumed.
+     * This provider's internal `--output-format stream-json` framing of the
+     * real claude CLI is a name collision, not schema support — the pin
+     * records the honest `false` so a future wiring must flip it on purpose.
+     */
+    public function testClaudeCodeProviderSupportsJsonSchemaReturnsFalse(): void
     {
         $provider = new ClaudeCodeProvider(new ClaudeCodeInvocation());
-        $this->assertTrue($provider->supportsJsonSchema());
+        $this->assertFalse($provider->supportsJsonSchema());
     }
 
     // =========================================================================
@@ -429,7 +435,7 @@ final class ClaudeCodeProviderTest extends TestCase
         $this->assertTrue($provider->supportsStreaming());
         $this->assertTrue($provider->supportsFunctionCalling());
         $this->assertFalse($provider->supportsVision());
-        $this->assertTrue($provider->supportsJsonSchema());
+        $this->assertFalse($provider->supportsJsonSchema());
         $this->assertSame(200_000, $provider->contextWindow());
         $this->assertSame(0.0, $provider->costPer1kTokens('any-model', 'input'));
     }

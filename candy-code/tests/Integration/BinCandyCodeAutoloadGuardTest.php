@@ -29,11 +29,13 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-NINE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY:
  *
- *  - {@see \SugarCraft\Code\Cli\NonInteractive}, twelve —
+ *  - {@see \SugarCraft\Code\Cli\NonInteractive}, thirteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
  *    as JSON, and the two AUT-2 session-degrade lines), `failUsage()`, `failUnusableProvider()`,
+ *    and — added by AUT-4 — `failJsonSchemaUnsupported()`, the refusal line for a
+ *    schema the selected provider cannot honour, stderr-alone like its usage twins,
  *    `noticeOfflineDefault()`, `readStdinIfPiped()`, and — added by E219 —
  *    `noticeRefusal()`, one line per tool call the turn refused. That last one
  *    is the only site on this list whose routing decision is written up

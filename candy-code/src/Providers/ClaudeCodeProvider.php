@@ -70,9 +70,20 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         return false;
     }
 
+    /**
+     * AUT-4 honesty flip: this provider NEVER consumed
+     * {@see \SugarCraft\Code\Providers\CompleteRequest::$jsonSchema} — the
+     * `true` was the capability lie the round-65 audit named. Its internal
+     * `--output-format stream-json` conversation with the real claude CLI
+     * is a name collision, not a schema channel; the CLI's stream framing
+     * says nothing about constraining answers to a schema. Saying `false`
+     * costs nothing that worked before (the flag had zero producers until
+     * AUT-4 wired it) and buys the launch's refusal path its only honest
+     * answer for this provider.
+     */
     public function supportsJsonSchema(): bool
     {
-        return true;
+        return false;
     }
 
     /**

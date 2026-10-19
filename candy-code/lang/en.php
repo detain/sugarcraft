@@ -67,6 +67,7 @@ return [
     'cli.argv.hint.continue_or_resume' => 'Use --continue for the most recent session, or --resume <id|name> for a specific one.',
     'cli.argv.hint.flag_alone' => 'Write it as {flag} alone.',
     'cli.argv.hint.flag_value' => 'Write it as {flag}=<value>; it may not be omitted.',
+    'cli.argv.hint.json_schema' => 'Expected a JSON Schema object, written inline as {"type":"object",...} or as a path to a file containing one.',
     'cli.argv.hint.max_cost' => 'Expected a spend ceiling in US dollars, for example 5 or $2.50.',
     'cli.argv.hint.max_turns' => 'Expected a positive whole number of tool-loop steps, for example 8.',
     'cli.argv.hint.model_value' => 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.',
@@ -79,6 +80,9 @@ return [
     'cli.argv.hint.root_value' => 'Write it as --root=<dir> if the directory begins with "-"; it may not be omitted.',
     'cli.argv.hint.valid_modes' => 'Valid modes are: {modes}.',
     'cli.argv.hint.words_open_tui' => 'Words after the options open the TUI with them as the first prompt; to run a one-shot prompt, use -p "<prompt>". A subcommand takes no prompt, and an empty argument is not one.',
+    'cli.argv.json_schema.empty' => '--json-schema expects a schema, but the value is empty',
+    'cli.argv.json_schema.flag' => '--json-schema expects a schema, but the next argument is the option {option}',
+    'cli.argv.json_schema.missing' => '--json-schema expects a schema, but the argument list ended',
     'cli.argv.max_cost.empty' => '--max-cost expects a spend ceiling, but the value is empty',
     'cli.argv.max_cost.flag' => '--max-cost expects a spend ceiling, but the next argument is the option {option}',
     'cli.argv.max_cost.missing' => '--max-cost expects a spend ceiling, but the argument list ended',
@@ -130,6 +134,7 @@ return [
     'cli.completion.option.config' => 'Read settings and permissions from <file>',
     'cli.completion.option.continue' => 'Continue the most recent session',
     'cli.completion.option.help' => 'Show the help screen',
+    'cli.completion.option.json_schema' => 'Constrain the one-shot answer to a JSON Schema (inline or file path)',
     'cli.completion.option.max_cost' => 'Spend ceiling for the launch, in US dollars',
     'cli.completion.option.max_turns' => 'Tool-loop step ceiling for the launch',
     'cli.completion.option.mode' => 'Permission mode to run under',
@@ -389,6 +394,18 @@ Options:
                          number; zero is refused rather than read as "no
                          cap", and an unusable value refuses the launch
                          rather than silently deferring to the setting.
+      --json-schema <path-or-json>
+                         Constrain the answer to a JSON Schema: an inline
+                         {"type":"object",...} document or a path to a file
+                         holding one. Also accepts --json-schema=<value>;
+                         the = form is the one to use when the path begins
+                         with "-". Only providers that report supporting
+                         schema-constrained answers run the request at all
+                         — anything else refuses with exit 2 rather than
+                         billing for an unconstrained answer. The schema
+                         gates the turn's self-finishing request; steps
+                         that continue a tool loop stay free (a forced
+                         JSON answer cannot carry tool calls).
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
                          every launch opens a new session; Up in an empty
@@ -700,6 +717,11 @@ TXT,
     'cli.models.none_selected' => 'No provider is selected; set CANDY_CODE_PROVIDER or use Ctrl+P "Switch model".',
     'cli.models.selected_legend' => '* = selected (CANDY_CODE_PROVIDER or {path}).',
     'cli.noninteractive.answer_not_json' => 'the answer could not be encoded as JSON: {error}',
+    'cli.noninteractive.json_schema_no_backend' => 'the supplied backend cannot honour --json-schema: it is not the engine, so there is no provider to constrain the answer with',
+    'cli.noninteractive.json_schema_not_object' => '--json-schema must be a JSON object (a schema); a list or a scalar is not one',
+    'cli.noninteractive.json_schema_invalid' => '--json-schema is not valid JSON: {error}',
+    'cli.noninteractive.json_schema_unreadable' => '--json-schema names no readable file: {path}',
+    'cli.noninteractive.json_schema_unsupported' => 'the {name} provider does not honour --json-schema: the answer would be billed as structured and arrive unconstrained',
     'cli.noninteractive.no_prompt' => 'no prompt given — pass -p "<prompt>" or `candy-code run "<prompt>"`',
     'cli.noninteractive.no_reason_given' => 'no reason given',
     'cli.noninteractive.offline_default' => 'no provider configured (CANDY_CODE_PROVIDER, CANDY_CODE_BACKEND_CMD and CANDY_CODE_BACKEND_CMD_STREAM unset, none persisted); answering from the offline echo provider.',

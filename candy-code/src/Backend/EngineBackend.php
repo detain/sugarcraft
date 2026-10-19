@@ -694,6 +694,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * top-level turn — asks nothing. @see withReasoningEffort()
          */
         private readonly string|float|null $reasoningEffort = null,
+        /**
+         * AUT-4: the JSON Answer Contract — a decoded JSON-schema object the
+         * operator asked this `-p` run to answer against via `--json-schema`
+         * (path or inline). NULL, everywhere but that one flag's run, asks
+         * nothing, and every request is byte-identical to a schema-less turn.
+         * It reaches the wire through each turn's {@see Runtime} and
+         * {@see \SugarCraft\Code\Providers\CompleteRequest::$jsonSchema},
+         * which consumes it only on the self-finishing step — see
+         * {@see Runtime::jsonSchemaFor()} for the terminal-turn ruling. The
+         * provider is checked for {@see ProviderInterface::supportsJsonSchema()}
+         * BEFORE the first billed call by {@see \SugarCraft\Code\Cli\NonInteractive};
+         * an unsupported provider never rides here, so a backend that got a
+         * schema is one that will honour it. Main-chat scope: TaskTool and
+         * Workflow builds never set it (the same E20-style seam).
+         */
+        private readonly ?array $jsonSchema = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -852,6 +868,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function reasoningEffort(): string|float|null
     {
         return $this->reasoningEffort;
+    }
+
+    /**
+     * @see $jsonSchema
+     *
+     * @param array<string, mixed>|null $schema
+     */
+    public function withJsonSchema(?array $schema): self
+    {
+        return $this->mutate(['jsonSchema' => $schema]);
+    }
+
+    /**
+     * The JSON Answer Contract this backend's turns ask for, if any.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @see $jsonSchema
+     */
+    public function jsonSchema(): ?array
+    {
+        return $this->jsonSchema;
     }
 
     /**
@@ -2698,6 +2736,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             parallelToolDeadlineSeconds: $parallelToolDeadlineSeconds,
             maxOutputTokens: $maxOutputTokens,
             maxConcurrentDelegations: $this->maxConcurrentDelegations,
+            // AUT-4: read off $this INSIDE the one construction site, not a
+            // parameter — every caller of newRuntime() keeps its shape and a
+            // `-p` run's schema reaches all of its turns. Null everywhere else.
+            jsonSchema: $this->jsonSchema,
         ))->withSessionPromptMemo($this->sessionPromptMemo);
     }
 

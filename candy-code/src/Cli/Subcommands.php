@@ -1703,6 +1703,7 @@ final class Subcommands
         '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'cli.completion.option.mode'],
         '--max-cost' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_cost'],
         '--max-turns' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_turns'],
+        '--json-schema' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.json_schema'],
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'cli.completion.option.help'],

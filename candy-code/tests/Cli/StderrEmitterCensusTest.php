@@ -57,7 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty-nine sites (AUT-2 2026-10-19: +2 in
+ *  1. `fwrite(STDERR, …)` — thirty sites (AUT-4 2026-10-19: +1 in
+ *     `NonInteractive::failJsonSchemaUnsupported()`, stderr-alone beside the usage line;
+ *     AUT-2 2026-10-19: +2 in
  *     `NonInteractive::run()` for the session-funnel and save degrade lines,
  *     stderr-alone like every other answer-shaping note; ISS-026 residual 2026-10-18: +1 in
  *     `Bootstrap::openSession()` for the cross-project `--resume` pick notice,
@@ -337,7 +339,7 @@ final class StderrEmitterCensusTest extends TestCase
         // the answer proceeds without history) and the save-degrade line
         // (answer already echoed; a failed persist cannot retract it). Both
         // stderr alone by design: stdout is the answer and nothing else.
-        'src/Cli/NonInteractive.php' => 12,
+        'src/Cli/NonInteractive.php' => 13, // +1 AUT-4 failJsonSchemaUnsupported
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is
@@ -498,7 +500,7 @@ final class StderrEmitterCensusTest extends TestCase
         // pre-launch exit-2 usage decision.
         // AUT-5 took it to thirty-one: --max-turns' same three refusal shapes,
         // the same pre-launch exit-2 usage decision.
-        'src/Cli/ArgvParser.php' => 31,
+        'src/Cli/ArgvParser.php' => 34, // +3 AUT-4 --json-schema refusal family
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
@@ -520,7 +522,7 @@ final class StderrEmitterCensusTest extends TestCase
         // +3 in AUT-2: the defensive picker failUsage, the session-funnel
         // degrade line, and the save-degrade line — all stderr-only, the same
         // pre-launch/after-answer exit-shape decision as --max-cost's family.
-        'src/Cli/NonInteractive.php' => 15,
+        'src/Cli/NonInteractive.php' => 17, // +2 AUT-4 refusal prefixes (gate line + decode failUsage)
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door

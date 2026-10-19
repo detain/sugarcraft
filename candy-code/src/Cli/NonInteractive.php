@@ -268,6 +268,18 @@ final class NonInteractive
             return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
         }
 
+        // AUT-4: `--json-schema` is DECODED here, at the CLI boundary —
+        // ArgvParser deliberately stores the raw token, because deciding
+        // "inline object or path to one" is filesystem work a parser must
+        // never do. A bad value is a usage error (exit 2) on the same shape
+        // as every other usage refusal; whether the SELECTED provider can
+        // honour a good one is judged below, where the provider is known.
+        try {
+            $jsonSchema = self::decodeJsonSchema($args->jsonSchema);
+        } catch (\InvalidArgumentException $e) {
+            return self::failUsage('candy-code: ' . $e->getMessage(), $outputFormat);
+        }
+
         // Step 3.D-2: only a run that built its own backend owns the session
         // whose end it reports — a caller that supplied one (the tests, a
         // headless host) owns that session's lifecycle, SessionEnd included.
@@ -387,6 +399,25 @@ final class NonInteractive
             $backend = $backend->withStepUsageObserver(static function (?\SugarCraft\Code\Usage $usage) use (&$sessionUsages): void {
                 $sessionUsages[] = $usage;
             });
+        }
+
+        // AUT-4 honesty gate, BEFORE the first billed call and before the
+        // turn hooks: a provider that does not consume CompleteRequest's
+        // `jsonSchema` would answer UNCONSTRAINED while the caller paid for
+        // and parses a structured shape — silence here is the bug (the W1
+        // audit's ClaudeCode capability-lie is exactly this defect with the
+        // polarity flipped). An injected non-engine backend carries the
+        // schema surface nowhere, so it earns the same refusal.
+        if ($jsonSchema !== null) {
+            if (!$backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+                return self::failJsonSchemaUnsupported(null, $outputFormat);
+            }
+
+            if (!$backend->provider()->supportsJsonSchema()) {
+                return self::failJsonSchemaUnsupported($backend->provider()->name(), $outputFormat);
+            }
+
+            $backend = $backend->withJsonSchema($jsonSchema);
         }
 
         // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
@@ -836,6 +867,86 @@ final class NonInteractive
     {
         \fwrite(\STDERR, $message . "\n" . ($hint === null ? '' : $hint . "\n"));
         self::emitErrorDocument($outputFormat, 'usage', $message, null);
+
+        return self::EXIT_CONFIG;
+    }
+
+    /**
+     * AUT-4: parse `--json-schema`'s raw token at the boundary — inline
+     * object if it opens with `{`, otherwise a file to read — and refuse
+     * anything that is not a JSON object with a usage error BEFORE a call
+     * is billed. `array_is_list()` refuses `[]` and any array form: a JSON
+     * Schema is an object, and the one empty-object shape that parses to a
+     * PHP list-like structure (an empty schema `{}` decodes to `[]`) is
+     * special-cased by re-reading the trimmed text, so the permissive empty
+     * schema stays usable while `[1,2]` does not.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function decodeJsonSchema(?string $raw): ?array
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        $text = \trim($raw);
+        if (\str_starts_with($text, '[')) {
+            // An inline JSON LIST: clearly a document, clearly not a schema.
+            // Calling it a missing file — which the path arm would otherwise
+            // do — is the confusing half of fail-loud.
+            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_not_object'));
+        }
+
+        try {
+            if (\str_starts_with($text, '{')) {
+                $decoded = \json_decode($text, true, 512, \JSON_THROW_ON_ERROR);
+            } else {
+                // Checked before reading: file_get_contents() raises a PHP
+                // WARNING on a miss (the suite fails on warnings), and a
+                // TOCTOU loss between check and read still lands on the
+                // same honest refusal via the false arm.
+                if (!\is_file($text) || !\is_readable($text)) {
+                    throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_unreadable', ['path' => $text]));
+                }
+
+                $contents = \file_get_contents($text);
+                if ($contents === false) {
+                    throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_unreadable', ['path' => $text]));
+                }
+
+                $decoded = \json_decode($contents, true, 512, \JSON_THROW_ON_ERROR);
+            }
+        } catch (\JsonException $e) {
+            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_invalid', ['error' => $e->getMessage()]), 0, $e);
+        }
+
+        if (!\is_array($decoded) || (\array_is_list($decoded) && $decoded !== [])) {
+            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_not_object'));
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * AUT-4 refusal: the operator asked for a JSON-Schema-constrained answer
+     * the selected provider provably cannot produce. Refused BEFORE the
+     * first billed call, on the `failUsage()` shape — one stderr line, the
+     * typed document on stdout when the format prints documents, exit 2.
+     *
+     * @param string|null $provider The provider's name, or null when the
+     *                              injected backend is no engine at all
+     *                              (a host wiring its own Backend).
+     */
+    private static function failJsonSchemaUnsupported(?string $provider, string $outputFormat): int
+    {
+        $message = 'candy-code: ' . Lang::t(
+            $provider === null
+                ? 'cli.noninteractive.json_schema_no_backend'
+                : 'cli.noninteractive.json_schema_unsupported',
+            ['name' => $provider ?? ''],
+        );
+        \fwrite(\STDERR, $message . "\n");
+        self::emitErrorDocument($outputFormat, 'json_schema_unsupported', $message, $provider);
 
         return self::EXIT_CONFIG;
     }

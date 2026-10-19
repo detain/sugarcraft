@@ -804,7 +804,70 @@ final class Runtime
         private ?int $maxOutputTokens = null,
         private ?int $maxConcurrentDelegations = null,
         private ?\SugarCraft\Code\Support\ToolCallIdAllocator $toolCallIds = null,
+        /**
+         * AUT-4: the JSON Answer Contract this turn's self-finishing requests
+         * carry ({@see jsonSchemaFor()}). Null on every path that did not ask.
+         *
+         * @var array<string, mixed>|null
+         */
+        private ?array $jsonSchema = null,
     ) {}
+
+    /**
+     * Which request the operator's `--json-schema` (AUT-4) rides, and which
+     * it does not — the TERMINAL/SELF-FINISHING-TURN ruling.
+     *
+     * WHAT THIS ENFORCES: the schema constrains a request only when what
+     * comes back is the ANSWER — the request whose history does not end on
+     * tool results. A first step of the common structured-answer run IS
+     * that request: a schema-forced completion cannot emit tool calls, so
+     * the constrained call settles the turn directly. A step whose history
+     * ends on tool results is mid-loop — the model is deciding what to do
+     * next, and forcing JSON there would strip the turn of its tools.
+     *
+     * WHY EX-ANTE RATHER THAN POST-LOOP: the alternative — detect the final
+     * step after the loop ends and re-request it under the schema — pays a
+     * second billed call per tool-using turn to constrain a call whose
+     * content is already decided. v1's DISCLOSED GAP: a turn that DOES use
+     * tools settles its final answer on an unconstrained step; the schema
+     * then applies to nothing in that run, and the operator's contract
+     * silently goes unhonoured — the same silence this flag's honesty gate
+     * exists to prevent at the provider axis, kept here as the documented
+     * v1 boundary of the step axis. Reaching for tools remains the model's
+     * own decision; the flag asks for a JSON answer, and a run that needs
+     * the work done had better do it.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function jsonSchemaFor(App $app): ?array
+    {
+        if ($this->jsonSchema === null) {
+            return null;
+        }
+
+        // WHICH requests are self-finishing candidates: one without any
+        // tool result newer than the newest assistant row that asked for
+        // tools. A tail-scan on row KIND alone cannot decide it — runTurn
+        // splices a todo reminder and a context row as USER rows AFTER the
+        // step's tool results (EngineBackend :1834/:1848), so the last
+        // provider-acting row can read as User mid-loop. Position decides
+        // instead: the first step of a one-shot turn (no calls, no results
+        // yet) carries the schema; every step whose newest tool activity is
+        // an un-consumed result stays free — mid-loop or carried over from
+        // an older turn — because a constrained answer cannot carry tool
+        // calls and forcing one mid-loop would strand the loop.
+        $lastCall = -1;
+        $lastResult = -1;
+        foreach ($app->messages as $index => $row) {
+            if ($row instanceof ToolResultMessage) {
+                $lastResult = $index;
+            } elseif ($row instanceof AssistantMessage && ($row->toolCalls() ?? []) !== []) {
+                $lastCall = $index;
+            }
+        }
+
+        return $lastResult > $lastCall ? null : $this->jsonSchema;
+    }
 
     /**
      * Record whether the step that just finished ran anything that could have
@@ -1412,6 +1475,10 @@ final class Runtime
             // Roadmap 4.1-1: a delegated run's preset `effort:`. Null on
             // every other App, so the provider's own tiers answer.
             reasoningEffort: $app->reasoningEffort,
+            // AUT-4: the launch's --json-schema, on self-finishing candidate
+            // requests only ({@see jsonSchemaFor()} gates the tool-loop
+            // steps out). Null everywhere the flag was not given.
+            jsonSchema: $this->jsonSchemaFor($app),
         );
 
         if ($onRequest !== null) {

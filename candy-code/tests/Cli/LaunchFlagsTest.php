@@ -181,6 +181,40 @@ final class LaunchFlagsTest extends TestCase
     }
 
     /**
+     * `--json-schema` carries its value RAW too (AUT-4), and RAWER than the
+     * money/step ceilings: the parser touches no filesystem and runs no JSON
+     * decoder, so an inline `{"...":...}` document and a path to one are the
+     * same string here. Every shape judgement belongs to
+     * {@see NonInteractive::decodeJsonSchema()} at the console boundary —
+     * a parser that opened files would make `parse()` observable by cwd and
+     * break the SUBCOMMANDS no-fs-in-parse law.
+     *
+     * @return array<string, array{list<string>, ?string}>
+     */
+    public static function jsonSchemaSpellings(): array
+    {
+        return [
+            'schema spaced'   => [['candy-code', '--json-schema', 'answer.json'], 'answer.json'],
+            'schema attached' => [['candy-code', '--json-schema=answer.json'], 'answer.json'],
+            'schema inline'   => [['candy-code', '--json-schema', '{"type":"object"}'], '{"type":"object"}'],
+            'schema inline attached' => [['candy-code', '--json-schema={"type":"object"}'], '{"type":"object"}'],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     * @dataProvider jsonSchemaSpellings
+     */
+    public function testTheJsonSchemaFlagParsesRawAndIsNotAnUnknownFlag(array $argv, ?string $schema): void
+    {
+        $args = ArgvParser::parse($argv);
+
+        $this->assertSame($schema, $args->jsonSchema);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertNull($args->usageError);
+    }
+
+    /**
      * `--max-turns` carries its value RAW too (AUT-5): the parser judges only
      * the SHAPE failures that make "which value was asked for" unanswerable
      * (missing, flag-eaten, empty). Whether `five` or `0` or an
@@ -268,6 +302,15 @@ final class LaunchFlagsTest extends TestCase
             'turns ate a flag'       => [['candy-code', '--max-turns', '-p', 'hi'], '--max-turns expects a step ceiling, but the next argument is the option -p'],
             'turns, empty attached'  => [['candy-code', '--max-turns='], '--max-turns expects a step ceiling, but the value is empty'],
             'turns, empty spaced'    => [['candy-code', '--max-turns', ''], '--max-turns expects a step ceiling, but the value is empty'],
+
+            // --json-schema joins the strict family (AUT-4): a schema whose
+            // value went missing must refuse the launch, never silently run
+            // UNCONSTRAINED — the whole capability-honesty posture starts at
+            // the parser.
+            'schema, list ended'      => [['candy-code', '--json-schema'], '--json-schema expects a schema, but the argument list ended'],
+            'schema ate a flag'       => [['candy-code', '--json-schema', '-p', 'hi'], '--json-schema expects a schema, but the next argument is the option -p'],
+            'schema, empty attached'  => [['candy-code', '--json-schema='], '--json-schema expects a schema, but the value is empty'],
+            'schema, empty spaced'    => [['candy-code', '--json-schema', ''], '--json-schema expects a schema, but the value is empty'],
         ];
     }
 
@@ -285,6 +328,7 @@ final class LaunchFlagsTest extends TestCase
         $this->assertNull($args->permissionMode);
         $this->assertNull($args->maxCost);
         $this->assertNull($args->maxTurns);
+        $this->assertNull($args->jsonSchema);
     }
 
     /**
@@ -303,6 +347,7 @@ final class LaunchFlagsTest extends TestCase
             ['candy-code', '--model', ''],
             ['candy-code', '--max-cost', ''],
             ['candy-code', '--max-turns', ''],
+            ['candy-code', '--json-schema', ''],
         ] as $argv) {
             $args = ArgvParser::parse($argv);
 
@@ -588,6 +633,8 @@ final class LaunchFlagsTest extends TestCase
         $this->assertMatchesRegularExpression('/^ +--permission-mode(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--max-cost(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--max-turns(?:[ =,]|$)/m', $screen);
+        $this->assertMatchesRegularExpression('/^ +--json-schema(?:[ =,]|$)/m', $screen);
+        $this->assertStringContainsString('Constrain the answer to a JSON Schema', $screen);
         $this->assertStringContainsString('it beats $CANDY_CODE_MAX_COST', $screen);
         $this->assertStringContainsString('it beats the maxToolSteps setting key', $screen);
         $this->assertStringContainsString('not a provider', $screen);
@@ -610,10 +657,12 @@ final class LaunchFlagsTest extends TestCase
             $needleModel = $shell === 'fish' ? '-l model' : '--model';
             $needleMode = $shell === 'fish' ? '-l permission-mode' : '--permission-mode';
             $needleTurns = $shell === 'fish' ? '-l max-turns' : '--max-turns';
+            $needleSchema = $shell === 'fish' ? '-l json-schema' : '--json-schema';
 
             $this->assertStringContainsString($needleModel, $script, "{$shell} omits --model");
             $this->assertStringContainsString($needleMode, $script, "{$shell} omits --permission-mode");
             $this->assertStringContainsString($needleTurns, $script, "{$shell} omits --max-turns");
+            $this->assertStringContainsString($needleSchema, $script, "{$shell} omits --json-schema");
 
             foreach (PermissionMode::cases() as $mode) {
                 $this->assertStringContainsString(

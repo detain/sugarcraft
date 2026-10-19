@@ -135,6 +135,7 @@ final class ArgvParser
         $permissionMode = null;
         $maxCost = null;
         $maxTurns = null;
+        $jsonSchema = null;
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
@@ -626,6 +627,59 @@ final class ArgvParser
                 continue;
             }
 
+            // --json-schema=<path-or-json> / --json-schema <path-or-json> (AUT-4)
+            //
+            // The JSON-Answer-contract twin of --max-cost's shape split: the
+            // parser judges only PRESENCE and never touches the filesystem,
+            // so — like the config paths — no fs read rides `parse()` (the
+            // SUBCOMMANDS docblock law). WHAT the value must decode to is
+            // judged at NonInteractive's own boundary, the one place that
+            // runs the one-shot path; every provider that cannot honour the
+            // contract is refused there BEFORE the first billed call, never
+            // silently ignored. Inline JSON is distinguished from a path by
+            // its first byte (`{`); anything else is handed through as the
+            // file name it is.
+            if (\str_starts_with($arg, '--json-schema=')) {
+                $value = \substr($arg, 14); // length of "--json-schema="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyJsonSchemaError();
+                        $usageHint = self::jsonSchemaValueHint();
+                    }
+                    ++$i;
+                    continue;
+                }
+                $jsonSchema = $value;
+                ++$i;
+                continue;
+            }
+
+            // --json-schema <path-or-json>
+            if ($arg === '--json-schema') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'candy-code: ' . Lang::t('cli.argv.json_schema.missing')
+                            : 'candy-code: ' . Lang::t('cli.argv.json_schema.flag', ['option' => $next]);
+                        $usageHint = self::jsonSchemaValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyJsonSchemaError();
+                        $usageHint = self::jsonSchemaValueHint();
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $jsonSchema = $next;
+                $i += 2;
+                continue;
+            }
+
             // -c / --continue: reopen the most recently used session, with
             // its transcript, instead of starting a new one.
             if ($arg === '--continue' || $arg === '-c') {
@@ -801,7 +855,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema);
     }
 
     /**
@@ -1112,6 +1166,27 @@ final class ArgvParser
     private static function maxCostValueHint(): string
     {
         return Lang::t('cli.argv.hint.max_cost');
+    }
+
+    /**
+     * The usage error for `--json-schema=` and `--json-schema ""` — the
+     * empty value rule {@see emptyMaxCostError()} documents, on the answer
+     * contract axis (AUT-4).
+     */
+    private static function emptyJsonSchemaError(): string
+    {
+        return 'candy-code: ' . Lang::t('cli.argv.json_schema.empty');
+    }
+
+    /**
+     * The remedy line under the `--json-schema` usage errors: plain prose,
+     * the same reason {@see maxCostValueHint()} gives — the grammar is "a
+     * JSON object, or a file containing one", not a closed set anything can
+     * be re-read against; the decode itself lives in NonInteractive.
+     */
+    private static function jsonSchemaValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.json_schema');
     }
 
     /**
