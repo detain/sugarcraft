@@ -215,6 +215,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // choke); the manifest is gated WITH its bundle directory and answers as a
         // loader-local gap, the command-floor discipline entered one row younger.
         'Bundles/Bundle.php|.candy-code/bundles' => self::BOTH,
+        // PLG-1 `bundles install`: the verb's ONE write destination, the user
+        // bundle root — the same PATH the reader above already classifies,
+        // arriving in a SECOND file, which the derivation flags by name. It
+        // writes nobody's project tier: USER, like the serve state directory.
+        'Cli/Subcommands.php|.candy-code/bundles' => self::USER,
         'Bundles/Bundle.php|.claude-plugin/plugin.json' => self::BOTH,
         'Cli/Bootstrap.php|.candy-code/agents' => self::REPOSITORY,
         'Cli/Bootstrap.php|.candy-code/hooks.yaml' => self::REPOSITORY,
@@ -481,7 +486,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SEVENTY occurrences — one per entry
+     * APPEARS IN. On this tree that is SEVENTY-ONE occurrences — one per entry
      * in {@see DOT_PATHS} — of FORTY-EIGHT distinct paths. TWENTY-NINE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -681,7 +686,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE',
             62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR', 65 => 'SIXTY-FIVE',
             66 => 'SIXTY-SIX', 67 => 'SIXTY-SEVEN', 68 => 'SIXTY-EIGHT',
-            69 => 'SIXTY-NINE', 70 => 'SEVENTY'];
+            69 => 'SIXTY-NINE', 70 => 'SEVENTY', 71 => 'SEVENTY-ONE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
