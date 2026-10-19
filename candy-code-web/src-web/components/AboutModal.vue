@@ -20,7 +20,21 @@ const health = ref<MethodResult<'server.health'> | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
 
+/**
+ * w4j/w2h review MINOR: the close→rapid-reopen race. load() clears the
+ * feeds and awaits; a re-open starts a SECOND load while the first is
+ * still in flight, and the two share one set of refs. The generation
+ * latch is the write gate: every load stamps its own number, and a
+ * settle that arrives after a newer load began belongs to a superseded
+ * visit and is dropped — answers AND errors, because a refusal from the
+ * closed visit is not news to the open one. Without it, the first
+ * visit's response (or failure) can repopulate or blank the feeds the
+ * second visit already settled.
+ */
+let generation = 0
+
 async function load(): Promise<void> {
+  const mine = ++generation
   loading.value = true
   error.value = null
   // w2h M3: a re-open never renders the previous visit's answers. Both
@@ -29,6 +43,9 @@ async function load(): Promise<void> {
   info.value = null
   health.value = null
   const [first, second] = await Promise.allSettled([connection.request('server.info', {}), connection.request('server.health', {})])
+  if (mine !== generation) {
+    return
+  }
   if (first.status === 'fulfilled') info.value = first.value
   else error.value = describe(first.reason)
   if (second.status === 'fulfilled') health.value = second.value

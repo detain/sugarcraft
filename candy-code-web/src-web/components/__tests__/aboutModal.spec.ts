@@ -102,4 +102,69 @@ describe('AboutModal (WEB-1c)', () => {
     await wrapper.find('[data-testid="about-backdrop"]').trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(2)
   })
+
+  it('drops a superseded answer that settles after the current visit (generation latch)', async () => {
+    wire = await Wire.connect()
+    const wrapper = mount(AboutModal, { props: { open: true } })
+    await flushPromises()
+    const staleInfo = wire.sent('server.info').at(-1)
+    const staleHealth = wire.sent('server.health').at(-1)
+    if (!staleInfo || !staleHealth) throw new Error('first open asked nothing')
+
+    // Close and re-open while the first visit is STILL in flight — the
+    // race w4j/w2h review named. Two loads now share one set of refs;
+    // only the newest generation may write.
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    const currentInfo = wire.sent('server.info').at(-1)
+    const currentHealth = wire.sent('server.health').at(-1)
+    if (!currentInfo || !currentHealth || currentInfo === staleInfo) throw new Error('re-open did not ask again')
+    wire.socket.answer({ version: '2.0.0', protocol: 1, permissionModes: ['default'], defaultPermissionMode: 'default' }, currentInfo.id)
+    wire.socket.answer({ ok: true, version: '2.0.0', uptimeS: 10, sessionsOpen: 0, turnsRunning: 0, draining: false }, currentHealth.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-info"]').text()).toContain('2.0.0')
+
+    // The superseded visit settles LAST — both its frames, so its
+    // allSettled really resumes after the current visit painted. Without
+    // the latch its answers overwrite the settled feeds.
+    wire.socket.answer({
+      version: '0.0.1-STALE', protocol: 1, permissionModes: ['default'], defaultPermissionMode: 'default',
+    }, staleInfo.id)
+    wire.socket.answer({ ok: true, version: '0.0.1', uptimeS: 99_999, sessionsOpen: 42, turnsRunning: 0, draining: false }, staleHealth.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-info"]').text()).not.toContain('STALE')
+    expect(wrapper.find('[data-testid="about-info"]').text()).toContain('2.0.0')
+    expect(wrapper.find('[data-testid="about-health"]').text()).toContain('up 10 s')
+    expect(wrapper.find('[data-testid="about-health"]').text()).not.toContain('42 sessions')
+  })
+
+  it('a superseded refusal cannot splat an error over the open visit', async () => {
+    wire = await Wire.connect()
+    const wrapper = mount(AboutModal, { props: { open: true } })
+    await flushPromises()
+    const staleInfo = wire.sent('server.info').at(-1)
+    const staleHealth = wire.sent('server.health').at(-1)
+    if (!staleInfo || !staleHealth) throw new Error('first open asked nothing')
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    const currentInfo = wire.sent('server.info').at(-1)
+    const currentHealth = wire.sent('server.health').at(-1)
+    if (!currentInfo || !currentHealth) throw new Error('re-open did not ask again')
+    wire.socket.answer({ version: '2.0.0', protocol: 1, permissionModes: ['default'], defaultPermissionMode: 'default' }, currentInfo.id)
+    wire.socket.answer({ ok: true, version: '2.0.0', uptimeS: 10, sessionsOpen: 0, turnsRunning: 0, draining: false }, currentHealth.id)
+    await flushPromises()
+
+    // The dead visit dies last: info REFUSED and health answered — its
+    // allSettled completes, and a writer without the latch would set the
+    // error line (and overwrite info) on the healthy open visit.
+    wire.socket.fail(-32001, 'gone', 'refused by a dead visit', staleInfo.id)
+    wire.socket.answer({ ok: true, version: '9.9.9', uptimeS: 1, sessionsOpen: 7, turnsRunning: 0, draining: false }, staleHealth.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="about-info"]').text()).toContain('2.0.0')
+    expect(wrapper.find('[data-testid="about-health"]').text()).toContain('up 10 s')
+  })
 })
