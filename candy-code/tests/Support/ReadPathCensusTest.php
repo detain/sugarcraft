@@ -400,6 +400,21 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — an `@file` import, judged by the $boundaryCheck callback the caller '
                 . 'supplies (InstructionFileLoader passes one built on ContainedPath)',
         ],
+        // plan_comparison CTX-3: the instruction-diff tracker. BOTH reads take
+        // their paths from InstructionFileLoader documents — every emitted path
+        // passed one of the loader's eight ContainedPath::within() gates on the way
+        // out (loadPersonal()'s entries are gated against their own home-dir anchor,
+        // see InstructionFileLoader's class doc-block) — and the tracker adds a
+        // staleness gate of its own: a realpath that moved since capture is
+        // REFUSED, never followed, so a re-read can never escape on the old verdict.
+        'Context/InstructionDiffTracker.php|file_get_contents' => [
+            'CONTAINED_UPSTREAM:Context/InstructionFileLoader.php — capture(): re-reads the bytes of a '
+                . 'loader document path, one admitted only through the loader\'s own ContainedPath gate; '
+                . 'an over-cap document (body null) is stat-tracked and never read here',
+            'CONTAINED_UPSTREAM:Context/InstructionFileLoader.php — recheck(): reads only after the stat '
+                . 'moved AND realpath still equals the path captured under the loader\'s gate — a moved '
+                . 'inode is degraded to a pointer line, not followed',
+        ],
         // One sink since audit 15d-09 / C3 moved the four document reads into
         // readBounded(), the size-bounded read; the four read DECISIONS are
         // unchanged and each still compares its path before calling it.
@@ -468,6 +483,18 @@ final class ReadPathCensusTest extends TestCase
                 . 'owned home bin/candy-code passes in; opened `ab` only to create it under a 0077 '
                 . 'umask and write one launch header — nothing is read back. A symlinked file or a '
                 . 'world-writable directory is refused before the open (audit C2a)',
+        ],
+        // plan_comparison EDT: the post-edit formatter's before/after pair. The
+        // path reaching both reads is the one PathJail::resolve() produced for the
+        // file the Edit call just made — the same jail LintRunner's step 3.E row
+        // claims, and stricter: the formatter is handed the file for WRITING, so a
+        // path Edit could not reach is never formatted here at all.
+        'Format/FormatRunner.php|file_get_contents' => [
+            'PATH_JAIL — format(): the restore baseline. `$absolute` is `PathJail::resolve($root, '
+                . '$path)` re-checked by `is_file()` and skipped when it is a tool-output spill; the '
+                . 'bytes go to a hash and to `guard()`, never to the model',
+            'PATH_JAIL — guard(): the read-back that decides whether the formatter run earned its '
+                . 'write — same jail-resolved path, compared to the baseline hash',
         ],
         // CALLER_SUPPLIED, not CONTAINED_UPSTREAM, and the correction was made BY
         // this test: the first draft claimed the upstream gate was in
