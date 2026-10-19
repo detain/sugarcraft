@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Providers;
 
+use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Handler\MockHandler as GuzzleMockHandler;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Messages\AssistantMessage;
@@ -14,6 +16,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\GeminiProvider;
+use SugarCraft\Code\Providers\ProviderException;
+use SugarCraft\Code\Providers\VertexProvider;
 
 /**
  * PRV-3: the native Gemini API-key arm.
@@ -88,7 +92,7 @@ final class GeminiProviderTest extends TestCase
         $this->assertFalse($provider->supportsFunctionCalling(), 'the arm builds no tool shapes - claiming the capability without the plumbing is the bug PRV-3 refuses to reintroduce');
         $this->assertTrue($provider->supportsVision(), 'inline images ride inlineData parts via the shared AttachmentEncoding');
         $this->assertFalse($provider->supportsDocuments(), 'document blocks are the Anthropic-family position, same as Vertex\'s arm takes');
-        $this->assertFalse($provider->supportsJsonSchema(), 'PRV-3 commit 2: the responseSchema emit is a separate commit');
+        $this->assertTrue($provider->supportsJsonSchema(), 'PRV-3 (3/3): the shared arm emits the native responseSchema/responseMimeType pair');
 
         $this->assertCount(0, $provider->embeddings(new EmbeddingsRequest(model: 'gemini-embedding-1', input: 'x'))->embeddings);
     }
@@ -195,6 +199,33 @@ final class GeminiProviderTest extends TestCase
         $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')]));
 
         $this->assertSame(['thinkingBudget' => 0], $captured['body']['generationConfig']['thinkingConfig']);
+    }
+
+    public function testStructuredOutputRidesTheNativeSchemaAndMimeTypePairTogetherOrNotAtAll(): void
+    {
+        // AUT-4 honesty regime: Google's GenerationConfig ignores a
+        // responseSchema sent without responseMimeType, so the shared arm
+        // emits them as a pair — and an absent or unparseable schema emits
+        // neither half rather than a schema the server will silently drop.
+        $schema = ['type' => 'object', 'properties' => ['answer' => ['type' => 'string']], 'required' => ['answer']];
+
+        $captured = null;
+        $provider = $this->providerCapturingUnary($captured);
+
+        $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')], jsonSchema: $schema));
+        $this->assertSame($schema, $captured['body']['generationConfig']['responseSchema']);
+        $this->assertSame('application/json', $captured['body']['generationConfig']['responseMimeType']);
+
+        // The string spelling of the same schema decodes to the same pair.
+        $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')], jsonSchema: (string) json_encode($schema)));
+        $this->assertSame($schema, $captured['body']['generationConfig']['responseSchema']);
+
+        $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')], jsonSchema: 'this is not json'));
+        $this->assertArrayNotHasKey('responseSchema', $captured['body']['generationConfig'], 'an unparseable schema degrades to plain output, never a half a pair');
+        $this->assertArrayNotHasKey('responseMimeType', $captured['body']['generationConfig']);
+
+        $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')]));
+        $this->assertArrayNotHasKey('responseSchema', $captured['body']['generationConfig']);
     }
 
     public function testAnEmptyTranscriptRefusesThroughTheErrorCarrier(): void
@@ -429,6 +460,107 @@ final class GeminiProviderTest extends TestCase
         $rebound->complete(new CompleteRequest(model: '', messages: [new UserMessage('hi')]));
         $this->assertStringEndsWith('/models/gemini-2.5-pro:generateContent', $captured['endpoint']);
         $this->assertSame(1_048_576, $rebound->contextWindow());
+    }
+
+    // =========================================================================
+    // PRV-3 review fixes: bounded SSE framing and the shared error unwrapper
+    // =========================================================================
+
+    public function testTheSseDecoderRefusesFramesBeyondTheEightKiBBound(): void
+    {
+        // CRITICAL-1: read(8192) in the transports is chunk GRANULARITY; the
+        // bound that closes the memory-DoS shape lives in the shared decoder
+        // and must raise BEFORE any yield of the offending document.
+        $decode = \Closure::bind(
+            static function (array $chunks): array {
+                return iterator_to_array(GeminiProvider::decodeSseStream($chunks), false);
+            },
+            null,
+            GeminiProvider::class,
+        );
+
+        // A terminated 16 KiB frame - double the bound on one line.
+        $fat = 'data: ' . str_repeat('A', 16 * 1024) . "\n\n";
+        $caught = null;
+        try {
+            $decode([$fat]);
+        } catch (ProviderException $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'a 16 KiB data line must be refused, not fed to json_decode');
+        $this->assertStringContainsString('8192', $caught->getMessage(), 'the refusal names the cap');
+
+        // An UNTERMINATED runaway line is refused mid-stream: the buffer may
+        // not grow past the bound while waiting for a newline that never
+        // comes. Split into sub-cap reads so no single chunk crosses it -
+        // only accumulation can.
+        $runaway = 'data: ' . str_repeat('B', 3000);
+        $caught = null;
+        try {
+            $decode([$runaway, $runaway, $runaway]);
+        } catch (ProviderException $e) {
+            $caught = $e;
+        }
+        $this->assertNotNull($caught, 'three sub-cap reads of one unclosed frame must still hit the bound');
+        $this->assertStringContainsString('without a line terminator', $caught->getMessage());
+
+        // The bound is not off-by-one-hungry: a maximum-size line survives.
+        $doc = '{"candidates":[{"content":{"parts":[{"text":"' . str_repeat('o', 8100) . '"}]}}]}';
+        $this->assertLessThanOrEqual(8192, strlen('data: ' . $doc), 'fixture must sit at-or-under the cap');
+        $events = $decode(['data: ' . $doc . "\n\n"]);
+        $this->assertCount(1, $events);
+    }
+
+    public function testTheGoogleErrorUnwrapperIsSharedByBothProviderErrorPaths(): void
+    {
+        // CRITICAL-2: one parser, both hosts, censused so the shared helper
+        // can neither be forked into a second implementation nor quietly
+        // dropped from a call site while the prose still claims it.
+        $root = dirname(__DIR__, 2) . '/src/Providers/';
+        $files = [
+            'Concerns/AnthropicMessagesWire.php',
+            'GeminiProvider.php',
+            'VertexProvider.php',
+            'AnthropicProvider.php',
+            'Concerns/GeminiGenerateContentWire.php',
+        ];
+
+        $definitions = 0;
+        foreach ($files as $relative) {
+            $definitions += substr_count((string) file_get_contents($root . $relative), 'function vertexJsonHttpErrorBody');
+        }
+        $this->assertSame(1, $definitions, 'the unwrapper must exist in exactly one file - the shared trait - never per-host');
+        $this->assertSame(3, substr_count((string) file_get_contents($root . 'GeminiProvider.php'), 'self::vertexJsonHttpErrorBody(')
+            + substr_count((string) file_get_contents($root . 'VertexProvider.php'), 'self::vertexJsonHttpErrorBody('),
+            'both provider error paths must keep routing through the shared parser (one Gemini call, two Vertex calls)');
+
+        $envelope = (string) json_encode([
+            'error' => ['code' => 403, 'message' => 'API key not valid. Please pass a valid API key.', 'status' => 'PERMISSION_DENIED'],
+        ]);
+        $thrower = static function () use ($envelope) {
+            throw RequestException::create(
+                new Request('POST', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'),
+                new Response(403, [], $envelope),
+            );
+        };
+
+        $gemini = (new GeminiProvider('gsk-bad', 'https://x.invalid', 'gemini-2.5-flash', http: $thrower))
+            ->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')]));
+        $this->assertTrue($gemini->isError);
+        $this->assertSame(
+            'API key not valid. Please pass a valid API key. (PERMISSION_DENIED)',
+            $gemini->errorMessage,
+            'the native arm must show Google\'s sentence, not Guzzle\'s transport prose',
+        );
+
+        $vertex = VertexProvider::create(
+            projectId: 'p',
+            location: 'l',
+            model: 'gemini-1.5-pro-002',
+            predictor: $thrower,
+        )->complete(new CompleteRequest(model: 'gemini-1.5-pro-002', messages: [new UserMessage('hi')]));
+        $this->assertTrue($vertex->isError);
+        $this->assertStringStartsWith('API key not valid. Please pass a valid API key. (PERMISSION_DENIED', $vertex->errorMessage);
     }
 
     // =========================================================================

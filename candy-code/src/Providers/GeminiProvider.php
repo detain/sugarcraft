@@ -265,8 +265,11 @@ final readonly class GeminiProvider implements ProviderInterface, RebindsModel
 
     public function supportsJsonSchema(): bool
     {
-        // PRV-3 follow-through: false until the responseSchema emit lands.
-        return false;
+        // PRV-3 (3/3): the shared arm emits the native
+        // `responseSchema` + `responseMimeType` pair, so this host honestly
+        // claims structured output - feeding AUT-4's honesty regime, which
+        // asks the flag instead of assuming the wire.
+        return true;
     }
 
     public function contextWindow(): int
@@ -301,7 +304,11 @@ final readonly class GeminiProvider implements ProviderInterface, RebindsModel
                 isError: true,
                 // Classified while the exception (status, body) still
                 // exists, and carried in the text - see ContextOverflow::describe().
-                errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
+                // PRV-3 CRITICAL-2: without a Google JSON envelope the unwrapper
+                // returns null and the message is exactly what it was before.
+                errorMessage: ContextOverflow::matches($e)
+                    ? ContextOverflow::describe($e->getMessage())
+                    : (self::vertexJsonHttpErrorBody($e) ?? $e->getMessage()),
                 errorContextOverflow: ContextOverflow::matches($e),
                 // Same verdict as a field, so the turn loop's overflow
                 // recovery reads it rather than the prose. See

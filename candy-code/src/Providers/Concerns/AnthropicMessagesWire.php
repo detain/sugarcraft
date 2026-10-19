@@ -15,6 +15,7 @@ use SugarCraft\Code\Providers\CacheBreakpoints;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ContextOverflow;
+use SugarCraft\Code\Providers\ProviderException;
 use SugarCraft\Code\Providers\ProviderStreamException;
 use SugarCraft\Code\Providers\TransientFailure;
 use SugarCraft\Code\Tools\Tool;
@@ -1545,9 +1546,71 @@ trait AnthropicMessagesWire
         return $total / 1000;
     }
     // -------------------------------------------------------------------------
+    // Error paths: the Google-family JSON error envelope
+    // -------------------------------------------------------------------------
+
+    /**
+     * Both hosts behind this trait answer HTTP failures with Google's
+     * `{"error":{"code":N,"message":"...","status":"NAME"}}` envelope, and
+     * the generic transport text ("Client error: POST https://…") hides the
+     * one sentence the operator needs. SHARED ON PURPOSE: the native
+     * API-key arm and the Vertex arm must not drift into two unwrappers of
+     * the same document — {@see \SugarCraft\Code\Providers\GeminiProvider::complete()}
+     * and {@see \SugarCraft\Code\Providers\VertexProvider::complete()} are
+     * its only two call sites, and `GeminiProviderTest` censuses exactly
+     * that (PRV-3 review CRITICAL-2: the helper exists for both or for
+     * neither, never as a claim).
+     *
+     * Duck-typed on `getResponse()` rather than on a Guzzle class: the SDK
+     * transport and any future one expose the same PSR-7 shape, and a
+     * throwable without a readable JSON envelope costs a null and keeps its
+     * own message.
+     */
+    private static function vertexJsonHttpErrorBody(\Throwable $e): ?string
+    {
+        if (!method_exists($e, 'getResponse')) {
+            return null;
+        }
+        $response = $e->getResponse();
+        if ($response === null || !method_exists($response, 'getBody')) {
+            return null;
+        }
+
+        $decoded = json_decode((string) $response->getBody(), true);
+        $error = is_array($decoded) ? ($decoded['error'] ?? null) : null;
+        if (!is_array($error)) {
+            return null;
+        }
+
+        $message = is_string($error['message'] ?? null) ? trim($error['message']) : '';
+        if ($message === '') {
+            return null;
+        }
+
+        $status = is_string($error['status'] ?? null) && $error['status'] !== ''
+            ? ' (' . $error['status'] . ')'
+            : '';
+
+        return $message . $status;
+    }
+
+    // -------------------------------------------------------------------------
     // Shared SSE framing: both hosts answer a stream request with `data:`
     // lines carrying one Anthropic event document each
     // -------------------------------------------------------------------------
+
+    /**
+     * Hard bound on ONE SSE frame — a single line or, while one is still
+     * accumulating, the whole unconsumed buffer. 8 KiB is generous against
+     * every observed Anthropic/Gemini event (the largest captured frame is a
+     * fraction of it) and closes the memory-DoS shape where a hostile proxy
+     * or a desynced stream never emits a newline and the accumulator grows
+     * without bound. PRV-3 review CRITICAL-1: the read(8192) slice size in
+     * the transports is chunk GRANULARITY, not a cap - without this bound a
+     * frame may straddle any number of reads.
+     */
+    public const MAX_SSE_FRAME_BYTES = 8192;
+
     /**
      * Reassembles a sequence of raw SSE byte chunks into decoded events.
      *
@@ -1556,6 +1619,10 @@ trait AnthropicMessagesWire
      * {@see decodeSseEvents()} only emits on a newline - a server that closes
      * straight after its last `data:` line would otherwise leave that event
      * stranded in the buffer, silently discarded when this generator returns.
+     *
+     * Bounded: any single frame beyond {@see MAX_SSE_FRAME_BYTES} - terminated
+     * or not - raises {@see ProviderException} naming the cap BEFORE any yield
+     * of the offending document.
      *
      * @param iterable<int, string> $chunks
      * @return \Generator<int, array<string, mixed>>
@@ -1594,7 +1661,20 @@ trait AnthropicMessagesWire
         $buffer .= $chunk;
 
         while (($newline = strpos($buffer, "\n")) !== false) {
-            $line = trim(substr($buffer, 0, $newline));
+            $line = substr($buffer, 0, $newline);
+
+            // The bound is measured on the WIRE line, CR included - a frame
+            // is refused for what it cost the accumulator, not for what
+            // survives trim(). Checked before any dispatch or yield: the
+            // offending document must never reach a parser (CRITICAL-1).
+            if (strlen($line) > self::MAX_SSE_FRAME_BYTES) {
+                throw new ProviderException(
+                    'SSE frame exceeds the ' . self::MAX_SSE_FRAME_BYTES . '-byte bound ('
+                    . strlen($line) . ' bytes before the line terminator).'
+                );
+            }
+
+            $line = trim($line);
             $buffer = substr($buffer, $newline + 1);
 
             if (!str_starts_with($line, 'data:')) {
@@ -1610,6 +1690,17 @@ trait AnthropicMessagesWire
             if (is_array($decoded)) {
                 yield $decoded;
             }
+        }
+
+        // No newline in sight and the accumulator is already over the bound:
+        // the frame that will never terminate must not grow memory past it
+        // either - refuse NOW, mid-stream, not when the newline eventually
+        // (never) arrives.
+        if (strlen($buffer) > self::MAX_SSE_FRAME_BYTES) {
+            throw new ProviderException(
+                'SSE frame exceeds the ' . self::MAX_SSE_FRAME_BYTES . '-byte bound ('
+                . strlen($buffer) . ' bytes accumulated without a line terminator).'
+            );
         }
     }
 

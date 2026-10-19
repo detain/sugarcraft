@@ -267,6 +267,23 @@ trait GeminiGenerateContentWire
             $generationConfig['stopSequences'] = $stopSequences;
         }
 
+        // AUT-4's honesty regime asks providers only what they can actually
+        // carry; on this wire structured output is the native pair
+        // `responseSchema` + `responseMimeType: application/json` - Google's
+        // GenerationConfig ignores a schema sent without the mime type, so
+        // they are always emitted together. Unparseable schema text degrades
+        // to plain output rather than a 400 the caller cannot act on; hosts
+        // that do not advertise the capability never receive the field
+        // because no caller sets it for them (Vertex's flag states this).
+        $schema = $request->jsonSchema;
+        if (is_string($schema)) {
+            $schema = json_decode($schema, true);
+        }
+        if (is_array($schema) && $schema !== []) {
+            $generationConfig['responseSchema'] = $schema;
+            $generationConfig['responseMimeType'] = 'application/json';
+        }
+
         $body['generationConfig'] = $generationConfig;
 
         return $body;

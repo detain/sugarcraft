@@ -397,6 +397,11 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     public function supportsJsonSchema(): bool
     {
         // Anthropic constrains output through tools, not a response schema.
+        // Since PRV-3 the shared Gemini arm CAN build a `responseSchema` on
+        // the same class, but the flag stays false: no caller ever sets
+        // CompleteRequest::$jsonSchema for a `vertex` launch, and the
+        // engine-side honesty check must keep speaking the Anthropic truth
+        // for the models this host predominantly routes.
         return false;
     }
 
@@ -451,7 +456,11 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 isError: true,
                 // 2.7-1a: classified while the exception (status, body) still
                 // exists, and carried in the text — see ContextOverflow::describe().
-                errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
+                // PRV-3 CRITICAL-2: a Google JSON error envelope is unwrapped to
+                // its own message by the shared parser; null keeps the old text.
+                errorMessage: ContextOverflow::matches($e)
+                    ? ContextOverflow::describe($e->getMessage())
+                    : (self::vertexJsonHttpErrorBody($e) ?? $e->getMessage()),
                 // 2.7-1b: the same verdict as a field, so the turn loop's
                 // overflow recovery reads it rather than the prose.
                 errorContextOverflow: ContextOverflow::matches($e),
@@ -559,7 +568,11 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 isError: true,
                 // 2.7-1a: classified while the exception (status, body) still
                 // exists, and carried in the text — see ContextOverflow::describe().
-                errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
+                // PRV-3 CRITICAL-2: a Google JSON error envelope is unwrapped to
+                // its own message by the shared parser; null keeps the old text.
+                errorMessage: ContextOverflow::matches($e)
+                    ? ContextOverflow::describe($e->getMessage())
+                    : (self::vertexJsonHttpErrorBody($e) ?? $e->getMessage()),
                 // 2.7-1b: the same verdict as a field, so the turn loop's
                 // overflow recovery reads it rather than the prose.
                 errorContextOverflow: ContextOverflow::matches($e),
