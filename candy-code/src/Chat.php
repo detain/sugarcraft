@@ -19171,10 +19171,15 @@ final class Chat implements Model
      * One funnel through {@see dispatchCommand()}, the same one a typed
      * submit takes, including the read-only-session gate submit() applies
      * ahead of dispatch — a palette row must not open in a read-only window
-     * the typed spelling is refused in. A file-based row cannot reach here
-     * (the registry's palette rows are built-ins, and a template row has no
-     * private handler to name); a row whose handler is absent is a wiring bug
-     * {@see CommandRegistryTest} turns red, and fails closed to a no-op here.
+     * the typed spelling is refused in. A file-based row cannot BE a palette
+     * row (the registry's palette rows are built-ins, and a template row has
+     * no private handler to name), but a file may CLAIM a built-in's name —
+     * and precedence then decides, exactly as it does for a typed submit:
+     * submit() checks the file map before dispatchCommand(), so the shadowed
+     * case below routes through submit() itself rather than reaching the
+     * built-in handler the typed spelling never runs (w4b review, w5j-1). A
+     * row whose handler is absent is a wiring bug {@see CommandRegistryTest}
+     * turns red, and fails closed to a no-op here.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -19189,6 +19194,19 @@ final class Chat implements Model
         $readOnly = $closed->readOnlyRefusal($text);
         if ($readOnly !== null) {
             return $readOnly;
+        }
+
+        // FILE-BASED SHADOW FIRST, mirroring submit()'s ordering: a command
+        // file claiming this built-in's name reroutes the typed spelling into
+        // a prompt, and dispatchCommand() consults only the built-in table —
+        // it could not see the shadow at all. Routing through submit() keeps
+        // ONE funnel for expansion, fork-parking, the tier checks and turn
+        // dispatch, so the palette row and the typed command cannot drift
+        // apart the way two parallel expanders would (w4b review MINOR,
+        // w5j-1). The draft box is consumed by the submission exactly as a
+        // typed Enter consumes it — parity is the palette's contract.
+        if ($closed->resolveCustomCommand($text) !== null) {
+            return $closed->mutate(['inputBuf' => $text])->submit();
         }
 
         return $closed->dispatchCommand($text) ?? [$closed, null];

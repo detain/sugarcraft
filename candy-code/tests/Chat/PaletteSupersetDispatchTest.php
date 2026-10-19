@@ -221,4 +221,53 @@ final class PaletteSupersetDispatchTest extends TestCase
             self::assertFalse(isset(self::EXPLICIT_ARM_EXCEPTIONS[$name]), "/$name must be a generic-tail row");
         }
     }
+
+    /**
+     * w5j-1 (w4b review MINOR): the file-based shadow of a palette row's name.
+     * submit() checks the file map BEFORE dispatchCommand() precisely so an
+     * `undo.md` replaces `/undo`; a palette tail that still reached the
+     * built-in handler ran the very command the operator overrode. Typed and
+     * palette must now both run the file.
+     */
+    public function testAPaletteRowShadowedByACommandFileRunsTheFileAsTypedDoes(): void
+    {
+        $spec = CommandRegistry::forPaletteAction(PaletteAction::UndoTurn);
+        self::assertInstanceOf(CommandSpec::class, $spec);
+        self::assertSame('undo', $spec->name);
+
+        $shadow = CommandSpec::new(
+            name: 'undo',
+            description: 'the operator reclaimed /undo',
+            category: 'Custom',
+            template: 'shadowed /undo ran',
+        );
+
+        $typed = (new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            inputBuf: '/undo',
+            backend: new EchoBackend(),
+            customCommands: ['undo' => $shadow],
+        ))->withSize(100, 30);
+        $palette = (new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            backend: new EchoBackend(),
+            customCommands: ['undo' => $shadow],
+        ))->withSize(100, 30);
+
+        [$typedNext] = $typed->update(new KeyMsg(KeyType::Enter));
+        [$paletteNext] = $palette->runPaletteAction($spec->label());
+        [$builtInNext] = $this->paletteFixture()->runPaletteAction($spec->label());
+
+        self::assertSame(
+            $this->rowShapes(array_slice($typedNext->history, 2)),
+            $this->rowShapes(array_slice($paletteNext->history, 2)),
+            'the palette ran the built-in /undo while the typed spelling ran its file shadow',
+        );
+        self::assertSame($typedNext->inFlight, $paletteNext->inFlight);
+        self::assertNotSame(
+            $this->rowShapes(array_slice($paletteNext->history, 2)),
+            $this->rowShapes(array_slice($builtInNext->history, 2)),
+            'fixture: the shadow must change the outcome — equal rows on both sides would prove nothing',
+        );
+    }
 }
