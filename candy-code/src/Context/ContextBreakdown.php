@@ -69,6 +69,11 @@ final readonly class ContextBreakdown
      *        the request before them had cached — and the newest as the
      *        cached share before and after it (roadmap 3.B-5); null when the
      *        backend does not track them ({@see withCacheBreaks()})
+     * @param array{files: list<array{path: string, bytes: int, personal: bool}>, refused: list<array{path: string, reason: string}>}|null $instructionFiles
+     *        the instruction documents the system prompt splices — NAMES and
+     *        sizes only, bodies never (roadmap VIS-2a) — plus the paths the
+     *        loader refused and why; null when this breakdown was measured
+     *        without pricing them ({@see measure()})
      */
     public function __construct(
         public int $window,
@@ -83,6 +88,7 @@ final readonly class ContextBreakdown
         public ?array $sessionCache,
         public ?array $pruning = null,
         public ?array $cacheBreaks = null,
+        public ?array $instructionFiles = null,
     ) {
     }
 
@@ -160,6 +166,7 @@ final readonly class ContextBreakdown
                 'rows' => array_reverse(\array_slice($rows, -self::PRUNED_ROWS)),
             ],
             $this->cacheBreaks,
+            $this->instructionFiles,
         );
     }
 
@@ -188,6 +195,7 @@ final readonly class ContextBreakdown
             $this->sessionCache,
             $this->pruning,
             ['breaks' => max(0, $breaks), 'last' => $last],
+            $this->instructionFiles,
         );
     }
 
@@ -215,6 +223,10 @@ final readonly class ContextBreakdown
      * @param int $historyTokens the history estimate the status bar shows — passed
      *        in rather than recomputed so the two can never disagree (it carries
      *        the session's calibration, which only `Chat` holds)
+     * @param array{files: list<array{path: string, bytes: int, personal: bool}>, refused: list<array{path: string, reason: string}>}|null $instructionFiles
+     *        the session's instruction documents as the loader named them
+     *        (roadmap VIS-2a); null says "this session did not price them",
+     *        and the report prints that rather than an empty list
      */
     public static function measure(
         array $history,
@@ -223,6 +235,7 @@ final readonly class ContextBreakdown
         int $window,
         int $historyTokens,
         int $largest = self::LARGEST_MESSAGES,
+        ?array $instructionFiles = null,
     ): self {
         $toolCount = null;
         $toolTokens = null;
@@ -277,6 +290,7 @@ final readonly class ContextBreakdown
             array_slice($sizes, 0, max(0, $largest)),
             $lastCache,
             $cacheReplies > 0 ? ['read' => $cacheRead, 'prompt' => $cachePrompt, 'replies' => $cacheReplies] : null,
+            instructionFiles: $instructionFiles,
         );
     }
 

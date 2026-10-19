@@ -11,7 +11,8 @@ use SugarCraft\Code\Context\ContextBreakdown;
 
 /**
  * `/context` (and `/tokens`): where the next request's context window goes —
- * the system prompt per layer, the tool schemas, the history, the largest
+ * the system prompt per layer, the instruction documents it splices (by name
+ * and size, roadmap VIS-2a), the tool schemas, the history, the largest
  * messages, the cache-hit share (roadmap 5.6) and the cache breaks (3.B-5). Read-only and local: it
  * measures in this process, sends nothing and calls no model. The report
  * itself is {@see ContextCommand}'s; this is its session half (roadmap O-2h).
@@ -45,6 +46,7 @@ final class ContextHostCommand implements HostCommand
             $tools,
             (int) $context->contextTokenLimit,
             (int) $context->contextTokens,
+            instructionFiles: self::instructionFiles($context->root),
         )
             // Roadmap 5.6 remainder: what the session's ledger prunes out.
             ->withPruning($context->contextLedger(), $context->history);
@@ -55,5 +57,41 @@ final class ContextHostCommand implements HostCommand
         }
 
         return CommandResult::reply($text, (new ContextCommand($breakdown))->report());
+    }
+
+    /**
+     * The instruction documents this session's prompt splices, as names and
+     * sizes only (roadmap VIS-2a): {@see \SugarCraft\Code\Cli\Bootstrap::instructionLoader()}
+     * is the memoized instance the system prompt itself is built from, so the
+     * panel reads the loader's own record — {@see \SugarCraft\Code\Context\InstructionFileLoader::loadDocuments()}
+     * for the repository-shipped files, {@see \SugarCraft\Code\Context\InstructionFileLoader::loadPersonal()}
+     * for the operator's own (kept apart there precisely because provenance
+     * frames it differently), and {@see \SugarCraft\Code\Context\InstructionFileLoader::refusedPaths()}
+     * for what was not read and why. A loader that cannot be built leaves the
+     * figure null and the report says "not measured" — the same unknown-honesty
+     * rule every other part of the panel follows.
+     *
+     * @return array{files: list<array{path: string, bytes: int, personal: bool}>, refused: list<array{path: string, reason: string}>}|null
+     */
+    private static function instructionFiles(?string $root): ?array
+    {
+        try {
+            $loader = \SugarCraft\Code\Cli\Bootstrap::instructionLoader($root);
+            $files = [];
+            foreach ($loader->loadDocuments() as $doc) {
+                $files[] = ['path' => $doc['path'], 'bytes' => $doc['bytes'], 'personal' => false];
+            }
+            foreach ($loader->loadPersonal() as $doc) {
+                $files[] = ['path' => $doc['path'], 'bytes' => $doc['bytes'], 'personal' => true];
+            }
+            $refused = [];
+            foreach ($loader->refusedPaths() as $path => $reason) {
+                $refused[] = ['path' => (string) $path, 'reason' => (string) $reason];
+            }
+
+            return ['files' => $files, 'refused' => $refused];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

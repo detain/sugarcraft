@@ -109,6 +109,7 @@ final class ContextCommandTest extends TestCase
 
         self::assertStringContainsString('System prompt: not measured', $report);
         self::assertStringContainsString('Tool schemas: not measured', $report);
+        self::assertStringContainsString('Instruction files: not measured', $report, 'a breakdown that never priced its documents says so, never lists nothing');
         self::assertStringContainsString('Prompt cache: no reply has reported a cache split yet.', $report);
         self::assertStringContainsString('History: ~12 (1 message sent to the model; 0 UI-only rows never sent)', $report);
     }
@@ -311,6 +312,90 @@ final class ContextCommandTest extends TestCase
         );
         $text = implode("\n", array_map(static fn (Message $m): string => $m->content, $reply->rows));
         self::assertStringContainsString('Cache breaks: 2 this session — the newest read 5% of its prompt from cache, after 95% on the request before.', $text);
+    }
+
+    /**
+     * Roadmap VIS-2a: `/context` names the instruction documents the system
+     * prompt splices — the repository-shipped ones, the operator's personal
+     * one (marked, because provenance frames it differently), and the paths
+     * the loader refused. Names and sizes only; bodies never reach the panel.
+     */
+    public function testTheReportNamesTheInstructionFilesAndRefusals(): void
+    {
+        $files = [
+            'files' => [
+                ['path' => '/repo/CLAUDE.md', 'bytes' => 2048, 'personal' => false],
+                ['path' => '/home/op/.candy-code/AGENTS.md', 'bytes' => 512, 'personal' => true],
+            ],
+            'refused' => [
+                ['path' => '/repo/imported.md', 'reason' => 'over the size ceiling'],
+            ],
+        ];
+        $report = ContextCommand::compose(ContextBreakdown::measure([Message::user('hi')], null, null, 8192, 12, instructionFiles: $files));
+
+        self::assertStringContainsString('Instruction files:', $report);
+        self::assertMatchesRegularExpression('/^  2 KB\s+\/repo\/CLAUDE\.md$/m', $report);
+        self::assertMatchesRegularExpression('/^  512 B\s+\/home\/op\/\.candy-code\/AGENTS\.md \(personal\)$/m', $report);
+        self::assertStringContainsString('not read: /repo/imported.md — over the size ceiling', $report);
+        self::assertStringNotContainsString('Instruction files: not measured', $report);
+    }
+
+    public function testPricedButEmptyInstructionFilesSayNoneNotNothingAtAll(): void
+    {
+        $report = ContextCommand::compose(ContextBreakdown::measure(
+            [Message::user('hi')], null, null, 8192, 12,
+            instructionFiles: ['files' => [], 'refused' => []],
+        ));
+
+        self::assertStringContainsString("Instruction files:\n  - none", $report);
+        self::assertStringNotContainsString('Instruction files: not measured', $report);
+    }
+
+    /**
+     * The ctor is POSITIONAL and both withers re-new it by hand — one shifted
+     * slot and pruning lands in the breaks or the documents vanish under a
+     * wither. Pinned by slot identity, not by re-deriving the wither bodies.
+     */
+    public function testInstructionFilesRideEveryPositionalWitherWithoutShiftingSlots(): void
+    {
+        $b = new ContextBreakdown(200, null, null, null, 1, 1, 0, [], null, null, ['slot' => 'pruning'], ['slot' => 'breaks'], ['slot' => 'files']);
+        self::assertSame(['slot' => 'pruning'], $b->pruning);
+        self::assertSame(['slot' => 'breaks'], $b->cacheBreaks);
+        self::assertSame(['slot' => 'files'], $b->instructionFiles);
+
+        $documents = ['files' => [['path' => '/x/CLAUDE.md', 'bytes' => 10, 'personal' => false]], 'refused' => []];
+        $history = [Message::user('hi')];
+        $measured = ContextBreakdown::measure($history, null, null, 8192, 12, instructionFiles: $documents);
+        $pruned = $measured->withPruning(\SugarCraft\Code\Context\Pruning\ContextLedger::new(), $history);
+        self::assertSame($documents, $pruned->instructionFiles, 'withPruning() must carry the documents through');
+        $both = $pruned->withCacheBreaks(1, ['from' => 90, 'to' => 5]);
+        self::assertSame($documents, $both->instructionFiles, 'withCacheBreaks() must carry them too');
+        self::assertSame(['breaks' => 1, 'last' => ['from' => 90, 'to' => 5]], $both->cacheBreaks, 'the breaks still land in their own slot');
+        self::assertIsArray($both->pruning);
+    }
+
+    /**
+     * End to end: `/context` on a real session root names the CLAUDE.md that
+     * root actually ships — the loader, not a fixture array, feeds the panel.
+     */
+    public function testTheHostCommandFeedsTheRealLoader(): void
+    {
+        $this->fixture = (new PromptFixture())->write('CLAUDE.md', "# Conventions\n\nUse tabs.\n");
+
+        $reply = (new \SugarCraft\Code\Host\Commands\ContextHostCommand())->run(
+            \SugarCraft\Code\Host\Commands\CommandContext::new(
+                history: [Message::user('go')],
+                root: $this->fixture->root(),
+                contextTokenLimit: 100_000,
+                contextTokens: 5,
+            ),
+            '/context',
+        );
+        $text = implode("\n", array_map(static fn (Message $m): string => $m->content, $reply->rows));
+
+        self::assertStringContainsString('Instruction files:', $text);
+        self::assertStringContainsString($this->fixture->root() . '/CLAUDE.md', $text);
+        self::assertStringNotContainsString('Instruction files: not measured', $text);
     }
 
     private function runtime(App $app): Runtime

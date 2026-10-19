@@ -84,6 +84,8 @@ final class ContextCommand
             }
         }
 
+        $lines = array_merge($lines, self::instructionLines($b));
+
         if ($b->toolTokens === null || $b->toolCount === null) {
             $lines[] = Lang::t('cmd.context.tools.unmeasured');
         } else {
@@ -138,6 +140,45 @@ final class ContextCommand
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The instruction-file part (roadmap VIS-2a): which documents the system
+     * prompt splices, their sizes, and which paths the loader refused — names
+     * and sizes only, bodies never. A breakdown measured without pricing them
+     * (any hand-built one, any backend this panel cannot see into) says "not
+     * measured" rather than printing an empty list that reads as "nothing is
+     * loaded".
+     *
+     * @return list<string>
+     */
+    private static function instructionLines(ContextBreakdown $b): array
+    {
+        $files = $b->instructionFiles;
+        if ($files === null) {
+            return [Lang::t('cmd.context.instructions.unmeasured')];
+        }
+
+        $lines = [Lang::t('cmd.context.instructions')];
+        if ($files['files'] === [] && $files['refused'] === []) {
+            $lines[] = '  - ' . Lang::t('cmd.context.none');
+        }
+        foreach ($files['files'] as $file) {
+            $lines[] = sprintf(
+                '  %-8s %s%s',
+                self::bytes($file['bytes']),
+                Chat::reportField($file['path']),
+                $file['personal'] ? ' ' . Lang::t('cmd.context.instructions.personal') : '',
+            );
+        }
+        foreach ($files['refused'] as $refusal) {
+            $lines[] = '  ' . Lang::t('cmd.context.instructions.refused', [
+                'path' => Chat::reportField($refusal['path']),
+                'reason' => Chat::reportField($refusal['reason']),
+            ]);
+        }
+
+        return $lines;
     }
 
     /**
