@@ -16860,7 +16860,7 @@ final class Chat implements Model
         }
 
         $limit = $query === '' ? SessionPicker::PAGE_SIZE : SessionPicker::SEARCH_LIMIT;
-        [$rows, $more] = $this->sessionPickerRows($limit, false);
+        [$rows, $more] = $this->sessionPickerRows($limit, false, $query);
         if ($rows === []) {
             return null;
         }
@@ -16887,9 +16887,19 @@ final class Chat implements Model
      * thing that arms the load-more edge (E744 WS5): the page is grown by
      * widening the limit, not by an offset walk.
      *
+     * A non-empty $bodyQuery threads the picker's filter text into the
+     * top-level read as `withBodySearch` (SES-2), so the page the store
+     * answers with is the FTS5-ranked body hits, not a recency page the
+     * client-side fuzzy then discards rows from. On an FTS5-less store the
+     * query degrades to the same name/preview/id LIKE prefilter the picker
+     * always had (enhanced-store law); the sub-agent read deliberately
+     * stays unfiltered so the children of a body-matched session ride in
+     * with their parent. The picker's Smith-Waterman ranking then runs over
+     * what comes back, the existing tie-break.
+     *
      * @return array{0: list<array<string, mixed>>, 1: bool}
      */
-    private function sessionPickerRows(int $limit, bool $archived): array
+    private function sessionPickerRows(int $limit, bool $archived, string $bodyQuery = ''): array
     {
         $store = $this->sessionStore;
         if ($store === null) {
@@ -16898,12 +16908,17 @@ final class Chat implements Model
 
         $kinds = \SugarCraft\Code\Session\SessionKind::class;
         $query = \SugarCraft\Code\Session\SessionQuery::new();
-        $top = $store->listSessionsFiltered(
-            $query->withKinds($kinds::Main, $kinds::Branch, $kinds::Background)
-                ->withIncludeArchived($archived)
-                ->withPinnedFirst()
-                ->withLimit($limit),
-        );
+        $topPage = $query->withKinds($kinds::Main, $kinds::Branch, $kinds::Background)
+            ->withIncludeArchived($archived)
+            ->withPinnedFirst()
+            ->withLimit($limit);
+        // A plain SessionStore lawfully refuses `bodySearch` (its LIKE
+        // cannot rank), so the FTS wire is threaded only on stores that own
+        // the side table; everything else keeps the exact pre-SES-2 page.
+        if ($bodyQuery !== '' && $store instanceof \SugarCraft\Code\Session\EnhancedSessionStore) {
+            $topPage = $topPage->withBodySearch($bodyQuery);
+        }
+        $top = $store->listSessionsFiltered($topPage);
         if ($top === []) {
             return [[], false];
         }
@@ -16954,7 +16969,7 @@ final class Chat implements Model
         }
 
         $limit = $picker->nextFetchLimit();
-        [$rows, $more] = $this->sessionPickerRows($limit, $picker->showsArchived());
+        [$rows, $more] = $this->sessionPickerRows($limit, $picker->showsArchived(), $picker->query());
 
         return [$this->mutate(['sessionPicker' => $picker->withFetchedRows($rows, $limit, $more)]), null];
     }
@@ -16967,7 +16982,7 @@ final class Chat implements Model
     private function reloadSessionPicker(SessionPicker $picker, ?string $keepId = null): SessionPicker
     {
         $limit = max($picker->fetchLimit(), $picker->query() !== '' || $picker->isFiltering() ? SessionPicker::SEARCH_LIMIT : 0);
-        [$rows, $more] = $this->sessionPickerRows($limit, $picker->showsArchived());
+        [$rows, $more] = $this->sessionPickerRows($limit, $picker->showsArchived(), $picker->query());
 
         return $picker->withReloadedRows($rows, $limit, $more, $keepId);
     }
@@ -17139,7 +17154,7 @@ final class Chat implements Model
                     if ($picker->fetchLimit() >= SessionPicker::SEARCH_LIMIT) {
                         return $keep($picker);
                     }
-                    [$rows, $more] = $this->sessionPickerRows(SessionPicker::SEARCH_LIMIT, $picker->showsArchived());
+                    [$rows, $more] = $this->sessionPickerRows(SessionPicker::SEARCH_LIMIT, $picker->showsArchived(), $picker->query());
 
                     return $keep($picker->withFetchedRows($rows, SessionPicker::SEARCH_LIMIT, $more));
 

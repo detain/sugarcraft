@@ -421,4 +421,79 @@ final class SessionCommandTest extends TestCase
         $this->assertSame(Role::Assistant, $lastMsg2->role);
         $this->assertStringContainsString('No active session', $lastMsg2->content);
     }
+
+    // =========================================================================
+    // SES-2 picker wire (w6h): the Ctrl+R page read threads the filter text
+    // into withBodySearch, so the store answers with FTS5 body hits; on a
+    // latched (no-FTS5) store the same text degrades to the name/preview/id
+    // LIKE prefilter. Pinned at the page read itself because the picker's
+    // client-side fuzzy ranks what arrives and cannot distinguish the two
+    // fetch shapes on its own.
+    // =========================================================================
+
+    /** @param list<string> $bodies */
+    private function saveBodySearchChat(
+        \SugarCraft\Code\Session\EnhancedSessionStore $store,
+        string $id,
+        ?string $name,
+        array $bodies,
+    ): void {
+        $store->createSession($id, 'openai', 'gpt-4', null, $name);
+        $messages = [];
+        foreach ($bodies as $i => $body) {
+            $messages[] = ['role' => $i % 2 === 0 ? 'user' : 'assistant', 'content' => $body];
+        }
+        $store->saveTranscript($id, $messages);
+    }
+
+    /**
+     * Drive the private page read behind the picker and return its row ids.
+     *
+     * @return list<string>
+     */
+    private function pickerPageIds(Chat $chat, string $bodyQuery): array
+    {
+        $rows = (new \ReflectionMethod(Chat::class, 'sessionPickerRows'))->invoke($chat, 20, false, $bodyQuery)[0];
+
+        return array_column($rows, 'sessionId');
+    }
+
+    public function testThePickerPageReadCarriesBodySearchHitsTheNameLegCannotSee(): void
+    {
+        $store = new \SugarCraft\Code\Session\EnhancedSessionStore($this->tempDir . '/wire-fts.db');
+        $this->saveBodySearchChat($store, 'quiet-vault', 'Quarterly Notes', ['the ledger entry about the amber anchor was misplaced']);
+        $store->createSession('bare-list', 'openai', 'gpt-4', null, 'Bare List');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'bare-list',
+        );
+
+        self::assertSame(['quiet-vault'], $this->pickerPageIds($chat, 'anchor'));
+        // No query keeps the plain recency page — the wire costs nothing when
+        // the picker is not filtering.
+        self::assertContains('bare-list', $this->pickerPageIds($chat, ''));
+    }
+
+    public function testThePickerPageReadDegradesTheBodyQueryToTheLikeNameLegWhenFts5IsLatched(): void
+    {
+        $store = new \SugarCraft\Code\Session\EnhancedSessionStore($this->tempDir . '/wire-latched.db', 'no_such_fts_module_probe');
+        $this->saveBodySearchChat($store, 'quiet-vault', 'Quarterly Notes', ['the ledger entry about the amber anchor was misplaced']);
+        $this->saveBodySearchChat($store, 'named-anchor', 'Anchor Point', ['nothing relevant in the body']);
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'named-anchor',
+        );
+
+        // Degrade, never fail: LIKE saw the name, never the body — exactly the
+        // pre-SES-2 answer for the same text.
+        self::assertSame(['named-anchor'], $this->pickerPageIds($chat, 'anchor'));
+    }
 }
