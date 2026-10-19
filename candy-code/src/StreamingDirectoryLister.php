@@ -11,27 +11,28 @@ use Generator;
  * directories with thousands of files do not cause memory exhaustion.
  *
  * Mirrors ReadDirIter from Go's charmbracelet/gum.
+ *
+ * The former `positive-int $chunkSize` constructor knob is removed: readdir()
+ * buffers at the libc layer already, and the value was declared but read
+ * nowhere. The first production consumer (Tools/BuiltIn/Ls.php, SHL-2) passes
+ * a PathJail-resolved directory — the gap this class used to record.
  */
 final class StreamingDirectoryLister
 {
     /**
-     * @param positive-int $chunkSize Number of entries to buffer per yield.
-     *                                Larger values reduce syscalls but use
-     *                                more memory; 64 is a sane default.
-     */
-    public function __construct(
-        private readonly int $chunkSize = 64,
-    ) {}
-
-    /**
-     * Yield directory entries lazily, one chunk at a time.
+     * Yield directory entries lazily.
      * Empty directories produce an empty Generator (caller handles that).
+     *
+     * By default every dot-prefixed entry is skipped (including `.` and `..`).
+     * With $includeHidden the full directory is enumerated minus the two self
+     * references — a listing tool decides visibility itself, the lister must
+     * not silently swallow entries the caller asked for unfiltered.
      *
      * @param non-empty-string $path
      * @return Generator<non-negative-int, non-empty-string, mixed, void>
      *  Yields [index, absolutePath] pairs for each file/dir found.
      */
-    public function list(string $path)
+    public function list(string $path, bool $includeHidden = false)
     {
         if (!is_dir($path)) {
             return;
@@ -45,8 +46,7 @@ final class StreamingDirectoryLister
         try {
             $index = 0;
             while (($entry = readdir($handle)) !== false) {
-                // Skip hidden files (starting with .) and . / .. directory entries
-                if (str_starts_with($entry, '.')) {
+                if (!$this->visible($entry, $includeHidden)) {
                     continue;
                 }
 
@@ -65,9 +65,9 @@ final class StreamingDirectoryLister
      * @param non-empty-string $path
      * @return Generator<non-negative-int, non-empty-string, mixed, void>
      */
-    public function listFiles(string $path): Generator
+    public function listFiles(string $path, bool $includeHidden = false): Generator
     {
-        foreach ($this->list($path) as $index => $absolutePath) {
+        foreach ($this->list($path, $includeHidden) as $index => $absolutePath) {
             if (is_file($absolutePath)) {
                 yield $index => $absolutePath;
             }
@@ -81,7 +81,7 @@ final class StreamingDirectoryLister
      * @param non-empty-string $path
      * @return non-negative-int
      */
-    public function count(string $path): int
+    public function count(string $path, bool $includeHidden = false): int
     {
         if (!is_dir($path)) {
             return 0;
@@ -95,7 +95,7 @@ final class StreamingDirectoryLister
         try {
             $count = 0;
             while (($entry = readdir($handle)) !== false) {
-                if (str_starts_with($entry, '.')) {
+                if (!$this->visible($entry, $includeHidden)) {
                     continue;
                 }
                 $count++;
@@ -104,5 +104,19 @@ final class StreamingDirectoryLister
         } finally {
             closedir($handle);
         }
+    }
+
+    /**
+     * The one visibility law both walks share: default hides every dot entry
+     * (byte-compatible with the original lister); hidden-inclusive mode hides
+     * only the two self references readdir() always reports.
+     */
+    private function visible(string $entry, bool $includeHidden): bool
+    {
+        if (!$includeHidden) {
+            return !str_starts_with($entry, '.');
+        }
+
+        return $entry !== '.' && $entry !== '..';
     }
 }

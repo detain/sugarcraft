@@ -187,4 +187,63 @@ final class StreamingDirectoryListerTest extends TestCase
             );
         }
     }
+
+    // ---------------------------------------------------------------------
+    // $includeHidden (SHL-2): the flag that made this generator usable as a
+    // listing tool's engine. The false default must stay byte-compatible with
+    // the original walk — testListSkipsDotFiles above is that pin — and the
+    // true branch drops ONLY the two self references readdir() reports.
+    // ---------------------------------------------------------------------
+
+    public function testIncludeHiddenShowsDotEntriesButNeverSelfReferences(): void
+    {
+        touch($this->tmpDir . '/visible.txt');
+        touch($this->tmpDir . '/.hidden');
+        mkdir($this->tmpDir . '/.dotdir');
+
+        $lister = new StreamingDirectoryLister();
+        $paths = array_values(iterator_to_array($lister->list($this->tmpDir, includeHidden: true)));
+
+        sort($paths);
+        $this->assertSame([
+            $this->tmpDir . '/.dotdir',
+            $this->tmpDir . '/.hidden',
+            $this->tmpDir . '/visible.txt',
+        ], $paths);
+    }
+
+    public function testIncludeHiddenCountAgreesWithIncludeHiddenList(): void
+    {
+        touch($this->tmpDir . '/visible.txt');
+        touch($this->tmpDir . '/.hidden');
+
+        $lister = new StreamingDirectoryLister();
+
+        // The two walks share one visibility law; if they drift, a tool that
+        // counts one way and lists another is lying about completeness.
+        $this->assertSame(
+            iterator_count($lister->list($this->tmpDir, includeHidden: true)),
+            $lister->count($this->tmpDir, includeHidden: true),
+        );
+        $this->assertSame(
+            iterator_count($lister->list($this->tmpDir)),
+            $lister->count($this->tmpDir),
+        );
+    }
+
+    public function testListFilesHonoursTheHiddenFlagWithoutDroppingItsFileFilter(): void
+    {
+        touch($this->tmpDir . '/.dotfile');
+        touch($this->tmpDir . '/plain.dat');
+        mkdir($this->tmpDir . '/.dotdir');
+
+        $lister = new StreamingDirectoryLister();
+        $files = array_values(iterator_to_array($lister->listFiles($this->tmpDir, includeHidden: true)));
+
+        sort($files);
+        $this->assertSame([
+            $this->tmpDir . '/.dotfile',
+            $this->tmpDir . '/plain.dat',
+        ], $files);
+    }
 }

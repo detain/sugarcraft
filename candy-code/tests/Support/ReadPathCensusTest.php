@@ -771,9 +771,11 @@ final class ReadPathCensusTest extends TestCase
         ],
         'StreamingDirectoryLister.php|opendir' => [
             'NAMES_ONLY — yields entry names; no content is read here and this class holds no '
-                . 'boundary. DORMANT: nothing in `src/` constructs it, so the first consumer must '
-                . 'pass a jailed root — recorded as a gap rather than given a boundary with no anchor',
-            'NAMES_ONLY — the same, in the chunked variant',
+                . 'boundary. Its first production consumer (SHL-2) is Tools/BuiltIn/Ls.php, which '
+                . 'feeds it a PathJail-resolved directory: the containment the gap-note asked for '
+                . 'lives in the caller, and any second consumer inherits that obligation',
+            'NAMES_ONLY — the same, in the counting variant (the former "chunked" naming described '
+                . 'a $chunkSize ctor knob that was declared and read nowhere; removed by SHL-2)',
         ],
         'Support/AiCommentWatcher.php|file_get_contents' => [
             'PATH_JAIL — the watch-files poll (roadmap 5.14i) reads a project file its own walk found: '
