@@ -119,7 +119,15 @@ final class FilesMethods
         return GitRunner::new(self::root($call))->withInheritedGitEnv()->withTimeout(self::GIT_TIMEOUT_SECONDS);
     }
 
-    private static function root(CallContext $call): string
+    /**
+     * The project root one read call runs against: the serve --root when the
+     * server has one, else the hub's opened workspace. Shared doctrine with
+     * `fs.search` ({@see FsMethods::search()}) — every workspace-jailed read
+     * answer stays inside exactly this directory.
+     *
+     * @throws RpcError when this server serves no project root at all
+     */
+    public static function root(CallContext $call): string
     {
         return $call->server->config()->root
             ?? $call->server->hub()->workspace()->root

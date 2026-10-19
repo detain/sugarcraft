@@ -90,10 +90,7 @@ final class MentionIndex
         $root = realpath($root) ?: $root;
 
         if ($partial === '') {
-            return array_map(
-                static fn(string $path): array => ['path' => $path, 'subject' => basename($path), 'indices' => [], 'score' => 0],
-                array_slice($files, 0, $limit),
-            );
+            return self::head($files, $limit);
         }
 
         $memoKey = $root . "\0" . $partial;
@@ -101,6 +98,62 @@ final class MentionIndex
             return array_slice(self::$rankMemo[$memoKey], 0, $limit);
         }
 
+        $scored = self::scored($partial, $files);
+
+        if (count(self::$rankMemo) >= self::RANK_MEMO_MAX) {
+            unset(self::$rankMemo[array_key_first(self::$rankMemo)]);
+        }
+
+        return self::$rankMemo[$memoKey] = $scored;
+    }
+
+    /**
+     * Rank an EXPLICIT file list with the popup's own matcher — the seam the
+     * server's `fs.search` uses so a non-git workspace orders its walked files
+     * by the same fuzzy score the git-backed {@see self::rank()} applies,
+     * without re-walking (or duplicating) the ranking logic.
+     *
+     * Not memoized: the caller supplies the list, so there is no stable root
+     * key to cache under, and the server caps the list it hands in.
+     *
+     * @param  list<string>  $files
+     * @return list<array{path: string, subject: string, indices: list<int>, score: int}>
+     */
+    public static function rankPaths(string $partial, array $files, int $limit = self::POPUP_LIMIT): array
+    {
+        if ($files === [] || $limit < 1) {
+            return [];
+        }
+
+        return $partial === '' ? self::head($files, $limit) : array_slice(self::scored($partial, $files), 0, $limit);
+    }
+
+    /**
+     * The head of the listing, in listing order, for the empty partial:
+     * `@` alone shows the front of the project rather than nothing.
+     *
+     * @param  list<string>  $files
+     * @return list<array{path: string, subject: string, indices: list<int>, score: int}>
+     */
+    private static function head(array $files, int $limit): array
+    {
+        return array_map(
+            static fn(string $path): array => ['path' => $path, 'subject' => basename($path), 'indices' => [], 'score' => 0],
+            array_slice($files, 0, $limit),
+        );
+    }
+
+    /**
+     * Every file the matcher accepts, best-ranked first. Basename is scored
+     * before path so a basename hit outranks a deep directory that merely
+     * contains the letters. usort is not stable, so the tiebreakers are
+     * spelled out: score, then shorter path, then the listing's own order.
+     *
+     * @param  list<string>  $files
+     * @return list<array{path: string, subject: string, indices: list<int>, score: int}>
+     */
+    private static function scored(string $partial, array $files): array
+    {
         $matcher = self::$matcher ??= SmithWatermanMatcher::new(requireFullQuery: true);
         $scored = [];
         foreach ($files as $path) {
@@ -124,18 +177,11 @@ final class MentionIndex
             }
         }
 
-        // usort is not stable, so the tiebreakers are spelled out: score,
-        // then shorter path (a shallower file is the likelier intent), then
-        // the path listing's own sorted order.
         usort($scored, static function (array $a, array $b): int {
             return [$b['score'], strlen($a['path']), $a['path']] <=> [$b['score'], strlen($b['path']), $b['path']];
         });
 
-        if (count(self::$rankMemo) >= self::RANK_MEMO_MAX) {
-            unset(self::$rankMemo[array_key_first(self::$rankMemo)]);
-        }
-
-        return self::$rankMemo[$memoKey] = $scored;
+        return $scored;
     }
 
     /**

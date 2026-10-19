@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Protocol\Schema;
 
 use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Memory\MemoryHistory;
+use SugarCraft\Code\Protocol\Methods\FsMethods;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Share\ShareSession;
@@ -539,6 +540,18 @@ final class MethodSchemas
                     'readable' => Schema::boolean()->describe('False when the directory itself could not be read (entries is then empty).'),
                     'project' => Schema::boolean(),
                 ], ['root', 'path', 'parent', 'entries', 'truncated', 'readable', 'project'], false),
+            ],
+            'fs.search' => [
+                Schema::object([
+                    'query' => Schema::string(4096)->describe('The partial typed after `@`; empty lists the front of the project.'),
+                    'limit' => Schema::integer(1, FsMethods::SEARCH_MAX_LIMIT)->describe('Rows to return, best-ranked first; capped at '.FsMethods::SEARCH_MAX_LIMIT.'.'),
+                    'showHidden' => Schema::boolean()->describe('Consider dot-files in the non-git fallback walk (a git listing is whatever git tracks, hidden included).'),
+                ]),
+                Schema::object([
+                    'root' => Schema::string()->describe('The workspace root the listing is jailed to.'),
+                    'matches' => Schema::arrayOf(Schema::string())->describe('Workspace-relative file paths, ranked; insert one after `@`.'),
+                    'truncated' => Schema::boolean()->describe('False when the whole ranked list fit in `limit`.'),
+                ], ['root', 'matches', 'truncated'], false),
             ],
             'files.diff' => [
                 Schema::object(['ref' => Schema::string(128)]),

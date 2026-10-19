@@ -594,6 +594,25 @@ export interface Methods {
       project: boolean
     }
   }
+  /** Workspace file names ranked against a partial (the web composer @-mention popup); jailed to the project root. */
+  "fs.search": {
+    params: {
+      /** The partial typed after `@`; empty lists the front of the project. */
+      query?: string
+      /** Rows to return, best-ranked first; capped at 100. */
+      limit?: number
+      /** Consider dot-files in the non-git fallback walk (a git listing is whatever git tracks, hidden included). */
+      showHidden?: boolean
+    }
+    result: {
+      /** The workspace root the listing is jailed to. */
+      root: string
+      /** Workspace-relative file paths, ranked; insert one after `@`. */
+      matches: string[]
+      /** False when the whole ranked list fit in `limit`. */
+      truncated: boolean
+    }
+  }
   /** A generation job's state, progress and artifact refs, from its ledger. */
   "generate.status": {
     params: {
@@ -1375,6 +1394,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "files.diff": "read",
   "files.read": "read",
   "fs.listDirs": "read",
+  "fs.search": "read",
   "generate.status": "read",
   "generate.submit": "write",
   "media.fetch": "read",

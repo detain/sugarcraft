@@ -2235,6 +2235,57 @@
                 "additionalProperties": false
             }
         },
+        "fs.search": {
+            "description": "Workspace file names ranked against a partial (the web composer @-mention popup); jailed to the project root.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "The partial typed after `@`; empty lists the front of the project."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "description": "Rows to return, best-ranked first; capped at 100."
+                    },
+                    "showHidden": {
+                        "type": "boolean",
+                        "description": "Consider dot-files in the non-git fallback walk (a git listing is whatever git tracks, hidden included)."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "root": {
+                        "type": "string",
+                        "description": "The workspace root the listing is jailed to."
+                    },
+                    "matches": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Workspace-relative file paths, ranked; insert one after `@`."
+                    },
+                    "truncated": {
+                        "type": "boolean",
+                        "description": "False when the whole ranked list fit in `limit`."
+                    }
+                },
+                "required": [
+                    "root",
+                    "matches",
+                    "truncated"
+                ],
+                "additionalProperties": false
+            }
+        },
         "generate.status": {
             "description": "A generation job's state, progress and artifact refs, from its ledger.",
             "scope": "read",
