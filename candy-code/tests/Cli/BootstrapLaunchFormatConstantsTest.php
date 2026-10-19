@@ -336,6 +336,12 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             // rendered deprecation line — the exact bytes LegacyMigrationTest pins.
             'docs/TROUBLESHOOTING.md' => LegacyMigrationTest::class
                 . '::testLegacyEnvVarsFoldAndAPreSetNewNameWins',
+            // W1 DST-2: the Compose sketch's `candy-code:` service key carries the
+            // label and its colon, and the flattened page runs it into the dot
+            // ending the `--rotate` command line one fence above — a YAML key,
+            // not a quotation of a line the launcher prints. DOCKER quotes no
+            // launch line, so no guard exists and none is owed.
+            'docs/DOCKER.md' => self::PAGE_QUOTE_IS_COINCIDENCE,
         ],
         'PROJECT_TIER_TOOL_REMOVAL_FORMAT' => [
             'README.md' => ReadmeSettingsTierClaimTest::class
@@ -380,11 +386,14 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * sentence — the "near" case {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()}
      * pins, settled by a person reading the page.
      *
-     * README.md is the holder since W10 widened {@see PAGE_QUOTE_FIELD_BYTES}
+     * README.md is a holder since W10 widened {@see PAGE_QUOTE_FIELD_BYTES}
      * for the twenty-four-name tool list: its "rather than ignoring it"
      * sentence and a later em dash now fall inside the bound for
      * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT}'s `ignoring %s — %s`.
-     * README quotes no refusal line.
+     * README quotes no refusal line. `docs/DOCKER.md` is the second holder
+     * since W1 DST-2: its Compose sketch's `candy-code:` service key carries
+     * the label and colon, and the flattened page runs it into the dot ending
+     * a `--rotate` command line — a YAML key, not a launch line.
      */
     private const PAGE_QUOTE_IS_COINCIDENCE = '<an unrelated sentence the bounded shape happens to match>';
 
