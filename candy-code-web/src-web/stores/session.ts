@@ -201,6 +201,16 @@ function setup(sessionId: string) {
     await connection.request('session.dequeue', { sessionId, queueId })
   }
 
+  /**
+   * WEB-1a: re-read the queued prompts from the server (`session.queue`).
+   * The snapshot and the live `turn.*` events keep `state.queue` current;
+   * this is the manual reconcile when a viewer suspects it drifted.
+   */
+  async function refreshQueue(): Promise<void> {
+    const result = await connection.request('session.queue', { sessionId })
+    state.queue = result.items
+  }
+
   async function setMode(permissionMode: PermissionMode): Promise<void> {
     const result = await connection.request('session.setMode', { sessionId, permissionMode })
     state.permissionMode = result.permissionMode
@@ -276,6 +286,7 @@ function setup(sessionId: string) {
     cancel,
     respond,
     dequeue,
+    refreshQueue,
     setMode,
     loadOlder,
     loadingOlder,

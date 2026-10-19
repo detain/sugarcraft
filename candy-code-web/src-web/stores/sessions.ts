@@ -92,6 +92,29 @@ export const useSessionsStore = defineStore('sessions', () => {
     drop(sessionId)
   }
 
+  /** WEB-1a: fork on the server; the fresh summary joins the index like a created one. */
+  async function fork(sessionId: string): Promise<SessionSummary> {
+    const summary = await connection.request('session.fork', { sessionId })
+    put(summary)
+    return summary
+  }
+
+  /**
+   * WEB-1a: close the session. The server keeps it listed with a closed
+   * status (a `session.status` event would say the same; the local stamp is
+   * what makes the row honest before the round trip comes back).
+   */
+  async function close(sessionId: string): Promise<void> {
+    await connection.request('session.close', { sessionId })
+    const current = byId.value[sessionId]
+    if (current) put({ ...current, status: 'closed' })
+  }
+
+  /** WEB-1a: the transcript rendered server-side, in the format asked for. */
+  async function exportTranscript(sessionId: string, format: 'markdown' | 'json' | 'text'): Promise<{ format: string; content: string }> {
+    return connection.request('session.export', { sessionId, format })
+  }
+
   function drop(sessionId: string): void {
     const next = { ...byId.value }
     delete next[sessionId]
@@ -127,5 +150,5 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   })
 
-  return { byId, items, loading, loaded, error, load, create, rename, remove }
+  return { byId, items, loading, loaded, error, load, create, rename, remove, fork, close, exportTranscript }
 })

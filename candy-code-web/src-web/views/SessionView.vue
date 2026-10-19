@@ -100,6 +100,15 @@ async function dequeue(queueId: string): Promise<void> {
   }
 }
 
+/** WEB-1a: manual reconcile of the queue against `session.queue` on the server. */
+async function refreshQueue(): Promise<void> {
+  try {
+    await session.value.refreshQueue()
+  } catch (failure) {
+    error.value = describe(failure)
+  }
+}
+
 async function setMode(mode: PermissionMode): Promise<void> {
   try {
     await session.value.setMode(mode)
@@ -152,7 +161,7 @@ async function rename(): Promise<void> {
     </Transcript>
     <p class="sr-only" role="status" aria-live="polite" data-testid="reply-announcement">{{ finishedReply }}</p>
     <div class="dock">
-      <QueueStrip :queue="state.queue" @remove="dequeue" />
+      <QueueStrip :queue="state.queue" @remove="dequeue" @refresh="refreshQueue" />
       <p v-if="error" class="error" role="alert" data-testid="session-error">{{ error }}</p>
       <Composer
         v-model="draft"

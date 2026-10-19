@@ -3,20 +3,37 @@ import { oneLine } from '../lib/format'
 import type { QueueEntry } from '../protocol/generated'
 
 defineProps<{ queue: QueueEntry[] }>()
-const emit = defineEmits<{ remove: [queueId: string] }>()
+const emit = defineEmits<{ remove: [queueId: string]; refresh: [] }>()
 </script>
 
 <template>
-  <ol v-if="queue.length > 0" class="queue" data-testid="queue">
-    <li v-for="entry in queue" :key="entry.queueId" data-testid="queue-entry">
-      <span class="pos">queued {{ entry.position }}</span>
-      <span class="text">{{ oneLine(entry.text, 160) }}</span>
-      <button type="button" class="link" :aria-label="`Remove queued prompt ${entry.position}`" @click="emit('remove', entry.queueId)">remove</button>
-    </li>
-  </ol>
+  <section v-if="queue.length > 0" class="strip">
+    <div class="head">
+      <span class="count">{{ queue.length }} queued</span>
+      <button type="button" class="link" title="Re-read the queue from the server (WEB-1a)" data-testid="queue-refresh" @click="emit('refresh')">reload</button>
+    </div>
+    <ol class="queue" data-testid="queue">
+      <li v-for="entry in queue" :key="entry.queueId" data-testid="queue-entry">
+        <span class="pos">queued {{ entry.position }}</span>
+        <span class="text">{{ oneLine(entry.text, 160) }}</span>
+        <button type="button" class="link" :aria-label="`Remove queued prompt ${entry.position}`" @click="emit('remove', entry.queueId)">remove</button>
+      </li>
+    </ol>
+  </section>
 </template>
 
 <style scoped>
+.head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: flex-end;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.count {
+  margin-right: auto;
+}
 .queue {
   list-style: none;
   margin: 0 0 0.5rem;
