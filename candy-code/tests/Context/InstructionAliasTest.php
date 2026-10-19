@@ -52,7 +52,7 @@ final class InstructionAliasTest extends TestCase
     public function testTheAliasRosterIsPrecedenceOrdered(): void
     {
         self::assertSame(
-            ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'],
+            ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'],
             InstructionFileLoader::FILENAMES,
         );
     }
@@ -74,11 +74,37 @@ final class InstructionAliasTest extends TestCase
         file_put_contents($this->repoRoot . '/.cursorrules', 'CURSORCANARY');
         file_put_contents($this->repoRoot . '/GEMINI.md', 'GEMINICANARY');
         file_put_contents($this->repoRoot . '/AGENTS.md', 'AGENTSCANARY');
+        file_put_contents($this->repoRoot . '/CLAUDE.local.md', 'LOCALCANARY');
         file_put_contents($this->repoRoot . '/CLAUDE.md', 'CLAUDECANARY');
 
         $contents = (new InstructionFileLoader($this->repoRoot))->loadRoot();
 
-        self::assertSame(['CLAUDECANARY', 'AGENTSCANARY', 'GEMINICANARY', 'CURSORCANARY', 'CLINECANARY'], $contents);
+        self::assertSame(['CLAUDECANARY', 'LOCALCANARY', 'AGENTSCANARY', 'GEMINICANARY', 'CURSORCANARY', 'CLINECANARY'], $contents);
+    }
+
+    public function testCLAUDELocalMdAloneIsReadAtTheRoot(): void
+    {
+        file_put_contents($this->repoRoot . '/CLAUDE.local.md', '# LOCALONLY');
+
+        $documents = (new InstructionFileLoader($this->repoRoot))->loadDocuments();
+
+        self::assertCount(1, $documents);
+        self::assertSame($this->repoRoot . '/CLAUDE.local.md', $documents[0]['path']);
+        self::assertStringContainsString('LOCALONLY', (string) $documents[0]['body']);
+    }
+
+    public function testTheLocalOverlayLosesTheLevelToCLAUDEMdButOutranksTheOtherNames(): void
+    {
+        // Per-level precedence, the level's ONE on-touch slot: CLAUDE.md first,
+        // the uncommitted overlay second, everything else behind it.
+        file_put_contents($this->repoRoot . '/pkg/CLAUDE.local.md', 'LOCALCANARY');
+        file_put_contents($this->repoRoot . '/pkg/AGENTS.md', 'AGENTSCANARY');
+        file_put_contents($this->repoRoot . '/pkg/src/a.php', '<?php');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+
+        self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/CLAUDE.local.md', 'LOCALCANARY'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
+        self::assertSame(self::framedOnTouch($this->repoRoot . '/pkg/AGENTS.md', 'AGENTSCANARY'), $loader->loadForPath($this->repoRoot . '/pkg/src/a.php'));
     }
 
     public function testAClinerulesDirectoryIsNotRead(): void

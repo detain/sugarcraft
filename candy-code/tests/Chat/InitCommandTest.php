@@ -97,7 +97,7 @@ final class InitCommandTest extends TestCase
     {
         $prompt = InitCommand::prompt();
 
-        foreach (['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.cursorrules', '.clinerules'] as $name) {
+        foreach (['AGENTS.md', 'CLAUDE.md', 'CLAUDE.local.md', 'GEMINI.md', '.cursorrules', '.clinerules'] as $name) {
             self::assertStringContainsString($name, $prompt);
         }
         self::assertStringNotContainsString('@', $prompt, 'the mention scanner must find nothing to attach');

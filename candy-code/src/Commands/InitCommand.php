@@ -36,7 +36,7 @@ final class InitCommand
     public const PROMPT = <<<'PROMPT'
         Please analyze this project and write an AGENTS.md file at the repository root. It will be loaded into the context of every future coding-agent session in this repository, so it should hold what an agent cannot cheaply rediscover on its own.
 
-        Start by reading what is already there: an existing AGENTS.md, CLAUDE.md, GEMINI.md, .cursorrules, .clinerules, .github/copilot-instructions.md, the README, and the build or package manifests. If an AGENTS.md exists, improve it in place instead of starting over, and keep anything still accurate.
+        Start by reading what is already there: an existing AGENTS.md, CLAUDE.md, CLAUDE.local.md, GEMINI.md, .cursorrules, .clinerules, .github/copilot-instructions.md, the README, and the build or package manifests. If an AGENTS.md exists, improve it in place instead of starting over, and keep anything still accurate.
 
         Cover, concisely:
         1. The commands that build, lint and test the project, including how to run a single test.

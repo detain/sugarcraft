@@ -149,8 +149,16 @@ final class InstructionFileLoader
      * order: earlier names win a level's single on-touch slot and come first in
      * the session documents.
      *
-     * The three after the first two are OTHER AGENTS' spellings of the same
-     * convention (roadmap 5.14j): Gemini CLI's `GEMINI.md`, Cursor's legacy
+     * `CLAUDE.local.md` rides second because it is Claude Code's UNCOMMITTED
+     * personal overlay: the file a developer keeps beside a committed
+     * `CLAUDE.md` for instructions that should not ship with the repository.
+     * Ordering it after `CLAUDE.md` and before `AGENTS.md` keeps the committed
+     * project file first at a level while the overlay still outranks every
+     * other spelling; the shared `$emittedPaths` dedup means a file imported
+     * by both is emitted once.
+     *
+     * The three after it are OTHER AGENTS' spellings of the same convention
+     * (roadmap 5.14j): Gemini CLI's `GEMINI.md`, Cursor's legacy
      * `.cursorrules`, and Cline's `.clinerules`. A repository that ships only
      * one of those has written its conventions down already; reading them is
      * cheaper than asking every team to keep a second copy as AGENTS.md. Every
@@ -160,7 +168,7 @@ final class InstructionFileLoader
      * A `.clinerules` DIRECTORY (Cline's newer folder form) is not a file and is
      * skipped by the same `is_file()` that skips a missing CLAUDE.md.
      */
-    public const FILENAMES = ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'];
+    public const FILENAMES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'GEMINI.md', '.cursorrules', '.clinerules'];
 
     /** The one personal instruction file, relative to {@see personalDir()}. */
     public const PERSONAL_FILENAME = 'AGENTS.md';
@@ -1035,8 +1043,8 @@ final class InstructionFileLoader
      *
      * Walks up from the touched file's directory toward repoRoot, checking
      * each level for CLAUDE.md, AGENTS.md or an alias ({@see FILENAMES}).
-     * CLAUDE.md is preferred over AGENTS.md, and both over the aliases, at the
-     * same level. Each nested file is injected at most once
+     * CLAUDE.md is preferred over its CLAUDE.local.md overlay, and both over
+     * AGENTS.md and the aliases, at the same level. Each nested file is injected at most once
      * per session — a later call returns null when it holds nothing not yet
      * injected, and a file the root documents already carried (directly or via
      * an `@import`) counts as injected too.
