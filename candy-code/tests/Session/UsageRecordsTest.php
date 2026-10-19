@@ -300,7 +300,7 @@ final class UsageRecordsTest extends TestCase
         // shape, the house pin for wiring that only fires on a live settle.
         $chat = file_get_contents(dirname(__DIR__, 2) . '/src/Chat.php');
         self::assertStringContainsString(
-            '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink());',
+            '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model);',
             $chat,
         );
 

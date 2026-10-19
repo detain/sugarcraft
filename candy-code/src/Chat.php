@@ -2734,7 +2734,7 @@ final class Chat implements Model
             // Roadmap 5.14b: accounted first (the call ran on the user's key),
             // then one UI-only row — shown, never sent — unless the session
             // it was asked in is no longer the one on screen.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the btw call ran on the title engine
             if ($msg->sessionId !== $this->currentSessionId) {
                 return [$this, null];
             }
@@ -2766,7 +2766,7 @@ final class Chat implements Model
             // Step 3.G: the commit is already made (or refused). Accounted
             // first — the subject came from a model call on the user's key —
             // then one display-only line saying what was committed, or why not.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the subject came from the title engine
 
             return [$this->mutate(['history' => [...$this->history, Message::notice($msg->notice())]]), null];
         }
@@ -2777,7 +2777,7 @@ final class Chat implements Model
             // note was saved, changed or removed; a run that saved nothing
             // says nothing. Shown even after a session switch: the notes are
             // the project's, not the session's, and a write is never silent.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: consolidation ran on the summary engine
             $notice = \SugarCraft\Code\Memory\AutoMemoryConsolidator::notice($msg);
             if ($notice === null) {
                 return [$this, null];
@@ -2879,7 +2879,7 @@ final class Chat implements Model
             // summarization call went out on the user's key and was billed
             // whether or not its answer is still wanted. Dropping the summaries
             // is right; forgetting the money is not.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: the compaction summary ran on the summary engine
 
             // Roadmap 2.10: an ahead-of-need summary condenses nothing when it
             // lands - it is held for the 85% tier in submit(), under its own
@@ -2936,7 +2936,7 @@ final class Chat implements Model
         if ($msg instanceof PromptSuggestionMsg) {
             // Accounted first, on the rule every provider-call arm follows:
             // the call was made on the user's key whatever becomes of it.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the suggestion ran on the title engine
 
             $text = self::sanitizePromptSuggestion($msg->suggestion);
             $stale = $msg->generation !== $this->generation
@@ -2958,7 +2958,7 @@ final class Chat implements Model
             // three provider-call arms follow: the titler is a real call on the
             // user's key, and a session that was switched away from or a title
             // that came back unusable cost exactly as much as one that did not.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the title ran on the title engine
 
             // The title call is fire-and-forget: by the time it lands the
             // user may have switched sessions, and a title belonging to a
@@ -4284,7 +4284,7 @@ final class Chat implements Model
      */
     private function landGoalVerdict(GoalJudgedMsg $msg): array
     {
-        $this->accountUsage($msg->usage);
+        $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the judge is a title-engine call
         if ($msg->generation !== $this->generation || !$this->inFlight || $msg->sessionId !== $this->currentSessionId) {
             return [$this, null];
         }
@@ -20022,7 +20022,7 @@ final class Chat implements Model
     private function landHandoff(\SugarCraft\Code\Host\Commands\HandoffSeededMsg $msg): array
     {
         // Accounted first: the summary ran on the user's key whatever follows.
-        $this->accountUsage($msg->usage);
+        $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: the handoff block came from the summary engine
         if ($msg->fromSessionId !== $this->currentSessionId) {
             return [$this, null];
         }
@@ -21108,9 +21108,22 @@ final class Chat implements Model
      * what lets a Cmd's resolved Msg account against the session the user is
      * still in.
      */
-    private function accountUsage(?Usage $usage): void
+    private function accountUsage(?Usage $usage, ?string $model = null): void
     {
-        $this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink());
+        $this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model);
+    }
+
+    /**
+     * The model name an engine reports, or null when the slot is empty or
+     * the backend there is not an EngineBackend. OBS-3: settle sites for the
+     * auxiliary calls (titler, suggestion, goal judge, auto-commit,
+     * compaction, consolidation, handoff) thread the model of the engine
+     * that RAN the call, because the chat backend's name would misattribute
+     * every one of those rows in the durable day×model ledger.
+     */
+    private static function modelOf(?Backend $backend): ?string
+    {
+        return $backend instanceof Backend\EngineBackend ? $backend->model() : null;
     }
 
     /**
@@ -21137,7 +21150,7 @@ final class Chat implements Model
             return null;
         }
 
-        return function (Usage $usage) use ($store): void {
+        return function (Usage $usage, ?string $model = null) use ($store): void {
             $sessionId = $this->currentSessionId;
             if ($sessionId === null) {
                 return;
@@ -21146,7 +21159,10 @@ final class Chat implements Model
             $store->appendUsageRecord(
                 $sessionId,
                 $usage,
-                $this->backend instanceof Backend\EngineBackend ? $this->backend->model() : null,
+                // OBS-3: prefer the model threaded from the settle site that
+                // knows which engine ran; fall back to the chat backend's
+                // name for the main path, which is exactly the old answer.
+                $model ?? self::modelOf($this->backend),
             );
         };
     }

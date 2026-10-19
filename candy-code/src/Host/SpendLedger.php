@@ -107,8 +107,21 @@ final class SpendLedger
      * fabricates neither. The sink resolves its session id at CALL time
      * because a late-minted session only learns its id between the Chat's
      * construction and its first settle.
+     *
+     * THE MODEL RIDES THE SAME SEAM (OBS-3). `$model` names the model that
+     * actually MADE the call, threaded from the settle site that knows it;
+     * the sink forwards it to the row. Null means the caller did not know,
+     * and the sink resolves its own honest fallback. This matters because
+     * the session's chat backend is NOT the only thing that bills — the
+     * titler, the suggestion model, the goal judge, the auto-commit subject,
+     * the compactor, the consolidator and the handoff writer each run on
+     * their own engine, and a ledger that stamped every one of them with the
+     * chat model's name would answer `/usage`'s day×model rollup wrong by
+     * construction. Sinks that ignore the second parameter still work: PHP
+     * user-defined functions accept extra arguments, so widening this seam
+     * never breaks a mirror that has not caught up yet.
      */
-    public function account(TokenTracker $tracker, ?Usage $usage, ?\Closure $record = null): void
+    public function account(TokenTracker $tracker, ?Usage $usage, ?\Closure $record = null, ?string $model = null): void
     {
         if ($usage === null) {
             return;
@@ -121,7 +134,7 @@ final class SpendLedger
         }
 
         if ($record !== null) {
-            $record($usage);
+            $record($usage, $model);
         }
     }
 

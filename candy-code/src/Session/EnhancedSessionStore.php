@@ -2432,6 +2432,79 @@ final class EnhancedSessionStore
     }
 
     /**
+     * The durable ledger folded by DAY and MODEL — the rollup OBS-3's
+     * `/usage` answers from. Days come back newest-first, models
+     * alphabetically inside a day; `$sessionId` narrows to one session and
+     * null spans every session the table holds. Rows written before the
+     * model was threaded carry a null model and group together under it —
+     * the renderer says so honestly rather than inventing a name.
+     *
+     * The unpriced bit is MAX per group, so a group with one blind row is a
+     * blind group, and the `≥` law (SES-1) says so wherever the group's
+     * dollars are printed.
+     *
+     * @return list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
+     */
+    public function usageDayModelRollups(?string $sessionId = null): array
+    {
+        $where = $sessionId === null ? '' : ' WHERE session_id = ?';
+        $stmt = $this->pdo->prepare('
+            SELECT date(ts, \'unixepoch\') AS day, model, COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost_usd), 0.0), COALESCE(MAX(unpriced), 0)
+              FROM usage_records' . $where . '
+             GROUP BY day, model
+             ORDER BY day DESC, model
+        ');
+        $stmt->execute($sessionId === null ? [] : [$sessionId]);
+
+        $rows = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $row) {
+            $rows[] = [
+                'day' => (string) $row[0],
+                'model' => $row[1] === null ? null : (string) $row[1],
+                'calls' => (int) $row[2],
+                'totalTokens' => (int) $row[3],
+                'costUsd' => (float) $row[4],
+                'unpriced' => (int) $row[5] !== 0,
+            ];
+        }
+        $stmt->closeCursor();
+
+        return $rows;
+    }
+
+    /**
+     * The same ledger folded by MODEL alone, newest activity first — the
+     * per-model totals `/usage` prints under the day grid.
+     *
+     * @return list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
+     */
+    public function usageModelRollups(?string $sessionId = null): array
+    {
+        $where = $sessionId === null ? '' : ' WHERE session_id = ?';
+        $stmt = $this->pdo->prepare('
+            SELECT model, COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost_usd), 0.0), COALESCE(MAX(unpriced), 0)
+              FROM usage_records' . $where . '
+             GROUP BY model
+             ORDER BY MAX(ts) DESC
+        ');
+        $stmt->execute($sessionId === null ? [] : [$sessionId]);
+
+        $rows = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $row) {
+            $rows[] = [
+                'model' => $row[0] === null ? null : (string) $row[0],
+                'calls' => (int) $row[1],
+                'totalTokens' => (int) $row[2],
+                'costUsd' => (float) $row[3],
+                'unpriced' => (int) $row[4] !== 0,
+            ];
+        }
+        $stmt->closeCursor();
+
+        return $rows;
+    }
+
+    /**
      * A {@see TokenTracker} reseeded from the session's durable ledger, or
      * null when the ledger is empty — the SES-1 resume seam. The launch
      * hands the answer to Chat's `tokenTracker:` argument, whose `?? new
