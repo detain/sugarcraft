@@ -1,0 +1,130 @@
+# DST-1 — build the candy-code PHAR and publish it on a release.
+#
+# Triggered by pushing a tag spelled `candy-code/v*` (per-lib tagging, the
+# shape the repo already uses for split sync), or manually with a tag input.
+#
+# REPRODUCIBILITY CAVEAT (disclosed, not solved here): the build runs
+# `composer install` with the lock deliberately absent — house rule forbids
+# committing per-lib composer.lock — and the `sugarcraft/*` siblings resolve
+# from Packagist at their `dev-master` moving target. Two builds of the same
+# tag can therefore differ byte-wise; the .sha256 published alongside each
+# release names the bytes that job produced, not a rebuild guarantee. The
+# build script REFUSES symlinked sibling vendors, so a linked-mode working
+# tree can never freeze uncommitted sibling code into a public artifact.
+#
+# `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
+# never a runtime requirement: the produced archive executes under a normal
+# `php candy-code.phar` with the default readonly=On.
+name: Release PHAR
+
+on:
+  push:
+    tags:
+      - 'candy-code/v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing candy-code/v* tag to build and publish'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          coverage: none
+          extensions: mbstring, intl, sqlite3, pdo_sqlite, curl, openssl, pcntl
+
+      - name: Install production dependencies
+        run: |
+          set -euo pipefail
+          cd candy-code
+          # A linked-mode local checkout can carry a path-repo lock; CI starts
+          # from git, and the build REFUSES symlinked vendors as the second
+          # line of defence against frozen sibling WIP.
+          rm -f composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Build the archive
+        run: |
+          set -euo pipefail
+          php -d phar.readonly=0 candy-code/tools/build-phar.php \
+            --out=dist/candy-code.phar \
+            --version='${{ steps.tag.outputs.tag }}'
+
+      - name: Checksum
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum candy-code.phar > candy-code.phar.sha256)
+          cat dist/candy-code.phar.sha256
+
+      - name: Smoke — version
+        run: php dist/candy-code.phar --version
+
+      - name: Smoke — headless echo turn as JSON on a virgin HOME
+        run: |
+          set -euo pipefail
+          fake_home="$(mktemp -d)"
+          HOME="$fake_home" php dist/candy-code.phar -p 'release smoke' --output-format json > /tmp/phar-smoke.json
+          php -r 'exit(json_decode(file_get_contents("/tmp/phar-smoke.json"), true) === null ? 1 : 0);'
+
+      - name: Smoke — archive scanners are alive under phar://
+        run: |
+          set -euo pipefail
+          php -r '
+            $phar = getenv("PHAR_PATH");
+            require $phar . "/vendor/autoload.php";
+            $tools = \SugarCraft\Code\Tools\Catalog\ToolCatalog::names();
+            $specs = \SugarCraft\Code\Commands\Specs\BuiltInCommands::all();
+            if (count($tools) === 0 || count($specs) === 0) {
+              fwrite(STDERR, "phar scanner census empty: tools=" . count($tools) . " specs=" . count($specs) . "\n");
+              exit(1);
+            }
+            echo "phar scanners alive: " . count($tools) . " tools, " . count($specs) . " specs\n";
+          '
+        env:
+          PHAR_PATH: ${{ github.workspace }}/dist/candy-code.phar
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: candy-code-phar-${{ steps.tag.outputs.tag }}
+          path: |
+            dist/candy-code.phar
+            dist/candy-code.phar.sha256
+
+      - name: Publish GitHub release
+        run: |
+          set -euo pipefail
+          tag='${{ steps.tag.outputs.tag }}'
+          notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c candy-code.phar.sha256\n\nRun: php candy-code.phar --version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/candy-code.phar dist/candy-code.phar.sha256 --clobber
+          else
+            gh release create "$tag" dist/candy-code.phar dist/candy-code.phar.sha256 \
+              --title "candy-code ${tag#candy-code/}" --verify-tag --notes "$(printf '%b' "$notes")"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

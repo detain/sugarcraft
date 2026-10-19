@@ -5,3 +5,4 @@ composer.lock
 # path; the blanket rule above otherwise swallows it silently on a fresh clone.
 !tests/fixtures/prompt/home/.candy-code/
 .candy-code-build/
+dist/
