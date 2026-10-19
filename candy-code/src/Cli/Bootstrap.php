@@ -11580,20 +11580,42 @@ final class Bootstrap
      */
     public static function keybindingsSetting(): array
     {
-        $raw = self::readUserConfig()[self::KEYBINDINGS_SETTING] ?? null;
-        if ($raw === null) {
-            return [];
-        }
-
-        $reason = KeyBindingsValidator::new()->validate($raw);
+        [$map, $reason] = self::keybindingsParse();
         if ($reason !== null) {
             throw new PermissionConfigException(
                 Lang::t('cli.refuse.keybindings', ['reason' => $reason]),
             );
         }
 
+        return $map;
+    }
+
+    /**
+     * The `keybindings` setting parsed WITHOUT the launch verdict: the map
+     * beside the validator's raw reason (reason `null` when the key is
+     * absent, usable, or both). {@see keybindingsSetting()} wraps this pair
+     * in the exit-2 launch refusal; `/keys reload` consumes the pair
+     * directly — plan_comparison w5j: a reload quotes the validator, never
+     * the launch speech it would have made (nothing can refuse a start
+     * mid-session, and the launch tail promised a refusal that cannot
+     * happen).
+     *
+     * @return array{0: array<string,string|null>, 1: ?string}
+     */
+    private static function keybindingsParse(): array
+    {
+        $raw = self::readUserConfig()[self::KEYBINDINGS_SETTING] ?? null;
+        if ($raw === null) {
+            return [[], null];
+        }
+
+        $reason = KeyBindingsValidator::new()->validate($raw);
+        if ($reason !== null) {
+            return [[], $reason];
+        }
+
         /** @var array<string,string|null> $raw */
-        return $raw;
+        return [$raw, null];
     }
 
     /**
@@ -11652,15 +11674,17 @@ final class Bootstrap
      *
      * Fail-loud-keep-live: a present-but-unusable re-read costs the NEW map,
      * never the running one — the keymap a user pressed into is more true
-     * than one half-typed into a file — with the refusal said out loud.
+     * than one half-typed into a file — with the refusal said out loud, in
+     * the validator's own words (w5j: the RAW reason, not the launch
+     * exception's "refusing to start" speech, which at reload time describes
+     * a verdict no longer on the table).
      */
     public static function reloadKeybindings(): void
     {
-        try {
-            $map = self::keybindingsSetting();
-        } catch (PermissionConfigException $e) {
+        [$map, $reason] = self::keybindingsParse();
+        if ($reason !== null) {
             \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(
-                Lang::t('cli.keys.reload_refused', ['reason' => $e->getMessage()]),
+                Lang::t('cli.keys.reload_refused', ['reason' => $reason]),
             );
 
             return;

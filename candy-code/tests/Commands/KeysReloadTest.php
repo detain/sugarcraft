@@ -202,8 +202,10 @@ final class KeysReloadTest extends TestCase
         Bootstrap::reloadKeybindings();
         self::assertSame(['chat.agents'], KeyBindingRegistry::suppressed());
 
-        // A half-written edit must not cost the live keymap: validation throws
-        // inside the reload, which keeps the applied state and announces the
+        // A half-written edit must not cost the live keymap: the reload
+        // consults the validator verdict directly — w5j: no throw to catch,
+        // and the quoted line is the validator's own reason rather than the
+        // launch refusal — keeping the applied state and announcing the
         // refusal through the same sink.
         $this->writeSettings(['keybindings' => 'not-a-map']);
         RuntimeNoticeSink::drain();
@@ -212,6 +214,16 @@ final class KeysReloadTest extends TestCase
 
         $rows = RuntimeNoticeSink::drain();
         self::assertSame(1, self::countRowsContaining($rows, 'kept'), 'got: ' . print_r($rows, true));
+
+        // w5j honesty pins: the refusal says WHY in the validator's raw
+        // words, and it must not wear the launch speech — "Refusing to
+        // start" is a verdict a reload can neither make nor mean.
+        self::assertSame(
+            1,
+            self::countRowsContaining($rows, 'must be an object mapping binding ids to chords'),
+            'got: ' . print_r($rows, true),
+        );
+        self::assertSame(0, self::countRowsContaining($rows, 'Refusing'), 'got: ' . print_r($rows, true));
     }
 
     public function testTheKeysRowCarriesTheReloadArgumentThroughTheRegistry(): void

@@ -15,6 +15,7 @@ use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\SessionSettings;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
@@ -205,6 +206,36 @@ final class ApplySettingsTest extends TestCase
         // the next launch like every restart key.
         [$granted] = $chat->applySettings(['trustedProjectHooks'], '/x/config.json');
         self::assertStringContainsString('1 needs a restart (trustedProjectHooks)', self::toastText($granted));
+    }
+
+    public function testAReloadKeyIsAnnouncedForTheReloadWordAndChangesNothingNow(): void
+    {
+        // w5j (MINOR-2): the reload bucket of the save summary — `keybindings`
+        // is the one ApplyMode::Reload key, and TUI-4a's promise is that a
+        // save alone says the word it takes (`/keys reload`) while touching
+        // nothing live. The family's next-turn and restart legs have their
+        // pins above; this closes the third bucket.
+        $overridesBefore = KeyBindingRegistry::overrides();
+        $suppressedBefore = KeyBindingRegistry::suppressed();
+
+        [$chat] = (new Chat(backend: new EchoBackend()))->applySettings(['keybindings'], '/x/config.json');
+        self::assertStringContainsString('1 applies on /keys reload (keybindings)', self::toastText($chat));
+
+        // A reload-pending save is not a success badge — the Info symbol says
+        // the keymap is still waiting on the word.
+        $raw = (string) $chat->settingsToast()?->view('', 400, 0);
+        self::assertStringContainsString('ℹ', $raw, 'the reload bucket paints Info, not Success');
+        self::assertStringNotContainsString('✔', $raw);
+
+        // The leg promises the word, not an apply: the live keymap is inert.
+        self::assertSame($overridesBefore, KeyBindingRegistry::overrides());
+        self::assertSame($suppressedBefore, KeyBindingRegistry::suppressed());
+
+        // Mixed buckets keep their own clauses side by side.
+        [$mixed] = (new Chat(backend: new EchoBackend()))->applySettings(['keybindings', 'instructions'], '/x/config.json');
+        $text = self::toastText($mixed);
+        self::assertStringContainsString('1 applies on /keys reload (keybindings)', $text);
+        self::assertStringContainsString('1 needs a restart (instructions)', $text);
     }
 
     // ── the toast ───────────────────────────────────────────────────────
