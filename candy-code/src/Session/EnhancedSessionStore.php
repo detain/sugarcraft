@@ -678,9 +678,11 @@ final class EnhancedSessionStore
 
         // The durable spend ledger (SES-1, plan_comparison §SES-1): one row
         // per accounted provider call, appended at the single accounting
-        // choke ({@see \SugarCraft\Code\Host\SpendLedger::account()}) so BOTH
-        // the TUI and serve — which run the same Chat through TurnRunner —
-        // write it without either owning a second call site. Before this
+        // choke ({@see \SugarCraft\Code\Host\SpendLedger::account()}) so the
+        // TUI and serve — each through ITS OWN sink, {@see \SugarCraft\Code\Chat::usageRecordSink()}
+        // and {@see \SugarCraft\Code\Host\SessionHost::usageRecordSink()}, since
+        // a SessionHost is not a Chat — write it through one table and one
+        // guard without either owning a second append site. Before this
         // table, per-session spend existed only in a per-process
         // TokenTracker: `--continue` restarted `/budget` at $0.00. The token
         // buckets keep Usage's null-is-unreported law (a 0 row means the

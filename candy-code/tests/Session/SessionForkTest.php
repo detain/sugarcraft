@@ -10,6 +10,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionMeta;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Usage;
 
 /**
  * `/branch` and `/fork` must hand the new session the conversation it was
@@ -257,5 +258,37 @@ final class SessionForkTest extends TestCase
         $store->getPdo()->exec('CREATE INDEX idx_test_messages_created ON messages(session_id, created_at DESC)');
 
         $this->assertSame(['first', 'second', 'third'], array_column($store->getMessages('s'), 'content'));
+    }
+
+    public function testAForkIsAStrangerToTheParentsLedgerAndCarriesOnlyStateRows(): void
+    {
+        // SES-1, rev-w4g MINOR-2 (the absence test the lane report had
+        // claimed but not shipped): the spend ledger is a per-session
+        // history of BILLED CALLS, not forkable state. The base store's
+        // fork INSERT enumerates its columns and names neither cost_usd
+        // nor cost_unpriced, and copySessionState enumerates checkpoints,
+        // blobs, transcripts, ledgers and meta — never usage_records.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('parent', 'p', 'm');
+        $store->saveCheckpoint('parent', ['messages' => [Message::user('bill me')], 'inputBuf' => '']);
+        self::assertTrue($store->appendUsageRecord('parent', Usage::new(totalTokens: 100, costUsd: 0.02, unpricedModel: 'mystery')));
+
+        $fork = $store->forkSession('parent');
+
+        // Positive control: this IS a real fork — state rows came along —
+        // so the emptiness below is selectivity, not a no-op copy.
+        self::assertNotEmpty($store->listCheckpoints($fork));
+
+        self::assertNull($store->sessionCost($fork), 'a fork owes nothing for calls it did not make');
+        self::assertNull($store->usageTotals($fork));
+        $stmt = (new PDO('sqlite:' . $this->dbPath))->prepare('SELECT COUNT(*) FROM usage_records WHERE session_id = ?');
+        $stmt->execute([$fork]);
+        self::assertSame(0, (int) $stmt->fetchColumn(), 'no usage_record follows the fork');
+
+        // The parent keeps every cent of its own history, bound and all.
+        self::assertSame(
+            ['calls' => 1, 'totalTokens' => 100, 'costUsd' => 0.02, 'unpriced' => true],
+            $store->usageTotals('parent'),
+        );
     }
 }

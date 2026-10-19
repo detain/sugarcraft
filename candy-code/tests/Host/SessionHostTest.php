@@ -239,6 +239,29 @@ final class SessionHostTest extends TestCase
         self::assertSame(TurnTicket::REFUSED, $ticket->admitted);
     }
 
+    public function testAServeRoutedTurnLandsItsUsageRecordInTheDurableLedger(): void
+    {
+        // SES-1, rev-w4g MAJOR-1: serve does NOT run the TUI's Chat — the
+        // host settles its turns through its own accounting sites — so a
+        // ledger sink attached only on the Chat side would persist ZERO
+        // usage_records for every serve session and `serve --continue`
+        // would restart its durable cost at $0. The sink must ride both
+        // hosts' calls into the same choke.
+        $backend = self::scripted();
+        $host = SessionHost::new('s', WorkspaceContext::new(sessionStore: $this->store, backend: $backend));
+
+        $host->submit('expensive');
+        $backend->settle(Message::assistant('done')->withUsage(Usage::new(totalTokens: 10, costUsd: 0.05)));
+
+        self::assertGreaterThan(0.0, $host->spentUsd(), 'the in-process tracker billed the turn');
+        self::assertSame(
+            ['calls' => 1, 'totalTokens' => 10, 'costUsd' => 0.05, 'unpriced' => false],
+            $this->store->usageTotals('s'),
+            'the serve-routed call landed its row in the durable ledger',
+        );
+        self::assertEqualsWithDelta(0.05, $this->store->sessionCost('s'), 1e-9, 'and the row cache folded with it');
+    }
+
     /**
      * Roadmap N-P4b on server sessions: `compaction.mode: off` skips the
      * automatic tier but still refuses a prompt the window cannot take, and

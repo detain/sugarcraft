@@ -43,8 +43,10 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
+use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionLock;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 
 /**
@@ -1453,7 +1455,7 @@ final class SessionHost
                     // Billed before the latch check, as the TUI bills it: a
                     // paid-for provider call is never unbilled, even when the
                     // summaries it carried are superseded on arrival.
-                    $this->ledger()->account($this->spend, $msg->usage);
+                    $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());
                     if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
                         return;
                     }
@@ -1541,7 +1543,7 @@ final class SessionHost
                 return;
             }
 
-            $this->ledger()->account($this->spend, $reply->usage);
+            $this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink());
             if ($generation !== $this->generation) {
                 // A cancelled turn's reply: billed, never shown.
                 return;
@@ -1827,6 +1829,39 @@ final class SessionHost
         $service = $this->workspace->service(SpendLedger::class);
 
         return $service instanceof SpendLedger ? $service : SpendLedger::new();
+    }
+
+    /**
+     * The durable ledger sink SES-1 hands the host's accounting sites: one
+     * `usage_records` row per accounted call, appended through the same
+     * single guard the in-process tracker rides at {@see SpendLedger::account()}.
+     * This is the serve path's mirror of {@see Chat::usageRecordSink()} —
+     * SessionHost is NOT a Chat (its own class docblock says so) and settles
+     * its turns through its own two accounting sites, so a sink handed only
+     * to Chat would persist nothing for `serve --continue`. Null when the
+     * workspace holds only the base store; accounting then stays exactly as
+     * durable as it was before the table.
+     *
+     * The store's kind is judged at build time and the session id and model
+     * are read at CALL time — not because a host can late-mint (its id is
+     * `readonly`, named before the first turn), but because one shape for
+     * both sinks is one shape to keep correct.
+     */
+    private function usageRecordSink(): ?\Closure
+    {
+        $store = $this->workspace->sessionStore;
+        if (!$store instanceof EnhancedSessionStore) {
+            return null;
+        }
+
+        return function (Usage $usage) use ($store): void {
+            $backend = $this->workspace->backend;
+            $store->appendUsageRecord(
+                $this->sessionId,
+                $usage,
+                $backend instanceof EngineBackend ? $backend->model() : null,
+            );
+        };
     }
 
     private function meter(): ContextMeter

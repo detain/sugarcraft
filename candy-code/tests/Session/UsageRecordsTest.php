@@ -269,6 +269,61 @@ final class UsageRecordsTest extends TestCase
             '/tokenTracker: \$sessionStore instanceof EnhancedSessionStore\s*\?\s*\$sessionStore->resumedTokenTracker\(\$sessionId\)/',
             $bootstrap,
         );
+
+        // SES-1, rev-w4g MAJOR-1: the host's OWN accounting sites carry the
+        // sink too — serve is SessionHost, not Chat, and an unwired site
+        // persists nothing. Both shapes are pinned verbatim: one string per
+        // live call into the choke.
+        $host = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+        foreach ([
+            '$this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());',
+            '$this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink());',
+        ] as $wire) {
+            self::assertStringContainsString($wire, $host, 'serve accounts through the choke WITH the ledger sink');
+        }
+    }
+
+    public function testTheLedgerSinksReadTheirSessionIdentityInsideTheClosure(): void
+    {
+        // rev-w4g MINOR-1: the sink docblock's late-mint law — the id is
+        // resolved at CALL time — is invisible to behavior, because the
+        // sink itself is constructed one expression before the ledger
+        // invokes it, so "sink-build time" and "call time" cannot diverge
+        // in a running test. This shape pin is what makes the sentence
+        // load-bearing: hoist the id read above `return function` or
+        // capture it in `use`, and it goes red.
+        foreach ([
+            ['/src/Chat.php', '$this->currentSessionId'],
+            ['/src/Host/SessionHost.php', '$this->sessionId'],
+        ] as [$file, $identityRead]) {
+            $method = self::sinkMethodSlice(file_get_contents(dirname(__DIR__, 2) . $file));
+            $built = strpos($method, 'return function');
+            self::assertNotFalse($built, $file . ' must hand its sink back as a closure');
+            self::assertStringContainsString(
+                'use ($store): void',
+                $method,
+                $file . "'s sink captures the store and nothing else — an id stamped into `use` would freeze the pre-mint null",
+            );
+            self::assertNotFalse(
+                strpos($method, $identityRead, $built),
+                $file . ": {$identityRead} must be read INSIDE the closure — at call time",
+            );
+        }
+    }
+
+    /**
+     * The usageRecordSink() method body: from its declaration to its
+     * closing brace. Nested closure braces close at eight-space indent,
+     * so the first four-space `    }` ends the method.
+     */
+    private static function sinkMethodSlice(string $source): string
+    {
+        $start = strpos($source, 'private function usageRecordSink');
+        self::assertNotFalse($start, 'the sink method exists');
+        $end = strpos($source, "\n    }", $start);
+        self::assertNotFalse($end, 'the sink method closes');
+
+        return substr($source, $start, $end - $start);
     }
 
     /**

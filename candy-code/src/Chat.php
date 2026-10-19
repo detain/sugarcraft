@@ -20214,9 +20214,12 @@ final class Chat implements Model
     /**
      * The durable ledger sink SES-1 hands the accounting choke: one
      * `usage_records` row per accounted call, appended through the same
-     * single guard the in-process tracker rides, so the TUI and serve (which
-     * run THIS Chat through TurnRunner) share one append site without a
-     * second seam to remember. Null when this Chat has no enhanced store —
+     * single guard the in-process tracker rides. This is the TUI path's
+     * sink; the serve path reaches the SAME table through its own mirror
+     * at {@see \SugarCraft\Code\Host\SessionHost::usageRecordSink()},
+     * because a SessionHost is not a Chat ({@see SessionHost}) — the one
+     * choke that makes a second APPEND SITE unnecessary is the ledger's,
+     * not this method's. Null when this Chat has no enhanced store —
      * accounting then stays exactly as durable as it was before the table.
      *
      * The closure resolves store kind at build time but the session ID at
