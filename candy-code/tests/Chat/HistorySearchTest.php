@@ -7,7 +7,10 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Host\WorkspaceContext;
+use SugarCraft\Code\InitialPromptMsg;
 use SugarCraft\Code\Session\PromptHistory;
+use SugarCraft\Code\Support\AiCommentWatcher;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\HistorySearch;
 use SugarCraft\Core\KeyType;
@@ -228,6 +231,71 @@ final class HistorySearchTest extends TestCase
         $this->assertSame('mid-sentence ', $pasted->inputBuf, 'the draft behind the overlay is untouched');
     }
 
+    public function testAnIncomingWatcherPromptDoesNotSubmitBeneathTheOpenSearch(): void
+    {
+        // rev-w2b MAJOR: with the search up, the overlay owns the keys, but
+        // an AiCommentWatcher prompt arriving as an InitialPromptMsg was
+        // submitted as a LIVE turn — inFlight=true while the overlay held
+        // the keyboard. The session-picker bail at submitInitialPrompt()
+        // gains the same shape: the words wait in the draft, no turn starts.
+        $chat = $this->searchableChat();
+        [$searching] = $chat->update($this->ctrlG());
+        $this->assertNotNull($searching->historySearch(), 'fixture: the search is up');
+
+        [$fed, $cmd] = $searching->update(new InitialPromptMsg('watcher surfaced prompt'));
+
+        $this->assertNull($cmd, 'no command drives a turn beneath the overlay');
+        $this->assertFalse($this->readInFlight($fed), 'the chat is not in flight');
+        $this->assertNotNull($fed->historySearch(), 'the overlay keeps the keyboard');
+        $this->assertSame('watcher surfaced prompt', $fed->inputBuf, 'the words wait in the draft (picker precedent)');
+    }
+
+    public function testTheSamePromptStillSubmitsOnceTheSearchIsClosed(): void
+    {
+        // Polarity: the bail must not EAT watcher prompts. With the overlay
+        // down the same message takes the Enter road — the box takes it and
+        // submit() sends it.
+        $chat = $this->searchableChat();
+        [$searching] = $chat->update($this->ctrlG());
+        [$closed] = $searching->update(new KeyMsg(KeyType::Escape));
+        $this->assertNull($closed->historySearch(), 'fixture: the overlay is down');
+
+        [, $cmd] = $closed->update(new InitialPromptMsg('watcher surfaced prompt'));
+
+        $this->assertNotNull($cmd, 'the prompt still becomes a turn once the chat owns the keys back');
+    }
+
+    public function testTheWatcherTickStandsDownWhileTheSearchIsUpAndReArmsAfter(): void
+    {
+        // The deferral conjunct inside subscriptions(): no poll is armed at
+        // all while the overlay owns the keys — and nothing is lost, because
+        // leaving the overlay re-arms the tick on the next reconcile.
+        $root = \sys_get_temp_dir() . '/w2b-watch-' . \uniqid('hs', true);
+        \mkdir($root, 0o700, true);
+        try {
+            $history = new PromptHistory($this->historyPath);
+            $history->append('a stored prompt');
+            $chat = (new Chat(
+                backend: new EchoBackend(),
+                promptHistory: $history,
+                projectRoot: $root,
+                workspace: WorkspaceContext::new(root: $root, userConfig: ['watchFiles' => true]),
+            ))->withSize(100, 30);
+
+            $this->assertTrue($chat->subscriptions()?->has(AiCommentWatcher::SUBSCRIPTION) ?? false, 'fixture: watching an idle chat');
+
+            [$searching] = $chat->update($this->ctrlG());
+            $this->assertNotNull($searching->historySearch(), 'fixture: the search is up');
+            $this->assertFalse($searching->subscriptions()?->has(AiCommentWatcher::SUBSCRIPTION) ?? false, 'no poll armed while the overlay owns the keys');
+
+            [$closed] = $searching->update(new KeyMsg(KeyType::Escape));
+            $this->assertNull($closed->historySearch(), 'fixture: closed');
+            $this->assertTrue($closed->subscriptions()?->has(AiCommentWatcher::SUBSCRIPTION) ?? false, 'leaving the overlay re-arms the tick — no watcher-prompt loss');
+        } finally {
+            @\rmdir($root);
+        }
+    }
+
     private function ctrlG(): KeyMsg
     {
         return new KeyMsg(KeyType::Char, 'g', ctrl: true);
@@ -239,5 +307,13 @@ final class HistorySearchTest extends TestCase
         $property->setAccessible(true);
 
         return $property->getValue($chat);
+    }
+
+    private function readInFlight(Chat $chat): bool
+    {
+        $property = new \ReflectionProperty($chat, 'inFlight');
+        $property->setAccessible(true);
+
+        return (bool) $property->getValue($chat);
     }
 }

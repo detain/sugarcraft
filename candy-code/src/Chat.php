@@ -1823,6 +1823,8 @@ final class Chat implements Model
      *
      * With the session picker up (bare `--resume`), choosing comes first: the
      * words become the draft, and Enter sends them once a session is picked.
+     * The history search owns the keys the same way (TUI-2 review): the words
+     * wait in the draft, and no turn starts beneath the overlay.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -1830,7 +1832,7 @@ final class Chat implements Model
     {
         $next = $this->mutate(['initialPrompt' => null, 'inputBuf' => $prompt]);
 
-        if ($next->sessionPicker !== null) {
+        if ($next->sessionPicker !== null || $next->historySearch !== null) {
             return [$next, null];
         }
 
@@ -19239,6 +19241,7 @@ final class Chat implements Model
             && $this->palette === null
             && $this->sessionPicker === null
             && $this->dirPicker === null
+            && $this->historySearch === null
             && !$this->readOnlySession
             && \SugarCraft\Code\Support\AiCommentWatcher::enabled($this->workspace?->userConfig ?? [])
         ) {

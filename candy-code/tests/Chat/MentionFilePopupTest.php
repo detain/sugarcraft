@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Renderer;
 
 /**
  * TUI-1 (plan_comparison): the fuzzy `@` file popup — open, browse, accept,
@@ -142,6 +143,29 @@ final class MentionFilePopupTest extends TestCase
 
         $midWord = (new Chat(inputBuf: 'mail me@x', backend: new EchoBackend(), projectRoot: $this->w2bRoot))->withSize(100, 30);
         $this->assertFalse($midWord->mentionPopupOpen(), 'an @ glued to a word is not a mention — tokenAt already knew, the popup just inherits it');
+    }
+
+    public function testAClippedRowKeepsOnlyTheHighlightIndicesItCanStillShow(): void
+    {
+        // rev-w2b MINOR-1: rank's indices address the UNCLIPPED subject, and
+        // Highlighter's bounds-drop is one cell too generous on a cut row —
+        // clipToWidth's trailing `…` occupies an in-bounds haystack slot, so
+        // an index at exactly the cut length would style the ellipsis (a
+        // highlight overflowing the row's truncation). The re-clip drops it.
+        $clip = new \ReflectionMethod(Renderer::class, 'clipHighlightIndices');
+        $clip->setAccessible(true);
+
+        $this->assertSame(
+            [0, 2, 4],
+            $clip->invoke(null, [0, 2, 4], 'parser.php', 'parser.php'),
+            'a row that never clipped keeps every index',
+        );
+        $this->assertSame(
+            [0],
+            $clip->invoke(null, [0, 7, 8, 20], 'parsearchatlibrary.php', 'parse…'),
+            'index 7 is the `…` slot and 8/20 are gone characters — only 0 survives',
+        );
+        $this->assertSame([], $clip->invoke(null, [9], 'abcdefgh', '…'), 'a fully eaten row keeps nothing');
     }
 
     private function composingAt(string $draft): Chat

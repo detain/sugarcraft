@@ -6116,7 +6116,7 @@ final class Renderer
             // as the "/" popup requires (audit 15b-16).
             $name = self::slashMenuText($row['subject']);
             $plainName = self::clipToWidth($name, max(0, $budget - 1));
-            $match = new MatchResult('', $plainName, $row['score'], $row['indices']);
+            $match = new MatchResult('', $plainName, $row['score'], self::clipHighlightIndices($row['indices'], $name, $plainName));
 
             $reopen = self::sgrOpen($rowStyle);
             $styled = $highlighter->highlight(
@@ -6143,6 +6143,28 @@ final class Renderer
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * TUI-1 review MINOR: the rank's indices address the UNCLIPPED subject,
+     * while {@see clipToWidth()} replaces everything past its cut with one
+     * `…`. Highlighter's bounds-drop already hides indices past the end, but
+     * the ellipsis occupies a slot inside the clipped haystack — an index at
+     * exactly the cut length would style the ellipsis instead of the matched
+     * character it named (a highlight that overflows its row's truncation).
+     * Re-clip to the kept prefix so a truncated row styles only what it shows.
+     *
+     * @param list<int> $indices
+     * @return list<int>
+     */
+    private static function clipHighlightIndices(array $indices, string $subject, string $clipped): array
+    {
+        if ($indices === [] || $subject === $clipped) {
+            return $indices;
+        }
+        $kept = max(0, mb_strlen($clipped, 'UTF-8') - 1);
+
+        return array_values(array_filter($indices, static fn (int $index): bool => $index < $kept));
     }
 
     /**
