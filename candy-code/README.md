@@ -2328,9 +2328,16 @@ bash scripts/parallel-tests.sh \
   --against-json candy-code/tests/Config/Support/suite-figure.json
 ```
 
-K defaults to min(nproc, 8): wall time falls roughly with K until the slowest
-single test file becomes the floor, past which extra shards stop paying. CI pins
-K=min(nproc, 4) because its 2-4 vCPU runners must not be oversubscribed. The
+K defaults to min(nproc, 24): measured 2026-10-18 on a 64-core box, the
+23,434-test suite medians are 185s at K=8, 108.5s at K=16, 102.5s at K=24,
+and 105.5s at K=32 — wall time falls until the slowest single test file
+(KeyHelpTest, ~108s) becomes the floor, which it does from K=16 up. The old
+K=8 cap was a mis-measurement of the 11.5k-test era: K=8 measured WORSE
+(185s vs 102s) than every larger K tested, and light suites peak sooner still
+(candy-top's optimum is K=16, with K=24 costing it ~0.05s of noise). CI pins
+K=min(nproc, 4) because its 2-4 vCPU runners must not be oversubscribed.
+`--lib <slug>` shards any other lib's suite through the same conservation
+gate (default candy-code). The
 conservation gate is fail-closed by design: a test file added without a
 `scripts/parallel-tests-durations.tsv` row lands in zero shards, the shard sum
 falls short of the pinned figure, and the run goes RED. To refresh the

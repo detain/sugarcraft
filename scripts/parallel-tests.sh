@@ -1,17 +1,27 @@
 #!/usr/bin/env bash
-# Sharded parallel PHPUnit runner for the candy-code suite.
+# Sharded parallel PHPUnit runner for any lib's suite (default: candy-code).
 #
 # Usage:
 #   scripts/parallel-tests.sh [K] [--junit <xml>] [--durations <tsv>]
-#                             [--against-json <suite-figure.json>]
+#                             [--lib <slug>] [--against-json <suite-figure.json>]
 #                             [--out <dir>] [--timeout <secs>] [--manifest] [--clover]
 #
-#   K            shard count (default: min(nproc, 8) — K=8 is the measured
-#                local floor, see "Measured discipline" below; beyond K=8
-#                contention outpaces the gains, so more shards stop paying).
+#   K            shard count (default: min(nproc, 24) — re-swept 2026-10-18 on
+#                a 64-core box: K=24 is the measured optimum for the heavy
+#                candy-code suite (median 102.5s vs 185s at the old K=8 cap)
+#                and within noise of light-lib optima (candy-top peaks at
+#                K=16, K=24 costs it ~0.05s). The wall is bound by the
+#                slowest single test file, not by K — see "Measured
+#                discipline" below.)
 #                CI pins K=min(nproc,4) explicitly — its GitHub-hosted
 #                ubuntu-latest runners are 2-4 vCPU and must not be
 #                oversubscribed.)
+#   --lib        lib directory slug of the suite to shard (default: candy-code).
+#                Launches <slug>/vendor/bin/phpunit with -c <slug>/phpunit.xml and
+#                refuses to start if either file is missing. Shard lists stay
+#                repo-root-relative (<slug>/tests/...) — the shape the committed
+#                scripts/parallel-tests-durations.tsv carries and the shape the
+#                junit-derived fallbacks strip to.
 #   --junit      baseline JUnit XML from a serial run — the duration source for
 #                the LPT manifest, and the conservation reference. Without it,
 #                --durations, or a previous <out>/durations.tsv, there is no
@@ -55,7 +65,9 @@
 #    and CANDY_CODE_MCP_DISABLE=1 as a command prefix on the phpunit launch
 #    (E737 — shards run at the checkout root, where an operator's own trusted
 #    `.mcp.json` must not let the suite spawn its servers; serial launches do
-#    not go through this script and keep the default-on behavior). Each shard re-runs
+#    not go through this script and keep the default-on behavior). The gate is
+#    prefixed for every --lib suite: only candy-code's Bootstrap reads the
+#    variable, so it is inert for all other libs. Each shard re-runs
 #    tests/bootstrap.php in its own process (TMPDIR sandbox, loop pin, stdin
 #    pin, HOME handling are all per-process).
 #  * CRITICAL RUNNER REQUIREMENT (measured 2026-09-10): do NOT wrap shards in
@@ -70,16 +82,22 @@
 #    safe — keep the pin intact.
 #  * Conservation is asserted from per-shard junit roots vs the baseline junit
 #    root (tests/assertions/errors/failures/skipped) in a final table.
-#  * MEASURED K-SCALING (11,566-test tree @56501908d, 64-core box): serial
-#    565s; K=4 159s; K=8 ~65-73s wall with the largest LPT bucket ~62s — one
-#    ProcessExecutorTest-class file is the hard floor below which no shard
-#    count can go, and beyond K=8 contention outpaces the gains. Hence the
-#    local default min(nproc, 8); CI stays at K=min(nproc, 4) because its
-#    runners are 2-4 vCPU.
+#  * MEASURED K-SCALING (re-swept 2026-10-18 on a 64-core box, tree
+#    @15f197607, 23,434-test era; 2 runs per K, all CONSERVATION PASS):
+#    candy-code medians K=8 185.0s, K=16 108.5s, K=24 102.5s, K=32 105.5s —
+#    the wall is floor-bound by the slowest single test file (KeyHelpTest
+#    ~108.6s recorded duration; actual shard runs land slightly under), not
+#    by shard count. Light suites cross over sooner: candy-top (2,117T)
+#    medians K=8 3.44s, K=16 2.585s (optimum), K=24 2.635s, K=32 2.675s —
+#    every K>=16 still beats 8. The old default min(nproc, 8) dated from the
+#    11,566-test tree @56501908d ("beyond K=8 contention outpaces the
+#    gains"); that claim is REFUTED here — K=8 measured the worst of every K
+#    tested. Hence the local default min(nproc, 24); CI stays at
+#    K=min(nproc, 4) because its runners are 2-4 vCPU.
 set -u
 
 usage() {
-	sed -n '2,47p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,96p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -88,7 +106,8 @@ REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
 }
 
 K=$(nproc)
-if [ "$K" -gt 8 ]; then K=8; fi
+if [ "$K" -gt 24 ]; then K=24; fi
+LIB=candy-code
 OUT="${TMPDIR:-/tmp}/parallel-tests"
 BASE_JUNIT=""
 DURATIONS=""
@@ -109,6 +128,10 @@ while [ $# -gt 0 ]; do
 		;;
 	--against-json)
 		AGAINST_JSON=${2:?--against-json needs a file}
+		shift 2
+		;;
+	--lib)
+		LIB=${2:?--lib needs a slug}
 		shift 2
 		;;
 	--out)
@@ -143,6 +166,21 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
+case "$LIB" in
+'' | .* | */*)
+	echo "parallel-tests: --lib must be a plain lib directory slug: $LIB" >&2
+	exit 1
+	;;
+esac
+[ -f "$REPO/$LIB/vendor/bin/phpunit" ] || {
+	echo "parallel-tests: missing $LIB/vendor/bin/phpunit — install/refresh the lib's vendor first" >&2
+	exit 1
+}
+[ -f "$REPO/$LIB/phpunit.xml" ] || {
+	echo "parallel-tests: missing $LIB/phpunit.xml" >&2
+	exit 1
+}
+
 DUR=$OUT/durations.tsv
 if [ -n "$BASE_JUNIT" ]; then
 	[ -s "$BASE_JUNIT" ] || {
@@ -168,14 +206,14 @@ fi
 }
 
 mkdir -p "$OUT"
-php "$REPO/scripts/parallel-tests-make-shards.php" "$SOURCE" "$K" "$OUT" || exit 1
+php "$REPO/scripts/parallel-tests-make-shards.php" "$SOURCE" "$K" "$OUT" "$LIB" || exit 1
 if [ "$MODE" = --manifest ]; then
 	cat "$OUT/plan-k$K.tsv"
 	exit 0
 fi
 
 cd "$REPO" || exit 1
-PHPUNIT="php candy-code/vendor/bin/phpunit"
+PHPUNIT="php $LIB/vendor/bin/phpunit"
 declare -a PIDS
 START=$(date -u +%s)
 
@@ -202,7 +240,7 @@ for i in $(seq 0 $((K - 1))); do
 		# shell — and it is set for shards ONLY: a serial run launched
 		# directly (`vendor/bin/phpunit`) keeps the documented default-on
 		# behavior, exactly as an operator's interactive launch does.
-		CANDY_CODE_MCP_DISABLE=1 timeout "$SHARD_TIMEOUT" $PHPUNIT -c candy-code/phpunit.xml --colors=never \
+		CANDY_CODE_MCP_DISABLE=1 timeout "$SHARD_TIMEOUT" $PHPUNIT -c "$LIB/phpunit.xml" --colors=never \
 			--cache-directory "$OUT/cache-k$K-$i" \
 			--log-junit "$OUT/junit-$i.xml" \
 			"${COV_ARGS[@]}" \
