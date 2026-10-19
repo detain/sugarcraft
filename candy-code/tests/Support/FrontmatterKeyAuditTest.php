@@ -242,6 +242,20 @@ final class FrontmatterKeyAuditTest extends TestCase
         );
     }
 
+    public function testARuleDeclaringTheForeignAliasKeysEarnsNoNoticeAndFoldsCorrectly(): void
+    {
+        $root = $this->dir . '/repo-alias';
+        mkdir($root . '/.claude/rules', 0o700, true);
+        file_put_contents($root . '/.claude/rules/mod.mdc', "---\nglobs:\n  - src/main.php\nalwaysApply: false\n---\nbody\n");
+
+        $loader = new RuleLoader($root, reportRefusals: false);
+        $rules = $loader->loadProjectClaudeRules();
+
+        self::assertCount(1, $rules);
+        self::assertFalse($rules[0]->enabled, 'alwaysApply: false is ACTED ON at the parse boundary, not merely tolerated');
+        self::assertSame([], $loader->ignoredFrontmatter(), 'a did-you-mean on a working alias would train the operator to ignore the audit');
+    }
+
     private function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {

@@ -742,7 +742,10 @@ precedence order (`InstructionFileLoader::FILENAMES`):
 - **your personal file** — `~/.candy-code/AGENTS.md`, always, at session start,
   in every project. It is priced first under the same instruction budget and
   framed in your own voice (the `<user-rules>` fence and preamble your
-  `~/.candy-code/rules` use), ahead of anything a repository ships. Only an
+  `~/.candy-code/rules` use — since INT-2 the `~/.claude/rules` and
+  `~/.cursor/rules` imports share exactly that framing and tier, differing only
+  by the `[claude]`/`[cursor]` badge `/rules` prints), ahead of anything a
+  repository ships. Only an
   owned home is consulted (`HomeDirectory::owned()`); when you have not written
   that file, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in,
   gated by its own directory the same way — the two are never both read;

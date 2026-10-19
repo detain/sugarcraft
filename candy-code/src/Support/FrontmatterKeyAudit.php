@@ -52,6 +52,13 @@ final class FrontmatterKeyAudit
      * agentskills.io spec's descriptive fields: a skill's name is its
      * directory, and the rest describe the file rather than ask for
      * behaviour, so declaring them is never a mistake worth a notice.
+     *
+     * Rule keys `globs` and `alwaysApply` are the INT-2 foreign-tree spellings
+     * and they are ACTED ON, not carried: `globs:` is read as an alias of
+     * `paths:` during {@see \SugarCraft\Code\Context\Rule}'s trigger build and
+     * `alwaysApply:` folds into `enabled` at the parse boundary. They belong in
+     * KNOWN precisely so an imported rule using them earns no did-you-mean -
+     * and in no INERT row, because both keys decide something.
      */
     public const KNOWN = [
         self::AGENT => [
@@ -64,7 +71,7 @@ final class FrontmatterKeyAudit
             'paths', 'requires', 'os',
         ],
         self::COMMAND => ['description', 'argument-hint', 'model', 'subtask'],
-        self::RULE => ['name', 'description', 'enabled', 'models', 'keywords', 'paths'],
+        self::RULE => ['name', 'description', 'enabled', 'models', 'keywords', 'paths', 'globs', 'alwaysApply'],
     ];
 
     /**

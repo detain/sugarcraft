@@ -783,6 +783,179 @@ final class RuleLoaderTest extends TestCase
         );
     }
 
+    // -- INT-2: foreign rules trees (Claude Code / Cursor) --------------------
+
+    public function testTheUserClaudeTreeLoadsIntoTheUserTierCarryingItsBadge(): void
+    {
+        $root = $this->sandbox . '/repo-foreign';
+        $claude = $this->home . '/.claude/rules';
+        mkdir($claude . '/nested', 0o755, true);
+        $this->emitRule($claude . '/be-short.md', "---\nname: be-short\n---\nCLAUDE-USER\n");
+        $this->emitRule($claude . '/nested/deep.mdc', "---\nname: deep\n---\nCLAUDE-NESTED-MDC\n");
+
+        $loaded = (new RuleLoader($root))->loadUserClaudeRules();
+
+        self::assertSame(['be-short', 'deep'], $this->ruleNames($loaded), 'the foreign tree walks like the native one: recursive, ksorted by key');
+        foreach ($loaded as $rule) {
+            self::assertSame('user', $rule->tier, 'a foreign directory never mints a tier - authorship decides the fence, INT-2');
+            self::assertSame(Rule::ORIGIN_CLAUDE, $rule->origin);
+            self::assertSame('[claude]', $rule->badge(), 'provenance surfaces in the SkillSource bracket spelling');
+        }
+    }
+
+    public function testTheUserCursorTreeAcceptsMdcAndKeysOnTheStem(): void
+    {
+        $root = $this->sandbox . '/repo-cursor';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($cursor, 0o755, true);
+        $this->emitRule($cursor . '/style.mdc', "---\nname: style\nalwaysApply: true\n---\nCURSOR\n");
+
+        $rule = (new RuleLoader($root))->loadUserCursorRules()[0];
+
+        self::assertSame('style', $rule->key, 'the stripped suffix is the file\'s ACTUAL extension - an operator toggles the stem, not one tool\'s spelling of it');
+        self::assertSame(Rule::ORIGIN_CURSOR, $rule->origin);
+        self::assertSame('[cursor]', $rule->badge());
+        self::assertTrue($rule->enabled, 'alwaysApply: true asks for exactly what happens and folds to a no-op');
+    }
+
+    public function testTheNativeWalkStillIgnoresMdcFiles(): void
+    {
+        $root = $this->sandbox . '/repo-native-mdc';
+        $rules = $this->home . '/.candy-code/rules';
+        mkdir($rules, 0o755, true);
+        $this->emitRule($rules . '/note.md', "---\nname: note\n---\nNATIVE\n");
+        $this->emitRule($rules . '/stray.mdc', "---\nname: stray\n---\nNOT-NATIVE\n");
+
+        self::assertSame(['note'], $this->ruleNames((new RuleLoader($root))->loadUserRules()), 'a file in the wrong extension is one the operator\'s own tool would not load either');
+    }
+
+    public function testGlobsFrontmatterBuildsThePathTriggerAsAnAliasOfPaths(): void
+    {
+        $root = $this->sandbox . '/repo-globs';
+        $claude = $this->home . '/.claude/rules';
+        mkdir($claude, 0o755, true);
+        // Plain non-wildcard values: the ALIAS mapping is the subject, the
+        // dialect is PathGlob's, and glob-shaped literals in this file would
+        // drift the harvested corpus (GlobDialectDifferentialTest).
+        $this->emitRule($claude . '/scoped.mdc', "---\nname: scoped\nglobs:\n  - src/main.php\n---\nBODY\n");
+        $this->emitRule($claude . '/both.mdc', "---\nname: both\nglobs:\n  - b.md\npaths:\n  - a.md\n---\nBODY\n");
+
+        $loaded = (new RuleLoader($root))->loadUserClaudeRules();
+        // ksort puts `both` before `scoped` - the walk orders by key, not by
+        // the order this test planted the files.
+        $both = $loaded[0];
+        $scoped = $loaded[1];
+
+        self::assertCount(1, $scoped->triggers);
+        self::assertInstanceOf(PathTrigger::class, $scoped->triggers[0]);
+        self::assertSame(['src/main.php'], $scoped->triggers[0]->globs, 'globs: reaches the same PathTrigger paths: builds');
+        self::assertSame(['a.md'], $both->triggers[0]->globs, 'the native spelling wins the alias when one file declares both');
+    }
+
+    public function testAlwaysApplyFalseDisablesAtTheParseBoundaryAndEarnsNoAuditNotice(): void
+    {
+        $root = $this->sandbox . '/repo-always';
+        $claude = $this->home . '/.claude/rules';
+        mkdir($claude, 0o755, true);
+        $this->emitRule($claude . '/off.mdc', "---\nname: off\nalwaysApply: false\n---\nX\n");
+        $this->emitRule($claude . '/on.md', "---\nname: on\n---\nY\n");
+
+        $loader = new RuleLoader($root);
+        $parsed = $loader->loadUserClaudeRules();
+
+        self::assertSame(['off' => false, 'on' => true], [
+            'off' => $parsed[0]->enabled,
+            'on' => $parsed[1]->enabled,
+        ], 'the mis-map hazard: alwaysApply:false must read as OFF at parse, not stand in every prompt');
+        self::assertSame(['on'], $this->ruleNames($loader->load()), 'and load() drops it like it drops enabled:false');
+        self::assertSame([], $loader->ignoredFrontmatter(), 'globs/alwaysApply are acted-on aliases - a did-you-mean on a working key is a lie');
+    }
+
+    public function testTheEnabledAndAlwaysApplyKeysFoldWithAndSemantics(): void
+    {
+        $root = $this->sandbox . '/repo-fold';
+        $cursor = $this->home . '/.cursor/rules';
+        mkdir($cursor, 0o755, true);
+        $this->emitRule($cursor . '/one.mdc', "---\nname: one\nenabled: true\nalwaysApply: false\n---\nA\n");
+        $this->emitRule($cursor . '/two.mdc', "---\nname: two\nenabled: false\nalwaysApply: true\n---\nB\n");
+
+        $parsed = (new RuleLoader($root))->loadUserCursorRules();
+
+        self::assertFalse($parsed[0]->enabled, 'one key saying off is enough');
+        self::assertFalse($parsed[1]->enabled, 'the other key saying off is equally enough');
+    }
+
+    public function testANonBooleanAlwaysApplyFailsTheParseAndLandsInTheSkipLedger(): void
+    {
+        $root = $this->sandbox . '/repo-badfold';
+        $claude = $this->home . '/.claude/rules';
+        mkdir($claude, 0o755, true);
+        $this->emitRule($claude . '/odd.mdc', "---\nname: odd\nalwaysApply: 'no'\n---\nA\n");
+
+        $loader = new RuleLoader($root);
+
+        self::assertSame([], $loader->loadUserClaudeRules());
+        self::assertNotEmpty($loader->skippedFiles(), 'the string \"no\" is not boolean and the loader does not guess');
+    }
+
+    public function testForeignProjectTreesLoadAfterTheirNativeSiblingInTheProjectTier(): void
+    {
+        $root = $this->sandbox . '/repo-foreign-project';
+        mkdir($root . '/.candy-code/rules', 0o755, true);
+        mkdir($root . '/.claude/rules', 0o755, true);
+        mkdir($root . '/.cursor/rules', 0o755, true);
+        $this->emitRule($root . '/.candy-code/rules/one.md', "---\nname: one\n---\n1\n");
+        $this->emitRule($root . '/.claude/rules/two.md', "---\nname: two\n---\n2\n");
+        $this->emitRule($root . '/.cursor/rules/three.mdc', "---\nname: three\n---\n3\n");
+
+        $loaded = (new RuleLoader($root))->load();
+
+        self::assertSame(['one', 'two', 'three'], $this->ruleNames($loaded), 'each tier walks native first, then claude, then cursor - family order inside the tier');
+        self::assertSame(['project', 'project', 'project'], array_map(static fn (Rule $r): string => $r->tier, $loaded), 'untrusted clone bytes stay the repository\'s voice whatever directory shipped them');
+        self::assertSame(['', '[claude]', '[cursor]'], array_map(static fn (Rule $r): string => $r->badge(), $loaded));
+    }
+
+    public function testAForeignPackSharingAStemWithANativePackStaysItsOwnPack(): void
+    {
+        $root = $this->sandbox . '/repo-stem';
+        $rules = $this->home . '/.candy-code/rules';
+        $claude = $this->home . '/.claude/rules';
+        mkdir($rules, 0o755, true);
+        mkdir($claude, 0o755, true);
+        $this->emitRule($rules . '/focus.md', "NATIVE-FOCUS\n");
+        $this->emitRule($claude . '/focus.md', "CLAUDE-FOCUS\n");
+
+        $loaded = (new RuleLoader($root))->load();
+
+        self::assertCount(2, $loaded, 'two directories are two packs - dedup de-duplicates FILES, not names');
+        self::assertSame(['focus', 'focus'], array_map(static fn (Rule $r): string => $r->key, $loaded));
+        self::assertSame(['', '[claude]'], array_map(static fn (Rule $r): string => $r->badge(), $loaded));
+    }
+
+    public function testEachForeignDirectoryKeepsItsOwnFileCapAndStarvesNoNativePack(): void
+    {
+        $cap = (new ReflectionClass(RuleLoader::class))->getConstant('MAX_FILES');
+        self::assertIsInt($cap);
+
+        $root = $this->sandbox . '/repo-foreign-caps';
+        $claude = $this->home . '/.claude/rules';
+        $native = $this->home . '/.candy-code/rules';
+        mkdir($claude, 0o755, true);
+        mkdir($native, 0o755, true);
+        for ($i = 0; $i < $cap; $i++) {
+            $this->emitRule(sprintf($claude . '/c%02d.md', $i), "BODY\n");
+        }
+        $this->emitRule($claude . '/zz_overflow.md', "OVERFLOW\n");
+        $this->emitRule($native . '/standing.md', "STANDING\n");
+
+        $loader = new RuleLoader($root);
+
+        self::assertCount($cap, $loader->loadUserClaudeRules(), 'the foreign tree gets its OWN ceiling - a crowded import cannot starve the native user tier');
+        self::assertCount(1, $loader->loadUserRules());
+        $skipped = array_keys($loader->skippedFiles());
+        self::assertCount(1, array_filter($skipped, static fn (string $p): bool => str_starts_with($p, $claude . '/')), 'the overflow is attributed inside the foreign directory');
+    }
+
     // -- Model-scoped rules (ISS-068) ------------------------------------------
 
     public function testARuleScopedToAnotherModelIsDroppedWhenTheSessionModelIsKnown(): void
