@@ -130,6 +130,9 @@ final class ReadOnlySessionTest extends TestCase
     {
         yield '/workflow run' => ['/workflow run deploy'];
         yield '/workflow resume' => ['/workflow resume deploy'];
+        yield '/schedules delete' => ['/schedules delete nightly'];
+        yield '/schedules enable' => ['/schedules enable nightly'];
+        yield '/schedules disable' => ['/schedules disable nightly'];
         yield '/clear' => ['/clear'];
         yield '/compact' => ['/compact'];
         yield '/rename' => ['/rename Mine now'];
@@ -209,6 +212,31 @@ final class ReadOnlySessionTest extends TestCase
             $last = $answered->history[\count($answered->history) - 1]->content;
             self::assertStringNotContainsString('was not sent', $last);
             self::assertStringContainsString('History:', $last, "{$command} printed the breakdown");
+        }
+
+        self::assertFalse($writer->isReadOnlySession());
+    }
+
+    /**
+     * AUT-1: `/schedules` READS a file the other window does not hold, so
+     * listing answers in a read-only window; only its verbs are gated
+     * ({@see \SugarCraft\Code\Host\Commands\SchedulesCommand::isReadOnlyVerb()}).
+     */
+    public function testTheSchedulesListingAnswersInAReadOnlyWindow(): void
+    {
+        $writer = $this->open();
+        foreach (['/schedules', '/schedules list'] as $command) {
+            $reader = self::typed($this->open(), $command);
+            self::assertTrue($reader->isReadOnlySession(), 'fixture: the writer holds the session');
+
+            [$answered] = $reader->update(new KeyMsg(KeyType::Enter));
+
+            self::assertSame('', $answered->inputBuf, "{$command} ran and consumed the draft");
+            self::assertStringNotContainsString(
+                'was not sent',
+                $answered->history[\count($answered->history) - 1]->content,
+                "{$command} is a read",
+            );
         }
 
         self::assertFalse($writer->isReadOnlySession());

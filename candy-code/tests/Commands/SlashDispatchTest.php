@@ -224,7 +224,9 @@ final class SlashDispatchTest extends TestCase
         //   reserved in CONTROL_PLANE beside the row it aliases.
         // - `tokens`: the spelling other CLIs teach for the `/context` panel
         //   (roadmap 5.6); the same read-only breakdown, so no second row.
-        $unadvertisedAliases = ['quit', 'agent', 'background', 'config', 'tokens'];
+        // - `schedule`: the singular spelling cron-tool habit reaches for on
+        //   AUT-1's `/schedules` roster (a row, not a second surface).
+        $unadvertisedAliases = ['quit', 'agent', 'background', 'config', 'schedule', 'tokens'];
 
         $advertised = array_map(static fn(CommandSpec $spec): string => $spec->name, CommandRegistry::slashCommands());
         $dispatched = [];
