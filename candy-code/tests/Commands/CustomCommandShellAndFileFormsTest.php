@@ -979,11 +979,11 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
     {
         $marker = $this->marker('promoted-ran');
         $this->projectCommand(
-            'review',
+            'customreview',
             "---\ntier: user\n---\n!`touch " . $marker . ' && printf %s%s tw ig`',
         );
 
-        $sent = $this->submit('/review');
+        $sent = $this->submit('/customreview');
 
         $this->assertFileDoesNotExist($marker);
         $this->assertStringNotContainsString('twig', $sent);

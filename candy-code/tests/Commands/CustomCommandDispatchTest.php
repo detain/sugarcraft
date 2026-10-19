@@ -124,9 +124,9 @@ final class CustomCommandDispatchTest extends TestCase
 
     public function testAProjectCommandFileIsDispatchedAsItsTemplate(): void
     {
-        $this->projectCommand('review', "Review the diff and be blunt.");
+        $this->projectCommand('customreview', "Review the diff and be blunt.");
 
-        $next = $this->submit('/review');
+        $next = $this->submit('/customreview');
 
         $this->assertSame('Review the diff and be blunt.', $this->sent($next));
         $this->assertTrue($next->inFlight, 'it goes to the model, like any other prompt');
@@ -140,11 +140,11 @@ final class CustomCommandDispatchTest extends TestCase
      */
     public function testWithoutALoaderTheSameDraftRunsNothing(): void
     {
-        $this->projectCommand('review', 'Review the diff and be blunt.');
+        $this->projectCommand('customreview', 'Review the diff and be blunt.');
 
         $chat = new Chat(
             history: [Message::user('hello'), Message::assistant('hi')],
-            inputBuf: '/review',
+            inputBuf: '/customreview',
             backend: new EchoBackend(),
             projectRoot: $this->project,
         );
@@ -153,7 +153,7 @@ final class CustomCommandDispatchTest extends TestCase
         // `/word` is refused locally. What the control still proves is the
         // ORIGINAL claim — without the loader the template DOES NOT RUN: no
         // expansion of 'Review it.' reaches the model under either shape.
-        $next = $this->submit('/review', $chat);
+        $next = $this->submit('/customreview', $chat);
         $this->assertFalse($next->inFlight, 'nothing was dispatched');
         $refused = array_slice($next->history, 2);
         $this->assertStringContainsString('Nothing is named', $refused[0]->content);
@@ -268,9 +268,9 @@ final class CustomCommandDispatchTest extends TestCase
 
     public function testFrontmatterIsStrippedFromTheDispatchedPrompt(): void
     {
-        $this->projectCommand('review', "---\ndescription: Review a diff\nargument-hint: <path>\n---\nReview $1.");
+        $this->projectCommand('customreview', "---\ndescription: Review a diff\nargument-hint: <path>\n---\nReview $1.");
 
-        $this->assertSame('Review src/Chat.php.', $this->sent($this->submit('/review src/Chat.php')));
+        $this->assertSame('Review src/Chat.php.', $this->sent($this->submit('/customreview src/Chat.php')));
     }
 
     // ── precedence and the two listing surfaces ──────────────────────────
@@ -349,12 +349,12 @@ final class CustomCommandDispatchTest extends TestCase
 
     public function testThePopupListsACustomCommandWhileItIsBeingTyped(): void
     {
-        $this->projectCommand('review', "---\ndescription: Review a diff\n---\nReview it.");
+        $this->projectCommand('customreview', "---\ndescription: Review a diff\n---\nReview it.");
 
-        $matches = $this->chat('/rev')->slashMenuMatches();
+        $matches = $this->chat('/customrev')->slashMenuMatches();
 
         $this->assertSame(
-            ['review'],
+            ['customreview'],
             array_map(static fn(CommandSpec $s): string => $s->name, $matches),
         );
         $this->assertSame('Review a diff', $matches[0]->description);
@@ -378,11 +378,11 @@ final class CustomCommandDispatchTest extends TestCase
 
     public function testHelpListsCustomCommandsToo(): void
     {
-        $this->projectCommand('review', "---\ndescription: Review a diff\n---\nReview it.");
+        $this->projectCommand('customreview', "---\ndescription: Review a diff\n---\nReview it.");
 
         $listing = $this->sent($this->submit('/help'));
 
-        $this->assertStringContainsString('/review', $listing);
+        $this->assertStringContainsString('/customreview', $listing);
         $this->assertStringContainsString('Review a diff', $listing);
     }
 
@@ -439,12 +439,12 @@ final class CustomCommandDispatchTest extends TestCase
      */
     public function testTheDiscoveredMapIsCarriedAcrossACloneRatherThanReloaded(): void
     {
-        $this->projectCommand('review', 'Review it.');
+        $this->projectCommand('customreview', 'Review it.');
         $chat = $this->chat();
 
-        unlink($this->project . '/.candy-code/commands/review.md');
+        unlink($this->project . '/.candy-code/commands/customreview.md');
 
-        $this->assertSame('Review it.', $this->sent($this->submit('', $this->type($chat, '/review'))));
+        $this->assertSame('Review it.', $this->sent($this->submit('', $this->type($chat, '/customreview'))));
     }
 
     // ── an expansion that produced nothing ───────────────────────────────
@@ -535,14 +535,14 @@ final class CustomCommandDispatchTest extends TestCase
      */
     public function testAnUnknownColonFormIsRefusedRatherThanPrompted(): void
     {
-        $this->projectCommand('review', 'Review it.');
+        $this->projectCommand('customreview', 'Review it.');
 
         $next = $this->submit('/nosuchthing:x');
         $this->assertFalse($next->inFlight);
 
         $added = array_slice($next->history, 2);
         $this->assertStringContainsString('Nothing is named', $added[0]->content);
-        $this->assertSame('Review it.', $this->sent($this->submit('/review')));
+        $this->assertSame('Review it.', $this->sent($this->submit('/customreview')));
     }
 
     // ── the control plane is not overridable ─────────────────────────────
