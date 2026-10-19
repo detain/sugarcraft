@@ -73,6 +73,15 @@ final class HelpMenu implements Overlay
     /** Cells reserved for the centred key label inside a box (btop's; the docblock records why the measured step-down was rejected). */
     public const KEY_COL = 20;
 
+    /**
+     * Non-content rows inside the outer box: the top border, the centred
+     * key/description header row, and the bottom border. A page's content
+     * budget is therefore `height - self::CHROME_ROWS` per column, and a
+     * page fitted to its own content renders `usedRows + self::CHROME_ROWS`
+     * box rows ({@see self::usedRows()}).
+     */
+    public const CHROME_ROWS = 3;
+
     private function __construct(
         public readonly int $page = 0,
     ) {
@@ -133,7 +142,11 @@ final class HelpMenu implements Overlay
      * columns of `height - 3` rows each (the box interior minus the centred
      * key/description header row), and {@see self::plan()} decides which
      * section boxes (and which segments of an over-tall section) land
-     * where.
+     * where. That budget is the per-page CONTENT CAPACITY, planned at this
+     * global height for every page; the box {@see self::paint()} renders is
+     * fitted per page to at most `usedRows + 3` rows ({@see self::usedRows()}),
+     * never taller and never re-flowed — a short page shows a shorter box,
+     * the pagination stays identical.
      *
      * @return array{0: int, 1: int, 2: int, 3: int}
      */
@@ -202,19 +215,31 @@ final class HelpMenu implements Overlay
         $columns = self::columnsFor($width);
         $columnWidth = self::columnWidth($width, $columns);
         $page = min($this->page, $pages - 1);
+        // The plan is ALWAYS derived at the global capacity (height - CHROME_ROWS
+        // rows per column): which boxes land on which page is a property of the
+        // content budget, never of the current page's visual height, so page
+        // turns cannot re-flow. The outer box then FITS the page it draws —
+        // top border exactly where it always was (the box grows and shrinks
+        // DOWNWARD only, no vertical jump across a turn) and height_p =
+        // usedRows + CHROME_ROWS rows tall. logoDelta() and Logo::blockFits()
+        // keep reserving the GLOBAL-height block extents above, which the
+        // fitted box never exceeds (it only shrinks), so the fit stays
+        // conservative by construction.
+        $grid = self::plan($width, max(1, $height - self::CHROME_ROWS));
+        $boxHeight = min($height, self::usedRows($grid[$page] ?? []) + self::CHROME_ROWS);
         if ($delta !== 0) {
             Logo::paint($surface, $y - 1, $c->logo->art, $c->logo->frameIndex, $ink);
         } else {
             Banner::paint($surface, $y - 1, $ink, $c->tty());
         }
-        MenuDraw::box($surface, $c, $x, $y + 6 + $delta, $width, $height, Lang::t('overlay.title.help'));
-        $clip = MenuDraw::inside($x, $y + 6 + $delta, $width, $height);
+        MenuDraw::box($surface, $c, $x, $y + 6 + $delta, $width, $boxHeight, Lang::t('overlay.title.help'));
+        $clip = MenuDraw::inside($x, $y + 6 + $delta, $width, $boxHeight);
         $bold = MenuDraw::BOLD;
         if ($pages > 1) {
             [$open, $close] = $c->border()->embedJunctions(true);
             MenuDraw::at(
                 $surface,
-                $y + 5 + $delta + $height,
+                $y + 5 + $delta + $boxHeight,
                 $x + 2,
                 $ink->fg('hi_fg') . $open . $bold . '↑' . $ink->fg('title') . ' '
                     . Lang::t('overlay.help.page', ['page' => $page + 1, 'pages' => $pages]) . ' '
@@ -223,7 +248,6 @@ final class HelpMenu implements Overlay
         }
         $cy = $y + 7 + $delta;
         MenuDraw::at($surface, $cy++, $x + 1, $ink->fg('title') . $bold . MenuDraw::cjust(Lang::t('menu.help.key'), self::KEY_COL) . Lang::t('menu.help.description'), '', $clip);
-        $grid = self::plan($width, max(1, $height - 3));
         foreach ($grid[$page] ?? [] as $j => $boxes) {
             $bx = $x + 1 + $j * ($columnWidth + self::GUTTER);
             foreach ($boxes as $box) {
@@ -341,6 +365,34 @@ final class HelpMenu implements Overlay
         $pages[] = $columns;
 
         return $pages;
+    }
+
+    /**
+     * The content rows one planned page actually consumes: the deepest box
+     * bottom across the two columns — each box rides at its column offset
+     * `row` and is `count(lines) + 2` rows tall (its own two borders), the
+     * one-row spacer between stacked boxes is already inside `row`, and a
+     * trailing spacer never exists. `usedRows + self::CHROME_ROWS` is the
+     * page's fitted outer-box height in {@see self::paint()}. Precondition
+     * for the fitted box to hide nothing: a page planned at capacity
+     * `height - self::CHROME_ROWS` has `usedRows <= height - self::CHROME_ROWS`
+     * whenever that capacity is at least 3 (below it the greedy overflows
+     * the head of a column exactly as the old atomic flow did, and paint's
+     * min() then keeps the legacy global box height). Pure — a function of
+     * {@see self::plan()}'s output, deterministic like the planner itself.
+     *
+     * @param list<list<array{heading: string, lines: list<array{0: string, 1: string}>, row: int, segment: int, segments: int}>> $columns one page's entry from {@see self::plan()}: columns => boxes
+     */
+    public static function usedRows(array $columns): int
+    {
+        $used = 0;
+        foreach ($columns as $boxes) {
+            foreach ($boxes as $box) {
+                $used = max($used, $box['row'] + count($box['lines']) + 2);
+            }
+        }
+
+        return $used;
     }
 
     /**
