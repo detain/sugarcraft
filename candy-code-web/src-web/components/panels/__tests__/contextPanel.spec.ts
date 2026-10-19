@@ -116,3 +116,97 @@ describe('ContextPanel (WEB-3a)', () => {
     expect(wrapper.find('[data-testid="context-panel"]').text()).toContain('131,072')
   })
 })
+
+/** WEB-3b: the trust prompt — plain-span rendering, verdict buttons on context.trust. */
+
+const TRUST = {
+  askId: 'trust-9f0e1d2c3',
+  kind: 'trust' as const,
+  target: 'mcp' as const,
+  root: '/repo/project',
+  reason: 'This project declares MCP servers in .mcp.json, but /repo/project is not in your trusted projects — nothing of it starts.',
+  status: 'asked' as const,
+  persisted: false,
+  sessionId: 's1',
+}
+
+describe('ContextPanel trust prompt (WEB-3b)', () => {
+  async function openWithTrust(): Promise<ReturnType<typeof mount>> {
+    const wrapper = mount(ContextPanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+    await wire.answer('context.sources', { ...SOURCES, trust: TRUST })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('renders the prompt with plain spans and three verdict buttons', async () => {
+    await wire.connect()
+    const wrapper = await openWithTrust()
+    const section = wrapper.find('[data-testid="context-trust"]')
+    expect(section.exists()).toBe(true)
+    expect(section.text()).toContain('not in your trusted projects')
+    const root = wrapper.find('[data-testid="context-trust-root"]')
+    expect(root.element.tagName).toBe('SPAN')
+    expect(root.text()).toBe('/repo/project')
+    expect(section.find('a').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="context-trust-session"]').text()).toBe('Trust (this run)')
+    expect(wrapper.find('[data-testid="context-trust-user"]').text()).toBe('Always trust')
+    expect(wrapper.find('[data-testid="context-trust-reject"]').text()).toBe('Leave untrusted')
+  })
+
+  it('sends the user-tier grant and states persistence from the answer', async () => {
+    await wire.connect()
+    const wrapper = await openWithTrust()
+
+    await wrapper.find('[data-testid="context-trust-user"]').trigger('click')
+    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'user' })
+    await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: true })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="context-trust-session"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="context-trust-settled"]').text()).toContain('user config')
+    expect(wrapper.find('[data-testid="context-trust-settled"]').text()).toContain('next launch')
+  })
+
+  it('adopts a live trust prompt even when the measurement returned none', async () => {
+    await wire.connect()
+    const wrapper = mount(ContextPanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+    await wire.answer('context.sources', { ...SOURCES, trust: null })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="context-trust"]').exists()).toBe(false)
+
+    wire.event(null, 'permission.asked', TRUST, false)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="context-trust-root"]').text()).toBe('/repo/project')
+
+    await wrapper.find('[data-testid="context-trust-session"]').trigger('click')
+    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'session' })
+    await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: false })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="context-trust-settled"]').text()).toContain('this server run')
+  })
+
+  it('ignores prompts measured for another session', async () => {
+    await wire.connect()
+    const wrapper = await openWithTrust()
+    wire.event(null, 'permission.asked', { ...TRUST, askId: 'trust-111122223', sessionId: 'other' }, false)
+    await flushPromises()
+    // The open prompt is untouched: still the first ask, no second section.
+    expect(wrapper.findAll('[data-testid="context-trust"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="context-trust-root"]').text()).toBe('/repo/project')
+  })
+
+  it('a settled-elsewhere refusal clears the prompt with an honest line', async () => {
+    await wire.connect()
+    const wrapper = await openWithTrust()
+
+    await wrapper.find('[data-testid="context-trust-reject"]').trigger('click')
+    await wire.fail('context.trust', -32009, 'already_resolved')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="context-trust-error"]').text()).toContain('settled elsewhere')
+    expect(wrapper.find('[data-testid="context-trust-root"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="context-trust-reject"]').exists()).toBe(false)
+  })
+})

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useConnectionStore } from '../../stores/connection'
 import { useContextSourcesStore } from '../../stores/contextSources'
 
 /**
@@ -10,10 +11,33 @@ import { useContextSourcesStore } from '../../stores/contextSources'
  * plain `{{ }}` span — no MessageMarkdown anywhere near it (the ChangesPanel
  * rule from WEB-1b: server-supplied strings are data, never markup). MCP
  * rows carry name and transport only; the server never sends the URL.
+ *
+ * WEB-3b: the trust prompt rides the same answer (`sources.trust`). Its
+ * verdict buttons call `context.trust` on the Approve scope; the root and
+ * reason stay plain spans under the same rule.
  */
 const props = defineProps<{ sessionId: string }>()
 
 const context = useContextSourcesStore()
+const connection = useConnectionStore()
+
+const canAnswer = computed(() => connection.scopes.includes('approve'))
+const busy = ref(false)
+const trustError = ref<string | null>(null)
+
+async function answer(decision: 'grant' | 'reject', remember: 'session' | 'user'): Promise<void> {
+  if (busy.value) return
+  busy.value = true
+  trustError.value = null
+  try {
+    const settled = await context.respondTrust(decision, remember)
+    if (!settled) trustError.value = 'The prompt was settled elsewhere — reload to re-measure.'
+  } catch (failure) {
+    trustError.value = failure instanceof Error ? failure.message : String(failure)
+  } finally {
+    busy.value = false
+  }
+}
 
 const bytes = ref(0)
 watch(
@@ -126,6 +150,26 @@ onMounted(() => void context.load(props.sessionId))
         </ul>
         <p v-if="context.sources.mcp.skipped.length > 0" class="meta">Skipped entries: <span class="reason">{{ context.sources.mcp.skipped.join('; ') }}</span></p>
       </section>
+
+      <section v-if="context.sources.trust || trustError" data-testid="context-trust">
+        <h3>Project trust</h3>
+        <template v-if="context.sources.trust">
+          <p class="reason" data-testid="context-trust-reason">{{ context.sources.trust.reason }}</p>
+          <p class="meta">root: <span class="path" data-testid="context-trust-root">{{ context.sources.trust.root }}</span></p>
+        </template>
+        <p v-if="trustError" class="error" role="alert" data-testid="context-trust-error">{{ trustError }}</p>
+        <div v-if="context.sources.trust?.status === 'asked'" class="actions">
+          <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer('grant', 'session')">Trust (this run)</button>
+          <button type="button" data-testid="context-trust-user" :disabled="busy || !canAnswer" @click="answer('grant', 'user')">Always trust</button>
+          <button type="button" data-testid="context-trust-reject" :disabled="busy || !canAnswer" @click="answer('reject', 'session')">Leave untrusted</button>
+        </div>
+        <p v-else-if="context.sources.trust" class="meta" data-testid="context-trust-settled">
+          <template v-if="context.sources.trust.status === 'granted'">
+            {{ context.sources.trust.persisted ? 'Trusted and written to your user config — the servers start at the next launch.' : 'Trusted for this server run — nothing was written.' }}
+          </template>
+          <template v-else>Left untrusted — nothing of this project starts.</template>
+        </p>
+      </section>
     </template>
   </div>
 </template>
@@ -205,5 +249,10 @@ li {
   margin: 0;
   color: var(--error);
   font-size: 0.875rem;
+}
+.actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 </style>

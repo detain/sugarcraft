@@ -74,6 +74,8 @@ export interface ContextSources {
     path: string
     reason: string
   }[]
+  /** WEB-3b: this root's trust prompt — measured here is where it is DISCOVERED: an untrusted project `.mcp.json` verdict mints the prompt (once per root) and server-scopes it as `permission.asked`; null while the verdicts need no grant or one was already settled. */
+  trust?: TrustPrompt | null
   /** The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a). */
   breakdown: {
     window: number
@@ -267,6 +269,22 @@ export type Subscription = {
   fromSeq: number
   throughSeq: number
   pendingAsks: PendingAsk[]
+}
+
+export interface TrustPrompt {
+  askId: string
+  /** WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
+  kind: "trust"
+  /** What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer. */
+  target: "mcp"
+  /** The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes. */
+  root: string
+  /** Why the prompt was put, for the panel line. */
+  reason?: string
+  /** `asked` while open; one answer settles it for the process (the once-per-untrusted-root law). */
+  status: "asked" | "granted" | "rejected"
+  /** True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false. */
+  persisted?: boolean
 }
 
 export interface Usage {
@@ -492,6 +510,22 @@ export interface Methods {
       sessionId: SessionId
     }
     result: ContextSources
+  }
+  /** Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused. */
+  "context.trust": {
+    params: {
+      /** The trust prompt's id, as permission.asked (kind "trust") carried it. */
+      askId: string
+      decision: "grant" | "reject"
+      /** `user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant); `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture). */
+      remember?: "session" | "user" | "project"
+    }
+    result: {
+      askId: string
+      status: "granted" | "rejected"
+      /** True only when the user-tier write landed. */
+      persisted: boolean
+    }
   }
   /** The workspace's changed and untracked files. */
   "files.changed": {
@@ -1336,6 +1370,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "command.exec": "write",
   "command.list": "read",
   "context.sources": "read",
+  "context.trust": "approve",
   "files.changed": "read",
   "files.diff": "read",
   "files.read": "read",
@@ -1477,7 +1512,7 @@ export interface Events {
     content: string
     createdAt?: number
   }
-  /** A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. */
+  /** A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and, since ISS-004, a background session's relayed question, named by its background id and answered the same way. Since WEB-3b a third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. */
   "permission.asked": {
     askId: string
     toolCallId: string
@@ -1495,6 +1530,21 @@ export interface Events {
       agentName?: string
       parentCallId?: string
     }
+    sessionId: SessionId
+  } | {
+    askId: string
+    /** WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
+    kind: "trust"
+    /** What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer. */
+    target: "mcp"
+    /** The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes. */
+    root: string
+    /** Why the prompt was put, for the panel line. */
+    reason?: string
+    /** `asked` while open; one answer settles it for the process (the once-per-untrusted-root law). */
+    status: "asked" | "granted" | "rejected"
+    /** True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false. */
+    persisted?: boolean
     sessionId: SessionId
   }
   /** A tool call is waiting for an answer (permission.respond). */

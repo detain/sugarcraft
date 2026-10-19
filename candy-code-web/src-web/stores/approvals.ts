@@ -121,6 +121,10 @@ export const useApprovalsStore = defineStore('approvals', () => {
         break
       case 'permission.asked': {
         const data = envelope.data as unknown as Events['permission.asked']
+        // WEB-3b: a project-trust prompt shares this channel but is not a
+        // question for the turn — the Context panel owns it (context.trust).
+        // A permission ask never carries `kind`, so its presence is the marker.
+        if ('kind' in data) break
         if (typeof data.sessionId === 'string') add(data)
         break
       }

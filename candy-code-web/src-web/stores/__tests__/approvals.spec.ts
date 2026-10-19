@@ -83,4 +83,30 @@ describe('approvals across sessions', () => {
     expect(approvals.all.map((item) => item.askId)).toEqual(['k1', 'k2'])
     expect(seen).toEqual(['k1', 'k2'])
   })
+
+  it('does not hold a project-trust prompt — the Context panel owns those (WEB-3b)', async () => {
+    const wire = await connected()
+    const approvals = useApprovalsStore()
+    const seen: string[] = []
+    approvals.onNew((item) => seen.push(item.askId))
+
+    wire.serverEvent('permission.asked', {
+      sessionId: 's1',
+      askId: 'trust-9f0e1d2c3',
+      kind: 'trust',
+      target: 'mcp',
+      root: '/repo/project',
+      reason: 'nothing of it starts',
+      status: 'asked',
+      persisted: false,
+    })
+    expect(approvals.total).toBe(0)
+    expect(seen).toEqual([])
+
+    // The refresh backstop sees only permission.pending rows, never trust ids.
+    wire.serverEvent('server.tick', { now: 1, turnsRunning: 1 })
+    wire.answer('permission.pending', { items: [] })
+    await flush()
+    expect(approvals.total).toBe(0)
+  })
 })
