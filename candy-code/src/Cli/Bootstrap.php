@@ -1547,42 +1547,42 @@ final class Bootstrap
     }
 
     /**
+     * Build the launch's OBS-1 event sink (roadmap: typed spans from the
+     * `src/Events/*` DTOs over OTLP/HTTP-JSON, hand-rolled — no
+     * open-telemetry packages on a TUI tree).
+     *
+     * The dark decision lives ONCE in {@see \SugarCraft\Code\Observability\OtelConfig::buildSink()}
+     * — this seam only supplies the exporter factory, and that factory never
+     * runs while dark: without `OTEL_EXPORTER_OTLP_ENDPOINT` the whole call
+     * is one `getenv()` read and a null sink — no Guzzle client, no shutdown
+     * registration, no network call site built. When lit, the shutdown arm
+     * is a best-effort FLUSH of the bounded batch: the per-request Guzzle
+     * timeout bounds it, so this is a finite HTTP call at exit, NOT a
+     * wall-clock kill (E646 law).
+     */
+    public static function observabilitySink(): \SugarCraft\Code\Observability\EventSink
+    {
+        return \SugarCraft\Code\Observability\OtelConfig::sinkFromEnvironment(
+            static function (\SugarCraft\Code\Observability\OtelConfig $config): \SugarCraft\Code\Observability\EventSink {
+                $sink = new \SugarCraft\Code\Observability\BatchEventSink(
+                    \SugarCraft\Code\Observability\OtelSink::fromConfig($config, new \GuzzleHttp\Client()),
+                    $config->batchSize,
+                );
+                register_shutdown_function(static function () use ($sink): void {
+                    $sink->flush();
+                });
+
+                return $sink;
+            },
+        );
+    }
+
+    /**
      * Build the fully-wired Chat model the CLI binary hands to Program.
      *
      * $root defaults to getcwd() — the directory the CLI was invoked from —
      * matching the original inline IIFE's behaviour.
      */
-    /**
-     * Build the launch's OBS-1 event sink (roadmap: typed spans from the
-     * `src/Events/*` DTOs over OTLP/HTTP-JSON, hand-rolled — no
-     * open-telemetry packages on a TUI tree).
-     *
-     * Dark by construction: without `OTEL_EXPORTER_OTLP_ENDPOINT` this is
-     * three `getenv()` reads and a {@see \SugarCraft\Code\Observability\NullEventSink}
-     * singleton-allocation — no Guzzle client, no shutdown registration, no
-     * network call site ever built. When lit, the shutdown arm is a
-     * best-effort FLUSH of the bounded batch: the per-request Guzzle timeout
-     * bounds it, so this is a finite HTTP call at exit, NOT a wall-clock kill
-     * (E646 law).
-     */
-    public static function observabilitySink(): \SugarCraft\Code\Observability\EventSink
-    {
-        $config = \SugarCraft\Code\Observability\OtelConfig::fromEnvironment();
-        if (!$config->exportsEvents()) {
-            return new \SugarCraft\Code\Observability\NullEventSink();
-        }
-
-        $sink = new \SugarCraft\Code\Observability\BatchEventSink(
-            \SugarCraft\Code\Observability\OtelSink::fromConfig($config, new \GuzzleHttp\Client()),
-            $config->batchSize,
-        );
-        register_shutdown_function(static function () use ($sink): void {
-            $sink->flush();
-        });
-
-        return $sink;
-    }
-
     public static function chat(?string $root = null): Chat
     {
         // `?: null` rather than a bare `getcwd()`: the call can fail (deleted

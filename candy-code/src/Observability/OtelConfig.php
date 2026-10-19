@@ -85,21 +85,16 @@ final class OtelConfig
     }
 
     /**
-     * Single decision point for the whole feature: dark unless an endpoint
-     * is configured AND a transport can be built for it. Construction of
-     * the exporter never happens here; that is the caller's (Bootstrap's)
-     * job through the seam that keeps tests hermetic.
+     * Environment-reading shim for {@see buildSink()}: read the environment,
+     * hand the config to the single gate. Production (Bootstrap's sink seam)
+     * and tests reach the decision through exactly this path, so there is
+     * only ever one copy of the dark-mode branch to drift.
      *
      * @param callable(self): ?EventSink $exporterFactory
      */
     public static function sinkFromEnvironment(callable $exporterFactory): EventSink
     {
-        $config = self::fromEnvironment();
-        if (!$config->exportsEvents()) {
-            return new NullEventSink();
-        }
-
-        return $config->buildSink($exporterFactory);
+        return self::fromEnvironment()->buildSink($exporterFactory);
     }
 
     /**
@@ -113,6 +108,11 @@ final class OtelConfig
     }
 
     /**
+     * THE gate: a dark config answers {@see NullEventSink} without the
+     * exporter factory ever running, and a factory that declines (null)
+     * still lands on the null sink. One branch, one truth — callers supply
+     * the factory, never a second dark check.
+     *
      * @param callable(self): ?EventSink $exporterFactory
      */
     public function buildSink(callable $exporterFactory): EventSink

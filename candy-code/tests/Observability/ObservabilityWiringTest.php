@@ -17,6 +17,7 @@ final class ObservabilityWiringTest extends TestCase
 {
     private const CHAT_SOURCE = __DIR__ . '/../../src/Chat.php';
     private const BOOTSTRAP_SOURCE = __DIR__ . '/../../src/Cli/Bootstrap.php';
+    private const OTEL_CONFIG_SOURCE = __DIR__ . '/../../src/Observability/OtelConfig.php';
     private const MANIFEST = __DIR__ . '/../../composer.json';
 
     public function testChatFoldsAtExactlyTheTwoSettlingDoorsThreeConsumesInTotal(): void
@@ -40,14 +41,25 @@ final class ObservabilityWiringTest extends TestCase
         $bootstrap = self::read(self::BOOTSTRAP_SOURCE);
         $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink into the single funnel serve shares');
         $seam = self::methodBody($bootstrap, 'public static function observabilitySink');
-        $this->assertStringContainsString('return new \\SugarCraft\\Code\\Observability\\NullEventSink();', $seam);
+        $this->assertStringContainsString('OtelConfig::sinkFromEnvironment(', $seam, 'the production seam runs through the single OtelConfig gate');
+        $this->assertSame(0, substr_count($seam, 'exportsEvents'), 'the seam holds no second copy of the dark decision — F2 unification');
         $this->assertStringContainsString('register_shutdown_function', $seam);
         $this->assertStringContainsString('$sink->flush();', $seam, 'bounded shutdown flush — an exit-time HTTP POST the request timeout caps, not a wall-clock kill (E646)');
+    }
+
+    public function testTheDarkDecisionLivesOnceInTheConfigGate(): void
+    {
+        $config = self::read(self::OTEL_CONFIG_SOURCE);
+
+        $gate = self::methodBody($config, 'public function buildSink');
         $this->assertLessThan(
-            strpos($seam, 'register_shutdown_function'),
-            strpos($seam, 'if (!$config->exportsEvents())'),
-            'the dark branch returns before any client or registration exists',
+            strpos($gate, '$exporterFactory($this)'),
+            strpos($gate, 'if (!$this->exportsEvents())'),
+            'the dark branch returns the null sink before the factory can run',
         );
+
+        $shim = self::methodBody($config, 'public static function sinkFromEnvironment');
+        $this->assertSame(0, substr_count($shim, 'exportsEvents'), 'the env shim delegates to the gate instead of re-checking it — one path, no double-lock drift');
     }
 
     public function testNoOpenTelemetryPackageJoinsTheManifest(): void
