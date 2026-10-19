@@ -7066,7 +7066,7 @@ final class DocFigureProseDriftTest extends TestCase
             . '__' . \SugarCraft\Code\Tools\McpToolBridge::sanitize('deploy app');
         self::assertSame('/mcp__srv__deploy_20app', $sample, 'the sanitizer law moved — the page example lies');
         self::assertStringContainsString('a prompt called `deploy app`', $page, 'the page example pair was reworded out from under this pin');
-        self::assertStringContainsString($sample, $page, 'MCP.md example no longer matches what the sanitizer produces');
+        self::assertStringContainsString('`' . $sample . '`', $page, 'MCP.md example no longer matches what the sanitizer produces');
 
         // The tier constant and the page's tier word.
         self::assertSame('mcp', \SugarCraft\Code\Commands\McpPromptCommands::TIER, 'the tier word moved — page and transcript badge move with it');
