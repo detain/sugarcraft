@@ -181,4 +181,36 @@ final class EditorCommandTest extends TestCase
         self::assertCount(1, $rows);
         self::assertSame('[text]', $rows[0]->argumentHint);
     }
+
+    /**
+     * VIS-2b: `/memory open` reuses this class with a different destination —
+     * the file itself, not the draft box. The Cmd is still plain Cmd::exec
+     * (that channel is what hands the terminal over and back), and the
+     * completion row names the file without reading it back.
+     */
+    public function testOpenFilePutsTheGivenPathOnTheExecChannel(): void
+    {
+        $cmd = EditorCommand::new()
+            ->withEnvironment(['EDITOR' => 'ed'], $this->sandbox . '/tmp')
+            ->openFile($this->sandbox . '/note.md');
+        $request = self::execRequest($cmd);
+
+        self::assertSame("ed '" . $this->sandbox . "/note.md'", $request->command);
+        self::assertFalse($request->captureOutput);
+    }
+
+    public function testOpenCollectRowsNameTheFileOrTheFailure(): void
+    {
+        $closed = EditorCommand::openCollect('/tmp/n.md', 'vim', 0, null);
+        self::assertInstanceOf(StatusMsg::class, $closed);
+        self::assertStringContainsString('/tmp/n.md', $closed->message);
+
+        $exited = EditorCommand::openCollect('/tmp/n.md', 'vim', 3, null);
+        self::assertInstanceOf(ErrorMsg::class, $exited);
+        self::assertStringContainsString('unchanged', $exited->message);
+
+        $unstarted = EditorCommand::openCollect('/tmp/n.md', 'vim', 0, new \RuntimeException('no tty'));
+        self::assertInstanceOf(ErrorMsg::class, $unstarted);
+        self::assertStringContainsString('no tty', $unstarted->message);
+    }
 }

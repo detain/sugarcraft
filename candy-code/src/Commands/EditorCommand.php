@@ -107,6 +107,50 @@ final class EditorCommand
     }
 
     /**
+     * The Cmd that opens $path in the user's editor IN PLACE (VIS-2b,
+     * `/memory open`): `Cmd::exec` and nothing else — the terminal hand-back
+     * is exactly what the exec channel performs, and routing the child any
+     * other way would run an editor with no terminal. There is deliberately
+     * no PasteMsg round-trip here: the file is its own destination, and the
+     * memory store re-reads from disk on every call, so the edit lands
+     * without this class ever reading the bytes back.
+     */
+    public function openFile(string $path): \Closure
+    {
+        $editor = $this->editor();
+
+        return Cmd::exec(
+            $editor . ' ' . escapeshellarg($path),
+            false,
+            static fn (int $exit, string $out, string $err, ?\Throwable $error): Msg => self::openCollect($path, $editor, $exit, $error),
+        );
+    }
+
+    /**
+     * The single transcript row an in-place open answers with once the
+     * editor is gone: which file was closed, or how it failed. Public for
+     * the same reason collect() is — exercisable without a terminal.
+     */
+    public static function openCollect(string $path, string $editor, int $exit, ?\Throwable $error): Msg
+    {
+        if ($error !== null) {
+            return new ErrorMsg(Lang::t('cmd.editor.open-not-started', [
+                'editor' => $editor,
+                'error' => $error->getMessage(),
+            ]));
+        }
+
+        if ($exit !== 0) {
+            return new ErrorMsg(Lang::t('cmd.editor.open-failed', [
+                'editor' => $editor,
+                'status' => (string) $exit,
+            ]));
+        }
+
+        return new StatusMsg(Lang::t('cmd.editor.opened', ['path' => $path]));
+    }
+
+    /**
      * What the editor left behind, as the Msg the draft box takes. Public so
      * the completion can be exercised without a terminal to hand over.
      */

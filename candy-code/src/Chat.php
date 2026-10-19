@@ -16928,13 +16928,73 @@ final class Chat implements Model
      * Handle /memory commands — {@see \SugarCraft\Code\Host\Commands\MemoryCommand} (roadmap O-2h):
      * list, add, search, delete, edit, clear, import, log and restore over the
      * session's home store and project root, through the router the `Memory`
-     * tool shares.
+     * tool shares. `/memory open <id>` (VIS-2b) is answered here rather than
+     * by the router, because it needs the Cmd channel: only an exec Cmd hands
+     * the terminal to `$EDITOR` and back.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleMemoryCommand(string $inputText): array
     {
+        $open = $this->memoryOpenArm($inputText);
+        if ($open !== null) {
+            return $open;
+        }
+
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\MemoryCommand(), $inputText);
+    }
+
+    /**
+     * The `/memory open <id>` answer as [Chat, Cmd] — null for every other
+     * /memory form, so the router keeps them. A bare `/memory open` gets the
+     * usage row; an id the stores do not have gets the unknown row (checked
+     * repository-first through the same {@see MemoryWriter} the `Memory` tool
+     * shares); a hit gets the editor Cmd onto the exec channel.
+     *
+     * @return ?array{0:Chat,1:?\Closure}
+     */
+    private function memoryOpenArm(string $inputText): ?array
+    {
+        $home = $this->memoryStore();
+        if ($home === null) {
+            return null; // no store configured: the router's not_configured row is the answer
+        }
+
+        $after = self::commandArgument($inputText);
+        if ($after === '') {
+            return null; // bare /memory: the router prints help
+        }
+
+        $parts = \preg_split('/\s+/', $after, 2);
+        if (($parts[0] ?? '') !== 'open') {
+            return null;
+        }
+
+        $id = \trim($parts[1] ?? '');
+        if ($id === '') {
+            return [$this->memoryRow($inputText, Lang::t('host.memory.usage.open')), null];
+        }
+
+        $located = \SugarCraft\Code\Memory\MemoryWriter::new($home, $this->projectRoot())->locate($id);
+        $path = $located === null ? null : $located[1]->notePath($id);
+        if ($path === null) {
+            return [$this->memoryRow($inputText, Lang::t('host.memory.open-unknown', ['id' => $id])), null];
+        }
+
+        return [
+            $this->withInputBuf(''),
+            \SugarCraft\Code\Commands\EditorCommand::new()->openFile($path),
+        ];
+    }
+
+    /** A `/memory` row this arm answers without the router: echo and reply, UI-only. */
+    private function memoryRow(string $inputText, string $response): self
+    {
+        return $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
     }
 
     private function withInputBuf(string $buf): self

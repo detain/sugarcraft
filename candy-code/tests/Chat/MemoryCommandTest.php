@@ -757,4 +757,81 @@ final class MemoryCommandTest extends TestCase
         $this->assertFalse($chatWithMemory->inFlight);
         $this->assertNotNull($chatWithMemory->memoryStore());
     }
+
+    /**
+     * The `/memory open` harness: same Chat shape as the list tests, with a
+     * note added first so there is an id to open.
+     */
+    private function chatWithMemoryDraft(string $draft, string $id): Chat
+    {
+        $this->memoryStore->add('Pinned note ' . $id, 'project');
+
+        return new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: $draft,
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+    }
+
+    public function testMemoryOpenArmsTheEditorOnTheExecChannel(): void
+    {
+        $id = $this->memoryStore->add('Open me in the editor', 'project');
+        $chat = new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory open ' . $id,
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        );
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        self::assertNotNull($cmd, 'VIS-2b: the terminal hand-back must ride the Cmd channel');
+        self::assertFalse($next->inFlight);
+        $request = $cmd();
+        self::assertInstanceOf(\SugarCraft\Core\ExecRequest::class, $request);
+        $path = $this->memoryStore->notePath($id);
+        self::assertIsString($path);
+        self::assertStringEndsWith(escapeshellarg($path), (string) $request->command);
+    }
+
+    public function testMemoryOpenWithoutIdAnswersUsageOnTheTranscript(): void
+    {
+        $chat = $this->chatWithMemoryDraft('/memory open', 'anything');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        self::assertNull($cmd);
+        $lastMsg = $next->history[count($next->history) - 1];
+        self::assertSame(Role::Assistant, $lastMsg->role);
+        self::assertStringContainsString('Usage: /memory open <id>', $lastMsg->content);
+    }
+
+    public function testMemoryOpenUnknownIdAnswersLoudly(): void
+    {
+        $chat = $this->chatWithMemoryDraft('/memory open note-that-does-not-exist', 'anything');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        self::assertNull($cmd);
+        $lastMsg = $next->history[count($next->history) - 1];
+        self::assertStringContainsString('No memory note `note-that-does-not-exist` to open.', $lastMsg->content);
+    }
+
+    public function testBareMemoryHelpStillListsEverySubcommandIncludingOpen(): void
+    {
+        $chat = $this->chatWithMemoryDraft('/memory', 'anything');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        self::assertNull($cmd, 'VIS-2b R1 default: bare /memory stays help, no editor ever arms');
+        $transcript = '';
+        foreach ($next->history as $message) {
+            $transcript .= $message->content;
+        }
+        self::assertStringContainsString('/memory open <id>', $transcript);
+        self::assertStringContainsString('/memory list', $transcript);
+    }
 }
