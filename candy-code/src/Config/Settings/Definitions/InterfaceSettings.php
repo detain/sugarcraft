@@ -286,7 +286,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::Complex)
                 ->withValidators(KeyBindingsValidator::new())
                 ->withLabel(Lang::t('settings.keybindings.label'))
-                ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA Ctrl+<key> chord to a binding id (the /keys reference names them); the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
+                ->withHelp('{"shell.palette": "Ctrl+B"}: bind an EXTRA chord to a binding id (the /keys reference names them) — Ctrl+<key>, Alt+<key>, Shift+<key>, or a lone function key; the shipped chord keeps working. Present-but-unusable refuses the launch; remove the key for the shipped bindings.')
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
                 ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a)'),
             // TUI-3A: the composer's vim MODE (plan_comparison.md §3). USER

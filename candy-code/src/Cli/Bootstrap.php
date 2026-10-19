@@ -11795,7 +11795,9 @@ final class Bootstrap
     /**
      * The settings key holding user keybinding overrides (ISS-047). Its shape
      * is owned by {@see \SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator}
-     * — a map of binding id to `Ctrl+<key>` chord — and the definition lives in
+     * — a map of binding id to a chord (`Ctrl+<key>`, `Alt+<key>`,
+     * `Shift+<key>`, or a lone function key, widened from the bare-`Ctrl+<letter>`
+     * grammar by TUI-4c) — and the definition lives in
      * the Interface settings family as a user-tier, restart-applied entry.
      */
     public const KEYBINDINGS_SETTING = 'keybindings';
