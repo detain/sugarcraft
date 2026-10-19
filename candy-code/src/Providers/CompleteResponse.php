@@ -137,10 +137,37 @@ final readonly class CompleteResponse
          *
          * Null means UNCLASSIFIED: {@see ContextOverflow::matches()} then
          * falls back to the wording, which is how a provider that never sets
-         * this field keeps working. Last in the list, not beside
-         * `$errorTransient`, so no positional construction site moves.
+         * this field keeps working. Not last in the list any more - the
+         * ordering rule it was written under (no positional construction
+         * site moves) is preserved by {@see $thinkingBlocks} also being a
+         * defaulted TAIL, never by adjacency.
          */
         public ?bool $errorContextOverflow = null,
+        /**
+         * CTX-1 (§6.3): the Anthropic family's SIGNED thinking blocks, in
+         * the wire's own shape, for replay on the next request of the same
+         * conversation — `[['type' => 'thinking', 'thinking' => string,
+         * 'signature' => string], ['type' => 'redacted_thinking', 'data' =>
+         * string], ...]`.
+         *
+         * WHY A SEPARATE FIELD BESIDE `$reasoning`: `reasoning` is prose for
+         * the human ticker — display text, sign-agnostic and safe to drop.
+         * This field is protocol state: when extended thinking is enabled
+         * AND the turn produced tool calls, Anthropic requires the assistant
+         * turn's thinking blocks (signature verbatim) to come back as the
+         * leading content blocks of the next request, and 400s the turn
+         * without them. Only {@see \SugarCraft\Code\Messages\AssistantMessage}
+         * carries them onward; nothing renders them.
+         *
+         * `[]` IS THE ORDINARY ANSWER: every non-Anthropic-family provider,
+         * every frame that is not a closing `thinking`/`redacted_thinking`
+         * content block, and every thinking model that produced no signature
+         * (streams cut before the closing block). The parse seams collect
+         * ONLY replayable shapes — a `thinking` block missing its signature
+         * cannot be replayed, so it is not collected, exactly as it is not
+         * foldable into a round trip.
+         */
+        public array $thinkingBlocks = [],
     ) {}
 
     /**

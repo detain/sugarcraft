@@ -126,9 +126,9 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withRange(0)
                 ->withLabel(Lang::t('settings.thinkingBudget.label'))
-                ->withHelp('Gemini thinking-token budget on the `vertex` provider; thinking tokens bill as output.')
+                ->withHelp('Thinking-token budget: Gemini `thinkingConfig` on the `vertex` provider; extended thinking on the `anthropic` provider, where the Messages API floor is 1024 (0 or unset means off on either arm). Thinking tokens bill as output.')
                 ->withReaderSymbol(ProviderFactory::class . '::createVertex')
-                ->withReadBy('`ProviderFactory::createVertex()` → `VertexProvider`'),
+                ->withReadBy('`ProviderFactory::createVertex()` → `VertexProvider`, `createAnthropic()` → `AnthropicProvider`'),
             SettingDefinition::new('promptCache', SettingType::Bool, true)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)

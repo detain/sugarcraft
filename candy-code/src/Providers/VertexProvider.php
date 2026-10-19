@@ -238,8 +238,15 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
      *        -1 asks for dynamic thinking, 0 turns it off (Flash models only;
      *        Pro refuses 0), a positive count caps it. Null sends no
      *        `thinkingConfig`, leaving the model's own default. Sent on the
-     *        Gemini arm only - the Anthropic arm's extended thinking is a
-     *        different request shape this class does not build.
+     *        Gemini arm only. CORRECTED BY CTX-1 (§6.3): the Anthropic arm's
+     *        extended thinking IS now buildable on this wire — see
+     *        {@see anthropicThinkingBudget()} — but this class deliberately
+     *        leaves that hook at its null default: the SAME setting number
+     *        counts Gemini thinking tokens (where 0/-1/small values are
+     *        ordinary) and would not be a valid Anthropic `budget_tokens`,
+     *        so feeding both arms from it would make every Gemini user's
+     *        value an Anthropic-arm surprise. Anthropic-on-Vertex thinking
+     *        is a follow-up with its own key if a user ever asks for it.
      * @param bool $promptCache Audit A15: whether the Anthropic arm marks
      *        prompt-cache breakpoints ({@see CacheBreakpoints}: the system
      *        prompt, the last tool and the conversation tail). From the
@@ -487,6 +494,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         // than a property because this class is `final readonly` - the buffer
         // lives exactly as long as one completeStream() call.
         $toolCallBuffer = [];
+        $thinkingBuffer = [];
 
         try {
             // Endpoint templating and body shaping are inside the try because
@@ -508,7 +516,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
 
             foreach (($this->streamer)($endpoint, self::METHOD_STREAM_RAW_PREDICT, $body) as $event) {
                 $event = is_array($event) ? $event : [];
-                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer);
+                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer, $thinkingBuffer);
 
                 $type = $event['type'] ?? null;
                 $sawTerminal = $sawTerminal

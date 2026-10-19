@@ -310,8 +310,12 @@ final class LayeredSettings
      *                 to whichever host the operator's provider names.
      *  - `thinkingBudget`
      *                 Gemini's `thinkingConfig.thinkingBudget` on the `vertex`
-     *                 provider (audit A21 b), read by
-     *                 `ProviderFactory::createVertex()`. Thinking tokens bill as
+     *                 provider (audit A21 b) and the `budget_tokens` of
+     *                 Anthropic extended thinking on the `anthropic` provider
+     *                 (CTX-1 §6.3, floor 1024 - values the arm cannot use are
+     *                 refused at construction, not dropped), read by
+     *                 `ProviderFactory::createVertex()` / `createAnthropic()`.
+     *                 Thinking tokens bill as
      *                 output, so this is `maxOutputTokens`'s argument on the
      *                 reasoning half of the reply: USER-TIER ONLY.
      *  - `promptCache`

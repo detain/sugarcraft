@@ -192,7 +192,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
 | `modelPrices` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createBedrock()`, `createCustom()` → `userTierModelPrices()` | **no** |
 | `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |
-| `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider` | **no** |
+| `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider`, `createAnthropic()` → `AnthropicProvider` | **no** |
 | `promptCache` | `ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()` | **no** |
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
@@ -483,7 +483,16 @@ same money reason as `maxOutputTokens`.
 - **`thinkingBudget`** sets Gemini's `thinkingConfig.thinkingBudget` on the
   `vertex` provider (audit A21): `-1` for dynamic thinking, `0` to turn it off
   (Flash models only; Pro refuses `0`), or a token cap. Unset sends no
-  `thinkingConfig`, so the model's own default applies. Thinking tokens bill as
+  `thinkingConfig`, so the model's own default applies. On the `anthropic`
+  provider the same key switches on extended thinking (CTX-1 §6.3): the
+  value becomes the Messages API `thinking.budget_tokens`, whose protocol
+  floor is `1024` — anything from `1` to `1023` (and `-1`, Gemini's dynamic
+  spelling with no Anthropic meaning) is refused when the provider is built,
+  naming the setting; `0` or unset means off and sends no `thinking` field.
+  With thinking on, requests force `temperature: 1` and raise `max_tokens`
+  above the budget, and each reply's signed thinking blocks are carried in
+  the transcript and replayed on the next request — the shape the Messages
+  API requires for thinking turns that end in tool calls. Thinking tokens bill as
   output, which is why a project may not set it. Separately, Vertex no longer
   sends a 4096 `maxOutputTokens` to Gemini when you set none: Gemini 2.5 thinks
   by default and its thinking spends from that same budget, so a hard prompt

@@ -54,7 +54,10 @@ use SugarCraft\Code\Usage;
  * CONTRACT ON THE USING CLASS. It must define the promoted private properties
  * `$defaultModel` (string), `$modelPrices` (array) and `$promptCache` (bool)
  * with those meanings - traits read them directly, exactly as they did when
- * this code lived inline.
+ * this code lived inline. Extended thinking is reached through the OVERRIDABLE
+ * hook {@see anthropicThinkingBudget()} rather than a required property,
+ * because only the native arm is configured for it today: a host that leaves
+ * the hook alone sends the exact body it sent before CTX-1.
  */
 trait AnthropicMessagesWire
 {
@@ -75,6 +78,23 @@ trait AnthropicMessagesWire
     /** `max_tokens` is REQUIRED by the Anthropic Messages API - there is no server-side default to fall back to. */
     private const DEFAULT_MAX_TOKENS = 4096;
     private const DEFAULT_TEMPERATURE = 0.7;
+    /**
+     * CTX-1 (§6.3): the smallest `budget_tokens` the Messages API accepts for
+     * extended thinking - it answers anything under 1024 with a 400, so the
+     * floor is a protocol constant, not a taste level, and the boundary
+     * parse in `ProviderFactory::configuredAnthropicThinkingBudget()` refuses
+     * against this same number. PUBLIC because the factory's boundary parse
+     * for the `anthropic` provider block and the constructor that trusts its
+     * result both refuse against this one definition.
+     */
+    public const MIN_THINKING_BUDGET = 1024;
+    /**
+     * CTX-1: the Messages API requires `temperature: 1` whenever extended
+     * thinking is enabled - any other value is a 400 - so a thinking request
+     * overrides whatever temperature the caller asked for rather than being
+     * refused for it.
+     */
+    private const THINKING_TEMPERATURE = 1.0;
     /**
      * E707 (round 81): the two vocabularies this class routes between for the
      * one event each - a reply stopped by the OUTPUT ceiling. Anthropic
@@ -406,6 +426,21 @@ trait AnthropicMessagesWire
     // Anthropic (rawPredict / streamRawPredict) request shaping
     // -------------------------------------------------------------------------
     /**
+     * CTX-1 (§6.3): the host's extended-thinking budget for this wire, or
+     * null to send no `thinking` field at all (the default, and the exact
+     * pre-CTX-1 body). A host that answers non-null commits to the protocol
+     * triangle that {@see anthropicBody()} enforces - budget >= 1024,
+     * temperature forced to 1, max_tokens raised above the budget - and to
+     * replaying the signed blocks {@see anthropicBlocks()} carries. The
+     * budget must ALREADY be boundary-parsed: the value is trusted here,
+     * which is why the factory refuses malformed `thinkingBudget` settings
+     * at construction rather than filtering them per request.
+     */
+    protected function anthropicThinkingBudget(): ?int
+    {
+        return null;
+    }
+    /**
      * The native Anthropic Messages API document the wire expects.
      *
      * The host-specific opening keys come from
@@ -435,10 +470,24 @@ trait AnthropicMessagesWire
             ));
         }
 
+        // CTX-1 (§6.3): extended thinking, once the host's budget hook is on.
+        // The protocol pins three fields together, so they move together:
+        // `thinking.budget_tokens` must be >= MIN_THINKING_BUDGET (the hook's
+        // boundary parse guarantees it), `temperature` must be exactly 1, and
+        // `max_tokens` must be larger than the budget - the answer cannot fit
+        // inside the thoughts. The max_tokens floor of budget x 1.5 is
+        // deliberate headroom, and `max()` guarantees enabling thinking can
+        // only ever RAISE an explicit request ceiling, never shrink it.
+        $thinkingBudget = $this->anthropicThinkingBudget();
+
         $body = array_merge($this->anthropicWireBodyPrelude($request), [
             'messages' => $messages,
-            'max_tokens' => $request->maxTokens ?? self::DEFAULT_MAX_TOKENS,
-            'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
+            'max_tokens' => $thinkingBudget === null
+                ? ($request->maxTokens ?? self::DEFAULT_MAX_TOKENS)
+                : max($request->maxTokens ?? self::DEFAULT_MAX_TOKENS, $thinkingBudget + intdiv($thinkingBudget, 2)),
+            'temperature' => $thinkingBudget === null
+                ? ($request->temperature ?? self::DEFAULT_TEMPERATURE)
+                : self::THINKING_TEMPERATURE,
         ]);
 
         $system = $this->systemInstruction($request);
@@ -450,6 +499,10 @@ trait AnthropicMessagesWire
             $body['system'] = $request->systemBlocks !== null && $request->systemBlocks !== []
                 ? $this->systemBlockArray($request)
                 : $system;
+        }
+
+        if ($thinkingBudget !== null) {
+            $body['thinking'] = ['type' => 'enabled', 'budget_tokens' => $thinkingBudget];
         }
 
         if ($request->topP !== null) {
@@ -691,14 +744,25 @@ trait AnthropicMessagesWire
 
         $blocks = [];
 
+        // CTX-1 (§6.3): signed thinking blocks replay FIRST. While extended
+        // thinking is on, the Messages API refuses a tool turn whose assistant
+        // history dropped the thinking blocks that preceded its tool_use
+        // blocks - the signature is the chain of custody - so every stored
+        // block leads this turn's content. The blocks were boundary-parsed
+        // into wire shape at the parse seams that collected them (only
+        // replayable shapes are ever stored), and they ride only while the
+        // budget hook is on: a request that did not ask for thinking gets
+        // exactly the body shape it got before CTX-1.
+        if ($this->anthropicThinkingBudget() !== null && $msg instanceof AssistantMessage) {
+            foreach ($msg->thinkingBlocks() as $block) {
+                $blocks[] = $block;
+            }
+        }
+
         if ($msg->content() !== '') {
             $blocks[] = ['type' => 'text', 'text' => $msg->content()];
         }
 
-        // No `thinking` block is emitted here - the other half of the dormant
-        // extended-thinking seam documented on parseAnthropicResponse(). It is
-        // absent rather than removed: there is no signature to replay yet
-        // because no request ever asks for extended thinking.
         if ($msg instanceof AssistantMessage) {
             foreach ($msg->toolCalls() ?? [] as $call) {
                 $block = $this->toolUseBlock($call);
@@ -827,31 +891,39 @@ trait AnthropicMessagesWire
         $text = '';
         $reasoning = '';
         $toolCalls = [];
+        $thinkingBlocks = [];
 
         // An Anthropic reply is a LIST of content blocks, not one text field:
         // a thinking-enabled model puts a `thinking` block first, and a
         // tool-calling turn ends in one `tool_use` block per call.
         //
-        // KNOWN-INCOMPLETE SEAM - extended thinking round-trip. A `thinking`
-        // block carries a `signature` alongside its text, and when extended
-        // thinking is on Anthropic requires the assistant's thinking blocks
-        // (signature included) to be replayed verbatim in the next request or
-        // it rejects the turn. This method folds thinking text into
-        // `reasoning` and drops the signature, and {@see anthropicBlocks()}
-        // has no `thinking` case to replay it with - CompleteResponse has
-        // nowhere to carry a signature, and AssistantMessage nowhere to store
-        // one. Nothing is broken today because {@see anthropicBody()} never
-        // sends a `thinking` parameter, so no signed block is ever produced.
-        // Whoever enables extended thinking has to close BOTH halves: keep the
-        // signature on the way in, and emit the block on the way out.
+        // CTX-1 (§6.3) closed the extended-thinking round-trip that lived
+        // here as a KNOWN-INCOMPLETE SEAM: the signature now rides out of
+        // this method on CompleteResponse::$thinkingBlocks, AssistantMessage
+        // stores it, and {@see anthropicBlocks()} replays the block first on
+        // the next request. The text keeps folding into `reasoning` as well -
+        // that field is the human ticker and stays display-only; this field
+        // is protocol state. A `thinking` block WITHOUT a signature cannot be
+        // replayed (a forged or truncated one 400s the turn), so it is not
+        // collected; a `redacted_thinking` block carries opaque `data` and no
+        // text at all - it never folded into `reasoning` before CTX-1 and
+        // still does not, it only earns its place in the replay list.
         foreach ($this->contentBlocks($data) as $block) {
             $type = $block['type'] ?? null;
 
             if ($type === 'text' && is_string($block['text'] ?? null)) {
                 $text .= $block['text'];
-            } elseif (($type === 'thinking' || $type === 'redacted_thinking')
-                && is_string($block['thinking'] ?? null)) {
+            } elseif ($type === 'thinking' && is_string($block['thinking'] ?? null)) {
                 $reasoning .= $block['thinking'];
+                if (is_string($block['signature'] ?? null) && $block['signature'] !== '') {
+                    $thinkingBlocks[] = [
+                        'type' => 'thinking',
+                        'thinking' => $block['thinking'],
+                        'signature' => $block['signature'],
+                    ];
+                }
+            } elseif ($type === 'redacted_thinking' && is_string($block['data'] ?? null) && $block['data'] !== '') {
+                $thinkingBlocks[] = ['type' => 'redacted_thinking', 'data' => $block['data']];
             } elseif ($type === 'tool_use') {
                 $toolCalls[] = ToolCall::fromArray([
                     'id' => is_string($block['id'] ?? null) ? $block['id'] : '',
@@ -881,6 +953,7 @@ trait AnthropicMessagesWire
             costUsd: $usage->costUsd,
             usage: $usage,
             truncated: in_array($data['stop_reason'] ?? null, self::TRUNCATED_STOP_REASONS, true),
+            thinkingBlocks: $thinkingBlocks,
         );
     }
     /**
@@ -982,7 +1055,7 @@ trait AnthropicMessagesWire
      * @param array<string, mixed> $event
      * @param array<int, array{id?: string, name?: string, json?: string}> $toolCallBuffer
      */
-    private function parseAnthropicChunk(array $event, string $model, array &$toolCallBuffer): ?CompleteResponse
+    private function parseAnthropicChunk(array $event, string $model, array &$toolCallBuffer, array &$thinkingBuffer): ?CompleteResponse
     {
         $type = $event['type'] ?? null;
 
@@ -1002,6 +1075,25 @@ trait AnthropicMessagesWire
                     'name' => is_string($block['name'] ?? null) ? $block['name'] : '',
                     'json' => '',
                 ];
+
+                return null;
+            }
+
+            // CTX-1 (§6.3): a thinking block opens its buffer the same way a
+            // tool call does - text arrives in `thinking_delta`s and the
+            // signature in a trailing `signature_delta`, and neither can be
+            // replayed until the block closes. A `redacted_thinking` block is
+            // the exception that arrives WHOLE in the start event (opaque
+            // `data`, no deltas at all), which is why `data` is captured here
+            // and nowhere else.
+            if (is_array($block) && in_array($block['type'] ?? null, ['thinking', 'redacted_thinking'], true)) {
+                $index = (int) ($event['index'] ?? 0);
+                $thinkingBuffer[$index] = [
+                    'type' => $block['type'],
+                    'thinking' => is_string($block['thinking'] ?? null) ? $block['thinking'] : '',
+                    'signature' => is_string($block['signature'] ?? null) ? $block['signature'] : '',
+                    'data' => is_string($block['data'] ?? null) ? $block['data'] : '',
+                ];
             }
 
             return null;
@@ -1020,8 +1112,30 @@ trait AnthropicMessagesWire
                 return null;
             }
 
+            // CTX-1: the signature rides its own delta AFTER the thinking
+            // text; it appends to the open block and never reaches the
+            // ticker (the human reasoning stream wants prose, not crypto).
+            if ($deltaType === 'signature_delta') {
+                $index = (int) ($event['index'] ?? 0);
+                if (isset($thinkingBuffer[$index])) {
+                    $thinkingBuffer[$index]['signature'] .= (string) ($delta['signature'] ?? '');
+                }
+
+                return null;
+            }
+
             $text = is_string($delta['text'] ?? null) ? $delta['text'] : '';
             $thought = is_string($delta['thinking'] ?? null) ? $delta['thinking'] : '';
+
+            if ($thought !== '') {
+                // Accumulate for the replay while the SAME text still folds
+                // into the ticker frame below - the str-reasoning contract
+                // every consumer already relies on.
+                $index = (int) ($event['index'] ?? 0);
+                if (isset($thinkingBuffer[$index])) {
+                    $thinkingBuffer[$index]['thinking'] .= $thought;
+                }
+            }
 
             if ($text === '' && $thought === '') {
                 return null;
@@ -1035,6 +1149,36 @@ trait AnthropicMessagesWire
 
         if ($type === 'content_block_stop') {
             $index = (int) ($event['index'] ?? 0);
+
+            // CTX-1: a closing thinking block leaves the stream as its own
+            // frame carrying exactly the replayable shape - a `thinking`
+            // block without text or without its signature cannot be sent
+            // back, and an uncollected block simply never replays (the same
+            // fail-safe the unary parse applies).
+            $thoughtBlock = $thinkingBuffer[$index] ?? null;
+            if ($thoughtBlock !== null) {
+                unset($thinkingBuffer[$index]);
+
+                if ($thoughtBlock['type'] === 'redacted_thinking' && $thoughtBlock['data'] !== '') {
+                    return new CompleteResponse(
+                        content: '',
+                        thinkingBlocks: [['type' => 'redacted_thinking', 'data' => $thoughtBlock['data']]],
+                    );
+                }
+
+                if ($thoughtBlock['type'] === 'thinking'
+                    && $thoughtBlock['thinking'] !== '' && $thoughtBlock['signature'] !== '') {
+                    return new CompleteResponse(
+                        content: '',
+                        thinkingBlocks: [[
+                            'type' => 'thinking',
+                            'thinking' => $thoughtBlock['thinking'],
+                            'signature' => $thoughtBlock['signature'],
+                        ]],
+                    );
+                }
+            }
+
             $buffered = $toolCallBuffer[$index] ?? null;
 
             if ($buffered === null) {

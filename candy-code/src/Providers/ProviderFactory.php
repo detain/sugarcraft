@@ -125,7 +125,7 @@ final readonly class ProviderFactory
         ],
         'anthropic' => [
             'required' => ['apiKey'],
-            'optional' => ['baseUrl', 'model', 'modelPrices', 'contextWindow', 'fallbackModels'],
+            'optional' => ['baseUrl', 'model', 'modelPrices', 'contextWindow', 'fallbackModels', 'thinkingBudget'],
         ],
         'claude-code' => [
             'required' => ['claudePath'],
@@ -914,6 +914,54 @@ final readonly class ProviderFactory
     }
 
     /**
+     * CTX-1 (§6.3): the same `thinkingBudget` setting read for the ANTHROPIC
+     * arm, where the number is a `budget_tokens` the Messages API will be
+     * sent - so the tolerance of {@see configuredThinkingBudget()} is wrong
+     * here: silently dropping a value the user paid a Spend-class setting to
+     * raise, or forwarding one the server 400s on both turns and the retry,
+     * are both worse than naming it. This parse is STRICT and LOUD for values
+     * that cannot mean anything the API accepts, and generous only for
+     * "thinking off" in its conventional spellings (absent, null, the empty
+     * unset-`${VAR}` placeholder, 0). Everything reaching the provider is
+     * therefore trusted: a whole number at or above the protocol floor.
+     *
+     * `-1` is deliberately refused rather than reinterpreted: it is Gemini's
+     * dynamic-thinking spelling and has no Anthropic equivalent, so on this
+     * provider it is a setting addressed to the wrong arm.
+     */
+    private static function configuredAnthropicThinkingBudget(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || (is_array($value) && $value === [])) {
+            return null;
+        }
+
+        $tokens = self::wholeNumber($value);
+
+        if ($tokens === null) {
+            throw new \InvalidArgumentException(sprintf(
+                'anthropic: the `thinkingBudget` setting must be a whole token count (or 0 for off), '
+                . 'got %s.',
+                get_debug_type($value),
+            ));
+        }
+
+        if ($tokens === 0) {
+            return null;
+        }
+
+        if ($tokens < AnthropicProvider::MIN_THINKING_BUDGET) {
+            throw new \InvalidArgumentException(sprintf(
+                'anthropic: the `thinkingBudget` setting must be at least %d tokens (the Messages API '
+                . 'refuses any smaller extended-thinking budget); got %d - use 0 to disable thinking.',
+                AnthropicProvider::MIN_THINKING_BUDGET,
+                $tokens,
+            ));
+        }
+
+        return $tokens;
+    }
+
+    /**
      * Normalises the `extraBody` setting (audit A10): an object of top-level
      * request fields, or `[]`. Only the SHAPE is checked here (null, `''` -
      * an unset `${VAR}` placeholder - and non-arrays mean none); the KEYS are
@@ -1037,6 +1085,9 @@ final readonly class ProviderFactory
             contextWindowOverride: self::configuredContextWindow(
                 $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
                 $model,
+            ),
+            thinkingBudget: self::configuredAnthropicThinkingBudget(
+                $config['thinkingBudget'] ?? self::userTierSetting('thinkingBudget'),
             ),
         );
     }

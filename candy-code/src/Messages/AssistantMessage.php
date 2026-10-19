@@ -38,6 +38,18 @@ final readonly class AssistantMessage implements Message
          * model about a limit it did not hit.
          */
         private bool $lengthStopped = false,
+        /**
+         * CTX-1 (§6.3): the signed thinking blocks this call produced, in
+         * the Anthropic wire's own shape (see {@see
+         * \SugarCraft\Code\Providers\CompleteResponse::$thinkingBlocks} for
+         * the two block shapes and why a signature is what makes a block
+         * replayable). The Messages wire replays them as the assistant
+         * turn's LEADING content blocks when extended thinking is enabled -
+         * dropping them here would 400 every tool turn of a thinking
+         * conversation. `[]` on every message not produced by a
+         * thinking-enabled Anthropic-family call.
+         */
+        private array $thinkingBlocks = [],
     ) {}
 
     /**
@@ -81,9 +93,23 @@ final readonly class AssistantMessage implements Message
     }
 
     /**
+     * This call's signed thinking blocks for replay - see the constructor's
+     * $thinkingBlocks docblock. Never null, often empty.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function thinkingBlocks(): array
+    {
+        return $this->thinkingBlocks;
+    }
+
+    /**
      * The same step carrying $toolCalls instead (null for none) - how
      * {@see HistorySanitizer} renames a call id an older transcript used
-     * twice (step 0.2). Everything else, accounting included, is kept.
+     * twice (step 0.2). Everything else, accounting and signed thinking
+     * blocks included, is kept: a rename rewrites the tool_use block's id
+     * and MUST NOT strand the thinking blocks that the same signed turn
+     * produced, or the replay that 400s is worse than the duplicate id was.
      */
     public function withToolCalls(?array $toolCalls): self
     {
@@ -93,14 +119,22 @@ final readonly class AssistantMessage implements Message
             $this->reasoning,
             $this->usage,
             $this->lengthStopped,
+            $this->thinkingBlocks,
         );
     }
 
     /**
-     * The wire shape a provider is sent. Deliberately carries NO `usage` key:
-     * this is what goes back INTO the next request, and a turn's cost is
-     * engine-side accounting rather than conversation content. Adding it here
-     * would put the previous call's bill into the next call's prompt.
+     * The wire shape a provider is sent. Deliberately carries NO `usage`
+     * key: this is what goes back INTO the next request, and a turn's cost
+     * is engine-side accounting rather than conversation content. Adding it
+     * here would put the previous call's bill into the next call's prompt.
+     *
+     * CTX-1: `thinkingBlocks` DOES belong, because unlike usage it is
+     * conversation content in the protocol's own sense - the Messages wire
+     * consumes it, and a rehydrated transcript that lost it could not
+     * replay the turn. Readers must take it TOLERANTLY
+     * (`$row['thinkingBlocks'] ?? []`): every transcript written before
+     * CTX-1 lacks the key, and `[]` is the correct meaning of "legacy row".
      */
     public function toArray(): array
     {
@@ -109,6 +143,7 @@ final readonly class AssistantMessage implements Message
             'content' => $this->content,
             'tool_calls' => $this->toolCalls,
             'reasoning' => $this->reasoning,
+            'thinkingBlocks' => $this->thinkingBlocks,
         ];
     }
 }

@@ -93,6 +93,14 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
      *        legal, the extra positional argument is simply ignored), yields
      *        decoded SSE events.
      * @param array<string, array{0: float, 1: float}|array<string, mixed>> $modelPrices Operator rate overrides, raw-id or family keyed.
+     * @param int|null $thinkingBudget CTX-1 (§6.3): extended-thinking budget
+     *        in tokens, boundary-parsed by
+     *        {@see ProviderFactory::configuredAnthropicThinkingBudget()} —
+     *        null (or the setting unset) sends no `thinking` field at all.
+     *        The constructor is the trust boundary: anything it accepts is a
+     *        value the Messages API will accept, so a non-null budget below
+     *        the protocol's 1024-token floor is refused HERE (loudly, at
+     *        launch) rather than as an opaque server 400 per request.
      */
     public function __construct(
         private string $apiKey,
@@ -103,7 +111,17 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         private array $modelPrices = [],
         private bool $promptCache = true,
         private ?int $contextWindowOverride = null,
+        private ?int $thinkingBudget = null,
     ) {
+        if ($thinkingBudget !== null && $thinkingBudget < self::MIN_THINKING_BUDGET) {
+            throw new \InvalidArgumentException(sprintf(
+                'Anthropic Messages: thinkingBudget %d is below the protocol floor of %d tokens; '
+                . 'unset the setting to disable extended thinking.',
+                $thinkingBudget,
+                self::MIN_THINKING_BUDGET,
+            ));
+        }
+
         $this->httpClient = self::guzzleClient([
             'base_uri' => rtrim($baseUrl, '/') . '/',
             'headers' => [
@@ -277,6 +295,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         // blocks, keyed by the stream's content-block index. A local rather
         // than a property because this class is `final readonly`.
         $toolCallBuffer = [];
+        $thinkingBuffer = [];
 
         try {
             // The endpoint and body are inside the try because both can
@@ -298,7 +317,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             // injected two-parameter seam simply ignores the third argument.
             foreach (($this->httpStream)($this->messagesEndpoint(), $body, $request->onHeartbeat) as $event) {
                 $event = is_array($event) ? $event : [];
-                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer);
+                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer, $thinkingBuffer);
 
                 $type = $event['type'] ?? null;
                 $sawTerminal = $sawTerminal
@@ -356,11 +375,21 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
     }
 
     /**
+     * CTX-1 (§6.3): this host speaks extended thinking natively, so it feeds
+     * the wire's budget hook from the constructor-parsed setting. The value
+     * is already trusted (>= 1024 or null) by the time the body is shaped.
+     */
+    protected function anthropicThinkingBudget(): ?int
+    {
+        return $this->thinkingBudget;
+    }
+
+    /**
      * The trait's spread-based rebinder cannot be used here: this class holds
      * a `httpClient` property that is not a constructor parameter, so the
      * named spread would reject it. Rebuilding positionally keeps every
-     * transport seam, price override, cache flag and sizing override intact
-     * across a model switch.
+     * transport seam, price override, cache flag, sizing override and the
+     * CTX-1 thinking budget intact across a model switch.
      */
     public function withModel(string $model): static
     {
@@ -373,6 +402,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             $this->modelPrices,
             $this->promptCache,
             $this->contextWindowOverride,
+            $this->thinkingBudget,
         );
     }
 }
