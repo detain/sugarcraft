@@ -27,6 +27,7 @@ use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Events\TodoUpdated;
 use SugarCraft\Code\Events\TokenDelta;
 use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Message;
@@ -448,7 +449,7 @@ final class TurnRunner
             // The permission events (1.C-2) share the inbox: a question has to
             // reach the screen in the turn's own event order, between the tool
             // events around it.
-            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Code\Events\MediaProgress|SubAgentActivity|PermissionAsked|PermissionResolved|\SugarCraft\Code\Events\ContextLedgerChanged $event) use ($inbox, $generation, $runner, $cancellation): void {
+            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Code\Events\MediaProgress|ToolProgress|SubAgentActivity|PermissionAsked|PermissionResolved|\SugarCraft\Code\Events\ContextLedgerChanged $event) use ($inbox, $generation, $runner, $cancellation): void {
                 if ($event instanceof SpendCapBreached) {
                     $runner->markSpendCapped($cancellation);
                 }
@@ -864,6 +865,7 @@ final class TurnRunner
             return;
         }
         $ephemeral = $event instanceof TokenDelta || $event instanceof ReasoningDelta || $event instanceof StepStarted
+            || $event instanceof ToolProgress
             || ($event instanceof SubAgentActivity && !\in_array($event->op, [SubAgentActivity::OP_STARTED, SubAgentActivity::OP_FINISHED], true));
         if ($ephemeral && !$this->hasListeners()) {
             return;

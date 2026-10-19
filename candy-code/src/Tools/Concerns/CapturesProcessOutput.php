@@ -166,7 +166,7 @@ trait CapturesProcessOutput
      *     groupKilled: bool,
      * }
      */
-    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null): array
+    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null, ?\Closure $onChunk = null): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -271,6 +271,12 @@ trait CapturesProcessOutput
                     $stdout = self::appendBounded($stdout, $chunk, $maxBytes, $stdoutDropped);
                 } else {
                     $stderr = self::appendBounded($stderr, $chunk, $maxBytes, $stderrDropped);
+                }
+                // WEB-4: every byte the capture keeps is offered to the live
+                // tail feed, stdout and stderr alike — the ring shows what
+                // the watcher sees, in the order the pipes answered.
+                if ($onChunk !== null) {
+                    $onChunk($chunk);
                 }
             }
         }
@@ -496,7 +502,7 @@ trait CapturesProcessOutput
      *     groupKilled: bool,
      * }
      */
-    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null, ?\Closure $onWait = null): array
+    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null, ?\Closure $onWait = null, ?\Closure $onChunk = null): array
     {
         $idle = $idleCeilingSec
             ?? \SugarCraft\Code\Tools\ToolLimits::current()->seconds(\SugarCraft\Code\Tools\ToolLimits::INTERACTIVE_IDLE_KEY)
@@ -543,6 +549,12 @@ trait CapturesProcessOutput
                 if ($chunk !== null && $chunk !== '') {
                     $transcript = self::appendBounded($transcript, $chunk, $maxBytes, $dropped);
                     $lastProgressAt = \microtime(true);
+                    // WEB-4: the pty's live paint rides the same tail feed as
+                    // the pipe capture; the bounded final drains stay out of
+                    // it — tool.finished carries those bytes regardless.
+                    if ($onChunk !== null) {
+                        $onChunk($chunk);
+                    }
 
                     // A program that never stops painting never reaches the
                     // idle check below, so the wall bound is checked here too.

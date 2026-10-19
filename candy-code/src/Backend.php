@@ -35,11 +35,13 @@ use SugarCraft\Code\Backend\CancellationToken;
  * call's — as it lands ({@see Events\ContextLedgerChanged}, roadmap 3.B-3),
  * and for an in-flight media render, its live preview frames as they poll in
  * ({@see Events\MediaProgress}, plan_crush_media W2.4 — display-only, never a
- * Message).
+ * Message), and for a running tool that streams, its live output tail as it
+ * fills ({@see Events\ToolProgress}, plan_comparison WEB-4 — ephemeral,
+ * display-only, never a Message).
  * The roster is exactly what
  * {@see Backend\EngineBackend::encodeEvent()} admits — the wire encoder's
  * parameter type, not a prose list, is the authority, and a consumer that
- * type-matches these six covers the channel. It exists
+ * type-matches these seven covers the channel. It exists
  * because the returned Message is a single opaque final answer: an
  * agentic backend such as {@see Backend\EngineBackend} can run several
  * rounds of tool calls behind it, and without this callback none of
@@ -76,7 +78,7 @@ interface Backend
      *                                `function(string $token): void`
      * @param callable|null $onEvent optional turn-lifecycle observer.
      *                                Signature:
-     *                                `function(Events\ToolStarted|Events\ToolFinished|Events\SpendCapBreached|Events\MediaProgress|Events\SubAgentActivity|Events\ContextLedgerChanged $event): void`
+     *                                `function(Events\ToolStarted|Events\ToolFinished|Events\SpendCapBreached|Events\MediaProgress|Events\ToolProgress|Events\SubAgentActivity|Events\ContextLedgerChanged $event): void`
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message;
 

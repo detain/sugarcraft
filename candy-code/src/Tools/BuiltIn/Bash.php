@@ -8,9 +8,12 @@ use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
+use SugarCraft\Code\Tools\AcceptsToolProgress;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\PromptGuidance;
+use SugarCraft\Code\Tools\ShellTailRing;
+use SugarCraft\Code\Tools\TakesToolCallId;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
@@ -43,7 +46,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
 #[BuiltInTool(name: 'Bash', permission: ToolPermissionClass::Write, position: 1)]
-final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, BuildsFromCatalog
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -73,6 +76,13 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * `bashMaxTimeoutSeconds` settings, applied per turn through
      * {@see \SugarCraft\Code\Tools\ToolLimits::applyTo()} and
      * {@see withTimeoutBounds()}; the constants when unset.
+     *
+     * $toolProgressEmitter is production wiring, not a setting: the turn's
+     * live event channel (bound through {@see withToolProgressEmitter()} by
+     * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()}), fed a
+     * frame-rate-capped {@see \SugarCraft\Code\Events\ToolProgress} tail of
+     * the command's output while it runs (WEB-4). Null — every launch-built
+     * and standalone caller — streams nothing, exactly as before.
      */
     public function __construct(
         private ?string $root = null,
@@ -84,7 +94,22 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         private ?Bubblewrap $sandbox = null,
         private int $defaultTimeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
+        private ?\Closure $toolProgressEmitter = null,
     ) {}
+
+    /**
+     * This tool streaming its live tail through $emit and every other field
+     * kept — the {@see withGitGuidance()} rebuild, for the same reason: every
+     * property is constructor-promoted, so the object's own vars are the
+     * constructor's argument list. The turn's channel binds here (WEB-4);
+     * {@see AcceptsToolProgress} is the seam that hands it over.
+     *
+     * @param \Closure(\SugarCraft\Code\Events\ToolProgress): void $emit
+     */
+    public function withToolProgressEmitter(\Closure $emit): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['toolProgressEmitter' => $emit]));
+    }
 
     /**
      * This tool with the `timeout` parameter's default and ceiling replaced
@@ -455,6 +480,28 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         $timeout = $this->timeoutSeconds($args['timeout'] ?? null);
         $interactive = ($args['interactive'] ?? false) === true;
 
+        // WEB-4: the live tail. The ring is built only when the turn bound a
+        // channel AND the call has its engine-spliced id — a tail without an
+        // id has no row to hang on, and inventing one would let a forged
+        // `id` argument steer where frames land (TakesToolCallId is what
+        // makes $args['id'] the engine's own value). Both capture mechanisms
+        // feed the same ring; the trait calls back per chunk it keeps.
+        $callId = (string) ($args['id'] ?? '');
+        $progress = $this->toolProgressEmitter !== null && $callId !== ''
+            ? new ShellTailRing(
+                $callId,
+                self::NAME,
+                $this->toolProgressEmitter,
+                self::PROGRESS_TAIL_BYTES,
+                self::PROGRESS_FRAME_INTERVAL_SECONDS,
+            )
+            : null;
+        $onChunk = $progress === null
+            ? null
+            : static function (string $chunk) use ($progress): void {
+                $progress->onChunk($chunk);
+            };
+
         // The sandbox (roadmap 5.12) is a PREFIX on the same shell string, so
         // both capture mechanisms — and the setsid group kill the timeout
         // fires — keep working unchanged. A configured sandbox that cannot
@@ -483,8 +530,13 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         }
 
         $run = $interactive
-            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat)
-            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat);
+            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat, $onChunk)
+            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat, $onChunk);
+        // The last frame: bytes that arrived between the final cadence slice
+        // and EOF would otherwise never have been shown. tool.finished lands
+        // the full contract right after, so a client that missed this frame
+        // loses nothing it could not re-derive.
+        $progress?->finish();
         if (($run['timedOut'] ?? false) === true) {
             // ISS-014: the group-kill claim rides the CONFIRMATION, never
             // the timeout flag. An unconfirmed stop (no recorded group, or
@@ -527,6 +579,21 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      */
     public const DEFAULT_TIMEOUT_SECONDS = 120;
     public const MAX_TIMEOUT_SECONDS = 600;
+
+    /**
+     * The live tail's frame budget and cadence (WEB-4). 4 KiB is the newest
+     * bytes a watcher needs to follow a build's scroll; half a second is the
+     * pacing every live surface here already keeps (the media progress loop
+     * polls on the same beat, and TokenDelta frames cost the reducer more
+     * than they paint below this interval). The bound lives on the ring, not
+     * the wire: a frame past MAX_FRAME_BYTES would fail the whole turn, and
+     * the 256 KiB tool.finished contract is the durable surface.
+     */
+    public const PROGRESS_TAIL_BYTES = 4096;
+    public const PROGRESS_FRAME_INTERVAL_SECONDS = 0.5;
+
+    /** The tool name this call streams under ({@see self::name()}). */
+    public const NAME = 'Bash';
 
     /**
      * The model's `timeout` as the seconds this call may run: a positive

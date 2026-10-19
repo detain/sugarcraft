@@ -19,6 +19,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\PermissionAsked;
 use SugarCraft\Code\Events\PermissionResolved;
 use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Host\EventLog;
 use SugarCraft\Code\Host\SessionEvent;
@@ -245,6 +246,57 @@ final class TurnRunnerEventLogTest extends TestCase
 
         self::assertFalse($done->inFlight);
         self::assertSame([], EventLog::new($this->store)->since('s'));
+    }
+
+    /**
+     * WEB-4's replay contract: live tail frames reach the subscriber exactly
+     * as they arrive and NEVER enter the durable log - a late joiner replays
+     * nothing and still sees the whole output, because tool.finished is the
+     * contract and the tail is paint.
+     */
+    public function testATailFrameReachesTheListenerAndNeverTheLog(): void
+    {
+        $runner = TurnRunner::new();
+        $heard = [];
+        $runner->listen(static function (SessionEvent $event) use (&$heard): void {
+            $heard[] = $event;
+        });
+        $backend = self::scripted();
+        $chat = $this->chat($backend, $runner);
+
+        [$running, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $settled = self::start($cmd);
+
+        ($backend->emit)(new ToolStarted('c1', 'Bash', ['command' => 'make']));
+        ($backend->emit)(new ToolProgress('c1', 'Bash', 'gcc -c a.c', 1, false, 4096));
+        ($backend->emit)(new ToolProgress('c1', 'Bash', 'gcc -c b.c', 2, true, 4096));
+        $running = self::pump($running);
+        ($backend->emit)(new ToolFinished('c1', 'Bash', new EngineToolResult('c1', 'built')));
+        $running = self::pump($running);
+
+        ($backend->deferred)()->resolve(Message::assistant('done'));
+        self::apply($running, self::settled($settled));
+
+        self::assertSame([
+            SessionEvent::MESSAGE_CREATED,
+            SessionEvent::TURN_STARTED,
+            SessionEvent::TOOL_STARTED,
+            SessionEvent::TOOL_FINISHED,
+            SessionEvent::ASSISTANT_COMPLETED,
+            SessionEvent::TURN_COMPLETED,
+        ], array_column(EventLog::new($this->store)->since('s'), 'type'), 'a tail frame never enters the replay log');
+
+        $tails = array_values(array_filter($heard, static fn (SessionEvent $e): bool => $e->type === SessionEvent::TOOL_PROGRESS));
+        self::assertCount(2, $tails, 'the live subscriber heard both frames');
+        self::assertNull($tails[0]->seq, 'an ephemeral event never carries a seq');
+        self::assertSame('c1', $tails[0]->data['toolCallId']);
+        self::assertSame('Bash', $tails[0]->data['name']);
+        self::assertSame('gcc -c a.c', $tails[0]->data['tail']);
+        self::assertSame(1, $tails[0]->data['seq']);
+        self::assertFalse($tails[0]->data['truncated']);
+        self::assertSame(4096, $tails[0]->data['tailBudget']);
+        self::assertSame('gcc -c b.c', $tails[1]->data['tail']);
+        self::assertTrue($tails[1]->data['truncated']);
     }
 
     private function chat(Backend $backend, ?TurnRunner $runner = null): Chat

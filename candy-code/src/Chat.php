@@ -51,6 +51,7 @@ use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Media\PreviewSlots;
 use SugarCraft\Code\Events\TokenDelta;
 use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookManager;
@@ -218,7 +219,7 @@ final class Chat implements Model
      * and {@see \SugarCraft\Code\Events\UsageUpdated} ride it too, for the
      * status bar; they never reach a {@see BackendToolEventsMsg}.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|TokenDelta|ReasoningDelta|\SugarCraft\Code\Events\StepStarted|\SugarCraft\Code\Events\UsageUpdated}>
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|TokenDelta|ReasoningDelta|\SugarCraft\Code\Events\StepStarted|\SugarCraft\Code\Events\UsageUpdated}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -988,7 +989,7 @@ final class Chat implements Model
          * allocating here) keeps every existing embedder/test constructor
          * call working unchanged.
          *
-         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
         /**
@@ -5592,6 +5593,17 @@ final class Chat implements Model
             return [$this, $this->foldHop($rest, $msg->replay)];
         }
 
+        if ($event instanceof ToolProgress) {
+            // WEB-4 settled-queue twin: the tail records like the deltas do —
+            // ephemeral in the log either way (the runner never writes it) —
+            // and the fold returns WITHOUT touching the placeholder chain, so
+            // the settled ToolFinished that follows still pairs with its
+            // ToolStarted exactly as if the frame had never arrived.
+            $runner->recordEvent($msg->turn, $event);
+
+            return [$this, $this->foldHop($rest, $msg->replay)];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event, '', $msg->turn)
             : $this->replaceToolRunningPlaceholder($event, $msg->turn);
@@ -5719,9 +5731,12 @@ final class Chat implements Model
             // and consumers of this accessor pair starts with finishes.
             // MediaProgress (W2.4) shares both grounds: display-only frames
             // that belong to a running call's SLOT, never to a pairing.
+            // ToolProgress (WEB-4) shares both grounds and one more: the
+            // accessor's consumers pair starts with finishes, and a tail
+            // frame is neither — it belongs to a running row's live view.
             if ($event instanceof TokenDelta || $event instanceof ReasoningDelta
                 || $event instanceof SpendCapBreached || $event instanceof SubAgentActivity
-                || $event instanceof MediaProgress) {
+                || $event instanceof MediaProgress || $event instanceof ToolProgress) {
                 continue;
             }
             $events[] = $event;
@@ -6087,6 +6102,18 @@ final class Chat implements Model
             // The running row reads the slot at paint time; the live pump's
             // repaint cadence (same as the agent lines above) shows it.
             PreviewSlots::set($event->toolCallId, $event->frameB64, $event->progress, $event->eta);
+
+            return [$this, $more];
+        }
+
+        if ($event instanceof ToolProgress) {
+            // WEB-4: live shell tail — recorded like the deltas (broadcast to
+            // listeners, never written: the runner's ephemeral gate and the
+            // log's durable list both keep it out of the store). The TUI
+            // paints no live tail this wave, so the fold returns WITHOUT
+            // touching the placeholder chain; the ToolFinished that pairs
+            // this call follows in order, untouched by the frame.
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
 
             return [$this, $more];
         }

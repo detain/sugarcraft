@@ -24,6 +24,7 @@ use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\BuiltIn\BashEscapeDenyHook;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
@@ -3095,6 +3096,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 }
                 $onEvent($activity);
             };
+            // WEB-4: the live shell-tail channel, bound only to tools that
+            // ask ({@see \SugarCraft\Code\Tools\AcceptsToolProgress}). Same
+            // pid rule as the emitter above — a frame pushed from a forked
+            // grandchild would write into a copy of the turn and vanish — and
+            // its own closure because a tail frame is neither a delegation
+            // beat nor a preview.
+            $toolProgressEmitter = static function (ToolProgress $frame) use ($pid, $onEvent): void {
+                if (getmypid() !== $pid) {
+                    return;
+                }
+                $onEvent($frame);
+            };
+        } else {
+            $toolProgressEmitter = null;
         }
 
         $ledgerRead = null;
@@ -3132,6 +3147,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 if ($ledgerRead !== null && $ledgerApply !== null && ($modelPrunes || $tool instanceof \SugarCraft\Code\Tools\BuiltIn\Compress)) {
                     $tools[] = $tool->withLedger($ledgerRead, $ledgerApply);
                 }
+
+                continue;
+            }
+            if ($tool instanceof \SugarCraft\Code\Tools\AcceptsToolProgress) {
+                // WEB-4: the shell tail needs no engine — only the turn's
+                // event channel, and only when the turn has one.
+                $tools[] = $toolProgressEmitter === null
+                    ? $tool
+                    : $tool->withToolProgressEmitter($toolProgressEmitter);
 
                 continue;
             }
@@ -4882,7 +4906,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 static function (string $delta) use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'token', 'text' => $delta]);
                 },
-                static function (ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|ContextLedgerChanged $event) use ($childSocket): void {
+                static function (ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|ContextLedgerChanged $event) use ($childSocket): void {
                     self::writeFrame($childSocket, self::encodeEvent($event));
                 },
                 // E456. The child's third sink, and the one that exists for the
@@ -5312,7 +5336,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @return array<string, mixed>
      */
-    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|ContextLedgerChanged $event): array
+    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|ContextLedgerChanged $event): array
     {
         if ($event instanceof ContextLedgerChanged) {
             // Roadmap 3.B-3: the live `ledger` frame — what a Prune (or an
@@ -5341,6 +5365,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 'frame' => $event->frameB64,
                 'progress' => $event->progress,
                 'eta' => $event->eta,
+            ];
+        }
+
+        if ($event instanceof ToolProgress) {
+            // WEB-4: the live shell tail, same crossing rule as the preview
+            // frame — the capture loop runs in the turn child, so a tail that
+            // wants the browser must be a frame or it is nothing. Like its
+            // neighbour it never becomes a Message: this arm is its whole
+            // durable surface, and there is none.
+            return [
+                'kind' => 'tool_progress',
+                'id' => $event->toolCallId,
+                'name' => $event->toolName,
+                'tail' => $event->tail,
+                'seq' => $event->seq,
+                'truncated' => $event->truncated,
+                'budget' => $event->tailBudget,
             ];
         }
 
@@ -5403,7 +5444,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @param array<string, mixed> $encoded
      */
-    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|SubAgentActivity|ContextLedgerChanged|null
+    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|MediaProgress|ToolProgress|SubAgentActivity|ContextLedgerChanged|null
     {
         // THE KIND IS READ BEFORE THE IDENTITY, and the order is the fix, not
         // a style choice: a spend_cap frame carries no toolCallId/name pair at
@@ -5447,6 +5488,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 $progress !== null ? (float) $progress : null,
                 $eta !== null ? (float) $eta : null,
             );
+        }
+
+        if ($kind === 'tool_progress') {
+            // WEB-4, same kind-before-identity law: the frame names the call
+            // it tails, and a tail whose shape cannot be read costs one
+            // repaint — dropped, never fatal, never stored. A non-positive
+            // seq or a negative budget is not a frame this build ever wrote.
+            $callId = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;
+            $name = is_string($encoded['name'] ?? null) ? $encoded['name'] : null;
+            $tail = $encoded['tail'] ?? null;
+            $seq = $encoded['seq'] ?? null;
+            $truncated = $encoded['truncated'] ?? null;
+            $budget = $encoded['budget'] ?? null;
+            if ($callId === null || $callId === '' || $name === null || !is_string($tail)
+                || !is_int($seq) || $seq < 1 || !is_bool($truncated)
+                || !is_int($budget) || $budget < 0) {
+                return null;
+            }
+
+            return new ToolProgress($callId, $name, $tail, $seq, $truncated, $budget);
         }
 
         if ($kind === 'ledger') {

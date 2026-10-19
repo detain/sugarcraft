@@ -13,6 +13,7 @@ use SugarCraft\Code\Events\StepStarted;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Events\TokenDelta;
 use SugarCraft\Code\Events\ToolFinished;
+use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Media\MediaKind;
@@ -417,6 +418,14 @@ final class TranscriptProjector
                 'cap' => $event->capUsd,
             ], $sessionId, $turnId),
             $event instanceof TokenDelta => SessionEvent::new(SessionEvent::ASSISTANT_DELTA, ['text' => $event->text], $sessionId, $turnId),
+            $event instanceof ToolProgress => SessionEvent::new(SessionEvent::TOOL_PROGRESS, [
+                'toolCallId' => $event->toolCallId,
+                'name' => $event->toolName,
+                'seq' => $event->seq,
+                'tail' => $event->tail,
+                'truncated' => $event->truncated,
+                'tailBudget' => $event->tailBudget,
+            ], $sessionId, $turnId),
             $event instanceof ReasoningDelta => SessionEvent::new(SessionEvent::REASONING_DELTA, ['text' => $event->text], $sessionId, $turnId),
             default => null,
         };
