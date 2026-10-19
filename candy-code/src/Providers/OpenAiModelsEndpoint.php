@@ -11,7 +11,7 @@ use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
  * PRV-1 (§6.5): one bounded `GET {root}/v1/models` against an
  * OpenAI-compatible endpoint — the listing route `openai`, `custom` and
  * `sglang` all speak — shared by every {@see HasModelCatalog} provider and
- * by `models --all`.
+ * by `models all`.
  *
  * NEVER BLOCKS THE TUI, NEVER THROWS: an unreachable host, a 401, a proxy
  * without the route, a timeout or a non-JSON body all answer null, which

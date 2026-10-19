@@ -593,7 +593,8 @@ final class Subcommands
 
     /**
      * `candy-code models` — every provider this install can select, with the
-     * model each one defaults to, and a marker on the selected one.
+     * model each one defaults to, and a marker on the selected one. The one
+     * operand `all` expands each row with the merged model catalog (PRV-1).
      *
      * Reads {@see Bootstrap::availableProviders()}, which is the SAME
      * enumeration `Bootstrap::backendFor()` resolves a name against and the
@@ -603,7 +604,18 @@ final class Subcommands
      */
     private static function models(ParsedArgs $args): int
     {
-        if ($args->subcommandArgs !== []) {
+        // PRV-1 (§6.5): `models all` appends the catalog tiers per provider.
+        // The plan words this as `models --all`; the flag FORM is deliberately
+        // not added — `models` owning `--all` would widen the verb's flag
+        // roster (ParsedArgs::SUBCOMMAND_FLAGS) whose stability is pinned
+        // test-first (SessionSubcommandsTest: `models --all` answers
+        // unknownFlags `['--all']`), and that headless roster is frozen for
+        // this wave. The catalog therefore rides the verb's OWN operand:
+        // exactly `all` selects the expanded listing, anything else is still
+        // the rejectOperands error, so `models delete everything` stays a
+        // usage error and not a silent table print.
+        $all = $args->subcommandArgs === ['all'];
+        if (!$all && $args->subcommandArgs !== []) {
             return self::rejectOperands('models', $args);
         }
 
@@ -611,14 +623,28 @@ final class Subcommands
         $providers = Bootstrap::availableProviders();
         \ksort($providers);
 
+        $metadata = $all ? \SugarCraft\Code\Providers\ModelMetadata::new() : null;
+
         $rows = [];
         foreach ($providers as $name => $config) {
             $model = $config['model'] ?? null;
-            $rows[] = [
+            $model = \is_string($model) && $model !== '' ? $model : 'unknown';
+            $row = [
                 'provider' => $name,
-                'model' => \is_string($model) && $model !== '' ? $model : 'unknown',
+                'model' => $model,
                 'selected' => $name === $selected,
             ];
+
+            if ($all) {
+                $row['catalog'] = self::modelCatalogRows(
+                    $name,
+                    \is_array($config) ? $config : [],
+                    $model,
+                    $metadata,
+                );
+            }
+
+            $rows[] = $row;
         }
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -643,12 +669,64 @@ final class Subcommands
         }
         foreach ($rows as $row) {
             \printf("%s %-{$width}s  %s\n", $row['selected'] ? '*' : ' ', $row['provider'], $row['model']);
+            // One indented wrapped line of catalog ids under the row; the
+            // configured model leads it, exactly like the palette merge.
+            foreach (isset($row['catalog']) && $row['catalog'] !== []
+                ? \explode("\n", \wordwrap(implode(', ', $row['catalog']), 96, "\n", true))
+                : [] as $line) {
+                echo '  ' . \str_repeat(' ', $width) . '  ' . $line . "\n";
+            }
         }
         echo "\n" . ($selected === null
             ? Lang::t('cli.models.none_selected')
             : Lang::t('cli.models.selected_legend', ['path' => Bootstrap::userConfigPath()])) . "\n";
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * PRV-1: the merged catalog rows `models all` offers for one provider.
+     * The live tier rides only for the OpenAI-compatible transports — the
+     * same three that implement {@see \SugarCraft\Code\Providers\HasModelCatalog}
+     * — asking the endpoint the chat calls would use (openai's unset base is
+     * the SDK default, never a guess), and only when the discovery opt-out
+     * ({@see \SugarCraft\Code\Providers\ModelMetadata::OPT_OUT_ENV}) is not
+     * set, exactly like the palette's prefetch. Everything else answers from
+     * the LiteLLM table and the configured id alone. A dead endpoint costs its
+     * bounded seconds once and degrades to the table tiers — this is a CLI
+     * listing, so a wait is honest here where the palette may only ever
+     * read memos.
+     *
+     * @param array<string, mixed> $config
+     * @return list<string>
+     */
+    private static function modelCatalogRows(string $name, array $config, string $configured, ?\SugarCraft\Code\Providers\ModelMetadata $metadata): array
+    {
+        $type = \is_string($config['type'] ?? null) ? strtolower($config['type']) : $name;
+        $live = null;
+
+        if ($type === 'openai' || $type === 'sglang' || $type === 'custom') {
+            $key = \is_string($config['apiKey'] ?? null) && $config['apiKey'] !== '' ? $config['apiKey'] : null;
+            $base = \is_string($config['baseUrl'] ?? null) && trim($config['baseUrl']) !== ''
+                ? trim($config['baseUrl'])
+                // The SDK default is only worth asking with a key in hand:
+                // an anonymous api.openai.com call is a guaranteed 401, so
+                // without one the catalog stays table-and-config, no bytes
+                // spent. (sglang/custom default to null — no invented base.)
+                : ($type === 'openai' && $key !== null ? 'https://api.openai.com/v1' : null);
+
+            if ($base !== null && !\SugarCraft\Code\Providers\ModelMetadata::disabledFromEnvironment()) {
+                $live = \SugarCraft\Code\Providers\OpenAiModelsEndpoint::fetch($base, $key);
+            }
+        }
+
+        return \SugarCraft\Code\Providers\ModelCatalog::merge(
+            // The literal 'unknown' is the row display's placeholder, not a
+            // model id; the catalog tier starts from what is actually set.
+            $configured === 'unknown' ? [] : [$configured],
+            $live,
+            \SugarCraft\Code\Providers\ModelCatalog::litellm($name, $metadata),
+        );
     }
 
     // ---------------------------------------------------------------------

@@ -11,18 +11,22 @@ use SugarCraft\Code\Providers\ModelMetadata;
 
 /**
  * PRV-1 (§6.5): the once-per-process catalog memo and the merge order it
- * feeds the palette and `models --all`.
+ * feeds the palette and the `models all` listing.
  */
 final class ModelCatalogTest extends TestCase
 {
+    private string|false $originalOptOut;
+
     protected function setUp(): void
     {
         parent::setUp();
+        $this->originalOptOut = getenv(ModelMetadata::OPT_OUT_ENV);
         ModelCatalog::resetForTesting();
     }
 
     protected function tearDown(): void
     {
+        $this->restoreOptOut();
         ModelCatalog::resetForTesting();
         parent::tearDown();
     }
@@ -53,6 +57,8 @@ final class ModelCatalogTest extends TestCase
 
     public function testPrefetchAsksEachKeyOnceAndRemembersEvenTheFailures(): void
     {
+        $this->allowDiscovery();
+
         $good = self::counting('https://a/v1', ['x', 'y']);
         ModelCatalog::prefetch($good);
         ModelCatalog::prefetch($good);
@@ -68,6 +74,8 @@ final class ModelCatalogTest extends TestCase
 
     public function testLiveAndPrefetchIgnoreAProviderWithoutAKey(): void
     {
+        $this->allowDiscovery();
+
         $keyless = self::counting('k', null);
         $void = new class implements HasModelCatalog {
             public int $calls = 0;
@@ -89,6 +97,42 @@ final class ModelCatalogTest extends TestCase
         self::assertSame(0, $void->calls, 'no key means nothing to memoise against, so nothing is asked');
         self::assertNull(ModelCatalog::live($void));
         self::assertNull(ModelCatalog::live($keyless), 'peeking an unfetched key answers null');
+    }
+
+    /**
+     * The whole model-discovery family — cached table AND live listing —
+     * answers to one opt-out. The suite sets it globally; this is the pin
+     * that says why a green suite never touched an endpoint.
+     */
+    public function testTheDiscoveryOptOutHoldsTheLiveTierBack(): void
+    {
+        putenv(ModelMetadata::OPT_OUT_ENV . '=1');
+        self::assertTrue(ModelMetadata::disabledFromEnvironment());
+
+        $held = self::counting('https://opt-out.invalid/v1', ['x']);
+        ModelCatalog::prefetch($held);
+        self::assertSame(0, $held->calls, 'opted out means no request, not a memoised failure');
+        self::assertNull(ModelCatalog::live($held));
+
+        $this->allowDiscovery();
+        ModelCatalog::prefetch($held);
+        self::assertSame(1, $held->calls, 'clearing the flag lets the same provider be asked');
+        self::assertSame(['x'], ModelCatalog::live($held));
+    }
+
+    /** `0` is the flag-style "not set" form; the suite default (1) is not. */
+    private function allowDiscovery(): void
+    {
+        putenv(ModelMetadata::OPT_OUT_ENV . '=0');
+    }
+
+    private function restoreOptOut(): void
+    {
+        if ($this->originalOptOut === false) {
+            putenv(ModelMetadata::OPT_OUT_ENV);
+        } else {
+            putenv(ModelMetadata::OPT_OUT_ENV . '=' . $this->originalOptOut);
+        }
     }
 
     public function testLitellmFamiliesAreMappedAndSelfHostedNamesHaveNone(): void

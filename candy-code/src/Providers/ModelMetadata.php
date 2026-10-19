@@ -23,7 +23,7 @@ use SugarCraft\Code\Support\HomeDirectory;
  * native `AnthropicProvider` carries its own tables and does not consult this
  * one; `openai` and `custom` are its only provider readers of the figures.
  * PRV-1 (§6.5) adds a second kind of reader, {@see candidates()}: the model
- * palette and `models --all` enumerate names for ANY provider type from the
+ * palette and `models all` enumerate names for ANY provider type from the
  * same table. {@see OpenAIProvider} answered 0
  * ("unknown") for a model its built-in table did not list. Both now consult
  * this database between the operator's own settings and their built-in
@@ -262,7 +262,7 @@ final class ModelMetadata
 
     /**
      * PRV-1 (§6.5): the model names this database knows, for filling the
-     * model palette and `models --all` without any provider round trip.
+     * model palette and `models all` without any provider round trip.
      * Every entry is a table key verbatim, so {@see entry()} resolves each
      * one directly — including hosted rows whose key carries the upstream
      * prefix (`bedrock/…`, `vertex_ai/…`), whose spelling IS the name the

@@ -6,13 +6,13 @@ namespace SugarCraft\Code\Providers;
 
 /**
  * PRV-1 (§6.5): the once-per-process cache in front of the two model-catalog
- * sources, and the merge order the palette and `models --all` render.
+ * sources, and the merge order the palette and `models all` render.
  *
  * WHY IT EXISTS. The catalog tiers would otherwise mean a network GET and a
  * sweep of the LiteLLM table on every keystroke the palette takes — model
  * listing is read on the render path, and the render path never blocks. So
  * all fetching lives in {@see prime()}, which only update-side code may call
- * (a palette open, a `/model` command, `models --all`), while the render
+ * (a palette open, a `/model` command, `models all`), while the render
  * path reads the memo through {@see live()} and {@see litellm()} — cold
  * simply means "only the tiers you already have", never a stall and never a
  * wrong label.
@@ -30,7 +30,7 @@ namespace SugarCraft\Code\Providers;
  */
 final class ModelCatalog
 {
-    /** Rows the palette and `models --all` offer per provider at most. */
+    /** Rows the palette and `models all` offer per provider at most. */
     public const MAX_ROWS = 64;
 
     /**
@@ -60,11 +60,17 @@ final class ModelCatalog
      * "do not ask again this session" rule {@see ModelMetadata} applies to
      * failed downloads. Safe on the update side; NEVER call from a render
      * path.
+     *
+     * The live listing is part of the model-discovery family, so it rides
+     * the SAME opt-out as the cached table: with
+     * {@see ModelMetadata::OPT_OUT_ENV} set (air-gapped hosts, and the whole
+     * test suite via tests/bootstrap.php) no request is made at all and the
+     * catalog answers from the table tiers only.
      */
     public static function prefetch(?HasModelCatalog $provider): void
     {
         $key = $provider?->catalogKey();
-        if ($key === null || \array_key_exists($key, self::$live)) {
+        if ($key === null || \array_key_exists($key, self::$live) || ModelMetadata::disabledFromEnvironment()) {
             return;
         }
 
@@ -100,11 +106,20 @@ final class ModelCatalog
             return self::$litellm[$name];
         }
 
-        $family = self::LITELLM_FAMILY[$name] ?? null;
+        $family = self::family($name);
 
         return self::$litellm[$name] = $family === null
             ? []
             : ($metadata ?? ModelMetadata::new())->candidates($family, self::MAX_ROWS);
+    }
+
+    /**
+     * The provider's LiteLLM attribution family, or null for none — the one
+     * name→family rule shared by the palette and `models all`.
+     */
+    public static function family(string $providerName): ?string
+    {
+        return self::LITELLM_FAMILY[strtolower($providerName)] ?? null;
     }
 
     /**

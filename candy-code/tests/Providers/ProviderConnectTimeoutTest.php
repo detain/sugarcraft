@@ -91,7 +91,7 @@ final class ProviderConnectTimeoutTest extends TestCase
         // a detached grandchild, inline only on a build without ext-pcntl.
         'ModelMetadata.php' => 'one model-database download, bounded so the inline path cannot stall a launch',
         // PRV-1 (§6.5): one `GET {base}/models` per catalog, fired only from
-        // palette-open prefetch and `models --all`, never a completion path.
+        // palette-open prefetch and `models all`, never a completion path.
         'OpenAiModelsEndpoint.php' => 'one models-list metadata GET, bounded so a dead endpoint cannot stall a palette open',
     ];
 
