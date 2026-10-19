@@ -86,6 +86,37 @@ final class TextAreaEditorTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    public function testCtrlOSurvivesTheVimModeDoorFromNormalState(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('POSIX-only: discovery falls back to vi/nano');
+        }
+
+        // The vim door (TextArea::vimUpdate) passes the three clipboard/editor
+        // chords Ctrl+C/X/O down to the built-in editing arms from ANY vim
+        // state. The C/X legs are pinned in TextAreaVimModeTest; this is the
+        // O leg — drop the third rune from the door condition and this test
+        // is what reddens: Ctrl+O from Normal must reach applyEditKey() and
+        // mint the same ExecRequest the non-vim path mints, not sink into
+        // the vim handler's declined-keys silence.
+        $t = TextArea::new()->withVimMode(true);
+        [$t, ] = $t->focus();
+        $t = $t->setValue('buffer draft');
+
+        [$next, $cmd] = $t->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertNotNull($cmd, 'the Ctrl+O passthrough must survive vim mode');
+        $this->assertSame($t, $next, 'like the plain path, the chord mutates nothing synchronously');
+
+        $msg = $cmd();
+        $this->assertInstanceOf(ExecRequest::class, $msg);
+        $tmp = $msg->command[count($msg->command) - 1];
+        $this->assertIsString($tmp);
+        $this->assertSame('buffer draft', file_get_contents($tmp));
+
+        // Drain the onComplete cleanup so the temp file does not leak.
+        ($msg->onComplete)(0, '', '', null);
+    }
+
     public function testTextAreaEditedMsgReplacesValue(): void
     {
         $t = $this->focused('original');
