@@ -8965,11 +8965,14 @@ final class Bootstrap
     }
 
     /**
-     * MCP-3: the memo key for a decision. With no user tier this is exactly
-     * the canonical project path — the key every pre-MCP-3 reader and writer
-     * used — and only a live user tier widens it, to the two paths joined by a
-     * NUL. A path cannot contain NUL, so no pair of real files can collide
-     * with a single-path key.
+     * MCP-3: the memo key for a decision. With NO resolvable user tier (an
+     * unowned home, or the disabled switch) this is exactly the canonical
+     * project path — the key every pre-MCP-3 reader and writer used. Whenever
+     * the home resolves, the key is the two paths joined by a NUL whether or
+     * not the user file exists yet: widening on resolvability rather than on
+     * existence is what keeps a file created mid-session from missing the
+     * memo and double-building the client. A path cannot contain NUL, so no
+     * pair of real files can collide with a single-path key.
      *
      * @param array{path: string, userPath?: string} $decision
      */
@@ -9246,12 +9249,14 @@ final class Bootstrap
      * The launch's MCP client, with its configured servers STARTED, or null when
      * this project has no usable `.mcp.json`.
      *
-     * ONE LOCATION, `$root/.mcp.json`, and no user-level fallback. Adding one
-     * would mean choosing a precedence between a file the repository chooses and
-     * a file the user chooses, for a config whose entries `proc_open()` arbitrary
-     * commands; a second tier is a decision to make deliberately with its own
-     * tests, not a convenience to slip in beside the first. Stated here so its
-     * absence is a decision rather than an oversight.
+     * TWO LOCATIONS (MCP-3): `$root/.mcp.json` behind the project trust
+     * ceremony, and `~/.candy-code/mcp.json` behind the ownership gate at
+     * {@see HomeDirectory::owned()}. The precedence the old revision of this
+     * paragraph said was deliberately unchosen is now chosen, here and in
+     * {@see McpClient::startServers()}: the PROJECT owns a shared name, at
+     * launch and in the listing, because the project tier is the one consented
+     * to per server. The user tier widens DISCOVERY only — its entries carry
+     * no project pin and need no re-trust.
      *
      * CONTAINMENT. `.mcp.json` is a REPOSITORY-CHOSEN path whose contents name
      * commands to execute, so it is confined the way every other

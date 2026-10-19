@@ -1,9 +1,9 @@
 # MCP servers
 
-CandyCode reads one Model Context Protocol config file — `.mcp.json` at the
-project root, the same filename and the same `mcpServers` key Claude Code uses —
-and exposes each tool a configured server advertises to the model as an ordinary
-tool.
+CandyCode reads Model Context Protocol config from two files — `.mcp.json` at
+the project root, the same filename and the same `mcpServers` key Claude Code
+uses, and your own `~/.candy-code/mcp.json` — and exposes each tool a
+configured server advertises to the model as an ordinary tool.
 
 Nothing starts unless you have opted this project in. That gate is the first
 thing to understand, because starting an MCP server *is* code execution and it
@@ -93,9 +93,37 @@ call, with no new consent. The grant now binds to each server:
   `trustedProjectMcp` when it is missing, and records the file as it is now.
   It starts nothing; `--output-format json` returns the same report.
 
-**There is no user-level `.mcp.json`.** Adding one would mean choosing a
-precedence between a file the repository picks and a file you pick, for a config
-whose entries `proc_open()` arbitrary commands. Its absence is a decision.
+### Two tiers, one precedence (MCP-3)
+
+There are two files, and this section is the day the old sentence calling the
+second one's absence "a decision" was rewritten — your own
+`~/.candy-code/mcp.json` is now read beside the project's `.mcp.json`, same
+`mcpServers` shape, and the precedence question that sentence named is
+answered here:
+
+- **The gate is ownership, not ceremony.** The user file is read only when
+  `HomeDirectory::owned()` verifies the home — the same check every other
+  `~/.candy-code` file rides. Entries you wrote for yourself are admitted on
+  that gate alone: no `trustedProjectMcp` listing, no `mcp trust`, no pin
+  record. The project ceremony stays project-only in both directions —
+  `candy-code mcp trust` reports and records the project tier's names, and a
+  user server never enters a project's pin file, or a refusal notice whose fix
+  line tells you to run that command.
+- **The project wins a shared name.** A repo that declares `issues` owns what
+  `issues` means for that checkout — matching the trust record, which is keyed
+  to the repo's own bytes. The shadowed user entry is invisible to every
+  report: not started, not refused, not even a shape-check sentence. The `/mcp`
+  panel's `User scope: N servers (path)` row counts only what the launch will
+  actually start from your file.
+- **Why the repo wins the collision:** the repository is the side that is
+  consented to per server, so widening discovery must not silently retitle
+  that consent; and your tier still cannot be overridden wholesale, only
+  name-for-name where you both declare.
+- **The freeze covers both files.** Each tier the launch read is digested at
+  the instant its client is memoised, the drift line answers for either, and
+  the client's memo key composites the two paths — creating your file
+  mid-session neither reconnects nor re-reads anything, and the `CANDY_CODE_MCP_DISABLE`
+  switch answers for both tiers at once.
 
 ---
 
@@ -349,7 +377,9 @@ authenticate can be told apart from a broken one.
 The `/mcp` panel opens empty in a fresh project and both hint lines there point
 here, so this is the worked answer to "how would I do that?". Shortest honest
 form: **write the file, trust the root, relaunch** — there is no registration
-step for anything that does not demand OAuth login.
+step for anything that does not demand OAuth login. (Your own
+`~/.candy-code/mcp.json` skips the middle step: see
+[Two tiers, one precedence](#two-tiers-one-precedence-mcp-3).)
 
 A stdio server and three zero-auth remotes, in candy-code's native config spelling:
 
@@ -464,12 +494,13 @@ that server's resource roster taken once at launch. The tail is a readout,
 not a gate: a server that exposes no resources, or one whose read failed,
 simply carries no tail.
 
-A live session also digests `.mcp.json` at the instant it memoises its client.
-The verdict rides inside the liveness block above, so it renders only while
-this process has at least one started server to report — a session that
-started no servers shows no liveness block, hence no verdict line even after
-its config drifts. While that block is rendering and the file's bytes no
-longer match the digest taken at launch, the panel adds one line:
+A live session also digests each MCP config file it read — the project's
+`.mcp.json` and, when it had one, `~/.candy-code/mcp.json` — at the instant it
+memoises its client. The verdict rides inside the liveness block above, so it
+renders only while this process has at least one started server to report — a
+session that started no servers shows no liveness block, hence no verdict line
+even after its config drifts. While that block is rendering and a file's bytes
+no longer match the digest taken for it at launch, the panel adds one line:
 `Config: changed since launch — restart CandyCode to apply (reload is not
 implemented)`. That is a DETECTION, not a fix, and the fix was weighed and
 declined (option β — hot-reloading the config): re-reading the file in-session would relaunch
@@ -567,8 +598,9 @@ unasked — `plan` and `auto` included. The hint is honoured only because a
 server is started only once trusted; see
 [PERMISSIONS.md](PERMISSIONS.md#the-six-modes) for the full rule.
 
-**Denying servers.** The `disabledMcpServers` setting lists `.mcp.json` server
-names, or `fnmatch` globs such as `untrusted_*`, that this launch must not use.
+**Denying servers.** The `disabledMcpServers` setting lists `mcpServers` names
+from either tier's file, or `fnmatch` globs such as `untrusted_*`, that this
+launch must not use.
 `Bootstrap::mcpClient()` hands them to `McpClient::setDenyPatterns()`
 before any server starts, and the client applies them everywhere: a matching
 entry is never started (so it is not pinned as trusted either), its tools are
