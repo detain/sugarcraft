@@ -267,6 +267,7 @@ final class AgentPresetFieldCarryTest extends TestCase
                 'claude' => PermissionMode::Default,
                 'opencode' => PermissionMode::Default,
                 'spec' => PermissionMode::Default,
+                'bundle' => PermissionMode::Default,
             ],
             $modes,
             'only the native tier may raise its own permission mode',

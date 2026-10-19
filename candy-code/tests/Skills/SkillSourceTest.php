@@ -42,6 +42,11 @@ final class SkillSourceTest extends TestCase
         $this->assertSame('[spec]', SkillSource::AgentSkillsSpec->badge());
     }
 
+    public function testBundleBadge(): void
+    {
+        $this->assertSame('[bundle]', SkillSource::Bundle->badge());
+    }
+
     // -------------------------------------------------------------------------
     // color()
     // -------------------------------------------------------------------------
@@ -109,6 +114,7 @@ final class SkillSourceTest extends TestCase
         $this->assertSame('claude', SkillSource::Claude->value);
         $this->assertSame('opencode', SkillSource::Opencode->value);
         $this->assertSame('spec', SkillSource::AgentSkillsSpec->value);
+        $this->assertSame('bundle', SkillSource::Bundle->value);
     }
 
     public function testFromValueRoundTrips(): void

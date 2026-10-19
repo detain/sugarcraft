@@ -19,6 +19,7 @@ enum SkillSource: string
     case Claude = 'claude';
     case Opencode = 'opencode';
     case AgentSkillsSpec = 'spec'; // bare 6-field agentskills.io SKILL.md, no tool-specific extras
+    case Bundle = 'bundle'; // Claude-format plugin bundle (.claude-plugin/plugin.json directory), PLG-1
 
     /**
      * Text badge shown before a skill's name in the palette/menu.
@@ -30,6 +31,7 @@ enum SkillSource: string
             self::Claude => '[claude]',
             self::Opencode => '[opencode]',
             self::AgentSkillsSpec => '[spec]',
+            self::Bundle => '[bundle]',
         };
     }
 
@@ -44,7 +46,7 @@ enum SkillSource: string
      * `[claude]` badge measured 1.9:1 against white and the badge that exists
      * to be scanned at a glance could not be seen at all.
      *
-     * DOMAIN of the distinctness promise: the four tokens are pairwise distinct
+     * DOMAIN of the distinctness promise: the tokens are pairwise distinct
      * in all five palettes as authored. They can collapse onto a shared
      * fallback when {@see Theme} has to escalate a token for legibility against
      * a hostile terminal background (e.g. a mid-grey, where every palette token
@@ -58,6 +60,7 @@ enum SkillSource: string
             self::Claude => $theme->shellWarning,
             self::Opencode => $theme->shellInfo,
             self::AgentSkillsSpec => $theme->shellPrimary,
+            self::Bundle => $theme->shellSuccess,
         };
     }
 }
