@@ -218,8 +218,10 @@ final class UsageWiringTest extends TestCase
     {
         $message = new \SugarCraft\Code\Messages\AssistantMessage('hi', null, null, Usage::new(50, 0.01));
 
+        // CTX-1 grew the replayable thinking-block carrier onto the wire shape;
+        // it is not a usage key, and the law this arm pins still holds.
         $this->assertSame(
-            ['role', 'content', 'tool_calls', 'reasoning'],
+            ['role', 'content', 'tool_calls', 'reasoning', 'thinkingBlocks'],
             array_keys($message->toArray()),
         );
     }
@@ -382,6 +384,9 @@ final class UsageWiringTest extends TestCase
             'withTurnTranscript' => $base->withTurnTranscript([Message::user('nudge')]),
             // Roadmap 2.2-2: the session ledger rides the same reply.
             'withContextLedger' => $base->withContextLedger(\SugarCraft\Code\Context\Pruning\ContextLedger::new()),
+            // CTX-2 (w2a): the document attachment row — the file it names was
+            // billed for the turn that grew it.
+            'attachDocument' => $base->attachDocument('/tmp/x.pdf'),
         ];
 
         $reflected = [];
