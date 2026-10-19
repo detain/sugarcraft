@@ -7,10 +7,15 @@ namespace SugarCraft\Code\Tests\Tools\Catalog;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
+use SugarCraft\Code\MCP\McpClient;
+use SugarCraft\Code\MCP\McpTool;
+use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\BoardPostTool;
 use SugarCraft\Code\Tools\BuiltIn\BoardReadTool;
+use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
+use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
@@ -70,15 +75,85 @@ final class ToolCatalogTest extends TestCase
     public function testTheDeclaredNameIsTheNameTheToolAnswers(): void
     {
         $root = sys_get_temp_dir();
-        $built = ToolCatalog::build(self::context($root));
+        $context = self::context($root);
+        $built = ToolCatalog::build($context);
+
+        // MCP-7 minted the catalog's first CONDITIONAL builds: the dispatcher
+        // pair exists only when a frozen shape actually deferred a server.
+        // The roster stays complete — every declared name answers, and every
+        // skipped name is skipped by its own fromCatalog(), never by the walk.
+        $declared = array_values(array_filter(
+            ToolCatalog::built(),
+            static function (CatalogEntry $e) use ($context): bool {
+                /** @var class-string<BuildsFromCatalog> $class */
+                $class = $e->class;
+
+                return $class::fromCatalog($context) !== null;
+            },
+        ));
 
         self::assertSame(
-            array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::built()),
+            array_map(static fn (CatalogEntry $e): string => $e->name, $declared),
             array_map(static fn (Tool $t): string => $t->name(), $built),
         );
         foreach ($built as $i => $tool) {
-            self::assertInstanceOf(ToolCatalog::built()[$i]->class, $tool);
+            self::assertInstanceOf($declared[$i]->class, $tool);
         }
+    }
+
+    /**
+     * The pair's half of the conditional-build premise: a context frozen with
+     * a LAZY shape gains exactly mcp_list and mcp_call, in that order, after
+     * the last ordinary tool; a shape that deferred nothing gains neither.
+     */
+    public function testTheDispatcherPairRidesOnlyAFrozenLazyShape(): void
+    {
+        $deferred = new McpTool(
+            name: 'heavy',
+            description: 'a tool whose schema the floor defers',
+            inputSchema: ['type' => 'object', 'properties' => ['q' => ['type' => 'string']]],
+            serverName: 'srv',
+        );
+        $client = new McpClient('/nonexistent/mcp-7-catalog-probe/.mcp.json');
+        $lazy = McpToolShape::derive($client, [$deferred], [], 1);
+        self::assertTrue($lazy->lazy);
+
+        $names = $this->buildNames(self::withShape($lazy));
+        self::assertContains(McpListTool::NAME, $names);
+        self::assertContains(McpCallTool::NAME, $names);
+        self::assertSame(
+            [McpListTool::NAME, McpCallTool::NAME],
+            \array_slice($names, -2),
+            'the pair lands last, in roster order 39 then 40',
+        );
+
+        $untriggered = McpToolShape::derive($client, [$deferred], [], 100000);
+        self::assertFalse($untriggered->lazy);
+        $names = $this->buildNames(self::withShape($untriggered));
+        self::assertNotContains(McpListTool::NAME, $names);
+        self::assertNotContains(McpCallTool::NAME, $names);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildNames(ToolBuildContext $context): array
+    {
+        return array_map(static fn (Tool $t): string => $t->name(), ToolCatalog::build($context));
+    }
+
+    private function withShape(McpToolShape $shape): ToolBuildContext
+    {
+        $root = sys_get_temp_dir();
+
+        return new ToolBuildContext(
+            root: $root,
+            loader: new InstructionFileLoader($root),
+            skills: new SkillRegistry(),
+            skillNudge: SkillPathNudge::new(new SkillRegistry()),
+            ruleNudge: RulePathNudge::fromLoader(static fn (): array => []),
+            mcpShape: $shape,
+        );
     }
 
     public function testTheWireOrderTheModelLearnedIsKept(): void

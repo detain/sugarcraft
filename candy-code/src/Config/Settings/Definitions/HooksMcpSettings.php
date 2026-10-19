@@ -97,6 +97,21 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withHelp('Start the MCP servers a trusted project\'s .mcp.json names; off starts none and the surfaces report the launch as disabled.')
                 ->withReaderSymbol(Bootstrap::class . '::mcpDisabled')
                 ->withReadBy('`Bootstrap::mcpConfigDecision()` (so `mcpClient()` and `mcp list`) → `mcpDisabled()`'),
+            // MCP-7: the per-server schema-token floor above which a server's
+            // tools ride the mcp_list/mcp_call dispatcher pair instead of
+            // first-class mcp__server__tool bridges. User tier only, like
+            // mcp.enabled: how much of a model's window a checkout's servers
+            // may occupy is the operator's call, never the checkout's.
+            SettingDefinition::new(Bootstrap::MCP_LAZY_SETTING, SettingType::Int, Bootstrap::DEFAULT_LAZY_SCHEMA_TOKENS)
+                ->withCategory(SettingCategory::HooksMcp)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withRange(0)
+                ->withLabel(Lang::t('settings.mcp.lazySchemaTokens.label'))
+                ->withHelp('Schema tokens one MCP server may advertise before its tools defer to mcp_list/mcp_call; 0 never defers.')
+                ->withReaderSymbol(Bootstrap::class . '::mcpToolShape')
+                ->withReadBy('`Bootstrap::mcpToolShape()` → `McpToolShape::derive()`, at the first MCP tool build of the launch'),
             SettingDefinition::new('claudeMcpBinary', SettingType::Path)
                 ->withCategory(SettingCategory::HooksMcp)
                 ->withRiskClass(RiskClass::Exec)

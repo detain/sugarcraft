@@ -84,6 +84,35 @@ final class ToolCatalog
     }
 
     /**
+     * Entries whose fromCatalog() may answer NULL on an ordinary launch: the
+     * name exists in the catalog (classified, rosters, docs) but the tool is
+     * built only when the context carries what it needs. MCP-7's dispatcher
+     * pair is the first resident — it builds only from a frozen shape that
+     * actually deferred a server. Pins that equate "a plain launch's built-in
+     * set" to the catalog read {@see builtUnconditionally()}, not built(),
+     * or the pair's mere DECLARATION would silently demand its presence in
+     * every no-MCP launch.
+     *
+     * @var list<string>
+     */
+    public const CONDITIONAL_BUILDS = ['mcp_list', 'mcp_call'];
+
+    /**
+     * The entries every launch carries, whatever its context: built() minus
+     * the conditional ones. {@see build()} may return MORE than this (a lazy
+     * MCP shape adds the pair) but never less.
+     *
+     * @return list<CatalogEntry>
+     */
+    public static function builtUnconditionally(): array
+    {
+        return array_values(array_filter(
+            self::built(),
+            static fn (CatalogEntry $e): bool => !in_array($e->name, self::CONDITIONAL_BUILDS, true),
+        ));
+    }
+
+    /**
      * @return list<CatalogEntry>
      */
     public static function externallyWired(): array

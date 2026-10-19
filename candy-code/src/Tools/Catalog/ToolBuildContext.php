@@ -56,6 +56,13 @@ final readonly class ToolBuildContext
         public ?MemoryWriter $memory = null,
         public ReadLedger $readLedger = new ReadLedger(),
         public ?\SugarCraft\Code\Sessions\BackgroundShellRegistry $backgroundShells = null,
+        /**
+         * This launch's frozen MCP bridge/dispatch split (MCP-7), null when no
+         * client exists. Carried as data so the pair can be conditionally
+         * BUILT by the catalog like every other tool, instead of being
+         * appended to the finished list by hand.
+         */
+        public ?\SugarCraft\Code\MCP\McpToolShape $mcpShape = null,
     ) {
     }
 }

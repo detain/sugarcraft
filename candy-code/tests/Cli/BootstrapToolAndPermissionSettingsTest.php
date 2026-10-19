@@ -760,7 +760,8 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         $this->writeProjectSettings(['disabledTools' => ['[!B]*']]);
         Bootstrap::useProjectRootForSettings($this->projectRoot);
 
-        self::assertSame(\count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::built()), count($this->toolNames()));
+        // MCP-7: the pair rides only a lazy MCP shape; this launch has none.
+        self::assertSame(\count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::builtUnconditionally()), count($this->toolNames()));
         self::assertStringNotContainsString('disabledTools', $this->stderrOfToolSet());
     }
 

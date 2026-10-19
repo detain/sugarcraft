@@ -194,9 +194,12 @@ final class McpToolWiringTest extends TestCase
 
         // The learned wire order is pinned by ToolCatalogTest; this test is
         // about where the bridge lands, so it reads the catalog's built set.
+        // MCP-7: the dispatcher pair is DECLARED unconditionally but BUILT
+        // only from a lazy shape; this launch's fake server is small, so the
+        // expected built-in set is the unconditional one plus no pair.
         $builtIns = array_map(
             static fn (\SugarCraft\Code\Tools\Catalog\CatalogEntry $e): string => $e->name,
-            \SugarCraft\Code\Tools\Catalog\ToolCatalog::built(),
+            \SugarCraft\Code\Tools\Catalog\ToolCatalog::builtUnconditionally(),
         );
 
         $this->assertSame($builtIns, \array_slice($names, 0, \count($builtIns)));
@@ -218,7 +221,7 @@ final class McpToolWiringTest extends TestCase
 
         $this->assertSame([], array_filter($tools, static fn (object $t): bool => $t instanceof McpToolBridge));
         $this->assertCount(
-            \count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::built()),
+            \count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::builtUnconditionally()),
             $tools,
             'the built-in set alone — exactly what the catalog builds',
         );
@@ -296,7 +299,7 @@ final class McpToolWiringTest extends TestCase
 
         $this->assertNull(Bootstrap::mcpClient($this->repo));
         $this->assertCount(
-            \count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::built()),
+            \count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::builtUnconditionally()),
             $tools,
             'no bridges, because no server was started',
         );

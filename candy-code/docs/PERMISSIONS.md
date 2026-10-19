@@ -764,14 +764,20 @@ The tool names a pattern can start with are the tool catalog's names —
 `RepoMap`, `Prune`, `Todo`, `Compress`, `Recall`, `AskUser`, `PlanExit`,
 `SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellStop`,
 `GenerateImage`,
-`GenerateVideo`, `BoardPost`, `BoardRead` — and
+`GenerateVideo`, `BoardPost`, `BoardRead`,
+`mcp_list`, `mcp_call` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path
 spellings for `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp`/`Ls`, per-path union for
 `ApplyPatch`, domains for `WebFetch`, whole-subject globs for `WebSearch` and
 `Skill`; for the rest — and for `doctor` and `mcp__*`, which map no subject —
 the argument is unknowable, so the rule's action decides alone: a restrictive
-rule matches every call of that tool and an allow matches none. To constrain
+rule matches every call of that tool and an allow matches none. One translation
+exists for the deferred MCP spelling (MCP-7): a RESTRICTIVE rule naming a wire
+tool, or any glob that matches it, also binds calls of the dispatcher named
+mcp_call whose server/tool arguments name that tool, and a restrictive rule
+naming that dispatcher binds bridged mcp__ calls too — the two spellings are
+one capability. As everywhere, Allow covers only what it names. To constrain
 a command beyond what a glob can say, use a hook matcher instead — see
 [`HOOKS.md`](HOOKS.md).
 

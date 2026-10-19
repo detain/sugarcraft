@@ -6,10 +6,13 @@ namespace SugarCraft\Code\Tests\Tools;
 
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpTool;
+use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Memory\DreamMemoryView;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
+use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\SkillTool;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
@@ -888,6 +891,23 @@ final class BuiltInToolCorpus
     }
 
     /**
+     * The MCP-7 dispatcher pair needs a frozen {@see McpToolShape}; the corpus
+     * wants only its schema shape, so it gets the shape a launch WITHOUT any
+     * MCP server freezes: no eager bridges, nothing dispatched, lazy off.
+     * A client path that cannot exist keeps the fixture from reading a real
+     * `~/.mcp.json` even though `derive()` here never talks to the client.
+     */
+    private static function emptyMcpToolShape(): McpToolShape
+    {
+        return McpToolShape::derive(
+            new McpClient('/nonexistent/corpus-probe/.mcp.json'),
+            [],
+            [],
+            8000,
+        );
+    }
+
+    /**
      * Every built-in tool, constructed with its default (standalone) wiring.
      *
      * A tool whose constructor has REQUIRED arguments has to be named here.
@@ -974,6 +994,17 @@ final class BuiltInToolCorpus
                                 serverName: 'corpus',
                             ),
                         ),
+                        // MCP-7: the dispatcher pair over a shape with NO client
+                        // config and an EMPTY roster — like the bridge above, the
+                        // corpus probes name/description/schema shape only, and
+                        // the one consumer that calls `execute([])` gets the
+                        // empty-roster / missing-argument error an unconfigured
+                        // dispatcher must produce. `derive()` with no descriptors
+                        // freezes lazy=false, which is exactly the untriggered
+                        // shape these tools would never be BUILT under anyway;
+                        // they are in the corpus for their schemas either way.
+                        McpListTool::class => new McpListTool(self::emptyMcpToolShape()),
+                        McpCallTool::class => new McpCallTool(self::emptyMcpToolShape()),
                         default => throw new \RuntimeException(sprintf(
                             '%s needs constructor arguments; add it to %s::instances() so every built-in-tool test '
                             . 'covers it rather than silently skipping it.',

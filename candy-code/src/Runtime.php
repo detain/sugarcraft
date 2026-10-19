@@ -698,7 +698,10 @@ final class Runtime
      *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop'];
+    // 'mcp_call' joined at MCP-7: the dispatcher writes whatever the tool it
+    // NAMES writes, so a dispatched write moves the working tree exactly like
+    // a bridged one (which the mcp__ prefix half of this rule already covers).
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'mcp_call'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

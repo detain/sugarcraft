@@ -42,6 +42,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\LSP\LspClient;
 use SugarCraft\Code\MCP\McpClient;
+use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\MCP\McpTrustPins;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\UnreadableNotes;
@@ -1466,6 +1467,21 @@ final class Bootstrap
      * @var array<int, array<string, McpClient>>
      */
     private static array $mcpClients = [];
+
+    /**
+     * MCP-7: the frozen bridge/dispatch split per launch config, keyed by pid
+     * then by the same {@see mcpConfigMemoKey()} the client memo uses — one
+     * shape per client, because a shape's dispatched roster must belong to
+     * the client whose `callTool()` runs it. NEVER re-derived mid-session:
+     * servers or tools that appear after the first read are adopted next
+     * session, the E703-α rule for the model-facing roster made structural.
+     * Absence is not memoised (no client yet must not freeze the decision),
+     * so a shape appears exactly once per key and every later reader gets
+     * that same object.
+     *
+     * @var array<int, array<string, McpToolShape>>
+     */
+    private static array $mcpToolShapes = [];
 
     /**
      * E703-α: the bytes each memoised client's config file had AT LAUNCH,
@@ -8961,6 +8977,21 @@ final class Bootstrap
     public const MCP_ENABLED_SETTING = 'mcp.enabled';
 
     /**
+     * MCP-7: the settings key holding the per-server schema-token floor. A
+     * server whose advertised schemas cost more than this gets no
+     * `mcp__server__tool` bridges; its tools ride the `mcp_list`/`mcp_call`
+     * dispatcher pair instead (see {@see \SugarCraft\Code\MCP\McpToolShape}).
+     */
+    public const MCP_LAZY_SETTING = 'mcp.lazySchemaTokens';
+
+    /**
+     * The floor when the setting is unset: a few ordinary servers' worth of
+     * schemas, so the pair only appears next to a genuine schema bomb. Zero
+     * disables deferral; the settings range refuses negatives.
+     */
+    public const DEFAULT_LAZY_SCHEMA_TOKENS = 8000;
+
+    /**
      * Whether project MCP is off for this launch: {@see MCP_DISABLE_ENV}, OR
      * the operator's `mcp.enabled: false` setting.
      *
@@ -9918,21 +9949,55 @@ final class Bootstrap
      * The model-facing {@see McpToolBridge} for every tool the launch's MCP
      * servers advertise — empty when there is no config, which is the common case.
      *
+     * MCP-7: only the EAGER half of the frozen shape appears here. A server
+     * whose schemas exceed {@see MCP_LAZY_SETTING} contributes no bridges;
+     * its tools are declared through the `mcp_list`/`mcp_call` pair built by
+     * the catalog from the same shape ({@see mcpToolShape()}), so the two
+     * spellings of the roster cannot disagree and neither re-derives
+     * mid-session.
+     *
      * @return list<McpToolBridge>
      */
     public static function mcpTools(?string $root = null): array
     {
+        return self::mcpToolShape($root)?->bridges() ?? [];
+    }
+
+    /**
+     * The launch's frozen bridge/dispatch split, or null while no client exists.
+     *
+     * Derived once per {@see mcpConfigMemoKey()}: the first reader pays the
+     * `listTools()` round trip and the pricing; every later reader — the
+     * catalog for the pair, `mcpTools()` for the bridges — gets this same
+     * object. That is the MCP-7 cache law made structural: the model-facing
+     * MCP roster never re-derives mid-session, and tools that appear after
+     * the first read are adopted next session, the way E703-α already treats
+     * the config file itself.
+     */
+    public static function mcpToolShape(?string $root = null): ?McpToolShape
+    {
+        $decision = self::mcpConfigDecision($root);
+        $pid = getmypid() ?: 0;
+        $memoKey = self::mcpConfigMemoKey($decision);
+
+        if (array_key_exists($memoKey, self::$mcpToolShapes[$pid] ?? [])) {
+            return self::$mcpToolShapes[$pid][$memoKey];
+        }
+
         $client = self::mcpClient($root);
         if ($client === null) {
-            return [];
+            return null;
         }
 
-        $tools = [];
-        foreach ($client->listTools() as $descriptor) {
-            $tools[] = new McpToolBridge($client, $descriptor);
-        }
+        $shape = McpToolShape::derive(
+            $client,
+            $client->listTools(),
+            $client->configEntries(),
+            \SugarCraft\Code\Config\Settings\UiSettings::int(self::MCP_LAZY_SETTING),
+        );
+        self::$mcpToolShapes[$pid][$memoKey] = $shape;
 
-        return $tools;
+        return $shape;
     }
 
     /**
@@ -10585,9 +10650,12 @@ final class Bootstrap
         // MCP bridges are APPENDED, so the built-ins keep the wire order the
         // model has learned and an MCP config can only ever ADD names. Empty
         // unless this project ships a `.mcp.json` AND the user trusted this
-        // root — see {@see mcpTools()} and {@see mcpClient()}. `Task` is not in
-        // this set: `tools()` appends it after the filter, only when an
-        // AgentManager is bound.
+        // root — see {@see mcpTools()} and {@see mcpClient()}. MCP-7's
+        // dispatcher pair is the exception to APPENDED: `mcp_list`/`mcp_call`
+        // are ordinary positioned built-ins BUILT BY THE CATALOG from the
+        // frozen shape, and only when something was actually deferred.
+        // `Task` is not in this set: `tools()` appends it after the filter,
+        // only when an AgentManager is bound.
         $tools = [
             ...\SugarCraft\Code\Tools\Catalog\ToolCatalog::build(new \SugarCraft\Code\Tools\Catalog\ToolBuildContext(
                 root: $root,
@@ -10617,6 +10685,11 @@ final class Bootstrap
                 // ({@see registerBackgroundShellShutdown()}) tears down what
                 // this pid's copies hold.
                 backgroundShells: self::backgroundShells($root),
+                // MCP-7: the pair is BUILT here, from the frozen shape, like
+                // every other conditional tool — null shape or an all-eager
+                // config yields null from fromCatalog() and neither name
+                // reaches the wire at all.
+                mcpShape: self::mcpToolShape($root),
             )),
             ...self::mcpTools($root),
         ];
