@@ -20,6 +20,7 @@ asking.
 | [MEMORY.md](MEMORY.md) | The memory stores and what reaches the prompt | You wonder what the model remembers |
 | [CONTEXT.md](CONTEXT.md) | Context budget, compaction, "turn was NOT sent" | Long sessions start dropping turns |
 | [SERVER.md](SERVER.md) | `candy-code serve`, the WebSocket protocol, tokens | You embed or remote-control the agent |
+| [DOCKER.md](DOCKER.md) | Running `serve` in a container: image, volume, ports, health | You deploy the server |
 | [MEDIA.md](MEDIA.md) | Image/video generation, render modes, presets | You generate media |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The code's shape, seams and invariants, incl. [the screen, zone by zone](ARCHITECTURE.md#the-screen-zone-by-zone) | You are reading or changing `src/` |
 | [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behaviour |

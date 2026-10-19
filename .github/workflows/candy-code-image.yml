@@ -1,0 +1,69 @@
+name: candy-code serve image
+
+# DST-2. The image resolves its app code from the PUBLISHED package stream
+# (composer dev-master), so this job both publishes and proves: every change
+# under candy-code/ re-verifies that the published stream still composes a
+# working serve image. Cloned from .github/workflows/vhs-runner-php-image.yml
+# (same pinned-action set, same GHCR tag shape: latest + sha).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'candy-code/**'
+      - '.github/workflows/candy-code-image.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  IMAGE_NAME: ghcr.io/detain/sugarcraft-candy-code
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - uses: docker/setup-buildx-action@5b9cf3909b54a280b6df6eee035755eb1f2fd611
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@703896b4f30f62d53f5530a80bcdc589a3f702bc
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+
+      - name: Build + push image
+        uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
+        with:
+          context: candy-code
+          file: candy-code/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "## candy-code serve image built"
+            echo ""
+            echo "- Image: \`${{ env.IMAGE_NAME }}:latest\`"
+            echo "- SHA: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
