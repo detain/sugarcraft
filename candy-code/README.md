@@ -493,7 +493,7 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules`
 `/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
 `/settings` (`/config`) `/share` `/skills` `/status` `/sweep` `/theme` `/undo`
-`/websearch` `/workflow`.
+`/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no

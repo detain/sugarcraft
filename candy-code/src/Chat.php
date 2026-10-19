@@ -12480,7 +12480,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status',
+        'context', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage',
     ];
 
     /**
@@ -14313,6 +14313,22 @@ final class Chat implements Model
     {
         return $this->runHostCommand(
             new \SugarCraft\Code\Host\Commands\StatusHostCommand($this->tokenTracker, $this->maxCostUsd),
+            $inputText,
+        );
+    }
+
+    /**
+     * `/usage` (OBS-3): the durable spend ledger folded by day and model
+     * ({@see \SugarCraft\Code\Host\Commands\UsageHostCommand}). Nothing per-Chat
+     * is handed in — the whole point is the figure that survives this launch;
+     * `/budget` remains the question about the tracker.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleUsageCommand(string $inputText): array
+    {
+        return $this->runHostCommand(
+            new \SugarCraft\Code\Host\Commands\UsageHostCommand(),
             $inputText,
         );
     }
