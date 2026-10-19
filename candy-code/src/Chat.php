@@ -70,6 +70,8 @@ use SugarCraft\Code\Commands\McpPromptCommands;
 use SugarCraft\Code\Commands\ShareCommand;
 use SugarCraft\Code\Commands\WebSearchCommand;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
+use SugarCraft\Code\Observability\EventSink;
+use SugarCraft\Code\Observability\NullEventSink;
 use SugarCraft\Code\Palette\PaletteAction;
 use SugarCraft\Code\Palette\PaletteState;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -1713,6 +1715,15 @@ final class Chat implements Model
          * an evaporating register would make `y` unobservable.
          */
         public readonly ComposerVim $composerVim = new ComposerVim(),
+        /**
+         * Passive observer over the typed event DTOs (roadmap OBS-1). It
+         * defaults to {@see NullEventSink} so an unconfigured session pays
+         * one no-op call per folded event; Bootstrap installs the OTLP sink
+         * only when `OTEL_EXPORTER_OTLP_ENDPOINT` says so. Carried by object
+         * identity through {@see mutate()} like the trackers above it: an
+         * exporter's half-filled batch must survive a clone, not restart.
+         */
+        private readonly EventSink $eventSink = new NullEventSink(),
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -5818,6 +5829,12 @@ final class Chat implements Model
 
         $rest = new BackendToolEventsMsg($remaining, $msg->message, $msg->generation, $msg->turn, $msg->replay);
 
+        // Observability fold (roadmap OBS-1): this is the settled-queue door
+        // every backend tool event passes through, so the sink sees exactly
+        // what the model applied — once, before any arm re-dispatches. The
+        // dark default is a no-op method call.
+        $this->eventSink->consume($event);
+
         if ($event instanceof SpendCapBreached) {
             // E20's mid-turn abort lands in the SAME ordered story as the
             // tool calls around it — appended, then the chain continues to
@@ -6174,6 +6191,16 @@ final class Chat implements Model
 
         [$generation, $event] = $entry;
 
+        // Observability fold (roadmap OBS-1): the live pump's second door.
+        // Stale-generation events are NOT exported — they are dropped below
+        // exactly as the model drops them — with one deliberate exception
+        // mirroring the arms: a PermissionResolved is applied (and therefore
+        // observed) by askId regardless of generation, because a settlement
+        // belongs to the question it names, not to whichever turn is live.
+        if ($generation === $this->generation || $event instanceof \SugarCraft\Code\Events\PermissionResolved) {
+            $this->eventSink->consume($event);
+        }
+
         // Consumed-prefix cursor rather than an array_shift per coalesced
         // delta: shifting re-indexes the whole remainder every time, so a
         // burst of n deltas cost O(n^2) to fold into one append. One slice at
@@ -6191,6 +6218,11 @@ final class Chat implements Model
                 && $peek[0] === $generation) {
                 $consumed++;
                 $run .= $peek[1]->text;
+                // The coalesced members never reach the unpack below, so the
+                // sink takes them here — same generation law as the head.
+                if ($generation === $this->generation) {
+                    $this->eventSink->consume($peek[1]);
+                }
             }
             if ($event instanceof TokenDelta) {
                 $text = $run;
@@ -10948,6 +10980,10 @@ final class Chat implements Model
             // session's `/rules` toggle set, and a clone that allocated a fresh one
             // would switch every pack back on at the next keystroke.
             'rulesState' => $this->rulesState,
+            // Carried by identity too (roadmap OBS-1): the sink is the
+            // session's exporter — a clone that reset to null would drop
+            // whatever batch was already half full.
+            'eventSink' => $this->eventSink,
             'maxCostUsd' => $this->maxCostUsd,
             'summaryBackend' => $this->summaryBackend,
             'pendingCompactionId' => $this->pendingCompactionId,
