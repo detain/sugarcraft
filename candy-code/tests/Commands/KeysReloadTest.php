@@ -58,7 +58,7 @@ final class KeysReloadTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempHome = sys_get_temp_dir() . '/w4f-keys-' . getmypid() . '-' . uniqid();
+        $this->tempHome = sys_get_temp_dir() . '/w4f-keys-' . getmypid() . '-' . uniqid('', true);
         $this->useHomeSandbox($this->tempHome);
 
         $this->overridesBefore = KeyBindingRegistry::overrides();

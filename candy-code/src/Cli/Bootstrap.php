@@ -1311,8 +1311,8 @@ final class Bootstrap
      * the mismatch is recorded here instead of being left for the next reader to
      * infer from the values.
      *
-      * EIGHT OTHER repository-chosen paths do NOT feed this — seven with a holder
-      * of their own and the eighth, the `.candy-code/memory` sentinel of the
+      * TEN OTHER repository-chosen paths do NOT feed this — nine with a holder
+      * of their own and the tenth, the `.candy-code/memory` sentinel of the
       * importer's chat trigger, named inside that entry below — and each
       * is named rather than counted, because "five feeders" quietly becoming
       * "six things nobody drains" is the drift this collector keeps producing. It
@@ -1361,8 +1361,10 @@ final class Bootstrap
       *    — read as a failure in a doctor report. Both are gated
       *    ({@see projectSettingsTrusted()} plus two `ContainedPath` compares);
       *    neither is reported;
-      *  - `.candy-code/rules` (the Phase 6 P6.S2 rules tier, read by
-      *    {@see \SugarCraft\Code\Context\RuleLoader}) is a gap for a fourth
+      *  - `.candy-code/rules`, and with it the INT-2 foreign imports
+      *    `.claude/rules` and `.cursor/rules` (the Phase 6 P6.S2 rules tier plus
+      *    its W4 families, read by
+      *    {@see \SugarCraft\Code\Context\RuleLoader}) are a gap for a fourth
       *    reason: `RuleLoader` records its containment refusals LOADER-LOCAL in
       *    its own `refusedPaths()` and nothing here drains them, so this launch
       *    reports none. It is gated on both anchors (`ContainedPath::below` on the
@@ -2406,10 +2408,10 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * SEVENTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * NINETEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * FORTY distinct ones on this tree, seventeen of them classified
+     * FORTY-TWO distinct ones on this tree, nineteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2425,6 +2427,11 @@ final class Bootstrap
      * SEVENTEEN with the instruction tail alias `.github/copilot-instructions.md`
      * — once more a new path and a named gap at once: the loader gates it with
      * the instruction files' own compares and records refusals loader-local.
+     * INT-2 (plan_comparison W4) made it NINETEEN with the two foreign rule
+     * trees `.claude/rules` and `.cursor/rules` — each ONE literal in
+     * {@see \SugarCraft\Code\Context\RuleLoader} serving both tiers, so the
+     * project leg is repository-chosen and joins the gap column under the same
+     * loader-local discipline as its native `.candy-code/rules` sibling.
      *
      *  - `.candy-code/settings.json` and `.candy-code/settings.local.json` are
      *    genuinely new — the project tier of

@@ -18,6 +18,8 @@ use PHPUnit\Framework\TestCase;
  *    (`chat()`), the shell's layout hook (`app()`), the launch's settings
  *    write door (`settingsWriter()`), and the project-MCP trust grant
  *    (`trustProjectMcp()`);
+ *  - that `candy-code login` persists a typed provider key through the same
+ *    door (`Subcommands::loginStoreKey()`, plan_comparison W4 PRV-4);
  *  - that {@see \SugarCraft\Code\Config\Settings\SettingsWriter} is built in
  *    one place, `Bootstrap::settingsWriter()`, which `workspace()` registers
  *    for `/model` and `app()` hands on to the settings editor;
@@ -40,6 +42,7 @@ final class SettingsWriterCensusTest extends TestCase
         'Cli/Bootstrap.php::chat' => 1,
         'Cli/Bootstrap.php::settingsWriter' => 1,
         'Cli/Bootstrap.php::trustProjectMcp' => 1,
+        'Cli/Subcommands.php::loginStoreKey' => 1,
     ];
 
     public function testConfigJsonIsWrittenOnlyThroughItsKnownDoors(): void

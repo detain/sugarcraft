@@ -391,6 +391,12 @@ final class StdinConstantReaderCensusTest extends TestCase
         'candy-code/src/Agents/ProcessExecutor.php' => ['STDIN'],
         'candy-code/src/Cli/Acp.php' => ['STDIN'],
         'candy-code/src/Cli/NonInteractive.php' => ['STDIN'],
+        // plan_comparison W4 (PRV-4): loginStoreKey() reads the typed provider key with
+        // fgets(\STDIN). Measured on this box: with descriptor 0 closed fgets returns
+        // false WITHOUT throwing (the stream resource still exists, the read fails), so
+        // trim((string) false) === '' lands in the empty-key guard — a loud refusal and
+        // EXIT_FAILURE. DEGRADES, never throws.
+        'candy-code/src/Cli/Subcommands.php' => ['STDIN'],
         'candy-code/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
         'candy-code/src/Server/Workspace/WorkspaceHostProcess.php' => ['STDIN'],
         // rv-qa-1: the no-tty pre-flight names \STDIN in stream_isatty() only. A closed

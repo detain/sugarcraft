@@ -627,6 +627,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // launch made (however deep the child wrote) before removing it.
         'LangLaunchLocaleTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'MCP/McpClientTest.php' => ['glob($this->tempDir.\'/*\')'],
+        // W4 (WEB-3a): purgeTree() in tearDown() empties the sys_get_temp_dir()
+        // sandbox the test itself built (fake HOME, project dir, session store).
+        'Protocol/ContextSourcesTest.php' => ['scandir($dir)'],
         // removeTree() tears down the serve state dir the test made under its sandbox.
         'Server/ServeStatusStopTest.php' => ['scandir($path)'],
         // tearDown() sweeps the two crossed-project sandbox dirs setUp() made.

@@ -120,15 +120,21 @@ final class McpClientUserMergeTest extends TestCase
 
         $client = new McpClient($this->projectPath, userConfigPath: $this->userPath);
 
+        // W4 weld cure (r77 SwallowingCatch family): fail() inside a try whose catch
+        // is RuntimeException-wide is swallowed by its own net — ExpectationFailedException
+        // extends RuntimeException. Capture, then assert OUTSIDE the trap.
+        $caught = null;
         try {
             $client->startServers();
-            self::fail('the un-shadowed malformed entry must still throw');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('bad (entry is string', $e->getMessage(), 'user-tier entries keep their own shape accountability');
-            self::assertStringNotContainsString('dup (entry', $e->getMessage(), 'a shadowed entry is invisible to EVERY report — the same invisibility the listing promises');
+            $caught = $e;
         } finally {
             $client->stopServers();
         }
+
+        self::assertNotNull($caught, 'the un-shadowed malformed entry must still throw');
+        self::assertStringContainsString('bad (entry is string', $caught->getMessage(), 'user-tier entries keep their own shape accountability');
+        self::assertStringNotContainsString('dup (entry', $caught->getMessage(), 'a shadowed entry is invisible to EVERY report — the same invisibility the listing promises');
     }
 
     public function testAdmitSeesTheTierFileForEachEntry(): void
@@ -188,21 +194,25 @@ final class McpClientUserMergeTest extends TestCase
         $this->writeConfig($this->projectPath, ['p1' => ['type' => 'git']]);
         file_put_contents($this->userPath, '{not json');
 
+        $caught = null;
         try {
             $this->loadConfig(new McpClient($this->projectPath, userConfigPath: $this->userPath));
-            self::fail('a malformed user file must throw, not degrade to project-only');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString($this->userPath, $e->getMessage(), 'the failure sentence names the file at fault — both tiers are diagnosable');
-            self::assertStringContainsString('is not valid JSON', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a malformed user file must throw, not degrade to project-only');
+        self::assertStringContainsString($this->userPath, $caught->getMessage(), 'the failure sentence names the file at fault — both tiers are diagnosable');
+        self::assertStringContainsString('is not valid JSON', $caught->getMessage());
 
         file_put_contents($this->userPath, json_encode(['servers' => []], JSON_THROW_ON_ERROR));
+        $caught = null;
         try {
             $this->loadConfig(new McpClient($this->projectPath, userConfigPath: $this->userPath));
-            self::fail('a user file without mcpServers must throw');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString($this->userPath . ' has no "mcpServers" object', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a user file without mcpServers must throw');
+        self::assertStringContainsString($this->userPath . ' has no "mcpServers" object', $caught->getMessage());
     }
 
     public function testABrokenProjectAbortsBeforeAnyUserDiagnostic(): void
@@ -215,13 +225,15 @@ final class McpClientUserMergeTest extends TestCase
         file_put_contents($this->projectPath, '{project broken');
         file_put_contents($this->userPath, '{user broken');
 
+        $caught = null;
         try {
             $this->loadConfig(new McpClient($this->projectPath, userConfigPath: $this->userPath));
-            self::fail('a malformed project file must throw');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString($this->projectPath, $e->getMessage());
-            self::assertStringNotContainsString($this->userPath, $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a malformed project file must throw');
+        self::assertStringContainsString($this->projectPath, $caught->getMessage());
+        self::assertStringNotContainsString($this->userPath, $caught->getMessage());
     }
 
     /** @return list<array{path: string, servers: array<mixed>}> */
