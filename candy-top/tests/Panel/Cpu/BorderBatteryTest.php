@@ -37,6 +37,24 @@ use SugarCraft\Top\View\Surface;
 
 final class BorderBatteryTest extends TestCase
 {
+    private string $tz;
+
+    /**
+     * The App clock paints with date_default_timezone_get() (ClockFormat),
+     * so pin the zone like every other clock-bearing class (house pattern,
+     * FrameSnapshotTest et al.) — CI runners are UTC, dev boxes are not.
+     */
+    protected function setUp(): void
+    {
+        $this->tz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+    }
+
+    protected function tearDown(): void
+    {
+        date_default_timezone_set($this->tz);
+    }
+
     private static function snap(int $percent, string $status = 'discharging', int $seconds = 10440, float $watts = 12.5): BatterySnapshot
     {
         return new BatterySnapshot('BAT0', $percent, $status, $seconds, $watts);
@@ -251,9 +269,12 @@ final class BorderBatteryTest extends TestCase
     public function testAppShrinksTheClockForThePresentBattery(): void
     {
         // 54 cells of clock: under budget 140 - 66 = 74 without the reserve, cut to 52 with it.
+        // The expected wall time DERIVES from the same Harness::TIME the app clock
+        // formats (under the UTC pin above) — survives both TZ and harness changes.
+        $clock = date('H:i:s', (int) Harness::TIME);
         $config = Config::new()->with('clock_format', str_repeat('%X ', 6) . '%X');
-        $text = str_repeat('17:13:20 ', 6) . '17:13:20';
-        $budget = static fn (string $row): int => mb_strlen((string) preg_replace('/^.*┐(17:13:20[^┌]*)┌.*$/u', '$1', $row));
+        $text = str_repeat($clock . ' ', 6) . $clock;
+        $budget = static fn (string $row): int => mb_strlen((string) preg_replace('/^.*┐(' . $clock . '[^┌]*)┌.*$/u', '$1', $row));
 
         [$app, $row] = self::app($config, 140);
         $this->assertTrue($app->clockReserved());
