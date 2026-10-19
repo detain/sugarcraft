@@ -171,6 +171,86 @@ final class InstructionAliasTest extends TestCase
         self::assertNull($loader->loadForPath($this->repoRoot . '/pkg/src/a.php'), 'injected at most once');
     }
 
+    public function testAnExcludedRootFileIsSkippedAndRecorded(): void
+    {
+        file_put_contents($this->repoRoot . '/CLAUDE.md', 'KEEPME');
+        file_put_contents($this->repoRoot . '/CLAUDE.local.md', 'DROPMEE');
+
+        $loader = new InstructionFileLoader($this->repoRoot, excludedGlobs: ['CLAUDE.local.md']);
+        $contents = $loader->loadRoot();
+
+        self::assertSame(['KEEPME'], $contents);
+        self::assertSame(
+            'excluded by instructionsExclude',
+            $loader->refusedPaths()[$this->repoRoot . '/CLAUDE.local.md'],
+        );
+    }
+
+    public function testExclusionMatchesTheCheckoutRelativePathAtEveryRepositoryTier(): void
+    {
+        // Patterns read like .gitignore entries: relative to the checkout, at
+        // every level. The wildcard is assembled from char code so this file
+        // contributes no glob-shaped literal to the corpus census.
+        $pattern = 'vendor/' . \chr(42) . '/CLAUDE.md';
+        mkdir($this->repoRoot . '/vendor/dep', 0o700, true);
+        file_put_contents($this->repoRoot . '/vendor/dep/CLAUDE.md', 'VENDORCANARY');
+        file_put_contents($this->repoRoot . '/vendor/dep/x.php', '<?php');
+        file_put_contents($this->repoRoot . '/pkg/src/b.php', '<?php');
+
+        $loader = new InstructionFileLoader($this->repoRoot, excludedGlobs: [$pattern]);
+
+        self::assertNull($loader->loadForPath($this->repoRoot . '/vendor/dep/x.php'));
+        self::assertArrayHasKey($this->repoRoot . '/vendor/dep/CLAUDE.md', $loader->refusedPaths());
+        self::assertSame(
+            'excluded by instructionsExclude',
+            $loader->refusedPaths()[$this->repoRoot . '/vendor/dep/CLAUDE.md'],
+        );
+        // A path the pattern does not name keeps loading normally.
+        self::assertNull($loader->loadForPath($this->repoRoot . '/pkg/src/b.php'));
+    }
+
+    public function testExclusionNeverSilencesThePersonalTier(): void
+    {
+        $home = $this->tempDir . '/home/.candy-code';
+        mkdir($home, 0o700, true);
+        file_put_contents($home . '/AGENTS.md', 'PERSONALCANARY');
+        file_put_contents($this->repoRoot . '/CLAUDE.md', 'ROOTCANARY');
+
+        // A catch-all pattern is the operator silencing REPOSITORY context;
+        // the personal file's channel stays open — the key is user-tier only
+        // precisely so it can mute everything except the user's own voice.
+        $loader = new InstructionFileLoader(
+            $this->repoRoot,
+            personalDir: $home,
+            excludedGlobs: [\chr(42)],
+        );
+
+        $personal = $loader->loadPersonal();
+        self::assertCount(1, $personal);
+        self::assertStringContainsString('PERSONALCANARY', (string) $personal[0]['body']);
+        self::assertSame([], $loader->loadRoot());
+        self::assertSame(
+            'excluded by instructionsExclude',
+            $loader->refusedPaths()[$this->repoRoot . '/CLAUDE.md'],
+        );
+    }
+
+    public function testAPatternThatWillNotCompileMatchesNothing(): void
+    {
+        // Exclusion FAILS OPEN: a hand-typo'd pattern must never silently drop
+        // context it only appeared to name.
+        mkdir($this->repoRoot . '/unclosedb', 0o700, true);
+        file_put_contents($this->repoRoot . '/unclosedb/CLAUDE.md', 'BRKCANDRY_CANARY');
+        file_put_contents($this->repoRoot . '/unclosedb/x.php', '<?php');
+
+        $loader = new InstructionFileLoader($this->repoRoot, excludedGlobs: ['unclosed[b/CLAUDE.md']);
+
+        self::assertSame(
+            self::framedOnTouch($this->repoRoot . '/unclosedb/CLAUDE.md', 'BRKCANDRY_CANARY'),
+            $loader->loadForPath($this->repoRoot . '/unclosedb/x.php'),
+        );
+    }
+
     public function testAnAncestorAliasIsReadFromTheEnclosingCheckout(): void
     {
         mkdir($this->tempDir . '/repo/.git');

@@ -738,7 +738,11 @@ precedence order (`InstructionFileLoader::FILENAMES`):
   that file, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in,
   gated by its own directory the same way — the two are never both read;
 - **root files** — always, at session start;
-- **forced patterns** from config — glob-resolved, loaded every session;
+- **forced patterns** from config — glob-resolved, loaded every session; the
+  sibling user-tier key `instructionsExclude` skips (and records as refusals)
+  the repository-tier instruction files its globs match — a checkout can never
+  silence context its operator chose, and the personal file is outside the
+  filter by construction;
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
   injected when a tool touches a path under it, at most once per session.
 

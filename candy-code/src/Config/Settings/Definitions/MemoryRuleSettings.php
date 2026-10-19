@@ -129,6 +129,14 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.instructions.label'))
                 ->withHelp('Globs of files whose contents become authoritative system-prompt text.')
                 ->withReaderSymbol(Bootstrap::class . '::forcedInstructions'),
+            SettingDefinition::new('instructionsExclude', SettingType::StringList, [])
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withLayered()
+                ->withUi(UiEditability::List)
+                ->withLabel(Lang::t('settings.instructionsExclude.label'))
+                ->withHelp('Globs of instruction files to skip, recorded as refusals; user-tier only — a repository cannot mute its operator.')
+                ->withReaderSymbol(Bootstrap::class . '::excludedInstructions'),
             SettingDefinition::new('disabledRules', SettingType::StringList, [])
                 ->withCategory(SettingCategory::MemoryRules)
                 ->withRiskClass(RiskClass::Prompt)

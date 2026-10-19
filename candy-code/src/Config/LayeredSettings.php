@@ -557,6 +557,7 @@ final class LayeredSettings
         'sd.savePattern',
         'skills.pathNudges',
         'instructions',
+        'instructionsExclude',
         'disabledRules',
         'embeddingModel',
         'disabledSkills',
@@ -895,7 +896,8 @@ final class LayeredSettings
      * `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
      * `extraBody`, `thinkingBudget`, `promptCache`, `maxToolSteps`,
      * `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `instructions`,
-     * `disabledRules`, `enabledSkills`, `attribution`, `statusLine`, `layout`
+     * `instructionsExclude`, `disabledRules`, `enabledSkills`, `attribution`,
+     * `statusLine`, `layout`
      * and `lintCommands`, in {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
@@ -934,6 +936,15 @@ final class LayeredSettings
      * authoritative. A project value would let a repository force any file it
      * ships, under any name, which is precisely the review a user performs by
      * looking at the instruction files they know about.
+     *
+     * `instructionsExclude` is the MIRROR of that argument and lands on the
+     * same side: it names globs whose instruction files are SKIPPED. A
+     * repository that could set it could mute whichever context files it does
+     * not like — including the operator's forced ones, because exclusion runs
+     * before every repository-tier read. Context the operator chose is theirs
+     * to silence and nobody else's, so the key is user-tier only; the loader
+     * consults it for the four repository tiers and never for the personal
+     * file.
      *
      * NO `src/` CONSUMER, DELIBERATELY, and it is a seam rather than dead code.
      * {@see projectLayer()} filters on {@see PROJECT_TIER_KEYS} — the positive

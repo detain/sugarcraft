@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Context;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Util\PathGlob;
 
 /**
  * Loads instruction files (CLAUDE.md, AGENTS.md and the other agents' aliases
@@ -246,6 +247,15 @@ final class InstructionFileLoader
      */
     private array $announcedRefusals = [];
 
+    /**
+     * The compiled form of each configured {@see $excludedGlobs} pattern,
+     * keyed by the pattern — one `PathGlob::compile()` per pattern per
+     * session, not per candidate.
+     *
+     * @var array<string, string>
+     */
+    private array $excludedCompiled = [];
+
     private readonly ImportResolver $importResolver;
 
     /**
@@ -299,6 +309,7 @@ final class InstructionFileLoader
         private readonly array $forcedInstructions = [],
         ?ImportResolver $importResolver = null,
         private readonly ?string $personalDir = null,
+        private readonly array $excludedGlobs = [],
     ) {
         $this->importResolver = $importResolver ?? ImportResolver::new();
     }
@@ -377,6 +388,12 @@ final class InstructionFileLoader
 
         foreach ($rootFiles as $path) {
             if (!is_file($path)) {
+                continue;
+            }
+
+            if ($this->excluded($path)) {
+                $this->refusedPaths[$path] = 'excluded by instructionsExclude';
+
                 continue;
             }
 
@@ -556,6 +573,51 @@ final class InstructionFileLoader
         }
 
         return $this->personalCache;
+    }
+
+    /**
+     * Is this candidate instruction file silenced by the operator's
+     * `instructionsExclude` patterns?
+     *
+     * ONE ENFORCEMENT POINT, consulted by every repository-tier read loop
+     * (root, ancestors, forced, on-touch) AFTER `is_file()` and BEFORE the
+     * {@see ContainedPath} gate — ordered that way on purpose: containment is
+     * one compare per READ DECISION and its routed-call-site inventory is the
+     * audit surface, so a second gate folded into the same decision would make
+     * the count unexplainable. The personal tier is deliberately NOT consulted
+     * here beyond the tier itself: the key is USER-tier only — a repository can
+     * never silence its own context, and an operator excluding everything still
+     * keeps their own personal file's channel open.
+     *
+     * The matched subject is the checkout-RELATIVE spelling inside the
+     * checkout — patterns read the same way an operator reads `.gitignore` —
+     * and the absolute spelled path outside it
+     * (forced globs may reach the ancestor trees), so a pattern can never be
+     * dodged by a path shape the operator did not intend. A pattern that will
+     * not compile matches NOTHING (the {@see PathGlob::matchCompiled()}
+     * three-valued verdict, null read as false): exclusion fails OPEN, because
+     * silently dropping context is exactly the failure this key must not add.
+     * Every hit is RECORDED in {@see $refusedPaths} the way a containment
+     * refusal is, so the skip is announced rather than mysterious.
+     */
+    private function excluded(string $path): bool
+    {
+        if ($this->excludedGlobs === []) {
+            return false;
+        }
+
+        $subject = \str_starts_with($path, $this->repoRoot . '/')
+            ? \substr($path, \strlen($this->repoRoot) + 1)
+            : $path;
+
+        foreach ($this->excludedGlobs as $pattern) {
+            $regex = $this->excludedCompiled[$pattern] ??= PathGlob::compile($pattern);
+            if (PathGlob::matchCompiled($regex, $subject) === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -868,6 +930,12 @@ final class InstructionFileLoader
                     continue;
                 }
 
+                if ($this->excluded($path)) {
+                    $this->refusedPaths[$path] = 'excluded by instructionsExclude';
+
+                    continue;
+                }
+
                 if (!ContainedPath::within($path, $ancestorRoot)) {
                     $this->refusedPaths[$path] = 'an ancestor instruction file resolving outside the '
                         . 'enclosing checkout (' . $ancestorRoot . ')';
@@ -1023,6 +1091,12 @@ final class InstructionFileLoader
 
             foreach ($matches as $path) {
                 if (!is_file($path)) {
+                    continue;
+                }
+
+                if ($this->excluded($path)) {
+                    $this->refusedPaths[$path] = 'excluded by instructionsExclude';
+
                     continue;
                 }
 
@@ -1216,6 +1290,12 @@ final class InstructionFileLoader
                 foreach (self::FILENAMES as $filename) {
                     $fullPath = $dir . '/' . $filename;
                     if (!is_file($fullPath)) {
+                        continue;
+                    }
+
+                    if ($this->excluded($fullPath)) {
+                        $this->refusedPaths[$fullPath] = 'excluded by instructionsExclude';
+
                         continue;
                     }
 

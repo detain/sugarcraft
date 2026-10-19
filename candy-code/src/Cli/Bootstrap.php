@@ -10194,11 +10194,18 @@ final class Bootstrap
      * InstructionFileLoader::loadForced()} resolves come from {@see
      * forcedInstructions()} — the "instructions" key of
      * ~/.candy-code/config.json — which is what gives loadForced() a real
-     * data source instead of a permanently-empty constructor default.
+     * data source instead of a permanently-empty constructor default. The
+     * operator's silencing patterns come from {@see excludedInstructions()},
+     * the sibling "instructionsExclude" key — USER-tier only, so a checked-out
+     * repository can never mute the context its operator chose to keep.
      */
     public static function instructionLoader(?string $root = null): InstructionFileLoader
     {
-        return new InstructionFileLoader(self::requireRoot($root), self::forcedInstructions());
+        return new InstructionFileLoader(
+            self::requireRoot($root),
+            self::forcedInstructions(),
+            excludedGlobs: self::excludedInstructions(),
+        );
     }
 
     /**
@@ -10260,6 +10267,39 @@ final class Bootstrap
     public static function forcedInstructions(): array
     {
         $configured = self::readUserConfig()['instructions'] ?? null;
+        if (!is_array($configured)) {
+            return [];
+        }
+
+        $patterns = [];
+        foreach ($configured as $pattern) {
+            if (is_string($pattern) && trim($pattern) !== '') {
+                $patterns[] = $pattern;
+            }
+        }
+
+        return $patterns;
+    }
+
+    /**
+     * The operator's `instructionsExclude` patterns — every instruction file
+     * whose checkout-relative spelling matches one of them is skipped by
+     * {@see InstructionFileLoader} and RECORDED in its refusedPaths rather
+     * than silently dropped. Malformed entries degrade to "that one pattern is
+     * ignored" exactly as {@see forcedInstructions()} does, because both lists
+     * are hand-authored in a config file; a pattern that will not compile
+     * matches nothing, so exclusion fails OPEN — this key removes context the
+     * operator asked to remove and never removes more on a parse ambiguity.
+     *
+     * User-tier only by ruling (roadmap 6.4): the project tier cannot set it,
+     * because a repository that can silence which instruction files are read
+     * can silence the operator.
+     *
+     * @return list<string>
+     */
+    public static function excludedInstructions(): array
+    {
+        $configured = self::readUserConfig()['instructionsExclude'] ?? null;
         if (!is_array($configured)) {
             return [];
         }
