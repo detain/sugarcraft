@@ -66,6 +66,35 @@ describe('AboutModal (WEB-1c)', () => {
     expect(wrapper.find('[data-testid="about-health"]').text()).toContain('draining')
   })
 
+  it('a re-open that fails shows nothing stale from the previous visit', async () => {
+    const wrapper = await openModal()
+    wire.answer('server.info', {
+      version: '1.2.3',
+      protocol: 1,
+      permissionModes: ['default', 'plan'],
+      defaultPermissionMode: 'default',
+    })
+    wire.answer('server.health', { ok: true, version: '1.2.3', uptimeS: 60, sessionsOpen: 1, turnsRunning: 0, draining: false })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-info"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="about-health"]').exists()).toBe(true)
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    for (const method of ['server.info', 'server.health'] as const) {
+      const frame = wire.sent(method).at(-1)
+      if (!frame) throw new Error(`no ${method} sent on re-open`)
+      wire.socket.fail(-32001, 'forbidden', `no ${method} this time`, frame.id)
+    }
+    await flushPromises()
+    // w2h M3: both feeds cleared on open — a failed re-fetch is an error,
+    // not last visit's version block or health line still on screen.
+    expect(wrapper.find('[data-testid="about-error"]').text()).toContain('no server.info this time')
+    expect(wrapper.find('[data-testid="about-info"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="about-health"]').exists()).toBe(false)
+  })
+
   it('closes from the button and the backdrop', async () => {
     const wrapper = await openModal()
     await wrapper.find('[data-testid="about-close"]').trigger('click')

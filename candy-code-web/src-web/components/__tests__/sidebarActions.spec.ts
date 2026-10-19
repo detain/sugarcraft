@@ -100,9 +100,10 @@ describe('session-row menu (WEB-1a)', () => {
     expect(useSessionsStore().byId.s1).toBeUndefined()
   })
 
-  it('downloads the exported transcript as a file', async () => {
+  it('downloads the exported transcript as a file, revoking the blob URL on replace or unmount', async () => {
     const { wire, wrapper } = await mountSidebar(['s1'])
-    const createObjectURL: Mock<(blob: Blob) => string> = vi.fn(() => 'blob:download')
+    let next = 0
+    const createObjectURL: Mock<(blob: Blob) => string> = vi.fn(() => `blob:download-${++next}`)
     const revokeObjectURL = vi.fn()
     Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true, writable: true })
     Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true, writable: true })
@@ -118,8 +119,22 @@ describe('session-row menu (WEB-1a)', () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     const blob = createObjectURL.mock.calls[0]?.[0]
     expect(blob).toBeInstanceOf(Blob)
-    expect(anchor).toEqual({ download: 'session-s1.md', href: 'blob:download' })
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:download')
+    expect(anchor).toEqual({ download: 'session-s1.md', href: 'blob:download-1' })
+    // w2h M4: no eager revoke — the browser may not have read the blob yet.
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+
+    // A second export revokes the URL the first one used, at replacement.
+    await wrapper.find('[data-testid="row-menu-s1"]').trigger('click')
+    await wrapper.find('[data-testid="row-export-markdown-s1"]').trigger('click')
+    wire.answer('session.export', { format: 'markdown', content: '# transcript two' })
+    await settle()
+    expect(createObjectURL).toHaveBeenCalledTimes(2)
+    expect(anchor).toEqual({ download: 'session-s1.md', href: 'blob:download-2' })
+    expect(revokeObjectURL.mock.calls.map((call) => call[0])).toEqual(['blob:download-1'])
+
+    // Unmount revokes whatever URL is still live.
+    wrapper.unmount()
+    expect(revokeObjectURL.mock.calls.map((call) => call[0])).toEqual(['blob:download-1', 'blob:download-2'])
   })
 
   it('Escape closes the menu', async () => {
