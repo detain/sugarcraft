@@ -188,7 +188,7 @@ final class HttpMcpToolTimeoutTest extends TestCase
         $client->startServers();
 
         self::assertSame(
-            ['s' => ['url' => 'http://mock.invalid:9/mcp', 'status' => 401]],
+            ['s' => ['url' => 'http://mock.invalid:9/mcp', 'status' => 401, 'transport' => 'http']],
             $client->authRequired(),
         );
         self::assertSame(

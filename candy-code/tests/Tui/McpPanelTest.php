@@ -522,6 +522,62 @@ final class McpPanelTest extends TestCase
     }
 
     /**
+     * MCP-4: a live legacy-SSE session reads EXACTLY like the streamable-http
+     * one — same `ready` word, its own `[sse]` tag from the declared type —
+     * and a credential refusal on the same transport keeps the ISS-042
+     * marker rather than falling to `exited` (no process ever died).
+     *
+     * Rows are asserted per LINE without pinning the detail cell: the
+     * inventory's `detail` match (Bootstrap.php, serialization-forbidden to
+     * this lane) has no `sse` leg yet, so the URL is absent TODAY; the weld
+     * one-liner adds it and these assertions must ride both worlds.
+     */
+    public function testTheSseTransportSharesTheReadyVocabularyAndTheAuthMarker(): void
+    {
+        $live = 'sseen-' . bin2hex(random_bytes(3));
+        $refused = 'sseauth-' . bin2hex(random_bytes(3));
+        $root = $this->makeRoot();
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [
+                $live => ['type' => 'sse', 'url' => 'http://legacy.invalid/sse'],
+                $refused => ['type' => 'sse', 'url' => 'http://mock.invalid/legacy'],
+            ],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $out = McpPanel::render($inventory, 160, [
+            $live => ['transport' => 'sse', 'up' => true, 'tools' => 7],
+            $refused => ['transport' => 'sse', 'up' => false, 'tools' => 0, 'auth-required' => 401],
+        ]);
+
+        $lines = explode("\n", $out);
+        $liveLine = self::lineNaming($lines, $live);
+        $refusedLine = self::lineNaming($lines, $refused);
+
+        self::assertStringContainsString($live . ' [sse]', $liveLine);
+        self::assertStringContainsString(' · ready 7 tools', $liveLine);
+        self::assertStringContainsString($refused . ' [sse]', $refusedLine);
+        self::assertStringContainsString(' · auth-required HTTP 401', $refusedLine);
+        self::assertStringNotContainsString(' · exited', $out,
+            'a transport with no process must never borrow the exited word');
+    }
+
+    /**
+     * @param list<string> $lines
+     */
+    private static function lineNaming(array $lines, string $needle): string
+    {
+        foreach ($lines as $line) {
+            if (str_contains($line, $needle)) {
+                return $line;
+            }
+        }
+
+        self::fail("no rendered row names {$needle}");
+    }
+
+    /**
      * A suffixed CJK row at width 60: the clip must still hold the pane in
      * DISPLAY cells and must keep the suffix end intact (middle-truncate
      * preserves both ends — the tools word is proof the tail survived).

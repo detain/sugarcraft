@@ -105,22 +105,20 @@ final class McpForeignTranslateTest extends TestCase
     }
 
     /**
-     * ISS-093(e): `sse` is the one foreign transport with no alias — the entry
-     * imports CLEAN and then throws `Unknown MCP server type: sse` at every
-     * launch. The note is the import telling the truth about a lie it is
-     * about to write down.
+     * MCP-4 closed the transport gap ISS-093(e) warned about: `sse` is a
+     * BUILT type now ({@see SseMcpServer}), so the import is the clean
+     * bottom path it never was — the entry rides no note because there is
+     * no longer a lie for the note to pre-empt. The type is preserved as
+     * written, exactly as the aliasing siblings preserve theirs.
      */
-    public function testAnSseEntryIsImportedWithANamedFailingWarning(): void
+    public function testAnSseEntryNowImportsWithoutNotes(): void
     {
         $translated = McpForeignTranslate::translateDocument('claude', ['mcpServers' => [
             'legacy' => ['type' => 'sse', 'url' => 'https://old.example/sse'],
         ]]);
 
-        self::assertSame(
-            ['legacy: type "sse" has no transport in this port — the entry will fail at launch; convert it to "http" if the server speaks streamable HTTP'],
-            $translated['notes'],
-        );
-        self::assertSame('sse', $translated['servers']['legacy']['type'], 'the warning annotates, it does not silently rewrite the type');
+        self::assertSame([], $translated['notes']);
+        self::assertSame('sse', $translated['servers']['legacy']['type'], 'the type imports as written — no silent rewrite to http');
     }
 
     /**

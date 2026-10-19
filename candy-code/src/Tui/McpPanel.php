@@ -258,7 +258,8 @@ final class McpPanel
         }
 
         // ISS-042: the one non-registered row the snapshot carries — an http
-        // entry refused 401/403 at start. It is not "not up" (a mystery) and
+        // (or, since MCP-4, sse) entry refused 401/403 at start. It is not
+        // "not up" (a mystery) and
         // not "exited" (it never had a process): it is up-and-refusing for
         // credentials, a state with a command that fixes it.
         if (isset($row['auth-required'])) {
@@ -277,6 +278,9 @@ final class McpPanel
             // is pinned by the docs and the panel adds a transport, not a word.
             ['claude-mcp', true] => Lang::t('tui.mcp.liveness.up'),
             ['http', true] => Lang::t('tui.mcp.liveness.ready'),
+            // MCP-4: a live legacy-SSE session is "ready" exactly like the
+            // streamable-http one — same vocabulary, no new word.
+            ['sse', true] => Lang::t('tui.mcp.liveness.ready'),
             ['git', true] => Lang::t('tui.mcp.liveness.ready_in_process'),
             default => Lang::t('tui.mcp.liveness.exited'),
         };

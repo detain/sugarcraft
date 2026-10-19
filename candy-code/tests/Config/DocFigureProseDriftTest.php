@@ -3736,7 +3736,7 @@ final class DocFigureProseDriftTest extends TestCase
         $mcp = self::markdownProse($raw);
         self::assertSame(
             1,
-            preg_match('/Four types, and they are the four `McpClient::startServer\(\)` constructs/', $mcp),
+            preg_match('/Five types, and they are the five `McpClient::startServer\(\)` constructs/', $mcp),
             'the type-table lead-in no longer states the count with its factory cite',
         );
 
@@ -3764,7 +3764,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('(the default when `type` is absent)', $mcp, 'the stdio row lost its default note');
 
         // E708: opencode spellings are renamed BEFORE the match, never as new
-        // arms — the four-construct census above stays four precisely because
+        // arms — the five-construct census above stays five precisely because
         // the alias map runs first. Both sides are pinned: re-planting the
         // pre-E708 `startServer()` (literal `?? 'stdio'` line, no substitution,
         // no canonicalisation) reddens the presence legs, and a page/table
@@ -3825,11 +3825,11 @@ final class DocFigureProseDriftTest extends TestCase
         );
 
         self::assertSame(
-            3,
-            preg_match_all("/'(stdio|http|git)' => new ([A-Za-z]+)/", $buildText, $arms, PREG_SET_ORDER),
+            4,
+            preg_match_all("/'(stdio|http|git|sse)' => new ([A-Za-z]+)/", $buildText, $arms, PREG_SET_ORDER),
             'buildServer() no longer constructs one named class per match arm — the pin lost its ground',
         );
-        self::assertCount(3, $arms, 'the three new-constructing arms moved — the page counts them plus the gated fourth');
+        self::assertCount(4, $arms, 'the four new-constructing arms moved — the page counts them plus the gated fifth');
         $built = [];
         foreach ($arms as $arm) {
             $built[$arm[1]] = $arm[2];
@@ -3844,8 +3844,8 @@ final class DocFigureProseDriftTest extends TestCase
         );
         $built['claude-mcp'] = $claudeArm[1];
 
-        preg_match_all('/^\| `(stdio|http|git|claude-mcp)`(?: \(the default when `type` is absent\))? \| `([A-Za-z]+)` \| ([^|]+) \|$/m', $raw, $rows, PREG_SET_ORDER);
-        self::assertCount(4, $rows, 'the type table no longer carries four parseable rows — re-pin with the prose');
+        preg_match_all('/^\| `(stdio|http|git|claude-mcp|sse)`(?: \(the default when `type` is absent\))? \| `([A-Za-z]+)` \| ([^|]+) \|$/m', $raw, $rows, PREG_SET_ORDER);
+        self::assertCount(5, $rows, 'the type table no longer carries five parseable rows — re-pin with the prose');
         $documented = [];
         $documentedKeys = [];
         foreach ($rows as $row) {
@@ -3853,13 +3853,13 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match_all('/`([a-zA-Z]+)`/', $row[3], $cells);
             $documentedKeys[$row[1]] = $cells[1];
         }
-        self::assertSame($documented, $built, 'the factory classes and the table disagree — the page says the types ARE the three constructs');
+        self::assertSame($documented, $built, 'the factory classes and the table disagree — the page says the types ARE the constructs');
         foreach ($documented as $type => $class) {
             self::assertTrue(class_exists('SugarCraft\Code\MCP\\' . $class), "the table row for {$type} names {$class}, which no longer exists");
         }
 
         $armPositions = [];
-        foreach (['stdio', 'http', 'git', 'claude-mcp'] as $type) {
+        foreach (['stdio', 'http', 'sse', 'git', 'claude-mcp'] as $type) {
             $armPositions[$type] = strpos($buildText, "'{$type}' =>");
             self::assertIsInt($armPositions[$type]);
         }
@@ -3869,7 +3869,7 @@ final class DocFigureProseDriftTest extends TestCase
         $order['default'] = $defaultAt;
         asort($order);
         $boundary = array_values($order);
-        foreach (array_slice($boundary, 0, 4) as $index => $begin) {
+        foreach (array_slice($boundary, 0, 5) as $index => $begin) {
             $type = array_keys($order)[$index];
             $armSlice = substr($buildText, $begin, $boundary[$index + 1] - $begin);
             preg_match_all("/\\\$config\['(\w+)'\]/", $armSlice, $reads);
@@ -3881,7 +3881,7 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertStringContainsString('$this->resolveEnv(', $buildText, 'buildServer() no longer interpolates at all — the two-key claim lost its ground');
         preg_match_all('/resolveEnv\(\$config\[.([a-z]+).\]/', $buildText, $interpolated);
-        self::assertSame(['env', 'headers'], $interpolated[1], 'resolveEnv is applied to more or fewer config keys than the page\'s two');
+        self::assertSame(['env', 'headers', 'headers'], $interpolated[1], 'resolveEnv call sites moved — the page counts two keys (stdio `env`, the http/sse `headers`) across three call sites');
         self::assertStringContainsString('applied to ' . \chr(42) . \chr(42) . 'two keys only' . \chr(42) . \chr(42), $mcp, 'the two-keys claim reworded while the call-site census above still answers — re-pin together');
         self::assertStringContainsString(
             'applied to `command`, `args`, `url` or `path`',
@@ -4057,7 +4057,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(in_array('serve', $commands, true), 'the serve subcommand left the roster — the page still describes it');
         self::assertStringContainsString('`candy-code serve` is not one of them', $mcp, 'the serve-is-not-MCP claim left the page');
         self::assertStringContainsString('six answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the one subcommand that does not exit');
-        foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'StdioMcpServer'] as $class) {
+        foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'SseMcpServer', 'StdioMcpServer'] as $class) {
             $half = 'SugarCraft\Code\MCP\\' . $class;
             self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
         }
@@ -6015,12 +6015,14 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E702: the supported-transports census on MCP.md against the factory
-     * itself — every yes-row names a real buildServer arm and every arm has
-     * its yes-row, the no-row is exactly `sse` and quotes the throw its
-     * entry actually reaches, and the http row's bearer-attach / static
-     * precedence sentence names the two methods that implement it.
+     * itself — every row names a real buildServer arm and every arm has its
+     * row (MCP-4 closed the one no-row: `sse` is built now, so the census
+     * carries no unimplemented entry). The sse row's origin law states the
+     * same guard {@see SseMcpServer} enforces in code, and the http row's
+     * bearer-attach / static precedence sentence names the two methods that
+     * implement it.
      */
-    public function testMcpTransportCensusRowsAreTheFactoryArmsPlusTheNamedUnimplemented(): void
+    public function testMcpTransportCensusRowsAreTheFactoryArms(): void
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $prose = self::markdownProse($raw);
@@ -6032,22 +6034,22 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertIsArray($build, 'buildServer() vanished — the transport census lost its ground');
         $buildText = (string) substr($clientSource, $build['begin'], $build['end'] - $build['begin']);
-        preg_match_all("/'(stdio|http|git)' => new /", $buildText, $arms);
+        preg_match_all("/'((?:stdio|http|git|sse))' => new /", $buildText, $arms);
         $implemented = $arms[1];
-        // E699: the fourth transport is constructed, through its gate —
-        // fromGrant's arm counts exactly like a `new` arm for the census.
+        // E699: the gated transport is constructed through fromGrant —
+        // that arm counts exactly like a `new` arm for the census.
         if (preg_match("/'claude-mcp' => ClaudeCodeMcpServer::fromGrant/", $buildText) === 1) {
             $implemented[] = 'claude-mcp';
         }
         sort($implemented);
         self::assertSame(
-            ['claude-mcp', 'git', 'http', 'stdio'],
+            ['claude-mcp', 'git', 'http', 'sse', 'stdio'],
             $implemented,
             'the factory gained or lost a constructed transport — the census table and this pin move together',
         );
 
         preg_match_all('/^\| (Stdio|HTTP|Git|Claude-mcp|SSE) \| (yes|\*\*no\*\*) \|/m', $raw, $rows, \PREG_SET_ORDER);
-        self::assertCount(5, $rows, 'the transport census no longer carries its five named rows (four built, one spec-named-unimplemented)');
+        self::assertCount(5, $rows, 'the transport census no longer carries its five named rows (all five built)');
         $yes = [];
         $no = [];
         foreach ($rows as $row) {
@@ -6059,11 +6061,26 @@ final class DocFigureProseDriftTest extends TestCase
         }
         sort($yes);
         self::assertSame($implemented, $yes, 'a yes-row stopped matching a constructed arm (or an arm lost its row)');
-        self::assertSame(['sse'], $no, 'the named-unimplemented row moved — sse is the transport the spec carries and this port does not');
+        self::assertSame(
+            [],
+            $no,
+            'a transport row went unimplemented again — the census and the factory arms move together; nothing is spec-named-and-unbuilt now',
+        );
 
-        self::assertStringContainsString('Unknown MCP server type: sse', $prose, 'the page no longer quotes the concrete message an sse entry raises');
-        self::assertStringContainsString('"Unknown MCP server type: $type"', $buildText, 'the default-arm message was reworded — the page quotes its sse instance');
-        self::assertStringContainsString('spec-named and not implemented', $prose, 'the page stopped calling sse what it is: named by the specification, not built here');
+        // MCP-4: the sse row is no longer an absence, it is a security law.
+        // Page and source must keep stating the SAME guard: the stream's
+        // endpoint event picks the POST target and the client refuses any
+        // target off the configured URL's origin.
+        self::assertTrue(
+            class_exists('SugarCraft\Code\MCP\SseMcpServer'),
+            'the sse row names a transport whose class is gone',
+        );
+        $sse = self::sourceOf('MCP/SseMcpServer.php');
+        self::assertStringContainsString("the configured URL's origin", $prose, 'the sse row stopped stating the origin lock the class enforces');
+        self::assertStringContainsString('`endpoint` event', $prose, 'the page stopped naming the event whose data selects the POST target');
+        self::assertStringContainsString('endpoint', $sse, 'the endpoint-event handshake the page describes is gone from the class');
+        self::assertStringContainsString('DIFFERENT ORIGIN', $sse, 'the refusal the page promises for a cross-origin publish lost its wording');
+        self::assertStringContainsString('text/event-stream', $sse, 'the GET accept the row describes is gone');
 
         $http = self::sourceOf('MCP/HttpMcpServer.php');
         self::assertStringContainsString('wins over the store', $prose, 'the http row stopped stating the static-header precedence');

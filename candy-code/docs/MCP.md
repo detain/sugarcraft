@@ -154,16 +154,17 @@ answered here:
 }
 ```
 
-Four types, and they are the four `McpClient::startServer()` constructs:
+Five types, and they are the five `McpClient::startServer()` constructs:
 
 | `type` | Class | Keys |
 |---|---|---|
 | `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout` |
 | `http` | `HttpMcpServer` | `url`, `headers`, `toolTimeout` |
+| `sse` | `SseMcpServer` | `url`, `headers`, `toolTimeout` |
 | `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
-Any other `type` — beyond the four above and the aliases below — **throws**
+Any other `type` — beyond the five above and the aliases below — **throws**
 `Unknown MCP server type: …` for that one entry, and it costs only its own server:
 `McpClient::startServers()` attempts every entry whatever its position in the
 file, collects each failure, and throws one report after the loop naming the
@@ -203,13 +204,16 @@ census, table first:
 | HTTP | yes | `url` (+ optional `headers`) | Streamable HTTP: one POST per message accepting `application/json, text/event-stream`, the `Mcp-Session-Id` from `initialize` echoed on every later request, replies read from a JSON body or SSE `data:` frames; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
 | Git | yes | `path` (omit → this project) (+ optional `timeout`) | in-process — no transport, no child, no socket |
 | Claude-mcp | yes | operator-tier `claudeMcpBinary` (+ optional `claudeMcpArgs`, `claudeMcpEnv`; never the entry) | spawned child under process containment, JSON-RPC over pipes |
-| SSE | **no** | — | spec-named and not implemented: `"type": "sse"` falls to the factory's default arm and throws `Unknown MCP server type: sse` — a config-error report, deferred until every OTHER entry has been attempted, so one `sse` entry costs only its own server |
+| SSE | yes | `url` (+ optional `headers`, `toolTimeout`) | legacy 2024-11-05 HTTP+SSE: one long-lived `GET` of `text/event-stream`; its first `endpoint` event names where requests POST, and the client locks that target to the configured URL's origin — a cross-origin publish is refused before anything is sent, so the bearer can never ship to a host the operator did not configure; replies ride the stream matched by `id`; a dropped stream gets a bounded reconnect burst and then refusal until the next call retries it |
 
-The `sse` row is written because the failure used to be silent-fast: before
-`startServer()`'s guard was widened, that one unrecognized entry disabled
-every server listed after it in the same file, with no report at all. An
-`http` entry whose URL happens to end in `/sse` is unaffected — the transport
-is the `type`, never the URL.
+The `sse` row has an interesting history: this transport is why
+`startServer()`'s guard is as wide as it is — before the widening, one
+unrecognized `sse` entry disabled every server listed after it in the same
+file, with no report at all (MCP-4 later built the transport the spec named).
+An `http` entry whose URL happens to end in `/sse` is unaffected — the
+transport is the `type`, never the URL. Note also that the `GET` opens its own
+socket and does not consult `HTTP_PROXY`/`HTTPS_PROXY` (unlike the Guzzle POST
+legs); on a proxied host, reach the server directly or via `url` rewriting.
 
 A fourth row deserves its own paragraph, because it is the only transport the
 repository cannot fully choose: **`claude-mcp` spawns the OPERATOR's binary,
@@ -291,8 +295,9 @@ session, so `start()` treats it as a start failure: the child is stopped and
 the exception carries the server's error code and message plus its stderr
 tail. In `/mcp` such a server shows ` · not up`, never ` · up 0 tools`.
 
-When the start-time `tools/list` is paginated, both transports follow the
-cursor chain to the end before caching the roster (ISS-093(b)): every
+When the start-time `tools/list` is paginated, the `stdio`, `http` and `sse`
+transports all follow the cursor chain to the end before caching the roster
+(ISS-093(b)): every
 `nextCursor` is walked page by page, and a cursor that repeats or a roster
 still being cut at the thirty-two page ceiling is a start failure. A mid-walk
 error is treated exactly like a front one — a partial roster never masquerades
@@ -337,11 +342,47 @@ transport the rest of the way:
   read whole, so a server must close the stream once it has answered, as the
   specification asks and both reference SDKs do.
 
+### How the legacy SSE transport runs
+
+`sse` is the 2024-11-05 wire: two half-channels instead of one. `SseMcpServer`
+opens the read side first — a single long-lived `GET` of `text/event-stream`
+carrying your `headers` (and a stored bearer under the same precedence as
+`http`) — and waits for the stream's first `endpoint` event, whose `data` is
+the URI every JSON-RPC message POSTs to (absolute, or resolved against the
+configured URL the way a browser would resolve it). Then:
+
+- **Origin law.** The POST target must share the configured URL's origin —
+  scheme, host, and port. A stream that publishes elsewhere is refused loudly
+  before the handshake POSTs anything: the server chooses where requests go,
+  and an unchecked `endpoint` event would ship every message, bearer included,
+  to a host the operator never configured. Redirects on the `GET` are refused
+  for the same reason; the response must be `text/event-stream` exactly.
+- **Delivery vs answer.** POSTs are fire-and-listen: a `2xx` (typically `202`)
+  only means the server took the message. The reply arrives on the stream,
+  matched by `id`, with the same `data:`-join and non-`message` skipping the
+  `http` transport uses (both read one shared `SseLineParser`).
+- **Per-call ceiling.** `toolTimeout` bounds how long one call waits for its
+  reply on the stream — the same opt-in per-call IO ceiling the other wire
+  transports carry, never a blanket timeout on the long-lived connection
+  itself, which is idle by design between calls.
+- **Drops.** If the stream dies mid-call, that call fails and is **not**
+  resent (the server may already be working on it; replaying could double a
+  side effect). The next call opens a bounded reconnect burst — three
+  attempts, 0.5 s doubling and capped — each a full fresh handshake on a new
+  `GET`. An exhausted burst marks the session lost and refuses until a later
+  call gets a fresh burst.
+- **Forks.** A forked worker never reads the parent's socket: the first call
+  in a child opens its own stream and runs its own handshake.
+
+`stop()` closes the stream; there is no session id to end and no `DELETE` to
+send. The legacy revision is deprecated upstream in favour of streamable
+`http` — use `sse` only for servers that predate the switch.
+
 ### `${VAR}` interpolation — exactly where it works
 
 `McpClient::resolveEnv()` expands `${VAR}` and `${VAR:-default}`, and it is
-applied to **two keys only**: a `stdio` server's `env` map and an `http`
-server's `headers` map. It is *not* applied to `command`, `args`, `url` or
+applied to **two keys only**: a `stdio` server's `env` map and the `headers`
+map of an `http` or `sse` server. It is *not* applied to `command`, `args`, `url` or
 `path`.
 
 One quoted pattern (`/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/`) walks the
@@ -478,7 +519,7 @@ and annotates each declared row:
 |---|---|
 | ` · up N tools` | a `stdio` child that is still running |
 | ` · exited N tools` | it came up at launch; the child is gone, its cached tool list is not |
-| ` · ready N tools` | an `http` server whose handshake completed |
+| ` · ready N tools` | an `http` or `sse` server whose handshake completed |
 | ` · ready (in-process) N tools` | the in-process `git` transport, up |
 | ` · not up` | declared, but this process never started it — a failed `start()` is skipped silently at launch, and this is where that skip surfaces |
 | ` · state unknown` | a transport the snapshot could not classify — unknown stays unknown |
@@ -749,8 +790,8 @@ instruction came from.
 ## Serving MCP
 
 `McpServer` is the interface for any tool provider a session can call, and
-most of its implementations are CLIENT transports: `StdioMcpServer` and
-`HttpMcpServer` talk to servers some OTHER program hosts. What CandyCode
+most of its implementations are CLIENT transports: `StdioMcpServer`,
+`HttpMcpServer` and `SseMcpServer` talk to servers some OTHER program hosts. What CandyCode
 serves itself is `GitMcpServer` (with `GitCommandHandlers`) — pure-PHP git
 tools that run in-process. It
 is reachable as a `type: git` entry in your own `.mcp.json`, i.e. CandyCode

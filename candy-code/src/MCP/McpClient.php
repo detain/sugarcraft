@@ -450,9 +450,9 @@ final class McpClient
      *
      * The instanceof narrowing is deliberate, same law as {@see pumpStderr()}:
      * {@see McpServer} does NOT grow an isUp(). A transport that has no
-     * liveness to report should not be forced to fake one; an unrecognised
-     * fourth class answers `transport: 'other'` with `up: null` — unknown,
-     * which is the truth, rather than a default that reads as healthy.
+     * liveness to report should not be forced to fake one; a class outside
+     * the factory's arms answers `transport: 'other'` with `up: null` —
+     * unknown, which is the truth, rather than a default that reads as healthy.
      *
      * `tools` counts the START-TIME cache every transport already holds
      * ({@see StdioMcpServer::listTools()}, {@see HttpMcpServer::listTools()},
@@ -470,6 +470,7 @@ final class McpClient
                 'transport' => match (true) {
                     $server instanceof StdioMcpServer => 'stdio',
                     $server instanceof HttpMcpServer => 'http',
+                    $server instanceof SseMcpServer => 'sse',
                     $server instanceof GitMcpServer => 'git',
                     $server instanceof ClaudeCodeMcpServer => ClaudeCodeMcpServer::TYPE,
                     default => 'other',
@@ -477,6 +478,7 @@ final class McpClient
                 'up' => match (true) {
                     $server instanceof StdioMcpServer,
                     $server instanceof HttpMcpServer,
+                    $server instanceof SseMcpServer,
                     $server instanceof GitMcpServer,
                     $server instanceof ClaudeCodeMcpServer => $server->isUp(),
                     default => null,
@@ -506,7 +508,7 @@ final class McpClient
         // to every pre-ISS-042 pin.
         foreach ($this->authRequired as $name => $row) {
             $rows[$name] = [
-                'transport' => 'http',
+                'transport' => $row['transport'] ?? 'http',
                 'up' => false,
                 'tools' => 0,
                 'auth-required' => $row['status'],
@@ -536,10 +538,14 @@ final class McpClient
      *      {@see McpTool::tryFromArray()}.
      *   2. `"type": "sse"` threw `RuntimeException: Unknown MCP server type: sse`
      *      from the `default` arm, which sat OUTSIDE the try. "tools visible: 0".
-     *      `sse` is not a typo hazard invented for the test — it is a transport
-     *      the MCP specification defines and this port has not implemented, so
-     *      the first `.mcp.json` carrying one silently disabled every OTHER
-     *      server in the file.
+     *      `sse` was not a typo hazard invented for the test — it is a transport
+     *      the MCP specification defines, and at measurement time this port had
+     *      not implemented it, so the first `.mcp.json` carrying one silently
+     *      disabled every OTHER server in the file. (MCP-4 closed the transport
+     *      gap: `sse` is now a built arm. The hazard this route measured — an
+     *      unknown type escaping the guard — is what the `match`-inside-try
+     *      restructure fixed, and the isolation pin keeps an un-built name,
+     *      `websocket`, playing the offender role the history names `sse` for.)
      *   3. Anything else a constructor or a `start()` can raise that is not a
      *      `RuntimeException` — an `\Error` from a third party's output, a
      *      `JsonException`, a `ValueError` off a closed pipe.
@@ -627,8 +633,16 @@ final class McpClient
             // this is runtime — the two channels stay separate, per
             // startServer()'s own two-catches law).
             $this->authRequired[$name] = [
-                'url' => $server instanceof HttpMcpServer ? $server->endpoint() : '',
+                'url' => ($server instanceof HttpMcpServer || $server instanceof SseMcpServer)
+                    ? $server->endpoint()
+                    : '',
                 'status' => $e->status,
+                // MCP-4: the snapshot row below used to hardcode `http` —
+                // true only while the typed exception had one raising class.
+                // `sse` shares the exception, so the row now CARRIES its
+                // transport and the snapshot reads it (default `http` keeps
+                // every pre-MCP-4 pin byte-identical).
+                'transport' => $server instanceof SseMcpServer ? 'sse' : 'http',
             ];
             $this->recordStrippedSecretEnv($name, $server);
 
@@ -695,9 +709,10 @@ final class McpClient
                 url: $config['url'] ?? '',
                 headers: $this->resolveEnv($config['headers'] ?? []),
                 httpClient: $this->httpClient,
-                // E695: the http arm is the ONLY consumer of the auth store —
-                // it is created lazily here so stdio/git-only configs never
-                // touch ~/.local/share/candy-code/mcp-auth.json. Tests pass
+                // E695: the http arm was the ONLY consumer of the auth store;
+                // MCP-4's `sse` arm joins it under the same lazy posture —
+                // stdio/git-only configs still never touch
+                // ~/.local/share/candy-code/mcp-auth.json. Tests pass
                 // an explicit store backed by a temp path for hermeticity.
                 authStore: $this->authStore ?? McpAuthStore::new(),
                 // ISS-042: `toolTimeout` was stdio-only; an http entry naming
@@ -707,6 +722,22 @@ final class McpClient
                 // equals stdio's 120 rather than the old implicit 30.
                 toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null)
                     ?? HttpMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS,
+            ),
+            // MCP-4: the legacy 2024-11-05 HTTP+SSE transport. Same config
+            // shape as `http` (`url`, `headers`, `toolTimeout`) — the wire
+            // differs, not the entry. {@see SseMcpServer} carries the
+            // security law that makes the arm safe: the stream's `endpoint`
+            // event names where requests POST, and the server LOCKS that
+            // target to the configured URL's origin, refusing cross-origin
+            // publishes before the handshake POSTs anything.
+            'sse' => new SseMcpServer(
+                name: $name,
+                url: $config['url'] ?? '',
+                headers: $this->resolveEnv($config['headers'] ?? []),
+                httpClient: $this->httpClient,
+                authStore: $this->authStore ?? McpAuthStore::new(),
+                toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null)
+                    ?? SseMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS,
             ),
             // `timeout` (seconds per git invocation, hooks included) is
             // OPTIONAL — audit R18. GitCommandHandlers::configuredTimeout()

@@ -30,7 +30,7 @@ final class McpForeignTranslate
     /**
      * E708 — foreign `type` spellings, renamed to this port's names BEFORE
      * {@see McpClient::startServer()} dispatch so the factory's match stays exactly the
-     * four-transport census the docs page records (an alias arm inside the
+     * five-transport census the docs page records (an alias arm inside the
      * `match` would make the page's "the types ARE the constructs" claim
      * count wrong). `local`/`remote` are the names opencode's config gives to
      * stdio and HTTP; nothing else in this file invents a synonym.
@@ -75,7 +75,7 @@ final class McpForeignTranslate
      * `environment` was read nowhere, so `searxng` spawned with no
      * `SEARXNG_URL` and no report anywhere said so — and its `enabled: false`
      * started anyway. Renaming here (rather than growing `local`/`remote`
-     * arms there) keeps the factory's match the four-transport census
+     * arms there) keeps the factory's match the five-transport census
      * docs/MCP.md records, and it means every downstream reader —
      * `resolveEnv`, the per-arm key reads the AX doc-arm pins — sees exactly
      * one spelling of each key.
@@ -253,14 +253,6 @@ final class McpForeignTranslate
                 // file's own reader already assumes.
                 unset($canonical['enabled']);
                 $notesForEntry[] = 'redundant "enabled": true dropped';
-            }
-            if ($foreignType === 'sse') {
-                // ISS-093(e): the one foreign transport this port has NO
-                // alias for — the entry imports cleanly and then throws
-                // `Unknown MCP server type: sse` at every launch, silent
-                // until that first spawn. Say it where the operator is still
-                // reading, with the fix named.
-                $notesForEntry[] = 'type "sse" has no transport in this port — the entry will fail at launch; convert it to "http" if the server speaks streamable HTTP';
             }
             // `${VAR}` in a value is not literal here: {@see McpClient::resolveEnv()}
             // expands it from THIS machine's environment at launch (whole-value

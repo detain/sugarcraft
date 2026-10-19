@@ -22,9 +22,12 @@ use SugarCraft\Code\MCP\McpClient;
  *   1. A `TypeError` out of `McpTool::fromArray()`, raised by a well-formed
  *      JSON-RPC reply of `{"tools":[{"name":5}]}`. Not a `RuntimeException`.
  *   2. `"type": "sse"` — the `default` arm's `throw` sat OUTSIDE the try, under
- *      a comment saying so as though it were the desired behaviour. `sse` is a
- *      transport the MCP specification defines and this port has not
- *      implemented, so it is what a real config carries, not a typo.
+ *      a comment saying so as though it were the desired behaviour. `sse` was
+ *      then a transport the MCP specification defines and this port had not
+ *      implemented, so it is what a real config carries, not a typo. (MCP-4
+ *      built `sse`; the pin below now offends with `websocket`, a name real
+ *      foreign configs and pre-spec proposals carry and this port still does
+ *      not build — the guard's job is unchanged, only its specimen moved.)
  *   3. Anything else non-`RuntimeException` a constructor or a handshake raises.
  *
  * MEASURED at `1dea13c4f` on this host (PHP 8.3.6, Linux 6.8) before the fix,
@@ -119,13 +122,14 @@ final class McpClientServerIsolationTest extends TestCase
     }
 
     /**
-     * ROUTE 2: an unknown transport. `sse` is in the MCP specification and is
-     * not implemented here, so this is the ordinary shape of the failure.
+     * ROUTE 2: an unknown transport. Since MCP-4, `sse` is BUILT, so the
+     * ordinary shape of this failure is a name the port does not implement —
+     * `websocket` is what real-world configs actually carry.
      */
     public function testAnUnknownServerTypeDoesNotAbortTheOthers(): void
     {
         $client = $this->clientFor(
-            ['bad' => ['type' => 'sse', 'url' => 'http://bad.invalid/rpc'], 'good' => $this->httpEntry()],
+            ['bad' => ['type' => 'websocket', 'url' => 'http://bad.invalid/rpc'], 'good' => $this->httpEntry()],
             [$this->handshake(), $this->initializedAck(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
@@ -143,7 +147,7 @@ final class McpClientServerIsolationTest extends TestCase
     public function testAnUnknownServerTypeIsNotReachable(): void
     {
         $client = $this->clientFor(
-            ['bad' => ['type' => 'sse', 'url' => 'http://bad.invalid/rpc']],
+            ['bad' => ['type' => 'websocket', 'url' => 'http://bad.invalid/rpc']],
             [],
         );
 
